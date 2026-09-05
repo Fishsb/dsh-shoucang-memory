@@ -1,0 +1,54 @@
+{
+  "name": "@dsh-external/shoucang-panel",
+  "version": "0.1.0",
+  "description": "守藏设置面板（会话窗口式）：root 管理 / 板块与管线开关 / 配置原文编辑 / 画像与记忆板块展示。宿主走 ctx.webServer 挂 /api/shoucang-panel，client 纯 DOM 注入。",
+  "private": true,
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./default-project.json": "./default-project.json",
+    "./default-vault-template.tar.gz": "./default-vault-template.tar.gz",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "client.js",
+    "scripts",
+    "cordis.patch.yml",
+    "default-project.json",
+    "default-vault-template.tar.gz"
+  ],
+  "sideEffects": [
+    "./lib/client.js"
+  ],
+  "scripts": {
+    "build:host": "node ../../.tsbuild/node_modules/typescript/bin/tsc -p tsconfig.json",
+    "build:client": "node scripts/build-client.mjs",
+    "build:default": "node scripts/gen-default-project.mjs",
+    "build": "npm run build:host && npm run build:client && npm run build:default"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime"
+      ],
+      "platform": "web"
+    }
+  },
+  "license": "Apache-2.0",
+  "peerDependencies": {
+    "@deepseek-ai/dsh-tools": ">=0.0.1-rc <2",
+    "cordis": ">=4.0.0-rc <5",
+    "schemastery": "^3.18.0"
+  }
+}

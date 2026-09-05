@@ -1,0 +1,46 @@
+# ============================================================
+# 守藏 · Shoucang 配置文件模板（suite 中枢版 v2，2026-09-06）
+# 定位重定义：UI + 全部集合插件设置界面 + 协调调度中枢。
+# 记忆归档职责已废弃（蒸馏唯一权归 @dsh-external/dsh-managing-memory
+# 的事件驱动 watcher，协作宪章 ADR-0005）——原 archive:/boards:/
+# lifecycle: 节删除；向量检索节悬置保留（UI 已建，后端另行立项）。
+# 用法: 复制为 shoucang.config.yaml 并按需修改；路径留空=能力禁用。
+# ============================================================
+
+shoucang:
+  wiki_root: ""              # [deprecated-悬置] 原 wiki 知识库根；三板块职责已由
+                             # 记忆插件+pmg 承接，此节仅为 panel 旧 UI 兼容保留
+
+  suite:                     # ★ 插件集合管理（新职责 · suite-manager 模块）
+    enabled: true
+    members:                 # 成员注册表（装守藏 = 获得集合入口；成员独立安装不受影响）
+      - id: memory
+        package: "@dsh-external/dsh-managing-memory"
+        repo: "Fishsb/dsh-managing-memory"        # 技能主仓（engine 契约宿主）
+        role: commander                           # 指挥者：R0 归属裁决 + 蒸馏唯一 watcher
+      - id: governance
+        package: "@dsh-external/project-map-governance"
+        repo: "Fishsb/dsh-project-map-governance"
+        role: executor                            # 执行者两模块：项目地图防漂移 + 知识卡库
+    # installChannel: std     # std=dsh plugin add（默认）| dev=注入器（开发机）
+    # autoCheck: true         # 装配检测：已装/未装/版本比对
+
+  scheduler:                 # 顶层调度执行器（重定义：suite 内部路由 + 状态聚合）
+    enabled: true
+    gates:                   # 4-Gate 降级复用：suite 成员操作路由（原记忆归档路由退役）
+      g0: true               #   准入：非 suite 意图 bypass
+      g1: true               #   读：成员状态/装配检测/积压统计
+      g2: true               #   写：安装编排/迁移派发（第二批实现）
+      g3: true               #   验证：G30 证据计数（对接记忆审计 §8）
+    verify:
+      enabled: true
+      g30:
+        enabled: true        # G30 证据计数保留（只数工具实证，不信自述）
+    state_dir: ".shoucang"
+
+  embedding:                 # [悬置] 本地向量辅助检索（panel UI 已建；后端接记忆检索另行立项）
+    base_url: ""
+    model: bge-m3
+    dimension: 1024
+    api_key: ""
+    rerank_url: ""

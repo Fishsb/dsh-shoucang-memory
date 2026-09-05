@@ -1,0 +1,4 @@
+# 守藏设置面板：宿主半区（HTTP RPC），client 半区由 ./client 自加载。
+- insert:
+    - id: shoucang-panel
+      name: '@dsh-external/shoucang-panel'
