@@ -12,3 +12,6 @@ plugins/*/lib/
 # 本地环境
 .env
 *.local
+
+# ---- project-map-governance（瞬态数据，不入库）----
+.internal/
