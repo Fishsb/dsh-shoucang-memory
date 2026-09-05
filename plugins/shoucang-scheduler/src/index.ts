@@ -1,171 +1,240 @@
 /**
- * @dsh-external/shoucang-scheduler — 工具包形态（由 dev_scaffold_plugin 生成）。
- * 规范：资源注册必须挂 ctx.effect（热重载/卸载自动清理——注入器踩坑记录）。
+ * @dsh-external/shoucang-scheduler — 守藏调度执行器（suite-manager 只读模块）。
+ * 由 dev_scaffold_plugin 生成；2026-09-05 重定义（HANDOVER #2）：
+ * 旧「记忆归档调度（boards 三板块/R1-R5/W1-W3）」语义已按拍板废弃（facts F-003/F-004），
+ * 本模块重定义为插件集合（suite）的**只读装配检测**——shoucang_suite 工具。
  *
- * 高性能铁律（DeepSeek V4 Pro 实测，参考 dsh-anchored-standard 98/99）：
- * 1. 工具 schema 精简：description 用短句点明用途，详解放 tool result / 静态引导文本，
- *    不要写进 schema——工具目录按字符计费进首轮 prefill，实测 6 插件可膨胀到 17.6 万字符，
- *    稀释首轮注意力且无缓存 prefill 最贵（缓存命中便宜 10 倍）。
- * 2. 首轮锚定：工具面大（≥5 个）时首轮只露最核心的 1-2 个工具，首个工具调用后恢复全部——
- *    首轮请求结构决定整条会话的策略轨迹，锚定在训练对齐的窄工具面再放开，能力不损。
- *    启用方法见 apply() 末尾的注释块。
+ * 装配检测口径（facts F-006 零硬编码红线：不写死机器路径，运行时经 env/home 探测）：
+ *   1. injected 基准：注入器 registry.json（$DSH_HOME/super-injector/registry.json，dev 注入装配）
+ *   2. profile 基准：$DSH_HOME/profiles/<profile>/package.json 的 dependencies + dsh.profile.bundles
+ *      （bundle 装配；多 profile 全扫，逐 profile 归属）
+ *   成员状态 = injected / profile / both / missing。
+ *
+ * 高性能铁律：工具 schema 精简（description 短句，详解放 tool result / 引导文本）；
+ * 只读工具，不产生副作用。
  */
 import type { Context } from 'cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import z from 'schemastery'
+import { readFileSync, readdirSync, existsSync } from 'node:fs'
+import { join } from 'node:path'
+import { homedir } from 'node:os'
 
-export const name = "@dsh-external/shoucang-scheduler"
+export const name = '@dsh-external/shoucang-scheduler'
 export const inject = ['tools']
 
-export interface Config {
-  boards_persona: boolean
-  boards_memory: boolean
-  boards_wiki: boolean
-  g30_enabled: boolean
-  verify_enabled: boolean
+export interface SuiteMember {
+  id: string
+  package: string
+  repo: string
+  role: string
 }
 
-export const Config = z.object({
-  boards_persona: z.boolean().default(true),
-  boards_memory: z.boolean().default(true),
-  boards_wiki: z.boolean().default(true),
-  g30_enabled: z.boolean().default(true),
-  verify_enabled: z.boolean().default(true),
+export interface Config {
+  members: SuiteMember[]
+  verify_enabled: boolean // 预留：G30 证据计数对接（HANDOVER #5，本次只读模块不启用）
+}
+
+export const Config: any = z.object({
+  members: z
+    .array(
+      z.object({
+        id: z.string(),
+        package: z.string(),
+        repo: z.string().default(''),
+        role: z.string().default('member'),
+      }),
+    )
+    .default([
+      {
+        id: 'memory',
+        package: '@dsh-external/dsh-managing-memory',
+        repo: 'Fishsb/dsh-managing-memory',
+        role: 'commander',
+      },
+      {
+        id: 'governance',
+        package: '@dsh-external/project-map-governance',
+        repo: 'Fishsb/dsh-project-map-governance',
+        role: 'executor',
+      },
+    ]),
+  verify_enabled: z.boolean().default(false),
 })
 
-// 默认板块快照（MVP 用 config 注入；对应 shoucang.config.yaml §boards）
-function defaultBoards(cfg: Config) {
-  return { persona: cfg.boards_persona, memory: cfg.boards_memory, wiki: cfg.boards_wiki }
+// —— 装配事实源探测（无硬编码路径）——
+
+function dshHome(): string {
+  return process.env.DSH_HOME || join(homedir(), '.dsh')
 }
 
-// boards 参数："memory,wiki" -> 仅开这两板块（演示板块开关联动）
-function parseBoards(raw: string | undefined, base: Record<string, boolean>) {
-  const b = { ...base }
-  if (!raw) return b
-  const parts = raw.split(',').map((s) => s.trim()).filter(Boolean)
-  const specified = new Set(parts)
-  for (const k of Object.keys(b)) b[k] = specified.has(k)
-  return b
+/** 注入器 registry.json → 已注入包名集合 */
+function readInjectedRegistry(): { names: Set<string>; entries: { dir: string; name: string; at: string }[] } {
+  const reg = join(dshHome(), 'super-injector', 'registry.json')
+  const names = new Set<string>()
+  const entries: { dir: string; name: string; at: string }[] = []
+  try {
+    if (existsSync(reg)) {
+      const raw = JSON.parse(readFileSync(reg, 'utf8')) as { dir?: string; name?: string; at?: string }[]
+      if (Array.isArray(raw)) {
+        for (const e of raw) {
+          if (!e?.name) continue
+          names.add(e.name)
+          entries.push({ dir: e.dir || '', name: e.name, at: e.at || '' })
+        }
+      }
+    }
+  } catch {
+    // registry 不可读时按空处理（工具如实报状态，不抛）
+  }
+  return { names, entries }
 }
 
-// G0 准入：判定是否进入守藏；纯推理/闲聊 → 旁路零成本
-function admit(intent: string | undefined, query: string | undefined) {
-  if (intent === 'read' || intent === 'write' || intent === 'maintain') return { pass: true, intent }
-  const q = (query || '').toLowerCase()
-  if (/写入|保存|记录|归档|添加|更新|冲突|废弃|merge|supersede/.test(q)) return { pass: true, intent: 'write' }
-  if (/检索|查|找|召回|笔记|记忆|画像|知识|how|what|remind|lookup|search/.test(q)) return { pass: true, intent: 'read' }
-  return { pass: false, intent: 'bypass', reason: '无守藏路由意图（纯推理/闲聊/工具执行）' }
+interface ProfileScan {
+  profile: string
+  pkgNames: Set<string> // dependencies + dsh.profile.bundles 里能对应包名的
+  bundles: string[]
 }
 
-// G1 读路由：场景映射 R1-R5（建议，不剥夺模型自主选路权）
-function readRoute(query: string | undefined, boards: Record<string, boolean>) {
-  const active = Object.keys(boards).filter((k) => boards[k])
-  const q = (query || '')
-  let route = 'R4'
-  let note = '语义检索，不可达自动降级关键词'
-  if (/冷启动|新会话|第一次/.test(q)) { route = 'R1'; note = '全局注入（受 injection.level 分级）' }
-  else if (/指针|index|导航|浏览|探索|目录/.test(q)) { route = 'R2'; note = '指针表逐层下钻' }
-  else if (/关键词|词面|精确/.test(q)) { route = 'R3'; note = '关键词检索' }
-  else if (/直读|路径|get_file|已知/.test(q)) { route = 'R5'; note = '直读 get_file' }
-  return { route, note, boards: active }
+/** 扫描 $DSH_HOME/profiles 下各 profile 的 package.json → 装配包名（bundles + dependencies 键名） */
+function scanProfiles(): ProfileScan[] {
+  const base = join(dshHome(), 'profiles')
+  const out: ProfileScan[] = []
+  let dirs: string[] = []
+  try {
+    dirs = readdirSync(base, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name)
+  } catch {
+    return out // profiles 不存在 → 空
+  }
+  for (const profile of dirs) {
+    const pj = join(base, profile, 'package.json')
+    if (!existsSync(pj)) continue
+    try {
+      const pkg = JSON.parse(readFileSync(pj, 'utf8')) as {
+        dependencies?: Record<string, string>
+        dsh?: { profile?: { bundles?: string[] } }
+      }
+      const deps = pkg.dependencies || {}
+      const bundles = pkg.dsh?.profile?.bundles || []
+      const pkgNames = new Set<string>()
+      // dependencies：值含 link:/file: 的是本地包（dependencies 键名即包名）；npm 范围键名也是包名
+      for (const k of Object.keys(deps)) pkgNames.add(k)
+      for (const b of bundles) pkgNames.add(b)
+      out.push({ profile, pkgNames, bundles })
+    } catch {
+      // 单 profile package.json 损坏跳过
+    }
+  }
+  return out
 }
 
-// G2 写路由：裁决 W1/W2/W3 + 板块开关校验
-function writeRoute(target: string | undefined, boards: Record<string, boolean>) {
-  const t = (target || '').toLowerCase()
-  let path = 'W2'
-  let destination = ''
-  let boardKey = ''
-  if (/persona|画像/.test(t)) { boardKey = 'persona'; destination = '画像/'; path = 'W2' }
-  else if (/memory|记忆|config|rule|refer|tool|env|环境/.test(t)) { boardKey = 'memory'; destination = '记忆/日记忆'; path = 'W1' }
-  else if (/pre.?skill|技能|skill/.test(t)) { boardKey = 'wiki'; destination = '预skill/skills'; path = 'W2' }
-  else if (/note|笔记/.test(t)) { boardKey = 'wiki'; destination = '笔记'; path = 'W1' }
-  else return { path: 'W2', destination: '(unknown)', boardKey: '(unknown)', blocked: 'target_type 无法归类' }
-  if (!boards[boardKey]) return { path, destination, boardKey, blocked: '板块已关闭:' + boardKey }
-  return { path, destination, boardKey, blocked: '' }
+function resolveBaseName(pkg: string): string {
+  // '@dsh-external/project-map-governance' → 'project-map-governance'；bundles 常以短名登记
+  return pkg.includes('/') ? pkg.split('/').pop() || pkg : pkg
 }
 
-// G3 验证门：G30 证据计数（claims ≤ 工具实证），只信工具证据；FIX_LOOP 升级建议
-function g30Verdict(claims: string | undefined, evidenceReads: string | undefined) {
-  const c = Number(claims) || 0
-  const e = Number(evidenceReads) || 0
-  return { claimsN: c, evidenceReads: e, pass: e >= c }
-}
-function fixLevel(g30: { pass: boolean }, conflict: boolean) {
-  if (g30.pass && !conflict) return 'L0-ok'
-  return g30.pass ? 'L2-fix-adjudication' : 'L1-fix-evidence'
-}
+// —— 工具 ——
 
 export function apply(ctx: Context, config: Config): void {
-  // shoucang_route：G0/G1/G2 + boards 联动（一次调用获调度路由裁决）
-  ctx.effect(() => ctx.tools.register(defineTool({
-    name: 'shoucang_route',
-    description: '守藏调度执行器：G0 准入早分流 / G1 读路由建议(R1-R5) / G2 写路径裁决(W1-W3)，受 boards 开关约束。Model 只对接此协议，不摸板块内部。',
-    parameters: {
-      intent: { type: 'string' },
-      query: { type: 'string' },
-      target_type: { type: 'string' },
-      boards: { type: 'string' },
-    },
-    output: {
-      schema: {
-        type: 'object',
-        properties: {
-          gate: { type: 'string' },
-          intent: { type: 'string' },
-          route: { type: 'string' },
-          destination: { type: 'string' },
-          boards: { type: 'array', items: { type: 'string' } },
-          blocked: { type: 'string' },
-          note: { type: 'string' },
-        },
-        additionalProperties: false,
-      },
-      render: (_args: unknown, v: any) => [{ type: 'text', text: `gate=${v.gate} intent=${v.intent} route=${v.route} dest=${v.destination} boards=[${(v.boards || []).join(',')}] blocked=${v.blocked || 'no'} note=${v.note || '-'}` }],
-    },
-    async execute(args: any) {
-      const boards = parseBoards(args.boards, defaultBoards(config))
-      const g0 = admit(args.intent, args.query)
-      if (!g0.pass) return { gate: 'g0/bypass', intent: 'bypass', route: '', destination: '', boards: Object.keys(boards).filter((k) => boards[k]), blocked: '', note: g0.reason }
-      if (g0.intent === 'read') { const r = readRoute(args.query, boards); return { gate: 'g1/read', intent: 'read', route: r.route, destination: '(read)', boards: r.boards, blocked: '', note: r.note } }
-      if (g0.intent === 'write') { const w = writeRoute(args.target_type, boards); return { gate: w.blocked ? 'g2/blocked' : 'g2/write', intent: 'write', route: w.path, destination: w.destination, boards: Object.keys(boards).filter((k) => boards[k]), blocked: w.blocked, note: w.blocked ? w.blocked : '经 write_gate 落盘' } }
-      return { gate: 'g2/maintain', intent: 'maintain', route: 'W3', destination: '归档', boards: Object.keys(boards).filter((k) => boards[k]), blocked: '', note: '维护触发（idle-review/lifecycle）' }
-    },
-  })), '@dsh-external/shoucang-scheduler: route tool')
+  ctx.effect(
+    () =>
+      ctx.tools.register(
+        defineTool({
+          name: 'shoucang_suite',
+          description:
+            '守藏 suite-manager 只读装配检测：核对 suite 成员（config members）在 injected（注入器 registry.json）与 profile（profiles/*/package.json bundles+deps）两个装配基准上的状态，输出 each member: status=injected|profile|both|missing + 来源明细。只读不改装。',
+          parameters: {
+            member: { type: 'string', description: '只查指定成员 id（缺省=全部）' },
+            scope: { type: 'string', description: 'all|injected|profile（缺省 all）' },
+          },
+          output: {
+            schema: {
+              type: 'object',
+              properties: {
+                members: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string' },
+                      package: { type: 'string' },
+                      repo: { type: 'string' },
+                      role: { type: 'string' },
+                      status: { type: 'string' },
+                      injected: { type: 'boolean' },
+                      profiles: { type: 'array', items: { type: 'string' } },
+                      detail: { type: 'string' },
+                    },
+                    required: ['id', 'package', 'status'],
+                    additionalProperties: false,
+                  },
+                },
+                summary: { type: 'string' },
+              },
+              additionalProperties: false,
+            },
+            render: (_args: unknown, v: any) => {
+              const rows = (v?.members || []).map(
+                (m: any) =>
+                  `- ${m.id} [${m.status}] ${m.package}${m.repo ? ` (repo:${m.repo})` : ''}${m.detail ? ` — ${m.detail}` : ''}`,
+              )
+              return [{ type: 'text', text: rows.length ? `suite 装配检测：\n${rows.join('\n')}\n${v?.summary || ''}` : 'suite 装配检测：无成员' }]
+            },
+          },
+          async execute(args: any) {
+            const scope = (args?.scope || 'all') as string
+            const filter = (args?.member || '').toString().trim()
+            const injected = readInjectedRegistry()
+            const profiles = scanProfiles()
 
-  // shoucang_verify：G3 验证门（V 对抗 + G30 + FIX_LOOP）
-  ctx.effect(() => ctx.tools.register(defineTool({
-    name: 'shoucang_verify',
-    description: '守藏调度执行器 G3 验证门：对抗验证 + 证据核验。输入 claims/evidence_reads/operation/conflict。只信工具证据(G30)，失败按 FIX_LOOP 给出修正层级。',
-    parameters: {
-      claims: { type: 'string' },
-      evidence_reads: { type: 'string' },
-      operation: { type: 'string' },
-      conflict: { type: 'string' },
-    },
-    output: {
-      schema: {
-        type: 'object',
-        properties: {
-          gate: { type: 'string' },
-          g30_pass: { type: 'boolean' },
-          claims: { type: 'number' },
-          evidence_reads: { type: 'number' },
-          v_stage: { type: 'string' },
-          fix_level: { type: 'string' },
-          note: { type: 'string' },
-        },
-        additionalProperties: false,
-      },
-      render: (_args: unknown, v: any) => [{ type: 'text', text: `gate=${v.gate} g30=${v.g30_pass} claims=${v.claims} evidence=${v.evidence_reads} v=${v.v_stage} fix=${v.fix_level} note=${v.note}` }],
-    },
-    async execute(args: any) {
-      const g30 = g30Verdict(args.claims, args.evidence_reads)
-      const conflict = (args.conflict || 'no') === 'yes'
-      const vStage = g30.pass ? (conflict ? 'v2-adjudication-conflict' : 'v1-evidence-ok') : 'v1-evidence-fail'
-      const fix = fixLevel(g30, conflict)
-      const note = g30.pass && !conflict ? '验证通过，可落库/晋升' : (g30.pass ? '证据充分但存在冲突，需修正四操作裁决' : 'G30 未过：claims 无足够工具实证，削减断言或补 read_file 证据')
-      return { gate: 'g3/verify', g30_pass: g30.pass, claims: g30.claimsN, evidence_reads: g30.evidenceReads, v_stage: vStage, fix_level: fix, note }
-    },
-  })), '@dsh-external/shoucang-scheduler: verify tool')
+            const rows = config.members
+              .filter((m) => !filter || m.id === filter || m.package.includes(filter))
+              .map((m) => {
+                const inInjected = injected.names.has(m.package)
+                const hitProfiles = profiles.filter((p) => {
+                  // 精确包名或 bundle 短名命中
+                  const short = resolveBaseName(m.package)
+                  return p.pkgNames.has(m.package) || p.pkgNames.has(short)
+                })
+                const inProfile = hitProfiles.length > 0
+                const inScope = scope === 'all' || (scope === 'injected' && inInjected) || (scope === 'profile' && inProfile)
+                if (!inScope) return null
+                let status = 'missing'
+                if (inInjected && inProfile) status = 'both'
+                else if (inInjected) status = 'injected'
+                else if (inProfile) status = 'profile'
+                const detail =
+                  status === 'both'
+                    ? `注入器+${hitProfiles.map((p) => p.profile).join(',')} profile`
+                    : status === 'injected'
+                      ? '注入器装配'
+                      : status === 'profile'
+                        ? `${hitProfiles.map((p) => p.profile).join(',')} profile 装配`
+                        : '两基准均未装配（member 独立可装：dev_inject_plugin 或 dsh plugin add）'
+                return {
+                  id: m.id,
+                  package: m.package,
+                  repo: m.repo,
+                  role: m.role,
+                  status,
+                  injected: inInjected,
+                  profiles: hitProfiles.map((p) => p.profile),
+                  detail,
+                }
+              })
+              .filter((r): r is NonNullable<typeof r> => r !== null)
+
+            const missing = rows.filter((r) => r.status === 'missing').length
+            const present = rows.length - missing
+            return {
+              members: rows,
+              summary: `共 ${rows.length} 成员（present ${present} / missing ${missing}）; 基准: injected registry ${injected.entries.length} 项, profiles ${profiles.length} 个`,
+            }
+          },
+        }),
+      ),
+    '@dsh-external/shoucang-scheduler: suite tool',
+  )
 }

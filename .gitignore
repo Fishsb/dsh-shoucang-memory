@@ -1,5 +1,6 @@
 # 治理文档本地化：不入开源发布仓（project-map-governance 产物，仅本地 AI 协作用）
 AGENTS.md
+CLAUDE.md
 docs/map/
 
 # 依赖与构建产物

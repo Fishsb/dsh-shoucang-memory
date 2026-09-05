@@ -1,7 +1,7 @@
 {
   "name": "@dsh-external/shoucang-scheduler",
-  "version": "0.0.1",
-  "description": "守藏调度执行器 DSH 适配器：注册 shoucang_route / shoucang_verify 工具，实现 G0-G3 门状态机 + boards 板块开关联动 + G30 证据计数",
+  "version": "0.1.0",
+  "description": "守藏调度执行器（suite-manager 只读模块）：shoucang_suite 装配检测（注入器 registry + profiles 清单 vs suite members）",
   "private": true,
   "type": "module",
   "main": "./lib/index.js",
