@@ -1197,7 +1197,7 @@
         return true;
       }
 
-      // cordis client plugin 激活：注入 slots，注册侧栏 footer.action 入口按钮
+      // cordis client plugin 激活：注入 slots（满足契约）+ DOM 入口始终挂载（React 不可用时真实入口）
       function apply(ctx) {
         mount(); // root + mask + CSS（幂等）
         if (ctx && typeof ctx.effect === 'function' && ctx.slots && typeof ctx.slots.inject === 'function') {
@@ -1208,26 +1208,27 @@
                 id: 'shoucang-panel-toggle',
                 label: function () { return '守藏面板'; },
                 component: function () {
-                  return {
-                    render: function () {
-                      var btn = el('button'); btn.type = 'button'; btn.title = '守藏面板';
-                      btn.className = 'sc-trigger';
-                      var ic = el('img'); ic.src = SC_ICON; ic.alt = '守';
-                      ic.style.cssText = 'width:22px;height:22px;display:block;pointer-events:none;';
-                      btn.appendChild(ic);
-                      btn.appendChild(el('span', 'sc-trigger-label', '守藏'));
-                      btn.onclick = openPanel;
-                      return btn;
-                    }
+                  // footer.action 为 React slot：component = React 组件函数（footer.action 期望函数式组件）
+                  var reactEl = null;
+                  try { reactEl = require('react'); } catch (e) { reactEl = null; }
+                  var open = openPanel;
+                  return function () {
+                    // 纯 DOM 插件无 react 运行时 → 渲染 null（React 组件返回 null 合法，空槽不崩）；DOM 入口由 mountSidebarEntry 提供
+                    if (!reactEl || typeof reactEl.createElement !== 'function') return null;
+                    return reactEl.createElement(
+                      'button',
+                      { type: 'button', title: '守藏面板', className: 'sc-trigger', onClick: function () { open(); } },
+                      reactEl.createElement('img', { src: SC_ICON, alt: '守', style: { width: 22, height: 22, display: 'block', pointerEvents: 'none' } }),
+                      reactEl.createElement('span', { className: 'sc-trigger-label' }, '守藏')
+                    );
                   };
                 }
               });
             });
           }, 'shoucang-panel: footer action');
-        } else {
-          // 无 slots 环境兜底：直插侧栏 footArea（旧方案）
-          mountSidebarEntry();
         }
+        // 真实入口：DOM 直插（无论 slot 是否渲染成功都可用）
+        if (!document.getElementById('scpanl-btn')) mountSidebarEntry();
         return function () {
           if (sidebarObserver) { try { sidebarObserver.disconnect(); } catch (e) { /* noop */ } }
           var n = document.getElementById('scpanl-root'); if (n) n.remove();
