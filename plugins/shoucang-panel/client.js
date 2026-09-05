@@ -22,8 +22,9 @@
       var exports = module.exports;
 
       var BASE = '/api/shoucang-panel';
-      // 入口位：侧栏底部设置上方；footerActions 单行被记忆插件(mneme)占用，故直插 footArea 首行上移——不注册 Cordis 插槽，零冲突
-      var inject = [];
+      // 入口位：注册进侧栏 footer.action 插槽（现行 cordis client slot 契约）；
+      // 直插 footArea 的旧 DOM 方案仅作无 slot 环境的兜底（不再默认启用）
+      var inject = ['slots'];
 
       /* ---------- RPC ---------- */
 
@@ -255,7 +256,7 @@
       function renderViewToggles(view, parsed) {
         view.textContent = '';
         view.appendChild(el('div', 'sc-h1', '板块与管线'));
-        view.appendChild(el('div', 'sc-desc', '即 shoucang.config.yaml 的配置，开关行级翻转 / 档位滑块 / 下拉，注释原样保留，文件先自动备份。'));
+        view.appendChild(el('div', 'sc-desc', '⚠ deprecated：旧记忆三板块（画像/记忆/wiki）业务已由记忆插件+pmg 承接（facts F-003），本页仅存根目录配置兼容；配置入口见「配置原文」。'));
         // 画像 persona 四档滑块：关闭 / 仅注入我 / 仅注入你 / 全注入
         var personaMode = parsed.flags['injection.persona'] || 'both';
         var PERSONA_TIERS = [['off', '关闭'], ['me', '仅注入我'], ['you', '仅注入你'], ['both', '全注入']];
@@ -1009,9 +1010,33 @@
         ['persona', '画像板块', 'persona'],
         ['memory', '记忆板块', 'memory'],
         ['wiki', '知识库 wiki', 'file'],
-        ['toggles', '板块与管线', 'toggles'],
+        ['suite', '插件集合', 'file'],
+        ['toggles', '板块与管线 (deprecated)', 'toggles'],
         ['file', '配置原文', 'file']
       ];
+
+      /* ---------- 插件集合视图（#3） ---------- */
+      function renderSuite(view, data) {
+        view.textContent = '';
+        view.appendChild(el('div', 'sc-h1', '插件集合'));
+        view.appendChild(el('div', 'sc-desc', '守藏 = 集合中枢：装守藏 = 获得集合入口；成员插件独立可装。装配状态 = 注入器 registry + profiles 双基准。'));
+        var members = (data && data.members) || [];
+        if (!members.length) { view.appendChild(el('div', 'sc-desc', '无成员数据。')); return; }
+        members.forEach(function (m) {
+          var item = el('div', 'setting-item');
+          var info = el('div', 'setting-item-info');
+          info.appendChild(el('div', 'setting-item-name', (m.id || m.package) + '  ·  ' + (m.status || '?')));
+          info.appendChild(el('div', 'setting-item-desc', m.package + (m.role ? ' · role ' + m.role : '') + (m.repo ? ' · ' + m.repo : '') + (m.detail ? ' — ' + m.detail : '')));
+          item.appendChild(info);
+          var badge = el('div', 'setting-item-control');
+          var color = m.status === 'both' ? 'var(--sc-accent)' : m.status === 'missing' ? 'var(--sc-muted)' : 'var(--text-normal, inherit)';
+          badge.style.color = color;
+          badge.appendChild(el('span', null, m.status === 'both' ? '✓✓ 双基准' : m.status === 'injected' ? '✓ 注入器' : m.status === 'profile' ? '✓ profile' : '✗ 未装配'));
+          item.appendChild(badge);
+          view.appendChild(item);
+        });
+        if (data && data.summary) view.appendChild(el('div', 'sc-desc', data.summary));
+      }
       var refs = {};
       var state = { parsed: null };
 
@@ -1027,6 +1052,10 @@
           api('/boards/memory').then(function (r) { renderMemoryExpanded(refs.view, r); }).catch(fail);
         } else if (name === 'wiki') {
           renderMemory(refs.view);
+        } else if (name === 'suite') {
+          api('/suite').then(function (r) {
+            renderSuite(refs.view, r);
+          }).catch(fail);
         } else if (name === 'toggles') {
           api('/config').then(function (r) {
             if (!r.parsed) { status(r.error === 'no-active-root' ? '未激活根目录——请到「配置原文」页根目录区添加。' : (r.error || '')); return; }
@@ -1168,20 +1197,42 @@
         return true;
       }
 
-      function apply(ctx) { // 支持被 cordis client runtime 挂载时走 effect 清理
-        void ctx;
-        mount();
-        mountSidebarEntry();
+      // cordis client plugin 激活：注入 slots，注册侧栏 footer.action 入口按钮
+      function apply(ctx) {
+        mount(); // root + mask + CSS（幂等）
+        if (ctx && typeof ctx.effect === 'function' && ctx.slots && typeof ctx.slots.inject === 'function') {
+          ctx.effect(function () {
+            return ctx.slots.inject('sidebar.footer.action', function () {
+              return ctx.slots.register({
+                name: 'sidebar.footer.action',
+                id: 'shoucang-panel-toggle',
+                label: function () { return '守藏面板'; },
+                component: function () {
+                  return {
+                    render: function () {
+                      var btn = el('button'); btn.type = 'button'; btn.title = '守藏面板';
+                      btn.className = 'sc-trigger';
+                      var ic = el('img'); ic.src = SC_ICON; ic.alt = '守';
+                      ic.style.cssText = 'width:22px;height:22px;display:block;pointer-events:none;';
+                      btn.appendChild(ic);
+                      btn.appendChild(el('span', 'sc-trigger-label', '守藏'));
+                      btn.onclick = openPanel;
+                      return btn;
+                    }
+                  };
+                }
+              });
+            });
+          }, 'shoucang-panel: footer action');
+        } else {
+          // 无 slots 环境兜底：直插侧栏 footArea（旧方案）
+          mountSidebarEntry();
+        }
         return function () {
           if (sidebarObserver) { try { sidebarObserver.disconnect(); } catch (e) { /* noop */ } }
           var n = document.getElementById('scpanl-root'); if (n) n.remove();
           var b = document.getElementById('scpanl-btn'); if (b) b.remove();
         };
-      }
-
-      if (typeof document !== 'undefined') {
-        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);
-        else mount();
       }
 
       exports.inject = inject;

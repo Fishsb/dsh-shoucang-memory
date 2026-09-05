@@ -689,6 +689,53 @@ export function apply(ctx: Context, config: Config): void {
     sendJson(res, 200, { root: root.path, groups })
   })
 
+  /* ---------- 插件集合视图（#3：suite 装配状态，只读；算法与 scheduler shoucang_suite 同源） ---------- */
+
+  interface SuiteMemberRow { id: string; package: string; repo: string; role: string; status: string; injected: boolean; profiles: string[]; detail: string }
+  const SUITE_MEMBERS: SuiteMemberRow[] = [
+    { id: 'memory', package: '@dsh-external/dsh-managing-memory', repo: 'Fishsb/dsh-managing-memory', role: 'commander', status: '', injected: false, profiles: [], detail: '' },
+    { id: 'governance', package: '@dsh-external/project-map-governance', repo: 'Fishsb/dsh-project-map-governance', role: 'executor', status: '', injected: false, profiles: [], detail: '' },
+  ]
+  const suiteScan = (): { members: SuiteMemberRow[]; summary: string } => {
+    const base = join(homedir(), '.dsh')
+    const home = process.env.DSH_HOME || base
+    // 注入器 registry
+    const regPath = join(home, 'super-injector', 'registry.json')
+    const injectedNames = new Set<string>()
+    try {
+      const raw = JSON.parse(readFileSync(regPath, 'utf8')) as { name?: string }[]
+      if (Array.isArray(raw)) for (const e of raw) if (e?.name) injectedNames.add(e.name)
+    } catch { /* 无 registry → 空 */ }
+    // profiles 装配清单
+    const profilesDir = join(home, 'profiles')
+    let profDirs: string[] = []
+    try { profDirs = readdirSync(profilesDir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name) } catch { /* none */ }
+    const profileHits: Record<string, string[]> = {}
+    for (const prof of profDirs) {
+      try {
+        const pj = JSON.parse(readFileSync(join(profilesDir, prof, 'package.json'), 'utf8')) as { dependencies?: Record<string, string>; dsh?: { profile?: { bundles?: string[] } } }
+        const names = new Set([...Object.keys(pj.dependencies || {}), ...(pj.dsh?.profile?.bundles || [])])
+        for (const m of SUITE_MEMBERS) {
+          const short = m.package.split('/').pop() || m.package
+          if (names.has(m.package) || names.has(short)) (profileHits[m.id] = profileHits[m.id] || []).push(prof)
+        }
+      } catch { /* skip broken profile */ }
+    }
+    const members = SUITE_MEMBERS.map((m) => {
+      const inInj = injectedNames.has(m.package)
+      const profs = profileHits[m.id] || []
+      const status = inInj && profs.length ? 'both' : inInj ? 'injected' : profs.length ? 'profile' : 'missing'
+      const detail = status === 'both' ? `注入器+${profs.join(',')} profile` : status === 'injected' ? '注入器装配' : status === 'profile' ? `${profs.join(',')} profile 装配` : '两基准均未装配'
+      return { ...m, status, injected: inInj, profiles: profs, detail }
+    })
+    return { members, summary: `成员 ${members.length}（present ${members.filter((m) => m.status !== 'missing').length} / missing ${members.filter((m) => m.status === 'missing').length}）` }
+  }
+
+  // 插件集合装配状态（只读；client「插件集合」视图数据源）
+  route('/suite', (_req, res) => {
+    try { sendJson(res, 200, suiteScan()) } catch (e) { sendJson(res, 500, { error: String(e) }) }
+  })
+
   // R1 热记忆注入预览（排障/验证用，只读）
   route('/inject/preview', (_req, res) => {
     sendJson(res, 200, { text: buildHotMemoryText() })

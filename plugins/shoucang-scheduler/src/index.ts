@@ -32,7 +32,9 @@ export interface SuiteMember {
 
 export interface Config {
   members: SuiteMember[]
-  verify_enabled: boolean // 预留：G30 证据计数对接（HANDOVER #5，本次只读模块不启用）
+  verify_enabled: boolean // G30 证据计数（#5，审计 §8 Q3 兼容）
+  migrate_enabled: boolean // migrationHint 消费（#4）
+  default_project: string // #4 devref-card 派发默认目标项目路径（空=仅提示不派发）
 }
 
 export const Config: any = z.object({
@@ -59,7 +61,9 @@ export const Config: any = z.object({
         role: 'executor',
       },
     ]),
-  verify_enabled: z.boolean().default(false),
+  verify_enabled: z.boolean().default(true),
+  migrate_enabled: z.boolean().default(true),
+  default_project: z.string().default(''),
 })
 
 // —— 装配事实源探测（无硬编码路径）——
@@ -133,6 +137,46 @@ function scanProfiles(): ProfileScan[] {
 function resolveBaseName(pkg: string): string {
   // '@dsh-external/project-map-governance' → 'project-map-governance'；bundles 常以短名登记
   return pkg.includes('/') ? pkg.split('/').pop() || pkg : pkg
+}
+
+// —— #4 migrationHint 日志解析（记忆插件 distill 契约：route=project 知识密集 → 指挥者发迁移调度信号）——
+
+interface MigrateHint {
+  at: string
+  text: string
+}
+
+function readMigrationHints(limit = 20): MigrateHint[] {
+  const logPath = join(dshHome(), 'super-injector', 'dsh-managing-memory.log')
+  const out: MigrateHint[] = []
+  try {
+    if (!existsSync(logPath)) return out
+    const text = readFileSync(logPath, 'utf8')
+    const lines = text.split('\n')
+    // 倒序取最近 limit 条含「迁移调度提示」的行
+    const hits: { at: string; line: string }[] = []
+    for (let i = lines.length - 1; i >= 0 && hits.length < limit; i--) {
+      const line = lines[i]
+      if (!line.includes('迁移调度提示')) continue
+      const at = (line.match(/^\[([^\]]+)\]/) || [])[1] || ''
+      hits.push({ at, line })
+    }
+    for (const h of hits.reverse()) out.push({ at: h.at, text: h.line.slice(0, 300) })
+  } catch {
+    // 日志不可读 → 空（只读工具如实报）
+  }
+  return out
+}
+
+/** #4 目标项目 pending 积压估算：读 devref/pending 目录（pmg 卡库写门前置） */
+function readPendingBacklog(project: string): number {
+  try {
+    const dir = join(project, 'docs', 'devref', 'pending')
+    if (!existsSync(dir)) return 0
+    return readdirSync(dir).filter((f) => f.endsWith('.md')).length
+  } catch {
+    return 0
+  }
 }
 
 // —— 工具 ——
@@ -237,4 +281,161 @@ export function apply(ctx: Context, config: Config): void {
       ),
     '@dsh-external/shoucang-scheduler: suite tool',
   )
+
+  // shoucang_verify：G3 验证门（#5，G30 证据计数 + 审计 §8 Q3 兼容）
+  ctx.effect(() => {
+    if (!config.verify_enabled) return () => {}
+    return ctx.tools.register(
+      defineTool({
+        name: 'shoucang_verify',
+        description:
+          '守藏 G3 验证门（G30 证据计数）：claims（断言数）≤ evidence_reads（工具实证数）才 pass，只信工具证据。输出对齐记忆审计 §8 第三问（route 分流质量抽验）可消费格式；无分布数据时仅证据判定。',
+        parameters: {
+          claims: { type: 'string', description: '断言/主张数（数字）' },
+          evidence_reads: { type: 'string', description: '工具实证读取数（read_file/工具结果，数字）' },
+          route: { type: 'string', description: '本次分流 route（memory|project|discard，审计 Q3 用）' },
+          project_cards: { type: 'string', description: 'route=project 的卡产出数（审计 Q3 落点）' },
+          route_total: { type: 'string', description: '同期 route 总样本数（审计 Q3 分布分母，可省）' },
+          conflict: { type: 'string', description: 'yes|no（有冲突需裁决）' },
+        },
+        output: {
+          schema: {
+            type: 'object',
+            properties: {
+              gate: { type: 'string' },
+              g30_pass: { type: 'boolean' },
+              claims: { type: 'number' },
+              evidence_reads: { type: 'number' },
+              fix_level: { type: 'string' },
+              audit: {
+                type: 'object',
+                properties: {
+                  q3_route: { type: 'string' },
+                  q3_route_present: { type: 'boolean' },
+                  q3_cards_ok: { type: 'boolean' },
+                  q3_pass_rate: { type: 'number' },
+                },
+                additionalProperties: false,
+              },
+              note: { type: 'string' },
+            },
+            additionalProperties: false,
+          },
+          render: (_a: unknown, v: any) => [
+            {
+              type: 'text',
+              text: `gate=${v.gate} g30=${v.g30_pass} claims=${v.claims} evidence=${v.evidence_reads} fix=${v.fix_level}${v.audit?.q3_route ? ` auditQ3:route=${v.audit.q3_route} cardsOk=${v.audit.q3_cards_ok}` : ''} note=${v.note || '-'}`,
+            },
+          ],
+        },
+        async execute(args: any) {
+          const c = Number(args?.claims) || 0
+          const e = Number(args?.evidence_reads) || 0
+          const g30Pass = e >= c
+          const conflict = (args?.conflict || 'no') === 'yes'
+          const fix = !g30Pass ? 'L1-fix-evidence' : conflict ? 'L2-fix-adjudication' : 'L0-ok'
+          const route = (args?.route || '').toString().trim()
+          const cards = Number(args?.project_cards) || 0
+          const total = Number(args?.route_total) || 0
+          // 审计 §8 Q3：route=project 时核验「projectCards 落点」——有产出即 cards_ok；给分布则算 pass_rate
+          const audit = {
+            q3_route: route || 'memory',
+            q3_route_present: route === 'project',
+            q3_cards_ok: route === 'project' ? cards > 0 : true,
+            q3_pass_rate: total > 0 ? Number((e / Math.max(total, 1)).toFixed(3)) : 0,
+          }
+          const note = !g30Pass
+            ? 'G30 未过：claims 无足够工具实证，削减断言或补 read_file 证据'
+            : conflict
+              ? '证据充分但存在冲突，需裁决'
+              : route === 'project' && cards === 0
+                ? 'route=project 但卡产出 0——审计 Q3 落点失败，检查 devref-card 迁移'
+                : '验证通过'
+          return {
+            gate: 'g3/verify',
+            g30_pass: g30Pass,
+            claims: c,
+            evidence_reads: e,
+            fix_level: fix,
+            audit,
+            note,
+          }
+        },
+      }),
+    )
+  }, '@dsh-external/shoucang-scheduler: verify tool')
+
+  // shoucang_migrate：#4 migrationHint 消费（只读：读记忆插件日志迁移调度提示 + 目标项目积压，给派发命令）
+  ctx.effect(() => {
+    if (!config.migrate_enabled) return () => {}
+    return ctx.tools.register(
+      defineTool({
+        name: 'shoucang_migrate',
+        description:
+          '守藏 migrationHint 消费（只读）：读记忆插件日志（$DSH_HOME/super-injector/dsh-managing-memory.log）的「迁移调度提示」行，聚合近期提示 + 目标项目 pending 积压（devref/pending），并给出 devref-card 派发命令（目标=参数 project 或 config default_project；写卡由 pmg devref-card 执行，本工具不写）。',
+        parameters: {
+          project: { type: 'string', description: '目标项目路径（覆盖 config default_project）' },
+        },
+        output: {
+          schema: {
+            type: 'object',
+            properties: {
+              hints: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: { at: { type: 'string' }, text: { type: 'string' } },
+                  additionalProperties: false,
+                },
+              },
+              hint_count_24h: { type: 'number' },
+              backlog: { type: 'number' },
+              backlog_threshold_met: { type: 'boolean' },
+              target_project: { type: 'string' },
+              dispatch_command: { type: 'string' },
+              note: { type: 'string' },
+            },
+            additionalProperties: false,
+          },
+          render: (_a: unknown, v: any) => [
+            {
+              type: 'text',
+              text:
+                `migrationHint 消费：近 24h 提示 ${v.hint_count_24h} 条（共 ${v.hints.length} 条）；目标 ${v.target_project || '(未配置)'} pending ${v.backlog} 张（阈值 ${v.backlog_threshold_met ? '已过' : '未过'}）` +
+                (v.dispatch_command ? `\n派发命令：${v.dispatch_command}` : '') +
+                (v.hints.length ? `\n最新提示：${v.hints[v.hints.length - 1].text}` : '\n（无迁移调度提示）'),
+            },
+          ],
+        },
+        async execute(args: any) {
+          const hints = readMigrationHints()
+          const now = Date.now()
+          const recent24h = hints.filter((h) => {
+            const t = Date.parse(h.at)
+            return !Number.isNaN(t) && now - t < 24 * 3600 * 1000
+          }).length
+          const target = (args?.project || '').toString().trim() || config.default_project.trim()
+          const backlog = target ? readPendingBacklog(target) : 0
+          const thresholdMet = backlog >= 3
+          // pmg devref-card 引擎路径运行时探测（注入成员位置，零硬编码）
+          const pmgScript = join(dshHome(), 'plugins', 'project-map-governance', 'engine', 'scripts', 'devref-card.mjs')
+          const pmgReady = existsSync(pmgScript)
+          const dispatchCmd = !target
+            ? '（未配置 default_project——config 指定目标项目路径后给出派发命令）'
+            : !pmgReady
+              ? `（pmg devref-card 未就位于 ${pmgScript}——需先注入 @dsh-external/project-map-governance）`
+              : `node "${pmgScript}" "${target}" --list` + (backlog > 0 ? '  # 待迁移卡见 --list；写卡用 --title/--card-type/--text/--source' : '')
+          return {
+            hints: hints.slice(-5),
+            hint_count_24h: recent24h,
+            backlog,
+            backlog_threshold_met: thresholdMet,
+            target_project: target,
+            dispatch_command: dispatchCmd,
+            note: backlog >= 3 ? 'pending ≥3，建议派发 pmg devref-card 迁移' : backlog > 0 ? '有积压但未达阈值' : '无积压或未配置目标',
+          }
+        },
+      }),
+    )
+  }, '@dsh-external/shoucang-scheduler: migrate tool')
 }

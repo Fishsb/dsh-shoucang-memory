@@ -1,7 +1,7 @@
 {
   "name": "@dsh-external/shoucang-panel",
-  "version": "0.1.0",
-  "description": "守藏设置面板（会话窗口式）：root 管理 / 板块与管线开关 / 配置原文编辑 / 画像与记忆板块展示。宿主走 ctx.webServer 挂 /api/shoucang-panel，client 纯 DOM 注入。",
+  "version": "0.2.0",
+  "description": "守藏设置面板（slot 契约 v0.2）：插件集合视图 / root 管理 / 配置原文编辑 / 画像记忆展示（旧板块与管线页 deprecated）。宿主 ctx.webServer 挂 /api/shoucang-panel，client 注册 sidebar.footer.action 插槽入口（DOM 面板）。",
   "private": true,
   "type": "module",
   "main": "./lib/index.js",
