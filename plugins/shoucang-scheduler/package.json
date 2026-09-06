@@ -23,11 +23,16 @@
     "schemastery": "^3.18.0"
   },
   "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.2",
+    "@deepseek-ai/dsh-tools": "0.0.1-rc.1",
     "@types/node": "^24.13.3",
+    "cordis": "^4.0.0-rc",
+    "schemastery": "^3.18.0",
     "typescript": "^5.9.0"
   },
   "scripts": {
     "build": "bash scripts/build.sh",
+    "build:local": "bash scripts/build-local.sh",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   }
 }
