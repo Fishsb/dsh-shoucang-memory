@@ -994,8 +994,16 @@
         return pill;
       }
       /** 索引指针行（tag pill + subject + notes 指针），点击直达 notes 小节。 */
+      /** 知识索引行渲染：按 tag 语义分组排序（环境→工具→流程→教训→发布→画像→其他），组内保持书写序（稳定排序）。 */
+      var TAG_ORDER = ['env', 'tool', 'flow', 'lesson', 'release', 'user', 'agent'];
       function renderIndexRows(container, lines, returnRender) {
-        (lines || []).forEach(function (ln) {
+        var arr = (lines || []).slice();
+        arr.sort(function (a, b) {
+          var ia = TAG_ORDER.indexOf(String(a.tag || '').toLowerCase()); if (ia === -1) ia = TAG_ORDER.length;
+          var ib = TAG_ORDER.indexOf(String(b.tag || '').toLowerCase()); if (ib === -1) ib = TAG_ORDER.length;
+          return ia - ib;
+        });
+        arr.forEach(function (ln) {
           var row = el('div', 'sc-idx-row');
           row.appendChild(idxPill(ln.tag));
           row.appendChild(el('span', 'sc-idx-subject', ln.subject || ''));
