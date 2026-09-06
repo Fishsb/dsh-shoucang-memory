@@ -43,8 +43,9 @@ export interface DistillConfig {
   memberPackages: { memory: string; governance: string }
 }
 
-// ── 蒸馏裁决契约 v3（事实源=记忆仓 engine/distill-contract.md；守藏为执行宿主，契约文本不改动语义）──
+// ── 蒸馏裁决契约 v3.1（事实源=记忆仓 engine/distill-contract.md；守藏为执行宿主，契约文本不改动语义）──
 // v3（2026-09-06 用户拍板）：判定锚从类别改为粒度——两库区别不是主题，是粒度分工。
+// v3.1（2026-09-06 用户拍板）：格式传递——appends.text 教程式三段、newIndex.line 内嵌 spec §8 索引行模板（格式权威=记忆库 spec §8）。
 export const DEFAULT_DISTILL_PROMPT = `你是知识整理蒸馏子代理（ADR-0005 v3）。任务：从给定会话增量正文中，判定每条可复用知识的归属（第一层路由），再输出结构化入册指令（由宿主执行写入，你无需也不能直接写文件/跑命令）。
 判定锚（v3）：两库不是按主题分类，是按粒度分工——
 - 记忆库=泛化元记忆（人脑类比）：只存「下次做类似任务时给 agent 的大概方向」——任务大概步骤轮廓/关键注意点/目标形态，粒度宁粗勿细。
@@ -59,8 +60,8 @@ export const DEFAULT_DISTILL_PROMPT = `你是知识整理蒸馏子代理（ADR-0
 route=memory 时续走四问：Q0 已有归属？Q1 下周用得上？Q2 归谁（MEMORY/USER/AGENT）？Q3 能合并？
 委派禁令：**独立完成，绝不 spawn/委派任何子代理**（查重凭给定正文与你自身知识判断）。
 输出：只输出一行 JSON（不要 reasoning、不要其他文本）：
-{"route":"memory","appends":[{"target":"notes/tools.md","section":"<既有 ## 小节名>","text":"≤120字高密度"}],"newIndex":[{"target":"MEMORY.md","line":"[tool] ... → notes/x.md §小节"}],"projectCards":[{"cardType":"how-to|reference|decision","board":"generic|project","title":"≤20字","text":"≤200字","source":"≤30字"}],"migrationHint":"","skipped":[{"title":"...","reason":"≤30字"}]}
-约束：route=memory → 填 appends/newIndex（target 白名单 notes/tools.md notes/flows.md notes/lessons.md notes/env.md notes/release.md；section 必须既有 ## 小节名；text 只写方向指引级浓缩，不搬细节条文），projectCards 留空；route=project → 填 projectCards（cardType: how-to=操作步骤/reference=契约事实/decision=架构决策；board 必填：generic=官方规范/平台规则，project=项目事实/用户决策，缺省按 project），appends/newIndex 留空，若该项目开发知识密集（连续踩坑/多契约）填 migrationHint（≤30字，提示宿主安排卡库迁移复核）；route=discard → 除 skipped 全空；与 route 不匹配的条目宿主拒收。`
+{"route":"memory","appends":[{"target":"notes/tools.md","section":"<既有 ## 小节名>","text":"教程式浓缩：目标一句+编号步骤+注意，≤120字"}],"newIndex":[{"target":"MEMORY.md","line":"[tag] 主题 · 概况短语/短语/短语 → notes/x.md §小节"}],"projectCards":[{"cardType":"how-to|reference|decision","board":"generic|project","title":"≤20字","text":"≤200字","source":"≤30字"}],"migrationHint":"","skipped":[{"title":"...","reason":"≤30字"}]}
+约束：route=memory → 填 appends/newIndex（target 白名单 notes/tools.md notes/flows.md notes/lessons.md notes/env.md notes/release.md；section 必须既有 ## 小节名；**text 教程式三段**「目标：… 1. … 2. … 注意：…」只写方向指引级浓缩——目标形态/步骤轮廓/关键注意点，不搬细节条文，纯事实类可省步骤保留目标行；**newIndex.line 格式权威=记忆库 spec §8**：[tag] 主题 · 概况短语/短语/短语 → notes/<file>.md §小节，定界符 ·=段界 /=短语界 →=指针，主题≤12字名词性禁冒号复合，概况名词短语 / 分隔、≤30字、高判别实词（专名/数值/路径关键词）、禁日期溯源），projectCards 留空；route=project → 填 projectCards（cardType: how-to=操作步骤/reference=契约事实/decision=架构决策；board 必填：generic=官方规范/平台规则，project=项目事实/用户决策，缺省按 project），appends/newIndex 留空，若该项目开发知识密集（连续踩坑/多契约）填 migrationHint（≤30字，提示宿主安排卡库迁移复核）；route=discard → 除 skipped 全空；与 route 不匹配的条目宿主拒收。`
 
 // ── 预筛信号词（零拷贝优先动态加载记忆仓 engine/signals.mjs；不可达时内嵌兜底副本，与 engine 同源）──
 const PRESCAN_STRONG = ['记住', '以后', '注意', '踩坑', '原来是这样', '应该改成', '别再用', '纠正', '别忘了', '务必']
