@@ -277,11 +277,23 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): void {
         }
         log(`distill: ${sid.slice(0, 8)} 预筛通过（信号词=${hasSig}，pending 候选=${candFiles.length}），进入蒸馏`)
       }
-      const candText = candFiles.map((f) => { try { return `### 源 ${f}\n${readFileSync(join(pendDir, f), 'utf8')}` } catch { return '' } }).join('\n')
+      // 候选按文件粒度装填：预算内进 prompt，放不下的整文件留 pending 下轮（防截断外候选被整批归档丢失知识）
+      const CAND_BUDGET = 12000
+      const candIncluded: string[] = []
+      let candBudget = CAND_BUDGET
+      const candText = candFiles.map((f) => {
+        let body = ''
+        try { body = readFileSync(join(pendDir, f), 'utf8') } catch { return '' }
+        const chunk = `### 源 ${f}\n${body}`
+        if (chunk.length > candBudget) return '' // 本文件装不下：不进本轮，保留 pending
+        candBudget -= chunk.length + 1 // +1 join('\n') 分隔符
+        candIncluded.push(f)
+        return chunk
+      }).join('\n')
       const userInput = [
         `## 待蒸馏会话\nsessionId=${sid}（内存增量，水位 ${lastSeq}→${maxSeq}）`,
         `## 会话增量正文\n${deltaText}`,
-        candFiles.length ? `## 待固化候选（pending/ 中 ${candFiles.length} 个）\n${candText.slice(0, 12000)}` : '（无待固化候选）',
+        candIncluded.length ? `## 待固化候选（pending/ 中 ${candIncluded.length}/${candFiles.length} 个，预算 ${CAND_BUDGET} 字符内）\n${candText}` : (candFiles.length ? '（待固化候选超预算，本轮不携带；候选保留 pending 待下轮）' : '（无待固化候选）'),
         '请按规则处理：裁决可复用知识点并输出入册指令 JSON。',
       ].join('\n\n')
 
@@ -326,9 +338,9 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): void {
           : await writeDispatch(sid, out, route, workspace)
         log(`distill: ${sid.slice(0, 8)} stop=${stop} route=${route} → ${disp.targetLib} 入册 ${disp.added} / 拒收 ${disp.rejected} / 失败 ${disp.failed}`)
         audit({ sid, kind: 'distill-run', route, stop, targetLib: disp.targetLib, added: disp.added, rejected: disp.rejected, failed: disp.failed })
-        if (disp.added > 0) {
+        if (disp.added > 0 && candIncluded.length) {
           const procDir = join(pendDir, '.processed')
-          try { mkdirSync(procDir, { recursive: true }); for (const f of candFiles) { try { renameSync(join(pendDir, f), join(procDir, f)) } catch { /* */ } } } catch { /* */ }
+          try { mkdirSync(procDir, { recursive: true }); for (const f of candIncluded) { try { renameSync(join(pendDir, f), join(procDir, f)) } catch { /* */ } } } catch { /* */ }
         }
         if (stop === 'completed') {
           writeWatermark(sid, maxSeq)
