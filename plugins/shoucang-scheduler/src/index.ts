@@ -38,7 +38,7 @@ export interface Config {
   migrate_enabled: boolean // migrationHint 消费（#4）
   default_project: string // #4 devref-card 派发默认目标项目路径（空=仅提示不派发）
   // ═══ ADR-0002 阶段 2：蒸馏器配置（蒸馏配置归守藏，承接原记忆仓 F-001/F-002）═══
-  enableDistill: boolean // 守藏蒸馏器开关；缺省 false（单飞切换时置 true 并关记忆插件蒸馏）
+  enableDistill: boolean // 守藏蒸馏器开关；单飞切换后缺省 true（记忆插件蒸馏已关，ADR-0002 阶段3）
   idleWakeMs: number // 唤醒判定：turn 结束后空闲满此毫秒数才蒸馏（缺省 10 分钟）
   minTurnChars: number // 本轮新增正文少于此字符数则跳过蒸馏（水位仍推进）
   distillPrescan: boolean // 预筛：spawn 前扫增量信号词 + pending 候选，皆无则跳过（零 LLM 成本）
@@ -74,7 +74,7 @@ export const Config: any = z.object({
   verify_enabled: z.boolean().default(true),
   migrate_enabled: z.boolean().default(true),
   default_project: z.string().default(''),
-  enableDistill: z.boolean().default(false).description('守藏蒸馏器（ADR-0002 阶段2）；缺省关——单飞切换时置 true 并关记忆插件蒸馏'),
+  enableDistill: z.boolean().default(true).description('守藏蒸馏器（ADR-0002 阶段2）；单飞切换完成后缺省开（记忆插件蒸馏已关）'),
   idleWakeMs: z.number().min(60000).default(600000).description('唤醒判定：turn 结束后空闲满此毫秒数才蒸馏（缺省 10 分钟）'),
   minTurnChars: z.number().min(0).default(200).description('本轮新增正文少于此字符数跳过蒸馏（水位仍推进）'),
   distillPrescan: z.boolean().default(true).description('预筛：无信号词且无 pending 候选则不唤醒 LLM 子代理'),
