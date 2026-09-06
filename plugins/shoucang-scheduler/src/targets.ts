@@ -133,6 +133,12 @@ export function resolveTarget(route: 'memory' | 'project', members: { memory: bo
 
 // —— 白名单（ADR-0002 决策 4：各库自治 config，蒸馏器只读消费；不符合不存）——
 
+export interface BoardDef {
+  host?: string
+  accept?: string[]
+  reject?: string[]
+}
+
 export interface Whitelist {
   version: number
   library: string
@@ -140,13 +146,22 @@ export interface Whitelist {
   indexTargets: string[]
   notes: string[]
   cardTypes: string[]
+  /** 契约 v3 粒度锚：板块边界（generic=官方/规范文档级；project=项目事实/用户拍板）。空键=不设板块门禁 */
+  boards: Record<string, BoardDef>
+}
+
+const NO_BOARDS: Record<string, BoardDef> = {}
+
+const PMG_BOARDS: Record<string, BoardDef> = {
+  generic: { host: 'dsh-project-map-governance-plugin', accept: ['官方规范', '平台规则', 'DSH 开发规范', '工具用法资料', '跨项目通用的规范性条文'], reject: ['泛化方向指引（记忆库粒度）', '一次性内容', '项目专属事实（归 project 板块）'] },
+  project: { host: 'workspace 项目（docs/devref/cards）', accept: ['项目事实', '开发中用户拍板的决策（decision）', '项目专属开发契约（reference）', '项目踩坑 SOP（how-to）'], reject: ['官方规范原文（归 generic 板块）', '泛化方向指引（记忆库粒度）'] },
 }
 
 export const BUILTIN_WHITELISTS: Record<RouteTarget['library'], Whitelist> = {
-  'memory-plugin': { version: 1, library: 'memory-plugin', routes: ['memory'], indexTargets: ['MEMORY.md', 'USER.md', 'AGENT.md'], notes: ['env', 'tools', 'flows', 'lessons', 'release', 'user', 'agent'], cardTypes: [] },
-  'shoucang-local': { version: 1, library: 'shoucang-local', routes: ['memory'], indexTargets: ['MEMORY.md', 'USER.md', 'AGENT.md'], notes: ['env', 'tools', 'flows', 'lessons', 'release', 'user', 'agent'], cardTypes: [] },
-  'pmg-cards': { version: 1, library: 'pmg-cards', routes: ['project'], indexTargets: [], notes: [], cardTypes: ['how-to', 'reference', 'decision'] },
-  'local-pending': { version: 1, library: 'local-pending', routes: ['project'], indexTargets: [], notes: [], cardTypes: ['how-to', 'reference', 'decision'] },
+  'memory-plugin': { version: 1, library: 'memory-plugin', routes: ['memory'], indexTargets: ['MEMORY.md', 'USER.md', 'AGENT.md'], notes: ['env', 'tools', 'flows', 'lessons', 'release', 'user', 'agent'], cardTypes: [], boards: NO_BOARDS },
+  'shoucang-local': { version: 1, library: 'shoucang-local', routes: ['memory'], indexTargets: ['MEMORY.md', 'USER.md', 'AGENT.md'], notes: ['env', 'tools', 'flows', 'lessons', 'release', 'user', 'agent'], cardTypes: [], boards: NO_BOARDS },
+  'pmg-cards': { version: 1, library: 'pmg-cards', routes: ['project'], indexTargets: [], notes: [], cardTypes: ['how-to', 'reference', 'decision'], boards: PMG_BOARDS },
+  'local-pending': { version: 1, library: 'local-pending', routes: ['project'], indexTargets: [], notes: [], cardTypes: ['how-to', 'reference', 'decision'], boards: NO_BOARDS },
 }
 
 export function loadWhitelist(root: string, library: RouteTarget['library']): { wl: Whitelist; source: 'file' | 'builtin' } {
@@ -163,6 +178,7 @@ export function loadWhitelist(root: string, library: RouteTarget['library']): { 
           indexTargets: raw.indexTargets ?? base.indexTargets,
           notes: raw.notes ?? base.notes,
           cardTypes: raw.cardTypes ?? base.cardTypes,
+          boards: raw.boards ?? base.boards,
         },
         source: 'file',
       }
@@ -182,11 +198,16 @@ export function gateMemoryAppend(a: { target?: string }, wl: Whitelist): GateRes
   return { ok: false, reason: `白名单不符: ${t || '(空)'} 不在 ${wl.library} 收录范围（indexTargets=[${wl.indexTargets.join(',')}] notes=[${wl.notes.join(',')}]）` }
 }
 
-/** project 路由卡目门禁：cardType ∈ 白名单卡型 */
-export function gateProjectCard(pc: { cardType?: string }, wl: Whitelist): GateResult {
+/** project 路由卡目门禁：cardType ∈ 白名单卡型；板块 ∈ 白名单 boards（契约 v3 粒度锚，空键=不设板块门禁） */
+export function gateProjectCard(pc: { cardType?: string; board?: string }, wl: Whitelist): GateResult {
   const c = String(pc.cardType || '').trim()
-  if (wl.cardTypes.includes(c)) return { ok: true }
-  return { ok: false, reason: `白名单不符: cardType=${c || '(空)'} 不在 ${wl.library} 收录范围（cardTypes=[${wl.cardTypes.join(',')}]）` }
+  if (!wl.cardTypes.includes(c)) return { ok: false, reason: `白名单不符: cardType=${c || '(空)'} 不在 ${wl.library} 收录范围（cardTypes=[${wl.cardTypes.join(',')}]）` }
+  const boardKeys = Object.keys(wl.boards || {})
+  if (boardKeys.length > 0) {
+    const b = String(pc.board || 'project').trim()
+    if (!boardKeys.includes(b)) return { ok: false, reason: `白名单不符: 板块=${b} 不在 ${wl.library} 收录范围（boards=[${boardKeys.join(',')}]，越界知识宁弃不存）` }
+  }
+  return { ok: true }
 }
 
 // —— 阶段 1 验收：组合矩阵 4 行自测 + 白名单门禁抽样 ——

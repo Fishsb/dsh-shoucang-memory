@@ -35,7 +35,7 @@
 
 ## 五、协调契约速查（与双插件的关系）
 - **协作宪章**（裁决序/角色/门禁等价）→ 主仓 `SKILL.md §协作宪章` + pmg `AGENTS.md 规则5`（suite 不重复定义，只消费）
-- **蒸馏契约 v2.1**（R0 路由/migrationHint）→ 主仓 `engine/distill-contract.md`
+- **蒸馏契约 v3**（粒度锚路由/migrationHint）→ 主仓 `engine/distill-contract.md`
 - **卡库写门**（迁移执行端）→ pmg `engine/scripts/devref-card.mjs`
 
 ## 六、环境重建备忘

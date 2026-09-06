@@ -16,7 +16,7 @@ import { appendFileSync, mkdirSync, readFileSync, writeFileSync, existsSync, rea
 import { join, dirname } from 'node:path'
 import {
   dshHome, knowledgeRoot, memoryLibRoot, pmgScriptsRoot,
-  memberPresent, resolveTarget, loadWhitelist, gateMemoryAppend, gateProjectCard,
+  memberPresent, resolveTarget, loadWhitelist, gateMemoryAppend, gateProjectCard, BUILTIN_WHITELISTS,
   type Whitelist, type RouteTarget,
 } from './targets.js'
 
@@ -231,16 +231,18 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): void {
       const cards = (out && Array.isArray(out.projectCards)) ? out.projectCards : []
       for (const pc of cards) {
         if (!pc || !pc.title || !pc.text) { failed++; continue }
-        const wl: Whitelist = loadWhitelist(resolved.root, resolved.library).wl
-        const g = gateProjectCard({ cardType: pc.cardType }, wl)
+        // 契约 v3：先定板块与写入目标；白名单跟随实际写入目标目录（各库自治：board=generic → pmg 权威仓 docs/devref，board=project → workspace docs/devref）
+        const board = String(pc.board || 'project') === 'generic' ? 'generic' : 'project'
+        const project = resolved.library === 'pmg-cards'
+          ? (board === 'generic' ? (config.genericProject.trim() || '') : (workspace || (config.defaultProject.trim() || '')))
+          : ''
+        let wl: Whitelist
+        if (resolved.library === 'pmg-cards' && project) wl = loadWhitelist(join(project, 'docs', 'devref'), 'pmg-cards').wl
+        else wl = BUILTIN_WHITELISTS[resolved.library]
+        const g = gateProjectCard({ cardType: pc.cardType, board }, wl)
         if (!g.ok) { rejected++; audit({ sid, kind: 'gate-reject', target: pc.title, reason: g.reason, lib: resolved.library }); log(`distill 拒收: ${g.reason?.slice(0, 120)}`); continue }
         if (resolved.library === 'pmg-cards') {
           const script = join(pmgScriptsRoot(), 'devref-card.mjs')
-          // 契约 v3：board=generic → 通用知识库宿主（config.genericProject，即 pmg 权威仓）；board=project → workspace 项目卡库
-          const board = String(pc.board || 'project') === 'generic' ? 'generic' : 'project'
-          const project = board === 'generic'
-            ? (config.genericProject.trim() || '')
-            : (workspace || (config.defaultProject.trim() || ''))
           if (!project || !existsSync(script)) {
             failed++
             const reason = !project ? (board === 'generic' ? '通用板块未配置 generic_project（宿主直写积压）' : '无目标项目（workspace 反解失败且未配 defaultProject）') : 'devref-card 未就位'
