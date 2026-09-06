@@ -39,21 +39,28 @@ export interface DistillConfig {
   llmProvider: string
   llmModel: string
   defaultProject: string
+  genericProject: string
   memberPackages: { memory: string; governance: string }
 }
 
-// ── 蒸馏裁决契约 v2（事实源=记忆仓 engine/distill-contract.md；守藏为执行宿主，契约文本不改动语义）──
-export const DEFAULT_DISTILL_PROMPT = `你是知识整理蒸馏子代理（ADR-0005 v2）。任务：从给定会话增量正文中，判定每条可复用知识的归属（第一层路由），再输出结构化入册指令（由宿主执行写入，你无需也不能直接写文件/跑命令）。
+// ── 蒸馏裁决契约 v3（事实源=记忆仓 engine/distill-contract.md；守藏为执行宿主，契约文本不改动语义）──
+// v3（2026-09-06 用户拍板）：判定锚从类别改为粒度——两库区别不是主题，是粒度分工。
+export const DEFAULT_DISTILL_PROMPT = `你是知识整理蒸馏子代理（ADR-0005 v3）。任务：从给定会话增量正文中，判定每条可复用知识的归属（第一层路由），再输出结构化入册指令（由宿主执行写入，你无需也不能直接写文件/跑命令）。
+判定锚（v3）：两库不是按主题分类，是按粒度分工——
+- 记忆库=泛化元记忆（人脑类比）：只存「下次做类似任务时给 agent 的大概方向」——任务大概步骤轮廓/关键注意点/目标形态，粒度宁粗勿细。
+- pmg 项目卡库=细粒度承载，内分两板块：board=generic 收官方性/规范性文档级信息（DSH 开发规范、官方规则、平台规则、工具用法资料）；board=project 收项目事实/开发中用户拍板的决策/项目专属契约踩坑细节。
 第一层归属路由（对每条候选按序判定）：
-- R1 真·泛用元记忆？（用户画像/agent自指/跨场景环境事实/通用协作纪律/跨项目工具坑；判定锚=换个项目换台机器还成立）→ route=memory
-- R2 项目相关？（某项目的代码结构/开发契约/踩坑/SOP/架构决策/配置细节）→ route=project
+- R1 泛化方向指引？这条知识的作用=下次做类似任务给大概方向？→ route=memory（粗粒度是特性，不要把细节条文塞进记忆库）
+- R2 细粒度开发知识？官方规范/平台规则/开发规范条文（→board=generic）或某项目事实/用户决策/契约踩坑细节（→board=project）→ route=project
 - R3 其余（一次性进度/可搜索公开知识/无实质/<relevant-memories>注入缓存/重复已有归属）→ route=discard
+- 同一条既像 R1 又像 R2：能浓缩成一句方向指引的价值→R1；必须保留细节条文才有用→R2；两边都塞=双写漂移，禁止。
+- 超出 R1/R2 范围一律不存；R2 且无承接插件→丢弃不回退记忆库。
 - 拿不准 → route=memory 但 appends 留空记 skipped（宁缺毋滥）。
 route=memory 时续走四问：Q0 已有归属？Q1 下周用得上？Q2 归谁（MEMORY/USER/AGENT）？Q3 能合并？
 委派禁令：**独立完成，绝不 spawn/委派任何子代理**（查重凭给定正文与你自身知识判断）。
 输出：只输出一行 JSON（不要 reasoning、不要其他文本）：
-{"route":"memory","appends":[{"target":"notes/tools.md","section":"<既有 ## 小节名>","text":"≤120字高密度"}],"newIndex":[{"target":"MEMORY.md","line":"[tool] ... → notes/x.md §小节"}],"projectCards":[{"cardType":"how-to|reference|decision","title":"≤20字","text":"≤200字","source":"≤30字"}],"migrationHint":"","skipped":[{"title":"...","reason":"≤30字"}]}
-约束：route=memory → 填 appends/newIndex（target 白名单 notes/tools.md notes/flows.md notes/lessons.md notes/env.md notes/release.md；section 必须既有 ## 小节名），projectCards 留空；route=project → 填 projectCards（cardType: how-to=操作步骤/reference=契约事实/decision=架构决策），appends/newIndex 留空，若该项目开发知识密集（连续踩坑/多契约）填 migrationHint（≤30字，提示宿主安排卡库迁移复核）；route=discard → 除 skipped 全空；与 route 不匹配的条目宿主拒收。`
+{"route":"memory","appends":[{"target":"notes/tools.md","section":"<既有 ## 小节名>","text":"≤120字高密度"}],"newIndex":[{"target":"MEMORY.md","line":"[tool] ... → notes/x.md §小节"}],"projectCards":[{"cardType":"how-to|reference|decision","board":"generic|project","title":"≤20字","text":"≤200字","source":"≤30字"}],"migrationHint":"","skipped":[{"title":"...","reason":"≤30字"}]}
+约束：route=memory → 填 appends/newIndex（target 白名单 notes/tools.md notes/flows.md notes/lessons.md notes/env.md notes/release.md；section 必须既有 ## 小节名；text 只写方向指引级浓缩，不搬细节条文），projectCards 留空；route=project → 填 projectCards（cardType: how-to=操作步骤/reference=契约事实/decision=架构决策；board 必填：generic=官方规范/平台规则，project=项目事实/用户决策，缺省按 project），appends/newIndex 留空，若该项目开发知识密集（连续踩坑/多契约）填 migrationHint（≤30字，提示宿主安排卡库迁移复核）；route=discard → 除 skipped 全空；与 route 不匹配的条目宿主拒收。`
 
 // ── 预筛信号词（零拷贝优先动态加载记忆仓 engine/signals.mjs；不可达时内嵌兜底副本，与 engine 同源）──
 const PRESCAN_STRONG = ['记住', '以后', '注意', '踩坑', '原来是这样', '应该改成', '别再用', '纠正', '别忘了', '务必']
@@ -229,8 +236,25 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): void {
         if (!g.ok) { rejected++; audit({ sid, kind: 'gate-reject', target: pc.title, reason: g.reason, lib: resolved.library }); log(`distill 拒收: ${g.reason?.slice(0, 120)}`); continue }
         if (resolved.library === 'pmg-cards') {
           const script = join(pmgScriptsRoot(), 'devref-card.mjs')
-          const project = workspace || (config.defaultProject.trim() || '')
-          if (!project || !existsSync(script)) { failed++; audit({ sid, kind: 'write-fail', target: pc.title, reason: !project ? '无目标项目（workspace 反解失败且未配 defaultProject）' : 'devref-card 未就位', lib: 'pmg-cards' }); continue }
+          // 契约 v3：board=generic → 通用知识库宿主（config.genericProject，即 pmg 权威仓）；board=project → workspace 项目卡库
+          const board = String(pc.board || 'project') === 'generic' ? 'generic' : 'project'
+          const project = board === 'generic'
+            ? (config.genericProject.trim() || '')
+            : (workspace || (config.defaultProject.trim() || ''))
+          if (!project || !existsSync(script)) {
+            failed++
+            const reason = !project ? (board === 'generic' ? '通用板块未配置 generic_project（宿主直写积压）' : '无目标项目（workspace 反解失败且未配 defaultProject）') : 'devref-card 未就位'
+            audit({ sid, kind: 'write-fail', target: pc.title, reason, lib: 'pmg-cards' })
+            try {
+              // 降级积压（不丢知识；迁移工具并入时按标记分流）
+              const slug = String(pc.title).replace(/[^\w\u4e00-\u9fa5]+/g, '-').slice(0, 30) || 'card'
+              const tag = board === 'generic' ? '[board:generic]' : '[route:project]'
+              const fb = join(pendDir, `${new Date().toISOString().slice(0, 10)}-proj-${sid.slice(0, 8)}-${slug}.md`)
+              writeFileSync(fb, `# ${tag} ${pc.cardType || 'reference'} · ${pc.title}\n\n- 卡类型：${pc.cardType || 'reference'}\n- 板块：${board}\n- 溯源：${pc.source || ''}\n- 源会话：${sid}\n- 落点：${board === 'generic' ? '通用板块（配置 generic_project 后经迁移并入）' : 'pmg 缺席积压（装上后经迁移工具并入卡库）'}\n\n${pc.text}\n`, 'utf8')
+              failed--; added++
+            } catch (e2) { log(`distill project 卡积压兜底失败: ${String((e2 as Error).message).slice(0, 120)}`) }
+            continue
+          }
           const args = [project, '--title', String(pc.title).trim(), '--card-type', String(pc.cardType || 'reference').trim(), '--text', String(pc.text || '').trim()]
           if (pc.source) args.push('--source', String(pc.source).trim())
           const r = await runNode(config.nodeBin, script, args, { timeout: 20000 })

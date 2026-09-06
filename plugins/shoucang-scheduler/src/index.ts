@@ -37,6 +37,7 @@ export interface Config {
   verify_enabled: boolean // G30 证据计数（#5，审计 §8 Q3 兼容）
   migrate_enabled: boolean // migrationHint 消费（#4）
   default_project: string // #4 devref-card 派发默认目标项目路径（空=仅提示不派发）
+  generic_project: string // 契约 v3 通用知识库宿主项目路径（=pmg 权威仓；空=board=generic 卡降级 pending）
   // ═══ ADR-0002 阶段 2：蒸馏器配置（蒸馏配置归守藏，承接原记忆仓 F-001/F-002）═══
   enableDistill: boolean // 守藏蒸馏器开关；单飞切换后缺省 true（记忆插件蒸馏已关，ADR-0002 阶段3）
   idleWakeMs: number // 唤醒判定：turn 结束后空闲满此毫秒数才蒸馏（缺省 10 分钟）
@@ -74,6 +75,7 @@ export const Config: any = z.object({
   verify_enabled: z.boolean().default(true),
   migrate_enabled: z.boolean().default(true),
   default_project: z.string().default(''),
+  generic_project: z.string().default('').description('通用知识库宿主项目路径（pmg 权威仓 docs/devref；蒸馏 board=generic 卡落此；空=降级 pending 待迁移）'),
   enableDistill: z.boolean().default(true).description('守藏蒸馏器（ADR-0002 阶段2）；单飞切换完成后缺省开（记忆插件蒸馏已关）'),
   idleWakeMs: z.number().min(60000).default(600000).description('唤醒判定：turn 结束后空闲满此毫秒数才蒸馏（缺省 10 分钟）'),
   minTurnChars: z.number().min(0).default(200).description('本轮新增正文少于此字符数跳过蒸馏（水位仍推进）'),
@@ -491,6 +493,7 @@ export function apply(ctx: Context, config: Config): void {
       llmProvider: config.llmProvider,
       llmModel: config.llmModel,
       defaultProject: config.default_project,
+      genericProject: config.generic_project,
       memberPackages: { memory: memoryPkg, governance: governancePkg },
     })
   }
