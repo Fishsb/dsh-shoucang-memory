@@ -946,10 +946,12 @@
       }
 
       /** 记忆库指针行：点击打开 notes 小节（只读 /memory/sections）；pointer=null 时不跳转。 */
-      function openMemoryNote(pointer, autoSection) {
+      function openMemoryNote(pointer, autoSection, returnRender) {
         if (!pointer) { status('该条目无 notes 跳转目标'); return; }
         var rel = String(pointer).split('§')[0].trim();
         if (!/^notes\/[a-z]+\.md$/.test(rel)) { status('指针目标非 notes 白名单：' + pointer); return; }
+        memoryViewScroll = refs.view.scrollTop; // 记录进入前滚动位置（返回时恢复）
+        noteReturnRender = returnRender || null; // 来源板块上下文（返回时回原板块，默认记忆板块）
         api('/memory/sections?rel=' + encodeURIComponent(rel)).then(function (r) {
           if (!r || !r.present) { status((r && r.error) || '小节不可用'); return; }
           renderNoteSections(refs.view, r);
@@ -992,14 +994,14 @@
         return pill;
       }
       /** 索引指针行（tag pill + subject + notes 指针），点击直达 notes 小节。 */
-      function renderIndexRows(container, lines) {
+      function renderIndexRows(container, lines, returnRender) {
         (lines || []).forEach(function (ln) {
           var row = el('div', 'sc-idx-row');
           row.appendChild(idxPill(ln.tag));
           row.appendChild(el('span', 'sc-idx-subject', ln.subject || ''));
           if (ln.pointer) row.appendChild(el('span', 'sc-idx-pointer', ln.pointer));
           var ptr = ln.pointer, sec = String(ln.pointer || '').split('§')[1] || '';
-          row.addEventListener('click', function () { openMemoryNote(ptr, sec.trim() || null); });
+          row.addEventListener('click', function () { openMemoryNote(ptr, sec.trim() || null, returnRender); });
           container.appendChild(row);
         });
       }
@@ -1051,17 +1053,26 @@
         }
         var pair = data.indexes.filter(function (f) { return f.name === 'USER.md' || f.name === 'AGENT.md' });
         var totalRows = 0;
-        // 顶栏容量卡（对齐记忆页结构）
+        // 顶栏容量卡（% 不在卡上，与进度条不重复）
         var grid = el('div', 'sc-mem-grid');
         pair.forEach(function (f) {
-          var pp = f.cap ? Math.round(f.chars / f.cap * 100) : 0;
           var card = el('div', 'sc-mem-stat');
           card.appendChild(el('div', 'sc-mem-stat-label', f.name.replace('.md', '') + ' 容量'));
           card.appendChild(el('div', 'sc-mem-stat-value', f.chars + ' / ' + f.cap));
-          card.appendChild(el('div', 'sc-mem-stat-sub', pp + '% · ' + (f.lines || []).length + ' 条画像'));
+          card.appendChild(el('div', 'sc-mem-stat-sub', (f.lines || []).length + ' 条画像'));
           grid.appendChild(card);
         });
         view.appendChild(grid);
+        // 容量进度条（% 唯一出现位，warn 80 / crit 95 阈值与记忆板块一致）
+        pair.forEach(function (f) {
+          var pp = f.cap ? Math.round(f.chars / f.cap * 100) : 0;
+          var row = el('div');
+          row.appendChild(el('div', 'sc-mem-sub', f.label + ' · ' + f.chars + '/' + f.cap + ' (' + pp + '%)'));
+          var bar = el('div', 'sc-cap' + (pp >= 95 ? ' crit' : pp >= 80 ? ' warn' : ''));
+          var fill = el('div', 'sc-cap-fill'); fill.style.width = Math.min(pp, 100) + '%';
+          bar.appendChild(fill); row.appendChild(bar);
+          view.appendChild(row);
+        });
         // 指针行（tag pill + subject + pointer，点击跳 notes 小节）
         pair.forEach(function (f) {
           totalRows += (f.lines || []).length;
@@ -1069,7 +1080,7 @@
           if (!(f.lines || []).length) { view.appendChild(el('div', 'sc-mem-empty', '（暂无指针行）')); return; }
           var list = el('div', 'sc-idx-list');
           list.style.cssText = 'display:flex;flex-direction:column;gap:1px;margin-bottom:10px;';
-          renderIndexRows(list, f.lines);
+          renderIndexRows(list, f.lines, renderPersona); // 画像来源：返回时回画像板块
           view.appendChild(list);
         });
         status('画像 · ' + totalRows + ' 条指针');
@@ -1096,7 +1107,7 @@
         };
         var group = function (t) { view.appendChild(el('div', 'sc-mem-group-title', t)); };
 
-        /* ── §1 蒸馏运行（守藏 = 唯一蒸馏器；hero 卡承载板块主问题：知识积累在不在跑） ── */
+        /* ── §1 蒸馏运行（等大一排；sparkline 保留在卡内） ── */
         group('蒸馏运行');
         var g1 = el('div', 'sc-mem-grid');
         var ds = data.distillStats;
@@ -1104,10 +1115,6 @@
           var byRoute = ds.byRoute || {};
           var routeParts = [];
           ['memory', 'project', 'discard'].forEach(function (k) { if (byRoute[k]) routeParts.push(k + ' ' + byRoute[k]); });
-          // hero：守藏蒸馏（数字 + 语境 + sparkline 趋势）
-          var hero = el('div', 'sc-mem-stat hero');
-          hero.appendChild(el('div', 'sc-mem-stat-label', '守藏蒸馏 · 近 7 日'));
-          hero.appendChild(el('div', 'sc-mem-stat-value', String(ds.runs || 0) + ' 次'));
           var heroSub = '入册 ' + String(ds.added || 0) + ' 条';
           var warnText = '';
           if (!(ds.runs || 0)) {
@@ -1118,14 +1125,15 @@
             if (today && yday && today.runs !== yday.runs) heroSub += ' · 今日 ' + today.runs + ' 次（昨日 ' + yday.runs + '）';
             if ((ds.failed || 0) > 0 || (ds.gateRejects || 0) > 0) warnText = '失败 ' + String(ds.failed || 0) + (ds.gateRejects ? ' · 门拒 ' + ds.gateRejects : '');
           }
-          hero.appendChild(el('div', 'sc-mem-stat-sub', heroSub));
+          var hero = mkStat('守藏蒸馏', String(ds.runs || 0) + ' 次', heroSub);
+          hero.appendChild(el('div', 'sc-mem-stat-sub', '近 7 日入册趋势'));
+          var spark = sparkline((ds.byDay || []).map(function (d) { return d.added; }), 130, 24);
+          if (spark) hero.appendChild(spark);
           if (warnText) {
             var warn = el('div', 'sc-mem-stat-sub');
             warn.appendChild(el('span', 'sc-danger', warnText)); // 语义色仅强化，文字数字仍是唯一信息通道（色盲可达）
             hero.appendChild(warn);
           }
-          var spark = sparkline((ds.byDay || []).map(function (d) { return d.added; }), 150, 26);
-          if (spark) hero.appendChild(spark);
           g1.appendChild(hero);
           // 伴卡：路由分布
           g1.appendChild(mkStat('路由分布', routeParts.length ? routeParts.join(' / ') : '—', (ds.rejected || 0) + ' 拒收' + ((ds.rejected || 0) || (ds.failed || 0) ? '' : ' · 全部放行')));
@@ -1165,7 +1173,7 @@
           idxWrap.style.cssText = 'border:1px solid var(--sc-border);border-radius:10px;padding:6px 10px;margin-bottom:6px;background:var(--sc-bg1);';
           var IDX_PREVIEW = 8;
           var allLines = memoryFile.lines || [];
-          renderIndexRows(idxWrap, allLines.slice(0, IDX_PREVIEW));
+          renderIndexRows(idxWrap, allLines.slice(0, IDX_PREVIEW), renderMemoryExpanded);
           if (allLines.length > IDX_PREVIEW) {
             var moreBtn = el('button', 'sc-idx-more', '展开全部 ' + allLines.length + ' 条');
             moreBtn.type = 'button';
@@ -1199,6 +1207,8 @@
           chip.appendChild(el('span', 'sc-tag', String(nf.sections.length)));
           chip.title = nf.rel + ' · ' + nf.sections.map(function (s) { return s.title }).join(' / ');
           chip.addEventListener('click', function () {
+            memoryViewScroll = view.scrollTop; // 记录进入前滚动位置（返回时恢复）
+            noteReturnRender = null; // 来源=记忆板块
             api('/memory/sections?rel=' + encodeURIComponent(nf.rel)).then(function (r) {
               renderNoteSections(view, r);
             }).catch(fail);
@@ -1222,6 +1232,8 @@
               chip.appendChild(el('span', 'sc-tag', String(nf.sections.length)));
               chip.title = 'suite · ' + nf.rel + ' · ' + nf.sections.map(function (s) { return s.title }).join(' / ');
               chip.addEventListener('click', function () {
+                memoryViewScroll = view.scrollTop; // 记录进入前滚动位置（返回时恢复）
+                noteReturnRender = null; // 来源=记忆板块（suite 区板块本身在记忆视图内）
                 api('/memory/sections?rel=' + encodeURIComponent(nf.rel) + '&root=suite').then(function (r) {
                   renderNoteSections(view, r);
                 }).catch(fail);
@@ -1237,16 +1249,25 @@
         status('记忆 · MEMORY ' + (memoryFile ? memoryFile.chars + '/' + memoryFile.cap + ' · ' + (memoryFile.lines || []).length + ' 行' : '不可用') + ' · 蒸馏 ' + (ds ? String(ds.runs || 0) + ' 次' : '—'));
       }
 
-      /** notes 小节正文浏览（只读；/memory/sections）。 */
+      /** notes 小节正文浏览（只读；/memory/sections）。返回时恢复来源板块与滚动位置（记忆/画像/守藏区均可进入）。 */
+      var memoryViewScroll = 0; // 进二级视图前的 .sc-view 滚动位置
+      var noteReturnRender = null; // 来源板块渲染器（null=记忆板块 renderMemoryExpanded）
       function renderNoteSections(view, data) {
         if (!data || !data.present || !data.sections) { status((data && data.error) || '无小节'); return; }
         view.textContent = '';
         view.appendChild(el('div', 'sc-h1', data.name));
         view.appendChild(el('div', 'sc-desc', (data.root === 'suite' ? 'suite 知识区 · ' : '') + data.rel + ' · ' + data.sections.length + ' 个小节（白名单只读）'));
-        var back = el('button', 'sc-btn subtle', '← 返回' + (data.root === 'suite' ? '守藏知识区' : '记忆库'));
+        var back = el('button', 'sc-btn subtle', '← 返回' + (noteReturnRender === renderPersona ? '画像板块' : data.root === 'suite' ? '守藏知识区' : '记忆库'));
         back.type = 'button';
-        back.addEventListener('click', function () { api('/memory/overview').then(function (r) { renderMemoryExpanded(view, r); }).catch(fail); });
+        back.addEventListener('click', function () {
+          var backRender = noteReturnRender || renderMemoryExpanded;
+          api('/memory/overview').then(function (r) {
+            backRender(view, r);
+            requestAnimationFrame(function () { view.scrollTop = memoryViewScroll; }); // 恢复滚动位置，不跳顶
+          }).catch(fail);
+        });
         view.appendChild(back);
+        view.scrollTop = 0; // 二级视图自身从顶部开始读
         data.sections.forEach(function (sec) {
           var head = el('div', 'sc-mem-group-title');
           var arrow = el('span', 'sc-sec-arrow', '▸');
