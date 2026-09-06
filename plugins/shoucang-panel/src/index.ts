@@ -689,6 +689,137 @@ export function apply(ctx: Context, config: Config): void {
     sendJson(res, 200, { root: root.path, groups })
   })
 
+  /* ---------- 记忆库（managing-memory 技能仓）实况只读展示（2026-09-06） ----------
+   * F-003 重定义：面板「画像/记忆」视图不再读 Obsidian 仓库，改读蒸馏 watcher 的
+   * 唯一事实源 ~/.dsh/skills/managing-memory/。零硬编码路径：home = DSH_HOME || ~/.dsh。
+   * 只读：不提供任何写入口（写/裁决归记忆插件）。 */
+
+  interface MemIndexEntry { tag: string; subject: string; pointer: string; raw: string }
+  interface MemIndexFile { name: string; label: string; text: string; chars: number; cap: number; lines: MemIndexEntry[] }
+
+  const memoryHomeOf = (): string | null => {
+    const home = process.env.DSH_HOME || join(homedir(), '.dsh')
+    const base = join(home, 'skills', 'managing-memory')
+    return existsSync(base) ? base : null
+  }
+  const MEM_INDEX_FILES: Array<{ file: string; label: string }> = [
+    { file: 'MEMORY.md', label: '知识索引 MEMORY' },
+    { file: 'USER.md', label: '用户画像 USER' },
+    { file: 'AGENT.md', label: 'Agent 画像 AGENT' },
+  ]
+  const NOTE_RELS = ['env', 'tools', 'flows', 'lessons', 'release', 'user', 'agent', 'INDEX']
+  /** 容量上限单一事实源 = engine/target-registry.json（读失败回退默认值） */
+  const memoryCaps = (base: string): Record<string, number> => {
+    const out: Record<string, number> = { 'MEMORY.md': 3000, 'USER.md': 2000, 'AGENT.md': 2000 }
+    try {
+      const reg = JSON.parse(readFileSync(join(base, 'engine', 'target-registry.json'), 'utf8')) as { targets?: { memory?: { capacity?: Record<string, number> } } }
+      const cap = reg?.targets?.memory?.capacity
+      if (cap) for (const k of Object.keys(cap)) out[k] = cap[k]
+    } catch { /* 回退默认容量 */ }
+    return out
+  }
+  /** 索引行：`[标签] 主题 · 概况 → notes/x.md §小节` */
+  const parseIndexLines = (text: string): MemIndexEntry[] => {
+    const out: MemIndexEntry[] = []
+    for (const raw of text.split(/\r?\n/)) {
+      const m = raw.match(/^\[([^\]]+)\]\s+(.+?)\s*→\s*(.+)$/)
+      if (!m) continue
+      out.push({ tag: m[1].trim(), subject: m[2].trim(), pointer: m[3].trim(), raw })
+    }
+    return out
+  }
+  const charsOf = (text: string): number => text.replace(/\s+/g, '').length
+  const readIndexFile = (base: string, f: { file: string; label: string }, caps: Record<string, number>): MemIndexFile | null => {
+    try {
+      const text = readFileSync(join(base, f.file), 'utf8')
+      return { name: f.file, label: f.label, text, chars: charsOf(text), cap: caps[f.file] ?? 2000, lines: parseIndexLines(text) }
+    } catch { return null }
+  }
+  /** notes 文件小节清单（标题+起始行；不含正文，正文走 /memory/sections） */
+  const notesSectionIndex = (base: string): Array<{ rel: string; name: string; sections: Array<{ title: string; line: number }> }> => {
+    const out: Array<{ rel: string; name: string; sections: Array<{ title: string; line: number }> }> = []
+    for (const w of NOTE_RELS) {
+      const full = join(base, 'notes', w + '.md')
+      if (!existsSync(full)) continue
+      const text = readFileSync(full, 'utf8')
+      const sections: Array<{ title: string; line: number }> = []
+      text.split(/\r?\n/).forEach((l, i) => { const m = l.match(/^##\s+(.+)$/); if (m) sections.push({ title: m[1].trim(), line: i + 1 }) })
+      out.push({ rel: 'notes/' + w + '.md', name: w + '.md', sections })
+    }
+    return out
+  }
+  const readJsonlTail = (full: string, n: number): Array<Record<string, unknown>> => {
+    try {
+      return readFileSync(full, 'utf8').split('\n').filter(Boolean).slice(-n).map((l) => { try { return JSON.parse(l) as Record<string, unknown> } catch { return null } }).filter((x): x is Record<string, unknown> => !!x)
+    } catch { return [] }
+  }
+
+  // 记忆库总览（一次取回：索引+容量+pending+蒸馏水位+notes 小节索引；全部只读）
+  route('/memory/overview', (_req, res) => {
+    const base = memoryHomeOf()
+    if (!base) return sendJson(res, 200, { present: false, error: '未检测到记忆库技能仓（~/.dsh/skills/managing-memory）——记忆插件蒸馏事实源不在本机默认位' })
+    try {
+      const caps = memoryCaps(base)
+      const indexes = MEM_INDEX_FILES.map((f) => readIndexFile(base, f, caps)).filter(Boolean) as MemIndexFile[]
+      let pendingCount = 0
+      const pendingRecent: Array<{ name: string; mtime: string }> = []
+      try {
+        const pendDir = join(base, 'pending')
+        const names = readdirSync(pendDir, { withFileTypes: true })
+          .filter((e) => e.isFile() && e.name.endsWith('.md'))
+          .map((e) => e.name)
+          .sort((a, b) => statMtime(join(pendDir, b)).localeCompare(statMtime(join(pendDir, a))))
+        pendingCount = names.length
+        for (const n of names.slice(0, 8)) pendingRecent.push({ name: n, mtime: statMtime(join(pendDir, n)) })
+      } catch { /* pending 缺失 */ }
+      const watermark = readJsonlTail(join(base, 'audit', 'distill-watermark.jsonl'), 5)
+      let undone = 0
+      try {
+        undone = readFileSync(join(base, 'audit', 'archive-progress.jsonl'), 'utf8').split('\n')
+          .filter((l) => { try { return l.trim() && (JSON.parse(l) as { done?: boolean }).done === false } catch { return false } })
+          .length
+      } catch { /* 无进度 */ }
+      sendJson(res, 200, {
+        present: true,
+        root: base,
+        indexes,
+        pending: { count: pendingCount, recent: pendingRecent },
+        distill: { recent: watermark, last: watermark[watermark.length - 1] ?? null },
+        queue: { undone },
+        notes: notesSectionIndex(base),
+        now: new Date().toISOString(),
+      })
+    } catch (e) { sendJson(res, 500, { error: String(e) }) }
+  })
+
+  // notes 小节正文（按 ## 切片；白名单 rel；只读）
+  route('/memory/sections', (req, res) => {
+    const base = memoryHomeOf()
+    if (!base) return sendJson(res, 200, { present: false, error: '未检测到记忆库技能仓' })
+    let rel = ''
+    try { rel = new URL(req.url ?? '/', 'http://dsh.local').searchParams.get('rel') ?? '' } catch { /* noop */ }
+    if (!new RegExp(`^notes/(${NOTE_RELS.join('|')})\\.md$`).test(rel)) return sendJson(res, 400, { error: 'bad rel' })
+    const abs = join(base, rel)
+    if (!existsSync(abs)) return sendJson(res, 404, { error: 'note not found' })
+    try {
+      const text = readFileSync(abs, 'utf8')
+      const sections: Array<{ title: string; line: number; body: string }> = []
+      const lines = text.split(/\r?\n/)
+      let cur: { title: string; line: number; body: string[] } | null = null
+      for (let i = 0; i < lines.length; i++) {
+        const m = lines[i].match(/^##\s+(.+)$/)
+        if (m) {
+          if (cur) sections.push({ title: cur.title, line: cur.line, body: cur.body.join('\n').trim() })
+          cur = { title: m[1].trim(), line: i + 1, body: [] }
+        } else if (cur) {
+          cur.body.push(lines[i])
+        }
+      }
+      if (cur) sections.push({ title: cur.title, line: cur.line, body: cur.body.join('\n').trim() })
+      sendJson(res, 200, { present: true, rel, name: rel.split('/').pop() ?? '', text, sections })
+    } catch (e) { sendJson(res, 500, { error: String(e) }) }
+  })
+
   /* ---------- 插件集合视图（#3：suite 装配状态，只读；算法与 scheduler shoucang_suite 同源） ---------- */
 
   interface SuiteMemberRow { id: string; package: string; repo: string; role: string; status: string; injected: boolean; profiles: string[]; detail: string }
