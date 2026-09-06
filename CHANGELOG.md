@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### Changed
+- **⛔ 守藏退役归档（2026-09-07 用户拍板，本仓 ADR-0003 / pmg 权威仓 ADR-0003）**：插件从 dsh-web 下线（`~/.dsh/plugins/shoucang-panel` 软链删除，仓库本体保留），记忆职责移交 dsh-auto-memory。ADR-0001（集合中枢定位）/ADR-0002（蒸馏唯一权归守藏）双双 superseded，F-001/F-008 superseded；README 定位声明改退役实态，suite 数据 `~/.dsh/suite/knowledge/` 零损失保留（只读）。本仓转冻结归档仓（治理文档 AGENTS/CLAUDE/docs/map 为 gitignore 本地文档，已同步改写不入库）。
+
 ### Fixed
 - **本地可复现构建路径 build-local.sh（2026-09-06，遗留项落地）**：DSH 源码 checkout 本机不存在，scripts/build.sh 不可用 → 新增 scripts/build-local.sh + tsconfig.local.json（npm run build:local），无 checkout 环境可编译。三个踩实前提：① 编译依赖落 devDependencies（npm 对 peerDependencies 按名安装会静默跳过；@deepseek-ai/dsh-tools 传递依赖自带 @deepseek-ai/cordis）② --legacy-peer-deps 防 npm 10 arborist 在 dsh-llm 预发布 peer 区间崩溃 ③ moduleResolution=bundler + cordis paths 映射 @deepseek-ai/cordis（npm 版 cordis type:module+无扩展名 d.ts 在 NodeNext 下星号导出失效 TS2834；ESNext 产物与 NodeNext 等价）。clean-room 复现（rm node_modules lib → 全新构建）通过，产物含契约 v3.1 prompt，self-reload 热重载生效；发布构建仍以 checkout build.sh 为权威
 - **蒸馏白名单消费路径修复（2026-09-06，契约 v3 联动）**：project 分支白名单原从 `pmgScriptsRoot()`（scripts 目录）读 → pmg `docs/devref/whitelist.json` 从未被消费（恒走内建缺省）；改为跟随实际写入目标加载（board=generic → `generic_project`/docs/devref，board=project → workspace/docs/devref）。targets.ts：Whitelist 增 `boards` 字段（BoardDef），BUILTIN 补 pmg 两板块，`gateProjectCard` 增 board∈boards 校验（越界宁弃不存）；index.ts/HANDOVER v2→v3 口径残留清理

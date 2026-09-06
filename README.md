@@ -1,5 +1,7 @@
 # 守藏 · Shoucang — 插件集合中枢（suite）
 
+> ⛔ **2026-09-07 已退役归档**（本仓 ADR-0003）：插件已从 dsh-web 下线（`~/.dsh/plugins/shoucang-panel` 软链删除，本仓本体保留），记忆职责移交 dsh-auto-memory（pmg 权威仓 ADR-0003 同日记录）。suite 数据 `~/.dsh/suite/knowledge/` 零损失保留（只读）。本仓转冻结归档仓，以下文档保留历史原貌。
+>
 > 守藏（Shoucang）：**插件集合中枢**——UI + 全部集合插件设置界面 + 协调调度中枢。独立项目仓（D:\FF\shoucang，git 已初始化，治理由本仓重建）。
 > 前身：独立记忆插件项目（D:\lk\FF\shoucang，2026-08-26 立项 / 08-27 停止开发）；记忆归档职责已由
 > `@dsh-external/dsh-managing-memory` 事件驱动蒸馏实现并超越，**2026-09-06 重定义**为集合中枢（旧仓冻结存档）。
