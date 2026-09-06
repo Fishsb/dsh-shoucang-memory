@@ -30,10 +30,12 @@ export const inject = ['webServer', 'systemPrompt', 'commands'] as const
 
 export interface Config {
   state_path: string
+  projectRoots: string
 }
 
 export const Config = z.object({
   state_path: z.string().default('~/.dsh/storages/shoucang-panel.json'),
+  projectRoots: z.string().default('D:\\FF').description('治理知识库项目发现根（逗号分隔，一层扫描）；仅收录存在 docs/devref/cards/ 的目录'),
 }).description('面板设置')
 
 interface RootEntry { id: string; name: string; path: string }
@@ -98,32 +100,6 @@ function walkMarkdown(rootDir: string, skipDirs: string[] = []): Array<{ rel: st
   return out
 }
 
-interface TreeNode { name: string; rel: string; type: 'dir' | 'file'; children?: TreeNode[] }
-
-/** 递归构建 Obsidian 仓库文件夹树（目录+文件，跳过隐藏/内部目录）。 */
-function buildTree(rootDir: string, skipDirs: string[]): TreeNode[] {
-  const out: TreeNode[] = []
-  const visit = (dir: string, prefix: string, acc: TreeNode[]): void => {
-    let entries: import('node:fs').Dirent[]
-    try { entries = readdirSync(dir, { withFileTypes: true }) } catch { return }
-    entries.sort((a, b) => a.name.localeCompare(b.name, 'zh'))
-    for (const e of entries) {
-      if (e.name.startsWith('.')) continue
-      const full = join(dir, e.name)
-      const rel = prefix ? `${prefix}/${e.name}` : e.name
-      if (e.isDirectory()) {
-        if (skipDirs.includes(e.name)) continue
-        const children: TreeNode[] = []
-        visit(full, rel, children)
-        acc.push({ name: e.name, rel, type: 'dir', children })
-      } else if (e.name.endsWith('.md') && e.name.indexOf('.bak') === -1) {
-        acc.push({ name: e.name, rel, type: 'file' })
-      }
-    }
-  }
-  visit(rootDir, '', out)
-  return out
-}
 
 export function apply(ctx: Context, config: Config): void {
   const webServer = (ctx as unknown as { webServer?: RouteRegistry }).webServer
@@ -616,79 +592,6 @@ export function apply(ctx: Context, config: Config): void {
 
   // ---- 板块只读接口（画像直接展示内容 / 记忆 Obsidian 仓库树与互链） ----
 
-  route('/boards/persona', (_req, res) => {
-    const root = activeRootOf()
-    if (!root) return sendJson(res, 200, { root: null, error: 'no-active-root', files: [] })
-    const all = walkMarkdown(join(root.path, '画像'))
-    const content = all.filter((f) => f.name !== '_index.md')
-    const me = content.find((f) => f.rel.startsWith('我/')) ?? content[0] ?? null
-    const you = content.find((f) => f.rel.startsWith('你/')) ?? content.find((f) => f !== me) ?? me
-    const files: Array<{ label: string; rel: string; name: string; mtime: string; text: string }> = []
-    if (me) files.push({ label: '用户画像.md', ...me })
-    if (you && you !== me) files.push({ label: 'agent画像.md', ...you })
-    sendJson(res, 200, { root: root.path, files })
-  })
-
-  route('/boards/tree', (_req, res) => {
-    const root = activeRootOf()
-    if (!root) return sendJson(res, 200, { root: null, error: 'no-active-root', tree: [] })
-    // 记忆板块树：只保留 画像/记忆/笔记/归档 四个根目录（固定顺序），内容原样
-    const TREE_ROOTS: Array<{ name: string; source: string }> = [
-      { name: '画像', source: '画像' },
-      { name: '记忆', source: '记忆' },
-      { name: '笔记', source: '笔记' },
-      { name: '归档', source: '归档' },
-    ]
-    const tree: TreeNode[] = []
-    let files = 0
-    const prefixTree = (nodes: TreeNode[], prefix: string): void => {
-      for (const n of nodes) {
-        n.rel = prefix ? `${prefix}/${n.rel}` : n.rel
-        if (n.children) prefixTree(n.children, prefix)
-      }
-    }
-    for (const r of TREE_ROOTS) {
-      const nodes = buildTree(join(root.path, r.source), ['_assets', '_meta'])
-      prefixTree(nodes, r.source) // 补真实路径前缀（显示根=四目录，rel=可解析路径）
-      const count = (ns: TreeNode[]): void => { for (const n of ns) { if (n.type === 'file') files++; if (n.children) count(n.children) } }
-      count(nodes)
-      tree.push({ name: r.name, rel: r.source, type: 'dir', children: nodes })
-    }
-    sendJson(res, 200, { root: root.path, tree, files })
-  })
-
-  route('/boards/note', (req, res) => {
-    const root = activeRootOf()
-    if (!root) return sendJson(res, 200, { root: null, error: 'no-active-root', note: null })
-    let rel = ''
-    try { rel = new URL(req.url ?? '/', 'http://dsh.local').searchParams.get('rel') ?? '' } catch { /* noop */ }
-    if (!rel || rel.indexOf('..') !== -1 || !rel.endsWith('.md')) return sendJson(res, 400, { error: 'bad rel' })
-    const base = resolve(root.path)
-    const abs = resolve(base, rel)
-    if (!abs.startsWith(base + sep)) return sendJson(res, 400, { error: 'bad rel' })
-    if (!existsSync(abs) || !statSync(abs).isFile()) return sendJson(res, 404, { error: 'note not found' })
-    sendJson(res, 200, { root: root.path, rel, name: rel.split(/[\\/]/).pop(), mtime: statMtime(abs), text: readFileSync(abs, 'utf8').slice(0, 12000) })
-  })
-
-  route('/boards/memory', (_req, res) => {
-    const root = activeRootOf()
-    if (!root) return sendJson(res, 200, { root: null, error: 'no-active-root', groups: [] })
-    const memDir = join(root.path, '记忆')
-    const files = walkMarkdown(memDir, ['_归档', '_备份'])
-    // 内容板块 = 记忆/ 下的一级目录（有几个目录就有几个板块，空目录也保留）
-    let topEntries: import('node:fs').Dirent[]
-    try { topEntries = readdirSync(memDir, { withFileTypes: true }) } catch { topEntries = [] }
-    const dirs = topEntries
-      .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
-      .map((e) => e.name)
-      .sort((a, b) => a.localeCompare(b, 'zh'))
-    const groups = dirs.map((dir) => ({
-      dir,
-      files: files.filter((f) => f.rel === dir || f.rel.startsWith(dir + '/')),
-    }))
-    sendJson(res, 200, { root: root.path, groups })
-  })
-
   /* ---------- 记忆库（managing-memory 技能仓）实况只读展示（2026-09-06） ----------
    * F-003 重定义：面板「画像/记忆」视图不再读 Obsidian 仓库，改读蒸馏 watcher 的
    * 唯一事实源 ~/.dsh/skills/managing-memory/。零硬编码路径：home = DSH_HOME || ~/.dsh。
@@ -887,6 +790,90 @@ export function apply(ctx: Context, config: Config): void {
       }
       if (cur) sections.push({ title: cur.title, line: cur.line, body: cur.body.join('\n').trim() })
       sendJson(res, 200, { present: true, root: rootParam, rel, name: rel.split('/').pop() ?? '', text, sections })
+    } catch (e) { sendJson(res, 500, { error: String(e) }) }
+  })
+
+  /* ---------- 治理知识库（pmg devref 卡库，只读；2026-09-06） ----------
+   * 通用知识 = pmg 权威仓 docs/devref/cards（跨项目规则/规范/拆坑）；
+   * 项目知识 = projectRoots 一层扫描发现的 <项目>/docs/devref/cards（有卡库才收录，无硬编码名单）。
+   * 卡册结构 = devref-card.mjs 写门契约：cards/{how-to,reference,decision}.md + INDEX.md。
+   * 全只读：切片渲染在 host 完成，前端零路径参数（project 用发现序号 id，防 path traversal）。 */
+
+  interface GmCardLib { id: number; name: string; path: string; generic: boolean; cards: Record<string, number>; hasIndex: boolean }
+  const GM_CARD_FILES: Array<{ file: string; type: string; label: string }> = [
+    { file: 'decision.md', type: 'decision', label: '架构决策' },
+    { file: 'reference.md', type: 'reference', label: '契约事实' },
+    { file: 'how-to.md', type: 'how-to', label: '操作步骤' },
+  ]
+  const GM_GENERIC_PROJECT = 'dsh-project-map-governance-plugin' // 通用知识库宿主（pmg 权威仓）
+  const projectRootsOf = (): string[] => {
+    const raw = (config.projectRoots || '').split(',').map((s) => expandHome(s.trim())).filter(Boolean)
+    return raw.length ? raw : []
+  }
+  /** 发现所有卡库：根目录一层扫描 + 通用库宿主固定收录（存在 docs/devref/cards/ 才算） */
+  const gmDiscover = (): GmCardLib[] => {
+    const roots = projectRootsOf()
+    const seen = new Set<string>()
+    const libs: GmCardLib[] = []
+    let id = 0
+    const scanDir = (dir: string): void => {
+      let entries: Array<{ name: string; isDirectory: boolean }> = []
+      try { entries = readdirSync(dir, { withFileTypes: true }).map((e) => ({ name: e.name, isDirectory: e.isDirectory() })) } catch { return }
+      for (const e of entries) {
+        if (!e.isDirectory || e.name.startsWith('.')) continue
+        const proj = join(dir, e.name)
+        if (seen.has(proj)) continue
+        const cardsDir = join(proj, 'docs', 'devref', 'cards')
+        if (!existsSync(cardsDir)) continue
+        seen.add(proj)
+        const cards: Record<string, number> = {}
+        for (const c of GM_CARD_FILES) {
+          try { cards[c.type] = readFileSync(join(cardsDir, c.file), 'utf8').split(/\r?\n/).filter((l) => /^##\s+/.test(l)).length } catch { cards[c.type] = 0 }
+        }
+        libs.push({ id: id++, name: e.name, path: proj, generic: e.name === GM_GENERIC_PROJECT, cards, hasIndex: existsSync(join(proj, 'docs', 'devref', 'INDEX.md')) })
+      }
+    }
+    for (const r of roots) scanDir(r)
+    return libs
+  }
+  route('/pmg/overview', (_req, res) => {
+    try {
+      const libs = gmDiscover()
+      const generic = libs.find((l) => l.generic) ?? null
+      const projects = libs.filter((l) => !l.generic).sort((a, b) => a.name.localeCompare(b.name, 'zh'))
+      sendJson(res, 200, {
+        present: libs.length > 0,
+        generic,
+        projects,
+        cardTypes: GM_CARD_FILES.map((c) => ({ type: c.type, label: c.label })),
+        roots: projectRootsOf(),
+        now: new Date().toISOString(),
+      })
+    } catch (e) { sendJson(res, 500, { error: String(e) }) }
+  })
+  route('/pmg/cards', (req, res) => {
+    try {
+      const sp = new URL(req.url ?? '/', 'http://dsh.local').searchParams
+      const id = Number(sp.get('id') ?? '-1')
+      const type = sp.get('type') ?? ''
+      const cardFile = GM_CARD_FILES.find((c) => c.type === type)
+      if (!cardFile) return sendJson(res, 400, { error: 'bad card type' })
+      const lib = gmDiscover().find((l) => l.id === id)
+      if (!lib) return sendJson(res, 404, { error: 'card library not found' })
+      const full = join(lib.path, 'docs', 'devref', 'cards', cardFile.file)
+      if (!existsSync(full)) return sendJson(res, 200, { present: false, error: '该册尚不存在（空卡册）' })
+      const text = readFileSync(full, 'utf8')
+      const cards: Array<{ title: string; body: string }> = []
+      let cur: { title: string; body: string[] } | null = null
+      for (const l of text.split(/\r?\n/)) {
+        const m = l.match(/^##\s+(.+)$/)
+        if (m) {
+          if (cur) cards.push({ title: cur.title, body: cur.body.join('\n').trim() })
+          cur = { title: m[1].trim(), body: [] }
+        } else if (cur) cur.body.push(l)
+      }
+      if (cur) cards.push({ title: cur.title, body: cur.body.join('\n').trim() })
+      sendJson(res, 200, { present: true, lib: lib.name, type, label: cardFile.label, cards })
     } catch (e) { sendJson(res, 500, { error: String(e) }) }
   })
 

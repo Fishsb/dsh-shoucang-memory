@@ -245,6 +245,13 @@
         '.sc-danger{color:#e5534b;font-weight:600;}',
         '.sc-idx-more{font-size:12px;color:var(--sc-accent);cursor:pointer;padding:5px 2px;border:none;background:none;text-align:left;}',
         '.sc-idx-more:hover{text-decoration:underline;}',
+        /* 治理知识库（wiki 板块改造 2026-09-06） */
+        '.sc-gm-badge{flex:none;font-size:10.5px;color:var(--sc-faint);font-variant-numeric:tabular-nums;margin-left:auto;}',
+        '.sc-gm-card-head{display:flex;align-items:baseline;gap:8px;padding:5px 4px;cursor:pointer;border-bottom:1px solid var(--sc-border);}',
+        '.sc-gm-card-head:hover{color:var(--sc-accent);}',
+        '.sc-gm-card-title{font-size:13px;font-weight:600;color:var(--sc-text);}',
+        '.sc-gm-card-head .sc-tag{flex:none;}',
+        '.sc-tag.dim{opacity:.55;}',
         '.sc-mem-sub{font-size:12px;color:var(--sc-text);margin:2px 0 0;padding-bottom:6px;}',
         '.sc-mem-sub.muted{color:var(--sc-muted);}',
         '.sc-mem-sub.mono{font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;font-size:11px;color:var(--sc-faint);}',
@@ -775,176 +782,6 @@
 
       /* ---------- 页面：画像 / 记忆板块 ---------- */
 
-      function stripFrontmatter(text) {
-        var m = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/)
-        if (!m) return { meta: {}, body: text }
-        var meta = {}
-        m[1].split(/\r?\n/).forEach(function (line) {
-          var kv = line.match(/^([\w-]+):\s*(.*)$/)
-          if (kv) meta[kv[1]] = kv[2].replace(/^['"]|['"]$/g, '')
-        })
-        return { meta: meta, body: text.slice(m[0].length) }
-      }
-
-      /* ---- Obsidian 仓库索引：[[双链]] 解析与跳转 ---- */
-
-      var memoryState = { treeLoaded: false, tree: [], index: {}, collapsed: {}, selected: null }
-      var pendingSelect = null
-
-      function ensureMemoryIndex() {
-        if (memoryState.treeLoaded) return Promise.resolve(true)
-        return api('/boards/tree').then(function (r) {
-          memoryState.tree = r.tree || []
-          memoryState.index = {}
-          memoryState.visibleCount = 0
-          var walk = function (nodes) {
-            nodes.forEach(function (n) {
-              if (n.type === 'file') {
-                if (n.name !== '_index.md') memoryState.visibleCount++ // _index.md 默认不显示
-                var key = n.rel.replace(/\.md$/, '')
-                var base = n.name.replace(/\.md$/, '')
-                var leaf = key.split('/').pop()
-                memoryState.index[key] = n.rel
-                if (!(base in memoryState.index)) memoryState.index[base] = n.rel
-                if (!(leaf in memoryState.index)) memoryState.index[leaf] = n.rel
-              }
-              if (n.children) walk(n.children)
-            })
-          }
-          walk(memoryState.tree)
-          memoryState.treeLoaded = true
-          return true
-        })
-      }
-
-      function resolveNote(target) {
-        var raw = String(target || '').trim().split('|')[0].trim()
-        if (!raw) return null
-        if (memoryState.index[raw]) return memoryState.index[raw]
-        var lc = raw.toLowerCase()
-        var hit = Object.keys(memoryState.index).find(function (k) {
-          return k.toLowerCase() === lc || k.toLowerCase().endsWith('/' + lc)
-        })
-        return hit ? memoryState.index[hit] : null
-      }
-
-      /** Obsidian 式双链渲染：[[目标]]（支持 [[路径|别名]]）→ 可点击跳转。 */
-      function makeWikilink(label) {
-        var a = el('a', 'sc-wl-link', label)
-        a.href = '#'
-        a.addEventListener('click', function (ev) {
-          ev.preventDefault()
-          openNoteTarget(label) // 闭包按次捕获，避免 var 循环共享末值
-        })
-        return a
-      }
-
-      function renderWikilinks(container, text) {
-        var re = /\[\[([^\]|#]+)(?:\|[^\]|#]+)?\]\]/g
-        var last = 0, m
-        while ((m = re.exec(text))) {
-          if (m.index > last) container.appendChild(document.createTextNode(text.slice(last, m.index)))
-          container.appendChild(makeWikilink((m[1] || '').trim()))
-          last = m.index + m[0].length
-        }
-        if (last < text.length) container.appendChild(document.createTextNode(text.slice(last)))
-      }
-
-      function openNoteTarget(target) {
-        ensureMemoryIndex().then(function () {
-          var rel = resolveNote(target)
-          if (!rel) { status('未找到互链条目：' + target); return }
-          if (currentView !== 'wiki') {
-            pendingSelect = rel
-            var item = refs.navItems.find(function (it) { return it.name === 'wiki' })
-            if (item) { item.el.click(); return }
-          }
-          selectNote(rel)
-        }).catch(fail)
-      }
-
-      function selectNote(rel) {
-        memoryState.selected = rel
-        var treeEl = document.querySelector('.sc-tree')
-        if (treeEl) renderTreeInto(treeEl)
-        api('/boards/note?rel=' + encodeURIComponent(rel)).then(function (r) {
-          var noteEl = document.querySelector('.sc-note')
-          if (!noteEl) return
-          noteEl.textContent = ''
-          var fm = stripFrontmatter(r.text || '')
-          noteEl.appendChild(el('div', 'sc-note-title', (r.name || rel).replace(/\.md$/, '') + (r.name === '_index.md' ? ' · 指针表' : '')))
-          var metaArr = [rel]
-          if (fm.meta.subtype) metaArr.push(fm.meta.subtype)
-          if (fm.meta.stage) metaArr.push(fm.meta.stage)
-          if (fm.meta.updated) metaArr.push(fm.meta.updated)
-          metaArr.push((r.mtime || '').slice(0, 10))
-          noteEl.appendChild(el('div', 'sc-note-meta', metaArr.join(' · ')))
-          renderNoteProps(noteEl, fm.meta) // Obsidian 属性块
-          var bodyEl = el('div', 'sc-note-body')
-          renderWikilinks(bodyEl, (fm.body || r.text || '').trim())
-          noteEl.appendChild(bodyEl)
-          status('已打开 ' + rel)
-        }).catch(fail)
-      }
-
-      /** Obsidian 属性面板：frontmatter 逐行展示（名称+值，tags 转 chip）。 */
-      function renderNoteProps(container, meta) {
-        var keys = Object.keys(meta)
-        if (!keys.length) return
-        var box = el('div', 'sc-note-props')
-        keys.forEach(function (k) {
-          var row = el('div', 'sc-prop-row')
-          row.appendChild(el('div', 'sc-prop-name', k))
-          var valWrap = el('div', 'sc-prop-value')
-          var v = meta[k]
-          if (k === 'tags') {
-            String(v).split(',').forEach(function (t) {
-              var tag = t.trim().replace(/^"|"$/g, '')
-              if (tag) valWrap.appendChild(el('span', 'sc-tag', tag))
-            })
-          } else {
-            valWrap.textContent = v
-          }
-          row.appendChild(valWrap)
-          box.appendChild(row)
-        })
-        container.appendChild(box)
-      }
-
-      function renderTreeInto(treeEl) {
-        if (!treeEl || !memoryState.tree.length) return
-        treeEl.textContent = ''
-        var walk = function (nodes, depth, parent) {
-          nodes.forEach(function (n) {
-            if (n.type === 'dir') {
-              var open = memoryState.collapsed[n.rel] !== true // 默认展开；仅 _index.md 文件默认隐藏
-              var row = el('div', 'sc-tree-row sc-tree-folder')
-              row.style.paddingLeft = (6 + depth * 10) + 'px'
-              row.appendChild(el('span', 'sc-tree-arrow', open ? '▾' : '▸'))
-              row.appendChild(el('span', 'sc-tree-folder-name', n.name))
-              row.onclick = function () { memoryState.collapsed[n.rel] = open; renderTreeInto(treeEl) }
-              parent.appendChild(row)
-              if (open) {
-                var box = el('div', 'sc-tree-children')
-                walk(n.children || [], depth + 1, box)
-                parent.appendChild(box)
-              }
-            } else {
-              if (n.name === '_index.md') return // 默认不显示 _index.md
-              var row2 = el('div', 'sc-tree-row' + (n.rel === memoryState.selected ? ' active' : ''))
-              row2.style.paddingLeft = (6 + depth * 10) + 'px'
-              row2.appendChild(el('span', 'sc-tree-arrow', '·'))
-              row2.appendChild(el('span', null, n.name.replace(/\.md$/, '')))
-              row2.onclick = function () { selectNote(n.rel) }
-              parent.appendChild(row2)
-            }
-          })
-        }
-        var rootBox = el('div', 'sc-tree-children')
-        walk(memoryState.tree, 0, rootBox)
-        treeEl.appendChild(rootBox)
-      }
-
       /** 记忆库指针行：点击打开 notes 小节（只读 /memory/sections）；pointer=null 时不跳转。 */
       function openMemoryNote(pointer, autoSection, returnRender) {
         if (!pointer) { status('该条目无 notes 跳转目标'); return; }
@@ -1302,32 +1139,118 @@
       }
 
       /** 记忆板块：Obsidian 仓库文件夹（文件树 + 笔记预览 + 属性块 + 双链跳转）。 */
-      function renderMemory(view) {
+      /* ---------- 治理知识库（pmg devref 卡库；wiki 板块改造 2026-09-06） ----------
+       * 设计依据（UI 方法论落地）：倒金字塔（决策→契约→操作册序）、渐进披露（册→卡→正文三级展开）、
+       * 空状态三要素、等大树行、计数徽标单处出现、项目名 zh 排序。 */
+      function renderGovernance(view) {
         view.textContent = '';
-        view.appendChild(el('div', 'sc-h1', '知识库 wiki'));
-        view.appendChild(el('div', 'sc-desc', '四目录直接切换：画像 / 记忆 / 笔记 / 归档。'));
+        view.appendChild(el('div', 'sc-h1', '治理知识库'));
+        view.appendChild(el('div', 'sc-desc', '通用知识（治理权威仓）· 项目知识（按项目分册）。册序：架构决策 → 契约事实 → 操作步骤。点击项目查看三册，点册头加载卡片，点卡标题展开正文。'));
         var wrap = el('div', 'sc-explorer');
         var treeEl = el('div', 'sc-tree');
         var noteEl = el('div', 'sc-note');
-        noteEl.appendChild(el('div', 'sc-note-placeholder', '选择左侧条目查看内容'));
         wrap.appendChild(treeEl);
         wrap.appendChild(noteEl);
         view.appendChild(wrap);
-        status('加载仓库索引…');
-        ensureMemoryIndex().then(function () {
-          renderTreeInto(treeEl);
-          var all = memoryState.visibleCount;
-          status('知识库 · 仓库 ' + all + ' 个条目');
-          if (pendingSelect) { var rel = pendingSelect; pendingSelect = null; selectNote(rel); }
+        status('加载卡库索引…');
+        api('/pmg/overview').then(function (r) {
+          if (!r || !r.present) {
+            // 空状态（NN/g 三要素：这是什么 + 推荐动作 + 结果预期）
+            treeEl.appendChild(el('div', 'sc-note-placeholder', '未发现卡库'));
+            noteEl.appendChild(el('div', 'sc-note-placeholder', '未发现任何项目卡库。\n卡库 = 项目 docs/devref/cards/（devref-card --init 创建骨架）；\n蒸馏 route=project 的知识卡会自动入册。'));
+            status('治理知识库 · 未发现卡库');
+            return;
+          }
+          var mkGroup = function (t) { var g = el('div', 'sc-mem-group-title'); g.style.padding = '8px 6px 4px'; g.textContent = t; treeEl.appendChild(g); };
+          var mkRow = function (lib) {
+            var total = (lib.cards.decision || 0) + (lib.cards.reference || 0) + (lib.cards['how-to'] || 0);
+            var row = el('div', 'sc-tree-row sc-tree-folder');
+            row.appendChild(el('span', 'sc-tree-arrow', '▸'));
+            row.appendChild(el('span', null, lib.name + (lib.generic ? '（通用）' : '')));
+            var badge = el('span', 'sc-gm-badge', String(total) + ' 卡');
+            row.appendChild(badge);
+            row.addEventListener('click', function () {
+              Array.prototype.forEach.call(treeEl.querySelectorAll('.sc-tree-row.active'), function (x) { x.classList.remove('active'); rowArrow(x, '▸'); });
+              row.classList.add('active');
+              rowArrow(row, '▾');
+              renderLibCards(noteEl, lib, r.cardTypes);
+            });
+            treeEl.appendChild(row);
+          };
+          var rowArrow = function (rowEl, a) { var arr = rowEl.querySelector('.sc-tree-arrow'); if (arr) arr.textContent = a; };
+          if (r.generic) mkGroup('通用知识');
+          if (r.generic) mkRow(r.generic);
+          if (r.projects && r.projects.length) {
+            mkGroup('项目知识 · 按项目');
+            r.projects.forEach(function (p) { mkRow(p); });
+          }
+          // 默认选中第一项（通用库优先）
+          var first = r.generic || (r.projects && r.projects[0]);
+          if (first) {
+            var firstRow = treeEl.querySelector('.sc-tree-row');
+            if (firstRow) firstRow.click();
+          }
         }).catch(fail);
       }
 
+      /** 右侧：选中项目的三册分组（渐进披露：册头懒加载 → 卡标题展开正文）。 */
+      function renderLibCards(noteEl, lib, cardTypes) {
+        noteEl.textContent = '';
+        noteEl.appendChild(el('div', 'sc-note-title', lib.name + (lib.generic ? ' · 通用知识' : ' · 项目知识')));
+        noteEl.appendChild(el('div', 'sc-note-meta', lib.path));
+        (cardTypes || []).forEach(function (ct) {
+          var count = lib.cards[ct.type] || 0;
+          var head = el('div', 'sc-mem-group-title');
+          var arrow = el('span', 'sc-sec-arrow', '▸');
+          head.appendChild(arrow);
+          head.appendChild(document.createTextNode(ct.label + ' · ' + count + ' 条'));
+          head.style.cssText = 'cursor:pointer;display:flex;align-items:baseline;gap:6px;';
+          head.title = '点击加载/收起';
+          var body = el('div', 'sc-card-body');
+          body.style.display = 'none';
+          var loaded = false;
+          head.addEventListener('click', function () {
+            var open = body.style.display !== 'none';
+            if (open) { body.style.display = 'none'; arrow.textContent = '▸'; head.style.color = ''; return; }
+            body.style.display = 'block'; arrow.textContent = '▾'; head.style.color = 'var(--sc-accent)';
+            if (!loaded) {
+              loaded = true;
+              body.textContent = '加载中…';
+              api('/pmg/cards?id=' + lib.id + '&type=' + encodeURIComponent(ct.type)).then(function (r) {
+                body.textContent = '';
+                if (!r || !r.present) { body.appendChild(el('div', 'sc-mem-empty', (r && r.error) || '该册暂无卡：蒸馏 route=project 自动入册，或 devref-card --title … 手工写入')); return; }
+                if (!(r.cards || []).length) { body.appendChild(el('div', 'sc-mem-empty', '该册暂无卡：蒸馏 route=project 自动入册，或 devref-card --title … 手工写入')); return; }
+                r.cards.forEach(function (c) {
+                  var cHead = el('div', 'sc-gm-card-head');
+                  cHead.appendChild(el('span', 'sc-gm-card-title', c.title));
+                  // 状态 pill（语义双通道：文字 + 色；从卡体溯源/状态行提取）
+                  var st = String(c.body || '').match(/状态[：:]\s*(proposed|accepted)/i);
+                  if (st) cHead.appendChild(el('span', 'sc-tag' + (/accepted/i.test(st[1]) ? '' : ' dim'), st[1].toLowerCase()));
+                  var cBody = el('div', 'sc-card-body');
+                  cBody.style.display = 'none';
+                  cBody.textContent = (c.body || '').trim() || '（空卡）';
+                  cHead.addEventListener('click', function () {
+                    var co = cBody.style.display !== 'none';
+                    cBody.style.display = co ? 'none' : 'block';
+                    cHead.style.color = co ? '' : 'var(--sc-accent)';
+                  });
+                  body.appendChild(cHead);
+                  body.appendChild(cBody);
+                });
+              }).catch(function (e) { body.textContent = ''; body.appendChild(el('div', 'sc-mem-empty', '加载失败：' + e)); });
+            }
+          });
+          noteEl.appendChild(head);
+          noteEl.appendChild(body);
+        });
+      }
+      /** 旧 vault 视图（deprecated：Obsidian 仓库模式，已被治理知识库替代；保留备查不删除）。 */
       /* ---------- 组装 ---------- */
 
       var VIEWS = [
         ['persona', '画像板块', 'persona'],
         ['memory', '记忆板块', 'memory'],
-        ['wiki', '知识库 wiki (旧 vault)', 'file'],
+        ['wiki', '治理知识库', 'file'],
         ['suite', '插件集合', 'file'],
         ['toggles', '板块与管线 (deprecated)', 'toggles'],
         ['file', '配置原文', 'file']
@@ -1369,7 +1292,7 @@
         } else if (name === 'memory') {
           api('/memory/overview').then(function (r) { renderMemoryExpanded(refs.view, r); }).catch(fail);
         } else if (name === 'wiki') {
-          renderMemory(refs.view);
+          renderGovernance(refs.view);
         } else if (name === 'suite') {
           api('/suite').then(function (r) {
             renderSuite(refs.view, r);
@@ -1444,8 +1367,6 @@
         if (!mask.querySelector('#scpanl-modal')) buildModal(mask);
         mask.classList.add('open');
         // 打开即刷新 UI 状态：重置知识库索引缓存并重渲染当前视图（画像/记忆/wiki/配置原文数据重新拉取，免手动刷新）
-        memoryState.treeLoaded = false;
-        memoryState.tree = [];
         refreshCurrentView();
       }
 
