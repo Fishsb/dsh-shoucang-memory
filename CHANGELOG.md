@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- **阶段 2 复审修正（2026-09-06，切换前全面审查）**：① **补回并发守卫**——迁移时遗漏记忆插件原版 `distilling` Set（同会话蒸馏在途标记），蒸馏在途（最长 10min）内再次 turn/end 会重武装定时器导致双写/竞态，已补回（add/finally.delete 配对）；② **pmg 写门双部署口径统一**——skills 副本与 plugins/engine 两处 devref-card.mjs 并存（pmg 治理双部署同步约定），targets.ts `pmgScriptsRoot()` 改双路径探测回退（skills 优先/engine 兜底），index.ts migrate 工具同源引用，消单点漂移；③ 审计双条（writeDispatch 明细 + distillAgent 汇总）保留为有意设计；pending 候选正则放宽为 `\d{4}-\d{2}-\d{2}-*.md`（有意，覆盖 R2 回退文件）。修复后 E2E 6/6 复验通过
+
 ### Added
 - **ADR-0002 阶段 2 蒸馏器落地（2026-09-06）**：`shoucang-scheduler` 新增 `src/distill.ts`——自记忆插件迁入事件驱动蒸馏机器（session/event turn/end → idle 定时器 → snapshotEvents 水位增量 → 信号词预筛 → spawn 蒸馏子代理 maxDepth=1+persona 委派禁令+toolFilter → JSON 裁决 route=memory|project|discard），**写入分发重接 targets.ts**：动态路由 + 各库白名单门禁（不符合不存、拒收写审计）+ 零拷贝写入（memory-append 经 MEMORY_ROOT 切区 / devref-card 派发 / pmg 缺席落 pending 积压兜底）；水位迁 `suite/knowledge/audit/distill-watermark.jsonl`，新增蒸馏审计 `distill-audit.jsonl`（UI 统计卡数据源）；补强 LLM 路由连败≥2 弃用指定 provider 回落继承（坑位卡原缺陷）。config 增 distill 节（enableDistill 缺省 false——单飞切换时开启）；inject 扩 ['tools','llm','subagents','agents']。验证：**E2E 隔离自测 6/6**（临时 DSH_HOME + mock 子代理驱动全链：事件→增量→预筛→spawn 契约→路由→白名单放行/拒收→真实 memory-append 写入→水位推进→审计留痕）；**连带发现并归一修复记忆插件 runAsync2 退出码恒 0 缺陷**（安全阀拒写被计成功，主仓 commit 1d4d178）
 - **ADR-0002 阶段 1 目标层落地（2026-09-06）**：`shoucang-scheduler` 新增 `src/targets.ts`——R0 动态目标路由（memory→记忆插件库→守藏本地三索引；project→pmg 卡库→本地 pending，装配探测复用 registry+profiles 双基准）+ 白名单门禁（各库数据根 `whitelist.json` 自治、蒸馏器只读消费、不符合不存、缺文件回退内建缺省并标注来源）+ `shoucang_targets_probe` 只读自测工具（组合矩阵 4 行 + 现网实测 + 门禁抽样）。守藏本地知识区建成 `$DSH_HOME/suite/knowledge/`（三索引+notes 七类+INDEX 注册表+pending+audit+whitelist.json，与记忆库同构）；维护工具零拷贝复用记忆仓 scripts 验证通过（`MEMORY_ROOT` 指向本地知识区：体检 exit 0 健康、写门 exit 0 允许）。验收：组合矩阵 4/4、门禁抽样 3/3、typecheck 零错误；reload 信号已写（生效待宿主重启/手动注入）

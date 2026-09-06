@@ -25,9 +25,13 @@ export function memoryLibRoot(): string {
   return join(dshHome(), 'skills', 'managing-memory')
 }
 
-/** pmg 引擎运行副本 scripts（devref-card.mjs 唯一写门所在） */
+/** pmg 引擎 scripts 目录——双部署探测：skills 运行副本优先，plugins/engine 兜底（pmg 治理保证两副本同步） */
 export function pmgScriptsRoot(): string {
-  return join(dshHome(), 'skills', 'project-map-governance', 'scripts')
+  const skills = join(dshHome(), 'skills', 'project-map-governance', 'scripts')
+  if (existsSync(join(skills, 'devref-card.mjs'))) return skills
+  const engine = join(dshHome(), 'plugins', 'project-map-governance', 'engine', 'scripts')
+  if (existsSync(join(engine, 'devref-card.mjs'))) return engine
+  return skills // 两处皆无 → 返回 skills 路径（present=false 走降级链，如实报）
 }
 
 // —— 装配探测（与 index.ts shoucang_suite 同源口径：injected registry + profiles 双基准）——

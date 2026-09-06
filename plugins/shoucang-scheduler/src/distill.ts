@@ -103,6 +103,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): void {
   const pendDir = join(kRoot, 'pending')
   const log = (msg: string): void => { try { mkdirSync(dirname(logFile), { recursive: true }); appendFileSync(logFile, '[' + new Date().toISOString() + '] ' + msg + '\n') } catch { /* 静默 */ } }
   const audit = (o: Record<string, unknown>): void => { try { mkdirSync(dirname(auditFile), { recursive: true }); appendFileSync(auditFile, JSON.stringify({ at: new Date().toISOString(), ...o }) + '\n') } catch { /* 静默 */ } }
+  const distilling = new Set<string>() // 并发守卫：同会话蒸馏在途标记（防 turn/end 重武装导致双写/竞态）
 
   const presence = () => ({
     memory: memberPresent(config.memberPackages.memory),
@@ -252,7 +253,9 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): void {
 
   const distillAgent = async (agent: any): Promise<void> => {
     const sid = agent.id as string
+    if (distilling.has(sid)) return // 并发守卫：蒸馏在途（最长 10min）内再触发直接跳过（防双写/竞态）
     if (agent.status && agent.status !== 'idle') { log(`distill: ${sid.slice(0, 8)} 已恢复活跃（status=${agent.status}），跳过`); return }
+    distilling.add(sid)
     try {
       validateProvider()
       const wm = readWatermarks().get(sid)
@@ -340,7 +343,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): void {
       }
     } catch (e) {
       log(`distill agent err ${sid.slice(0, 8)}: ${String((e as Error)?.message || e).slice(0, 120)}`)
-    }
+    } finally { distilling.delete(sid) }
   }
 
   // ── 事件订阅（effect 自动清理，reload 零泄漏）──

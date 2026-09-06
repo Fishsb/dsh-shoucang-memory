@@ -19,7 +19,7 @@ import z from 'schemastery'
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
-import { memberPresent, selftestMatrix } from './targets.js'
+import { memberPresent, selftestMatrix, pmgScriptsRoot } from './targets.js'
 import { registerDistill } from './distill.js'
 
 export const name = '@dsh-external/shoucang-scheduler'
@@ -434,8 +434,8 @@ export function apply(ctx: Context, config: Config): void {
           const target = (args?.project || '').toString().trim() || config.default_project.trim()
           const backlog = target ? readPendingBacklog(target) : 0
           const thresholdMet = backlog >= 3
-          // pmg devref-card 引擎路径运行时探测（注入成员位置，零硬编码）
-          const pmgScript = join(dshHome(), 'plugins', 'project-map-governance', 'engine', 'scripts', 'devref-card.mjs')
+          // pmg devref-card 引擎路径统一走 targets.ts 双部署探测（skills 优先/engine 兜底，零硬编码）
+          const pmgScript = join(pmgScriptsRoot(), 'devref-card.mjs')
           const pmgReady = existsSync(pmgScript)
           const dispatchCmd = !target
             ? '（未配置 default_project——config 指定目标项目路径后给出派发命令）'
