@@ -223,7 +223,37 @@
         '.sc-pointer-go{flex:none;color:var(--sc-accent);font-size:14px;font-weight:700;}',
         '.sc-wl-link{color:var(--sc-accent);cursor:pointer;text-decoration:none;',
         'border-bottom:1px dashed color-mix(in srgb,var(--sc-accent) 45%,transparent);}',
-        '.sc-wl-link:hover{text-decoration:underline;}'
+        '.sc-wl-link:hover{text-decoration:underline;}',
+        /* 记忆库实况（2026-09-06）：容量条 / stat 卡 / 标签 chip */
+        '.sc-mem-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:6px 0 16px;}',
+        '.sc-mem-stat{border:1px solid var(--sc-border);border-radius:10px;padding:10px 12px;background:var(--sc-bg1);}',
+        '.sc-mem-stat-label{font-size:11px;color:var(--sc-muted);letter-spacing:.04em;margin-bottom:4px;}',
+        '.sc-mem-stat-value{font-size:20px;font-weight:700;color:var(--sc-text);font-variant-numeric:tabular-nums;}',
+        '.sc-mem-stat-sub{font-size:11px;color:var(--sc-faint);margin-top:2px;}',
+        '.sc-cap{width:100%;height:6px;border-radius:3px;background:var(--sc-bg3);overflow:hidden;margin:6px 0 3px;}',
+        '.sc-cap-fill{height:100%;border-radius:3px;background:var(--sc-accent);transition:width .3s;}',
+        '.sc-cap.warn .sc-cap-fill{background:#e8a33d;}',
+        '.sc-cap.crit .sc-cap-fill{background:#e5534b;}',
+        '.sc-mem-sub{font-size:12px;color:var(--sc-text);margin:2px 0 0;padding-bottom:6px;}',
+        '.sc-mem-sub.muted{color:var(--sc-muted);}',
+        '.sc-mem-sub.mono{font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;font-size:11px;color:var(--sc-faint);}',
+        '.sc-idx-group{margin-bottom:14px;}',
+        '.sc-idx-group-head{display:flex;align-items:baseline;gap:8px;padding-bottom:5px;margin-bottom:4px;border-bottom:1px solid var(--sc-border);}',
+        '.sc-idx-file{font-size:12.5px;font-weight:700;color:var(--sc-text);}',
+        '.sc-idx-cap{font-size:11px;color:var(--sc-faint);font-variant-numeric:tabular-nums;}',
+        '.sc-idx-row{display:flex;gap:8px;align-items:baseline;padding:3px 2px;cursor:pointer;}',
+        '.sc-idx-row:hover{background:var(--sc-bg3);border-radius:6px;}',
+        '.sc-idx-tag{flex:none;font-size:10px;font-weight:700;padding:0 7px;border-radius:999px;line-height:16px;',
+        'background:color-mix(in srgb,var(--sc-accent) 16%,transparent);color:var(--sc-accent);}',
+        '.sc-idx-subject{flex:1;min-width:0;font-size:12.5px;color:var(--sc-text);line-height:1.5;}',
+        '.sc-idx-pointer{flex:none;font-size:11px;color:var(--sc-muted);cursor:pointer;margin-left:8px;}',
+        '.sc-idx-pointer:hover{color:var(--sc-accent);text-decoration:underline;}',
+        '.sc-notes-list{display:flex;flex-direction:column;gap:6px;margin-top:4px;}',
+        '.sc-note-chip{display:flex;align-items:center;gap:6px;border:1px solid var(--sc-border);border-radius:8px;',
+        'padding:5px 9px;cursor:pointer;background:var(--sc-bg1);font-size:12px;color:var(--sc-text);}',
+        '.sc-note-chip:hover{border-color:var(--sc-accent);background:var(--sc-bg3);}',
+        '.sc-note-chip .sc-tag{background:var(--sc-bg3);color:var(--sc-faint);border:none;font-weight:600;}',
+        '.sc-sec-arrow{display:inline-block;width:12px;flex:none;color:var(--sc-faint);transition:color .12s;}',
       ].join('');
 
       function status(msg) { var n = document.getElementById('sc-statusbar'); if (n) n.textContent = msg || ''; }
@@ -904,15 +934,26 @@
         treeEl.appendChild(rootBox)
       }
 
-      /** 指针行：画像/记忆板块 = 缩略指针（标题+一句话摘要），点击跳转知识库 wiki 全文。 */
-      function pointerSummary(f) {
-        var fm = stripFrontmatter(f.text || '')
-        if (fm.meta && fm.meta.description) return String(fm.meta.description)
-        var line = (fm.body || '').trim().split(/\r?\n/).filter(function (l) { return l && !/^#/.test(l) })[0] || ''
-        return line.slice(0, 70) || (fm.meta && fm.meta.title) || ''
+      /** 记忆库指针行：点击打开 notes 小节（只读 /memory/sections）；pointer=null 时不跳转。 */
+      function openMemoryNote(pointer, autoSection) {
+        if (!pointer) { status('该条目无 notes 跳转目标'); return; }
+        var rel = String(pointer).split('§')[0].trim();
+        if (!/^notes\/[a-z]+\.md$/.test(rel)) { status('指针目标非 notes 白名单：' + pointer); return; }
+        api('/memory/sections?rel=' + encodeURIComponent(rel)).then(function (r) {
+          if (!r || !r.present) { status((r && r.error) || '小节不可用'); return; }
+          renderNoteSections(refs.view, r);
+          if (autoSection) {
+            var heads = refs.view.querySelectorAll('.sc-mem-group-title');
+            heads.forEach(function (h) {
+              if (h.textContent.indexOf(autoSection) !== -1) {
+                var body = h.nextElementSibling;
+                if (body && body.classList.contains('sc-card-body') && body.style.display === 'none') h.click();
+              }
+            });
+          }
+        }).catch(fail);
       }
-
-      function makePointerRow(title, summary, targetKey, meta) {
+      function makeMemoryPointerRow(title, pointer, meta, summary) {
         var row = el('div', 'sc-pointer');
         var main = el('div', 'sc-pointer-main');
         var head = el('div', 'sc-pointer-head');
@@ -921,26 +962,213 @@
         main.appendChild(head);
         if (summary) main.appendChild(el('div', 'sc-pointer-summary', summary));
         row.appendChild(main);
-        row.appendChild(el('span', 'sc-pointer-go', '↗'));
-        row.addEventListener('click', function () { openNoteTarget(targetKey) });
+        if (pointer) row.appendChild(el('span', 'sc-pointer-go', '↗'));
+        var p = pointer, sec = String(pointer || '').split('§')[1] || '';
+        row.addEventListener('click', function () { openMemoryNote(p, sec.trim() || null); });
         return row;
       }
 
-      /** 画像板块：热记忆指针——只展示 用户画像.md / agent画像.md，点击直达 wiki 全文。 */
+      /** 标签 → 色相（tag pill 着色；未知回落品牌紫）。 */
+      function idxHue(tag) {
+        var map = { env: 180, tool: 212, flow: 262, lesson: 28, release: 320, 身份: 330, 偏好: 348, 习惯: 12, 硬件: 200, 环境: 190, 演化: 150, 经验: 45 };
+        return map[tag] != null ? map[tag] : 254;
+      }
+      function idxPill(tag) {
+        var h = idxHue(tag);
+        var pill = el('span', 'sc-idx-tag', String(tag || '?'));
+        pill.style.color = 'hsl(' + h + 'deg 72% 58%)';
+        pill.style.background = 'color-mix(in srgb, hsl(' + h + 'deg 85% 60%) 15%, transparent)';
+        return pill;
+      }
+      /** 索引指针行（tag pill + subject + notes 指针），点击直达 notes 小节。 */
+      function renderIndexRows(container, lines) {
+        (lines || []).forEach(function (ln) {
+          var row = el('div', 'sc-idx-row');
+          row.appendChild(idxPill(ln.tag));
+          row.appendChild(el('span', 'sc-idx-subject', ln.subject || ''));
+          if (ln.pointer) row.appendChild(el('span', 'sc-idx-pointer', ln.pointer));
+          var ptr = ln.pointer, sec = String(ln.pointer || '').split('§')[1] || '';
+          row.addEventListener('click', function () { openMemoryNote(ptr, sec.trim() || null); });
+          container.appendChild(row);
+        });
+      }
+      /** ISO → 本地 'MM-DD HH:MM'（蒸馏水位展示用）。 */
+      function fmtTime(iso) {
+        if (!iso) return '—';
+        try {
+          var d = new Date(iso);
+          var p = function (n) { return (n < 10 ? '0' : '') + n; };
+          return p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+        } catch (e) { return String(iso).slice(0, 16); }
+      }
+
+      /** 画像板块（F-003 重定义 2026-09-06）：真实画像 = USER.md/AGENT.md 指针行 + 容量（记忆库事实源）。 */
       function renderPersona(view, data) {
         view.textContent = '';
         view.appendChild(el('div', 'sc-h1', '画像板块'));
-        view.appendChild(el('div', 'sc-desc', '热记忆指针（缩略）：用户画像（我）· agent画像（你），点击跳转知识库 wiki 全文。'));
-        if (!data || data.error === 'no-active-root' || !(data.files && data.files.length)) {
-          status(data && data.error === 'no-active-root' ? '未激活根目录——请到「配置原文」页根目录区添加。' : (data && data.error) || '暂无画像内容');
+        view.appendChild(el('div', 'sc-desc', '记忆库画像实况（managing-memory 事实源）：USER.md（用户画像）· AGENT.md（Agent 画像）。指针行 → 点击直达 notes/ 详情小节。'));
+        if (!data || !data.present || !(data.indexes && data.indexes.length)) {
+          status((data && data.error) || '记忆库画像不可用');
           return;
         }
-        status('画像 · ' + data.files.length + ' 条热记忆指针');
-        var list = el('div', 'sc-pointer-list');
-        data.files.forEach(function (f) {
-          list.appendChild(makePointerRow(f.label || f.rel, pointerSummary(f), f.rel.replace(/\.md$/, ''), (f.mtime || '').slice(0, 10)));
+        var pair = data.indexes.filter(function (f) { return f.name === 'USER.md' || f.name === 'AGENT.md' });
+        var totalRows = 0;
+        // 顶栏容量卡（对齐记忆页结构）
+        var grid = el('div', 'sc-mem-grid');
+        pair.forEach(function (f) {
+          var pp = f.cap ? Math.round(f.chars / f.cap * 100) : 0;
+          var card = el('div', 'sc-mem-stat');
+          card.appendChild(el('div', 'sc-mem-stat-label', f.name.replace('.md', '') + ' 容量'));
+          card.appendChild(el('div', 'sc-mem-stat-value', f.chars + ' / ' + f.cap));
+          card.appendChild(el('div', 'sc-mem-stat-sub', pp + '% · ' + (f.lines || []).length + ' 条画像'));
+          grid.appendChild(card);
         });
-        view.appendChild(list);
+        view.appendChild(grid);
+        // 指针行（tag pill + subject + pointer，点击跳 notes 小节）
+        pair.forEach(function (f) {
+          totalRows += (f.lines || []).length;
+          view.appendChild(el('div', 'sc-mem-group-title', f.label + ' · ' + (f.lines || []).length));
+          if (!(f.lines || []).length) { view.appendChild(el('div', 'sc-mem-empty', '（暂无指针行）')); return; }
+          var list = el('div', 'sc-idx-list');
+          list.style.cssText = 'display:flex;flex-direction:column;gap:1px;margin-bottom:10px;';
+          renderIndexRows(list, f.lines);
+          view.appendChild(list);
+        });
+        status('画像 · ' + totalRows + ' 条指针');
+      }
+
+      /** 记忆板块（F-003 重定义 2026-09-06）：记忆库总览仪表盘 + MEMORY.md 索引指针。 */
+      function renderMemoryExpanded(view, data) {
+        view.textContent = '';
+        view.appendChild(el('div', 'sc-h1', '记忆板块'));
+        view.appendChild(el('div', 'sc-desc', '记忆库实况（managing-memory 事实源）：容量水位 / pending 候选 / 蒸馏运行 / 知识索引 MEMORY.md。'));
+        if (!data || !data.present) {
+          status((data && data.error) || '记忆库不可用');
+          return;
+        }
+        var memoryFile = null;
+        (data.indexes || []).forEach(function (f) { if (f.name === 'MEMORY.md') memoryFile = f; });
+
+        // 顶栏 stat 卡：索引容量 / 指针数 / pending / 蒸馏水位
+        var grid = el('div', 'sc-mem-grid');
+        var mkStat = function (label, value, sub) {
+          var card = el('div', 'sc-mem-stat');
+          card.appendChild(el('div', 'sc-mem-stat-label', label));
+          card.appendChild(el('div', 'sc-mem-stat-value', value));
+          if (sub) card.appendChild(el('div', 'sc-mem-stat-sub', sub));
+          return card;
+        };
+        if (memoryFile) {
+          var pct = memoryFile.cap ? Math.round(memoryFile.chars / memoryFile.cap * 100) : 0;
+          grid.appendChild(mkStat('MEMORY.md 容量', memoryFile.chars + ' / ' + memoryFile.cap, pct + '% · 索引 ' + (memoryFile.lines || []).length + ' 行'));
+        }
+        (data.indexes || []).filter(function (f) { return f.name === 'USER.md' || f.name === 'AGENT.md' }).forEach(function (f) {
+          var p2 = f.cap ? Math.round(f.chars / f.cap * 100) : 0;
+          grid.appendChild(mkStat(f.name.replace('.md', ''), f.chars + ' / ' + f.cap, p2 + '% · ' + (f.lines || []).length + ' 行'));
+        });
+        grid.appendChild(mkStat('pending 候选', String(data.pending ? data.pending.count : 0), 'ADD-only 暂存 · 非权威'));
+        // 蒸馏：最近蒸馏时间 + 待归档队列
+        var dLast = data.distill && data.distill.last;
+        grid.appendChild(mkStat('蒸馏水位', dLast ? fmtTime(dLast.at) : '—', dLast ? ('lastSeq ' + String(dLast.lastSeq) + ' · ' + String(dLast.sessionId || '').replace(/^session-/, '').slice(0, 8)) : 'watcher 事件驱动'));
+        var undone = data.queue ? data.queue.undone : 0;
+        grid.appendChild(mkStat('待归档会话', String(undone), undone ? 'archive-progress 未 done' : '无积压'));
+        view.appendChild(grid);
+
+        // 容量进度条
+        if (memoryFile) {
+          var pctv = memoryFile.cap ? Math.round(memoryFile.chars / memoryFile.cap * 100) : 0;
+          var capWrap = el('div', 'sc-mem-group-title');
+          capWrap.textContent = '索引容量水位';
+          view.appendChild(capWrap);
+          (data.indexes || []).forEach(function (f) {
+            if (!f.cap) return;
+            var p = Math.round(f.chars / f.cap * 100);
+            var row = el('div');
+            row.appendChild(el('div', 'sc-mem-sub', f.label + ' · ' + f.chars + '/' + f.cap + ' (' + p + '%)'));
+            var bar = el('div', 'sc-cap' + (p >= 95 ? ' crit' : p >= 80 ? ' warn' : ''));
+            var fill = el('div', 'sc-cap-fill'); fill.style.width = Math.min(p, 100) + '%';
+            bar.appendChild(fill); row.appendChild(bar);
+            view.appendChild(row);
+          });
+        }
+
+
+          // MEMORY.md 知识索引（tag pill + 主题 + notes 跳转）
+          if (memoryFile && (memoryFile.lines || []).length) {
+            view.appendChild(el('div', 'sc-mem-group-title', '知识索引 MEMORY.md · ' + memoryFile.lines.length + ' 条'));
+            view.appendChild(el('div', 'sc-desc', '点击行直达 notes 详情小节（只读）。'));
+            var idxWrap = el('div');
+            idxWrap.style.cssText = 'border:1px solid var(--sc-border);border-radius:10px;padding:6px 10px;margin-bottom:6px;background:var(--sc-bg1);';
+            renderIndexRows(idxWrap, memoryFile.lines);
+            view.appendChild(idxWrap);
+          }
+        // pending 最近候选
+        if (data.pending && data.pending.count) {
+          view.appendChild(el('div', 'sc-mem-group-title', 'pending 候选队列 · ' + data.pending.count + ' 条'));
+          var plist = el('div', 'sc-pointer-list');
+          (data.pending.recent || []).forEach(function (p) {
+            var name = String(p.name || '').replace(/\.md$/, '');
+            plist.appendChild(makeMemoryPointerRow(name, null, (p.mtime || '').slice(0, 10)));
+          });
+          view.appendChild(plist);
+          view.appendChild(el('div', 'sc-desc', '共 ' + data.pending.count + ' 条（仅显示最近 ' + (data.pending.recent || []).length + ' 条）· 只读展示'));
+        } else {
+          view.appendChild(el('div', 'sc-mem-empty', 'pending 队列为空'));
+        }
+
+        // notes/ 小节索引（可点开）
+        view.appendChild(el('div', 'sc-mem-group-title', 'notes 详情小节'));
+        var nw = el('div', 'sc-notes-list');
+        (data.notes || []).forEach(function (nf) {
+          var chip = el('div', 'sc-note-chip');
+          chip.appendChild(el('span', null, nf.name));
+          chip.appendChild(el('span', 'sc-tag', String(nf.sections.length)));
+          chip.title = nf.rel + ' · ' + nf.sections.map(function (s) { return s.title }).join(' / ');
+          chip.addEventListener('click', function () {
+            api('/memory/sections?rel=' + encodeURIComponent(nf.rel)).then(function (r) {
+              renderNoteSections(view, r);
+            }).catch(fail);
+          });
+          nw.appendChild(chip);
+        });
+        view.appendChild(nw);
+
+        status('记忆 · MEMORY ' + (memoryFile ? memoryFile.chars + '/' + memoryFile.cap + ' · ' + (memoryFile.lines || []).length + ' 行' : '不可用'));
+      }
+
+      /** notes 小节正文浏览（只读；/memory/sections）。 */
+      function renderNoteSections(view, data) {
+        if (!data || !data.present || !data.sections) { status((data && data.error) || '无小节'); return; }
+        view.textContent = '';
+        view.appendChild(el('div', 'sc-h1', data.name));
+        view.appendChild(el('div', 'sc-desc', data.rel + ' · ' + data.sections.length + ' 个小节（白名单只读）'));
+        var back = el('button', 'sc-btn subtle', '← 返回记忆库');
+        back.type = 'button';
+        back.addEventListener('click', function () { api('/memory/overview').then(function (r) { renderMemoryExpanded(view, r); }).catch(fail); });
+        view.appendChild(back);
+        data.sections.forEach(function (sec) {
+          var head = el('div', 'sc-mem-group-title');
+          var arrow = el('span', 'sc-sec-arrow', '▸');
+          head.appendChild(arrow);
+          head.appendChild(document.createTextNode(sec.title));
+          head.style.cursor = 'pointer';
+          head.title = '点击展开/收起';
+          head.style.display='flex'; head.style.alignItems='baseline'; head.style.gap='6px';
+          var body = el('div', 'sc-card-body');
+          body.style.maxHeight = 'none';
+          body.style.display = 'none';
+          body.textContent = sec.body || '（空小节）';
+          var toggle = function () {
+            var open = body.style.display !== 'none';
+            body.style.display = open ? 'none' : 'block';
+            arrow.textContent = open ? '▸' : '▾';
+            head.style.color = open ? '' : 'var(--sc-accent)';
+          };
+          head.addEventListener('click', toggle);
+          view.appendChild(head);
+          view.appendChild(body);
+        });
+        status(data.rel + ' · ' + data.sections.length + ' 小节（点击标题展开）');
       }
 
       /** 记忆板块：Obsidian 仓库文件夹（文件树 + 笔记预览 + 属性块 + 双链跳转）。 */
@@ -964,52 +1192,12 @@
         }).catch(fail);
       }
 
-      /* 记忆板块：热记忆指针（缩略），点击跳转知识库 wiki 全文。 */
-      function renderMemoryExpanded(view, data) {
-        view.textContent = '';
-        view.appendChild(el('div', 'sc-h1', '记忆板块'));
-        view.appendChild(el('div', 'sc-desc', '热记忆指针（缩略）：日记忆 + 记忆目录一级板块，点击跳转知识库 wiki 全文。'));
-        if (!data || data.error === 'no-active-root' || !data.groups) {
-          status(data && data.error === 'no-active-root' ? '未激活根目录——请到「配置原文」页根目录区添加。' : (data && data.error) || '暂无记忆内容');
-          return;
-        }
-        // 内容板块 = 记忆/ 下一级目录（有目录就有板块，空目录也保留）
-        var groups = (data.groups || []).slice()
-        groups.sort(function (a, b) {
-          var ad = a.dir === '日记忆' ? 0 : 1
-          var bd = b.dir === '日记忆' ? 0 : 1
-          if (ad !== bd) return ad - bd
-          return a.dir.localeCompare(b.dir, 'zh')
-        })
-        var total = 0
-        groups.forEach(function (g) {
-          var visible = g.files.filter(function (f) { return f.name !== '_index.md' })
-          total += visible.length
-          view.appendChild(el('div', 'sc-mem-group-title', g.dir + ' · ' + visible.length));
-          if (!visible.length) {
-            view.appendChild(el('div', 'sc-mem-empty', '（暂无条目）'));
-            return
-          }
-          var list = el('div', 'sc-pointer-list');
-          visible.forEach(function (f) {
-            var fm = stripFrontmatter(f.text || '')
-            var metaBits = []
-            if (fm.meta && fm.meta.subtype) metaBits.push(fm.meta.subtype)
-            if (fm.meta && fm.meta.stage) metaBits.push(fm.meta.stage)
-            metaBits.push((f.mtime || '').slice(0, 10))
-            list.appendChild(makePointerRow(f.rel, pointerSummary(f), f.rel.replace(/\.md$/, ''), metaBits.join(' · ')));
-          });
-          view.appendChild(list);
-        });
-        status('记忆 · ' + total + ' 条热记忆指针');
-      }
-
       /* ---------- 组装 ---------- */
 
       var VIEWS = [
         ['persona', '画像板块', 'persona'],
         ['memory', '记忆板块', 'memory'],
-        ['wiki', '知识库 wiki', 'file'],
+        ['wiki', '知识库 wiki (旧 vault)', 'file'],
         ['suite', '插件集合', 'file'],
         ['toggles', '板块与管线 (deprecated)', 'toggles'],
         ['file', '配置原文', 'file']
@@ -1047,9 +1235,9 @@
         refs.navItems.forEach(function (it) { it.el.classList.toggle('active', it.name === name); });
         refs.view.textContent = '';
         if (name === 'persona') {
-          api('/boards/persona').then(function (r) { renderPersona(refs.view, r); }).catch(fail);
+          api('/memory/overview').then(function (r) { renderPersona(refs.view, r); }).catch(fail);
         } else if (name === 'memory') {
-          api('/boards/memory').then(function (r) { renderMemoryExpanded(refs.view, r); }).catch(fail);
+          api('/memory/overview').then(function (r) { renderMemoryExpanded(refs.view, r); }).catch(fail);
         } else if (name === 'wiki') {
           renderMemory(refs.view);
         } else if (name === 'suite') {
@@ -1200,30 +1388,31 @@
       // cordis client plugin 激活：注入 slots（满足契约）+ DOM 入口始终挂载（React 不可用时真实入口）
       function apply(ctx) {
         mount(); // root + mask + CSS（幂等）
-        if (ctx && typeof ctx.effect === 'function' && ctx.slots && typeof ctx.slots.inject === 'function') {
+        // 0.1.2 起 React slot 按钮与 DOM 直插按钮（mountSidebarEntry）会同时显示为两个入口，
+        // 暂禁用 slot 按钮、只保留 DOM 直插真实入口；如需恢复 React slot 改回 true。
+        var ENABLE_SLOT_BUTTON = false;
+        if (ENABLE_SLOT_BUTTON && ctx && typeof ctx.effect === 'function' && ctx.slots && typeof ctx.slots.inject === 'function') {
           ctx.effect(function () {
             return ctx.slots.inject('sidebar.footer.action', function () {
+              // 0.1.2 契约：React 组件作为 register 的第二个参数（options.component 已不再被读取）
+              var reactEl = null;
+              try { reactEl = require('react'); } catch (e) { reactEl = null; }
+              var open = openPanel;
+              var ShoucangToggle = function () {
+                // 纯 DOM 插件无 react 运行时 → 渲染 null（React 组件返回 null 合法，空槽不崩）；DOM 入口由 mountSidebarEntry 提供
+                if (!reactEl || typeof reactEl.createElement !== 'function') return null;
+                return reactEl.createElement(
+                  'button',
+                  { type: 'button', title: '守藏面板', className: 'sc-trigger', onClick: function () { open(); } },
+                  reactEl.createElement('img', { src: SC_ICON, alt: '守', style: { width: 22, height: 22, display: 'block', pointerEvents: 'none' } }),
+                  reactEl.createElement('span', { className: 'sc-trigger-label' }, '守藏')
+                );
+              };
               return ctx.slots.register({
                 name: 'sidebar.footer.action',
                 id: 'shoucang-panel-toggle',
-                label: function () { return '守藏面板'; },
-                component: function () {
-                  // footer.action 为 React slot：component = React 组件函数（footer.action 期望函数式组件）
-                  var reactEl = null;
-                  try { reactEl = require('react'); } catch (e) { reactEl = null; }
-                  var open = openPanel;
-                  return function () {
-                    // 纯 DOM 插件无 react 运行时 → 渲染 null（React 组件返回 null 合法，空槽不崩）；DOM 入口由 mountSidebarEntry 提供
-                    if (!reactEl || typeof reactEl.createElement !== 'function') return null;
-                    return reactEl.createElement(
-                      'button',
-                      { type: 'button', title: '守藏面板', className: 'sc-trigger', onClick: function () { open(); } },
-                      reactEl.createElement('img', { src: SC_ICON, alt: '守', style: { width: 22, height: 22, display: 'block', pointerEvents: 'none' } }),
-                      reactEl.createElement('span', { className: 'sc-trigger-label' }, '守藏')
-                    );
-                  };
-                }
-              });
+                label: function () { return '守藏面板'; }
+              }, ShoucangToggle);
             });
           }, 'shoucang-panel: footer action');
         }
