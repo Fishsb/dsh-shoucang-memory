@@ -1002,11 +1002,11 @@
         } catch (e) { return String(iso).slice(0, 16); }
       }
 
-      /** 画像板块（F-003 重定义 2026-09-06）：真实画像 = USER.md/AGENT.md 指针行 + 容量（记忆库事实源）。 */
+      /** 画像板块（F-003）：USER.md/AGENT.md 画像专属视图——容量与指针行**只在此板块**展示（记忆板块不重复统计画像）。 */
       function renderPersona(view, data) {
         view.textContent = '';
         view.appendChild(el('div', 'sc-h1', '画像板块'));
-        view.appendChild(el('div', 'sc-desc', '记忆库画像实况（managing-memory 事实源）：USER.md（用户画像）· AGENT.md（Agent 画像）。指针行 → 点击直达 notes/ 详情小节。'));
+        view.appendChild(el('div', 'sc-desc', 'USER.md（用户画像）· AGENT.md（Agent 画像）——画像容量与指针行的唯一展示位（记忆板块不重复）。指针行 → 点击直达 notes/ 详情小节。'));
         if (!data || !data.present || !(data.indexes && data.indexes.length)) {
           status((data && data.error) || '记忆库画像不可用');
           return;
@@ -1037,20 +1037,18 @@
         status('画像 · ' + totalRows + ' 条指针');
       }
 
-      /** 记忆板块（F-003 重定义 2026-09-06）：记忆库总览仪表盘 + MEMORY.md 索引指针。 */
+      /** 记忆板块（阶段4 UI 重排 2026-09-06）：分区展示——蒸馏运行 / 记忆库状态 / 知识索引 / pending / notes / 守藏知识区。
+       * 去重原则：USER/AGENT 画像只在画像板块；MEMORY 容量百分比只在进度条；蒸馏水位读 suite 活水位。 */
       function renderMemoryExpanded(view, data) {
         view.textContent = '';
         view.appendChild(el('div', 'sc-h1', '记忆板块'));
-        view.appendChild(el('div', 'sc-desc', '记忆库实况（managing-memory 事实源）：容量水位 / pending 候选 / 蒸馏运行 / 知识索引 MEMORY.md。'));
+        view.appendChild(el('div', 'sc-desc', '蒸馏运行 → 记忆库状态 → 知识索引 → 候选与详情。画像（USER/AGENT）见「画像板块」。'));
         if (!data || !data.present) {
           status((data && data.error) || '记忆库不可用');
           return;
         }
         var memoryFile = null;
         (data.indexes || []).forEach(function (f) { if (f.name === 'MEMORY.md') memoryFile = f; });
-
-        // 顶栏 stat 卡：索引容量 / 指针数 / pending / 蒸馏水位
-        var grid = el('div', 'sc-mem-grid');
         var mkStat = function (label, value, sub) {
           var card = el('div', 'sc-mem-stat');
           card.appendChild(el('div', 'sc-mem-stat-label', label));
@@ -1058,75 +1056,66 @@
           if (sub) card.appendChild(el('div', 'sc-mem-stat-sub', sub));
           return card;
         };
-        if (memoryFile) {
-          var pct = memoryFile.cap ? Math.round(memoryFile.chars / memoryFile.cap * 100) : 0;
-          grid.appendChild(mkStat('MEMORY.md 容量', memoryFile.chars + ' / ' + memoryFile.cap, pct + '% · 索引 ' + (memoryFile.lines || []).length + ' 行'));
-        }
-        (data.indexes || []).filter(function (f) { return f.name === 'USER.md' || f.name === 'AGENT.md' }).forEach(function (f) {
-          var p2 = f.cap ? Math.round(f.chars / f.cap * 100) : 0;
-          grid.appendChild(mkStat(f.name.replace('.md', ''), f.chars + ' / ' + f.cap, p2 + '% · ' + (f.lines || []).length + ' 行'));
-        });
-        grid.appendChild(mkStat('pending 候选', String(data.pending ? data.pending.count : 0), 'ADD-only 暂存 · 非权威'));
-        // 蒸馏：最近蒸馏时间 + 待归档队列 + 守藏蒸馏统计卡（阶段4：蒸馏唯一权归守藏，distill-audit 聚合）
-        var dLast = data.distill && data.distill.last;
-        grid.appendChild(mkStat('蒸馏水位', dLast ? fmtTime(dLast.at) : '—', dLast ? ('lastSeq ' + String(dLast.lastSeq) + ' · ' + String(dLast.sessionId || '').replace(/^session-/, '').slice(0, 8)) : 'watcher 事件驱动'));
+        var group = function (t) { view.appendChild(el('div', 'sc-mem-group-title', t)); };
+
+        /* ── §1 蒸馏运行（守藏 = 唯一蒸馏器；水位 = suite 活水位） ── */
+        group('蒸馏运行');
+        var g1 = el('div', 'sc-mem-grid');
         var ds = data.distillStats;
         if (ds) {
           var byRoute = ds.byRoute || {};
           var routeParts = [];
           ['memory', 'project', 'discard'].forEach(function (k) { if (byRoute[k]) routeParts.push(k + ' ' + byRoute[k]); });
           var dsLast = ds.last && ds.last.at ? fmtTime(ds.last.at) : '—';
-          grid.appendChild(mkStat('守藏蒸馏', String(ds.runs || 0) + ' 次', '入册 ' + String(ds.added || 0) + ' · 最近 ' + dsLast));
-          grid.appendChild(mkStat('蒸馏路由', routeParts.length ? routeParts.join(' / ') : '—', '拒收 ' + String(ds.rejected || 0) + ' · 失败 ' + String(ds.failed || 0) + (ds.gateRejects ? ' · 门拒 ' + ds.gateRejects : '')));
+          g1.appendChild(mkStat('守藏蒸馏', String(ds.runs || 0) + ' 次', '入册 ' + String(ds.added || 0) + ' · 最近 ' + dsLast));
+          g1.appendChild(mkStat('路由分布', routeParts.length ? routeParts.join(' / ') : '—', '拒收 ' + String(ds.rejected || 0) + ' · 失败 ' + String(ds.failed || 0) + (ds.gateRejects ? ' · 门拒 ' + ds.gateRejects : '')));
         }
+        var dLast = data.distill && data.distill.last;
+        g1.appendChild(mkStat('蒸馏水位', dLast ? fmtTime(dLast.at) : '—', dLast ? ('lastSeq ' + String(dLast.lastSeq) + ' · ' + String(dLast.sessionId || '').replace(/^session-/, '').slice(0, 8)) : 'watcher 事件驱动'));
         var undone = data.queue ? data.queue.undone : 0;
-        grid.appendChild(mkStat('待归档会话', String(undone), undone ? 'archive-progress 未 done' : '无积压'));
-        view.appendChild(grid);
+        g1.appendChild(mkStat('待归档会话', String(undone), undone ? 'archive-progress 未 done' : '无积压'));
+        view.appendChild(g1);
 
-        // 容量进度条
-        if (memoryFile) {
-          var pctv = memoryFile.cap ? Math.round(memoryFile.chars / memoryFile.cap * 100) : 0;
-          var capWrap = el('div', 'sc-mem-group-title');
-          capWrap.textContent = '索引容量水位';
-          view.appendChild(capWrap);
-          (data.indexes || []).forEach(function (f) {
-            if (!f.cap) return;
-            var p = Math.round(f.chars / f.cap * 100);
-            var row = el('div');
-            row.appendChild(el('div', 'sc-mem-sub', f.label + ' · ' + f.chars + '/' + f.cap + ' (' + p + '%)'));
-            var bar = el('div', 'sc-cap' + (p >= 95 ? ' crit' : p >= 80 ? ' warn' : ''));
-            var fill = el('div', 'sc-cap-fill'); fill.style.width = Math.min(p, 100) + '%';
-            bar.appendChild(fill); row.appendChild(bar);
-            view.appendChild(row);
-          });
+        /* ── §2 记忆库状态（MEMORY 容量 + pending；百分比只在进度条，卡不重复） ── */
+        group('记忆库状态');
+        var g2 = el('div', 'sc-mem-grid');
+        if (memoryFile) g2.appendChild(mkStat('MEMORY.md 容量', memoryFile.chars + ' / ' + memoryFile.cap, '索引 ' + (memoryFile.lines || []).length + ' 行'));
+        g2.appendChild(mkStat('pending 候选', String(data.pending ? data.pending.count : 0), 'ADD-only 暂存 · 非权威'));
+        view.appendChild(g2);
+        if (memoryFile && memoryFile.cap) {
+          var p = Math.round(memoryFile.chars / memoryFile.cap * 100);
+          var row = el('div');
+          row.appendChild(el('div', 'sc-mem-sub', memoryFile.label + ' · ' + memoryFile.chars + '/' + memoryFile.cap + ' (' + p + '%)'));
+          var bar = el('div', 'sc-cap' + (p >= 95 ? ' crit' : p >= 80 ? ' warn' : ''));
+          var fill = el('div', 'sc-cap-fill'); fill.style.width = Math.min(p, 100) + '%';
+          bar.appendChild(fill); row.appendChild(bar);
+          view.appendChild(row);
         }
 
+        /* ── §3 知识索引 MEMORY.md ── */
+        if (memoryFile && (memoryFile.lines || []).length) {
+          group('知识索引 MEMORY.md · ' + memoryFile.lines.length + ' 条');
+          view.appendChild(el('div', 'sc-desc', '点击行直达 notes 详情小节（只读）。'));
+          var idxWrap = el('div');
+          idxWrap.style.cssText = 'border:1px solid var(--sc-border);border-radius:10px;padding:6px 10px;margin-bottom:6px;background:var(--sc-bg1);';
+          renderIndexRows(idxWrap, memoryFile.lines);
+          view.appendChild(idxWrap);
+        }
 
-          // MEMORY.md 知识索引（tag pill + 主题 + notes 跳转）
-          if (memoryFile && (memoryFile.lines || []).length) {
-            view.appendChild(el('div', 'sc-mem-group-title', '知识索引 MEMORY.md · ' + memoryFile.lines.length + ' 条'));
-            view.appendChild(el('div', 'sc-desc', '点击行直达 notes 详情小节（只读）。'));
-            var idxWrap = el('div');
-            idxWrap.style.cssText = 'border:1px solid var(--sc-border);border-radius:10px;padding:6px 10px;margin-bottom:6px;background:var(--sc-bg1);';
-            renderIndexRows(idxWrap, memoryFile.lines);
-            view.appendChild(idxWrap);
-          }
-        // pending 最近候选
+        /* ── §4 pending 候选队列 ── */
         if (data.pending && data.pending.count) {
-          view.appendChild(el('div', 'sc-mem-group-title', 'pending 候选队列 · ' + data.pending.count + ' 条'));
+          group('pending 候选队列 · ' + data.pending.count + ' 条');
           var plist = el('div', 'sc-pointer-list');
-          (data.pending.recent || []).forEach(function (p) {
-            var name = String(p.name || '').replace(/\.md$/, '');
-            plist.appendChild(makeMemoryPointerRow(name, null, (p.mtime || '').slice(0, 10)));
+          (data.pending.recent || []).forEach(function (p2) {
+            var name = String(p2.name || '').replace(/\.md$/, '');
+            plist.appendChild(makeMemoryPointerRow(name, null, (p2.mtime || '').slice(0, 10)));
           });
           view.appendChild(plist);
           view.appendChild(el('div', 'sc-desc', '共 ' + data.pending.count + ' 条（仅显示最近 ' + (data.pending.recent || []).length + ' 条）· 只读展示'));
-        } else {
-          view.appendChild(el('div', 'sc-mem-empty', 'pending 队列为空'));
         }
 
-        // notes/ 小节索引（可点开）
-        view.appendChild(el('div', 'sc-mem-group-title', 'notes 详情小节'));
+        /* ── §5 notes 详情小节 ── */
+        group('notes 详情小节');
         var nw = el('div', 'sc-notes-list');
         (data.notes || []).forEach(function (nf) {
           var chip = el('div', 'sc-note-chip');
@@ -1142,25 +1131,13 @@
         });
         view.appendChild(nw);
 
-        // 守藏本地知识区（阶段4 双根：suite/knowledge 与记忆库同构，蒸馏事实源宿主）
+        /* ── §6 守藏本地知识区（单行摘要，不再重复三索引卡；画像/索引详情在画像与记忆分区） ── */
         var suite = data.suite;
         if (suite && suite.present) {
-          view.appendChild(el('div', 'sc-mem-group-title', '守藏本地知识区 · suite/knowledge'));
-          view.appendChild(el('div', 'sc-desc', '守藏蒸馏器事实源（ADR-0002）：与记忆库同构的轻量三索引，蒸馏产物按白名单路由入区。'));
-          var sgrid = el('div', 'sc-mem-grid');
+          group('守藏本地知识区 · suite/knowledge');
           var sMemory = null;
           (suite.indexes || []).forEach(function (f) { if (f.name === 'MEMORY.md') sMemory = f; });
-          (suite.indexes || []).forEach(function (f) {
-            if (f.name !== 'MEMORY.md' && f.name !== 'USER.md' && f.name !== 'AGENT.md') return;
-            var sp = f.cap ? Math.round(f.chars / f.cap * 100) : 0;
-            var card = el('div', 'sc-mem-stat');
-            card.appendChild(el('div', 'sc-mem-stat-label', 'suite ' + f.name.replace('.md', '')));
-            card.appendChild(el('div', 'sc-mem-stat-value', f.chars + ' / ' + f.cap));
-            card.appendChild(el('div', 'sc-mem-stat-sub', sp + '% · ' + (f.lines || []).length + ' 行'));
-            sgrid.appendChild(card);
-          });
-          sgrid.appendChild(mkStat('suite pending', String(suite.pending ? suite.pending.count : 0), '守藏侧候选暂存'));
-          view.appendChild(sgrid);
+          view.appendChild(el('div', 'sc-desc', '守藏蒸馏器事实源（ADR-0002）：MEMORY ' + (sMemory ? sMemory.chars + '/' + sMemory.cap + ' · ' + (sMemory.lines || []).length + ' 行' : '—') + ' · pending ' + String(suite.pending ? suite.pending.count : 0) + ' 条。'));
           if (suite.notes && suite.notes.length) {
             var snw = el('div', 'sc-notes-list');
             suite.notes.forEach(function (nf) {
@@ -1181,7 +1158,7 @@
           view.appendChild(el('div', 'sc-mem-empty', '守藏本地知识区未启用（suite/knowledge 不存在）'));
         }
 
-        status('记忆 · MEMORY ' + (memoryFile ? memoryFile.chars + '/' + memoryFile.cap + ' · ' + (memoryFile.lines || []).length + ' 行' : '不可用'));
+        status('记忆 · MEMORY ' + (memoryFile ? memoryFile.chars + '/' + memoryFile.cap + ' · ' + (memoryFile.lines || []).length + ' 行' : '不可用') + ' · 蒸馏 ' + (ds ? String(ds.runs || 0) + ' 次' : '—'));
       }
 
       /** notes 小节正文浏览（只读；/memory/sections）。 */

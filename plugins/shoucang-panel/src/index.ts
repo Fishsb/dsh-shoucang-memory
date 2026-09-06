@@ -817,17 +817,21 @@ export function apply(ctx: Context, config: Config): void {
     const base = memoryHomeOf()
     if (!base) return sendJson(res, 200, { present: false, error: '未检测到记忆库技能仓（~/.dsh/skills/managing-memory）——记忆插件蒸馏事实源不在本机默认位' })
     try {
+      const mem = memOverviewOf(base)
+      const suiteBase = suiteHomeOf()
+      const suite = suiteBase ? memOverviewOf(suiteBase) : null
       const undone = (() => { try {
         return readFileSync(join(base, 'audit', 'archive-progress.jsonl'), 'utf8').split('\n')
           .filter((l) => { try { return l.trim() && (JSON.parse(l) as { done?: boolean }).done === false } catch { return false } })
           .length
       } catch { return 0 } })()
-      const suiteBase = suiteHomeOf()
       sendJson(res, 200, {
         present: true,
-        ...memOverviewOf(base),
+        ...mem,
+        // 蒸馏唯一权归守藏（ADR-0002 阶段3）：水位语义 = suite 活水位（记忆库根 watermark 已冻结为历史值）
+        distill: suite ? suite.distill : mem.distill,
         queue: { undone },
-        suite: suiteBase ? { present: true, ...memOverviewOf(suiteBase) } : { present: false },
+        suite: suite ? { present: true, ...suite } : { present: false },
         distillStats: distillStatsOf(),
         now: new Date().toISOString(),
       })
