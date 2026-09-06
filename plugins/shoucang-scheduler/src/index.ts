@@ -200,7 +200,28 @@ function readPendingBacklog(project: string): number {
 
 // —— 工具 ——
 
+// —— 自持配置文件（契约 v3 落地通道）——
+
+/**
+ * ~/.dsh/suite/scheduler.json — 唯一持久配置通道。
+ * 背景：注入插件不进 loader 配置持久化（super-injector dev_inject 硬编码 config:{}，README 明言重启不恢复），
+ * schemastery UI 配置对本插件不持久 → 自持 JSON 覆盖缺省（键名同 Config；缺文件/坏文件=纯缺省，不 fail-loud）。
+ */
+function applySuiteConfigFile(config: Config): void {
+  try {
+    const f = join(dshHome(), 'suite', 'scheduler.json')
+    if (!existsSync(f)) return
+    const raw = JSON.parse(readFileSync(f, 'utf8')) as Record<string, unknown>
+    if (raw && typeof raw === 'object') {
+      for (const [k, v] of Object.entries(raw)) {
+        if (v !== undefined) (config as any)[k] = v
+      }
+    }
+  } catch { /* 坏文件按纯缺省（可选文件） */ }
+}
+
 export function apply(ctx: Context, config: Config): void {
+  applySuiteConfigFile(config)
   ctx.effect(
     () =>
       ctx.tools.register(
