@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Added
+- **ADR-0002 阶段 1 目标层落地（2026-09-06）**：`shoucang-scheduler` 新增 `src/targets.ts`——R0 动态目标路由（memory→记忆插件库→守藏本地三索引；project→pmg 卡库→本地 pending，装配探测复用 registry+profiles 双基准）+ 白名单门禁（各库数据根 `whitelist.json` 自治、蒸馏器只读消费、不符合不存、缺文件回退内建缺省并标注来源）+ `shoucang_targets_probe` 只读自测工具（组合矩阵 4 行 + 现网实测 + 门禁抽样）。守藏本地知识区建成 `$DSH_HOME/suite/knowledge/`（三索引+notes 七类+INDEX 注册表+pending+audit+whitelist.json，与记忆库同构）；维护工具零拷贝复用记忆仓 scripts 验证通过（`MEMORY_ROOT` 指向本地知识区：体检 exit 0 健康、写门 exit 0 允许）。验收：组合矩阵 4/4、门禁抽样 3/3、typecheck 零错误；reload 信号已写（生效待宿主重启/手动注入）
 - **ADR-0002 蒸馏固化唯一权迁入守藏 + 阶段 0.5 技术查证（2026-09-06）**：产品原则拍板「守藏必须安装、守藏+任意一个成员插件=自循环」——蒸馏执行权（事件 watcher+spawn LLM 子代理+路由）自记忆插件迁入 scheduler；双库定位（记忆库=泛用元记忆、pmg 卡库=项目知识库分项目/通用两板块）；白名单门禁双端（各库 config 自治、不符合不存、拒收写审计日志）；R0 动态目标路由+降级链（守藏本地三索引兜底，位于 `$DSH_HOME/suite/knowledge/`，维护工具零拷贝复用记忆仓 scripts+MEMORY_ROOT）；UI 读时拉取+蒸馏统计卡；单飞切换。阶段 0.5 查证结论：无需 daemon 形态升级（scheduler 扩 `inject=['tools','llm','subagents','agents']` + `ctx.on` 即可，官方 cordis 契约）；spawn 契约/迁移单元（≈260 行蒸馏机器）/坑位防御清单/白名单跨读候选（倾向库目录 whitelist.json）已落 ADR-0002；F-002 superseded→F-008
 - **守藏迁入为独立集合中枢仓（2026-09-06）**：自 dsh-managing-memory/suite 迁入——UI（plugins/shoucang-panel，暂冻结）+ 调度执行器（plugins/shoucang-scheduler，4-Gate 降级复用为 suite 路由、G30 证据计数保留）+ scripts 合规扫描；配置模板 v2（`suite:` 成员注册表，archive:/boards:/lifecycle: 节删除）；README v4 重定义定位、HANDOVER 交接方案。已裁决事项见 `docs/map/facts.md`（蒸馏唯一权=记忆插件 watcher、旧三板块废弃、向量 UI 悬置、scnote 保留、零硬编码红线）
 

@@ -19,6 +19,7 @@ import z from 'schemastery'
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
+import { memberPresent, selftestMatrix } from './targets.js'
 
 export const name = '@dsh-external/shoucang-scheduler'
 export const inject = ['tools']
@@ -438,4 +439,26 @@ export function apply(ctx: Context, config: Config): void {
       }),
     )
   }, '@dsh-external/shoucang-scheduler: migrate tool')
+
+  // ═══ ADR-0002 阶段 1：R0 动态目标路由 + 白名单门禁自测（targets.ts）═══
+  ctx.effect(
+    () =>
+      ctx.tools.register(
+        defineTool({
+          name: 'shoucang_targets_probe',
+          description:
+            '守藏蒸馏目标层自测（ADR-0002 阶段1）：组合矩阵 4 行路由解析（memory/project × 成员在缺）+ 现网实测落点 + 白名单门禁抽样（各库 whitelist.json 自治，不符合不存）。只读。',
+          parameters: {},
+          output: { schema: { type: 'string' }, render: (_a: unknown, v: unknown) => [{ type: 'text', text: String(v) }] },
+          async execute() {
+            const real = {
+              memory: memberPresent('@dsh-external/dsh-managing-memory'),
+              governance: memberPresent('@dsh-external/project-map-governance'),
+            }
+            const lines = selftestMatrix(real)
+            return ['守藏蒸馏目标层自测（ADR-0002）：', ...lines].join('\n')
+          },
+        }),
+      ),
+    '@dsh-external/shoucang-scheduler: targets probe tool')
 }
