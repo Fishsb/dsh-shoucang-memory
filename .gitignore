@@ -16,3 +16,6 @@ plugins/*/lib/
 
 # ---- project-map-governance（瞬态数据，不入库）----
 .internal/
+
+# ---- 项目知识卡库（本地治理，不推 GitHub；官方参考用 devref.mjs 部署）----
+docs/devref/
