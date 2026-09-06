@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Added
+- **ADR-0002 蒸馏固化唯一权迁入守藏 + 阶段 0.5 技术查证（2026-09-06）**：产品原则拍板「守藏必须安装、守藏+任意一个成员插件=自循环」——蒸馏执行权（事件 watcher+spawn LLM 子代理+路由）自记忆插件迁入 scheduler；双库定位（记忆库=泛用元记忆、pmg 卡库=项目知识库分项目/通用两板块）；白名单门禁双端（各库 config 自治、不符合不存、拒收写审计日志）；R0 动态目标路由+降级链（守藏本地三索引兜底，位于 `$DSH_HOME/suite/knowledge/`，维护工具零拷贝复用记忆仓 scripts+MEMORY_ROOT）；UI 读时拉取+蒸馏统计卡；单飞切换。阶段 0.5 查证结论：无需 daemon 形态升级（scheduler 扩 `inject=['tools','llm','subagents','agents']` + `ctx.on` 即可，官方 cordis 契约）；spawn 契约/迁移单元（≈260 行蒸馏机器）/坑位防御清单/白名单跨读候选（倾向库目录 whitelist.json）已落 ADR-0002；F-002 superseded→F-008
 - **守藏迁入为独立集合中枢仓（2026-09-06）**：自 dsh-managing-memory/suite 迁入——UI（plugins/shoucang-panel，暂冻结）+ 调度执行器（plugins/shoucang-scheduler，4-Gate 降级复用为 suite 路由、G30 证据计数保留）+ scripts 合规扫描；配置模板 v2（`suite:` 成员注册表，archive:/boards:/lifecycle: 节删除）；README v4 重定义定位、HANDOVER 交接方案。已裁决事项见 `docs/map/facts.md`（蒸馏唯一权=记忆插件 watcher、旧三板块废弃、向量 UI 悬置、scnote 保留、零硬编码红线）
 
 ### Changed
