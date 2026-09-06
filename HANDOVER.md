@@ -36,6 +36,7 @@
 ## 五、协调契约速查（与双插件的关系）
 - **协作宪章**（裁决序/角色/门禁等价）→ 主仓 `SKILL.md §协作宪章` + pmg `AGENTS.md 规则5`（suite 不重复定义，只消费）
 - **蒸馏契约 v3**（粒度锚路由/migrationHint）→ 主仓 `engine/distill-contract.md`
+- **调度器持久配置**：`~/.dsh/suite/scheduler.json`（键名同 Config；注入插件 loader 配置不持久，此文件是唯一持久通道；当前 `generic_project`=pmg 权威仓路径）
 - **卡库写门**（迁移执行端）→ pmg `engine/scripts/devref-card.mjs`
 
 ## 六、环境重建备忘
