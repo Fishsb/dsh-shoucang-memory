@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Fixed
+- **蒸馏白名单消费路径修复（2026-09-06，契约 v3 联动）**：project 分支白名单原从 `pmgScriptsRoot()`（scripts 目录）读 → pmg `docs/devref/whitelist.json` 从未被消费（恒走内建缺省）；改为跟随实际写入目标加载（board=generic → `generic_project`/docs/devref，board=project → workspace/docs/devref）。targets.ts：Whitelist 增 `boards` 字段（BoardDef），BUILTIN 补 pmg 两板块，`gateProjectCard` 增 board∈boards 校验（越界宁弃不存）；index.ts/HANDOVER v2→v3 口径残留清理
 - **阶段 2 复审修正（2026-09-06，切换前全面审查）**：① **补回并发守卫**——迁移时遗漏记忆插件原版 `distilling` Set（同会话蒸馏在途标记），蒸馏在途（最长 10min）内再次 turn/end 会重武装定时器导致双写/竞态，已补回（add/finally.delete 配对）；② **pmg 写门双部署口径统一**——skills 副本与 plugins/engine 两处 devref-card.mjs 并存（pmg 治理双部署同步约定），targets.ts `pmgScriptsRoot()` 改双路径探测回退（skills 优先/engine 兜底），index.ts migrate 工具同源引用，消单点漂移；③ 审计双条（writeDispatch 明细 + distillAgent 汇总）保留为有意设计；pending 候选正则放宽为 `\d{4}-\d{2}-\d{2}-*.md`（有意，覆盖 R2 回退文件）。修复后 E2E 6/6 复验通过
 - **阶段 3 单飞切换落地（2026-09-06）**：蒸馏唯一权正式移交——scheduler `enableDistill` 缺省 `false→true`（lib 重编确认，registry/staging 无覆盖），记忆插件同批关闭蒸馏（其 lib 缺省 false）；数据迁移：水位 16 行 + pending 26 文件 → `suite/knowledge/`（audit/ + pending/，路径与 distill.ts 读取根吻合；原文件重命名 `.migrated-20260906` 保留可回滚）；self-reload 同批热重载（reload-debug 确认 match，记忆插件日志确认「蒸馏 off」）——**无双写窗口、无去重逻辑**；水位最新行为切换时活跃会话，衔接无缝。记忆仓治理同步：ADR-0007（accepted）+ facts F-001/F-002 superseded + CHANGELOG 归一（技能仓 a91574e、pmg 44590a3、本仓 e703ff2）
 
