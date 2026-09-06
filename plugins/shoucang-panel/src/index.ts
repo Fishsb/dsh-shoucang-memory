@@ -702,6 +702,40 @@ export function apply(ctx: Context, config: Config): void {
     const base = join(home, 'skills', 'managing-memory')
     return existsSync(base) ? base : null
   }
+  /* 守藏本地知识区（ADR-0002 阶段3 单飞切换后 = 蒸馏事实源宿主）：
+   * $DSH_HOME/suite/knowledge —— 三索引 + notes 七类 + pending + audit，与记忆库同构。
+   * 阶段4 UI 同步：panel 记忆视图双根（suite ∪ memory lib）+ 蒸馏统计卡（distill-audit.jsonl）。 */
+  const suiteHomeOf = (): string | null => {
+    const home = process.env.DSH_HOME || join(homedir(), '.dsh')
+    const base = join(home, 'suite', 'knowledge')
+    return existsSync(base) ? base : null
+  }
+  /** 蒸馏统计卡聚合（suite/knowledge/audit/distill-audit.jsonl；全量汇总 + 尾部明细）。 */
+  const distillStatsOf = (): Record<string, unknown> | null => {
+    const base = suiteHomeOf()
+    if (!base) return null
+    const full = join(base, 'audit', 'distill-audit.jsonl')
+    let rows: Array<Record<string, unknown>> = []
+    try {
+      rows = readFileSync(full, 'utf8').split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l) as Record<string, unknown> } catch { return null } }).filter((x): x is Record<string, unknown> => !!x)
+    } catch { rows = [] }
+    const num = (v: unknown): number => (typeof v === 'number' ? v : 0)
+    const byRoute: Record<string, number> = {}
+    let runs = 0, added = 0, rejected = 0, failed = 0, gateRejects = 0, writeFails = 0
+    let last: Record<string, unknown> | null = null
+    for (const r of rows) {
+      last = r
+      if (r.kind === 'gate-reject') { gateRejects++; continue }
+      if (r.kind === 'write-fail') { writeFails++; failed++; continue }
+      if (r.kind === 'distill-run') {
+        runs++
+        added += num(r.added); rejected += num(r.rejected); failed += num(r.failed)
+        const route = String(r.route || 'unknown')
+        byRoute[route] = (byRoute[route] || 0) + 1
+      }
+    }
+    return { runs, added, rejected, failed, gateRejects, writeFails, byRoute, last, recent: rows.slice(-5) }
+  }
   const MEM_INDEX_FILES: Array<{ file: string; label: string }> = [
     { file: 'MEMORY.md', label: '知识索引 MEMORY' },
     { file: 'USER.md', label: '用户画像 USER' },
@@ -755,38 +789,46 @@ export function apply(ctx: Context, config: Config): void {
   }
 
   // 记忆库总览（一次取回：索引+容量+pending+蒸馏水位+notes 小节索引；全部只读）
+  // 阶段4：双根同构读取（memory lib + suite/knowledge）+ 蒸馏统计卡聚合。
+  const memOverviewOf = (base: string): Record<string, unknown> => {
+    const caps = memoryCaps(base)
+    const indexes = MEM_INDEX_FILES.map((f) => readIndexFile(base, f, caps)).filter(Boolean) as MemIndexFile[]
+    let pendingCount = 0
+    const pendingRecent: Array<{ name: string; mtime: string }> = []
+    try {
+      const pendDir = join(base, 'pending')
+      const names = readdirSync(pendDir, { withFileTypes: true })
+        .filter((e) => e.isFile() && e.name.endsWith('.md'))
+        .map((e) => e.name)
+        .sort((a, b) => statMtime(join(pendDir, b)).localeCompare(statMtime(join(pendDir, a))))
+      pendingCount = names.length
+      for (const n of names.slice(0, 8)) pendingRecent.push({ name: n, mtime: statMtime(join(pendDir, n)) })
+    } catch { /* pending 缺失 */ }
+    const watermark = readJsonlTail(join(base, 'audit', 'distill-watermark.jsonl'), 5)
+    return {
+      root: base,
+      indexes,
+      pending: { count: pendingCount, recent: pendingRecent },
+      distill: { recent: watermark, last: watermark[watermark.length - 1] ?? null },
+      notes: notesSectionIndex(base),
+    }
+  }
   route('/memory/overview', (_req, res) => {
     const base = memoryHomeOf()
     if (!base) return sendJson(res, 200, { present: false, error: '未检测到记忆库技能仓（~/.dsh/skills/managing-memory）——记忆插件蒸馏事实源不在本机默认位' })
     try {
-      const caps = memoryCaps(base)
-      const indexes = MEM_INDEX_FILES.map((f) => readIndexFile(base, f, caps)).filter(Boolean) as MemIndexFile[]
-      let pendingCount = 0
-      const pendingRecent: Array<{ name: string; mtime: string }> = []
-      try {
-        const pendDir = join(base, 'pending')
-        const names = readdirSync(pendDir, { withFileTypes: true })
-          .filter((e) => e.isFile() && e.name.endsWith('.md'))
-          .map((e) => e.name)
-          .sort((a, b) => statMtime(join(pendDir, b)).localeCompare(statMtime(join(pendDir, a))))
-        pendingCount = names.length
-        for (const n of names.slice(0, 8)) pendingRecent.push({ name: n, mtime: statMtime(join(pendDir, n)) })
-      } catch { /* pending 缺失 */ }
-      const watermark = readJsonlTail(join(base, 'audit', 'distill-watermark.jsonl'), 5)
-      let undone = 0
-      try {
-        undone = readFileSync(join(base, 'audit', 'archive-progress.jsonl'), 'utf8').split('\n')
+      const undone = (() => { try {
+        return readFileSync(join(base, 'audit', 'archive-progress.jsonl'), 'utf8').split('\n')
           .filter((l) => { try { return l.trim() && (JSON.parse(l) as { done?: boolean }).done === false } catch { return false } })
           .length
-      } catch { /* 无进度 */ }
+      } catch { return 0 } })()
+      const suiteBase = suiteHomeOf()
       sendJson(res, 200, {
         present: true,
-        root: base,
-        indexes,
-        pending: { count: pendingCount, recent: pendingRecent },
-        distill: { recent: watermark, last: watermark[watermark.length - 1] ?? null },
+        ...memOverviewOf(base),
         queue: { undone },
-        notes: notesSectionIndex(base),
+        suite: suiteBase ? { present: true, ...memOverviewOf(suiteBase) } : { present: false },
+        distillStats: distillStatsOf(),
         now: new Date().toISOString(),
       })
     } catch (e) { sendJson(res, 500, { error: String(e) }) }
@@ -794,10 +836,16 @@ export function apply(ctx: Context, config: Config): void {
 
   // notes 小节正文（按 ## 切片；白名单 rel；只读）
   route('/memory/sections', (req, res) => {
-    const base = memoryHomeOf()
-    if (!base) return sendJson(res, 200, { present: false, error: '未检测到记忆库技能仓' })
+    let rootParam = ''
     let rel = ''
-    try { rel = new URL(req.url ?? '/', 'http://dsh.local').searchParams.get('rel') ?? '' } catch { /* noop */ }
+    try {
+      const sp = new URL(req.url ?? '/', 'http://dsh.local').searchParams
+      rel = sp.get('rel') ?? ''
+      rootParam = sp.get('root') ?? 'memory'
+    } catch { /* noop */ }
+    // 阶段4 双根：root=suite → 守藏本地知识区；root=memory（缺省）→ 记忆库
+    const base = rootParam === 'suite' ? suiteHomeOf() : memoryHomeOf()
+    if (!base) return sendJson(res, 200, { present: false, error: rootParam === 'suite' ? '未检测到守藏本地知识区（~/.dsh/suite/knowledge）' : '未检测到记忆库技能仓' })
     if (!new RegExp(`^notes/(${NOTE_RELS.join('|')})\\.md$`).test(rel)) return sendJson(res, 400, { error: 'bad rel' })
     const abs = join(base, rel)
     if (!existsSync(abs)) return sendJson(res, 404, { error: 'note not found' })
@@ -816,7 +864,7 @@ export function apply(ctx: Context, config: Config): void {
         }
       }
       if (cur) sections.push({ title: cur.title, line: cur.line, body: cur.body.join('\n').trim() })
-      sendJson(res, 200, { present: true, rel, name: rel.split('/').pop() ?? '', text, sections })
+      sendJson(res, 200, { present: true, root: rootParam, rel, name: rel.split('/').pop() ?? '', text, sections })
     } catch (e) { sendJson(res, 500, { error: String(e) }) }
   })
 

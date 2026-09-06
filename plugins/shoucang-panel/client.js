@@ -1067,9 +1067,18 @@
           grid.appendChild(mkStat(f.name.replace('.md', ''), f.chars + ' / ' + f.cap, p2 + '% · ' + (f.lines || []).length + ' 行'));
         });
         grid.appendChild(mkStat('pending 候选', String(data.pending ? data.pending.count : 0), 'ADD-only 暂存 · 非权威'));
-        // 蒸馏：最近蒸馏时间 + 待归档队列
+        // 蒸馏：最近蒸馏时间 + 待归档队列 + 守藏蒸馏统计卡（阶段4：蒸馏唯一权归守藏，distill-audit 聚合）
         var dLast = data.distill && data.distill.last;
         grid.appendChild(mkStat('蒸馏水位', dLast ? fmtTime(dLast.at) : '—', dLast ? ('lastSeq ' + String(dLast.lastSeq) + ' · ' + String(dLast.sessionId || '').replace(/^session-/, '').slice(0, 8)) : 'watcher 事件驱动'));
+        var ds = data.distillStats;
+        if (ds) {
+          var byRoute = ds.byRoute || {};
+          var routeParts = [];
+          ['memory', 'project', 'discard'].forEach(function (k) { if (byRoute[k]) routeParts.push(k + ' ' + byRoute[k]); });
+          var dsLast = ds.last && ds.last.at ? fmtTime(ds.last.at) : '—';
+          grid.appendChild(mkStat('守藏蒸馏', String(ds.runs || 0) + ' 次', '入册 ' + String(ds.added || 0) + ' · 最近 ' + dsLast));
+          grid.appendChild(mkStat('蒸馏路由', routeParts.length ? routeParts.join(' / ') : '—', '拒收 ' + String(ds.rejected || 0) + ' · 失败 ' + String(ds.failed || 0) + (ds.gateRejects ? ' · 门拒 ' + ds.gateRejects : '')));
+        }
         var undone = data.queue ? data.queue.undone : 0;
         grid.appendChild(mkStat('待归档会话', String(undone), undone ? 'archive-progress 未 done' : '无积压'));
         view.appendChild(grid);
@@ -1133,6 +1142,45 @@
         });
         view.appendChild(nw);
 
+        // 守藏本地知识区（阶段4 双根：suite/knowledge 与记忆库同构，蒸馏事实源宿主）
+        var suite = data.suite;
+        if (suite && suite.present) {
+          view.appendChild(el('div', 'sc-mem-group-title', '守藏本地知识区 · suite/knowledge'));
+          view.appendChild(el('div', 'sc-desc', '守藏蒸馏器事实源（ADR-0002）：与记忆库同构的轻量三索引，蒸馏产物按白名单路由入区。'));
+          var sgrid = el('div', 'sc-mem-grid');
+          var sMemory = null;
+          (suite.indexes || []).forEach(function (f) { if (f.name === 'MEMORY.md') sMemory = f; });
+          (suite.indexes || []).forEach(function (f) {
+            if (f.name !== 'MEMORY.md' && f.name !== 'USER.md' && f.name !== 'AGENT.md') return;
+            var sp = f.cap ? Math.round(f.chars / f.cap * 100) : 0;
+            var card = el('div', 'sc-mem-stat');
+            card.appendChild(el('div', 'sc-mem-stat-label', 'suite ' + f.name.replace('.md', '')));
+            card.appendChild(el('div', 'sc-mem-stat-value', f.chars + ' / ' + f.cap));
+            card.appendChild(el('div', 'sc-mem-stat-sub', sp + '% · ' + (f.lines || []).length + ' 行'));
+            sgrid.appendChild(card);
+          });
+          sgrid.appendChild(mkStat('suite pending', String(suite.pending ? suite.pending.count : 0), '守藏侧候选暂存'));
+          view.appendChild(sgrid);
+          if (suite.notes && suite.notes.length) {
+            var snw = el('div', 'sc-notes-list');
+            suite.notes.forEach(function (nf) {
+              var chip = el('div', 'sc-note-chip');
+              chip.appendChild(el('span', null, nf.name));
+              chip.appendChild(el('span', 'sc-tag', String(nf.sections.length)));
+              chip.title = 'suite · ' + nf.rel + ' · ' + nf.sections.map(function (s) { return s.title }).join(' / ');
+              chip.addEventListener('click', function () {
+                api('/memory/sections?rel=' + encodeURIComponent(nf.rel) + '&root=suite').then(function (r) {
+                  renderNoteSections(view, r);
+                }).catch(fail);
+              });
+              snw.appendChild(chip);
+            });
+            view.appendChild(snw);
+          }
+        } else {
+          view.appendChild(el('div', 'sc-mem-empty', '守藏本地知识区未启用（suite/knowledge 不存在）'));
+        }
+
         status('记忆 · MEMORY ' + (memoryFile ? memoryFile.chars + '/' + memoryFile.cap + ' · ' + (memoryFile.lines || []).length + ' 行' : '不可用'));
       }
 
@@ -1141,8 +1189,8 @@
         if (!data || !data.present || !data.sections) { status((data && data.error) || '无小节'); return; }
         view.textContent = '';
         view.appendChild(el('div', 'sc-h1', data.name));
-        view.appendChild(el('div', 'sc-desc', data.rel + ' · ' + data.sections.length + ' 个小节（白名单只读）'));
-        var back = el('button', 'sc-btn subtle', '← 返回记忆库');
+        view.appendChild(el('div', 'sc-desc', (data.root === 'suite' ? 'suite 知识区 · ' : '') + data.rel + ' · ' + data.sections.length + ' 个小节（白名单只读）'));
+        var back = el('button', 'sc-btn subtle', '← 返回' + (data.root === 'suite' ? '守藏知识区' : '记忆库'));
         back.type = 'button';
         back.addEventListener('click', function () { api('/memory/overview').then(function (r) { renderMemoryExpanded(view, r); }).catch(fail); });
         view.appendChild(back);
