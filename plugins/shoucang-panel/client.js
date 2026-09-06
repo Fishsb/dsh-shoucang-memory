@@ -234,6 +234,17 @@
         '.sc-cap-fill{height:100%;border-radius:3px;background:var(--sc-accent);transition:width .3s;}',
         '.sc-cap.warn .sc-cap-fill{background:#e8a33d;}',
         '.sc-cap.crit .sc-cap-fill{background:#e5534b;}',
+        /* 面板信息层级（Tufte/Few/NN-g 方法论落地 2026-09-06）：hero 卡 / sparkline / 语义色 / 折叠 */
+        '.sc-mem-stat.hero{grid-column:span 2;padding:14px 16px;border-color:color-mix(in srgb,var(--sc-accent) 40%,var(--sc-border));}',
+        '.sc-mem-stat.hero .sc-mem-stat-value{font-size:30px;line-height:1.1;}',
+        '.sc-mem-stat.hero .sc-mem-stat-label{font-size:12px;}',
+        '.sc-spark{display:block;margin-top:8px;}',
+        '.sc-spark path{fill:none;stroke:var(--sc-accent);stroke-width:1.5;stroke-linejoin:round;}',
+        '.sc-spark circle{fill:var(--sc-accent);}',
+        '.sc-spark .base{stroke:var(--sc-border);stroke-width:1;}',
+        '.sc-danger{color:#e5534b;font-weight:600;}',
+        '.sc-idx-more{font-size:12px;color:var(--sc-accent);cursor:pointer;padding:5px 2px;border:none;background:none;text-align:left;}',
+        '.sc-idx-more:hover{text-decoration:underline;}',
         '.sc-mem-sub{font-size:12px;color:var(--sc-text);margin:2px 0 0;padding-bottom:6px;}',
         '.sc-mem-sub.muted{color:var(--sc-muted);}',
         '.sc-mem-sub.mono{font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;font-size:11px;color:var(--sc-faint);}',
@@ -1002,6 +1013,33 @@
         } catch (e) { return String(iso).slice(0, 16); }
       }
 
+      /** 迷你趋势图（sparkline，Tufte）：纯 SVG 无依赖；values 全为同一值时不画（无趋势信息）。 */
+      function sparkline(values, w, h) {
+        if (!values || values.length < 2) return null;
+        var min = Math.min.apply(null, values), max = Math.max.apply(null, values);
+        if (min === max) return null; // 无变化 → 无趋势可表达（data-ink：不画装饰性平线）
+        var ns = 'http://www.w3.org/2000/svg';
+        var svg = document.createElementNS(ns, 'svg');
+        svg.setAttribute('class', 'sc-spark');
+        svg.setAttribute('width', w || 120); svg.setAttribute('height', h || 26);
+        svg.setAttribute('viewBox', '0 0 ' + (w || 120) + ' ' + (h || 26));
+        var W = (w || 120) - 4, H = (h || 26) - 6, x0 = 2, y0 = 3;
+        var pts = values.map(function (v, i) {
+          var x = x0 + (values.length === 1 ? 0 : i * W / (values.length - 1));
+          var y = y0 + (H - (v - min) * H / (max - min));
+          return [x, y];
+        });
+        var d = pts.map(function (p, i) { return (i ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' ');
+        var path = document.createElementNS(ns, 'path');
+        path.setAttribute('d', d);
+        svg.appendChild(path);
+        var lastPt = pts[pts.length - 1];
+        var dot = document.createElementNS(ns, 'circle');
+        dot.setAttribute('cx', lastPt[0].toFixed(1)); dot.setAttribute('cy', lastPt[1].toFixed(1)); dot.setAttribute('r', 2);
+        svg.appendChild(dot);
+        return svg;
+      }
+
       /** 画像板块（F-003）：USER.md/AGENT.md 画像专属视图——容量与指针行**只在此板块**展示（记忆板块不重复统计画像）。 */
       function renderPersona(view, data) {
         view.textContent = '';
@@ -1058,7 +1096,7 @@
         };
         var group = function (t) { view.appendChild(el('div', 'sc-mem-group-title', t)); };
 
-        /* ── §1 蒸馏运行（守藏 = 唯一蒸馏器；水位 = suite 活水位） ── */
+        /* ── §1 蒸馏运行（守藏 = 唯一蒸馏器；hero 卡承载板块主问题：知识积累在不在跑） ── */
         group('蒸馏运行');
         var g1 = el('div', 'sc-mem-grid');
         var ds = data.distillStats;
@@ -1066,21 +1104,48 @@
           var byRoute = ds.byRoute || {};
           var routeParts = [];
           ['memory', 'project', 'discard'].forEach(function (k) { if (byRoute[k]) routeParts.push(k + ' ' + byRoute[k]); });
-          var dsLast = ds.last && ds.last.at ? fmtTime(ds.last.at) : '—';
-          g1.appendChild(mkStat('守藏蒸馏', String(ds.runs || 0) + ' 次', '入册 ' + String(ds.added || 0) + ' · 最近 ' + dsLast));
-          g1.appendChild(mkStat('路由分布', routeParts.length ? routeParts.join(' / ') : '—', '拒收 ' + String(ds.rejected || 0) + ' · 失败 ' + String(ds.failed || 0) + (ds.gateRejects ? ' · 门拒 ' + ds.gateRejects : '')));
+          // hero：守藏蒸馏（数字 + 语境 + sparkline 趋势）
+          var hero = el('div', 'sc-mem-stat hero');
+          hero.appendChild(el('div', 'sc-mem-stat-label', '守藏蒸馏 · 近 7 日'));
+          hero.appendChild(el('div', 'sc-mem-stat-value', String(ds.runs || 0) + ' 次'));
+          var heroSub = '入册 ' + String(ds.added || 0) + ' 条';
+          var warnText = '';
+          if (!(ds.runs || 0)) {
+            heroSub = '待命中：会话空闲 10 分钟后自动蒸馏'; // 空状态：解释机制 + 预期（NN/g）
+          } else {
+            var byDay = ds.byDay || [];
+            var today = byDay[byDay.length - 1], yday = byDay[byDay.length - 2];
+            if (today && yday && today.runs !== yday.runs) heroSub += ' · 今日 ' + today.runs + ' 次（昨日 ' + yday.runs + '）';
+            if ((ds.failed || 0) > 0 || (ds.gateRejects || 0) > 0) warnText = '失败 ' + String(ds.failed || 0) + (ds.gateRejects ? ' · 门拒 ' + ds.gateRejects : '');
+          }
+          hero.appendChild(el('div', 'sc-mem-stat-sub', heroSub));
+          if (warnText) {
+            var warn = el('div', 'sc-mem-stat-sub');
+            warn.appendChild(el('span', 'sc-danger', warnText)); // 语义色仅强化，文字数字仍是唯一信息通道（色盲可达）
+            hero.appendChild(warn);
+          }
+          var spark = sparkline((ds.byDay || []).map(function (d) { return d.added; }), 150, 26);
+          if (spark) hero.appendChild(spark);
+          g1.appendChild(hero);
+          // 伴卡：路由分布
+          g1.appendChild(mkStat('路由分布', routeParts.length ? routeParts.join(' / ') : '—', (ds.rejected || 0) + ' 拒收' + ((ds.rejected || 0) || (ds.failed || 0) ? '' : ' · 全部放行')));
+          // 伴卡：蒸馏水位
+          var dLast = data.distill && data.distill.last;
+          g1.appendChild(mkStat('蒸馏水位', dLast ? fmtTime(dLast.at) : '—', dLast ? ('lastSeq ' + String(dLast.lastSeq) + ' · ' + String(dLast.sessionId || '').replace(/^session-/, '').slice(0, 8)) : 'watcher 事件驱动'));
         }
-        var dLast = data.distill && data.distill.last;
-        g1.appendChild(mkStat('蒸馏水位', dLast ? fmtTime(dLast.at) : '—', dLast ? ('lastSeq ' + String(dLast.lastSeq) + ' · ' + String(dLast.sessionId || '').replace(/^session-/, '').slice(0, 8)) : 'watcher 事件驱动'));
-        var undone = data.queue ? data.queue.undone : 0;
-        g1.appendChild(mkStat('待归档会话', String(undone), undone ? 'archive-progress 未 done' : '无积压'));
         view.appendChild(g1);
 
         /* ── §2 记忆库状态（MEMORY 容量 + pending；百分比只在进度条，卡不重复） ── */
         group('记忆库状态');
         var g2 = el('div', 'sc-mem-grid');
         if (memoryFile) g2.appendChild(mkStat('MEMORY.md 容量', memoryFile.chars + ' / ' + memoryFile.cap, '索引 ' + (memoryFile.lines || []).length + ' 行'));
-        g2.appendChild(mkStat('pending 候选', String(data.pending ? data.pending.count : 0), 'ADD-only 暂存 · 非权威'));
+        var pMeta = data.pending || {};
+        var pSub = 'ADD-only 暂存 · 非权威';
+        if (pMeta.count && typeof pMeta.last24h === 'number' && pMeta.last24h > 0) pSub = '24h 内新增 ' + pMeta.last24h + ' 条 · 蒸馏分批消化';
+        g2.appendChild(mkStat('pending 候选', String(pMeta.count || 0), pSub));
+        // 归档队列降级为次级卡（守藏语境的 so-what 弱：数据保留但不占蒸馏主行）
+        var undone = data.queue ? data.queue.undone : 0;
+        g2.appendChild(mkStat('待归档会话', String(undone), undone ? '记忆插件归档队列' : '无积压'));
         view.appendChild(g2);
         if (memoryFile && memoryFile.cap) {
           var p = Math.round(memoryFile.chars / memoryFile.cap * 100);
@@ -1092,13 +1157,24 @@
           view.appendChild(row);
         }
 
-        /* ── §3 知识索引 MEMORY.md ── */
+        /* ── §3 知识索引 MEMORY.md（progressive disclosure：默认 8 条 + 展开全部） ── */
         if (memoryFile && (memoryFile.lines || []).length) {
           group('知识索引 MEMORY.md · ' + memoryFile.lines.length + ' 条');
           view.appendChild(el('div', 'sc-desc', '点击行直达 notes 详情小节（只读）。'));
           var idxWrap = el('div');
           idxWrap.style.cssText = 'border:1px solid var(--sc-border);border-radius:10px;padding:6px 10px;margin-bottom:6px;background:var(--sc-bg1);';
-          renderIndexRows(idxWrap, memoryFile.lines);
+          var IDX_PREVIEW = 8;
+          var allLines = memoryFile.lines || [];
+          renderIndexRows(idxWrap, allLines.slice(0, IDX_PREVIEW));
+          if (allLines.length > IDX_PREVIEW) {
+            var moreBtn = el('button', 'sc-idx-more', '展开全部 ' + allLines.length + ' 条');
+            moreBtn.type = 'button';
+            moreBtn.addEventListener('click', function () {
+              idxWrap.textContent = '';
+              renderIndexRows(idxWrap, allLines);
+            });
+            idxWrap.appendChild(moreBtn);
+          }
           view.appendChild(idxWrap);
         }
 

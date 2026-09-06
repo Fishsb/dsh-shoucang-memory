@@ -721,6 +721,13 @@ export function apply(ctx: Context, config: Config): void {
     } catch { rows = [] }
     const num = (v: unknown): number => (typeof v === 'number' ? v : 0)
     const byRoute: Record<string, number> = {}
+    // 近 7 日按日聚合（sparkline 趋势数据源；含空日补齐，前端画平线即"无活动"）
+    const dayMap = new Map<string, { runs: number; added: number }>()
+    const dayKey = (iso: unknown): string => String(iso || '').slice(0, 10)
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10)
+      dayMap.set(d, { runs: 0, added: 0 })
+    }
     let runs = 0, added = 0, rejected = 0, failed = 0, gateRejects = 0, writeFails = 0
     let last: Record<string, unknown> | null = null
     for (const r of rows) {
@@ -732,9 +739,12 @@ export function apply(ctx: Context, config: Config): void {
         added += num(r.added); rejected += num(r.rejected); failed += num(r.failed)
         const route = String(r.route || 'unknown')
         byRoute[route] = (byRoute[route] || 0) + 1
+        const k = dayKey(r.at)
+        if (dayMap.has(k)) { const e = dayMap.get(k)!; e.runs++; e.added += num(r.added) }
       }
     }
-    return { runs, added, rejected, failed, gateRejects, writeFails, byRoute, last, recent: rows.slice(-5) }
+    const byDay = Array.from(dayMap.entries()).map(([day, v]) => ({ day, ...v }))
+    return { runs, added, rejected, failed, gateRejects, writeFails, byRoute, byDay, last, recent: rows.slice(-5) }
   }
   const MEM_INDEX_FILES: Array<{ file: string; label: string }> = [
     { file: 'MEMORY.md', label: '知识索引 MEMORY' },
@@ -794,21 +804,29 @@ export function apply(ctx: Context, config: Config): void {
     const caps = memoryCaps(base)
     const indexes = MEM_INDEX_FILES.map((f) => readIndexFile(base, f, caps)).filter(Boolean) as MemIndexFile[]
     let pendingCount = 0
+    let pendingMeta: Record<string, number> = {}
     const pendingRecent: Array<{ name: string; mtime: string }> = []
     try {
       const pendDir = join(base, 'pending')
+      const nowMs = Date.now()
       const names = readdirSync(pendDir, { withFileTypes: true })
         .filter((e) => e.isFile() && e.name.endsWith('.md'))
         .map((e) => e.name)
         .sort((a, b) => statMtime(join(pendDir, b)).localeCompare(statMtime(join(pendDir, a))))
       pendingCount = names.length
+      // 24h 内新增数（趋势语境：候选正在被消化=减少，新增快于消化=增长）
+      let last24h = 0
+      for (const n of names) {
+        try { if (nowMs - new Date(statMtime(join(pendDir, n))).getTime() < 86400000) last24h++ } catch { /* 跳过 */ }
+      }
       for (const n of names.slice(0, 8)) pendingRecent.push({ name: n, mtime: statMtime(join(pendDir, n)) })
+      pendingMeta = { last24h }
     } catch { /* pending 缺失 */ }
     const watermark = readJsonlTail(join(base, 'audit', 'distill-watermark.jsonl'), 5)
     return {
       root: base,
       indexes,
-      pending: { count: pendingCount, recent: pendingRecent },
+      pending: { count: pendingCount, ...pendingMeta, recent: pendingRecent },
       distill: { recent: watermark, last: watermark[watermark.length - 1] ?? null },
       notes: notesSectionIndex(base),
     }
