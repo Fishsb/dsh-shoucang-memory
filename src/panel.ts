@@ -22,6 +22,7 @@ import { tmpdir } from 'node:os'
 import { gunzipSync, zstdDecompressSync } from 'node:zlib'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { homedir } from 'node:os'
+import { dshHome } from './targets.js'
 import { fileURLToPath } from 'node:url'
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path'
 
@@ -257,83 +258,50 @@ export function applyPanel(ctx: Context, config: Config): void {
 
   const injectCache: { root: string | null; at: number; text: string } = { root: null, at: 0, text: '' }
   const injectMeta = { calls: 0, lastAt: 0 } // 提示词装配调用计数（实测新会话注入）
+  // 数据根：守藏自有记忆库（三索引体系，与蒸馏写入权威根一致）；MEMORY_ROOT 可覆盖
+  const memoryRootOf = (): string => {
+    const env = process.env.MEMORY_ROOT?.trim()
+    return env || join(dshHome(), 'skills', 'managing-memory')
+  }
   const buildHotMemoryText = (): string => {
     const now = Date.now()
-    const root = activeRootOf()
-    const key = root?.path ?? ''
-    if (injectCache.root === key && now - injectCache.at < 30000) return injectCache.text
-    injectCache.root = key
+    const memRoot = memoryRootOf()
+    if (injectCache.root === memRoot && now - injectCache.at < 30000) return injectCache.text
+    injectCache.root = memRoot
     injectCache.at = now
-    if (!root) { injectCache.text = ''; return '' }
     let level = 'smart'
-    let maxTokens = 1500
-    let personaOn = true
-    let memoryOn = true
     let hotMemoryOn = true
-    let personaMode = 'both'
     const file = configFileOf()
     if (file && existsSync(file)) {
       try {
         const view = parseView(readFileSync(file, 'utf8'))
         level = view.injection_level ?? 'smart'
-        personaOn = view.boards.persona !== false
-        memoryOn = view.boards.memory !== false
         hotMemoryOn = view.flags['injection.hot_memory'] !== false
-        personaMode = String(view.flags['injection.persona'] ?? 'both')
       } catch { /* 缺配置用默认 */ }
     }
-    if (level === 'off' || (!personaOn && !memoryOn)) { injectCache.text = ''; return '' }
-    const lines: string[] = ['[守藏·热记忆] 画像与记忆指针（缩略注入·按需 get_file 拉全文）：']
-    const seen = new Set<string>() // 防御性去重：同一 rel 绝不重复注入（审查 2026-08-27）
-    const pushLine = (rel: string, line: string): boolean => {
-      if (seen.has(rel)) return false
-      seen.add(rel)
-      lines.push(line)
-      return true
+    if (level === 'off' || !hotMemoryOn) { injectCache.text = ''; return '' }
+    // 指针式注入：三索引一行一条（[tag] 主题 · 概况 → notes/x.md §小节），Agent 按需 get_file 拉详情
+    const readIdx = (name: string): string[] => {
+      try {
+        return readFileSync(join(memRoot, name), 'utf8').split(/\r?\n/).map((l) => l.trim()).filter((l) => /^\[.+\]/.test(l))
+      } catch { return [] }
     }
-    // 画像：每轮必注（用户画像/agent画像 两行）
-    if (personaOn) {
-      const all = walkMarkdown(join(root.path, '画像'))
-      const content = all.filter((f) => f.name !== '_index.md')
-      const me = content.find((f) => f.rel.startsWith('我/')) ?? content[0] ?? null
-      const you = content.find((f) => f.rel.startsWith('你/') && f !== me) ?? content.find((f) => f !== me) ?? null
-      const injectMe = personaMode === 'me' || personaMode === 'both'
-      const injectYou = personaMode === 'you' || personaMode === 'both'
-      if (me && injectMe) pushLine(`画像/${me.rel}`, `- [[画像/${me.rel}|用户画像]] — ${pointerDesc(me)}`)
-      if (you && you !== me && injectYou) pushLine(`画像/${you.rel}`, `- [[画像/${you.rel}|agent画像]] — ${pointerDesc(you)}`)
+    const caps: Record<string, number> = { low: 2, medium: 4, high: 8, smart: 10 }
+    const userLines = readIdx('USER.md')
+    const memLines = readIdx('MEMORY.md').slice(0, caps[level] ?? 10)
+    if (!userLines.length && !memLines.length) { injectCache.text = ''; return '' }
+    const lines: string[] = [`[守藏·热记忆] 记忆库指针（${memRoot}；详情按指针 get_file 拉对应 notes §小节）：`]
+    if (userLines.length) {
+      lines.push('画像索引（USER.md）：')
+      for (const l of userLines) lines.push(`- ${l}`)
     }
-    // 记忆·热：仅 日记忆（临时·当日蒸馏指针，每轮注入）；受 boards.memory + injection.hot_memory 双门控
-    if (memoryOn && hotMemoryOn) {
-      const memFiles = walkMarkdown(join(root.path, '记忆', '日记忆'), ['_assets', '_meta']).filter((f) => f.name !== '_index.md')
-      const caps: Record<string, number> = { low: 2, medium: 4, high: 8, smart: 10 }
-      const perType = level === 'low' ? 2 : level === 'medium' ? 4 : 6
-      const total = caps[level] ?? 10
-      // 2c 字节预算+重要性装箱（落地方案）：不按遍历序取前 N，而是按评分排序后取高分 N——
-      // 评分 = frontmatter confidence（缺省 50）+ updated 新近加权（预算仍由末尾 max_tokens 裁切兜底）
-      const scoreOf = (f: typeof memFiles[number]): number => {
-        const m = f.text.match(/^---\r?\n([\s\S]*?)\r?\n---/)
-        if (!m) return 50
-        const cf = m[1].match(/confidence:\s*(\d+)/)
-        let s = cf ? parseInt(cf[1], 10) : 50
-        const up = m[1].match(/^updated:\s*([\d-]+)/m)
-        if (up) {
-          const days = (Date.now() - new Date(up[1]).getTime()) / 86400000
-          if (days < 1) s += 10; else if (days < 3) s += 5
-        }
-        return s
-      }
-      const ranked = memFiles.slice().sort((a, b) => scoreOf(b) - scoreOf(a))
-      let count = 0
-      for (const f of ranked) {
-        if (pushLine(f.rel, `- [[记忆/日记忆/${f.rel}|${pointerTitle(f)}]] — ${pointerDesc(f)}`)) {
-          count++
-          if (count >= total) break
-        }
-      }
+    if (memLines.length) {
+      lines.push(`知识索引（MEMORY.md，热取前 ${memLines.length} 条）：`)
+      for (const l of memLines) lines.push(`- ${l}`)
     }
-    const budget = Math.max(400, maxTokens * 2) // 中文粗估 ~2 字符/token
+    const budget = Math.max(400, 1500 * 2) // 中文粗估 ~2 字符/token
     let text = lines.join('\n')
-    if (text.length > budget) text = text.slice(0, budget) + '\n…（指针注入已按 max_tokens 预算裁切）'
+    if (text.length > budget) text = text.slice(0, budget) + '\n…（指针注入已按预算裁切）'
     injectCache.text = text
     return text
   }
@@ -990,7 +958,7 @@ export function applyPanel(ctx: Context, config: Config): void {
       ctx.logger?.warn?.('[shoucang] systemPrompt 能力不可用，R1 热记忆注入未注册')
     }
   // ── 空闲巩固轮（Letta-heartbeat 模式 · 2026-08-27）：蒸馏/合并/归档/结算 一体化 ──
-  const PY = process.env.SHOUCANG_PY || (existsSync('C:/Users/lk/AppData/Roaming/dsh-pytools/Scripts/python.exe') ? 'C:/Users/lk/AppData/Roaming/dsh-pytools/Scripts/python.exe' : 'python')
+  const PY = process.env.SHOUCANG_PY || 'python' // 零硬编码红线：本机解释器经 env 指定
   const _metaOf = (): string => { const r = activeRootOf(); return r ? join(r.path, '_meta') : '' }
   // 2d 配额代码化（落地方案）：idle 轮内 py 进程调用硬上限——防蒸馏/归档风暴失控（配合 _writeFacts 单轮落笔 15 上限）。
 // 仅 consolidateRound 会话内计配额；RPC（/model/* /vector/* 等）为交互路径不受限（修：此前全局计数使 RPC 也被拒）

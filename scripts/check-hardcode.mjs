@@ -21,6 +21,7 @@ const PATTERNS = [
   /["'\s(=:]+[Dd]:\\+[A-Za-z]/,
   /["'\s(=:]+[Cc]:\\+Users/,
   /["'\s(=:]+[Dd]:\/+[A-Za-z]/,
+  /["'\s(=:]+[Cc]:\/+[A-Za-z]/, // C:/ 正斜杠形态（2026-09-08 审查漏网补齐：panel.ts PY 解释器曾以该形态逃逸）
 ];
 
 let violations = [];
