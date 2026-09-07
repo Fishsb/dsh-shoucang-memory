@@ -1,13 +1,13 @@
 # 治理文档本地化：不入开源发布仓（2026-09-08 pmg 治理体系已整体移除；本文件仍按开源红线本地化）
 AGENTS.md
 CLAUDE.md
+HANDOVER.md
 
-# 依赖与构建产物
+# 依赖与构建产物（注意：lib/ 构建产物按 dsh 插件仓惯例提交入库，不在此列）
 node_modules/
 dist/
 .tsbuild/
 __pycache__/
-plugins/*/lib/
 
 # 本地环境
 .env
@@ -21,7 +21,7 @@ plugins/*/lib/
 
 # ---- 开发知识库（本机参考，不入公开仓）----
 docs/devref/
-plugins/shoucang/skill/docs/devref/
+skill/docs/devref/
 
 # ---- 记忆脚本瞬态产物（沿自源仓 gitignore）----
 .tmp-*

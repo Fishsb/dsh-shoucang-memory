@@ -61,15 +61,14 @@ dsh plugin --profile web add github:Fishsb/dsh-shoucang-memory
 ## 📚 文档
 
 - [CHANGELOG](CHANGELOG.md)
-- [记忆规格与纪律](plugins/shoucang/skill/memory-whitelist-spec.md) — 白名单门禁 / R0 路由 / 容量规则
-- [蒸馏契约](plugins/shoucang/skill/engine/distill-contract.md)
+- [记忆规格与纪律](skill/memory-whitelist-spec.md) — 白名单门禁 / R0 路由 / 容量规则
+- [蒸馏契约](skill/engine/distill-contract.md)
 
 > 🔒 **隐私**：记忆库全部数据只存本机，不随仓库发布、不上报任何数据。
 
 ## 🛠️ 开发
 
 ```sh
-cd plugins/shoucang
 npm install --legacy-peer-deps
 npm run typecheck && npm run build
 ```

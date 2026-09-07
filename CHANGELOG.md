@@ -5,6 +5,8 @@
 ## [Unreleased]
 
 ### Changed
+- **打包形态修正（2026-09-08，github 安装不可激活问题）**：插件包自 `plugins/shoucang/` 提升至**仓库根**（dsh 单插件仓标准形态，对齐 dsh-prompt-enhancer）——根 package.json 携带 dsh.bundle 契约、cordis.patch.yml id/name 改为包名 `dsh-shoucang-memory`、**lib/ 构建产物入库**（github: 安装无现场编译，产物随仓走）。修复 `dsh plugin add github:` 报「declares no dsh.bundle，装成 plain dependency 不激活」。
+
 - **审查修复三连（2026-09-08 逻辑关键点审查 → 用户拍板 A 方案）**：① 蒸馏 memory 路由探测改造——`presence().memory` 由「探测已消失的 @dsh-external/dsh-managing-memory 包（恒 false → 静默降级旁路权威记忆库）」改为 `memorySkillPresent()`（探测 ~/.dsh/skills/managing-memory/MEMORY.md），自测工具同口径；部署口径=skill/ → ~/.dsh/skills/managing-memory/。② panel 配置隔离——apply 给 panel 传浅拷贝，杜绝 scheduler 自持配置（suite/scheduler.json）就地覆写反向污染 panel 键。③ MEMORY_ROOT 双口径写入 skill/README 与仓 README（生产缺省即正确；仓内手工跑脚本须显式指向 _memory/）。
 
 - **无旧版适配清理（2026-09-08 用户拍板：项目未正式发布，不考虑老版本适配）**：合并插件 config 由 panel:/scheduler: 嵌套两节改为**扁平单层**（z.intersect 组合两组 schema，运行时解析合并验证通过）；shoucang.config.example.yaml 删除纯旧版兼容残留 wiki_root 节（零代码引用）；README/配置头注同步去掉「对号入座/兼容旧配置」表述。

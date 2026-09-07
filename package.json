@@ -1,7 +1,7 @@
 {
-  "name": "@dsh-external/shoucang",
+  "name": "dsh-shoucang-memory",
   "version": "0.3.0",
-  "description": "守藏单插件（2026-09-08 三位一体合并）：设置面板（UI/HTTP RPC）+ 调度蒸馏器（suite 路由/事件蒸馏）+ 内嵌 managing-memory 技能（skill/）。项目治理（pmg）已整体移除出架构。",
+  "description": "DSH 长期记忆插件：记忆库 + 会话蒸馏自动沉淀 + 设置面板，越用越懂你。守藏（Shoucang）单插件，panel + scheduler + 内嵌记忆技能。",
   "private": true,
   "type": "module",
   "main": "./lib/index.js",

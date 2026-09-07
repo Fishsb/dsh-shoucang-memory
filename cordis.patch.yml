@@ -1,0 +1,4 @@
+# dsh bundle patch: inserts this plugin into a profile's layer stack（守藏单插件）：宿主半区（HTTP RPC + 工具注册），client 半区由 ./client 自加载。
+- insert:
+    - id: dsh-shoucang-memory
+      name: 'dsh-shoucang-memory'
