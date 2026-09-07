@@ -1,5 +1,5 @@
 /**
- * @dsh-external/shoucang-panel — client 半区（纯 DOM，样式照搬 Obsidian 设置窗口）。
+ *dsh-shoucang-memory — client 半区（纯 DOM，样式照搬 Obsidian 设置窗口）。守藏单插件 2026-09-08 合并。
  *
  * 视觉规范（Obsidian 默认主题还原）：
  *   - 居中模态：左导航（--background-secondary）+ 右内容（--background-primary），
@@ -16,7 +16,7 @@
   'use strict';
 
   window.__ModuleLoader__.load({
-    id: '@dsh-external/shoucang-panel',
+    id: 'dsh-shoucang-memory',
     factory: function (require) {
       var module = { exports: {} };
       var exports = module.exports;
