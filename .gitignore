@@ -1,7 +1,6 @@
-# 治理文档本地化：不入开源发布仓（project-map-governance 产物，仅本地 AI 协作用）
+# 治理文档本地化：不入开源发布仓（2026-09-08 pmg 治理体系已整体移除；本文件仍按开源红线本地化）
 AGENTS.md
 CLAUDE.md
-docs/map/
 
 # 依赖与构建产物
 node_modules/
@@ -14,8 +13,20 @@ plugins/*/lib/
 .env
 *.local
 
-# ---- project-map-governance（瞬态数据，不入库）----
+# ---- 瞬态数据 ----
 .internal/
 
-# ---- 项目知识卡库（本地治理，不推 GitHub；官方参考用 devref.mjs 部署）----
+# ---- 私人记忆数据区（2026-09-08 自 dsh-managing-memory 迁入；隐私红线：不入公开仓）----
+/_memory/
+
+# ---- 开发知识库（本机参考，不入公开仓）----
 docs/devref/
+plugins/shoucang/skill/docs/devref/
+
+# ---- 记忆脚本瞬态产物（沿自源仓 gitignore）----
+.tmp-*
+*.tmpdir/
+*.tmp
+
+# ---- WorkBuddy 本地工作记忆（AI 协作数据，不入公开仓）----
+.workbuddy/

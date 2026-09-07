@@ -1,0 +1,4 @@
+# 守藏单插件（panel + scheduler 合并，2026-09-08）：宿主半区（HTTP RPC + 工具注册），client 半区由 ./client 自加载。
+- insert:
+    - id: shoucang
+      name: '@dsh-external/shoucang'

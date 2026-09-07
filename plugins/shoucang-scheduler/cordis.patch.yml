@@ -1,4 +1,0 @@
-# 守藏调度执行器（toolkit 形态）：宿主侧注册 shoucang_route / shoucang_verify 工具。
-- insert:
-    - id: shoucang-scheduler
-      name: '@dsh-external/shoucang-scheduler'

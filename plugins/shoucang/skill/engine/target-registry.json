@@ -1,0 +1,26 @@
+{
+  "configVersion": 1,
+  "comment": "目标库注册表（ADR-0005 决策 6）。root 可用 <dshHome>/<skillName>/<projectRoot> 占位；白名单相对各库根目录。pending 为候选暂存（ADD-only，非权威）。",
+  "targets": {
+    "memory": {
+      "root": "<dshHome>/skills/managing-memory",
+      "whitelist": {
+        "main": ["MEMORY.md", "USER.md", "AGENT.md"],
+        "notes": ["notes/env.md", "notes/tools.md", "notes/flows.md", "notes/lessons.md", "notes/release.md", "notes/user.md", "notes/agent.md", "notes/INDEX.md"]
+      },
+      "capacity": { "MEMORY.md": 3000, "USER.md": 2000, "AGENT.md": 2000 },
+      "pendingDir": "pending"
+    },
+    "project": {
+      "root": "<projectRoot>/docs/devref",
+      "whitelist": {
+        "main": ["INDEX.md"],
+        "notes": ["cards/how-to.md", "cards/reference.md", "cards/decision.md"]
+      },
+      "capacity": null,
+      "pendingDir": "pending",
+      "status": "cards-ready",
+      "comment": "卡库写门已就绪（pmg engine/scripts/devref-card.mjs，2026-09-06）；pending 中的 [route:project] 卡迁移至 <项目>/docs/devref/cards/ 后 route=project 可直写（需 --root 指定项目根）"
+    }
+  }
+}

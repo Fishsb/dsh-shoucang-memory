@@ -4,7 +4,7 @@
  *
  * 用法: node scripts/check-hardcode.mjs [项目根=当前目录]
  * 扫描范围: 代码与配置模板 (*.py *.js *.mjs *.yaml *.yml *.json *.toml)
- * 豁免: docs/(设计文档,路径属实测记录)、node_modules、.git、LICENSE、CHANGELOG
+ * 豁免: docs/(设计文档,路径属实测记录)、node_modules、.git、.internal(本机瞬态)、LICENSE、CHANGELOG
  * 退出码: 0 干净 / 1 发现硬编码
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -12,7 +12,7 @@ import { join, resolve } from "node:path";
 
 const root = resolve(process.argv[2] || ".");
 const CODE_EXT = /\.(py|js|mjs|cjs|yaml|yml|json|toml)$/;
-const SKIP_DIRS = new Set([".git", "node_modules", "docs", ".index_cache", ".kb", "__pycache__", "_archive_data"]);
+const SKIP_DIRS = new Set([".git", "node_modules", "docs", ".index_cache", ".kb", "__pycache__", "_archive_data", ".internal"]);
 const SKIP_FILES = /^(LICENSE|CHANGELOG\.md)$/i;
 
 // 本机绝对路径特征(Windows 盘符路径 + 用户目录)

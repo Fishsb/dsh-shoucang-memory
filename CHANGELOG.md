@@ -5,6 +5,14 @@
 ## [Unreleased]
 
 ### Changed
+- **审查修复三连（2026-09-08 逻辑关键点审查 → 用户拍板 A 方案）**：① 蒸馏 memory 路由探测改造——`presence().memory` 由「探测已消失的 @dsh-external/dsh-managing-memory 包（恒 false → 静默降级旁路权威记忆库）」改为 `memorySkillPresent()`（探测 ~/.dsh/skills/managing-memory/MEMORY.md），自测工具同口径；部署口径=skill/ → ~/.dsh/skills/managing-memory/。② panel 配置隔离——apply 给 panel 传浅拷贝，杜绝 scheduler 自持配置（suite/scheduler.json）就地覆写反向污染 panel 键。③ MEMORY_ROOT 双口径写入 skill/README 与仓 README（生产缺省即正确；仓内手工跑脚本须显式指向 _memory/）。
+
+- **无旧版适配清理（2026-09-08 用户拍板：项目未正式发布，不考虑老版本适配）**：合并插件 config 由 panel:/scheduler: 嵌套两节改为**扁平单层**（z.intersect 组合两组 schema，运行时解析合并验证通过）；shoucang.config.example.yaml 删除纯旧版兼容残留 wiki_root 节（零代码引用）；README/配置头注同步去掉「对号入座/兼容旧配置」表述。
+
+- **⛔→🔄 仓重构：双插件合并 + pmg 移除（2026-09-08 用户拍板）**：dsh-managing-memory 项目迁入本仓（公开树 → `plugins/shoucang/skill/`，私人数据 → 仓根 `_memory/`，gitignore；源仓保留冻结）。shoucang-panel + shoucang-scheduler + managing-memory 三位合并为**单一插件** `plugins/shoucang/`（@dsh-external/shoucang v0.3.0）：config 分 panel:/scheduler: 两节（字段与合并前一致），suite 外部成员表清空（记忆技能内嵌、pmg 移除），typecheck+build 零错误。**项目治理插件（project-map-governance）整体移除出架构**：docs/map 拆除、pre-commit 地图检查删除、ADR/地图/卡库机制不再维护；本仓与记忆仓历史 ADR+facts 分别存 `docs/history/` 与 `plugins/shoucang/skill/docs/history/`（只读）。AGENTS/CLAUDE 重写为精简工作约定（4 条规则）；README 重写为单插件架构。插件仍未上线（dsh-web 无软链），重启时软链指向 plugins/shoucang。
+
+
+### Changed
 - **⛔ 守藏退役归档（2026-09-07 用户拍板，本仓 ADR-0003 / pmg 权威仓 ADR-0003）**：插件从 dsh-web 下线（`~/.dsh/plugins/shoucang-panel` 软链删除，仓库本体保留），记忆职责移交 dsh-auto-memory。ADR-0001（集合中枢定位）/ADR-0002（蒸馏唯一权归守藏）双双 superseded，F-001/F-008 superseded；README 定位声明改退役实态，suite 数据 `~/.dsh/suite/knowledge/` 零损失保留（只读）。本仓转冻结归档仓（治理文档 AGENTS/CLAUDE/docs/map 为 gitignore 本地文档，已同步改写不入库）。
 
 ### Fixed

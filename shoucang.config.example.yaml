@@ -1,31 +1,19 @@
 # ============================================================
-# 守藏 · Shoucang 配置文件模板（suite 中枢版 v2，2026-09-06）
-# 定位重定义：UI + 全部集合插件设置界面 + 协调调度中枢。
-# 记忆归档职责已废弃（蒸馏唯一权归 @dsh-external/dsh-managing-memory
-# 的事件驱动 watcher，协作宪章 ADR-0005）——原 archive:/boards:/
-# lifecycle: 节删除；向量检索节悬置保留（UI 已建，后端另行立项）。
+# 守藏 · Shoucang 配置文件模板（单插件版 v3，2026-09-08）
+# 单插件 @dsh-external/shoucang：panel（UI）+ scheduler（suite 路由/蒸馏）
+# + 内嵌 managing-memory 技能（skill/）。项目未发布过版本，无旧版适配负担。
 # 用法: 复制为 shoucang.config.yaml 并按需修改；路径留空=能力禁用。
 # ============================================================
 
 shoucang:
-  wiki_root: ""              # [deprecated-悬置] 原 wiki 知识库根；三板块职责已由
-                             # 记忆插件+pmg 承接，此节仅为 panel 旧 UI 兼容保留
-
-  suite:                     # ★ 插件集合管理（新职责 · suite-manager 模块）
+  suite:                     # 插件集合管理（suite-manager 模块）
     enabled: true
-    members:                 # 成员注册表（装守藏 = 获得集合入口；成员独立安装不受影响）
-      - id: memory
-        package: "@dsh-external/dsh-managing-memory"
-        repo: "Fishsb/dsh-managing-memory"        # 技能主仓（engine 契约宿主）
-        role: commander                           # 指挥者：R0 归属裁决 + 蒸馏唯一 watcher
-      - id: governance
-        package: "@dsh-external/project-map-governance"
-        repo: "Fishsb/dsh-project-map-governance"
-        role: executor                            # 执行者两模块：项目地图防漂移 + 知识卡库
+    members: []              # 2026-09-08 单插件合并：记忆技能已内嵌（skill/）、pmg 治理整体移除；
+                             # 外部成员注册表清空。如未来再接成员插件，在此按 id/package/repo/role 登记
     # installChannel: std     # std=dsh plugin add（默认）| dev=注入器（开发机）
     # autoCheck: true         # 装配检测：已装/未装/版本比对
 
-  scheduler:                 # 顶层调度执行器（重定义：suite 内部路由 + 状态聚合）
+  scheduler:                 # 顶层调度执行器（suite 内部路由 + 状态聚合）
     enabled: true
     gates:                   # 4-Gate 降级复用：suite 成员操作路由（原记忆归档路由退役）
       g0: true               #   准入：非 suite 意图 bypass
