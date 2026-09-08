@@ -167,8 +167,8 @@ const PMG_BOARDS: Record<string, BoardDef> = {
 }
 
 export const BUILTIN_WHITELISTS: Record<RouteTarget['library'], Whitelist> = {
-  'memory-plugin': { version: 1, library: 'memory-plugin', routes: ['memory'], indexTargets: ['MEMORY.md', 'USER.md', 'AGENT.md'], notes: ['env', 'tools', 'flows', 'lessons', 'release', 'user', 'agent'], cardTypes: [], boards: NO_BOARDS },
-  'shoucang-local': { version: 1, library: 'shoucang-local', routes: ['memory'], indexTargets: ['MEMORY.md', 'USER.md', 'AGENT.md'], notes: ['env', 'tools', 'flows', 'lessons', 'release', 'user', 'agent'], cardTypes: [], boards: NO_BOARDS },
+  'memory-plugin': { version: 1, library: 'memory-plugin', routes: ['memory'], indexTargets: ['PRINCIPLES.md', 'MEMORY.md', 'USER.md', 'AGENT.md'], notes: ['env', 'tools', 'flows', 'lessons', 'release', 'user', 'agent'], cardTypes: [], boards: NO_BOARDS },
+  'shoucang-local': { version: 1, library: 'shoucang-local', routes: ['memory'], indexTargets: ['PRINCIPLES.md', 'MEMORY.md', 'USER.md', 'AGENT.md'], notes: ['env', 'tools', 'flows', 'lessons', 'release', 'user', 'agent'], cardTypes: [], boards: NO_BOARDS },
   'pmg-cards': { version: 1, library: 'pmg-cards', routes: ['project'], indexTargets: [], notes: [], cardTypes: ['how-to', 'reference', 'decision'], boards: PMG_BOARDS },
   'local-pending': { version: 1, library: 'local-pending', routes: ['project'], indexTargets: [], notes: [], cardTypes: ['how-to', 'reference', 'decision'], boards: NO_BOARDS },
 }

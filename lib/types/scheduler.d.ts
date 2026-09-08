@@ -35,6 +35,8 @@ export interface Config {
     distillPrompt: string;
     llmProvider: string;
     llmModel: string;
+    enableDeepSleep: boolean;
+    deepSleepIdleMs: number;
 }
 export declare const Config: any;
 export declare function applyScheduler(ctx: Context, config: Config): void;

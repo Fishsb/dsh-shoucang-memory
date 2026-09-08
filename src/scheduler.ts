@@ -46,6 +46,9 @@ export interface Config {
   distillPrompt: string // 蒸馏子代理 persona 覆盖（缺省内建 v2 契约）
   llmProvider: string // 蒸馏子代理指定 provider（空=继承主会话模型）
   llmModel: string // 蒸馏子代理指定 model（空=继承主会话模型）
+  // ═══ 深度睡眠归纳（L0 原则层；2026-09-08 拍板：全部会话停滞 ≥3h 自动执行）═══
+  enableDeepSleep: boolean // 深度睡眠巡检开关（停滞 ≥deepSleepIdleMs 自动归纳 PRINCIPLES）
+  deepSleepIdleMs: number // 停滞判定：无任何根会话活动持续此毫秒数才触发（缺省 3 小时）
 }
 
 export const Config: any = z.object({
@@ -70,6 +73,8 @@ export const Config: any = z.object({
   distillPrompt: z.string().default('').description('蒸馏子代理 persona 覆盖（缺省内建 v3 契约）'),
   llmProvider: z.string().default('').description('蒸馏子代理 provider（空=继承主会话模型）'),
   llmModel: z.string().default('').description('蒸馏子代理 model（空=继承主会话模型）'),
+  enableDeepSleep: z.boolean().default(true).description('深度睡眠归纳：全部会话停滞 ≥deepSleepIdleMs 自动提炼原则层 PRINCIPLES.md'),
+  deepSleepIdleMs: z.number().min(600000).default(10800000).description('停滞判定阈值（毫秒）：无任何会话活动持续满此时长触发深度睡眠归纳（缺省 3 小时）'),
 })
 
 // —— 装配事实源探测（无硬编码路径）——
@@ -502,6 +507,8 @@ export function applyScheduler(ctx: Context, config: Config): void {
       defaultProject: config.default_project,
       genericProject: config.generic_project,
       memberPackages: { governance: governancePkg },
+      enableDeepSleep: config.enableDeepSleep,
+      deepSleepIdleMs: config.deepSleepIdleMs,
     })
   }
 }

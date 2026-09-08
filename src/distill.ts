@@ -7,12 +7,16 @@
  *   → targets.ts 动态路由 + 各库白名单门禁（不符合不存）→ 零拷贝写入（memory-append / devref-card）
  *   → 水位推进（suite/knowledge/audit/distill-watermark.jsonl）→ 蒸馏审计（distill-audit.jsonl，UI 统计卡数据源）。
  *
+ * 深度睡眠归纳（L0 原则层 PRINCIPLES.md；2026-09-08 拍板）：独立巡检定时器（10min）检测「全部会话停滞 ≥3h
+ * （无任何根会话 turn/end 活动）且无活跃 agent」→ 触发一次归纳子代理（作用域=当天痕迹：本日 pending +
+ * 本日写入 notes + 本日 access 命中）→ 原则 JSON → write_gate 校验 → PRINCIPLES.md 原子落盘（冲突=原地 replace）。
+ *
  * 坑位防御（devref/pitfalls 全清单）：禁 spawnSync（全异步 runAsync）；定时器随 disposed 事件清理；
  * reload 后旧 ctx 失效→错误 catch+水位保留重试；maxDepth=1+persona 委派禁令+toolFilter；
  * 路由归一化未知回退 memory（宁滥勿丢）；LLM 路由连败≥2 弃用指定 provider 回落继承（本迁入版补强）。
  */
 import { spawn } from 'node:child_process'
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, renameSync } from 'node:fs'
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, renameSync, statSync, unlinkSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import {
   dshHome, knowledgeRoot, memoryLibRoot, pmgScriptsRoot,
@@ -41,6 +45,9 @@ export interface DistillConfig {
   defaultProject: string
   genericProject: string
   memberPackages: { governance: string }
+  // ═══ 深度睡眠归纳（L0 原则层 PRINCIPLES.md；2026-09-08 用户拍板：全部会话停滞 ≥3h 自动执行）═══
+  enableDeepSleep: boolean
+  deepSleepIdleMs: number
 }
 
 // ── 蒸馏裁决契约 v3.1（事实源=记忆仓 engine/distill-contract.md；守藏为执行宿主，契约文本不改动语义）──
@@ -62,6 +69,19 @@ route=memory 时续走四问：Q0 已有归属？Q1 下周用得上？Q2 归谁�
 输出：只输出一行 JSON（不要 reasoning、不要其他文本）：
 {"route":"memory","appends":[{"target":"notes/tools.md","section":"<既有 ## 小节名>","text":"教程式浓缩：目标一句+编号步骤+注意，≤120字"}],"newIndex":[{"target":"MEMORY.md","line":"[tag] 主题 · 概况短语/短语/短语 → notes/x.md §小节"}],"projectCards":[{"cardType":"how-to|reference|decision","board":"generic|project","title":"≤20字","text":"≤200字","source":"≤30字"}],"migrationHint":"","skipped":[{"title":"...","reason":"≤30字"}]}
 约束：route=memory → 填 appends/newIndex（target 白名单 notes/tools.md notes/flows.md notes/lessons.md notes/env.md notes/release.md；section 必须既有 ## 小节名；**text 教程式三段**「目标：… 1. … 2. … 注意：…」只写方向指引级浓缩——目标形态/步骤轮廓/关键注意点，不搬细节条文，纯事实类可省步骤保留目标行；**newIndex.line 格式权威=记忆库 spec §8**：[tag] 主题 · 概况短语/短语/短语 → notes/<file>.md §小节，定界符 ·=段界 /=短语界 →=指针，主题≤12字名词性禁冒号复合，概况名词短语 / 分隔、≤30字、高判别实词（专名/数值/路径关键词）、禁日期溯源），projectCards 留空；route=project → 填 projectCards（cardType: how-to=操作步骤/reference=契约事实/decision=架构决策；board 必填：generic=官方规范/平台规则，project=项目事实/用户决策，缺省按 project），appends/newIndex 留空，若该项目开发知识密集（连续踩坑/多契约）填 migrationHint（≤30字，提示宿主安排卡库迁移复核）；route=discard → 除 skipped 全空；与 route 不匹配的条目宿主拒收。`
+
+// ── 深度睡眠归纳契约（L0 原则层 PRINCIPLES.md；睡眠=回想巩固当天的记忆）──
+export const DEEP_SLEEP_PROMPT = `你是深度睡眠归纳子代理（守藏记忆 L0 原则层，audit-protocol §5）。任务：像人睡前回想当天经历一样，回顾给定「当天记忆痕迹」，提炼跨任务泛化原则（巩固记忆；主动遗忘=提纯下放，不是删除）。
+判定规则：
+- 同主题 ≥3 条痕迹，或单主题当日反复命中 → 提炼 1 条原则；支撑不足的一律不提炼。
+- 原则=一句方向指引（对齐 R1 粒度锚：目标形态/步骤轮廓/关键注意点），不搬细节条文。
+- 源指针只能指向给定痕迹中真实出现过的 notes/<file>.md §小节（1-2 个小节）；行格式严格为：\`- <原则一句> ← 源: notes/<file>.md §小节A/§小节B\`
+- pending 内容尚未入册 notes 的，不得作为源指针（仅作背景理解）；找不到 notes 锚点就不提炼（宁缺毋滥）。
+- 与既有原则冲突时用 replace（match=既有原则行原文，须逐字来自给定「现行原则」清单）；否则 add。
+- 独立完成：不 spawn 子代理、不使用任何工具，只依据给定材料。
+输出：只输出一行 JSON（不要 reasoning、不要其他文本）：
+{"principles":[{"action":"add","text":"- ... ← 源: notes/lessons.md §A/§B"},{"action":"replace","match":"- 既有原则原文","text":"- ... ← 源: notes/tools.md §C"}],"skipped":[{"title":"...","reason":"≤30字"}]}
+无足够素材 → {"principles":[],"skipped":[]}。`
 
 // ── 预筛信号词（零拷贝优先动态加载记忆仓 engine/signals.mjs；不可达时内嵌兜底副本，与 engine 同源）──
 const PRESCAN_STRONG = ['记住', '以后', '注意', '踩坑', '原来是这样', '应该改成', '别再用', '纠正', '别忘了', '务必']
@@ -385,6 +405,209 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): void {
     } finally { distilling.delete(sid) }
   }
 
+  // 子代理输出 → JSON（剥离代码栅栏 + 容错提取首个 {...}；蒸馏/深度睡眠共用）
+  const parseAgentJson = (result: any, label: string): any => {
+    if (!result || !Array.isArray(result.output)) return null
+    const joined = result.output.filter((b: any) => b && b.type === 'text').map((b: any) => b.text).join('').trim()
+    const cleaned = joined.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim()
+    try { return JSON.parse(cleaned) } catch (e1) {
+      const m = cleaned.match(/\{[\s\S]*\}/)
+      if (m) { try { return JSON.parse(m[0]) } catch (e2) { log(`${label} JSON 解析失败: ${String((e2 as Error).message).slice(0, 80)}`) } }
+      else log(`${label} JSON 解析失败: ${String((e1 as Error).message).slice(0, 80)}`)
+      return null
+    }
+  }
+
+  // ═══ 深度睡眠归纳 pass（L0 原则层 PRINCIPLES.md 自动写入口；2026-09-08 拍板）═══
+  // 触发口径：以「最后一次根会话 turn/end（completed）」为活动水位——无任何会话活动持续 ≥deepSleepIdleMs
+  // （缺省 3h）且无活跃 agent → 自动执行一次（每轮停滞窗口至多一次，新活动重置水位）；审计轮仍可手工兜底。
+  // 作用域=当天痕迹（本日 pending + 本日写入的 notes + 本日 access 命中，不做全库扫描）；产出经 write_gate 落盘。
+  const DEEP_SLEEP_CHECK_MS = 600000 // 巡检间隔 10min（停滞阈值由 deepSleepIdleMs 独立控制）
+  let lastActivityAt = Date.now()
+  let lastDeepSleepAt = 0
+  let deepSleepRunning = false
+  // 启动水位回放：取蒸馏审计最新时间（重启不重置停滞判定；无审计=新装，按启动时刻起算）
+  try {
+    const lines = readFileSync(auditFile, 'utf8').split('\n')
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (!lines[i].trim()) continue
+      try {
+        const t = Date.parse((JSON.parse(lines[i]) as any).at)
+        if (!Number.isNaN(t)) { if (t > lastActivityAt) lastActivityAt = t; break }
+      } catch { /* 坏行继续向前找 */ }
+    }
+  } catch { /* 无审计文件=新装 */ }
+
+  const todayStr = (): string => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+
+  // 当天痕迹收集（深度睡眠作用域=本日）
+  const gatherDeepSleepTraces = (memRoot: string): string => {
+    const today = todayStr()
+    const parts: string[] = []
+    // 1) 本日新增 pending（背景材料，不作源指针）
+    let budget = 10000
+    try {
+      for (const f of readdirSync(pendDir).filter((f) => f.startsWith(today) && f.endsWith('.md')).sort()) {
+        if (budget <= 0) break
+        let body = ''
+        try { body = readFileSync(join(pendDir, f), 'utf8') } catch { continue }
+        const chunk = `### pending/${f}\n${body}`
+        parts.push(chunk.length > budget ? chunk.slice(0, budget) + '\n…(截断)' : chunk)
+        budget -= chunk.length + 1
+      }
+    } catch { /* pending 不可读=无痕迹 */ }
+    // 2) 本日有写入（mtime 属今天）的 notes——正文全文，原则源指针唯一合法来源
+    const notesDir = join(memRoot, 'notes')
+    let touched: string[] = []
+    try {
+      const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0)
+      touched = readdirSync(notesDir).filter((f) => f.endsWith('.md') && f !== 'INDEX.md').filter((f) => {
+        try { return statSync(join(notesDir, f)).mtimeMs >= startOfDay.getTime() } catch { return false }
+      })
+    } catch { /* notes 不可读=无 */ }
+    let notesBudget = 16000
+    for (const f of touched) {
+      if (notesBudget <= 0) break
+      let body = ''
+      try { body = readFileSync(join(notesDir, f), 'utf8') } catch { continue }
+      const chunk = `### notes/${f}（本日有写入）\n${body}`
+      parts.push(chunk.length > notesBudget ? chunk.slice(0, notesBudget) + '\n…(截断)' : chunk)
+      notesBudget -= chunk.length + 1
+    }
+    // 3) 本日 access.log 检索命中（回想强度信号）
+    try {
+      const hits = readFileSync(join(memRoot, 'audit', 'access.log'), 'utf8').split('\n').filter((l) => l.trim())
+        .map((l) => { try { return JSON.parse(l) as { t?: string; f?: string; s?: string } } catch { return null } })
+        .filter((o): o is { t?: string; f?: string; s?: string } => !!o && typeof o.t === 'string' && o.t.startsWith(today))
+      if (hits.length) {
+        const agg = new Map<string, number>()
+        for (const h of hits) { const k = `notes/${h.f || '?'} §${h.s || '?'}`; agg.set(k, (agg.get(k) || 0) + 1) }
+        parts.push('### 本日 access 检索命中\n' + [...agg.entries()].map(([k, v]) => `- ${k} ×${v}`).join('\n'))
+      }
+    } catch { /* 无 access.log=无 */ }
+    return parts.join('\n\n')
+  }
+
+  // 原则落盘：宿主拼装新全文 → write_gate 校验（容量/指针/行格式）→ 原子替换（冲突=原地 replace）
+  const applyPrinciples = async (memRoot: string, out: any): Promise<{ added: number; replaced: number; skipped: number; gate: string }> => {
+    const principlesPath = join(memRoot, 'PRINCIPLES.md')
+    const gateScript = join(memoryLibRoot(), 'scripts', 'memory_write_gate.mjs')
+    if (!existsSync(gateScript)) return { added: 0, replaced: 0, skipped: 0, gate: 'write_gate 未就位' }
+    let content = ''
+    try { content = readFileSync(principlesPath, 'utf8') } catch {
+      content = '# PRINCIPLES.md — 原则层（L0 图式；spec §5.8）\n\n> 跨任务泛化方向指引，常驻注入。唯一写入口=深度睡眠归纳 pass，经 write_gate 落盘；每条带源指针。容量 ≤1,000 字符硬限（超限=原则间合并）。\n'
+    }
+    const lines = content.split(/\r?\n/)
+    let added = 0, replaced = 0, skipped = 0
+    for (const p of ((out && Array.isArray(out.principles)) ? out.principles : [])) {
+      const text = String((p && p.text) || '').trim()
+      if (!/^- .+←\s*源:\s*notes\/[A-Za-z0-9_-]+\.md/.test(text)) { skipped++; continue } // 行格式宿主预检（gate 亦校验）
+      if (p && p.action === 'replace') {
+        const match = String(p.match || '').trim()
+        const idx = lines.findIndex((l) => l.trim() === match)
+        if (idx < 0) { skipped++; continue }
+        lines[idx] = text
+        replaced++
+      } else {
+        if (lines.some((l) => l.trim().toLowerCase() === text.toLowerCase())) { skipped++; continue } // 去重
+        lines.push(text)
+        added++
+      }
+    }
+    if (!added && !replaced) return { added, replaced, skipped, gate: 'no-op' }
+    const tmpPath = principlesPath + '.tmp'
+    try {
+      writeFileSync(tmpPath, lines.join('\n').replace(/\n{3,}/g, '\n\n').replace(/\s+$/, '\n'), 'utf8')
+      const g = await runNode(config.nodeBin, gateScript, ['PRINCIPLES.md', tmpPath], { env: { MEMORY_ROOT: memRoot }, timeout: 20000 })
+      if (g.status === 0) { renameSync(tmpPath, principlesPath); return { added, replaced, skipped, gate: 'pass' } }
+      try { unlinkSync(tmpPath) } catch { /* */ }
+      const reason = g.status === 1 ? '超限=原则间合并（本轮跳过）' : g.status === 2 ? '指针悬空/未注册' : g.status === 4 ? '行格式违规' : `gate exit=${g.status}`
+      log(`deep sleep: write_gate 拒收（${reason}）: ${textOf(g).slice(0, 120)}`)
+      return { added, replaced, skipped, gate: reason }
+    } catch (e) {
+      try { unlinkSync(tmpPath) } catch { /* */ }
+      return { added, replaced, skipped, gate: '落盘异常: ' + String((e as Error).message).slice(0, 80) }
+    }
+  }
+
+  const runDeepSleep = async (): Promise<void> => {
+    try {
+      const { resolved } = resolveTarget('memory', presence())
+      if (resolved.library !== 'memory-plugin' && resolved.library !== 'shoucang-local') {
+        log('deep sleep: 记忆目标库不可用，跳过')
+        return
+      }
+      const traces = gatherDeepSleepTraces(resolved.root)
+      if (!traces) { log('deep sleep: 本日无痕迹，跳过'); audit({ kind: 'deep-sleep', result: 'no-traces' }); return }
+      const currentPrinciples = (() => { try { return readFileSync(join(resolved.root, 'PRINCIPLES.md'), 'utf8') } catch { return '' } })()
+      const currentList = currentPrinciples.split(/\r?\n/).map((l) => l.trim()).filter((l) => /^- .+←/.test(l)).join('\n') || '（暂无条目）'
+      validateProvider()
+      const userInput = [
+        '## 当天记忆痕迹（作用域=本日，不做全库扫描）',
+        traces,
+        `## 现行原则（冲突时 replace，match 逐字取自此清单）\n${currentList}`,
+        '请按规则处理：提炼跨任务泛化原则并输出 JSON 指令。',
+      ].join('\n\n')
+      const useProvider = config.llmProvider && config.llmModel && providerFailCount < 2
+      const agentOptions = useProvider ? { provider: config.llmProvider, model: config.llmModel } : undefined
+      let roots: any[] = []
+      try { roots = ctx.agents.roots() || [] } catch { /* */ }
+      const ac = new AbortController()
+      const timeout = setTimeout(() => { try { ac.abort(new Error('deep sleep timeout 10min')) } catch { /* */ } }, 600000)
+      try {
+        const run2 = await ctx.subagents.start('spawn', {
+          label: 'deep-sleep-induction',
+          ...(roots[0] ? { parent: roots[0] } : {}),
+          signal: ac.signal,
+          maxDepth: 1,
+          ...(agentOptions ? { agentOptions } : {}),
+          prompt: [{ type: 'text', text: userInput }],
+          persona: DEEP_SLEEP_PROMPT,
+          toolFilter: { allow: [] },
+        })
+        const result = await Promise.race([
+          run2.result,
+          new Promise((resolve) => setTimeout(() => resolve({ stopReason: 'timeout' } as any), 600000)),
+        ]) as any
+        clearTimeout(timeout)
+        const stop = result && result.stopReason
+        const out = parseAgentJson(result, 'deep sleep')
+        if (stop === 'completed' && out) providerFailCount = 0
+        else if (useProvider && (stop !== 'completed' || !out)) providerFailCount++
+        const app = (stop === 'completed' && out)
+          ? await applyPrinciples(resolved.root, out)
+          : { added: 0, replaced: 0, skipped: 0, gate: `stop=${stop}` }
+        log(`deep sleep: stop=${stop} 原则 +${app.added}/替换 ${app.replaced}/跳过 ${app.skipped}（${app.gate}）`)
+        audit({ kind: 'deep-sleep', stop, added: app.added, replaced: app.replaced, skipped: app.skipped, gate: app.gate })
+      } catch (e) {
+        clearTimeout(timeout)
+        if (useProvider) providerFailCount++
+        log(`deep sleep ERROR: ${String((e as Error)?.message || e).slice(0, 200)}`)
+        audit({ kind: 'deep-sleep', error: String((e as Error)?.message || e).slice(0, 160) })
+      }
+    } catch (e) {
+      log(`deep sleep err: ${String((e as Error)?.message || e).slice(0, 120)}`)
+    }
+  }
+
+  const deepSleepCheck = (): void => {
+    if (!config.enableDeepSleep || deepSleepRunning) return
+    const now = Date.now()
+    if (now - lastActivityAt < config.deepSleepIdleMs) return
+    if (lastActivityAt <= lastDeepSleepAt) return // 本轮停滞窗口已消化（新活动推进 lastActivityAt 后重新武装）
+    try {
+      const roots = ctx.agents.roots() || []
+      if (roots.some((a: any) => a.status && a.status !== 'idle')) return // 尚有活跃会话，推迟到下轮巡检
+    } catch { /* 探测失败按无活跃处理 */ }
+    deepSleepRunning = true
+    lastDeepSleepAt = now
+    log(`deep sleep: 触发（停滞 ${Math.round((now - lastActivityAt) / 60000)}min ≥ 阈值 ${Math.round(config.deepSleepIdleMs / 60000)}min）`)
+    runDeepSleep().catch((e) => log(`deep sleep err: ${String((e as Error)?.message || e).slice(0, 120)}`)).finally(() => { deepSleepRunning = false })
+  }
+
   // ── 事件订阅（effect 自动清理，reload 零泄漏）──
   const idleTimers = new Map<string, any>()
   const armIdleTimer = (agent: any): void => {
@@ -427,4 +650,11 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): void {
     }, 2000)
     return () => clearTimeout(t)
   }, SHORT + ': distill adopt')
+
+  // 深度睡眠巡检定时器（10min 一查；effect 清理，reload 零泄漏）
+  ctx.effect(() => {
+    log(`deep sleep 巡检启动（enable=${config.enableDeepSleep} · 停滞阈值 ${Math.round(config.deepSleepIdleMs / 60000)}min）`)
+    const iv = setInterval(() => { try { deepSleepCheck() } catch { /* 巡检零抛出 */ } }, DEEP_SLEEP_CHECK_MS)
+    return () => clearInterval(iv)
+  }, SHORT + ': deep-sleep check')
 }
