@@ -8,6 +8,8 @@
 - **T1**：client.js 五态徽章（running 绿/ended 灰/probing 蓝闪/suspect 蓝/stalled 红）+ 会话明细（色点 + 停滞时长 + 探测结论 `DS_PROBE_TEXT` 文案）。
 - **T2**：计时（已停滞 / 下次入睡倒计时 `dsFmtCountdown` / 上次入睡）+ 控制（立即归纳一次 `POST /deepsleep/trigger` 带 confirm / 暂停到明天 `enableDeepSleep=false`）+ 阈值可调（四个滑块写 `/deepsleep/config` → `~/.dsh/suite/scheduler.json`，原子+备份，重载生效）+ 卡住红告警（`stalled` 或 `probeResult==='stall'` 时显示）。
 
+- **踩坑修复（P0 线上故障）**：`/deepsleep/config` 的 GET 与 POST 曾拆成两次 `route()` 注册，宿主按路径去重 → 抛 `duplicate exact route` → **整个守藏插件树加载失败**（面板/蒸馏/深度睡眠全挂）。已合并为单 handler 按 `req.method` 分发，并在 `route()` 加已注册路径兜底（重复注册仅告警忽略）。
+
 ## T1 · 会话状态机可视化（内核已就绪，等 UI）
 
 - 状态：内核 `src/distill.ts` 已实现「会话活跃状态机」，`registerDistill()` 返回 `getDeepSleepStatus()` 快照接口。
