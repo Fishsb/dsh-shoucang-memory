@@ -535,10 +535,11 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         const t = Date.parse(String(o.at))
         if (Number.isNaN(t)) continue
         if (t > lastActivityAt) lastActivityAt = t
-        // 只回放「成功消化」的深睡：崩溃/error/no-parent 条目不推进水位，
-        // 否则失败会把整批痕迹划到窗口之外，当天再也不会被回想。
+        // 只回放「确实消化过痕迹」的深睡：error / no-parent / no-traces 都不推进水位——
+        // no-traces 说明本轮一条痕迹都没收到（可能只是窗口被上一轮污染），
+        // 若把它当水位，会把窗口内早于该时刻的痕迹永久关在窗外（当天再也回想不到）。
         if (o.kind === 'deep-sleep' && !(o as { error?: string }).error
-          && (o as { result?: string }).result !== 'no-parent'
+          && !['no-parent', 'no-traces'].includes(String((o as { result?: string }).result))
           && t > lastDeepSleepAt) lastDeepSleepAt = t
       } catch { /* 坏行跳过 */ }
     }
@@ -686,7 +687,8 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         return 'done'
       }
       const traces = gatherDeepSleepTraces(resolved.root)
-      if (!traces) { log('deep sleep: 本日无痕迹，跳过'); audit({ kind: 'deep-sleep', result: 'no-traces' }); return 'done' }
+      if (!traces) { log(`deep sleep: 本日无痕迹，跳过（窗口起点 ${new Date(traceSince()).toLocaleString()}）`); audit({ kind: 'deep-sleep', result: 'no-traces' }); return 'done' }
+      log(`deep sleep: 窗口内痕迹 ${traces.length} 字符（起点 ${new Date(traceSince()).toLocaleString()}）`)
       const currentPrinciples = (() => { try { return readFileSync(join(resolved.root, 'PRINCIPLES.md'), 'utf8') } catch { return '' } })()
       const currentList = currentPrinciples.split(/\r?\n/).map((l) => l.trim()).filter((l) => /^- .+←/.test(l)).join('\n') || '（暂无条目）'
       validateProvider()
