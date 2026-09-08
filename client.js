@@ -272,6 +272,39 @@
         '.sc-note-chip:hover{border-color:var(--sc-accent);background:var(--sc-bg3);}',
         '.sc-note-chip .sc-tag{background:var(--sc-bg3);color:var(--sc-faint);border:none;font-weight:600;}',
         '.sc-sec-arrow{display:inline-block;width:12px;flex:none;color:var(--sc-faint);transition:color .12s;}',
+        /* 深度睡眠视图（T1 状态机 + T2 计时/控制；docs/ui-todo.md） */
+        '.sc-h2{margin:18px 0 6px;font-size:14px;font-weight:700;color:var(--sc-muted);letter-spacing:.02em;}',
+        '.sc-ds-badges{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 4px;}',
+        '.sc-ds-badge{display:flex;align-items:center;gap:6px;padding:5px 11px;border-radius:20px;font-size:12.5px;font-weight:600;background:var(--sc-bg2);border:1px solid var(--sc-border);color:var(--sc-text);}',
+        '.sc-ds-badge .dot{width:8px;height:8px;border-radius:50%;flex:none;}',
+        '.sc-ds-badge.running{color:#3fb950;}',
+        '.sc-ds-badge.running .dot{background:#3fb950;}',
+        '.sc-ds-badge.ended{color:var(--sc-muted);}',
+        '.sc-ds-badge.ended .dot{background:#999;}',
+        '.sc-ds-badge.probing{color:#4a9eff;}',
+        '.sc-ds-badge.probing .dot{background:#4a9eff;animation:scblink 1s infinite;}',
+        '.sc-ds-badge.suspect{color:#4a9eff;}',
+        '.sc-ds-badge.suspect .dot{background:#4a9eff;}',
+        '.sc-ds-badge.stalled{color:#f85149;}',
+        '.sc-ds-badge.stalled .dot{background:#f85149;}',
+        '@keyframes scblink{50%{opacity:.3;}}',
+        '.sc-ds-timing{display:flex;flex-wrap:wrap;gap:18px;margin:6px 0 4px;}',
+        '.sc-ds-stat{display:flex;flex-direction:column;gap:2px;}',
+        '.sc-ds-stat .k{font-size:11px;color:var(--sc-faint);}',
+        '.sc-ds-stat .v{font-size:15px;font-weight:700;color:var(--sc-text);font-variant-numeric:tabular-nums;}',
+        '.sc-ds-sessions{display:flex;flex-direction:column;gap:6px;margin:6px 0;}',
+        '.sc-ds-session{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--sc-border);border-radius:8px;background:var(--sc-bg1);}',
+        '.sc-ds-dot{width:10px;height:10px;border-radius:50%;flex:none;}',
+        '.sc-ds-dot.running{background:#3fb950;}',
+        '.sc-ds-dot.ended{background:#999;}',
+        '.sc-ds-dot.probing{background:#4a9eff;animation:scblink 1s infinite;}',
+        '.sc-ds-dot.suspect{background:#4a9eff;}',
+        '.sc-ds-dot.stalled{background:#f85149;}',
+        '.sc-ds-session-main{flex:1;min-width:0;}',
+        '.sc-ds-sid{font-size:13px;font-weight:600;color:var(--sc-text);font-family:monospace;}',
+        '.sc-ds-session-sub{font-size:11.5px;color:var(--sc-muted);margin-top:2px;}',
+        '.sc-ds-alert{margin:10px 0;padding:9px 12px;border-radius:8px;background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.4);color:#f85149;font-size:12.5px;}',
+        '.sc-ds-ctl{display:flex;gap:8px;margin:8px 0;flex-wrap:wrap;}',
       ].join('');
 
       function status(msg) { var n = document.getElementById('sc-statusbar'); if (n) n.textContent = msg || ''; }
@@ -1252,6 +1285,7 @@
         ['memory', '记忆板块', 'memory'],
         ['wiki', '治理知识库', 'file'],
         ['suite', '插件集合', 'file'],
+        ['deepsleep', '深度睡眠', 'toggles'],
         ['toggles', '板块与管线 (deprecated)', 'toggles'],
         ['file', '配置原文', 'file']
       ];
@@ -1278,6 +1312,152 @@
         });
         if (data && data.summary) view.appendChild(el('div', 'sc-desc', data.summary));
       }
+
+      /* ---------- 深度睡眠视图（T1 状态机 + T2 计时/控制；docs/ui-todo.md） ---------- */
+
+      function dsFmtAgo(ts) {
+        if (!ts) return '—';
+        var s = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+        if (s < 60) return s + ' 秒';
+        var m = Math.floor(s / 60); if (m < 60) return m + ' 分钟';
+        var h = Math.floor(m / 60); if (h < 24) return h + ' 小时 ' + (m % 60) + ' 分';
+        return Math.floor(h / 24) + ' 天 ' + (h % 24) + ' 小时';
+      }
+      function dsFmtCountdown(ts) {
+        if (!ts) return '—';
+        var s = Math.floor((ts - Date.now()) / 1000);
+        if (s <= 0) return '随时';
+        var m = Math.floor(s / 60); if (m < 60) return m + ' 分钟后';
+        var h = Math.floor(m / 60); if (h < 24) return h + ' 小时 ' + (m % 60) + ' 分后';
+        return Math.floor(h / 24) + ' 天后';
+      }
+      function dsFmtTime(ts) {
+        if (!ts) return '从未';
+        try { return new Date(ts).toLocaleString('zh-CN', { hour12: false }); } catch (e) { return String(ts); }
+      }
+      var DS_STATE_TEXT = { running: '活跃（有事件）', ended: '已结束', probing: '探测中', suspect: '待复核', stalled: '疑似卡住' };
+      var DS_PROBE_TEXT = {
+        'long-run': '正常长任务（唯一拦睡）',
+        'suspect': '待复核（阻塞睡眠）',
+        'conflict': '证据冲突（阻塞睡眠待复核）',
+        'stall': '已确认卡住（不阻塞·请人工确认）',
+        'exit': '异常退出（正常睡）',
+        'no-transcript': '探针不可用（正常睡·请排查）',
+        'error': '探测异常（正常睡）'
+      };
+      function dsBadge(state, count, label) {
+        var b = el('div', 'sc-ds-badge ' + state);
+        b.appendChild(el('span', 'dot'));
+        b.appendChild(el('span', null, label + ' ' + (count || 0)));
+        return b;
+      }
+      function dsStat(k, v) {
+        var s = el('div', 'sc-ds-stat');
+        s.appendChild(el('div', 'k', k)); s.appendChild(el('div', 'v', v));
+        return s;
+      }
+      function dsNumber(name, desc, initial, min, max, unit, encode, key) {
+        var item = el('div', 'setting-item');
+        var info = el('div', 'setting-item-info');
+        info.appendChild(el('div', 'setting-item-name', name));
+        info.appendChild(el('div', 'setting-item-desc', desc));
+        var wrap = el('div'); wrap.className = 'sc-range-wrap';
+        var lab = el('span', 'sc-range-label'); lab.textContent = initial + ' ' + unit;
+        var range = el('input'); range.type = 'range'; range.min = String(min); range.max = String(max); range.step = '1'; range.value = String(initial);
+        range.addEventListener('input', function () { lab.textContent = range.value + ' ' + unit; });
+        range.addEventListener('change', function () {
+          var o = {}; o[key] = encode(range.value);
+          api('/deepsleep/config', { method: 'POST', body: JSON.stringify(o) })
+            .then(function () { status('✓ ' + name + ' = ' + range.value + ' ' + unit + '（重载生效）'); })
+            .catch(fail);
+        });
+        wrap.appendChild(lab); wrap.appendChild(range);
+        item.appendChild(info); item.appendChild(wrap);
+        return item;
+      }
+      function renderDeepSleep(view) {
+        view.textContent = '';
+        view.appendChild(el('div', 'sc-h1', '深度睡眠 · 会话状态机'));
+        view.appendChild(el('div', 'sc-desc', '全部根会话停滞 ≥ 阈值后自动回想当天记忆、提炼原则层 PRINCIPLES.md。状态机区分「正常长任务 / 卡住 / 异常退出」：仅长任务正在推进才拦睡，其余正常睡。'));
+        api('/deepsleep').then(function (r) {
+          if (!r.active) {
+            view.appendChild(el('div', 'sc-desc', '深度睡眠归纳器当前未激活（蒸馏器 enableDistill 未启用或尚未就绪）。'));
+            return;
+          }
+          // T1：状态机徽章
+          var badges = el('div', 'sc-ds-badges');
+          badges.appendChild(dsBadge('running', r.running, '活跃'));
+          badges.appendChild(dsBadge('ended', r.ended, '已结束'));
+          badges.appendChild(dsBadge('probing', r.probing, '探测中'));
+          badges.appendChild(dsBadge('suspect', r.suspect, '待复核'));
+          badges.appendChild(dsBadge('stalled', r.stalled, '疑似卡住'));
+          view.appendChild(badges);
+          // T2：计时
+          var timing = el('div', 'sc-ds-timing');
+          timing.appendChild(dsStat('已停滞', dsFmtAgo(r.lastActivityAt)));
+          timing.appendChild(dsStat('下次预计入睡', dsFmtCountdown(r.nextEligibleAt)));
+          timing.appendChild(dsStat('上次入睡', dsFmtTime(r.lastDeepSleepAt)));
+          view.appendChild(timing);
+          // T1：会话明细
+          if (r.sessions && r.sessions.length) {
+            view.appendChild(el('div', 'sc-h2', '会话明细'));
+            var listWrap = el('div', 'sc-ds-sessions');
+            r.sessions.forEach(function (s) {
+              var row = el('div', 'sc-ds-session');
+              row.appendChild(el('span', 'sc-ds-dot ' + s.state));
+              var main = el('div', 'sc-ds-session-main');
+              main.appendChild(el('div', 'sc-ds-sid', s.sid));
+              var sub = (DS_STATE_TEXT[s.state] || s.state) + ' · 停滞 ' + dsFmtAgo(s.state === 'ended' ? s.lastEndAt : s.lastEventAt);
+              if (s.probeResult) sub += ' · ' + (DS_PROBE_TEXT[s.probeResult] || s.probeResult);
+              main.appendChild(el('div', 'sc-ds-session-sub', sub));
+              row.appendChild(main);
+              listWrap.appendChild(row);
+            });
+            view.appendChild(listWrap);
+          }
+          // 卡住告警（T2）
+          var hasStall = r.stalled > 0 || (r.sessions || []).some(function (s) { return s.probeResult === 'stall'; });
+          if (hasStall) {
+            view.appendChild(el('div', 'sc-ds-alert', '⚠ 检测到疑似卡住的会话（无输出增长但会话仍在）：已正常计入停滞并安排睡眠，但建议你确认该任务是否真的卡住——必要时手动重启该会话。'));
+          }
+          // T2：控制
+          view.appendChild(el('div', 'sc-h2', '控制'));
+          var ctl = el('div', 'sc-ds-ctl');
+          var triggerBtn = el('button', 'sc-btn', '立即归纳一次');
+          triggerBtn.onclick = function () {
+            if (!window.confirm('立即触发一次深度睡眠归纳？将调用归纳子代理回顾当天记忆痕迹。')) return;
+            status('深度睡眠归纳中…');
+            api('/deepsleep/trigger', { method: 'POST', body: '{}' })
+              .then(function (rr) { status(rr.ok ? '✓ 已触发归纳（见日志）' : '⚠ 触发失败：' + (rr.error || '')); })
+              .catch(fail);
+          };
+          ctl.appendChild(triggerBtn);
+          var pauseBtn = el('button', 'sc-btn', '暂停到明天');
+          pauseBtn.onclick = function () {
+            if (!window.confirm('暂停深度睡眠自动归纳（enableDeepSleep=false）？可在下方重新开启，或重载插件恢复。')) return;
+            api('/deepsleep/config', { method: 'POST', body: JSON.stringify({ enableDeepSleep: false }) })
+              .then(function () { status('✓ 已暂停自动归纳（重载生效）'); renderDeepSleep(view); })
+              .catch(fail);
+          };
+          ctl.appendChild(pauseBtn);
+          view.appendChild(ctl);
+          // T2：可调阈值
+          view.appendChild(el('div', 'sc-h2', '阈值（改后需重载插件生效）'));
+          api('/deepsleep/config').then(function (cfg) {
+            var run = cfg.running || {};
+            view.appendChild(makeToggle('enableDeepSleep', '启用深度睡眠自动归纳 enableDeepSleep', '全部会话停滞 ≥ 阈值后自动提炼原则层（关闭=暂停）', !!run.enableDeepSleep, function (key, sw) {
+              api('/deepsleep/config', { method: 'POST', body: JSON.stringify({ enableDeepSleep: sw.checked }) })
+                .then(function () { status('✓ 已保存（重载生效）'); })
+                .catch(function (e) { fail(e); sw.checked = !sw.checked; });
+            }));
+            view.appendChild(dsNumber('停滞阈值 deepSleepIdleMs', '全部会话无活动持续满此毫秒数才触发（默认 3 小时）', Math.round((run.deepSleepIdleMs || 10800000) / 60000), 10, 720, '分钟', function (m) { return m * 60000; }, 'deepSleepIdleMs'));
+            view.appendChild(dsNumber('探测发起延迟 deepSleepProbeAfterMs', 'running 无事件持续此毫秒后发起输出增长探测（默认 3 小时）', Math.round((run.deepSleepProbeAfterMs || 10800000) / 60000), 10, 720, '分钟', function (m) { return m * 60000; }, 'deepSleepProbeAfterMs'));
+            view.appendChild(dsNumber('探测采样间隔 deepSleepProbeWindowMs', '两轮采样之间的间隔（默认 60 秒）', Math.round((run.deepSleepProbeWindowMs || 60000) / 1000), 5, 600, '秒', function (s) { return s * 1000; }, 'deepSleepProbeWindowMs'));
+          }).catch(fail);
+        }).catch(function (e) {
+          view.appendChild(el('div', 'sc-desc', '加载失败：' + (e && e.message ? e.message : e)));
+        });
+      }
       var refs = {};
       var state = { parsed: null };
 
@@ -1303,6 +1483,8 @@
             status('已加载 ' + (r.file || ''));
             renderViewToggles(refs.view, r.parsed);
           }).catch(fail);
+        } else if (name === 'deepsleep') {
+          renderDeepSleep(refs.view);
         } else if (name === 'file') {
           // 根目录管理并入配置页（不再单独导航界面）
           refs.view.textContent = '';

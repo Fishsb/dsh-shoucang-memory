@@ -21,6 +21,7 @@ import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { memberPresent, memorySkillPresent, selftestMatrix, pmgScriptsRoot } from './targets.js'
 import { registerDistill } from './distill.js'
+import { deepSleepShare } from './deepsleep-share.js'
 
 export const name = '@dsh-external/shoucang-scheduler'
 export const inject = ['tools', 'llm', 'subagents', 'agents']
@@ -512,7 +513,7 @@ export function applyScheduler(ctx: Context, config: Config): void {
   // ═══ ADR-0002 阶段 2：守藏蒸馏器（事件驱动，写入分发走 targets.ts 路由+白名单）═══
   if (config.enableDistill) {
     const governancePkg = config.members.find((m: SuiteMember) => m.id === 'governance')?.package || '@dsh-external/project-map-governance'
-    registerDistill(ctx as any, {
+    const distill = registerDistill(ctx as any, {
       nodeBin: 'node',
       idleWakeMs: config.idleWakeMs,
       minTurnChars: config.minTurnChars,
@@ -533,5 +534,7 @@ export function applyScheduler(ctx: Context, config: Config): void {
       deepSleepProbeRetries: config.deepSleepProbeRetries,
       deepSleepProbeMaxMs: config.deepSleepProbeMaxMs,
     })
+    // 跨插件桥接：把状态机 API 挂到共享引用，供 panel /deepsleep RPC 惰性读取
+    if (distill) deepSleepShare.api = distill
   }
 }

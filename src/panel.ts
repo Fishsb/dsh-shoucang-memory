@@ -16,13 +16,14 @@
  */
 import type { Context } from 'cordis'
 import z from 'schemastery'
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { execFileSync, spawn } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { gunzipSync, zstdDecompressSync } from 'node:zlib'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { homedir } from 'node:os'
 import { dshHome } from './targets.js'
+import { deepSleepShare } from './deepsleep-share.js'
 import { fileURLToPath } from 'node:url'
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path'
 
@@ -901,6 +902,95 @@ export function applyPanel(ctx: Context, config: Config): void {
   // 插件集合装配状态（只读；client「插件集合」视图数据源）
   route('/suite', (_req, res) => {
     try { sendJson(res, 200, suiteScan()) } catch (e) { sendJson(res, 500, { error: String(e) }) }
+  })
+
+  /* ---------- 深度睡眠状态机（T1/T2 面板视图数据源；跨插件经 deepSleepShare 惰性桥接） ----------
+   * scheduler.registerDistill 在启动期把 { getStatus, runNow, getConfig } 挂到 deepSleepShare.api；
+   * 此处请求时读取（此时 scheduler 必然已就绪）。蒸馏器未启用/未就绪 → 返回未激活态，不报错。 */
+
+  // 自持配置通道（与 scheduler.applySuiteConfigFile 同源）：~/.dsh/suite/scheduler.json
+  const suiteConfigPath = (): string => join(dshHome(), 'suite', 'scheduler.json')
+  const readSuiteConfig = (): Record<string, unknown> => {
+    try {
+      const f = suiteConfigPath()
+      if (!existsSync(f)) return {}
+      const raw = JSON.parse(readFileSync(f, 'utf8')) as Record<string, unknown>
+      return raw && typeof raw === 'object' ? raw : {}
+    } catch { return {} }
+  }
+  // 原子写（同目录 tmp + renameSync）+ 备份先行，零硬编码路径
+  const writeSuiteConfig = (obj: Record<string, unknown>): void => {
+    const f = suiteConfigPath()
+    mkdirSync(dirname(f), { recursive: true })
+    if (existsSync(f)) {
+      const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15)
+      try { writeFileSync(`${f}.bak-${stamp}`, readFileSync(f)) } catch { /* 首次无备份 */ }
+    }
+    const tmp = join(tmpdir(), 'shoucang-suite-cfg-' + Date.now() + '.json')
+    writeFileSync(tmp, JSON.stringify(obj, null, 2), 'utf8')
+    renameSync(tmp, f)
+  }
+  /** 深度睡眠配置键校验（与 scheduler.Config 同约束）；返回错误串或 null */
+  const validateDeepSleepConfig = (c: Record<string, unknown>): string | null => {
+    if ('enableDeepSleep' in c && typeof c.enableDeepSleep !== 'boolean') return 'enableDeepSleep 须为布尔'
+    if ('deepSleepProbe' in c && typeof c.deepSleepProbe !== 'boolean') return 'deepSleepProbe 须为布尔'
+    if ('deepSleepIdleMs' in c) {
+      const n = Number(c.deepSleepIdleMs)
+      if (!Number.isFinite(n) || n < 600000) return 'deepSleepIdleMs 须 ≥ 600000（10 分钟）'
+    }
+    if ('deepSleepProbeAfterMs' in c) {
+      const n = Number(c.deepSleepProbeAfterMs)
+      if (!Number.isFinite(n) || n < 600000) return 'deepSleepProbeAfterMs 须 ≥ 600000（10 分钟）'
+    }
+    if ('deepSleepProbeWindowMs' in c) {
+      const n = Number(c.deepSleepProbeWindowMs)
+      if (!Number.isFinite(n) || n < 5000) return 'deepSleepProbeWindowMs 须 ≥ 5000（5 秒）'
+    }
+    return null
+  }
+
+  // GET /deepsleep：状态机快照（T1 状态机 + T2 计时展示）
+  route('/deepsleep', (_req, res) => {
+    try {
+      if (!deepSleepShare.api) return sendJson(res, 200, { active: false, reason: 'distill-not-ready' })
+      sendJson(res, 200, { active: true, ...deepSleepShare.api.getDeepSleepStatus() })
+    } catch (e) { sendJson(res, 500, { error: String(e) }) }
+  })
+
+  // POST /deepsleep/trigger：手动触发一次深度睡眠归纳（T2「立即归纳一次」）
+  route('/deepsleep/trigger', async (_req, res) => {
+    try {
+      if (!deepSleepShare.api) return sendJson(res, 400, { ok: false, error: 'distill-not-ready' })
+      const r = await deepSleepShare.api.runDeepSleepNow()
+      sendJson(res, r.ok ? 200 : 409, r)
+    } catch (e) { sendJson(res, 500, { ok: false, error: String(e) }) }
+  })
+
+  // GET /deepsleep/config：运行中配置（T2「可调」展示源）
+  route('/deepsleep/config', (_req, res) => {
+    try {
+      if (deepSleepShare.api) return sendJson(res, 200, { active: true, running: deepSleepShare.api.getConfig(), persisted: readSuiteConfig() })
+      // 未就绪：退化为读取自持配置文件（至少给出现有持久值）
+      sendJson(res, 200, { active: false, running: null, persisted: readSuiteConfig() })
+    } catch (e) { sendJson(res, 500, { error: String(e) }) }
+  })
+
+  // POST /deepsleep/config：校验并写入自持配置文件（改动需重载插件生效）
+  route('/deepsleep/config', async (req, res) => {
+    try {
+      const body = (await readBody(req).catch(() => ({}))) as Record<string, unknown>
+      const patch: Record<string, unknown> = {}
+      for (const k of ['enableDeepSleep', 'deepSleepProbe', 'deepSleepIdleMs', 'deepSleepProbeAfterMs', 'deepSleepProbeWindowMs']) {
+        if (k in body) patch[k] = body[k]
+      }
+      if (!Object.keys(patch).length) return sendJson(res, 400, { error: 'no-deep-sleep-keys' })
+      const err = validateDeepSleepConfig(patch)
+      if (err) return sendJson(res, 400, { error: err })
+      const merged = { ...readSuiteConfig(), ...patch }
+      writeSuiteConfig(merged)
+      ctx.logger?.info?.(`[shoucang] deep-sleep config updated: ${Object.keys(patch).join(',')}`)
+      sendJson(res, 200, { ok: true, merged })
+    } catch (e) { sendJson(res, 500, { error: String(e) }) }
   })
 
   // R1 热记忆注入预览（排障/验证用，只读）

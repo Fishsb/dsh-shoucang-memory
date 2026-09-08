@@ -1,6 +1,12 @@
 # UI 待办清单（守藏面板）
 
-> 用户拍板登记（2026-09-08）：以下两项**后续**做 UI，本轮只做内核与数据接口，不动样式。
+> 状态（2026-09-08 续做）：**T1 + T2 均已落地**。内核数据接口（registerDistill 三函数）+ 跨插件共享引用（deepsleep-share.ts）+ panel 三路由（/deepsleep、/deepsleep/trigger、/deepsleep/config）+ client.js「深度睡眠」视图全部打通，typecheck/build/check-hardcode ✅。下面为原始契约与实现记录。
+
+## 实现记录（2026-09-08）
+
+- **接线**：`index.ts` 先 `applyPanel` 后 `applyScheduler`（共用 ctx）。新增 `src/deepsleep-share.ts` 模块级 `deepSleepShare.api` 惰性桥接：scheduler 启动期写入，panel RPC 请求时读取（读不到=未激活）。无运行时循环依赖（仅 type-only 引 `DeepSleepStatus`）。
+- **T1**：client.js 五态徽章（running 绿/ended 灰/probing 蓝闪/suspect 蓝/stalled 红）+ 会话明细（色点 + 停滞时长 + 探测结论 `DS_PROBE_TEXT` 文案）。
+- **T2**：计时（已停滞 / 下次入睡倒计时 `dsFmtCountdown` / 上次入睡）+ 控制（立即归纳一次 `POST /deepsleep/trigger` 带 confirm / 暂停到明天 `enableDeepSleep=false`）+ 阈值可调（四个滑块写 `/deepsleep/config` → `~/.dsh/suite/scheduler.json`，原子+备份，重载生效）+ 卡住红告警（`stalled` 或 `probeResult==='stall'` 时显示）。
 
 ## T1 · 会话状态机可视化（内核已就绪，等 UI）
 

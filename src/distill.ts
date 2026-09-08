@@ -188,7 +188,17 @@ function runNode(nodeBin: string, scriptPath: string, args: string[], opts?: { c
 const textOf = (r: RunResult): string => (r.out + (r.err ? '\n[stderr] ' + r.err.trim() : '')).trim()
 
 // ── 蒸馏器主体 ──
-export function registerDistill(ctx: AppContext, config: DistillConfig): { getDeepSleepStatus: () => DeepSleepStatus } {
+export function registerDistill(ctx: AppContext, config: DistillConfig): {
+  getDeepSleepStatus: () => DeepSleepStatus
+  runDeepSleepNow: () => Promise<{ ok: boolean; error?: string }>
+  getConfig: () => {
+    enableDeepSleep: boolean
+    deepSleepIdleMs: number
+    deepSleepProbe: boolean
+    deepSleepProbeAfterMs: number
+    deepSleepProbeWindowMs: number
+  }
+} {
   const SHORT = 'shoucang-scheduler'
   const logFile = join(dshHome(), 'super-injector', SHORT + '.log')
   const kRoot = knowledgeRoot()
@@ -879,6 +889,29 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): { getDe
     }
   }
 
+  /** 手动触发入口（T2 面板「立即归纳一次」）：复用 deepSleepRunning 并发守卫，避免与自动巡检重叠。 */
+  const runDeepSleepNow = async (): Promise<{ ok: boolean; error?: string }> => {
+    if (deepSleepRunning) return { ok: false, error: 'deep-sleep-already-running' }
+    deepSleepRunning = true
+    try {
+      await runDeepSleep()
+      return { ok: true }
+    } catch (e) {
+      return { ok: false, error: String((e as Error)?.message || e).slice(0, 160) }
+    } finally {
+      deepSleepRunning = false
+    }
+  }
+
+  /** 运行中深度睡眠配置（T2 面板「可调」展示源；持久化经 ~/.dsh/suite/scheduler.json） */
+  const getConfig = () => ({
+    enableDeepSleep: !!config.enableDeepSleep,
+    deepSleepIdleMs: Number(config.deepSleepIdleMs) || 10800000,
+    deepSleepProbe: !!config.deepSleepProbe,
+    deepSleepProbeAfterMs: Number(config.deepSleepProbeAfterMs) || (Number(config.deepSleepIdleMs) || 10800000),
+    deepSleepProbeWindowMs: Number(config.deepSleepProbeWindowMs) || 60000,
+  })
+
   // ── 事件订阅（effect 自动清理，reload 零泄漏）──
   const idleTimers = new Map<string, any>()
   const armIdleTimer = (agent: any): void => {
@@ -945,5 +978,5 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): { getDe
     return () => clearInterval(iv)
   }, SHORT + ': deep-sleep check')
 
-  return { getDeepSleepStatus }
+  return { getDeepSleepStatus, runDeepSleepNow, getConfig }
 }
