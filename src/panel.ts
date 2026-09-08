@@ -230,45 +230,66 @@ export function applyPanel(ctx: Context, config: Config): void {
     injectCache.at = now
     let level = 'smart'
     let hotMemoryOn = true
+    let personaMode = 'both'
+    let maxTokens = 3000
+    let capAgent = 0
+    let capUser = 0
+    let capMemory = 0
     const file = configFileOf()
     if (file && existsSync(file)) {
       try {
         const view = parseView(readFileSync(file, 'utf8'))
         level = view.injection_level ?? 'smart'
         hotMemoryOn = view.flags['injection.hot_memory'] !== false
+        personaMode = String(view.flags['injection.persona'] ?? 'both') // v16：off|me|you|both 接通生效（me=AGENT 画像 / you=USER 画像）
+        if (view.max_tokens != null) maxTokens = view.max_tokens // v16：总预算接通（原硬编码漂移键）
+        capAgent = view.caps_agent ?? 0 // v16：板块容量上限（字符，0=不裁）
+        capUser = view.caps_user ?? 0
+        capMemory = view.caps_memory ?? 0
       } catch { /* 缺配置用默认 */ }
     }
     if (level === 'off' || !hotMemoryOn) { injectCache.text = ''; return '' }
-    // 指针式注入：原则层 + 三索引一行一条（[tag] 主题 · 概况 → notes/x.md §小节），Agent 按需 get_file 拉详情
+    // 指针式注入：agent 画像（含 [原则] 习得原则）+ 用户画像 + 知识索引一行一条（[tag] 主题 · 概况 → notes/x.md §小节），Agent 按需 get_file 拉详情
     const readIdx = (name: string): string[] => {
       try {
         return readFileSync(join(memRoot, name), 'utf8').split(/\r?\n/).map((l) => l.trim()).filter((l) => /^\[.+\]/.test(l))
       } catch { return [] }
     }
-    const caps: Record<string, number> = { low: 2, medium: 4, high: 8, smart: 10 }
-    const userLines = readIdx('USER.md')
-    const memLines = readIdx('MEMORY.md').slice(0, caps[level] ?? 10)
-    // v14：原则层（L0 图式，跨任务方向指引）——整层注入（容量 ≤1,000 硬限保证不膨胀）
-    const principleLines = (() => {
-      try {
-        return readFileSync(join(memRoot, 'PRINCIPLES.md'), 'utf8').split(/\r?\n/).map((l) => l.trim()).filter((l) => /^- .+←/.test(l))
-      } catch { return [] }
-    })()
-    if (!userLines.length && !memLines.length && !principleLines.length) { injectCache.text = ''; return '' }
+    // v16：板块容量上限裁切（逐行累加，不切半行；0=不裁）
+    const capByChars = (src: string[], cap: number): { lines: string[]; trimmed: boolean } => {
+      if (!cap || cap <= 0) return { lines: src, trimmed: false }
+      const out: string[] = []
+      let used = 0
+      for (const l of src) {
+        const w = l.length + 3 // '- ' 前缀 + 换行
+        if (used + w > cap) return { lines: out, trimmed: true }
+        out.push(l)
+        used += w
+      }
+      return { lines: out, trimmed: false }
+    }
+    const rowCaps: Record<string, number> = { low: 2, medium: 4, high: 8, smart: 10 }
+    const userRes = capByChars(personaMode === 'off' || personaMode === 'me' ? [] : readIdx('USER.md'), capUser)
+    const agentRes = capByChars(personaMode === 'off' || personaMode === 'you' ? [] : readIdx('AGENT.md'), capAgent)
+    const memRes = capByChars(readIdx('MEMORY.md').slice(0, rowCaps[level] ?? 10), capMemory)
+    if (!userRes.lines.length && !agentRes.lines.length && !memRes.lines.length) { injectCache.text = ''; return '' }
     const lines: string[] = [`[守藏·热记忆] 记忆库指针（${memRoot}；详情按指针 get_file 拉对应 notes §小节）：`]
-    if (principleLines.length) {
-      lines.push('原则层（PRINCIPLES.md，跨任务方向指引）：')
-      for (const l of principleLines) lines.push(`- ${l}`)
+    if (agentRes.lines.length) {
+      lines.push('agent 画像（AGENT.md；含 [原则] 习得原则——跨任务方向指引，①③步优先读）：')
+      for (const l of agentRes.lines) lines.push(`- ${l}`)
+      if (agentRes.trimmed) lines.push('…（agent 画像超出注入上限已裁切）')
     }
-    if (userLines.length) {
-      lines.push('画像索引（USER.md）：')
-      for (const l of userLines) lines.push(`- ${l}`)
+    if (userRes.lines.length) {
+      lines.push('用户画像（USER.md）：')
+      for (const l of userRes.lines) lines.push(`- ${l}`)
+      if (userRes.trimmed) lines.push('…（用户画像超出注入上限已裁切）')
     }
-    if (memLines.length) {
-      lines.push(`知识索引（MEMORY.md，热取前 ${memLines.length} 条）：`)
-      for (const l of memLines) lines.push(`- ${l}`)
+    if (memRes.lines.length) {
+      lines.push(`知识索引（MEMORY.md，热取前 ${memRes.lines.length} 条）：`)
+      for (const l of memRes.lines) lines.push(`- ${l}`)
+      if (memRes.trimmed) lines.push('…（知识索引超出注入上限已裁切）')
     }
-    const budget = Math.max(400, 1500 * 2) // 中文粗估 ~2 字符/token
+    const budget = Math.max(400, maxTokens * 2) // 中文粗估 ~2 字符/token（v16：max_tokens 接通，缺省 3000=3000 字符与旧硬编码一致）
     let text = lines.join('\n')
     if (text.length > budget) text = text.slice(0, budget) + '\n…（指针注入已按预算裁切）'
     injectCache.text = text
@@ -281,7 +302,7 @@ export function applyPanel(ctx: Context, config: Config): void {
     writeFileSync(file, text, 'utf8')
   }
 
-  interface ParsedView { boards: Record<string, boolean>; flags: Record<string, boolean | string>; injection_level?: string; idle_review_ms?: number; age_days?: number; archive_mode?: string; fixed_time?: string; merge_fpr?: number; merge_floor?: number; sessions_dir?: string; interval_hours?: number; embedding?: Record<string, string | number> }
+  interface ParsedView { boards: Record<string, boolean>; flags: Record<string, boolean | string>; injection_level?: string; max_tokens?: number; caps_agent?: number; caps_user?: number; caps_memory?: number; idle_review_ms?: number; age_days?: number; archive_mode?: string; fixed_time?: string; merge_fpr?: number; merge_floor?: number; sessions_dir?: string; interval_hours?: number; embedding?: Record<string, string | number> }
 
   /** 缩进栈解析：每行归一为带点路径（如 shoucang.boards.persona），栈深即嵌套层级。 */
   function scanPaths(text: string, visit: (path: string[], indent: number, value: string) => void): void {
@@ -323,6 +344,11 @@ export function applyPanel(ctx: Context, config: Config): void {
       if (p === 'shoucang.merge.complement_floor') out.merge_floor = parseFloat(value) || undefined
       if (p === 'shoucang.injection.persona') out.flags['injection.persona'] = value.replace(/^['"]|['"]$/g, '')
       if (p === 'shoucang.injection.level') out.injection_level = value.replace(/^['"]|['"]$/g, '')
+      // v16：注入预算与板块容量上限（0 合法=不裁，显式 isNaN 检查防 falsy 丢失）
+      if (p === 'shoucang.injection.max_tokens') { const n = parseInt(value, 10); if (!isNaN(n)) out.max_tokens = n }
+      if (p === 'shoucang.injection.agent_max_chars') { const n = parseInt(value, 10); if (!isNaN(n)) out.caps_agent = n }
+      if (p === 'shoucang.injection.user_max_chars') { const n = parseInt(value, 10); if (!isNaN(n)) out.caps_user = n }
+      if (p === 'shoucang.injection.memory_max_chars') { const n = parseInt(value, 10); if (!isNaN(n)) out.caps_memory = n }
       if (p === 'shoucang.archive.idle_review_ms') { const n = parseInt(value, 10); if (!isNaN(n)) out.idle_review_ms = n } // 0 合法=禁用心跳（falsy 修复）
       if (p === 'shoucang.lifecycle.archive.age_days') out.age_days = parseFloat(value) || undefined
       if (p === 'shoucang.lifecycle.archive.mode') out.archive_mode = value.replace(/^['"]|['"]$/g, '')
@@ -481,6 +507,10 @@ export function applyPanel(ctx: Context, config: Config): void {
       'injection.level': ['off', 'low', 'medium', 'high', 'smart'],
       'injection.persona': ['off', 'me', 'you', 'both'],
       'injection.max_tokens': [],
+      // v16：注入板块容量上限（字符，0=不裁）
+      'injection.agent_max_chars': [],
+      'injection.user_max_chars': [],
+      'injection.memory_max_chars': [],
       'lifecycle.archive.min_confidence': [],
       'lifecycle.archive.age_days': [],
       'lifecycle.archive.mode': ['age', 'fixed'],
@@ -503,6 +533,10 @@ export function applyPanel(ctx: Context, config: Config): void {
       'archive.ttl_multiplier': [0.5, 10],
       'lifecycle.interval_hours': [1, 168],
       'injection.max_tokens': [100, 8000],
+      // v16：板块容量上限范围（0=不裁，上限留足写门容量的 6 倍余量）
+      'injection.agent_max_chars': [0, 20000],
+      'injection.user_max_chars': [0, 20000],
+      'injection.memory_max_chars': [0, 20000],
       'embedding.dimension': [16, 8192], // 常见嵌入维度范围
     }
     if (!(key in allowed)) return sendJson(res, 400, { error: `key 不允许：${key}` })
@@ -585,15 +619,14 @@ export function applyPanel(ctx: Context, config: Config): void {
     return { runs, added, rejected, failed, gateRejects, writeFails, byRoute, byDay, last, recent: rows.slice(-5) }
   }
   const MEM_INDEX_FILES: Array<{ file: string; label: string }> = [
-    { file: 'PRINCIPLES.md', label: '原则层 PRINCIPLES' },
     { file: 'MEMORY.md', label: '知识索引 MEMORY' },
     { file: 'USER.md', label: '用户画像 USER' },
-    { file: 'AGENT.md', label: 'Agent 画像 AGENT' },
+    { file: 'AGENT.md', label: 'Agent 画像 AGENT（含 [原则] 习得原则）' },
   ]
   const NOTE_RELS = ['env', 'tools', 'flows', 'lessons', 'release', 'user', 'agent', 'INDEX']
-  /** 容量上限单一事实源 = engine/target-registry.json（读失败回退默认值） */
+  /** 容量上限单一事实源 = engine/target-registry.json（读失败回退默认值；v16：PRINCIPLES 退役、AGENT 3000） */
   const memoryCaps = (base: string): Record<string, number> => {
-    const out: Record<string, number> = { 'MEMORY.md': 3000, 'USER.md': 2000, 'AGENT.md': 2000, 'PRINCIPLES.md': 1000 }
+    const out: Record<string, number> = { 'MEMORY.md': 3000, 'USER.md': 2000, 'AGENT.md': 3000 }
     try {
       const reg = JSON.parse(readFileSync(join(base, 'engine', 'target-registry.json'), 'utf8')) as { targets?: { memory?: { capacity?: Record<string, number> } } }
       const cap = reg?.targets?.memory?.capacity

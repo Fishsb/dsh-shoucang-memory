@@ -14,8 +14,11 @@ shoucang:
   injection:                    # R1 热记忆注入（每轮提示词，指针式）
     hot_memory: true            # 总开关（面板可 toggle）
     level: smart                # off|low|medium|high|smart —— MEMORY 索引热取行数 0/2/4/8/10
-    persona: both               # off|me|you|both —— 画像注入范围
-    max_tokens: 3000            # 100–8000，注入预算（中文粗估 ~2 字符/token）
+    persona: both               # off|me|you|both —— 画像注入范围（v16 生效：me=agent 画像 AGENT.md / you=用户画像 USER.md）
+    max_tokens: 3000            # 100–8000，注入总预算（中文粗估 ~2 字符/token；v16 接通生效）
+    agent_max_chars: 0          # AGENT.md（含 [原则] 习得原则）注入上限（字符；0=不裁，默认）
+    user_max_chars: 0           # USER.md 注入上限（字符；0=不裁，默认）
+    memory_max_chars: 0         # MEMORY.md 注入上限（字符，档位行数后二次裁切；0=不裁，默认）
   archive:                      # 归档心跳（空闲巩固轮）
     enabled: true               # 面板可 toggle
     idle_review_ms: 600000      # 60000–3600000（1–60 分钟）；0=禁用

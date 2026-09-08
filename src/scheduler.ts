@@ -44,8 +44,8 @@ export interface Config {
   distillPrompt: string // 蒸馏子代理 persona 覆盖（缺省内建 v4 契约）
   llmProvider: string // 蒸馏子代理指定 provider（空=继承主会话模型）
   llmModel: string // 蒸馏子代理指定 model（空=继承主会话模型）
-  // ═══ 深度睡眠归纳（L0 原则层；2026-09-08 拍板：全部会话停滞 ≥3h 自动执行）═══
-  enableDeepSleep: boolean // 深度睡眠巡检开关（停滞 ≥deepSleepIdleMs 自动归纳 PRINCIPLES）
+  // ═══ 深度睡眠归纳（v16：习得原则并入 agent 画像 AGENT.md；2026-09-08 拍板机制，2026-09-09 拍板定位）═══
+  enableDeepSleep: boolean // 深度睡眠巡检开关（停滞 ≥deepSleepIdleMs 自动归纳 [原则] 行入 AGENT.md）
   deepSleepIdleMs: number // 停滞判定：无任何根会话活动持续此毫秒数才触发（缺省 3 小时）
   // ═══ 会话活跃状态机（2026-09-08 重构）：区分「正常长任务 / 卡住 / 异常退出」═══
   deepSleepProbe: boolean // 输出增长探测开关（running 无事件超时后，采样 transcript 确认真活跃）
@@ -78,7 +78,7 @@ export const Config: any = z.object({
   distillPrompt: z.string().default('').description('蒸馏子代理 persona 覆盖（缺省内建 v4 契约）'),
   llmProvider: z.string().default('').description('蒸馏子代理 provider（空=继承主会话模型）'),
   llmModel: z.string().default('').description('蒸馏子代理 model（空=继承主会话模型）'),
-  enableDeepSleep: z.boolean().default(true).description('深度睡眠归纳：全部会话停滞 ≥deepSleepIdleMs 自动提炼原则层 PRINCIPLES.md'),
+  enableDeepSleep: z.boolean().default(true).description('深度睡眠归纳：全部会话停滞 ≥deepSleepIdleMs 自动提炼习得原则写入 agent 画像 AGENT.md（[原则] 行），同 pass 反思双通道维护 USER 画像'),
   deepSleepIdleMs: z.number().min(600000).default(10800000).description('停滞判定阈值（毫秒）：无任何会话活动持续满此时长触发深度睡眠归纳（缺省 3 小时）'),
   deepSleepProbe: z.boolean().default(true).description('输出增长探测：会话 running 但长时间无事件时，采样转录文件两次确认是长任务还是卡住'),
   deepSleepProbeAfterMs: z.number().min(600000).default(10800000).description('running 状态无事件持续此毫秒数后发起探测（缺省 3 小时）'),

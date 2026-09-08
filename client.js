@@ -281,7 +281,7 @@
 
       var SWITCH_KEYS = [
         ['boards.memory', '记忆板块 memory', '日记忆 → 温层类型目录 归档主链（三层记忆）'],
-        ['injection.hot_memory', '注入日记忆指针 hot_memory', '热记忆是否包含当日蒸馏指针行（画像常驻；需 boards.memory 总闸开启）'],
+        ['injection.hot_memory', '注入热记忆总闸 hot_memory', '关=不注入 agent/用户画像与知识索引任何指针行；需 boards.memory 总闸开启'],
         ['boards.wiki', 'Wiki 板块 wiki', '知识库文件树 + frontmatter 属性 + 双链（含 _index 默认隐藏）'],
         ['archive.enabled', '归档管线', '日记忆成熟归档入温层 + 归档/ 快照与 TTL 到期销毁'],
         ['lifecycle.enabled', '生命周期沉降 lifecycle', '置信度结算：boost/decay + 淘汰进归档（settle）'],
@@ -311,7 +311,7 @@
         var pItem = el('div', 'setting-item');
         var pInfo = el('div', 'setting-item-info');
         pInfo.appendChild(el('div', 'setting-item-name', '画像 persona 注入档位 injection.persona'));
-        pInfo.appendChild(el('div', 'setting-item-desc', '关闭=不注入画像；仅注入我=只注入用户画像；仅注入你=只注入 agent画像；全注入=两者（默认）'));
+        pInfo.appendChild(el('div', 'setting-item-desc', 'v16 已生效：关闭=不注入画像；仅注入我=只注入 agent 画像 AGENT.md（含 [原则] 习得原则）；仅注入你=只注入用户画像 USER.md；全注入=双画像（默认）'));
         var slider = el('div', 'sc-persona-slider');
         PERSONA_TIERS.forEach(function (tier, i) {
           var cell = el('div', 'sc-persona-cell' + (tier[0] === personaMode ? ' active' : ''));
@@ -363,6 +363,30 @@
         });
         lItem.appendChild(lInfo); lItem.appendChild(lSlider);
         view.appendChild(lItem);
+
+        // 注入容量预算（v16）：总预算 + 三板块字符上限（0=不裁）
+        function numSetting(name, desc, val, key, unit) {
+          var item = el('div', 'setting-item');
+          var info = el('div', 'setting-item-info');
+          info.appendChild(el('div', 'setting-item-name', name));
+          info.appendChild(el('div', 'setting-item-desc', desc));
+          var wrap = el('div'); wrap.style.cssText = 'display:flex;align-items:center;gap:6px;flex:none;';
+          var inp = el('input'); inp.type = 'number'; inp.className = 'sc-input'; inp.style.width = '96px'; inp.min = '0'; inp.step = '100'; inp.value = String(val);
+          var unitEl = el('span', 'sc-range-label', unit || '');
+          inp.onchange = function () {
+            var v = String(Math.max(0, parseInt(inp.value, 10) || 0));
+            api('/set', { method: 'POST', body: JSON.stringify({ key: key, value: v }) })
+              .then(function () { status('✓ ' + key + ' = ' + v); })
+              .catch(fail);
+          };
+          wrap.appendChild(inp); wrap.appendChild(unitEl);
+          item.appendChild(info); item.appendChild(wrap);
+          return item;
+        }
+        view.appendChild(numSetting('注入总预算 injection.max_tokens', '整轮指针注入的 token 预算（100–8000，默认 3000；中文粗估 ~2 字符/token），超出整体裁切——v16 起生效', parsed.max_tokens != null ? parsed.max_tokens : 3000, 'injection.max_tokens', 'tokens'));
+        view.appendChild(numSetting('agent 画像上限 injection.agent_max_chars', 'AGENT.md（含 [原则] 习得原则）注入字符上限，逐行裁切不切半行；0=不裁（默认，靠容量门 3000 兜底）', parsed.caps_agent != null ? parsed.caps_agent : 0, 'injection.agent_max_chars', '字符'));
+        view.appendChild(numSetting('用户画像上限 injection.user_max_chars', 'USER.md 注入字符上限；0=不裁（默认，靠容量门 2000 兜底）', parsed.caps_user != null ? parsed.caps_user : 0, 'injection.user_max_chars', '字符'));
+        view.appendChild(numSetting('知识索引上限 injection.memory_max_chars', 'MEMORY.md 注入字符上限（在档位行数基础上二次裁切）；0=不裁（默认）', parsed.caps_memory != null ? parsed.caps_memory : 0, 'injection.memory_max_chars', '字符'));
 
         // 蒸馏时间：会话静默触发蒸馏阈值（分钟滑块）
         var distMin = Math.round((parsed.idle_review_ms || 600000) / 60000);

@@ -177,7 +177,7 @@ export interface Whitelist {
 
 const BUILTIN: Whitelist = {
   version: 1, library: 'shoucang', routes: ['memory'],
-  indexTargets: ['PRINCIPLES.md', 'MEMORY.md', 'USER.md', 'AGENT.md'],
+  indexTargets: ['MEMORY.md', 'USER.md', 'AGENT.md'],
   notes: ['env', 'tools', 'flows', 'lessons', 'release', 'user', 'agent'],
 }
 

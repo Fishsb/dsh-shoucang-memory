@@ -1,7 +1,7 @@
 // memory_write_gate.mjs — 记忆写入前置门（重建版，v3：主文档硬限 / 辅助文档不拦截）
 // 原脚本随 2026-08-22 备份丢失未逐字还原；本版按 SKILL.md §6 接口重建。
 // 用法: node scripts/memory_write_gate.mjs <目标文件> <临时文件>
-//   目标文件: PRINCIPLES.md | MEMORY.md | USER.md | AGENT.md | notes/<file>.md（可绝对路径或相对技能目录）
+//   目标文件: MEMORY.md | USER.md | AGENT.md | notes/<file>.md（可绝对路径或相对技能目录）
 // 容量红线只对主文档（MEMORY/USER/AGENT=会话注入面）生效；notes 等辅助文档按需读取，不设硬限（超 NOTES_WARN 仅提示）
 // exit 0=允许（附核对：容量数字/占比、指针清单） 1=主文档超容量（合并精简或下沉 notes/） 2=指针悬空/未注册（先建子文档或 INDEX 注册） 3=用法错误
 import fs from 'node:fs';
@@ -12,7 +12,7 @@ const skillDir = process.env.MEMORY_ROOT ?? join(dirname(fileURLToPath(import.me
 
 const [target, tmp] = process.argv.slice(2);
 if (!target || !tmp) {
-  console.error('用法: node memory_write_gate.mjs <PRINCIPLES.md|MEMORY.md|USER.md|notes/<file>.md> <临时文件>');
+  console.error('用法: node memory_write_gate.mjs <MEMORY.md|USER.md|AGENT.md|notes/<file>.md> <临时文件>');
   process.exit(3);
 }
 if (!fs.existsSync(tmp)) {
@@ -25,16 +25,16 @@ const base = targetPath.split(/[\\/]/).pop();
 const isNotes = /^notes[\\/]/.test(targetPath) || base.startsWith('notes');
 
 // v9：主文档（注入面）硬限扩容；辅助文档不拦截（仅超 NOTES_WARN 提示）
-// v14：PRINCIPLES.md 原则层（L0 注入面）≤1,000 硬限
-const LIMITS = { 'MEMORY.md': 3000, 'USER.md': 2000, 'AGENT.md': 2000, 'PRINCIPLES.md': 1000 };
+// v16：PRINCIPLES.md 独立层退役——习得原则以 [原则] 行并入 AGENT.md，AGENT 容量 2,000→3,000
+const LIMITS = { 'MEMORY.md': 3000, 'USER.md': 2000, 'AGENT.md': 3000 };
 const NOTES_WARN = 8000;
 
 const tmpText = fs.readFileSync(tmp, 'utf8');
 const chars = tmpText.replace(/\s+/g, '').length;
 
 const issues = [];
-// 指针核对：MEMORY.md / USER.md / AGENT.md / PRINCIPLES.md 的拟写入内容会引用 notes/ 子文档
-if (base === 'MEMORY.md' || base === 'USER.md' || base === 'AGENT.md' || base === 'PRINCIPLES.md') {
+// 指针核对：MEMORY.md / USER.md / AGENT.md 的拟写入内容会引用 notes/ 子文档（v16：PRINCIPLES.md 退役，习得原则并入 AGENT.md）
+if (base === 'MEMORY.md' || base === 'USER.md' || base === 'AGENT.md') {
   const notesDir = join(skillDir, 'notes');
   const indexText = fs.existsSync(join(notesDir, 'INDEX.md')) ? fs.readFileSync(join(notesDir, 'INDEX.md'), 'utf8') : '';
   for (const m of tmpText.matchAll(/notes\/([A-Za-z0-9_-]+)\.md/g)) {
@@ -43,16 +43,10 @@ if (base === 'MEMORY.md' || base === 'USER.md' || base === 'AGENT.md' || base ==
   }
 }
 
-// v14：PRINCIPLES 行格式校验（`- 原则 ← 源: notes/<file>.md §小节`，spec §5.8）
+// v16：PRINCIPLES.md 专用行格式校验移除（习得原则并入 AGENT.md，走下方 [tag] 索引行格式校验）
+
 const formatIssues = [];
 const formatHints = [];
-if (base === 'PRINCIPLES.md') {
-  for (const raw of tmpText.split('\n')) {
-    const line = raw.trim();
-    if (!line || line.startsWith('#')) continue;
-    if (!/^- .+←\s*源:\s*notes\/[A-Za-z0-9_-]+\.md/.test(line)) formatIssues.push('原则行格式违规（须 `- 原则 ← 源: notes/<file>.md §小节`）: ' + line.slice(0, 40));
-  }
-}
 
 // v13：索引行格式校验（spec §8 概况规则 1-4 硬化；主题约束软提示）
 if (base === 'MEMORY.md' || base === 'USER.md' || base === 'AGENT.md') {

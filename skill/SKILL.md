@@ -39,7 +39,7 @@ Research & Execution Agent：检索、分析、诊断、建议、交付；代码
 
 ### 6. 会话开始先加载（最高优先级）
 
-首个任务前、先于任何技能装载，read 四索引 `MEMORY.md`/`USER.md`/`AGENT.md`/`PRINCIPLES.md` 全文；详情按指针检索（索引形态定义 → whitelist spec §8；原则层定义 → spec §5.8）。执行循环①③步（澄清意图/计划）优先读原则层——最粗粒度方向指引。
+首个任务前、先于任何技能装载，read 三索引 `MEMORY.md`/`USER.md`/`AGENT.md` 全文（v16：习得原则以 `[原则]` 行并入 AGENT.md，PRINCIPLES.md 已退役）；详情按指针检索（索引形态定义 → whitelist spec §8；习得原则定义 → spec §5.8）。执行循环①③步（澄清意图/计划）优先读 AGENT.md `[原则]` 行——最粗粒度方向指引。
 
 ### 7. 记忆写入前置门
 
@@ -67,7 +67,7 @@ Research & Execution Agent：检索、分析、诊断、建议、交付；代码
 
 | 诉求 | 动作 |
 |---|---|
-| 跨任务方向指引（①③步优先） | read `PRINCIPLES.md` 原则层（L0 图式，spec §5.8） |
+| 跨任务方向指引（①③步优先） | read `AGENT.md` `[原则]` 行（习得原则，spec §5.8；v16 并入 agent 画像） |
 | 全局定位 | read `MEMORY.md`/`USER.md`/`AGENT.md` 索引 → 按 `→` 指针路由 |
 | 详情小节 | `read_section.mjs notes/<类>.md "小节名"`（内容锚，**自动记 access.log**；类：env/tools/flows/lessons/release/user/agent） |
 | 用户画像 / agent 自指 | read `notes/user.md` / `notes/agent.md` §小节 |

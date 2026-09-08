@@ -9,7 +9,7 @@ DSH（DeepSeek Harness）文件式长期记忆技能的开发仓库：**规则�
 「文件式长期记忆 + 工作纪律」DSH 技能的**规则层与引擎**：
 
 - `SKILL.md` — 技能权威定义（L1-L4 纪律骨架：第一性原理/方案确认门/任务分流/审计）
-- `memory-whitelist-spec.md` — 记忆白名单规格（R0 路由/四问/容量/门禁/**v14 四级层级：L0 原则层 PRINCIPLES**）
+- `memory-whitelist-spec.md` — 记忆白名单规格（R0 路由/四问/容量/门禁/**v16 三级层级：习得原则并入 agent 画像**）
 - `audit-protocol.md` / `task-protocols.md` — 审计与任务协议（task-protocols §1 含人化执行循环总纲）
 - `human-execution-loop.md` — 人化执行循环完整版（七步 × 决策地基：每步决策点/所需信息/判定标准/失效信号）
 - `engine/` — 知识整理核心（ADR-0005）：蒸馏裁决契约 / 预筛信号词 / 泛化写入安全阀 / 目标库注册

@@ -395,25 +395,25 @@ try {
   fs.rmSync(tf, { recursive: true, force: true });
 } catch (e) { fail++; console.log('❌ health-零召回清单（异常: ' + failMsg(e) + '）'); }
 
-// 25) PRINCIPLES 写门与体检：正常 exit 0 / 超限 exit 1 / 格式违规 exit 4 / 体检含 PRINCIPLES 段
+// 25) 习得原则写门与体检（v16：[原则] 行并入 AGENT.md）：正常 exit 0 / 超限 exit 1 / 格式违规 exit 4 / 体检 AGENT 段含原则 tag
 try {
   const tg = makeContainer();
   const gate = path.join(tg, 'scripts', 'memory_write_gate.mjs');
   const p1 = path.join(tg, 'p1.txt');
-  fs.writeFileSync(p1, '- 遇陌生代码库先全局追踪数据流再动手 ← 源: notes/lessons.md §调试流程\n');
-  run('原则门-正常', 'node', [gate, 'PRINCIPLES.md', p1], [0]);
+  fs.writeFileSync(p1, '[原则] 排障先看根因 · 先验证成本低再修改成本高 → notes/lessons.md §调试流程\n');
+  run('原则门-正常', 'node', [gate, 'AGENT.md', p1], [0]);
   const p2 = path.join(tg, 'p2.txt');
-  fs.writeFileSync(p2, ('- 原则填充内容超限'.repeat(120) + ' ← 源: notes/lessons.md §x') + '\n');
-  run('原则门-超容量', 'node', [gate, 'PRINCIPLES.md', p2], [1]);
+  fs.writeFileSync(p2, ('[原则] 超限填充 · 原则填充内容超限'.repeat(200) + ' → notes/lessons.md §x') + '\n');
+  run('原则门-超容量', 'node', [gate, 'AGENT.md', p2], [1]);
   const p3 = path.join(tg, 'p3.txt');
-  fs.writeFileSync(p3, '随手写的一行没有格式\n');
-  run('原则门-格式违规', 'node', [gate, 'PRINCIPLES.md', p3], [4]);
+  fs.writeFileSync(p3, '[经验] 缺概况段与指针行\n');
+  run('原则门-格式违规', 'node', [gate, 'AGENT.md', p3], [4]);
   const hp = execFileSync('node', [path.join(tg, 'scripts', 'memory_health_check.mjs')], { encoding: 'utf8', cwd: tg, env: { ...process.env, MEMORY_ROOT: tg } });
-  const okP = /=== PRINCIPLES\.md/.test(hp) && /原则条目数/.test(hp);
+  const okP = /=== AGENT\.md/.test(hp) && /3,?000|3000/.test(hp);
   if (okP) pass++; else fail++;
-  console.log(`${okP ? '✅' : '❌'} health-PRINCIPLES 段（容量+条目输出）`);
+  console.log(`${okP ? '✅' : '❌'} health-AGENT 段（容量 3000 输出，v16 原则并入）`);
   fs.rmSync(tg, { recursive: true, force: true });
-} catch (e) { fail++; console.log('❌ PRINCIPLES 门禁/体检（异常: ' + failMsg(e) + '）'); }
+} catch (e) { fail++; console.log('❌ 习得原则门禁/体检（异常: ' + failMsg(e) + '）'); }
 
 console.log(`\n结果: ${pass} PASS / ${fail} FAIL`);
 process.exit(fail ? 1 : 0);

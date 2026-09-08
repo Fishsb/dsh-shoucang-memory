@@ -27,10 +27,11 @@ if (outFile) {
 
 // 索引文件（主文档=会话注入面）：按行解析，标题行（#）与空行不算条目
 // v9：容量红线只对主文档生效；详情子文档为按需读取层，不设硬限（超 NOTES_WARN 仅提示）
+// v16：PRINCIPLES.md 独立层退役——习得原则 [原则] 行并入 AGENT.md，AGENT 容量 2,000→3,000
 const INDEX_FILES = [
   { name: 'MEMORY.md', limit: 3000, tags: ['env', 'tool', 'flow', 'lesson'] },
   { name: 'USER.md', limit: 2000, tags: ['身份', '环境', '硬件', '偏好', '习惯'] },
-  { name: 'AGENT.md', limit: 2000, tags: ['身份', '使命', '边界', '偏好', '习惯', '经验', '演化', '教训'] },
+  { name: 'AGENT.md', limit: 3000, tags: ['身份', '使命', '边界', '偏好', '习惯', '经验', '演化', '教训', '原则'] },
 ];
 // 详情子文档（注册表见 notes/INDEX.md；缺少任一 → exit 4）
 const NOTES = ['env.md', 'tools.md', 'flows.md', 'lessons.md', 'release.md', 'user.md', 'agent.md'];
@@ -38,25 +39,7 @@ const NOTES_WARN = 8000; // 辅助文档高警戒提示线（不拦截，仅提�
 
 let exitCode = 0;
 
-// v14：原则层 PRINCIPLES.md（L0 图式，常驻注入面）——容量 ≤1,000 硬限 + 行格式校验
-const P_LIMIT = 1000;
-try {
-  const p = join(skillDir, 'PRINCIPLES.md');
-  const raw = await readFile(p, 'utf8');
-  const chars = raw.replace(/\s/g, '').length;
-  const pct = Math.min(100, Math.round((chars / P_LIMIT) * 100));
-  const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith('#') && !l.startsWith('>'));
-  const badFmt = lines.filter((l) => !/^- .+←\s*源:\s*notes\//.test(l));
-  const dup = lines.length !== new Set(lines.map((l) => l.toLowerCase())).size;
-  console.log(`\n=== PRINCIPLES.md (${p}) ===`);
-  console.log(`字符数: ${chars} / ${P_LIMIT} (${pct}%)${pct > 85 ? ' ⚠️ 超85%需原则间合并' : ''}`);
-  console.log(`原则条目数: ${lines.length}${badFmt.length ? ` | 格式违规 ${badFmt.length} 条（须 \`- 原则 ← 源: notes/…\`）: ${badFmt.slice(0, 2).join(' | ')}` : ''}${dup ? ' | 存在重复条目' : ''}`);
-  if (chars > P_LIMIT) exitCode = Math.max(exitCode, 2);
-  if (badFmt.length || dup) exitCode = Math.max(exitCode, 5);
-} catch {
-  console.log(`[FAIL] PRINCIPLES.md: 文件不存在（原则层 L0 未建档——审计归纳 pass 首次产出时创建，或手工建空模板）`);
-  exitCode = Math.max(exitCode, 4);
-}
+// v16：PRINCIPLES.md 段移除（原则层退役）——习得原则随 AGENT.md 段体检（tags 含 '原则'）
 
 function parseIndex(raw) {
   return raw.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
