@@ -280,7 +280,7 @@ export function applyPanel(ctx: Context, config: Config): void {
       } catch { /* 缺配置用默认 */ }
     }
     if (level === 'off' || !hotMemoryOn) { injectCache.text = ''; return '' }
-    // 指针式注入：三索引一行一条（[tag] 主题 · 概况 → notes/x.md §小节），Agent 按需 get_file 拉详情
+    // 指针式注入：原则层 + 三索引一行一条（[tag] 主题 · 概况 → notes/x.md §小节），Agent 按需 get_file 拉详情
     const readIdx = (name: string): string[] => {
       try {
         return readFileSync(join(memRoot, name), 'utf8').split(/\r?\n/).map((l) => l.trim()).filter((l) => /^\[.+\]/.test(l))
@@ -289,8 +289,18 @@ export function applyPanel(ctx: Context, config: Config): void {
     const caps: Record<string, number> = { low: 2, medium: 4, high: 8, smart: 10 }
     const userLines = readIdx('USER.md')
     const memLines = readIdx('MEMORY.md').slice(0, caps[level] ?? 10)
-    if (!userLines.length && !memLines.length) { injectCache.text = ''; return '' }
+    // v14：原则层（L0 图式，跨任务方向指引）——整层注入（容量 ≤1,000 硬限保证不膨胀）
+    const principleLines = (() => {
+      try {
+        return readFileSync(join(memRoot, 'PRINCIPLES.md'), 'utf8').split(/\r?\n/).map((l) => l.trim()).filter((l) => /^- .+←/.test(l))
+      } catch { return [] }
+    })()
+    if (!userLines.length && !memLines.length && !principleLines.length) { injectCache.text = ''; return '' }
     const lines: string[] = [`[守藏·热记忆] 记忆库指针（${memRoot}；详情按指针 get_file 拉对应 notes §小节）：`]
+    if (principleLines.length) {
+      lines.push('原则层（PRINCIPLES.md，跨任务方向指引）：')
+      for (const l of principleLines) lines.push(`- ${l}`)
+    }
     if (userLines.length) {
       lines.push('画像索引（USER.md）：')
       for (const l of userLines) lines.push(`- ${l}`)
@@ -618,6 +628,7 @@ export function applyPanel(ctx: Context, config: Config): void {
     return { runs, added, rejected, failed, gateRejects, writeFails, byRoute, byDay, last, recent: rows.slice(-5) }
   }
   const MEM_INDEX_FILES: Array<{ file: string; label: string }> = [
+    { file: 'PRINCIPLES.md', label: '原则层 PRINCIPLES' },
     { file: 'MEMORY.md', label: '知识索引 MEMORY' },
     { file: 'USER.md', label: '用户画像 USER' },
     { file: 'AGENT.md', label: 'Agent 画像 AGENT' },
@@ -625,7 +636,7 @@ export function applyPanel(ctx: Context, config: Config): void {
   const NOTE_RELS = ['env', 'tools', 'flows', 'lessons', 'release', 'user', 'agent', 'INDEX']
   /** 容量上限单一事实源 = engine/target-registry.json（读失败回退默认值） */
   const memoryCaps = (base: string): Record<string, number> => {
-    const out: Record<string, number> = { 'MEMORY.md': 3000, 'USER.md': 2000, 'AGENT.md': 2000 }
+    const out: Record<string, number> = { 'MEMORY.md': 3000, 'USER.md': 2000, 'AGENT.md': 2000, 'PRINCIPLES.md': 1000 }
     try {
       const reg = JSON.parse(readFileSync(join(base, 'engine', 'target-registry.json'), 'utf8')) as { targets?: { memory?: { capacity?: Record<string, number> } } }
       const cap = reg?.targets?.memory?.capacity

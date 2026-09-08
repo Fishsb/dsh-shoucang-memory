@@ -379,5 +379,41 @@ try {
   fs.rmSync(te, { recursive: true, force: true });
 } catch (e) { fail++; console.log('❌ 方案C-memory-append（异常: ' + failMsg(e) + '）'); }
 
+// 24) health_check 零召回清单：稀疏 access.log → 报告含「零召回主题」段（降级提纯候选输出，exit 0/2 均可）
+try {
+  const tf = makeContainer();
+  // 构造稀疏 access.log：只命中 env.md 一个小节，其余 notes 小节应进零召回清单
+  const envText = fs.readFileSync(path.join(tf, 'notes', 'env.md'), 'utf8');
+  const hitSec = (envText.match(/^## (.+?)（/m) || [null, 'DSH 环境'])[1];
+  fs.mkdirSync(path.join(tf, 'audit'), { recursive: true });
+  fs.writeFileSync(path.join(tf, 'audit', 'access.log'), JSON.stringify({ t: '2026-09-08T00:00:00Z', f: 'notes/env.md', s: hitSec }) + '\n');
+  const out = execFileSync('node', [path.join(tf, 'scripts', 'memory_health_check.mjs')], { encoding: 'utf8', cwd: tf, env: { ...process.env, MEMORY_ROOT: tf } });
+  const listed = (out.match(/零召回主题 (\d+) 个/) || [])[1];
+  const okFmt = /零召回主题 \d+ 个/.test(out) && /提纯降级/.test(out) && Number(listed) > 0;
+  if (okFmt) pass++; else fail++;
+  console.log(`${okFmt ? '✅' : '❌'} health-零召回清单（${listed || 0} 个候选，含提纯降级指引）`);
+  fs.rmSync(tf, { recursive: true, force: true });
+} catch (e) { fail++; console.log('❌ health-零召回清单（异常: ' + failMsg(e) + '）'); }
+
+// 25) PRINCIPLES 写门与体检：正常 exit 0 / 超限 exit 1 / 格式违规 exit 4 / 体检含 PRINCIPLES 段
+try {
+  const tg = makeContainer();
+  const gate = path.join(tg, 'scripts', 'memory_write_gate.mjs');
+  const p1 = path.join(tg, 'p1.txt');
+  fs.writeFileSync(p1, '- 遇陌生代码库先全局追踪数据流再动手 ← 源: notes/lessons.md §调试流程\n');
+  run('原则门-正常', 'node', [gate, 'PRINCIPLES.md', p1], [0]);
+  const p2 = path.join(tg, 'p2.txt');
+  fs.writeFileSync(p2, ('- 原则填充内容超限'.repeat(120) + ' ← 源: notes/lessons.md §x') + '\n');
+  run('原则门-超容量', 'node', [gate, 'PRINCIPLES.md', p2], [1]);
+  const p3 = path.join(tg, 'p3.txt');
+  fs.writeFileSync(p3, '随手写的一行没有格式\n');
+  run('原则门-格式违规', 'node', [gate, 'PRINCIPLES.md', p3], [4]);
+  const hp = execFileSync('node', [path.join(tg, 'scripts', 'memory_health_check.mjs')], { encoding: 'utf8', cwd: tg, env: { ...process.env, MEMORY_ROOT: tg } });
+  const okP = /=== PRINCIPLES\.md/.test(hp) && /原则条目数/.test(hp);
+  if (okP) pass++; else fail++;
+  console.log(`${okP ? '✅' : '❌'} health-PRINCIPLES 段（容量+条目输出）`);
+  fs.rmSync(tg, { recursive: true, force: true });
+} catch (e) { fail++; console.log('❌ PRINCIPLES 门禁/体检（异常: ' + failMsg(e) + '）'); }
+
 console.log(`\n结果: ${pass} PASS / ${fail} FAIL`);
 process.exit(fail ? 1 : 0);

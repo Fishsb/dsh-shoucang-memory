@@ -4,6 +4,16 @@
 
 ## [Unreleased]
 
+### Added
+- **记忆架构批次 1-3 落地（2026-09-08）**：批次1 文档失真修复（SKILL/README 解除过时退役标注转现行状态、spec §5.5 AGENT 容量对齐 v10 口径、human-execution-loop 补「召回即修正」再巩固纪律）；批次2 降级提纯（audit-protocol §3 提纯降级 SOP + §5 双向生命周期降级判据「连续 2 次审计零命中且非 env/release」、health_check 候选统计段增零召回清单）；批次3 四级层级 spec v14（§5.8 原则层 PRINCIPLES.md：L0 图式 ≤1,000 硬限、唯一写入口=审计深度睡眠归纳 pass（作用域=当天痕迹）、原则行格式 `- 原则 ← 源: notes/…`；SKILL 三索引→四索引、L3 原则层路由；write_gate/health_check 支持 PRINCIPLES；_memory 建档）。测试 28 PASS/0 FAIL；check-hardcode ✅。
+- **人化执行体系实施方案（2026-09-08）**：新增 `docs/human-loop-impl-plan.md`——批次 1-5 逐项执行规格（精确文件/锚点/验证命令/回退方式）：批次1 文档失真修复 → 批次2 降级提纯（协议+health 零召回清单）→ 批次3 四级层级 spec v14（PRINCIPLES 原则层/写门/深度睡眠归纳 pass）→ 批次4 project-nav 索引同步（原子写约束）→ 批次5 部署生效。
+- **人化执行体系优化路线图（2026-09-08）**：新增 `docs/human-loop-roadmap.md`——全量优化方案总览：已落地 4 项（七步循环总纲/循环完整版四要素/循环×记忆钩子/任务流程增强）+ 待拍板 4 项（A 主动遗忘=**降级提纯机制**：用户拍板方向修正——遗忘不直接删，细节下放更低记忆板块并提取通用经验，三级降级设计触发→提纯→降级→兜底，与蒸馏教程式浓缩同构；B 嵌入模型升级触发判据与路径；C 部署生效；D 记忆层级扩展=**新增 L0 原则层 PRINCIPLES.md**——四级层级 L0 图式/L1 索引/L2 详情/L3 暂存归档，提纯全链 pending→notes→原则，睡眠巩固双机制=即时小睡（事件蒸馏，已有）+深度睡眠（**回想巩固当天记忆**的归纳 pass，作用域限当天痕迹））+ 平台层 SOUL.md 可选补强项 + 设计原则四条。
+
+### Changed
+- **循环 × 记忆钩子表（2026-09-08）**：human-execution-loop.md 新增「循环 × 记忆钩子」节——七步循环各步的检索钩子（查什么）与写入钩子（何时沉淀）显式成表，原则=检索贯穿全程（线索触发）、写入只在⑥回溯与⑦收尾两个闸口（对应人脑「随时回忆、离线巩固」节律）。
+- **人化执行循环完整版（2026-09-08）**：新增 `skill/human-execution-loop.md`——七步循环逐步展开为「决策点 / 所需地基 / 判定标准 / 失效信号」四要素（横切地基：三索引/任务类型/goal/红线清单；人类依据：信息觅食、Kuhlthau ISP、程序理解研究、内外双循环、ReAct/Plan-Act-Reflect/Reflexion 印证）。task-protocols §1 总纲、SKILL L3 速查、README 拓扑三处指针同步接入。
+- **人化执行循环集成（2026-09-08）**：`skill/task-protocols.md` §1 新增「人化执行循环」总纲（① 澄清意图 → ② 侦察环境 → ③ 计划+未知项 → ④ 小步执行 → ⑤ 每步验证 → ⑥ 偏差即回溯 → ⑦ 沉淀记忆；依据信息觅食/采莓模型与老手开发流研究，需求随执行演化、线索变弱即换向、证据冗余即停）；build 流程方案模板补「未知项」、执行补「连续 2 次无实质进展即停走 §0」监控；consult 流程补检索停止条件（证据冗余即停）；SKILL L1 §2/§3 同步（方案模板补未知项 + 总纲路由）。
+
 ### Changed
 - **打包形态修正（2026-09-08，github 安装不可激活问题）**：插件包自 `plugins/shoucang/` 提升至**仓库根**（dsh 单插件仓标准形态，对齐 dsh-prompt-enhancer）——根 package.json 携带 dsh.bundle 契约、cordis.patch.yml id/name 改为包名 `dsh-shoucang-memory`、**lib/ 构建产物入库**（github: 安装无现场编译，产物随仓走）。修复 `dsh plugin add github:` 报「declares no dsh.bundle，装成 plain dependency 不激活」。
 

@@ -21,11 +21,11 @@ Research & Execution Agent：检索、分析、诊断、建议、交付；代码
 
 ### 2. 方案确认门
 
-任何"实际动作"（改/建/删文件、git 提交、副作用命令）前先提交完整方案、经用户确认才动手；只读收集可先行。流程：任务 → 只读收集 → 方案（目标/步骤/命令/预期/回退）→ 呈现等确认 → 执行（被否→重提）。通道：`ask_user_question`；plan mode 以 `exit_plan_mode` 提审。例外=用户授权；**已确认方案内连续步骤=todo 逐项对应已确认方案，新增未确认范围须重提**。方案设计时自查：有无绕过式/补丁式成分？（§0）
+任何"实际动作"（改/建/删文件、git 提交、副作用命令）前先提交完整方案、经用户确认才动手；只读收集可先行。流程：任务 → 只读收集 → 方案（目标/步骤/命令/预期/回退/未知项）→ 呈现等确认 → 执行（被否→重提）。通道：`ask_user_question`；plan mode 以 `exit_plan_mode` 提审。例外=用户授权；**已确认方案内连续步骤=todo 逐项对应已确认方案，新增未确认范围须重提**。方案设计时自查：有无绕过式/补丁式成分？（§0）
 
 ### 3. 动词即边界（任务类型分流）
 
-每任务开头声明：`任务类型：build/执行 | fix/审查 | consult/咨询 | wrap-up/收尾`，并 read `task-protocols.md` 对应小节执行。「审查/检查/分析/看看/评估/核对/整理方案」→ 只读+结论交付，**禁止顺带改文件**，发现项写「建议下一步」；「修复/补建/优化/做/继续」→ 才进入执行。
+每任务开头声明：`任务类型：build/执行 | fix/审查 | consult/咨询 | wrap-up/收尾`，并 read `task-protocols.md`（§1 人化执行循环总纲 + 对应小节）执行。「审查/检查/分析/看看/评估/核对/整理方案」→ 只读+结论交付，**禁止顺带改文件**，发现项写「建议下一步」；「修复/补建/优化/做/继续」→ 才进入执行。
 
 ### 4. 交付纪律
 
@@ -39,7 +39,7 @@ Research & Execution Agent：检索、分析、诊断、建议、交付；代码
 
 ### 6. 会话开始先加载（最高优先级）
 
-首个任务前、先于任何技能装载，read 三索引 `MEMORY.md`/`USER.md`/`AGENT.md` 全文；详情按指针检索（索引形态定义 → whitelist spec §8）。
+首个任务前、先于任何技能装载，read 四索引 `MEMORY.md`/`USER.md`/`AGENT.md`/`PRINCIPLES.md` 全文；详情按指针检索（索引形态定义 → whitelist spec §8；原则层定义 → spec §5.8）。执行循环①③步（澄清意图/计划）优先读原则层——最粗粒度方向指引。
 
 ### 7. 记忆写入前置门
 
@@ -67,6 +67,7 @@ Research & Execution Agent：检索、分析、诊断、建议、交付；代码
 
 | 诉求 | 动作 |
 |---|---|
+| 跨任务方向指引（①③步优先） | read `PRINCIPLES.md` 原则层（L0 图式，spec §5.8） |
 | 全局定位 | read `MEMORY.md`/`USER.md`/`AGENT.md` 索引 → 按 `→` 指针路由 |
 | 详情小节 | `read_section.mjs notes/<类>.md "小节名"`（内容锚，**自动记 access.log**；类：env/tools/flows/lessons/release/user/agent） |
 | 用户画像 / agent 自指 | read `notes/user.md` / `notes/agent.md` §小节 |
@@ -76,8 +77,11 @@ Research & Execution Agent：检索、分析、诊断、建议、交付；代码
 | 项目专属（结构+契约/踩坑） | 结构 → 项目 `docs/map/index.md`；契约/踩坑 → `docs/devref/` 卡库（INDEX→cards）**与** 记忆库 notes/ 双查（过渡期并列，迁移完成后卡库权威；ADR-0005） |
 | 记忆体系定义 | whitelist spec（四问/标签/容量/红牌唯一权威） |
 | 工具失败恢复 | `task-protocols.md §7` |
+| 人化执行循环地基（各步决策需要什么信息/怎么判定/何时回溯） | `human-execution-loop.md` |
 
-## 🏛 协作宪章（已退役，ADR-0003 归档）
+## 🏛 协作宪章（沿革留档）
+
+> 🔄 **现状（2026-09-08）**：守藏已重新上线（dsh-shoucang-memory 运行于 dsh-web），本 SKILL 纪律骨架**现行生效**；下方 ⛔ 退役声明为历史注记。
 
 - **⛔ 2026-09-07 记忆栈退役**（pmg 权威仓 ADR-0003）：原 suite 三方宪章（守藏=调度中枢+单一蒸馏器 / 本插件=知识库承载+引擎供应商 / pmg=执行者）整体失效——守藏与本插件已从 dsh-web 下线归档（`~/.dsh/backups/memory-stack-retire-20260907-001554/`），记忆职责由 dsh-auto-memory 插件承担（独立体系）。本 SKILL 的 L1-L4 纪律骨架保留为历史参考，不再被宿主注入执行。
 - **原裁决序（历史留档）**：用户实时拍板 > 记忆 L1 铁律（第一性原理/方案门）> pmg 治理门禁（facts/check）> 记忆 L2/L3 流程 > pmg 便利工具。

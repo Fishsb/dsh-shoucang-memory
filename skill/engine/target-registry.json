@@ -5,17 +5,43 @@
     "memory": {
       "root": "<dshHome>/skills/managing-memory",
       "whitelist": {
-        "main": ["MEMORY.md", "USER.md", "AGENT.md"],
-        "notes": ["notes/env.md", "notes/tools.md", "notes/flows.md", "notes/lessons.md", "notes/release.md", "notes/user.md", "notes/agent.md", "notes/INDEX.md"]
+        "main": [
+          "PRINCIPLES.md",
+          "MEMORY.md",
+          "USER.md",
+          "AGENT.md"
+        ],
+        "notes": [
+          "notes/env.md",
+          "notes/tools.md",
+          "notes/flows.md",
+          "notes/lessons.md",
+          "notes/release.md",
+          "notes/user.md",
+          "notes/agent.md",
+          "notes/INDEX.md"
+        ]
       },
-      "capacity": { "MEMORY.md": 3000, "USER.md": 2000, "AGENT.md": 2000 },
-      "pendingDir": "pending"
+      "capacity": {
+        "MEMORY.md": 3000,
+        "USER.md": 2000,
+        "AGENT.md": 2000,
+        "PRINCIPLES.md": 1000
+      },
+      "pendingDir": "pending",
+      "comment": "；v14 增原则层 PRINCIPLES.md（L0，唯一写入口=审计归纳 pass）"
     },
     "project": {
       "root": "<projectRoot>/docs/devref",
       "whitelist": {
-        "main": ["INDEX.md"],
-        "notes": ["cards/how-to.md", "cards/reference.md", "cards/decision.md"]
+        "main": [
+          "INDEX.md"
+        ],
+        "notes": [
+          "cards/how-to.md",
+          "cards/reference.md",
+          "cards/decision.md"
+        ]
       },
       "capacity": null,
       "pendingDir": "pending",

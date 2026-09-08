@@ -38,6 +38,26 @@ const NOTES_WARN = 8000; // 辅助文档高警戒提示线（不拦截，仅提�
 
 let exitCode = 0;
 
+// v14：原则层 PRINCIPLES.md（L0 图式，常驻注入面）——容量 ≤1,000 硬限 + 行格式校验
+const P_LIMIT = 1000;
+try {
+  const p = join(skillDir, 'PRINCIPLES.md');
+  const raw = await readFile(p, 'utf8');
+  const chars = raw.replace(/\s/g, '').length;
+  const pct = Math.min(100, Math.round((chars / P_LIMIT) * 100));
+  const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith('#') && !l.startsWith('>'));
+  const badFmt = lines.filter((l) => !/^- .+←\s*源:\s*notes\//.test(l));
+  const dup = lines.length !== new Set(lines.map((l) => l.toLowerCase())).size;
+  console.log(`\n=== PRINCIPLES.md (${p}) ===`);
+  console.log(`字符数: ${chars} / ${P_LIMIT} (${pct}%)${pct > 85 ? ' ⚠️ 超85%需原则间合并' : ''}`);
+  console.log(`原则条目数: ${lines.length}${badFmt.length ? ` | 格式违规 ${badFmt.length} 条（须 \`- 原则 ← 源: notes/…\`）: ${badFmt.slice(0, 2).join(' | ')}` : ''}${dup ? ' | 存在重复条目' : ''}`);
+  if (chars > P_LIMIT) exitCode = Math.max(exitCode, 2);
+  if (badFmt.length || dup) exitCode = Math.max(exitCode, 5);
+} catch {
+  console.log(`[FAIL] PRINCIPLES.md: 文件不存在（原则层 L0 未建档——审计归纳 pass 首次产出时创建，或手工建空模板）`);
+  exitCode = Math.max(exitCode, 4);
+}
+
 function parseIndex(raw) {
   return raw.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
 }
@@ -178,7 +198,24 @@ try {
     try { const o = JSON.parse(l); const k = `${o.f} §${o.s}`; counts[k] = (counts[k] || 0) + 1; } catch {}
   }
   const top = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5);
-  candStats = `\n候选统计: pending 滞留 ${pend.length} 个 | access.log 命中 ${lines.length} 次${top.length ? '\n  top 主题: ' + top.map(([k, v]) => `${k}×${v}`).join(' · ') : ''}（近 5 次审计 ≥3 次 → 提升评估）`;
+  // 零召回清单（降级提纯候选；判据见 audit-protocol §5：连续 2 次审计零命中且非 env/release）
+  const normCounts = {};
+  for (const l of lines) {
+    try { const o = JSON.parse(l); const k = `${String(o.f || '').replace(/^notes\//, '')} §${o.s}`; normCounts[k] = (normCounts[k] || 0) + 1; } catch {}
+  }
+  const zeroList = [];
+  try {
+    const notesDir = join(skillDir, 'notes');
+    const files = (await readdir(notesDir)).filter((f) => f.endsWith('.md') && f !== 'INDEX.md');
+    for (const f of files) {
+      const raw = await readFile(join(notesDir, f), 'utf8');
+      for (const m of raw.matchAll(/^## (.+)$/gm)) {
+        const sec = m[1].replace(/（[^）]*）$/, '').trim();
+        if (!counts[`${f} §${sec}`] && !normCounts[`${f} §${sec}`]) zeroList.push(`${f} §${sec}`);
+      }
+    }
+  } catch { /* 无 notes 目录跳过 */ }
+  candStats = `\n候选统计: pending 滞留 ${pend.length} 个 | access.log 命中 ${lines.length} 次${top.length ? '\n  top 主题: ' + top.map(([k, v]) => `${k}×${v}`).join(' · ') : ''}（近 5 次审计 ≥3 次 → 提升评估）${zeroList.length ? `\n  零召回主题 ${zeroList.length} 个: ${zeroList.slice(0, 8).join(' · ')}${zeroList.length > 8 ? ' …' : ''}（连续 2 次审计零命中且非 env/release → 提纯降级，见 audit-protocol §3/§5）` : ''}`;
 } catch { candStats = ''; }
 
 if (candStats) console.log(candStats);
