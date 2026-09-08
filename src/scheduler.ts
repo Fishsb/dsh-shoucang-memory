@@ -49,6 +49,10 @@ export interface Config {
   // ═══ 深度睡眠归纳（L0 原则层；2026-09-08 拍板：全部会话停滞 ≥3h 自动执行）═══
   enableDeepSleep: boolean // 深度睡眠巡检开关（停滞 ≥deepSleepIdleMs 自动归纳 PRINCIPLES）
   deepSleepIdleMs: number // 停滞判定：无任何根会话活动持续此毫秒数才触发（缺省 3 小时）
+  // ═══ 会话活跃状态机（2026-09-08 重构）：区分「正常长任务 / 卡住 / 异常退出」═══
+  deepSleepProbe: boolean // 输出增长探测开关（running 无事件超时后，采样 transcript 确认真活跃）
+  deepSleepProbeAfterMs: number // running 状态无事件多久发起探测（缺省 3 小时，同 idleMs）
+  deepSleepProbeWindowMs: number // 探测两次采样间隔（缺省 60 秒）
 }
 
 export const Config: any = z.object({
@@ -75,6 +79,9 @@ export const Config: any = z.object({
   llmModel: z.string().default('').description('蒸馏子代理 model（空=继承主会话模型）'),
   enableDeepSleep: z.boolean().default(true).description('深度睡眠归纳：全部会话停滞 ≥deepSleepIdleMs 自动提炼原则层 PRINCIPLES.md'),
   deepSleepIdleMs: z.number().min(600000).default(10800000).description('停滞判定阈值（毫秒）：无任何会话活动持续满此时长触发深度睡眠归纳（缺省 3 小时）'),
+  deepSleepProbe: z.boolean().default(true).description('输出增长探测：会话 running 但长时间无事件时，采样转录文件两次确认是长任务还是卡住'),
+  deepSleepProbeAfterMs: z.number().min(600000).default(10800000).description('running 状态无事件持续此毫秒数后发起探测（缺省 3 小时）'),
+  deepSleepProbeWindowMs: z.number().min(5000).default(60000).description('探测两次采样间隔（毫秒，缺省 60 秒）'),
 })
 
 // —— 装配事实源探测（无硬编码路径）——
@@ -509,6 +516,9 @@ export function applyScheduler(ctx: Context, config: Config): void {
       memberPackages: { governance: governancePkg },
       enableDeepSleep: config.enableDeepSleep,
       deepSleepIdleMs: config.deepSleepIdleMs,
+      deepSleepProbe: config.deepSleepProbe,
+      deepSleepProbeAfterMs: config.deepSleepProbeAfterMs,
+      deepSleepProbeWindowMs: config.deepSleepProbeWindowMs,
     })
   }
 }
