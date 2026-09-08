@@ -685,6 +685,20 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
    * 深睡将永远跑不起来（夜间正是这种场景）。此时用插件 ctx 惰性创建一个常驻 agent 当 parent
    * （只用于承载子代理创建，不给它下发任何任务）；创建失败则退回 no-parent 跳过，不崩。
    */
+  /**
+   * 默认 LLM 路由（守护 parent 用）：优先插件配置，其次宿主默认模型服务。
+   * 守护 parent 是新建的空 agent，没有会话继承模型；不显式给路由，子代理会 100ms 内
+   * stop=error 且零输出（实测），归纳必然空转。
+   */
+  const resolveDefaultModel = (): { provider: string; model: string } | undefined => {
+    try {
+      const c: any = ctx as any
+      const svc = c.agentDefaultModel ?? (typeof c.get === 'function' ? c.get('agentDefaultModel') : undefined)
+      const sel = svc && typeof svc.currentSelection === 'function' ? svc.currentSelection() : null
+      if (sel && sel.provider && sel.model) return { provider: String(sel.provider), model: String(sel.model) }
+    } catch { /* 解析失败=不给路由 */ }
+    return undefined
+  }
   const ensureDaemonParent = async (signal: AbortSignal, agentOptions?: { provider: string; model: string }): Promise<any | null> => {
     if (isValidParent(daemonParent)) return daemonParent
     try {
@@ -726,7 +740,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       const ac = new AbortController()
       const timeout = setTimeout(() => { try { ac.abort(new Error('deep sleep timeout 10min')) } catch { /* */ } }, 600000)
       let parent = pickParent()
-      if (!parent) parent = await ensureDaemonParent(ac.signal, agentOptions)
+      if (!parent) parent = await ensureDaemonParent(ac.signal, agentOptions ?? resolveDefaultModel())
       if (!parent) {
         log('deep sleep: 无可用 parent agent（宿主 spawn 必需），跳过本轮')
         audit({ kind: 'deep-sleep', result: 'no-parent' })
