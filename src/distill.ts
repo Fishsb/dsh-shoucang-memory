@@ -20,6 +20,7 @@
  * 路由归一化未知回退 memory（宁滥勿丢）；LLM 路由连败≥2 弃用指定 provider 回落继承（本迁入版补强）。
  */
 import { spawn } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, renameSync, statSync, unlinkSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import {
@@ -686,7 +687,9 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
   const ensureDaemonParent = async (signal: AbortSignal, agentOptions?: { provider: string; model: string }): Promise<any | null> => {
     if (isValidParent(daemonParent)) return daemonParent
     try {
+      // sessionId 必须显式给：宿主用它当 agent id（缺省会抛 agent id "undefined" does not match session id）
       const handle: any = await ctx.agents.create({
+        sessionId: `session-${randomUUID()}`,
         ...(agentOptions ? { agentOptions } : {}),
         signal,
       })
