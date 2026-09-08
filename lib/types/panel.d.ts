@@ -1,14 +1,16 @@
 /**
  * @dsh-external/shoucang-panel — 宿主半区。
  *
- * 职责：为 client 面板（client.js，纯 DOM）提供 /api/shoucang-panel HTTP RPC：
- *   GET  /roots     已登记守藏根目录列表 + 当前激活 root
- *   POST /set_root  {path, name?} 登记/切换 root（目录须含 shoucang.config.yaml）
- *   GET  /get_root  → {active}
- *   GET  /config    当前 root 的 shoucang.config.yaml 原文 + 关键字段解析
- *   POST /save      {text} 备份先行写入（.bak-<时间戳>）
- *   POST /toggle    {key} 翻转布尔项（boards.* / archive.enabled /
- *                   lifecycle.enabled / scheduler.enabled）
+ * 职责：为 client 面板（client.js，纯 DOM）提供 /api/shoucang-panel HTTP RPC（按功能组）：
+ *   根目录：GET /roots · POST /set_root · GET /get_root · POST /root/bootstrap
+ *   配置：  GET /config · POST /save · POST /toggle · POST /set（白名单键）
+ *   记忆：  GET /memory/overview · GET /memory/sections（双根 root=suite|memory）
+ *   集合：  GET /suite（suiteAssemblyMatrix 经 schedulerShare 桥接）
+ *   深睡：  GET /deepsleep · POST /deepsleep/trigger · GET+POST /deepsleep/config（单 handler 按 method 分发）
+ *   巩固轮：GET /idle/status · POST /idle/consolidate
+ *   向量/模型：GET /vector/status · POST /vector/build · GET /model/list · POST /model/pull|progress|import|deploy
+ *   注入：  GET /inject/preview · GET /inject/stats（R1 热记忆注入 systemPrompt.context）
+ *   命令：  /scnote（commands.register，笔记化任务）
  *
  * 开源红线：零硬编码路径。root 登记表存 state_path（默认 ~/.dsh/storages/
  * shoucang-panel.json，支持 ~ 展开），初始为空——root 由用户在面板里添加。
@@ -19,13 +21,10 @@ export declare const name = "@dsh-external/shoucang-panel";
 export declare const inject: readonly ["webServer", "systemPrompt", "commands"];
 export interface Config {
     state_path: string;
-    projectRoots: string;
 }
 export declare const Config: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<{
     state_path: import("@deepseek-ai/schemastery").default<string, string>;
-    projectRoots: import("@deepseek-ai/schemastery").default<string, string>;
 }>, Schemastery.ObjectT<{
     state_path: import("@deepseek-ai/schemastery").default<string, string>;
-    projectRoots: import("@deepseek-ai/schemastery").default<string, string>;
 }>>;
 export declare function applyPanel(ctx: Context, config: Config): void;

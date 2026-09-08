@@ -71,22 +71,21 @@
       /* ---------- Obsidian 样式（默认主题变量还原，深浅色自适应） ---------- */
 
       var CSS = [
+        /* 主题跟随宿主（2026-09-09 拍板）：--sc-* 全量映射到 dsh web 宿主语义变量 --dsw-alias-*，
+         * 宿主深浅色切换时面板自动跟随，不再依赖 prefers-color-scheme（原 media query 已删）；
+         * fallback 保留原深色值（宿主变量缺失时兜底）。状态色直接消费宿主 state-* 语义。 */
         '#scpanl-root,.sc-trigger{',
-        '--sc-bg1:#1e1e1e;--sc-bg2:#161616;--sc-bg3:#252525;',
-        '--sc-text:#dadada;--sc-muted:#999;--sc-faint:#666;',
-        '--sc-border:#2a2a2a;--sc-accent:hsl(254deg 80% 68%);--sc-accent-hover:hsl(254deg 80% 74%);',
+        '--sc-bg1:var(--dsw-alias-bg-layer-1,#1e1e1e);--sc-bg2:var(--dsw-alias-bg-layer-2,#161616);--sc-bg3:var(--dsw-alias-bg-layer-3,#252525);',
+        '--sc-text:var(--dsw-alias-label-primary,#dadada);--sc-muted:var(--dsw-alias-label-secondary,#999);--sc-faint:var(--dsw-alias-label-tertiary,#666);',
+        '--sc-border:var(--dsw-alias-border-l2,#2a2a2a);--sc-accent:var(--dsw-alias-brand-primary,hsl(254deg 80% 68%));--sc-accent-hover:var(--dsw-alias-brand-primary,hsl(254deg 80% 74%));',
+        '--sc-ok:var(--dsw-alias-state-success-primary,#3fb950);--sc-warn:var(--dsw-alias-state-warn-primary,#e8a33d);--sc-err:var(--dsw-alias-state-error-primary,#e5534b);',
+        '--sc-hover:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06));',
         'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Inter",sans-serif;}',
-        '@media (prefers-color-scheme: light){#scpanl-root,.sc-trigger{',
-        '--sc-bg1:#ffffff;--sc-bg2:#f6f6f6;--sc-bg3:#e9e9e9;',
-        '--sc-text:#222222;--sc-muted:#777777;--sc-faint:#999999;',
-        '--sc-border:#e0e0e0;}}',
 
-        '.sc-trigger{box-sizing:border-box;cursor:pointer;width:calc(100% + 4px);height:42px;color:var(--dsw-alias-label-primary);',
+        '.sc-trigger{box-sizing:border-box;cursor:pointer;width:calc(100% + 4px);height:42px;color:var(--dsw-alias-label-primary,var(--sc-text));',
         'background:0 0;border:none;border-radius:12px;flex:none;align-items:center;gap:8px;margin:4px -2px;padding:0 10px 0 8px;',
         'font-family:inherit;font-size:14px;line-height:22px;display:flex;overflow:hidden;user-select:none;}',
-        '.sc-trigger:hover{background:var(--dsw-alias-interactive-bg-hover)}',
-        '.sc-trigger-glyph{flex:none;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;',
-        'font-size:15px;font-weight:600;line-height:1;color:inherit;}',
+        '.sc-trigger:hover{background:var(--dsw-alias-interactive-bg-hover,var(--sc-bg3))}',
         '.sc-trigger-label{white-space:nowrap;overflow:hidden;}',
         '.sc-trigger.sc-rail{border-radius:50%;justify-content:center;gap:0;width:36px;height:36px;margin:8px 0 10px;padding:0;}',
         '.sc-trigger.sc-rail .sc-trigger-label{display:none;}',
@@ -118,17 +117,18 @@
         '.sc-nav-title{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--sc-muted);padding:4px 10px 10px;}',
         '.sc-nav-item{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:6px;cursor:pointer;',
         'font-size:13px;color:var(--sc-muted);user-select:none;}',
-        '.sc-nav-item:hover{background:var(--sc-bg3);color:var(--sc-text);}',
-        '.sc-nav-item.active{background:var(--sc-bg3);color:var(--sc-accent);font-weight:600;}',
+        '.sc-nav-item:hover{background:var(--sc-hover);color:var(--sc-text);}',
+        '.sc-nav-item.active{background:var(--sc-hover);color:var(--sc-accent);font-weight:600;}',
+        '.sc-nav-group{margin:12px 10px 3px;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--sc-faint);}',
         '.sc-nav-spacer{flex:1;}',
 
         '.sc-main{flex:1;display:flex;flex-direction:column;background:var(--sc-bg1);min-width:0;}',
-        '.sc-view{flex:1;overflow-y:auto;padding:20px 26px 44px;}',
+        '.sc-view{flex:1;overflow-y:auto;padding:22px 30px 48px;max-width:980px;}',
         '.sc-view::-webkit-scrollbar{width:10px;}',
         '.sc-view::-webkit-scrollbar-thumb{background:var(--sc-border);border-radius:5px;}',
 
         '.sc-h1{margin:0 0 4px;font-size:19px;font-weight:700;color:var(--sc-text);}',
-        '.sc-desc{margin:0 0 18px;font-size:12px;color:var(--sc-muted);line-height:1.5;}',
+        '.sc-desc{margin:0 0 18px;font-size:13px;color:var(--sc-muted);line-height:1.6;}',
 
         '.setting-item{display:flex;align-items:center;padding:12px 2px;border-top:1px solid var(--sc-border);gap:12px;}',
         '.setting-item:first-of-type{border-top:none;}',
@@ -173,38 +173,17 @@
         '.sc-statusbar{padding:8px 26px;border-top:1px solid var(--sc-border);font-size:11px;color:var(--sc-muted);',
         'min-height:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:var(--sc-bg1);}',
 
-        '.sc-board-list{display:flex;flex-direction:column;gap:10px;}',
-        '.sc-card{border:1px solid var(--sc-border);border-radius:10px;overflow:hidden;background:var(--sc-bg1);}',
-        '.sc-card-head{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 12px;',
-        'border-bottom:1px solid var(--sc-border);background:var(--sc-bg2);}',
-        '.sc-card-name{font-size:12.5px;font-weight:600;color:var(--sc-text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
-        '.sc-card-meta{flex:none;font-size:11px;color:var(--sc-faint);}',
+        /* 旧板块列表/卡片头样式已删（2026-09-09 pmg 移除后清理：sc-board-list/sc-card/sc-card-head/
+         * sc-card-name/sc-card-meta DOM 零使用；sc-card-body 保留——notes 小节折叠体在用） */
         '.sc-card-body{margin:0;padding:10px 12px;font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;',
         'font-size:12px;line-height:1.65;color:var(--sc-text);white-space:pre-wrap;word-break:break-word;',
         'max-height:300px;overflow-y:auto;background:var(--sc-bg1);}',
 
-        '.sc-explorer{display:flex;align-items:stretch;height:100%;gap:0;}',
-        '.sc-tree{width:216px;flex:none;min-width:0;border-right:1px solid var(--sc-border);overflow-y:auto;padding:6px 4px;}',
-        '.sc-tree-row{display:flex;align-items:center;gap:5px;padding:3px 6px;border-radius:6px;cursor:pointer;',
-        'font-size:12.5px;color:var(--sc-muted);white-space:nowrap;user-select:none;}',
-        '.sc-tree-row:hover{background:var(--sc-bg3);color:var(--sc-text);}',
-        '.sc-tree-row.active{background:var(--sc-bg3);color:var(--sc-accent);font-weight:600;}',
-        '.sc-tree-row.sc-tree-folder{color:var(--sc-text);font-weight:500;}',
-        '.sc-tree-arrow{flex:none;width:13px;text-align:center;color:var(--sc-faint);}',
-        '.sc-tree-children{margin-left:12px;border-left:1px solid var(--sc-border);}',
-        '.sc-note{flex:1;min-width:0;overflow-y:auto;padding:2px 16px 18px;}',
-        '.sc-note-placeholder{color:var(--sc-faint);font-size:12.5px;padding:30px 8px;text-align:center;}',
-        '.sc-note-title{font-size:15px;font-weight:700;color:var(--sc-text);margin:12px 0 2px;}',
-        '.sc-note-meta{font-size:11px;color:var(--sc-faint);margin-bottom:8px;word-break:break-all;}',
-        '.sc-note-props{margin:4px 0 12px;border:1px solid var(--sc-border);border-radius:8px;overflow:hidden;}',
-        '.sc-prop-row{display:flex;gap:10px;padding:4px 10px;font-size:12px;border-top:1px solid var(--sc-border);}',
-        '.sc-prop-row:first-of-type{border-top:none;}',
-        '.sc-prop-name{flex:none;width:110px;color:var(--sc-muted);font-weight:600;}',
-        '.sc-prop-value{flex:1;min-width:0;color:var(--sc-text);word-break:break-all;}',
+        /* 旧 vault 文件树/笔记详情渲染样式已删（2026-09-09 wiki explorer/pmg 治理知识库时代遗留：
+         * sc-explorer、sc-tree 系列、sc-note(容器)、sc-note-placeholder/title/meta/props、sc-prop 系列、
+         * sc-wl-link、sc-note-body 全部 DOM 零使用）；.sc-tag 保留（notes chips 计数在用） */
         '.sc-tag{display:inline-block;padding:0 6px;margin:0 4px 2px 0;border-radius:999px;background:var(--sc-bg3);',
         'border:1px solid var(--sc-border);color:var(--sc-text);font-size:11px;line-height:16px;}',
-        '.sc-note-props + .sc-note-body{border-top:1px solid var(--sc-border);padding-top:10px;}',
-        '.sc-note-body{font-size:12.5px;line-height:1.7;color:var(--sc-text);white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;}',
         '.sc-mem-group-title{font-size:12px;font-weight:700;color:var(--sc-accent);letter-spacing:.05em;',
         'margin:14px 0 6px;padding-bottom:4px;border-bottom:1px solid var(--sc-border);}',
         '.sc-mem-group-title:first-of-type{margin-top:0;}',
@@ -221,19 +200,17 @@
         '.sc-pointer-summary{margin-top:3px;font-size:12px;color:var(--sc-muted);line-height:1.5;',
         'overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}',
         '.sc-pointer-go{flex:none;color:var(--sc-accent);font-size:14px;font-weight:700;}',
-        '.sc-wl-link{color:var(--sc-accent);cursor:pointer;text-decoration:none;',
-        'border-bottom:1px dashed color-mix(in srgb,var(--sc-accent) 45%,transparent);}',
-        '.sc-wl-link:hover{text-decoration:underline;}',
         /* 记忆库实况（2026-09-06）：容量条 / stat 卡 / 标签 chip */
         '.sc-mem-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:6px 0 16px;}',
-        '.sc-mem-stat{border:1px solid var(--sc-border);border-radius:10px;padding:10px 12px;background:var(--sc-bg1);}',
+        '.sc-mem-stat{border:1px solid var(--sc-border);border-radius:12px;padding:10px 12px;background:var(--sc-bg1);transition:border-color .16s;}',,
         '.sc-mem-stat-label{font-size:11px;color:var(--sc-muted);letter-spacing:.04em;margin-bottom:4px;}',
         '.sc-mem-stat-value{font-size:20px;font-weight:700;color:var(--sc-text);font-variant-numeric:tabular-nums;}',
         '.sc-mem-stat-sub{font-size:11px;color:var(--sc-faint);margin-top:2px;}',
+        '.sc-mem-stat:hover{border-color:var(--sc-faint);}',
         '.sc-cap{width:100%;height:6px;border-radius:3px;background:var(--sc-bg3);overflow:hidden;margin:6px 0 3px;}',
         '.sc-cap-fill{height:100%;border-radius:3px;background:var(--sc-accent);transition:width .3s;}',
-        '.sc-cap.warn .sc-cap-fill{background:#e8a33d;}',
-        '.sc-cap.crit .sc-cap-fill{background:#e5534b;}',
+        '.sc-cap.warn .sc-cap-fill{background:var(--sc-warn);}',
+        '.sc-cap.crit .sc-cap-fill{background:var(--sc-err);}',
         /* 面板信息层级（Tufte/Few/NN-g 方法论落地 2026-09-06）：hero 卡 / sparkline / 语义色 / 折叠 */
         '.sc-mem-stat.hero{grid-column:span 2;padding:14px 16px;border-color:color-mix(in srgb,var(--sc-accent) 40%,var(--sc-border));}',
         '.sc-mem-stat.hero .sc-mem-stat-value{font-size:30px;line-height:1.1;}',
@@ -242,23 +219,13 @@
         '.sc-spark path{fill:none;stroke:var(--sc-accent);stroke-width:1.5;stroke-linejoin:round;}',
         '.sc-spark circle{fill:var(--sc-accent);}',
         '.sc-spark .base{stroke:var(--sc-border);stroke-width:1;}',
-        '.sc-danger{color:#e5534b;font-weight:600;}',
+        '.sc-danger{color:var(--sc-err);font-weight:600;}',
         '.sc-idx-more{font-size:12px;color:var(--sc-accent);cursor:pointer;padding:5px 2px;border:none;background:none;text-align:left;}',
         '.sc-idx-more:hover{text-decoration:underline;}',
-        /* 治理知识库（wiki 板块改造 2026-09-06） */
-        '.sc-gm-badge{flex:none;font-size:10.5px;color:var(--sc-faint);font-variant-numeric:tabular-nums;margin-left:auto;}',
-        '.sc-gm-card-head{display:flex;align-items:baseline;gap:8px;padding:5px 4px;cursor:pointer;border-bottom:1px solid var(--sc-border);}',
-        '.sc-gm-card-head:hover{color:var(--sc-accent);}',
-        '.sc-gm-card-title{font-size:13px;font-weight:600;color:var(--sc-text);}',
-        '.sc-gm-card-head .sc-tag{flex:none;}',
-        '.sc-tag.dim{opacity:.55;}',
         '.sc-mem-sub{font-size:12px;color:var(--sc-text);margin:2px 0 0;padding-bottom:6px;}',
         '.sc-mem-sub.muted{color:var(--sc-muted);}',
         '.sc-mem-sub.mono{font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;font-size:11px;color:var(--sc-faint);}',
-        '.sc-idx-group{margin-bottom:14px;}',
-        '.sc-idx-group-head{display:flex;align-items:baseline;gap:8px;padding-bottom:5px;margin-bottom:4px;border-bottom:1px solid var(--sc-border);}',
-        '.sc-idx-file{font-size:12.5px;font-weight:700;color:var(--sc-text);}',
-        '.sc-idx-cap{font-size:11px;color:var(--sc-faint);font-variant-numeric:tabular-nums;}',
+        '.sc-idx-list{display:flex;flex-direction:column;gap:1px;margin-bottom:10px;}',
         '.sc-idx-row{display:flex;gap:8px;align-items:baseline;padding:3px 2px;cursor:pointer;}',
         '.sc-idx-row:hover{background:var(--sc-bg3);border-radius:6px;}',
         '.sc-idx-tag{flex:none;font-size:10px;font-weight:700;padding:0 7px;border-radius:999px;line-height:16px;',
@@ -277,8 +244,8 @@
         '.sc-ds-badges{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 4px;}',
         '.sc-ds-badge{display:flex;align-items:center;gap:6px;padding:5px 11px;border-radius:20px;font-size:12.5px;font-weight:600;background:var(--sc-bg2);border:1px solid var(--sc-border);color:var(--sc-text);}',
         '.sc-ds-badge .dot{width:8px;height:8px;border-radius:50%;flex:none;}',
-        '.sc-ds-badge.running{color:#3fb950;}',
-        '.sc-ds-badge.running .dot{background:#3fb950;}',
+        '.sc-ds-badge.running{color:var(--sc-ok);}',
+        '.sc-ds-badge.running .dot{background:var(--sc-ok);}',
         '.sc-ds-badge.ended{color:var(--sc-muted);}',
         '.sc-ds-badge.ended .dot{background:#999;}',
         '.sc-ds-badge.probing{color:#4a9eff;}',
@@ -295,7 +262,7 @@
         '.sc-ds-sessions{display:flex;flex-direction:column;gap:6px;margin:6px 0;}',
         '.sc-ds-session{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--sc-border);border-radius:8px;background:var(--sc-bg1);}',
         '.sc-ds-dot{width:10px;height:10px;border-radius:50%;flex:none;}',
-        '.sc-ds-dot.running{background:#3fb950;}',
+        '.sc-ds-dot.running{background:var(--sc-ok);}',
         '.sc-ds-dot.ended{background:#999;}',
         '.sc-ds-dot.probing{background:#4a9eff;animation:scblink 1s infinite;}',
         '.sc-ds-dot.suspect{background:#4a9eff;}',
@@ -336,8 +303,8 @@
 
       function renderViewToggles(view, parsed) {
         view.textContent = '';
-        view.appendChild(el('div', 'sc-h1', '板块与管线'));
-        view.appendChild(el('div', 'sc-desc', '⚠ deprecated：旧记忆三板块（画像/记忆/wiki）业务已由记忆插件+pmg 承接（facts F-003），本页仅存根目录配置兼容；配置入口见「配置原文」。'));
+        view.appendChild(el('div', 'sc-h1', '参数调节'));
+        view.appendChild(el('div', 'sc-desc', '守藏根目录的运行参数：布尔开关一键切换、注入档位滑块调节，改动即时写回配置文件（备份先行）。标量参数（预算/阈值/时间窗）经「配置原文」编辑，后续逐步收编为本页控件。'));
         // 画像 persona 四档滑块：关闭 / 仅注入我 / 仅注入你 / 全注入
         var personaMode = parsed.flags['injection.persona'] || 'both';
         var PERSONA_TIERS = [['off', '关闭'], ['me', '仅注入我'], ['you', '仅注入你'], ['both', '全注入']];
@@ -957,7 +924,6 @@
           view.appendChild(el('div', 'sc-mem-group-title', f.label + ' · ' + (f.lines || []).length));
           if (!(f.lines || []).length) { view.appendChild(el('div', 'sc-mem-empty', '（暂无指针行）')); return; }
           var list = el('div', 'sc-idx-list');
-          list.style.cssText = 'display:flex;flex-direction:column;gap:1px;margin-bottom:10px;';
           renderIndexRows(list, f.lines, renderPersona); // 画像来源：返回时回画像板块
           view.appendChild(list);
         });
@@ -1175,12 +1141,12 @@
       /* ---------- 组装 ---------- */
 
       var VIEWS = [
-        ['persona', '画像板块', 'persona'],
-        ['memory', '记忆板块', 'memory'],
-        ['suite', '插件集合', 'file'],
-        ['deepsleep', '深度睡眠', 'toggles'],
-        ['toggles', '板块与管线 (deprecated)', 'toggles'],
-        ['file', '配置原文', 'file']
+        ['persona', '画像板块', 'persona', '记忆'],
+        ['memory', '记忆板块', 'memory', '记忆'],
+        ['suite', '插件集合', 'file', '运行'],
+        ['deepsleep', '深度睡眠', 'toggles', '运行'],
+        ['toggles', '参数调节', 'toggles', '配置'],
+        ['file', '配置原文', 'file', '配置']
       ];
 
       /* ---------- 插件集合视图（#3） ---------- */
@@ -1405,11 +1371,16 @@
       function buildModal(mask) {
         var modal = el('div'); modal.id = 'scpanl-modal';
 
-        // 左导航（Obsidian settings 侧栏）
+        // 左导航（Obsidian settings 侧栏；分组=记忆/运行/配置，2026-09-09 布局重排对齐宿主排版）
         var nav = el('div', 'sc-nav');
         nav.appendChild(el('div', 'sc-nav-title', '守藏 SHOUCANG'));
         refs.navItems = [];
+        var lastGroup = null;
         VIEWS.forEach(function (v) {
+          if (v[3] && v[3] !== lastGroup) {
+            nav.appendChild(el('div', 'sc-nav-group', v[3]));
+            lastGroup = v[3];
+          }
           var item = el('div', 'sc-nav-item');
           item.appendChild(svg(ICONS[v[2]]));
           item.appendChild(el('span', null, v[1]));
@@ -1425,7 +1396,7 @@
         var main = el('div', 'sc-main');
         refs.view = el('div', 'sc-view');
         main.appendChild(refs.view);
-        var bar = el('div'); bar.id = 'sc-statusbar';
+        var bar = el('div', 'sc-statusbar'); bar.id = 'sc-statusbar'; // 类挂样式 + id 供 status() 定位（此前只挂 id，.sc-statusbar 类样式永不命中）
         main.appendChild(bar);
         modal.appendChild(main);
 

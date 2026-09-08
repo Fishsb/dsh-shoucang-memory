@@ -61,5 +61,27 @@
     "cordis": "^4.0.0-rc",
     "schemastery": "^3.18.0",
     "typescript": "^5.9.0"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "deepseek",
+    "long-term-memory",
+    "memory-management",
+    "knowledge-base",
+    "llm",
+    "agent",
+    "ai-assistant",
+    "session-distillation",
+    "plugin",
+    "markdown"
+  ],
+  "homepage": "https://github.com/Fishsb/dsh-shoucang-memory#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Fishsb/dsh-shoucang-memory.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Fishsb/dsh-shoucang-memory/issues"
   }
 }

@@ -16,12 +16,12 @@
 import type { Context } from 'cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import z from 'schemastery'
-import { readFileSync, readdirSync, existsSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { homedir } from 'node:os'
-import { memorySkillPresent, selftestMatrix } from './targets.js'
+import { dshHome, selftestMatrix, suiteAssemblyMatrix } from './targets.js'
 import { registerDistill } from './distill.js'
 import { deepSleepShare } from './deepsleep-share.js'
+import { schedulerShare } from './scheduler-share.js'
 
 export const name = '@dsh-external/shoucang-scheduler'
 export const inject = ['tools', 'llm', 'subagents', 'agents']
@@ -41,7 +41,7 @@ export interface Config {
   idleWakeMs: number // 唤醒判定：turn 结束后空闲满此毫秒数才蒸馏（缺省 10 分钟）
   minTurnChars: number // 本轮新增正文少于此字符数则跳过蒸馏（水位仍推进）
   distillPrescan: boolean // 预筛：spawn 前扫增量信号词 + pending 候选，皆无则跳过（零 LLM 成本）
-  distillPrompt: string // 蒸馏子代理 persona 覆盖（缺省内建 v2 契约）
+  distillPrompt: string // 蒸馏子代理 persona 覆盖（缺省内建 v4 契约）
   llmProvider: string // 蒸馏子代理指定 provider（空=继承主会话模型）
   llmModel: string // 蒸馏子代理指定 model（空=继承主会话模型）
   // ═══ 深度睡眠归纳（L0 原则层；2026-09-08 拍板：全部会话停滞 ≥3h 自动执行）═══
@@ -75,7 +75,7 @@ export const Config: any = z.object({
   idleWakeMs: z.number().min(60000).default(600000).description('唤醒判定：turn 结束后空闲满此毫秒数才蒸馏（缺省 10 分钟）'),
   minTurnChars: z.number().min(0).default(200).description('本轮新增正文少于此字符数跳过蒸馏（水位仍推进）'),
   distillPrescan: z.boolean().default(true).description('预筛：无信号词且无 pending 候选则不唤醒 LLM 子代理'),
-  distillPrompt: z.string().default('').description('蒸馏子代理 persona 覆盖（缺省内建 v3 契约）'),
+  distillPrompt: z.string().default('').description('蒸馏子代理 persona 覆盖（缺省内建 v4 契约）'),
   llmProvider: z.string().default('').description('蒸馏子代理 provider（空=继承主会话模型）'),
   llmModel: z.string().default('').description('蒸馏子代理 model（空=继承主会话模型）'),
   enableDeepSleep: z.boolean().default(true).description('深度睡眠归纳：全部会话停滞 ≥deepSleepIdleMs 自动提炼原则层 PRINCIPLES.md'),
@@ -90,80 +90,7 @@ export const Config: any = z.object({
   deepSleepDaemonParent: z.boolean().default(false).description('无会话场景兜底：自建守护 parent 承载归纳子代理（宿主新建空 agent 路径未经验证，默认关）'),
 })
 
-// —— 装配事实源探测（无硬编码路径）——
-
-function dshHome(): string {
-  return process.env.DSH_HOME || join(homedir(), '.dsh')
-}
-
-/** 注入器 registry.json → 已注入包名集合 */
-function readInjectedRegistry(): { names: Set<string>; entries: { dir: string; name: string; at: string }[] } {
-  const reg = join(dshHome(), 'super-injector', 'registry.json')
-  const names = new Set<string>()
-  const entries: { dir: string; name: string; at: string }[] = []
-  try {
-    if (existsSync(reg)) {
-      const raw = JSON.parse(readFileSync(reg, 'utf8')) as { dir?: string; name?: string; at?: string }[]
-      if (Array.isArray(raw)) {
-        for (const e of raw) {
-          if (!e?.name) continue
-          names.add(e.name)
-          entries.push({ dir: e.dir || '', name: e.name, at: e.at || '' })
-        }
-      }
-    }
-  } catch {
-    // registry 不可读时按空处理（工具如实报状态，不抛）
-  }
-  return { names, entries }
-}
-
-interface ProfileScan {
-  profile: string
-  pkgNames: Set<string> // dependencies + dsh.profile.bundles 里能对应包名的
-  bundles: string[]
-}
-
-/** 扫描 $DSH_HOME/profiles 下各 profile 的 package.json → 装配包名（bundles + dependencies 键名） */
-function scanProfiles(): ProfileScan[] {
-  const base = join(dshHome(), 'profiles')
-  const out: ProfileScan[] = []
-  let dirs: string[] = []
-  try {
-    dirs = readdirSync(base, { withFileTypes: true })
-      .filter((d) => d.isDirectory())
-      .map((d) => d.name)
-  } catch {
-    return out // profiles 不存在 → 空
-  }
-  for (const profile of dirs) {
-    const pj = join(base, profile, 'package.json')
-    if (!existsSync(pj)) continue
-    try {
-      const pkg = JSON.parse(readFileSync(pj, 'utf8')) as {
-        dependencies?: Record<string, string>
-        dsh?: { profile?: { bundles?: string[] } }
-      }
-      const deps = pkg.dependencies || {}
-      const bundles = pkg.dsh?.profile?.bundles || []
-      const pkgNames = new Set<string>()
-      // dependencies：值含 link:/file: 的是本地包（dependencies 键名即包名）；npm 范围键名也是包名
-      for (const k of Object.keys(deps)) pkgNames.add(k)
-      for (const b of bundles) pkgNames.add(b)
-      out.push({ profile, pkgNames, bundles })
-    } catch {
-      // 单 profile package.json 损坏跳过
-    }
-  }
-  return out
-}
-
-function resolveBaseName(pkg: string): string {
-  // '@dsh-external/project-map-governance' → 'project-map-governance'；bundles 常以短名登记
-  return pkg.includes('/') ? pkg.split('/').pop() || pkg : pkg
-}
-
-// —— 自持配置文件（契约 v3 落地通道）——
+// —— 自持配置文件（契约 v3 落地通道；dshHome 等路径探测统一来自 targets.ts，单一事实源）——
 
 /**
  * ~/.dsh/suite/scheduler.json — 唯一持久配置通道。
@@ -233,51 +160,15 @@ export function applyScheduler(ctx: Context, config: Config): void {
           async execute(args: any) {
             const scope = (args?.scope || 'all') as string
             const filter = (args?.member || '').toString().trim()
-            const injected = readInjectedRegistry()
-            const profiles = scanProfiles()
-
-            const rows = config.members
+            const matrix = suiteAssemblyMatrix(config.members)
+            const rows = matrix.members
               .filter((m) => !filter || m.id === filter || m.package.includes(filter))
-              .map((m) => {
-                const inInjected = injected.names.has(m.package)
-                const hitProfiles = profiles.filter((p) => {
-                  // 精确包名或 bundle 短名命中
-                  const short = resolveBaseName(m.package)
-                  return p.pkgNames.has(m.package) || p.pkgNames.has(short)
-                })
-                const inProfile = hitProfiles.length > 0
-                const inScope = scope === 'all' || (scope === 'injected' && inInjected) || (scope === 'profile' && inProfile)
-                if (!inScope) return null
-                let status = 'missing'
-                if (inInjected && inProfile) status = 'both'
-                else if (inInjected) status = 'injected'
-                else if (inProfile) status = 'profile'
-                const detail =
-                  status === 'both'
-                    ? `注入器+${hitProfiles.map((p) => p.profile).join(',')} profile`
-                    : status === 'injected'
-                      ? '注入器装配'
-                      : status === 'profile'
-                        ? `${hitProfiles.map((p) => p.profile).join(',')} profile 装配`
-                        : '两基准均未装配（member 独立可装：dev_inject_plugin 或 dsh plugin add）'
-                return {
-                  id: m.id,
-                  package: m.package,
-                  repo: m.repo,
-                  role: m.role,
-                  status,
-                  injected: inInjected,
-                  profiles: hitProfiles.map((p) => p.profile),
-                  detail,
-                }
-              })
-              .filter((r): r is NonNullable<typeof r> => r !== null)
-
+              .filter((m) => scope === 'all' || (scope === 'injected' && m.injected) || (scope === 'profile' && m.profiles.length > 0))
             const missing = rows.filter((r) => r.status === 'missing').length
             const present = rows.length - missing
             return {
               members: rows,
-              summary: `共 ${rows.length} 成员（present ${present} / missing ${missing}）; 基准: injected registry ${injected.entries.length} 项, profiles ${profiles.length} 个`,
+              summary: `共 ${rows.length} 成员（present ${present} / missing ${missing}）`,
             }
           },
         }),
@@ -352,7 +243,7 @@ export function applyScheduler(ctx: Context, config: Config): void {
             : conflict
               ? '证据充分但存在冲突，需裁决'
               : route === 'project' && cards === 0
-                ? 'route=project 但卡产出 0——审计 Q3 落点失败，检查 devref-card 迁移'
+                ? 'route=project 但卡产出 0——审计 Q3 落点失败，检查 workspace docs/devref/shoucang 直写'
                 : '验证通过'
           return {
             gate: 'g3/verify',
@@ -379,8 +270,7 @@ export function applyScheduler(ctx: Context, config: Config): void {
           parameters: {},
           output: { schema: { type: 'string' }, render: (_a: unknown, v: unknown) => [{ type: 'text', text: String(v) }] },
           async execute() {
-            const real = { memory: memorySkillPresent() }
-            const lines = selftestMatrix(real)
+            const lines = selftestMatrix()
             return ['守藏蒸馏目标层自测（单库）：', ...lines].join('\n')
           },
         }),
@@ -389,7 +279,6 @@ export function applyScheduler(ctx: Context, config: Config): void {
 
   // ═══ ADR-0002 阶段 2：守藏蒸馏器（事件驱动，写入分发走 targets.ts 路由+白名单）═══
   if (config.enableDistill) {
-    const governancePkg = config.members.find((m: SuiteMember) => m.id === 'governance')?.package || '@dsh-external/project-map-governance'
     const distill = registerDistill(ctx as any, {
       nodeBin: 'node',
       idleWakeMs: config.idleWakeMs,
@@ -409,7 +298,11 @@ export function applyScheduler(ctx: Context, config: Config): void {
       deepSleepProbeMaxMs: config.deepSleepProbeMaxMs,
       deepSleepDaemonParent: config.deepSleepDaemonParent,
     })
-    // 跨插件桥接：把状态机 API 挂到共享引用，供 panel /deepsleep RPC 惰性读取
+    // 跨模块桥接：状态机 API 供 panel /deepsleep RPC 惰性读取；suite 矩阵供 panel /suite RPC 复用同一实现
     if (distill) deepSleepShare.api = distill
+    schedulerShare.api = { suiteScan: () => suiteAssemblyMatrix(config.members) }
+  } else {
+    // 蒸馏器关闭也要给 panel 提供装配矩阵（/suite 是只读视图，与蒸馏无关）
+    schedulerShare.api = { suiteScan: () => suiteAssemblyMatrix(config.members) }
   }
 }

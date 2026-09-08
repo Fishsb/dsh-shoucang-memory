@@ -26,46 +26,113 @@ export function memoryLibRoot(): string {
   return join(dshHome(), 'skills', 'managing-memory')
 }
 
-// —— 装配探测（与 index.ts shoucang_suite 同源口径：injected registry + profiles 双基准）——
+// —— 装配探测（injected registry + profiles 双基准；shoucang_suite 工具与 panel /suite 视图共用）——
 
-function readInjectedNames(): Set<string> {
+export interface RegistryEntry { dir: string; name: string; at: string }
+
+/** 注入器 registry.json → 已注入包名集合 + 原始条目（panel 明细展示用） */
+export function readInjectedRegistry(): { names: Set<string>; entries: RegistryEntry[] } {
   const names = new Set<string>()
+  const entries: RegistryEntry[] = []
   try {
     const reg = join(dshHome(), 'super-injector', 'registry.json')
     if (existsSync(reg)) {
-      const raw = JSON.parse(readFileSync(reg, 'utf8')) as { name?: string }[]
-      if (Array.isArray(raw)) for (const e of raw) if (e?.name) names.add(e.name)
+      const raw = JSON.parse(readFileSync(reg, 'utf8')) as { dir?: string; name?: string; at?: string }[]
+      if (Array.isArray(raw)) {
+        for (const e of raw) {
+          if (!e?.name) continue
+          names.add(e.name)
+          entries.push({ dir: e.dir || '', name: e.name, at: e.at || '' })
+        }
+      }
     }
   } catch { /* registry 不可读按空 */ }
-  return names
+  return { names, entries }
+}
+
+export interface ProfileScan {
+  profile: string
+  pkgNames: Set<string> // dependencies + dsh.profile.bundles 里能对应包名的
+  bundles: string[]
+}
+
+/** 扫描 $DSH_HOME/profiles 下各 profile 的 package.json → 装配包名（bundles + dependencies 键名，逐 profile 归属） */
+export function scanProfiles(): ProfileScan[] {
+  const base = join(dshHome(), 'profiles')
+  const out: ProfileScan[] = []
+  let dirs: string[] = []
+  try {
+    dirs = readdirSync(base, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name)
+  } catch {
+    return out // profiles 不存在 → 空
+  }
+  for (const profile of dirs) {
+    const pj = join(base, profile, 'package.json')
+    if (!existsSync(pj)) continue
+    try {
+      const pkg = JSON.parse(readFileSync(pj, 'utf8')) as { dependencies?: Record<string, string>; dsh?: { profile?: { bundles?: string[] } } }
+      const deps = pkg.dependencies || {}
+      const bundles = pkg.dsh?.profile?.bundles || []
+      const pkgNames = new Set<string>()
+      for (const k of Object.keys(deps)) pkgNames.add(k)
+      for (const b of bundles) pkgNames.add(b)
+      out.push({ profile, pkgNames, bundles })
+    } catch { /* 单 profile package.json 损坏跳过 */ }
+  }
+  return out
+}
+
+export function resolveBaseName(pkg: string): string {
+  // '@dsh-external/xxx' → 'xxx'；bundles 常以短名登记
+  return pkg.includes('/') ? pkg.split('/').pop() || pkg : pkg
+}
+
+function readInjectedNames(): Set<string> {
+  return readInjectedRegistry().names
 }
 
 function readProfileNames(): Set<string> {
   const names = new Set<string>()
-  try {
-    const base = join(dshHome(), 'profiles')
-    if (!existsSync(base)) return names
-    // 简版扫描：只取包名集合（profile 归属明细由 shoucang_suite 工具负责）
-    for (const d of readdirSync(base, { withFileTypes: true })) {
-      if (!d.isDirectory()) continue
-      const pj = join(base, d.name, 'package.json')
-      if (!existsSync(pj)) continue
-      try {
-        const pkg = JSON.parse(readFileSync(pj, 'utf8')) as { dependencies?: Record<string, string>; dsh?: { profile?: { bundles?: string[] } } }
-        for (const k of Object.keys(pkg.dependencies || {})) names.add(k)
-        for (const b of pkg.dsh?.profile?.bundles || []) names.add(b)
-      } catch { /* 单 profile 损坏跳过 */ }
-    }
-  } catch { /* profiles 不可读按空 */ }
+  for (const p of scanProfiles()) for (const n of p.pkgNames) names.add(n)
   return names
 }
 
-const baseName = (pkg: string): string => (pkg.includes('/') ? pkg.split('/').pop() || pkg : pkg)
+const baseName = (pkg: string): string => resolveBaseName(pkg)
 
 /** 成员是否已装配（任一基准命中） */
 export function memberPresent(memberPackage: string): boolean {
   const n = baseName(memberPackage)
   return readInjectedNames().has(memberPackage) || readProfileNames().has(memberPackage) || readInjectedNames().has(n) || readProfileNames().has(n)
+}
+
+// —— suite 装配矩阵（单一实现：scheduler 的 shoucang_suite 工具与 panel 的 /suite RPC 都调这里）——
+
+export interface SuiteMemberSpec { id: string; package: string; repo: string; role: string }
+export interface SuiteMemberRow extends SuiteMemberSpec { status: 'both' | 'injected' | 'profile' | 'missing'; injected: boolean; profiles: string[]; detail: string }
+
+export function suiteAssemblyMatrix(members: SuiteMemberSpec[]): { members: SuiteMemberRow[]; summary: string } {
+  const injected = readInjectedRegistry()
+  const profiles = scanProfiles()
+  const rows = members.map((m): SuiteMemberRow => {
+    const inInjected = injected.names.has(m.package)
+    const hitProfiles = profiles.filter((p) => p.pkgNames.has(m.package) || p.pkgNames.has(resolveBaseName(m.package)))
+    const inProfile = hitProfiles.length > 0
+    const status = inInjected && inProfile ? 'both' : inInjected ? 'injected' : inProfile ? 'profile' : 'missing'
+    const detail = status === 'both'
+      ? `注入器+${hitProfiles.map((p) => p.profile).join(',')} profile`
+      : status === 'injected'
+        ? '注入器装配'
+        : status === 'profile'
+          ? `${hitProfiles.map((p) => p.profile).join(',')} profile 装配`
+          : '两基准均未装配（member 独立可装：dev_inject_plugin 或 dsh plugin add）'
+    return { ...m, status, injected: inInjected, profiles: hitProfiles.map((p) => p.profile), detail }
+  })
+  const missing = rows.filter((r) => r.status === 'missing').length
+  const present = rows.length - missing
+  return {
+    members: rows,
+    summary: `共 ${rows.length} 成员（present ${present} / missing ${missing}）; 基准: injected registry ${injected.entries.length} 项, profiles ${profiles.length} 个`,
+  }
 }
 
 /**
@@ -147,8 +214,7 @@ export function gateMemoryAppend(a: { target?: string }, wl: Whitelist): GateRes
 
 // —— 自测：单库解析 + 白名单门禁抽样 ——
 
-export function selftestMatrix(real: { memory: boolean }): string[] {
-  void real
+export function selftestMatrix(): string[] {
   const lines: string[] = []
   const t = resolveTarget()
   lines.push(`${t.present ? '✅' : '❌'} 单库解析: ${t.library} @ ${t.root} present=${t.present}`)

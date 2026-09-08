@@ -1,14 +1,16 @@
 /**
  * @dsh-external/shoucang-panel — 宿主半区。
  *
- * 职责：为 client 面板（client.js，纯 DOM）提供 /api/shoucang-panel HTTP RPC：
- *   GET  /roots     已登记守藏根目录列表 + 当前激活 root
- *   POST /set_root  {path, name?} 登记/切换 root（目录须含 shoucang.config.yaml）
- *   GET  /get_root  → {active}
- *   GET  /config    当前 root 的 shoucang.config.yaml 原文 + 关键字段解析
- *   POST /save      {text} 备份先行写入（.bak-<时间戳>）
- *   POST /toggle    {key} 翻转布尔项（boards.* / archive.enabled /
- *                   lifecycle.enabled / scheduler.enabled）
+ * 职责：为 client 面板（client.js，纯 DOM）提供 /api/shoucang-panel HTTP RPC（按功能组）：
+ *   根目录：GET /roots · POST /set_root · GET /get_root · POST /root/bootstrap
+ *   配置：  GET /config · POST /save · POST /toggle · POST /set（白名单键）
+ *   记忆：  GET /memory/overview · GET /memory/sections（双根 root=suite|memory）
+ *   集合：  GET /suite（suiteAssemblyMatrix 经 schedulerShare 桥接）
+ *   深睡：  GET /deepsleep · POST /deepsleep/trigger · GET+POST /deepsleep/config（单 handler 按 method 分发）
+ *   巩固轮：GET /idle/status · POST /idle/consolidate
+ *   向量/模型：GET /vector/status · POST /vector/build · GET /model/list · POST /model/pull|progress|import|deploy
+ *   注入：  GET /inject/preview · GET /inject/stats（R1 热记忆注入 systemPrompt.context）
+ *   命令：  /scnote（commands.register，笔记化任务）
  *
  * 开源红线：零硬编码路径。root 登记表存 state_path（默认 ~/.dsh/storages/
  * shoucang-panel.json，支持 ~ 展开），初始为空——root 由用户在面板里添加。
@@ -16,7 +18,7 @@
  */
 import type { Context } from 'cordis'
 import z from 'schemastery'
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { execFileSync, spawn } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { gunzipSync, zstdDecompressSync } from 'node:zlib'
@@ -24,6 +26,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { homedir } from 'node:os'
 import { dshHome } from './targets.js'
 import { deepSleepShare } from './deepsleep-share.js'
+import { schedulerShare } from './scheduler-share.js'
 import { fileURLToPath } from 'node:url'
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path'
 
@@ -32,12 +35,10 @@ export const inject = ['webServer', 'systemPrompt', 'commands'] as const
 
 export interface Config {
   state_path: string
-  projectRoots: string
 }
 
 export const Config = z.object({
   state_path: z.string().default('~/.dsh/storages/shoucang-panel.json'),
-  projectRoots: z.string().default('').description('项目发现根（逗号分隔，一层扫描）；仅收录存在 docs/devref/cards/ 的目录。缺省空=发现关闭（2026-09-08 pmg 移除后不再预置路径，遵守零硬编码红线）'),
 }).description('面板设置')
 
 interface RootEntry { id: string; name: string; path: string }
@@ -74,32 +75,6 @@ async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> 
 
 function statMtime(file: string): string {
   try { return statSync(file).mtime.toISOString() } catch { return '' }
-}
-
-/** 递归收集目录下全部 .md（跳过隐藏/.bak；可跳过指定子目录），零硬编码用户路径。 */
-function walkMarkdown(rootDir: string, skipDirs: string[] = []): Array<{ rel: string; name: string; mtime: string; text: string }> {
-  const out: Array<{ rel: string; name: string; mtime: string; text: string }> = []
-  const visit = (dir: string, prefix: string): void => {
-    let entries: import('node:fs').Dirent[]
-    try { entries = readdirSync(dir, { withFileTypes: true }) } catch { return }
-    entries.sort((a, b) => a.name.localeCompare(b.name, 'zh'))
-    for (const e of entries) {
-      if (e.name.startsWith('.')) continue
-      const full = join(dir, e.name)
-      const rel = prefix ? `${prefix}/${e.name}` : e.name
-      if (e.isDirectory()) {
-        if (skipDirs.includes(e.name)) continue
-        visit(full, rel)
-      } else if (e.name.endsWith('.md') && e.name.indexOf('.bak') === -1) {
-        try {
-          const text = readFileSync(full, 'utf8').slice(0, 12000)
-          out.push({ rel, name: e.name, mtime: statMtime(full), text })
-        } catch { /* 跳过不可读文件 */ }
-      }
-    }
-  }
-  visit(rootDir, '')
-  return out
 }
 
 
@@ -239,33 +214,6 @@ export function applyPanel(ctx: Context, config: Config): void {
   }
 
   /* ---------- R1 热记忆注入（2026-08-27）：画像+记忆 指针行，每轮注入 ---------- */
-
-  interface PointerFile { rel: string; name: string; mtime: string; text: string }
-
-  const pointerTitle = (f: PointerFile): string => {
-    const m = f.text.match(/^---\r?\n([\s\S]*?)\r?\n---/)
-    if (m) {
-      for (const l of m[1].split(/\r?\n/)) {
-        if (l.startsWith('title:')) { const v = l.replace(/^title:\s*/, '').replace(/^['"]|['"]$/g, ''); if (v) return v.slice(0, 30) }
-        if (l.startsWith('name:')) { const v = l.replace(/^name:\s*/, '').replace(/^['"]|['"]$/g, ''); if (v) return v.slice(0, 30) }
-      }
-    }
-    return f.name.replace(/\.md$/, '').slice(0, 30)
-  }
-
-  const pointerDesc = (f: PointerFile): string => {
-    const m = f.text.match(/^---\r?\n([\s\S]*?)\r?\n---/)
-    if (m) {
-      const desc = m[1].split(/\r?\n/).find((l) => l.startsWith('description:'))
-      if (desc) {
-        const v = desc.replace(/^description:\s*/, '').replace(/^['"]|['"]$/g, '')
-        if (v) return v.slice(0, 60)
-      }
-    }
-    const body = f.text.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').trim()
-    const first = body.split(/\r?\n/).find((l) => l && !/^#/.test(l))
-    return (first || f.text.slice(0, 40)).slice(0, 60)
-  }
 
   const injectCache: { root: string | null; at: number; text: string } = { root: null, at: 0, text: '' }
   const injectMeta = { calls: 0, lastAt: 0 } // 提示词装配调用计数（实测新会话注入）
@@ -590,16 +538,14 @@ export function applyPanel(ctx: Context, config: Config): void {
   interface MemIndexFile { name: string; label: string; text: string; chars: number; cap: number; lines: MemIndexEntry[] }
 
   const memoryHomeOf = (): string | null => {
-    const home = process.env.DSH_HOME || join(homedir(), '.dsh')
-    const base = join(home, 'skills', 'managing-memory')
+    const base = join(dshHome(), 'skills', 'managing-memory')
     return existsSync(base) ? base : null
   }
   /* 守藏本地知识区（ADR-0002 阶段3 单飞切换后 = 蒸馏事实源宿主）：
    * $DSH_HOME/suite/knowledge —— 三索引 + notes 七类 + pending + audit，与记忆库同构。
    * 阶段4 UI 同步：panel 记忆视图双根（suite ∪ memory lib）+ 蒸馏统计卡（distill-audit.jsonl）。 */
   const suiteHomeOf = (): string | null => {
-    const home = process.env.DSH_HOME || join(homedir(), '.dsh')
-    const base = join(home, 'suite', 'knowledge')
+    const base = join(dshHome(), 'suite', 'knowledge')
     return existsSync(base) ? base : null
   }
   /** 蒸馏统计卡聚合（suite/knowledge/audit/distill-audit.jsonl；全量汇总 + 尾部明细）。 */
@@ -784,51 +730,17 @@ export function applyPanel(ctx: Context, config: Config): void {
   })
 
 
-  /* ---------- 插件集合视图（#3：suite 装配状态，只读；算法与 scheduler shoucang_suite 同源） ---------- */
-
-  interface SuiteMemberRow { id: string; package: string; repo: string; role: string; status: string; injected: boolean; profiles: string[]; detail: string }
-  const SUITE_MEMBERS: SuiteMemberRow[] = [
-    { id: 'memory', package: '@dsh-external/dsh-managing-memory', repo: 'Fishsb/dsh-managing-memory', role: 'commander', status: '', injected: false, profiles: [], detail: '' },
-    { id: 'governance', package: '@dsh-external/project-map-governance', repo: 'Fishsb/dsh-project-map-governance', role: 'executor', status: '', injected: false, profiles: [], detail: '' },
-  ]
-  const suiteScan = (): { members: SuiteMemberRow[]; summary: string } => {
-    const base = join(homedir(), '.dsh')
-    const home = process.env.DSH_HOME || base
-    // 注入器 registry
-    const regPath = join(home, 'super-injector', 'registry.json')
-    const injectedNames = new Set<string>()
-    try {
-      const raw = JSON.parse(readFileSync(regPath, 'utf8')) as { name?: string }[]
-      if (Array.isArray(raw)) for (const e of raw) if (e?.name) injectedNames.add(e.name)
-    } catch { /* 无 registry → 空 */ }
-    // profiles 装配清单
-    const profilesDir = join(home, 'profiles')
-    let profDirs: string[] = []
-    try { profDirs = readdirSync(profilesDir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name) } catch { /* none */ }
-    const profileHits: Record<string, string[]> = {}
-    for (const prof of profDirs) {
-      try {
-        const pj = JSON.parse(readFileSync(join(profilesDir, prof, 'package.json'), 'utf8')) as { dependencies?: Record<string, string>; dsh?: { profile?: { bundles?: string[] } } }
-        const names = new Set([...Object.keys(pj.dependencies || {}), ...(pj.dsh?.profile?.bundles || [])])
-        for (const m of SUITE_MEMBERS) {
-          const short = m.package.split('/').pop() || m.package
-          if (names.has(m.package) || names.has(short)) (profileHits[m.id] = profileHits[m.id] || []).push(prof)
-        }
-      } catch { /* skip broken profile */ }
-    }
-    const members = SUITE_MEMBERS.map((m) => {
-      const inInj = injectedNames.has(m.package)
-      const profs = profileHits[m.id] || []
-      const status = inInj && profs.length ? 'both' : inInj ? 'injected' : profs.length ? 'profile' : 'missing'
-      const detail = status === 'both' ? `注入器+${profs.join(',')} profile` : status === 'injected' ? '注入器装配' : status === 'profile' ? `${profs.join(',')} profile 装配` : '两基准均未装配'
-      return { ...m, status, injected: inInj, profiles: profs, detail }
-    })
-    return { members, summary: `成员 ${members.length}（present ${members.filter((m) => m.status !== 'missing').length} / missing ${members.filter((m) => m.status === 'missing').length}）` }
-  }
+  /* ---------- 插件集合视图（suite 装配状态，只读；算法单一实现=targets.suiteAssemblyMatrix，
+   * 经 schedulerShare 惰性桥接读取——panel 不再有本地成员表/扫描副本（2026-09-09 审查修复：
+   * 此前本地硬编码 memory+governance 两成员，governance 已随 pmg 移除，属假数据漂移）） ---------- */
 
   // 插件集合装配状态（只读；client「插件集合」视图数据源）
   route('/suite', (_req, res) => {
-    try { sendJson(res, 200, suiteScan()) } catch (e) { sendJson(res, 500, { error: String(e) }) }
+    try {
+      const api = schedulerShare.api
+      if (!api) return sendJson(res, 200, { members: [], summary: '调度器未就绪（suite 矩阵经 scheduler-share 桥接；空成员=如实空态）' })
+      sendJson(res, 200, api.suiteScan())
+    } catch (e) { sendJson(res, 500, { error: String(e) }) }
   })
 
   /* ---------- 深度睡眠状态机（T1/T2 面板视图数据源；跨插件经 deepSleepShare 惰性桥接） ----------
@@ -969,7 +881,7 @@ export function applyPanel(ctx: Context, config: Config): void {
   }
 
   ctx.effect(() => {
-    ctx.logger?.info?.('[shoucang] host RPC ready v6: roots/config/save/toggle/boards(persona|tree|note|memory)/inject')
+    ctx.logger?.info?.('[shoucang] host RPC ready: roots/bootstrap/config/save/toggle/set/memory(overview|sections)/suite/deepsleep(status|trigger|config)/idle(status|consolidate)/vector(status|build)/model(list|pull|progress|import|deploy)/inject(preview|stats)')
     // 注册 systemPrompt 注入块（每轮渲染，指针缓存 30s）
     const sp = (ctx as unknown as { systemPrompt?: { context?(opts: unknown): () => void } }).systemPrompt
     if (sp && typeof sp.context === 'function') {
@@ -993,7 +905,7 @@ const MAX_PY_PER_ROUND = 24
   const _runPy = (args: string[]): string => {
     if (inConsolidate) {
       if (++pyRoundCalls > MAX_PY_PER_ROUND) {
-        ctx.logger?.warn?.(`[shoucang] py 轮内配额超限(>{MAX_PY_PER_ROUND} 次)，本轮后续调用被拒`)
+        ctx.logger?.warn?.(`[shoucang] py 轮内配额超限(>${MAX_PY_PER_ROUND} 次)，本轮后续调用被拒`)
         return JSON.stringify({ error: 'py-call-quota-exceeded', quota: MAX_PY_PER_ROUND })
       }
     }
@@ -1009,7 +921,8 @@ const MAX_PY_PER_ROUND = 24
     if (c) return c
     const env = process.env.SHOUCANG_SESSIONS_DIR
     if (env) return env
-    const probe = join(process.env.USERPROFILE || '', '.dsh', 'sessions')
+    // 会话目录缺省探测走 dshHome()（DSH_HOME || ~/.dsh），与插件其余路径同一事实源（此前用 USERPROFILE 只在 Windows 成立）
+    const probe = join(dshHome(), 'sessions')
     return existsSync(probe) ? probe : ''
   }
   const _latestSession = (dir: string): string => {
@@ -1135,15 +1048,12 @@ const MAX_PY_PER_ROUND = 24
         if (!file) { res.steps.distill = { note: 'sessions_dir 内无会话文件' } }
         else {
           let text = ''
-          let workFile = file
           if (/\.zst(a|d)?$/i.test(file)) {
             const dec = _runPy([join(meta, 'session_decode.py'), file, join(tmpdir(), 'shoucang-session-dec.jsonl')])
             text = readFileSync(join(tmpdir(), 'shoucang-session-dec.jsonl'), 'utf8')
-            workFile = join(tmpdir(), 'shoucang-session-dec.jsonl')
           } else {
             try { text = _decodeBuf(readFileSync(file)) } catch { text = '' }
           }
-          void workFile
           // sid 带会话目录名（session-<uuid>）：同名 session.jsonl.zstd 导出互不污染 cutoff 边界
           const _segs = file.split(/[\\/]/)
           const _fname = _segs.pop() || 's'
@@ -1165,7 +1075,7 @@ const MAX_PY_PER_ROUND = 24
           } else {
             res.steps.distill = { session: sid, facts: 0, note: '无新事实或已蒸馏', raw: out.slice(-90) }
           }
-          try { const fsx = require('node:fs') as { unlinkSync(p: string): void }; fsx.unlinkSync(tmp) } catch { /* 残留无害 */ }
+          try { unlinkSync(tmp) } catch { /* 残留无害 */ }
         }
       } else {
         res.steps.distill = { note: '无会话源（需配置 idle.sessions_dir）' }

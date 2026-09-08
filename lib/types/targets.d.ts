@@ -3,8 +3,42 @@ export declare function dshHome(): string;
 export declare function knowledgeRoot(): string;
 /** 记忆库根（数据与脚本同根，scripts 缺省自定位） */
 export declare function memoryLibRoot(): string;
+export interface RegistryEntry {
+    dir: string;
+    name: string;
+    at: string;
+}
+/** 注入器 registry.json → 已注入包名集合 + 原始条目（panel 明细展示用） */
+export declare function readInjectedRegistry(): {
+    names: Set<string>;
+    entries: RegistryEntry[];
+};
+export interface ProfileScan {
+    profile: string;
+    pkgNames: Set<string>;
+    bundles: string[];
+}
+/** 扫描 $DSH_HOME/profiles 下各 profile 的 package.json → 装配包名（bundles + dependencies 键名，逐 profile 归属） */
+export declare function scanProfiles(): ProfileScan[];
+export declare function resolveBaseName(pkg: string): string;
 /** 成员是否已装配（任一基准命中） */
 export declare function memberPresent(memberPackage: string): boolean;
+export interface SuiteMemberSpec {
+    id: string;
+    package: string;
+    repo: string;
+    role: string;
+}
+export interface SuiteMemberRow extends SuiteMemberSpec {
+    status: 'both' | 'injected' | 'profile' | 'missing';
+    injected: boolean;
+    profiles: string[];
+    detail: string;
+}
+export declare function suiteAssemblyMatrix(members: SuiteMemberSpec[]): {
+    members: SuiteMemberRow[];
+    summary: string;
+};
 /**
  * 记忆库就位探测：库根下 MEMORY.md 存在（数据随 skill 部署到同一根）。
  */
@@ -39,6 +73,4 @@ export interface GateResult {
 export declare function gateMemoryAppend(a: {
     target?: string;
 }, wl: Whitelist): GateResult;
-export declare function selftestMatrix(real: {
-    memory: boolean;
-}): string[];
+export declare function selftestMatrix(): string[];

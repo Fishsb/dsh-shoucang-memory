@@ -23,6 +23,7 @@ import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, renameSync, statSync, unlinkSync } from 'node:fs'
 import { join, dirname } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import {
   dshHome, knowledgeRoot, memoryLibRoot, memorySkillPresent, resolveTarget, loadWhitelist, gateMemoryAppend,
   type Whitelist, type RouteTarget,
@@ -164,7 +165,7 @@ const loadEngineSignals = async (): Promise<void> => {
   const candidates = [join(memoryLibRoot(), 'engine', 'signals.mjs')]
   for (const p of candidates) {
     try {
-      const mod = await import('file://' + p.replace(/\\/g, '/'))
+      const mod = await import(pathToFileURL(p).href)
       if (mod && typeof mod.hasDistillSignals === 'function') { hasDistillSignalsImpl = mod.hasDistillSignals; return }
     } catch { /* 下一个 */ }
   }
@@ -303,7 +304,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
   }
   /**
    * 画像行写入（宿主直写，tmp+rename 原子）：小节存在→小节尾加行；不存在→文件尾建小节。
-   * 门禁：target 仅 USER.md/AGENT.md、小节名防注入、单条 ≤2000 字符库容量、去重、replace 须 match 逐字存在。
+   * 门禁：target 仅 USER.md/AGENT.md、小节名防注入、单行 ≤160 字符、库容量 ≤2,000、去重、replace 须 match 逐字存在。
    */
   const writeProfileLine = (root: string, target: string, section: string, line: string, replaceMatch?: string): 'added' | 'dedup' | 'rejected' | 'failed' => {
     try {
@@ -474,16 +475,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         ]) as any
         clearTimeout(timeout)
         const stop = result && result.stopReason
-        let out: any = null
-        if (result && Array.isArray(result.output)) {
-          const joined = result.output.filter((b: any) => b && b.type === 'text').map((b: any) => b.text).join('').trim()
-          const cleaned = joined.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim()
-          try { out = JSON.parse(cleaned) } catch (e1) {
-            const m = cleaned.match(/\{[\s\S]*\}/)
-            if (m) { try { out = JSON.parse(m[0]) } catch (e2) { log(`distill: ${sid.slice(0, 8)} JSON 解析失败: ${String((e2 as Error).message).slice(0, 80)}`) } }
-            else log(`distill: ${sid.slice(0, 8)} JSON 解析失败: ${String((e1 as Error).message).slice(0, 80)}`)
-          }
-        }
+        const out = parseAgentJson(result, `distill ${sid.slice(0, 8)}`) // 子代理输出 → JSON（剥离代码栅栏+容错提取，与深睡共用同一实现）
         if (stop === 'completed' && out) providerFailCount = 0
         else if (useProvider && (stop !== 'completed' || !out)) providerFailCount++
         const rawRoute = (out && typeof out.route === 'string') ? out.route.trim().toLowerCase() : ''
