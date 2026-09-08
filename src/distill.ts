@@ -60,6 +60,7 @@ export interface DistillConfig {
   // 探测可靠性加固（2026-09-08）：多轮采样 + 多信号交叉 + 卡住二次确认 + 失败重试 + 总时长兜底
   deepSleepProbeSamples: number
   deepSleepProbeConfirm: number
+  deepSleepDaemonParent: boolean // 无会话兜底：自建守护 parent（默认关，宿主新建空 agent 路径未验证）
   deepSleepProbeRetries: number
   deepSleepProbeMaxMs: number
 }
@@ -740,7 +741,12 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       const ac = new AbortController()
       const timeout = setTimeout(() => { try { ac.abort(new Error('deep sleep timeout 10min')) } catch { /* */ } }, 600000)
       let parent = pickParent()
-      if (!parent) parent = await ensureDaemonParent(ac.signal, agentOptions ?? resolveDefaultModel())
+      // 守护 parent 默认关闭（宿主「新建空 agent 当 parent」路径未经验证，实测子代理 100ms stop=error）
+      if (!parent && config.deepSleepDaemonParent) {
+        const route = agentOptions ?? resolveDefaultModel()
+        log(`deep sleep: 无可用 agent，尝试守护 parent（路由 ${route ? `${route.provider}/${route.model}` : '继承默认'}）`)
+        parent = await ensureDaemonParent(ac.signal, route)
+      }
       if (!parent) {
         log('deep sleep: 无可用 parent agent（宿主 spawn 必需），跳过本轮')
         audit({ kind: 'deep-sleep', result: 'no-parent' })

@@ -44,6 +44,7 @@ export interface Config {
     deepSleepProbeConfirm: number;
     deepSleepProbeRetries: number;
     deepSleepProbeMaxMs: number;
+    deepSleepDaemonParent: boolean;
 }
 export declare const Config: any;
 export declare function applyScheduler(ctx: Context, config: Config): void;

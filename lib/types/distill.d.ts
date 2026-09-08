@@ -38,6 +38,7 @@ export interface DistillConfig {
     deepSleepProbeWindowMs: number;
     deepSleepProbeSamples: number;
     deepSleepProbeConfirm: number;
+    deepSleepDaemonParent: boolean;
     deepSleepProbeRetries: number;
     deepSleepProbeMaxMs: number;
 }
