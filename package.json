@@ -64,17 +64,19 @@
   },
   "keywords": [
     "dsh",
+    "dsh-plugin",
     "deepseek-harness",
     "deepseek",
-    "long-term-memory",
+    "memory",
     "memory-management",
-    "knowledge-base",
-    "llm",
-    "agent",
-    "ai-assistant",
+    "long-term-memory",
     "session-distillation",
-    "plugin",
-    "markdown"
+    "context",
+    "agent",
+    "llm",
+    "ai-assistant",
+    "npm",
+    "plugin"
   ],
   "homepage": "https://github.com/Fishsb/dsh-shoucang-memory#readme",
   "repository": {
