@@ -23,14 +23,19 @@
 | boards.memory | true | 记忆板块显示；**同时是热记忆注入的总闸**（关了它，hot_memory 开着也不注入） |
 | boards.wiki | false | 旧 vault 导航（deprecated，保留兼容） |
 
-### 1.2 injection.* —— 每轮热记忆注入（指针式：原则层 + 画像 + 知识索引）
+### 1.2 injection.* —— 每轮热记忆注入（指针式：agent 画像 + 用户画像 + 知识索引）
+
+> v16 起注入面=**agent 画像（AGENT.md，含 [原则] 习得原则）+ 用户画像（USER.md）+ 知识索引（MEMORY.md）**；PRINCIPLES.md 独立原则层已退役（并入 AGENT.md）。
 
 | 键 | 缺省 | 范围/枚举 | 作用与消费点 |
 |---|---|---|---|
-| hot_memory | true | 布尔 | 总开关。关=本轮提示词不带任何守藏记忆（原则层也不带）。panel.ts buildHotMemoryText |
-| level | smart | off\|low\|medium\|high\|smart | MEMORY.md 知识索引热取行数：off=0 / low=2 / medium=4 / high=8 / smart=10。USER 画像与 PRINCIPLES 原则层**不受档位限制，始终全量** |
-| persona | both | off\|me\|you\|both | ⚠️ **漂移键：UI 可改但现行注入实现未消费**（USER.md 现为常驻全量注入，不按此档分流）。面板有下拉、/set 有白名单，改了不生效 |
-| max_tokens | 3000 | 100–8000 | ⚠️ **漂移键：UI 可改但未消费**——注入预算实际硬编码 3000 字符（中文粗估 ~1500 token），不读此键 |
+| hot_memory | true | 布尔 | 总开关。关=本轮提示词不带任何守藏记忆（画像与知识索引全不带）。panel.ts buildHotMemoryText |
+| level | smart | off\|low\|medium\|high\|smart | MEMORY.md 知识索引热取行数：off=0 / low=2 / medium=4 / high=8 / smart=10。画像索引不受档位限制 |
+| persona | both | off\|me\|you\|both | ✅ **v16 已接通生效**：off=不注入画像 / me=只注入 agent 画像 AGENT.md / you=只注入用户画像 USER.md / both=双画像（默认）。面板四档滑块 |
+| max_tokens | 3000 | 100–8000 | ✅ **v16 已接通生效**：注入总预算（token，中文粗估 ~2 字符/token），超出整体裁切 |
+| agent_max_chars | 0 | 0–20000 | ✅ v16 新增：AGENT.md（含 [原则] 行）注入字符上限，逐行裁切不切半行；**0=不裁**（默认，靠容量门 3,000 兜底），裁切发生时注入尾注提示 |
+| user_max_chars | 0 | 0–20000 | ✅ v16 新增：USER.md 注入字符上限；0=不裁（默认，容量门 2,000 兜底） |
+| memory_max_chars | 0 | 0–20000 | ✅ v16 新增：MEMORY.md 注入字符上限（在档位行数基础上二次裁切）；0=不裁（默认） |
 
 ### 1.3 archive.* —— 空闲巩固轮（会话静默后的自动蒸馏+结算心跳）
 
@@ -77,7 +82,7 @@
 
 | 键 | 缺省 | 作用 |
 |---|---|---|
-| enableDeepSleep | true | 深度睡眠归纳总开关（全部会话停滞 ≥ 阈值 → 自动提炼原则层 PRINCIPLES.md）；关=即「暂停到明天」按钮效果 |
+| enableDeepSleep | true | 深度睡眠归纳总开关（全部会话停滞 ≥ 阈值 → 自动提炼 `[原则]` 习得原则写入 AGENT.md，**反思双通道**同步维护 USER 画像）；关=即「暂停到明天」按钮效果 |
 | deepSleepIdleMs | 10800000（3h） | 无任何会话活动持续满此时长 → 触发归纳 |
 | deepSleepProbe | true | 输出增长探测开关：running 会话长时间无事件时，采样转录文件区分「长任务」还是「卡住」 |
 | deepSleepProbeAfterMs | 10800000（3h） | running 无事件满此时长发起探测 |
@@ -116,7 +121,8 @@
 | lifecycle.tiers.daily.dir / decay | 记忆/日记忆 / 5 | lifecycle_settle.py | 日记忆层目录与衰减档位 |
 | lifecycle.expire.confidence_floor / zero_hit_cycles | 10 / 2 | lifecycle_settle.py | 过期销毁判据（低置信 + 连续零命中轮数） |
 | lifecycle.archive.default_dir | 参考 | lifecycle_settle.py | 未知 subtype 的默认长期目录 |
-| injection.smart.threshold / keyword_hits / max_rows / fallback_level | 0.6 / 2 / 10 / low | **⚠️ 零消费（旧 R1 残留）** | 模板有但现行代码全不读 |
+
+> v16 注：模板 YAML 原 `injection.smart.*` 残留节（零消费）已被替换为上述新增的容量上限键，不再存在。
 
 ---
 
@@ -124,31 +130,33 @@
 
 | 常量 | 值 | 位置 | 说明 |
 |---|---|---|---|
-| 注入档位→行数 | low 2 / medium 4 / high 8 / smart 10 | panel.ts | USER 画像与原则层不受限 |
-| 注入预算 | 3000 字符 | panel.ts | 超出裁切加提示尾注 |
+| 注入档位→行数 | low 2 / medium 4 / high 8 / smart 10 | panel.ts | 仅限 MEMORY 知识索引；画像板块由 persona 档位与 max_chars 上限控制 |
+| 注入预算 max_tokens | 3000 token（≈6000 字符裁切线） | panel.ts | v16 接通；超出整体裁切加提示尾注 |
 | MAX_PY_PER_ROUND | 24 | panel.ts | 单轮巩固 py 调用配额（风暴防护） |
 | MAX_WRITES_PER_RUN | 15 | panel.ts | 单轮落笔上限（2026-08-27「101 条垃圾入库」教训产物） |
 | DEEP_SLEEP_CHECK_MS | 10min | distill.ts | 深度睡眠巡检间隔（入睡检测粒度） |
-| 画像容量 PROFILE_CAP | 2000 | panel/distill | 单文件画像容量 |
-| 写门容量 LIMITS | MEMORY 3000 / USER 2000 / AGENT 2000 / PRINCIPLES 1000 字符 | memory_write_gate.mjs | spec v14 协议容量 |
+| 画像容量 PROFILE_CAP | 3000（AGENT）/ 2000（USER） | distill.ts | 画像直写容量门（v16 AGENT 扩容） |
+| 写门容量 LIMITS | MEMORY 3000 / USER 2000 / AGENT 3000 字符 | memory_write_gate.mjs | spec v16 协议容量（PRINCIPLES 已退役） |
 | 容量警戒线 | 85% | memory_health_check.mjs | 超线体检告警 |
 | 遗忘降级判据 | 连续 2 次审计零命中 | audit-protocol §5 | spec §7 协议常量 |
 
 ---
 
-## 5. ⚠️ 漂移警示（改了不生效 / 缺省不一致）
+## 5. 漂移警示（v16 已修复 3 键，余 1 项为文档级差异）
 
-1. **injection.persona**：UI 有下拉、白名单可改，但运行时零消费——画像现为常驻全量注入，改 off 也不会停画像。
-2. **injection.max_tokens**：UI/范围校验齐全，但注入预算硬编码 3000 字符，改此键无效果。
-3. **injection.smart.\***：模板 YAML 有整节，现行代码零读取（旧 R1 体系残留）。
-4. **模板与 example 缺省不一致**：max_tokens（1500/3000）、complement_floor（0.4/0.3）、min_confidence（50/60）、age_days（1/7）、boards.wiki（true/false）——新建根目录走模板值，文档示例是另一套数。
-5. 上述漂移如需修复（补消费或删键），建议并入 settings-audit.md §五的行动清单一并处理。
+1. ~~injection.persona~~ ✅ **v16 已接通生效**（off|me|you|both 真实控制画像注入构成）。
+2. ~~injection.max_tokens~~ ✅ **v16 已接通生效**（总预算从硬编码改为读配置，缺省 3000 行为不变）。
+3. ~~injection.smart.\*~~ ✅ **v16 已移除**（模板残留节替换为容量上限键）。
+4. 模板与 example 其余缺省差异（complement_floor 0.4/0.3、min_confidence 50/60、age_days 1/7、boards.wiki true/false）仍存在——新建根目录走模板值。
+5. 既有根目录（v16 前建的）YAML 里没有 agent_max_chars 等新键——面板改这三个值会报「未定位到配置行」，需先在「配置原文」编辑器把三行补进 injection 节（或在 example 复制）。
 
 ## 6. 常见调节场景速查
 
 | 想做什么 | 改哪 |
 |---|---|
-| 少注入省 token | injection.level → low/medium（或 hot_memory=false 全关） |
+| 少注入省 token | injection.level → low/medium（或 hot_memory=false 全关）；细调走 max_tokens / *_max_chars |
+| 控制画像是否注入 | persona 档位（me=只 agent 画像 / you=只用户画像 / off=都不注） |
+| 限某个板块膨胀 | 对应 *_max_chars 设正数（如 agent_max_chars=2000） |
 | 别自动归档 | lifecycle.archive.apply_confirm=true（只出报告不落盘）；彻底停：lifecycle.enabled=false 或 interval_hours=0 |
 | 觉得蒸馏太频繁 | 手写 scheduler.json：调大 idleWakeMs / 调大 minTurnChars / distillPrescan=true |
 | 关闭深度睡眠 | 深度睡眠页 enableDeepSleep 关（=暂停到明天） |
