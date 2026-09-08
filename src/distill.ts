@@ -657,6 +657,22 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     }
   }
 
+  /**
+   * 深睡 parent 兜底（2026-09-08 修复：无 parent 直接崩 —— reading 'options'）。
+   * 悖论：深睡在「全部会话停滞/结束」时触发，此时 ctx.agents.roots() 常为空，
+   * 而宿主 spawn 必须有 parent（resolveChildDepth 读 parent.options）→ 必然会睡的时候必然崩。
+   * 解法：事件中缓存最近一次活动过的 agent（对象带 options/ctx 即可当 parent 用），
+   * 顺序=当前 roots → 在册 agents → 缓存的最近 agent；都没有则跳过本轮并审计（绝不崩）。
+   */
+  let lastParent: any = null
+  const isValidParent = (p: any): boolean => !!p && typeof p === 'object' && !!p.options && !!p.ctx
+  const rememberAgent = (a: any): void => { try { if (isValidParent(a)) lastParent = a } catch { /* */ } }
+  const pickParent = (): any | null => {
+    try { for (const r of ctx.agents.roots() || []) if (isValidParent(r)) return r } catch { /* */ }
+    try { for (const a of ctx.agents.list() || []) if (isValidParent(a)) return a } catch { /* */ }
+    return isValidParent(lastParent) ? lastParent : null
+  }
+
   const runDeepSleep = async (): Promise<void> => {
     try {
       const { resolved } = resolveTarget('memory', presence())
@@ -677,14 +693,18 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       ].join('\n\n')
       const useProvider = config.llmProvider && config.llmModel && providerFailCount < 2
       const agentOptions = useProvider ? { provider: config.llmProvider, model: config.llmModel } : undefined
-      let roots: any[] = []
-      try { roots = ctx.agents.roots() || [] } catch { /* */ }
+      const parent = pickParent()
+      if (!parent) {
+        log('deep sleep: 无可用 parent agent（宿主 spawn 必需），跳过本轮')
+        audit({ kind: 'deep-sleep', result: 'no-parent' })
+        return
+      }
       const ac = new AbortController()
       const timeout = setTimeout(() => { try { ac.abort(new Error('deep sleep timeout 10min')) } catch { /* */ } }, 600000)
       try {
         const run2 = await ctx.subagents.start('spawn', {
           label: 'deep-sleep-induction',
-          ...(roots[0] ? { parent: roots[0] } : {}),
+          parent,
           signal: ac.signal,
           maxDepth: 1,
           ...(agentOptions ? { agentOptions } : {}),
@@ -915,6 +935,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
   // ── 事件订阅（effect 自动清理，reload 零泄漏）──
   const idleTimers = new Map<string, any>()
   const armIdleTimer = (agent: any): void => {
+    rememberAgent(agent) // 深睡 parent 兜底缓存
     const sid = agent.id as string
     const old = idleTimers.get(sid)
     if (old) clearTimeout(old)
@@ -957,6 +978,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       const origin = a.session && a.session.header && a.session.header.origin
       if (origin === 'subagent') return
       noteEvent(sid, false)
+      rememberAgent(a) // 深睡 parent 兜底缓存（任意根会话事件都刷新）
     } catch { /* 状态迁移零抛出 */ }
   })
   ctx.effect(() => {
