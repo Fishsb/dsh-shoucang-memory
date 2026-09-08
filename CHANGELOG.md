@@ -15,6 +15,8 @@
 - **人化执行体系实施方案（2026-09-08）**：新增 `docs/human-loop-impl-plan.md`——批次 1-5 逐项执行规格（精确文件/锚点/验证命令/回退方式）：批次1 文档失真修复 → 批次2 降级提纯（协议+health 零召回清单）→ 批次3 四级层级 spec v14（PRINCIPLES 原则层/写门/深度睡眠归纳 pass）→ 批次4 project-nav 索引同步（原子写约束）→ 批次5 部署生效。
 - **人化执行体系优化路线图（2026-09-08）**：新增 `docs/human-loop-roadmap.md`——全量优化方案总览：已落地 4 项（七步循环总纲/循环完整版四要素/循环×记忆钩子/任务流程增强）+ 待拍板 4 项（A 主动遗忘=**降级提纯机制**：用户拍板方向修正——遗忘不直接删，细节下放更低记忆板块并提取通用经验，三级降级设计触发→提纯→降级→兜底，与蒸馏教程式浓缩同构；B 嵌入模型升级触发判据与路径；C 部署生效；D 记忆层级扩展=**新增 L0 原则层 PRINCIPLES.md**——四级层级 L0 图式/L1 索引/L2 详情/L3 暂存归档，提纯全链 pending→notes→原则，睡眠巩固双机制=即时小睡（事件蒸馏，已有）+深度睡眠（**回想巩固当天记忆**的归纳 pass，作用域限当天痕迹））+ 平台层 SOUL.md 可选补强项 + 设计原则四条。
 
+- **深度睡眠归纳两个致命缺陷修复（2026-09-08 首轮实跑暴露）**：① **无 parent 崩溃**——深睡必然在「全部会话停滞/结束」时触发，此时 `ctx.agents.roots()` 为空，而宿主 spawn 必须有 parent（`resolveChildDepth` 读 `parent.options`）→ 抛 `Cannot read properties of undefined (reading 'options')`，审计只留一条 error，等于「越该睡越崩」。改为 `pickParent()` 三级兜底（当前 roots → 在册 agents → **事件回调中缓存的最近活动 agent**），确无可用 parent 时跳过本轮并审计 `result=no-parent`。② **失败也推进水位**——`lastDeepSleepAt` 在 run 之前赋值，崩溃后整批痕迹被划出窗口，当天重试直接判「本日无痕迹」（实测 09:34 崩溃 → 09:43 重试 no-traces）。改为 `runDeepSleep()` 返回 done/failed，瞬时故障（no-parent/子代理异常）**回滚水位**下轮可重试；重启回放水位跳过 `error`/`no-parent` 条目。
+
 ### Fixed
 - **修复面板路由重复注册导致插件树整体加载失败（2026-09-08，P0 线上故障）**：`GET/POST /deepsleep/config` 被拆成两次 `route()` 注册，而宿主 webserver 按**路径**去重（不区分 method），第二次注册直接抛 `duplicate exact route`，进而 `plugin tree failed to load`——整个守藏插件（面板 + 蒸馏 + 深度睡眠）无法启动。修复：合并为**单 handler 按 `req.method` 分发**；同时在 `route()` 内加已注册路径集合兜底——同路径重复注册只告警忽略，不再因一条路由拖垮整个插件。typecheck/build/check-hardcode ✅。
 
