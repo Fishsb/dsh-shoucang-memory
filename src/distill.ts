@@ -540,6 +540,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         // no-traces 说明本轮一条痕迹都没收到（可能只是窗口被上一轮污染），
         // 若把它当水位，会把窗口内早于该时刻的痕迹永久关在窗外（当天再也回想不到）。
         if (o.kind === 'deep-sleep' && !(o as { error?: string }).error
+          && (o as { stop?: string }).stop !== 'error'
           && !['no-parent', 'no-traces'].includes(String((o as { result?: string }).result))
           && t > lastDeepSleepAt) lastDeepSleepAt = t
       } catch { /* 坏行跳过 */ }
@@ -757,7 +758,8 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
           : { added: 0, replaced: 0, skipped: 0, gate: `stop=${stop}` }
         log(`deep sleep: stop=${stop} 原则 +${app.added}/替换 ${app.replaced}/跳过 ${app.skipped}（${app.gate}）`)
         audit({ kind: 'deep-sleep', stop, added: app.added, replaced: app.replaced, skipped: app.skipped, gate: app.gate })
-        return 'done'
+        // 子代理异常结束（stop=error/timeout/aborted）不算消化：回滚水位，同一批痕迹下轮可重试
+        return stop === 'completed' ? 'done' : 'failed'
       } catch (e) {
         clearTimeout(timeout)
         if (useProvider) providerFailCount++
