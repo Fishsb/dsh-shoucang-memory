@@ -25,9 +25,6 @@ export interface SuiteMember {
 export interface Config {
     members: SuiteMember[];
     verify_enabled: boolean;
-    migrate_enabled: boolean;
-    default_project: string;
-    generic_project: string;
     enableDistill: boolean;
     idleWakeMs: number;
     minTurnChars: number;

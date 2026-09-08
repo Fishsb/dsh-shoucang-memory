@@ -1172,118 +1172,11 @@
       }
 
       /** 记忆板块：Obsidian 仓库文件夹（文件树 + 笔记预览 + 属性块 + 双链跳转）。 */
-      /* ---------- 治理知识库（pmg devref 卡库；wiki 板块改造 2026-09-06） ----------
-       * 设计依据（UI 方法论落地）：倒金字塔（决策→契约→操作册序）、渐进披露（册→卡→正文三级展开）、
-       * 空状态三要素、等大树行、计数徽标单处出现、项目名 zh 排序。 */
-      function renderGovernance(view) {
-        view.textContent = '';
-        view.appendChild(el('div', 'sc-h1', '治理知识库'));
-        view.appendChild(el('div', 'sc-desc', '通用知识（治理权威仓）· 项目知识（按项目分册）。册序：架构决策 → 契约事实 → 操作步骤。点击项目查看三册，点册头加载卡片，点卡标题展开正文。'));
-        var wrap = el('div', 'sc-explorer');
-        var treeEl = el('div', 'sc-tree');
-        var noteEl = el('div', 'sc-note');
-        wrap.appendChild(treeEl);
-        wrap.appendChild(noteEl);
-        view.appendChild(wrap);
-        status('加载卡库索引…');
-        api('/pmg/overview').then(function (r) {
-          if (!r || !r.present) {
-            // 空状态（NN/g 三要素：这是什么 + 推荐动作 + 结果预期）
-            treeEl.appendChild(el('div', 'sc-note-placeholder', '未发现卡库'));
-            noteEl.appendChild(el('div', 'sc-note-placeholder', '未发现任何项目卡库。\n卡库 = 项目 docs/devref/cards/（devref-card --init 创建骨架）；\n蒸馏 route=project 的知识卡会自动入册。'));
-            status('治理知识库 · 未发现卡库');
-            return;
-          }
-          var mkGroup = function (t) { var g = el('div', 'sc-mem-group-title'); g.style.padding = '8px 6px 4px'; g.textContent = t; treeEl.appendChild(g); };
-          var mkRow = function (lib) {
-            var total = (lib.cards.decision || 0) + (lib.cards.reference || 0) + (lib.cards['how-to'] || 0);
-            var row = el('div', 'sc-tree-row sc-tree-folder');
-            row.appendChild(el('span', 'sc-tree-arrow', '▸'));
-            row.appendChild(el('span', null, lib.name + (lib.generic ? '（通用）' : '')));
-            var badge = el('span', 'sc-gm-badge', String(total) + ' 卡');
-            row.appendChild(badge);
-            row.addEventListener('click', function () {
-              Array.prototype.forEach.call(treeEl.querySelectorAll('.sc-tree-row.active'), function (x) { x.classList.remove('active'); rowArrow(x, '▸'); });
-              row.classList.add('active');
-              rowArrow(row, '▾');
-              renderLibCards(noteEl, lib, r.cardTypes);
-            });
-            treeEl.appendChild(row);
-          };
-          var rowArrow = function (rowEl, a) { var arr = rowEl.querySelector('.sc-tree-arrow'); if (arr) arr.textContent = a; };
-          if (r.generic) mkGroup('通用知识');
-          if (r.generic) mkRow(r.generic);
-          if (r.projects && r.projects.length) {
-            mkGroup('项目知识 · 按项目');
-            r.projects.forEach(function (p) { mkRow(p); });
-          }
-          // 默认选中第一项（通用库优先）
-          var first = r.generic || (r.projects && r.projects[0]);
-          if (first) {
-            var firstRow = treeEl.querySelector('.sc-tree-row');
-            if (firstRow) firstRow.click();
-          }
-        }).catch(fail);
-      }
-
-      /** 右侧：选中项目的三册分组（渐进披露：册头懒加载 → 卡标题展开正文）。 */
-      function renderLibCards(noteEl, lib, cardTypes) {
-        noteEl.textContent = '';
-        noteEl.appendChild(el('div', 'sc-note-title', lib.name + (lib.generic ? ' · 通用知识' : ' · 项目知识')));
-        noteEl.appendChild(el('div', 'sc-note-meta', lib.path));
-        (cardTypes || []).forEach(function (ct) {
-          var count = lib.cards[ct.type] || 0;
-          var head = el('div', 'sc-mem-group-title');
-          var arrow = el('span', 'sc-sec-arrow', '▸');
-          head.appendChild(arrow);
-          head.appendChild(document.createTextNode(ct.label + ' · ' + count + ' 条'));
-          head.style.cssText = 'cursor:pointer;display:flex;align-items:baseline;gap:6px;';
-          head.title = '点击加载/收起';
-          var body = el('div', 'sc-card-body');
-          body.style.display = 'none';
-          var loaded = false;
-          head.addEventListener('click', function () {
-            var open = body.style.display !== 'none';
-            if (open) { body.style.display = 'none'; arrow.textContent = '▸'; head.style.color = ''; return; }
-            body.style.display = 'block'; arrow.textContent = '▾'; head.style.color = 'var(--sc-accent)';
-            if (!loaded) {
-              loaded = true;
-              body.textContent = '加载中…';
-              api('/pmg/cards?id=' + lib.id + '&type=' + encodeURIComponent(ct.type)).then(function (r) {
-                body.textContent = '';
-                if (!r || !r.present) { body.appendChild(el('div', 'sc-mem-empty', (r && r.error) || '该册暂无卡：蒸馏 route=project 自动入册，或 devref-card --title … 手工写入')); return; }
-                if (!(r.cards || []).length) { body.appendChild(el('div', 'sc-mem-empty', '该册暂无卡：蒸馏 route=project 自动入册，或 devref-card --title … 手工写入')); return; }
-                r.cards.forEach(function (c) {
-                  var cHead = el('div', 'sc-gm-card-head');
-                  cHead.appendChild(el('span', 'sc-gm-card-title', c.title));
-                  // 状态 pill（语义双通道：文字 + 色；从卡体溯源/状态行提取）
-                  var st = String(c.body || '').match(/状态[：:]\s*(proposed|accepted)/i);
-                  if (st) cHead.appendChild(el('span', 'sc-tag' + (/accepted/i.test(st[1]) ? '' : ' dim'), st[1].toLowerCase()));
-                  var cBody = el('div', 'sc-card-body');
-                  cBody.style.display = 'none';
-                  cBody.textContent = (c.body || '').trim() || '（空卡）';
-                  cHead.addEventListener('click', function () {
-                    var co = cBody.style.display !== 'none';
-                    cBody.style.display = co ? 'none' : 'block';
-                    cHead.style.color = co ? '' : 'var(--sc-accent)';
-                  });
-                  body.appendChild(cHead);
-                  body.appendChild(cBody);
-                });
-              }).catch(function (e) { body.textContent = ''; body.appendChild(el('div', 'sc-mem-empty', '加载失败：' + e)); });
-            }
-          });
-          noteEl.appendChild(head);
-          noteEl.appendChild(body);
-        });
-      }
-      /** 旧 vault 视图（deprecated：Obsidian 仓库模式，已被治理知识库替代；保留备查不删除）。 */
       /* ---------- 组装 ---------- */
 
       var VIEWS = [
         ['persona', '画像板块', 'persona'],
         ['memory', '记忆板块', 'memory'],
-        ['wiki', '治理知识库', 'file'],
         ['suite', '插件集合', 'file'],
         ['deepsleep', '深度睡眠', 'toggles'],
         ['toggles', '板块与管线 (deprecated)', 'toggles'],
@@ -1471,8 +1364,6 @@
           api('/memory/overview').then(function (r) { renderPersona(refs.view, r); }).catch(fail);
         } else if (name === 'memory') {
           api('/memory/overview').then(function (r) { renderMemoryExpanded(refs.view, r); }).catch(fail);
-        } else if (name === 'wiki') {
-          renderGovernance(refs.view);
         } else if (name === 'suite') {
           api('/suite').then(function (r) {
             renderSuite(refs.view, r);

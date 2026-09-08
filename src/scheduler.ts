@@ -19,7 +19,7 @@ import z from 'schemastery'
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
-import { memberPresent, memorySkillPresent, selftestMatrix, pmgScriptsRoot } from './targets.js'
+import { memorySkillPresent, selftestMatrix } from './targets.js'
 import { registerDistill } from './distill.js'
 import { deepSleepShare } from './deepsleep-share.js'
 
@@ -36,9 +36,6 @@ export interface SuiteMember {
 export interface Config {
   members: SuiteMember[]
   verify_enabled: boolean // G30 证据计数（#5，审计 §8 Q3 兼容）
-  migrate_enabled: boolean // migrationHint 消费（#4）
-  default_project: string // #4 devref-card 派发默认目标项目路径（空=仅提示不派发）
-  generic_project: string // 契约 v3 通用知识库宿主项目路径（=pmg 权威仓；空=board=generic 卡降级 pending）
   // ═══ ADR-0002 阶段 2：蒸馏器配置（蒸馏配置归守藏，承接原记忆仓 F-001/F-002）═══
   enableDistill: boolean // 守藏蒸馏器开关；单飞切换后缺省 true（记忆插件蒸馏已关，ADR-0002 阶段3）
   idleWakeMs: number // 唤醒判定：turn 结束后空闲满此毫秒数才蒸馏（缺省 10 分钟）
@@ -74,9 +71,6 @@ export const Config: any = z.object({
     )
     .default([]), // 2026-09-08 单插件合并：记忆技能已内嵌（skill/）、pmg 治理整体移除，suite 外部成员清空
   verify_enabled: z.boolean().default(true),
-  migrate_enabled: z.boolean().default(true),
-  default_project: z.string().default(''),
-  generic_project: z.string().default('').description('通用知识库宿主项目路径（pmg 权威仓 docs/devref；蒸馏 board=generic 卡落此；空=降级 pending 待迁移）'),
   enableDistill: z.boolean().default(true).description('守藏蒸馏器（ADR-0002 阶段2）；单飞切换完成后缺省开（记忆插件蒸馏已关）'),
   idleWakeMs: z.number().min(60000).default(600000).description('唤醒判定：turn 结束后空闲满此毫秒数才蒸馏（缺省 10 分钟）'),
   minTurnChars: z.number().min(0).default(200).description('本轮新增正文少于此字符数跳过蒸馏（水位仍推进）'),
@@ -168,48 +162,6 @@ function resolveBaseName(pkg: string): string {
   // '@dsh-external/project-map-governance' → 'project-map-governance'；bundles 常以短名登记
   return pkg.includes('/') ? pkg.split('/').pop() || pkg : pkg
 }
-
-// —— #4 migrationHint 日志解析（记忆插件 distill 契约：route=project 知识密集 → 指挥者发迁移调度信号）——
-
-interface MigrateHint {
-  at: string
-  text: string
-}
-
-function readMigrationHints(limit = 20): MigrateHint[] {
-  const logPath = join(dshHome(), 'super-injector', 'dsh-managing-memory.log')
-  const out: MigrateHint[] = []
-  try {
-    if (!existsSync(logPath)) return out
-    const text = readFileSync(logPath, 'utf8')
-    const lines = text.split('\n')
-    // 倒序取最近 limit 条含「迁移调度提示」的行
-    const hits: { at: string; line: string }[] = []
-    for (let i = lines.length - 1; i >= 0 && hits.length < limit; i--) {
-      const line = lines[i]
-      if (!line.includes('迁移调度提示')) continue
-      const at = (line.match(/^\[([^\]]+)\]/) || [])[1] || ''
-      hits.push({ at, line })
-    }
-    for (const h of hits.reverse()) out.push({ at: h.at, text: h.line.slice(0, 300) })
-  } catch {
-    // 日志不可读 → 空（只读工具如实报）
-  }
-  return out
-}
-
-/** #4 目标项目 pending 积压估算：读 devref/pending 目录（pmg 卡库写门前置） */
-function readPendingBacklog(project: string): number {
-  try {
-    const dir = join(project, 'docs', 'devref', 'pending')
-    if (!existsSync(dir)) return 0
-    return readdirSync(dir).filter((f) => f.endsWith('.md')).length
-  } catch {
-    return 0
-  }
-}
-
-// —— 工具 ——
 
 // —— 自持配置文件（契约 v3 落地通道）——
 
@@ -416,80 +368,6 @@ export function applyScheduler(ctx: Context, config: Config): void {
     )
   }, '@dsh-external/shoucang-scheduler: verify tool')
 
-  // shoucang_migrate：#4 migrationHint 消费（只读：读记忆插件日志迁移调度提示 + 目标项目积压，给派发命令）
-  ctx.effect(() => {
-    if (!config.migrate_enabled) return () => {}
-    return ctx.tools.register(
-      defineTool({
-        name: 'shoucang_migrate',
-        description:
-          '守藏 migrationHint 消费（只读）：读记忆插件日志（$DSH_HOME/super-injector/dsh-managing-memory.log）的「迁移调度提示」行，聚合近期提示 + 目标项目 pending 积压（devref/pending），并给出 devref-card 派发命令（目标=参数 project 或 config default_project；写卡由 pmg devref-card 执行，本工具不写）。',
-        parameters: {
-          project: { type: 'string', description: '目标项目路径（覆盖 config default_project）' },
-        },
-        output: {
-          schema: {
-            type: 'object',
-            properties: {
-              hints: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: { at: { type: 'string' }, text: { type: 'string' } },
-                  additionalProperties: false,
-                },
-              },
-              hint_count_24h: { type: 'number' },
-              backlog: { type: 'number' },
-              backlog_threshold_met: { type: 'boolean' },
-              target_project: { type: 'string' },
-              dispatch_command: { type: 'string' },
-              note: { type: 'string' },
-            },
-            additionalProperties: false,
-          },
-          render: (_a: unknown, v: any) => [
-            {
-              type: 'text',
-              text:
-                `migrationHint 消费：近 24h 提示 ${v.hint_count_24h} 条（共 ${v.hints.length} 条）；目标 ${v.target_project || '(未配置)'} pending ${v.backlog} 张（阈值 ${v.backlog_threshold_met ? '已过' : '未过'}）` +
-                (v.dispatch_command ? `\n派发命令：${v.dispatch_command}` : '') +
-                (v.hints.length ? `\n最新提示：${v.hints[v.hints.length - 1].text}` : '\n（无迁移调度提示）'),
-            },
-          ],
-        },
-        async execute(args: any) {
-          const hints = readMigrationHints()
-          const now = Date.now()
-          const recent24h = hints.filter((h) => {
-            const t = Date.parse(h.at)
-            return !Number.isNaN(t) && now - t < 24 * 3600 * 1000
-          }).length
-          const target = (args?.project || '').toString().trim() || config.default_project.trim()
-          const backlog = target ? readPendingBacklog(target) : 0
-          const thresholdMet = backlog >= 3
-          // pmg devref-card 引擎路径统一走 targets.ts 双部署探测（skills 优先/engine 兜底，零硬编码）
-          const pmgScript = join(pmgScriptsRoot(), 'devref-card.mjs')
-          const pmgReady = existsSync(pmgScript)
-          const dispatchCmd = !target
-            ? '（未配置 default_project——config 指定目标项目路径后给出派发命令）'
-            : !pmgReady
-              ? `（pmg devref-card 未就位于 ${pmgScript}——需先注入 @dsh-external/project-map-governance）`
-              : `node "${pmgScript}" "${target}" --list` + (backlog > 0 ? '  # 待迁移卡见 --list；写卡用 --title/--card-type/--text/--source' : '')
-          return {
-            hints: hints.slice(-5),
-            hint_count_24h: recent24h,
-            backlog,
-            backlog_threshold_met: thresholdMet,
-            target_project: target,
-            dispatch_command: dispatchCmd,
-            note: backlog >= 3 ? 'pending ≥3，建议派发 pmg devref-card 迁移' : backlog > 0 ? '有积压但未达阈值' : '无积压或未配置目标',
-          }
-        },
-      }),
-    )
-  }, '@dsh-external/shoucang-scheduler: migrate tool')
-
   // ═══ ADR-0002 阶段 1：R0 动态目标路由 + 白名单门禁自测（targets.ts）═══
   ctx.effect(
     () =>
@@ -497,16 +375,13 @@ export function applyScheduler(ctx: Context, config: Config): void {
         defineTool({
           name: 'shoucang_targets_probe',
           description:
-            '守藏蒸馏目标层自测（ADR-0002 阶段1）：组合矩阵 4 行路由解析（memory/project × 成员在缺）+ 现网实测落点 + 白名单门禁抽样（各库 whitelist.json 自治，不符合不存）。只读。',
+            '守藏蒸馏目标层自测：单库路由解析 + 白名单门禁抽样（USER/AGENT 画像与 notes 白名单，不符合不存）。只读。',
           parameters: {},
           output: { schema: { type: 'string' }, render: (_a: unknown, v: unknown) => [{ type: 'text', text: String(v) }] },
           async execute() {
-            const real = {
-              memory: memorySkillPresent(), // A 方案：探测技能权威根（@dsh-external/dsh-managing-memory 包已随合并消失）
-              governance: memberPresent('@dsh-external/project-map-governance'),
-            }
+            const real = { memory: memorySkillPresent() }
             const lines = selftestMatrix(real)
-            return ['守藏蒸馏目标层自测（ADR-0002）：', ...lines].join('\n')
+            return ['守藏蒸馏目标层自测（单库）：', ...lines].join('\n')
           },
         }),
       ),
@@ -523,9 +398,6 @@ export function applyScheduler(ctx: Context, config: Config): void {
       distillPrompt: config.distillPrompt,
       llmProvider: config.llmProvider,
       llmModel: config.llmModel,
-      defaultProject: config.default_project,
-      genericProject: config.generic_project,
-      memberPackages: { governance: governancePkg },
       enableDeepSleep: config.enableDeepSleep,
       deepSleepIdleMs: config.deepSleepIdleMs,
       deepSleepProbe: config.deepSleepProbe,

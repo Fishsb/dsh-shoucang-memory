@@ -24,8 +24,7 @@ import { randomUUID } from 'node:crypto'
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, renameSync, statSync, unlinkSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import {
-  dshHome, knowledgeRoot, memoryLibRoot, pmgScriptsRoot,
-  memberPresent, memorySkillPresent, resolveTarget, loadWhitelist, gateMemoryAppend, gateProjectCard, BUILTIN_WHITELISTS,
+  dshHome, knowledgeRoot, memoryLibRoot, memorySkillPresent, resolveTarget, loadWhitelist, gateMemoryAppend,
   type Whitelist, type RouteTarget,
 } from './targets.js'
 
@@ -47,9 +46,6 @@ export interface DistillConfig {
   distillPrompt: string
   llmProvider: string
   llmModel: string
-  defaultProject: string
-  genericProject: string
-  memberPackages: { governance: string }
   // ═══ 深度睡眠归纳（L0 原则层 PRINCIPLES.md；2026-09-08 用户拍板：全部会话停滞 ≥3h 自动执行）═══
   enableDeepSleep: boolean
   deepSleepIdleMs: number
@@ -117,25 +113,24 @@ interface SessRec {
   probeResult?: 'long-run' | 'stall' | 'suspect' | 'conflict' | 'exit' | 'no-transcript' | 'error' // 探测结论（审计可查）
 }
 
-// ── 蒸馏裁决契约 v3.1（事实源=记忆仓 engine/distill-contract.md；守藏为执行宿主，契约文本不改动语义）──
-// v3（2026-09-06 用户拍板）：判定锚从类别改为粒度——两库区别不是主题，是粒度分工。
-// v3.1（2026-09-06 用户拍板）：格式传递——appends.text 教程式三段、newIndex.line 内嵌 spec §8 索引行模板（格式权威=记忆库 spec §8）。
-export const DEFAULT_DISTILL_PROMPT = `你是知识整理蒸馏子代理（ADR-0005 v3）。任务：从给定会话增量正文中，判定每条可复用知识的归属（第一层路由），再输出结构化入册指令（由宿主执行写入，你无需也不能直接写文件/跑命令）。
-判定锚（v3）：两库不是按主题分类，是按粒度分工——
-- 记忆库=泛化元记忆（人脑类比）：只存「下次做类似任务时给 agent 的大概方向」——任务大概步骤轮廓/关键注意点/目标形态，粒度宁粗勿细。
-- pmg 项目卡库=细粒度承载，内分两板块：board=generic 收官方性/规范性文档级信息（DSH 开发规范、官方规则、平台规则、工具用法资料）；board=project 收项目事实/开发中用户拍板的决策/项目专属契约踩坑细节。
+// ── 蒸馏裁决契约 v4（2026-09-08 单库化：pmg 项目卡库已随治理插件移除，守藏只有一个记忆库）──
+// v4 变更：取消「记忆库 vs 项目卡库」粒度二分——跨项目有用的细粒度条文也进 notes；项目专属事实直写项目工作区 devref；
+//          新增 profiles 双画像通道（用户画像 USER + Agent 自我画像 AGENT，Q2「归谁」的落地写入通道）。
+export const DEFAULT_DISTILL_PROMPT = `你是知识整理蒸馏子代理（守藏契约 v4）。任务：从给定会话增量正文中，判定每条可复用知识的归属（第一层路由），再输出结构化入册指令（由宿主执行写入，你无需也不能直接写文件/跑命令）。
+判定锚（v4 单库）：只有一个记忆库——notes 存「下次做类似任务时给 agent 的方向」与跨项目有用的事实；项目专属事实不属于全局库，直写项目工作区。
 第一层归属路由（对每条候选按序判定）：
 - R1 泛化方向指引？这条知识的作用=下次做类似任务给大概方向？→ route=memory（粗粒度是特性，不要把细节条文塞进记忆库）
-- R2 细粒度开发知识？官方规范/平台规则/开发规范条文（→board=generic）或某项目事实/用户决策/契约踩坑细节（→board=project）→ route=project
-- R3 其余（一次性进度/可搜索公开知识/无实质/<relevant-memories>注入缓存/重复已有归属）→ route=discard
-- 同一条既像 R1 又像 R2：能浓缩成一句方向指引的价值→R1；必须保留细节条文才有用→R2；两边都塞=双写漂移，禁止。
-- 超出 R1/R2 范围一律不存；R2 且无承接插件→丢弃不回退记忆库。
+- R2 官方规范/平台规则/工具用法等**跨项目有用**的细粒度条文 → route=memory（归 notes/tools 或 notes/lessons，教程式浓缩）
+- R3 某项目专属事实（项目结构/该项目用户拍板的决策/项目契约踩坑，只在单一项目语境有用）→ route=project（宿主直写该项目工作区 docs/devref/shoucang/）
+- R4 其余（一次性进度/可搜索公开知识/无实质/<relevant-memories>注入缓存/重复已有归属）→ route=discard
+- 同一条既像 R1/R2 又像 R3：跨项目可复用→memory；只在单一项目成立→project。既不跨项目也不属于当前会话项目→丢弃。
 - 拿不准 → route=memory 但 appends 留空记 skipped（宁缺毋滥）。
-route=memory 时续走四问：Q0 已有归属？Q1 下周用得上？Q2 归谁（MEMORY/USER/AGENT）？Q3 能合并？
+route=memory 时续走四问：Q0 已有归属？Q1 下周用得上？Q2 归谁（notes 记忆 / USER 用户画像 / AGENT 自我画像）？Q3 能合并？
+Q2 画像判定：**用户的稳定偏好/背景/禁忌**（非一次性需求）→ profiles target=USER；**agent 自身的稳定做法/能力边界/常犯错误教训**（可跨任务复用的自我认知）→ profiles target=AGENT；一般知识→appends。
 委派禁令：**独立完成，绝不 spawn/委派任何子代理**（查重凭给定正文与你自身知识判断）。
 输出：只输出一行 JSON（不要 reasoning、不要其他文本）：
-{"route":"memory","appends":[{"target":"notes/tools.md","section":"<既有 ## 小节名>","text":"教程式浓缩：目标一句+编号步骤+注意，≤120字"}],"newIndex":[{"target":"MEMORY.md","line":"[tag] 主题 · 概况短语/短语/短语 → notes/x.md §小节"}],"projectCards":[{"cardType":"how-to|reference|decision","board":"generic|project","title":"≤20字","text":"≤200字","source":"≤30字"}],"migrationHint":"","skipped":[{"title":"...","reason":"≤30字"}]}
-约束：route=memory → 填 appends/newIndex（target 白名单 notes/tools.md notes/flows.md notes/lessons.md notes/env.md notes/release.md；section 必须既有 ## 小节名；**text 教程式三段**「目标：… 1. … 2. … 注意：…」只写方向指引级浓缩——目标形态/步骤轮廓/关键注意点，不搬细节条文，纯事实类可省步骤保留目标行；**newIndex.line 格式权威=记忆库 spec §8**：[tag] 主题 · 概况短语/短语/短语 → notes/<file>.md §小节，定界符 ·=段界 /=短语界 →=指针，主题≤12字名词性禁冒号复合，概况名词短语 / 分隔、≤30字、高判别实词（专名/数值/路径关键词）、禁日期溯源），projectCards 留空；route=project → 填 projectCards（cardType: how-to=操作步骤/reference=契约事实/decision=架构决策；board 必填：generic=官方规范/平台规则，project=项目事实/用户决策，缺省按 project），appends/newIndex 留空，若该项目开发知识密集（连续踩坑/多契约）填 migrationHint（≤30字，提示宿主安排卡库迁移复核）；route=discard → 除 skipped 全空；与 route 不匹配的条目宿主拒收。`
+{"route":"memory","appends":[{"target":"notes/tools.md","section":"<既有 ## 小节名>","text":"教程式浓缩：目标一句+编号步骤+注意，≤120字"}],"newIndex":[{"target":"MEMORY.md","line":"[tag] 主题 · 概况短语/短语/短语 → notes/x.md §小节"}],"profiles":[{"target":"USER|AGENT","section":"≤12字小节名","text":"≤80字一句话"}],"projectCards":[{"cardType":"how-to|reference|decision","title":"≤20字","text":"≤200字","source":"≤30字"}],"skipped":[{"title":"...","reason":"≤30字"}]}
+约束：route=memory → 填 appends/newIndex（target 白名单 notes/tools.md notes/flows.md notes/lessons.md notes/env.md notes/release.md；section 必须既有 ## 小节名；**text 教程式三段**「目标：… 1. … 2. … 注意：…」只写方向指引级浓缩——目标形态/步骤轮廓/关键注意点，不搬细节条文，纯事实类可省步骤保留目标行；**newIndex.line 格式权威=记忆库 spec §8**：[tag] 主题 · 概况短语/短语/短语 → notes/<file>.md §小节，定界符 ·=段界 /=短语界 →=指针，主题≤12字名词性禁冒号复合，概况名词短语 / 分隔、≤30字、高判别实词（专名/数值/路径关键词）、禁日期溯源），profiles/projectCards 留空；profiles 仅在 route=memory 时可填（0-2 条，宁缺毋滥，须是稳定画像而非一次性事实）；route=project → 填 projectCards（cardType: how-to=操作步骤/reference=契约事实/decision=架构决策），其余留空；route=discard → 除 skipped 全空；与 route 不匹配的条目宿主拒收。`
 
 // ── 深度睡眠归纳契约（L0 原则层 PRINCIPLES.md；睡眠=回想巩固当天的记忆）──
 export const DEEP_SLEEP_PROMPT = `你是深度睡眠归纳子代理（守藏记忆 L0 原则层，audit-protocol §5）。任务：像人睡前回想当天经历一样，回顾给定「当天记忆痕迹」，提炼跨任务泛化原则（巩固记忆；主动遗忘=提纯下放，不是删除）。
@@ -148,8 +143,12 @@ export const DEEP_SLEEP_PROMPT = `你是深度睡眠归纳子代理（守藏记�
 - 与既有原则冲突时用 replace（match=既有原则行原文，须逐字来自给定「现行原则」清单）；否则 add。
 - 独立完成：不 spawn 子代理、不使用任何工具，只依据给定材料。
 输出：只输出一行 JSON（不要 reasoning、不要其他文本）：
-{"principles":[{"action":"add","text":"- ... ← 源: notes/lessons.md §A/§B"},{"action":"replace","match":"- 既有原则原文","text":"- ... ← 源: notes/tools.md §C"}],"skipped":[{"title":"...","reason":"≤30字"}]}
-无足够素材 → {"principles":[],"skipped":[]}。`
+{"principles":[{"action":"add","text":"- ... ← 源: notes/lessons.md §A/§B"},{"action":"replace","match":"- 既有原则原文","text":"- ... ← 源: notes/tools.md §C"}],"profileOps":[{"target":"USER.md","action":"add","section":"沟通偏好","text":"- ... ← 源: notes/lessons.md §A"}],"skipped":[{"title":"...","reason":"≤30字"}]}
+无足够素材 → {"principles":[],"profileOps":[],"skipped":[]}。
+
+双画像巩固（自我认知；与原则同判据、同红线）：
+- 回顾给定「现行画像」（USER=用户画像 / AGENT=你的自我画像）与当天痕迹，若发现：**用户跨任务稳定的偏好/背景/禁忌**（非一次性需求）→ profileOps target=USER.md；**你自身反复出现的稳定做法/能力边界/常犯错误教训**（可跨任务复用的自我认知）→ target=AGENT.md。
+- 每条必须带 notes 源指针（行内 \`← 源: notes/<file>.md §小节\`），无锚不提炼；与既有画像行冲突用 replace（match=既有行原文，须逐字来自给定现行画像）；宁缺毋滥。`
 
 // ── 预筛信号词（零拷贝优先动态加载记忆仓 engine/signals.mjs；不可达时内嵌兜底副本，与 engine 同源）──
 const PRESCAN_STRONG = ['记住', '以后', '注意', '踩坑', '原来是这样', '应该改成', '别再用', '纠正', '别忘了', '务必']
@@ -211,10 +210,8 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
   const audit = (o: Record<string, unknown>): void => { try { mkdirSync(dirname(auditFile), { recursive: true }); appendFileSync(auditFile, JSON.stringify({ at: new Date().toISOString(), ...o }) + '\n') } catch { /* 静默 */ } }
   const distilling = new Set<string>() // 并发守卫：同会话蒸馏在途标记（防 turn/end 重武装导致双写/竞态）
 
-  const presence = () => ({
-    memory: memorySkillPresent(), // A 方案：探测技能权威根 MEMORY.md（包名探测随合并失效）
-    governance: memberPresent(config.memberPackages.governance),
-  })
+  // 单库化（2026-09-08 用户拍板）：守藏只有一个记忆库（生产根），不再有 presence 二分与降级链。
+  // 库缺席（部署残缺）时由各写入点如实审计，不再静默换库。
 
   loadEngineSignals()
 
@@ -295,15 +292,58 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
   const memAppend = async (target: string, kind: 'append' | 'new', payload: string, section: string, t: RouteTarget): Promise<RunResult> => {
     const script = join(memoryLibRoot(), 'scripts', 'memory-append.mjs')
     const args = kind === 'append' ? [target, section, payload] : [target, '-', '--new', payload]
-    const env = t.library === 'shoucang-local' ? { MEMORY_ROOT: t.root } : undefined
-    return runNode(config.nodeBin, script, args, { env, timeout: 20000 })
+    return runNode(config.nodeBin, script, args, { env: { MEMORY_ROOT: t.root }, timeout: 20000 })
+  }
+
+  // ── 双画像维护（2026-09-08 用户拍板：蒸馏/睡眠不只补记忆，还更新 USER/AGENT 双画像——助理角色要有自我认知）──
+  const PROFILE_CAP = 2000
+  const PROFILE_HEADER: Record<string, string> = {
+    'USER.md': '# USER.md — 用户画像\n\n> 「人」的画像：用户稳定偏好/背景/禁忌。库中唯一直接关于用户的文件；其余（notes/原则/索引/AGENT.md）皆为 agent 自身资产。写入口=蒸馏 profileUpdates + 深度睡眠 profileOps；每行带源指针。',
+    'AGENT.md': '# AGENT.md — Agent 自我画像（助理的自我认知）\n\n> 用户助理角色的自我认知：角色定位/稳定做法/能力边界/常犯错误与教训。库中其余一切（notes/原则/索引）都是本 agent 为履行助理职责而积累的自身资产，本文件只回答「我是谁、我怎样服务好用户」。写入口同上；每行带源指针。',
+  }
+  /**
+   * 画像行写入（宿主直写，tmp+rename 原子）：小节存在→小节尾加行；不存在→文件尾建小节。
+   * 门禁：target 仅 USER.md/AGENT.md、小节名防注入、单条 ≤2000 字符库容量、去重、replace 须 match 逐字存在。
+   */
+  const writeProfileLine = (root: string, target: string, section: string, line: string, replaceMatch?: string): 'added' | 'dedup' | 'rejected' | 'failed' => {
+    try {
+      if (target !== 'USER.md' && target !== 'AGENT.md') return 'rejected'
+      const sec = String(section || '').trim().replace(/^##+ */, '').trim()
+      const ln = String(line || '').trim()
+      if (!sec || !ln || ln.length > 160 || /[#`]/.test(sec)) return 'rejected'
+      const file = join(root, target)
+      let body = ''
+      try { body = readFileSync(file, 'utf8') } catch { body = (PROFILE_HEADER[target] || `# ${target}\n`) + '\n' }
+      if (body.split('\n').some((l) => l.trim() === ln)) return 'dedup'
+      if (body.length + ln.length + sec.length + 8 > PROFILE_CAP) return 'rejected' // 容量门：超限拒绝，待画像间合并
+      const lines = body.split('\n')
+      const secIdx = lines.findIndex((l) => l.trim() === `## ${sec}`)
+      if (secIdx < 0) lines.push('', `## ${sec}`, ln)
+      else if (replaceMatch) {
+        const mi = lines.findIndex((l) => l.trim() === String(replaceMatch).trim())
+        if (mi < 0) return 'rejected' // replace 要求 match 逐字存在（防误改）
+        lines[mi] = ln
+      } else {
+        let end = secIdx + 1
+        while (end < lines.length && !lines[end].startsWith('## ')) end++
+        lines.splice(end, 0, ln)
+      }
+      const tmp = file + '.tmp'
+      writeFileSync(tmp, lines.join('\n'), 'utf8')
+      renameSync(tmp, file)
+      return 'added'
+    } catch { return 'failed' }
   }
 
   const writeDispatch = async (sid: string, out: any, route: string, workspace: string | null): Promise<{ added: number; rejected: number; failed: number; targetLib: string }> => {
     let added = 0, rejected = 0, failed = 0
     if (route === 'memory') {
-      const { resolved } = resolveTarget('memory', presence())
-      const { wl, source } = loadWhitelist(resolved.root, resolved.library)
+      const resolved = resolveTarget()
+      if (!resolved.present) {
+        for (const _a of ((out && Array.isArray(out.appends)) ? out.appends : [])) { rejected++; audit({ sid, kind: 'gate-reject', reason: '记忆库缺席（部署残缺）', lib: resolved.library }) }
+        return { added, rejected, failed, targetLib: resolved.library }
+      }
+      const { wl, source } = loadWhitelist(resolved.root)
       const gate = (t?: string): boolean => {
         const r = gateMemoryAppend({ target: t }, wl)
         if (!r.ok) { rejected++; audit({ sid, kind: 'gate-reject', target: t, reason: r.reason, lib: resolved.library }); log(`distill 拒收: ${r.reason?.slice(0, 120)}`) }
@@ -311,10 +351,6 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       }
       const appends = (out && Array.isArray(out.appends)) ? out.appends : []
       const newIndex = (out && Array.isArray(out.newIndex)) ? out.newIndex : []
-      if (resolved.library !== 'memory-plugin' && resolved.library !== 'shoucang-local') {
-        for (const _a of appends) { rejected++; audit({ sid, kind: 'gate-reject', reason: 'memory 目标库不可用', lib: resolved.library }) }
-        return { added, rejected, failed, targetLib: resolved.library }
-      }
       for (const a of appends) {
         if (!a || !a.target || !a.section || !gate(a.target)) { if (a && (!a.target || !a.section)) failed++; continue }
         const r = await memAppend(String(a.target), 'append', String(a.text || '').trim(), String(a.section).trim(), resolved)
@@ -327,56 +363,46 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         const r = await memAppend(t, 'new', String(ni.line).trim(), '-', resolved)
         if (r.status === 0) added++; else { failed++; log(`distill 新索引失败: ${textOf(r).slice(0, 120)}`) }
       }
+      // 双画像：Q2「归谁」的 USER/AGENT 通道（宿主直写，格式/容量/去重门禁）
+      const profiles = (out && Array.isArray(out.profiles)) ? out.profiles : []
+      const date = new Date().toISOString().slice(0, 10)
+      for (const p of profiles) {
+        if (!p || !p.target || !p.section || !p.text) { failed++; continue }
+        const r = writeProfileLine(resolved.root, String(p.target).trim(), String(p.section), `- ${String(p.text).trim()} ← 源: distill ${sid.slice(0, 8)} ${date}`)
+        if (r === 'added') added++
+        else if (r === 'rejected') { rejected++; audit({ sid, kind: 'gate-reject', target: p.target, reason: '画像更新被拒（格式/容量门）' }) }
+        else if (r === 'failed') failed++
+        // dedup：静默不计
+      }
       audit({ sid, kind: 'distill-run', route, lib: resolved.library, wlSource: source, added, rejected, failed })
       return { added, rejected, failed, targetLib: resolved.library }
     }
     if (route === 'project') {
-      const { resolved } = resolveTarget('project', presence())
+      // 单库化（2026-09-08 用户拍板）：pmg 项目卡库已随治理插件移除，项目专属事实**直写项目工作区**
+      // <workspace>/docs/devref/shoucang/（workspace 由会话转录反解）；反解不到=无项目归属，如实丢弃并审计，
+      // 不再产生「pmg 缺席积压」死胡同（旧 local-pending 无人消费， knowledge 里的 pending 只作蒸馏输入队列）。
       const cards = (out && Array.isArray(out.projectCards)) ? out.projectCards : []
+      if (!workspace) {
+        for (const pc of cards) { rejected++; audit({ sid, kind: 'gate-reject', target: pc?.title, reason: '项目事实无归属（workspace 反解失败），不落全局库（跨工作区红线）' }) }
+        return { added, rejected, failed, targetLib: 'workspace' }
+      }
+      const dir = join(workspace, 'docs', 'devref', 'shoucang')
+      const cardTypes = ['how-to', 'reference', 'decision']
+      const date = new Date().toISOString().slice(0, 10)
       for (const pc of cards) {
         if (!pc || !pc.title || !pc.text) { failed++; continue }
-        // 契约 v3：先定板块与写入目标；白名单跟随实际写入目标目录（各库自治：board=generic → pmg 权威仓 docs/devref，board=project → workspace docs/devref）
-        const board = String(pc.board || 'project') === 'generic' ? 'generic' : 'project'
-        const project = resolved.library === 'pmg-cards'
-          ? (board === 'generic' ? (config.genericProject.trim() || '') : (workspace || (config.defaultProject.trim() || '')))
-          : ''
-        let wl: Whitelist
-        if (resolved.library === 'pmg-cards' && project) wl = loadWhitelist(join(project, 'docs', 'devref'), 'pmg-cards').wl
-        else wl = BUILTIN_WHITELISTS[resolved.library]
-        const g = gateProjectCard({ cardType: pc.cardType, board }, wl)
-        if (!g.ok) { rejected++; audit({ sid, kind: 'gate-reject', target: pc.title, reason: g.reason, lib: resolved.library }); log(`distill 拒收: ${g.reason?.slice(0, 120)}`); continue }
-        if (resolved.library === 'pmg-cards') {
-          const script = join(pmgScriptsRoot(), 'devref-card.mjs')
-          if (!project || !existsSync(script)) {
-            failed++
-            const reason = !project ? (board === 'generic' ? '通用板块未配置 generic_project（宿主直写积压）' : '无目标项目（workspace 反解失败且未配 defaultProject）') : 'devref-card 未就位'
-            audit({ sid, kind: 'write-fail', target: pc.title, reason, lib: 'pmg-cards' })
-            try {
-              // 降级积压（不丢知识；迁移工具并入时按标记分流）
-              const slug = String(pc.title).replace(/[^\w\u4e00-\u9fa5]+/g, '-').slice(0, 30) || 'card'
-              const tag = board === 'generic' ? '[board:generic]' : '[route:project]'
-              const fb = join(pendDir, `${new Date().toISOString().slice(0, 10)}-proj-${sid.slice(0, 8)}-${slug}.md`)
-              writeFileSync(fb, `# ${tag} ${pc.cardType || 'reference'} · ${pc.title}\n\n- 卡类型：${pc.cardType || 'reference'}\n- 板块：${board}\n- 溯源：${pc.source || ''}\n- 源会话：${sid}\n- 落点：${board === 'generic' ? '通用板块（配置 generic_project 后经迁移并入）' : 'pmg 缺席积压（装上后经迁移工具并入卡库）'}\n\n${pc.text}\n`, 'utf8')
-              failed--; added++
-            } catch (e2) { log(`distill project 卡积压兜底失败: ${String((e2 as Error).message).slice(0, 120)}`) }
-            continue
-          }
-          const args = [project, '--title', String(pc.title).trim(), '--card-type', String(pc.cardType || 'reference').trim(), '--text', String(pc.text || '').trim()]
-          if (pc.source) args.push('--source', String(pc.source).trim())
-          const r = await runNode(config.nodeBin, script, args, { timeout: 20000 })
-          if (r.status === 0) added++; else { failed++; audit({ sid, kind: 'write-fail', target: pc.title, reason: textOf(r).slice(0, 120), lib: 'pmg-cards' }) }
-        } else {
-          // local-pending 兜底：宿主直写防丢失积压（白名单已过；积压不过白名单语义见 ADR-0002 决策 4）
-          try {
-            const slug = String(pc.title).replace(/[^\w\u4e00-\u9fa5]+/g, '-').slice(0, 30) || 'card'
-            const fb = join(pendDir, `${new Date().toISOString().slice(0, 10)}-proj-${sid.slice(0, 8)}-${slug}.md`)
-            writeFileSync(fb, `# [route:project] ${pc.cardType || 'reference'} · ${pc.title}\n\n- 卡类型：${pc.cardType || 'reference'}\n- 溯源：${pc.source || ''}\n- 源会话：${sid}\n- 落点：pmg 缺席积压（装上后经迁移工具并入卡库）\n\n${pc.text}\n`, 'utf8')
-            added++
-          } catch (e2) { failed++; log(`distill project 卡积压兜底失败: ${String((e2 as Error).message).slice(0, 120)}`) }
-        }
+        const cardType = cardTypes.includes(String(pc.cardType || '')) ? String(pc.cardType) : 'reference'
+        if (!cardTypes.includes(String(pc.cardType || ''))) { rejected++; audit({ sid, kind: 'gate-reject', target: pc.title, reason: `cardType=${pc.cardType} 不在 [${cardTypes.join(',')}]` }); continue }
+        try {
+          const slug = String(pc.title).replace(/[^\w\u4e00-\u9fa5]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30) || 'card'
+          mkdirSync(dir, { recursive: true })
+          const fb = join(dir, `${date}-${cardType}-${slug}.md`)
+          writeFileSync(fb, `# [项目事实] ${cardType} · ${pc.title}\n\n- 卡类型：${cardType}\n- 溯源：${pc.source || ''}\n- 源会话：${sid}\n- 工作区：${workspace}\n\n${pc.text}\n`, 'utf8')
+          added++
+        } catch (e2) { failed++; log(`distill 项目事实直写失败: ${String((e2 as Error).message).slice(0, 120)}`) }
       }
-      audit({ sid, kind: 'distill-run', route, lib: resolved.library, added, rejected, failed })
-      return { added, rejected, failed, targetLib: resolved.library }
+      audit({ sid, kind: 'distill-run', route, lib: 'workspace', added, rejected, failed })
+      return { added, rejected, failed, targetLib: 'workspace' }
     }
     return { added, rejected, failed, targetLib: 'none' }
   }
@@ -719,9 +745,9 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
   /** 返回 'done'=本轮窗口已消化（推进水位）；'failed'=瞬时故障（回滚水位，下轮可重试同一批痕迹） */
   const runDeepSleep = async (): Promise<'done' | 'failed'> => {
     try {
-      const { resolved } = resolveTarget('memory', presence())
-      if (resolved.library !== 'memory-plugin' && resolved.library !== 'shoucang-local') {
-        log('deep sleep: 记忆目标库不可用，跳过')
+      const resolved = resolveTarget()
+      if (!resolved.present) {
+        log('deep sleep: 记忆库缺席（部署残缺），跳过')
         return 'done'
       }
       const traces = gatherDeepSleepTraces(resolved.root)
@@ -729,12 +755,19 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       log(`deep sleep: 窗口内痕迹 ${traces.length} 字符（起点 ${new Date(traceSince()).toLocaleString()}）`)
       const currentPrinciples = (() => { try { return readFileSync(join(resolved.root, 'PRINCIPLES.md'), 'utf8') } catch { return '' } })()
       const currentList = currentPrinciples.split(/\r?\n/).map((l) => l.trim()).filter((l) => /^- .+←/.test(l)).join('\n') || '（暂无条目）'
+      // 双画像巩固材料：现行 USER/AGENT 画像全文（行格式门禁的 replace 依据）
+      const currentProfiles = ['USER.md', 'AGENT.md'].map((f) => {
+        let body = ''
+        try { body = readFileSync(join(resolved.root, f), 'utf8') } catch { /* 无文件=空 */ }
+        return `### ${f}\n${body.trim() || '（空）'}`
+      }).join('\n\n')
       validateProvider()
       const userInput = [
         '## 当天记忆痕迹（作用域=本日，不做全库扫描）',
         traces,
         `## 现行原则（冲突时 replace，match 逐字取自此清单）\n${currentList}`,
-        '请按规则处理：提炼跨任务泛化原则并输出 JSON 指令。',
+        `## 现行画像（profileOps 的 replace match 逐字取自此处）\n${currentProfiles}`,
+        '请按规则处理：提炼跨任务泛化原则与双画像更新指令，输出 JSON。',
       ].join('\n\n')
       const useProvider = config.llmProvider && config.llmModel && providerFailCount < 2
       const agentOptions = useProvider ? { provider: config.llmProvider, model: config.llmModel } : undefined
@@ -776,8 +809,17 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         const app = (stop === 'completed' && out)
           ? await applyPrinciples(resolved.root, out)
           : { added: 0, replaced: 0, skipped: 0, gate: `stop=${stop}` }
-        log(`deep sleep: stop=${stop} 原则 +${app.added}/替换 ${app.replaced}/跳过 ${app.skipped}（${app.gate}）`)
-        audit({ kind: 'deep-sleep', stop, added: app.added, replaced: app.replaced, skipped: app.skipped, gate: app.gate })
+        // 双画像巩固：profileOps（add/replace，须 notes 源指针；格式/容量/去重门禁同蒸馏）
+        let profileAdded = 0
+        if (stop === 'completed' && out && Array.isArray(out.profileOps)) {
+          const ops = out.profileOps.filter((o: any) => o && ['USER.md', 'AGENT.md'].includes(String(o.target)) && ['add', 'replace'].includes(String(o.action)))
+          for (const op of ops) {
+            const r = writeProfileLine(resolved.root, String(op.target), String(op.section || ''), String(op.text || ''), op.action === 'replace' ? String(op.match || '') : undefined)
+            if (r === 'added') profileAdded++
+          }
+        }
+        log(`deep sleep: stop=${stop} 原则 +${app.added}/替换 ${app.replaced}/跳过 ${app.skipped}（${app.gate}）画像 +${profileAdded}`)
+        audit({ kind: 'deep-sleep', stop, added: app.added, replaced: app.replaced, skipped: app.skipped, profiles: profileAdded, gate: app.gate })
         // 子代理异常结束（stop=error/timeout/aborted）不算消化：回滚水位，同一批痕迹下轮可重试
         return stop === 'completed' ? 'done' : 'failed'
       } catch (e) {

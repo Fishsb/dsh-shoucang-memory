@@ -7,7 +7,7 @@
  *   - skill/       managing-memory 技能本体（SKILL.md + 规则 + engine/scripts；私人数据区 _memory/ 在仓根，gitignore）
  *
  * 项目治理插件（project-map-governance）已按 2026-09-08 用户拍板整体移除出架构：
- *   suite members 缺省清空，generic_project 留空=蒸馏 board=project 卡降级 pending。
+ *   suite members 缺省清空；单库化（v15）——project 路由直写项目工作区 docs/devref/shoucang/，不再有卡库与积压兜底。
  *
  * 配置形态：扁平单层（panel + scheduler 字段直接并集）；项目未发布过版本，无旧配置迁移问题。
  */
