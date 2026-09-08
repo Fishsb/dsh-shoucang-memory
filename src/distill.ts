@@ -535,7 +535,11 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         const t = Date.parse(String(o.at))
         if (Number.isNaN(t)) continue
         if (t > lastActivityAt) lastActivityAt = t
-        if (o.kind === 'deep-sleep' && t > lastDeepSleepAt) lastDeepSleepAt = t
+        // 只回放「成功消化」的深睡：崩溃/error/no-parent 条目不推进水位，
+        // 否则失败会把整批痕迹划到窗口之外，当天再也不会被回想。
+        if (o.kind === 'deep-sleep' && !(o as { error?: string }).error
+          && (o as { result?: string }).result !== 'no-parent'
+          && t > lastDeepSleepAt) lastDeepSleepAt = t
       } catch { /* 坏行跳过 */ }
     }
   } catch { /* 无审计文件=新装 */ }
@@ -673,15 +677,16 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     return isValidParent(lastParent) ? lastParent : null
   }
 
-  const runDeepSleep = async (): Promise<void> => {
+  /** 返回 'done'=本轮窗口已消化（推进水位）；'failed'=瞬时故障（回滚水位，下轮可重试同一批痕迹） */
+  const runDeepSleep = async (): Promise<'done' | 'failed'> => {
     try {
       const { resolved } = resolveTarget('memory', presence())
       if (resolved.library !== 'memory-plugin' && resolved.library !== 'shoucang-local') {
         log('deep sleep: 记忆目标库不可用，跳过')
-        return
+        return 'done'
       }
       const traces = gatherDeepSleepTraces(resolved.root)
-      if (!traces) { log('deep sleep: 本日无痕迹，跳过'); audit({ kind: 'deep-sleep', result: 'no-traces' }); return }
+      if (!traces) { log('deep sleep: 本日无痕迹，跳过'); audit({ kind: 'deep-sleep', result: 'no-traces' }); return 'done' }
       const currentPrinciples = (() => { try { return readFileSync(join(resolved.root, 'PRINCIPLES.md'), 'utf8') } catch { return '' } })()
       const currentList = currentPrinciples.split(/\r?\n/).map((l) => l.trim()).filter((l) => /^- .+←/.test(l)).join('\n') || '（暂无条目）'
       validateProvider()
@@ -697,7 +702,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       if (!parent) {
         log('deep sleep: 无可用 parent agent（宿主 spawn 必需），跳过本轮')
         audit({ kind: 'deep-sleep', result: 'no-parent' })
-        return
+        return 'failed'
       }
       const ac = new AbortController()
       const timeout = setTimeout(() => { try { ac.abort(new Error('deep sleep timeout 10min')) } catch { /* */ } }, 600000)
@@ -726,14 +731,17 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
           : { added: 0, replaced: 0, skipped: 0, gate: `stop=${stop}` }
         log(`deep sleep: stop=${stop} 原则 +${app.added}/替换 ${app.replaced}/跳过 ${app.skipped}（${app.gate}）`)
         audit({ kind: 'deep-sleep', stop, added: app.added, replaced: app.replaced, skipped: app.skipped, gate: app.gate })
+        return 'done'
       } catch (e) {
         clearTimeout(timeout)
         if (useProvider) providerFailCount++
         log(`deep sleep ERROR: ${String((e as Error)?.message || e).slice(0, 200)}`)
         audit({ kind: 'deep-sleep', error: String((e as Error)?.message || e).slice(0, 160) })
+        return 'failed'
       }
     } catch (e) {
       log(`deep sleep err: ${String((e as Error)?.message || e).slice(0, 120)}`)
+      return 'failed'
     }
   }
 
@@ -875,9 +883,16 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     if (now - hottest < idleMs) return
     if (hottest <= lastDeepSleepAt) return // 本轮停滞窗口已消化（新活动推进水位后重新武装）
     deepSleepRunning = true
+    const prevDeepSleepAt = lastDeepSleepAt
     lastDeepSleepAt = now
     log(`deep sleep: 触发（停滞 ${Math.round((now - hottest) / 60000)}min ≥ 阈值 ${Math.round(idleMs / 60000)}min · 会话态 running=${running} ended=${ended} stalled=${stalled}）`)
-    runDeepSleep().catch((e) => log(`deep sleep err: ${String((e as Error)?.message || e).slice(0, 120)}`)).finally(() => { deepSleepRunning = false })
+    runDeepSleep().then((r) => {
+      // 瞬时故障（无 parent / 子代理异常）→ 水位回滚，否则同一批痕迹会被永久划出窗口
+      if (r === 'failed') { lastDeepSleepAt = prevDeepSleepAt; log('deep sleep: 本轮失败，水位回滚（同一批痕迹下轮可重试）') }
+    }).catch((e) => {
+      lastDeepSleepAt = prevDeepSleepAt
+      log(`deep sleep err: ${String((e as Error)?.message || e).slice(0, 120)}（水位回滚）`)
+    }).finally(() => { deepSleepRunning = false })
   }
 
   /** 状态机快照（供 UI 消费；接线待办见 docs/ui-todo.md）——后续面板展示/手动触发都读这里 */
