@@ -748,6 +748,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         ]) as any
         clearTimeout(timeout)
         const stop = result && result.stopReason
+        if (stop !== 'completed') log(`deep sleep: 子代理非正常结束 stop=${stop} 详情=${JSON.stringify(result).slice(0, 400)}`)
         const out = parseAgentJson(result, 'deep sleep')
         if (stop === 'completed' && out) providerFailCount = 0
         else if (useProvider && (stop !== 'completed' || !out)) providerFailCount++
