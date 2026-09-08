@@ -32,7 +32,7 @@ type AppContext = {
   tools: { register(tool: unknown): unknown }
   llm: any
   subagents: { start(name: string, request: any): Promise<any> }
-  agents: { get(id: string): any; list(): any[]; roots(): any[] }
+  agents: { get(id: string): any; list(): any[]; roots(): any[]; create(options: any): Promise<any> }
   logger?: { info?(msg: string): void }
   on(event: string, handler: (arg: any, arg2?: any) => void): unknown
   effect(fn: () => any, key?: string): unknown
@@ -670,12 +670,31 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
    * 顺序=当前 roots → 在册 agents → 缓存的最近 agent；都没有则跳过本轮并审计（绝不崩）。
    */
   let lastParent: any = null
+  let daemonParent: any = null
   const isValidParent = (p: any): boolean => !!p && typeof p === 'object' && !!p.options && !!p.ctx
   const rememberAgent = (a: any): void => { try { if (isValidParent(a)) lastParent = a } catch { /* */ } }
   const pickParent = (): any | null => {
     try { for (const r of ctx.agents.roots() || []) if (isValidParent(r)) return r } catch { /* */ }
     try { for (const a of ctx.agents.list() || []) if (isValidParent(a)) return a } catch { /* */ }
     return isValidParent(lastParent) ? lastParent : null
+  }
+  /**
+   * 守护 parent（最后兜底）：服务重启后若从未有过会话活动，roots/list/lastParent 全空，
+   * 深睡将永远跑不起来（夜间正是这种场景）。此时用插件 ctx 惰性创建一个常驻 agent 当 parent
+   * （只用于承载子代理创建，不给它下发任何任务）；创建失败则退回 no-parent 跳过，不崩。
+   */
+  const ensureDaemonParent = async (signal: AbortSignal, agentOptions?: { provider: string; model: string }): Promise<any | null> => {
+    if (isValidParent(daemonParent)) return daemonParent
+    try {
+      const handle: any = await ctx.agents.create({
+        ...(agentOptions ? { agentOptions } : {}),
+        signal,
+      })
+      const a = handle && handle.agent ? handle.agent : handle
+      if (isValidParent(a)) { daemonParent = a; log('deep sleep: 已建立守护 parent（无会话场景承载归纳子代理）'); return a }
+      log('deep sleep: 守护 parent 创建结果不可用')
+    } catch (e) { log(`deep sleep: 守护 parent 创建失败：${String((e as Error)?.message || e).slice(0, 120)}`) }
+    return null
   }
 
   /** 返回 'done'=本轮窗口已消化（推进水位）；'failed'=瞬时故障（回滚水位，下轮可重试同一批痕迹） */
@@ -700,14 +719,15 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       ].join('\n\n')
       const useProvider = config.llmProvider && config.llmModel && providerFailCount < 2
       const agentOptions = useProvider ? { provider: config.llmProvider, model: config.llmModel } : undefined
-      const parent = pickParent()
+      const ac = new AbortController()
+      const timeout = setTimeout(() => { try { ac.abort(new Error('deep sleep timeout 10min')) } catch { /* */ } }, 600000)
+      let parent = pickParent()
+      if (!parent) parent = await ensureDaemonParent(ac.signal, agentOptions)
       if (!parent) {
         log('deep sleep: 无可用 parent agent（宿主 spawn 必需），跳过本轮')
         audit({ kind: 'deep-sleep', result: 'no-parent' })
         return 'failed'
       }
-      const ac = new AbortController()
-      const timeout = setTimeout(() => { try { ac.abort(new Error('deep sleep timeout 10min')) } catch { /* */ } }, 600000)
       try {
         const run2 = await ctx.subagents.start('spawn', {
           label: 'deep-sleep-induction',

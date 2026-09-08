@@ -10,6 +10,7 @@ type AppContext = {
         get(id: string): any;
         list(): any[];
         roots(): any[];
+        create(options: any): Promise<any>;
     };
     logger?: {
         info?(msg: string): void;
