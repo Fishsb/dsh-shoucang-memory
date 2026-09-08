@@ -52,7 +52,12 @@ export interface Config {
   // ═══ 会话活跃状态机（2026-09-08 重构）：区分「正常长任务 / 卡住 / 异常退出」═══
   deepSleepProbe: boolean // 输出增长探测开关（running 无事件超时后，采样 transcript 确认真活跃）
   deepSleepProbeAfterMs: number // running 状态无事件多久发起探测（缺省 3 小时，同 idleMs）
-  deepSleepProbeWindowMs: number // 探测两次采样间隔（缺省 60 秒）
+  deepSleepProbeWindowMs: number // 探测采样间隔（缺省 60 秒）
+  // 探测可靠性加固（2026-09-08）：防一次采样错判把长任务睡掉
+  deepSleepProbeSamples: number // 每轮采样次数（缺省 3；任一次检出增长即判长任务）
+  deepSleepProbeConfirm: number // 卡住需连续确认轮数（缺省 2；首轮落 suspect，阻塞睡眠待复核）
+  deepSleepProbeRetries: number // 探针不可用/异常时重试次数（缺省 2）
+  deepSleepProbeMaxMs: number // 单轮探测总时长兜底（缺省 10 分钟，防悬挂）
 }
 
 export const Config: any = z.object({
@@ -81,7 +86,11 @@ export const Config: any = z.object({
   deepSleepIdleMs: z.number().min(600000).default(10800000).description('停滞判定阈值（毫秒）：无任何会话活动持续满此时长触发深度睡眠归纳（缺省 3 小时）'),
   deepSleepProbe: z.boolean().default(true).description('输出增长探测：会话 running 但长时间无事件时，采样转录文件两次确认是长任务还是卡住'),
   deepSleepProbeAfterMs: z.number().min(600000).default(10800000).description('running 状态无事件持续此毫秒数后发起探测（缺省 3 小时）'),
-  deepSleepProbeWindowMs: z.number().min(5000).default(60000).description('探测两次采样间隔（毫秒，缺省 60 秒）'),
+  deepSleepProbeWindowMs: z.number().min(5000).default(60000).description('探测采样间隔（毫秒，缺省 60 秒）'),
+  deepSleepProbeSamples: z.number().min(1).default(3).description('每轮探测采样次数：任一次检出转录增长即判为长任务（缺省 3）'),
+  deepSleepProbeConfirm: z.number().min(1).default(2).description('判「卡住」需连续无增长的轮数，首轮落 suspect 阻塞睡眠待下轮复核（缺省 2）'),
+  deepSleepProbeRetries: z.number().min(1).default(2).description('探针不可用或异常时的重试次数（缺省 2）'),
+  deepSleepProbeMaxMs: z.number().min(30000).default(600000).description('单轮探测总时长兜底（毫秒，缺省 10 分钟，防悬挂）'),
 })
 
 // —— 装配事实源探测（无硬编码路径）——
@@ -519,6 +528,10 @@ export function applyScheduler(ctx: Context, config: Config): void {
       deepSleepProbe: config.deepSleepProbe,
       deepSleepProbeAfterMs: config.deepSleepProbeAfterMs,
       deepSleepProbeWindowMs: config.deepSleepProbeWindowMs,
+      deepSleepProbeSamples: config.deepSleepProbeSamples,
+      deepSleepProbeConfirm: config.deepSleepProbeConfirm,
+      deepSleepProbeRetries: config.deepSleepProbeRetries,
+      deepSleepProbeMaxMs: config.deepSleepProbeMaxMs,
     })
   }
 }

@@ -35,6 +35,10 @@ export interface DistillConfig {
     deepSleepProbe: boolean;
     deepSleepProbeAfterMs: number;
     deepSleepProbeWindowMs: number;
+    deepSleepProbeSamples: number;
+    deepSleepProbeConfirm: number;
+    deepSleepProbeRetries: number;
+    deepSleepProbeMaxMs: number;
 }
 /**
  * 会话活跃状态机（Session Activity FSM）——深度睡眠「是否算停滞」的唯一判据源。
@@ -48,14 +52,17 @@ export interface DistillConfig {
  *              ┌───────────┬────────────┬─────────────┬────────────┐
  *     输出在增长│ 无增长+会话还在│ 无增长+会话消失│ 探针不可用/异常│
  *              ▼           ▼            ▼             ▼
- *          RUNNING      STALLED       ENDED          ENDED
- *        (正常长任务)   (卡住告警)   (异常退出)   (无法确认，正常睡)
+ *          RUNNING      SUSPECT      ENDED          ENDED
+ *        (正常长任务)  (待复核，阻塞)  (异常退出)   (无法确认，正常睡)
+ *                          │ 连续 confirm 轮无增长（或状态活跃但无增长=证据冲突）
+ *                          ▼
+ *                       STALLED（已确认卡住，不阻塞）
  *
  * 用户拍板口径（2026-09-08）：**只有确认「长线任务正在推进」才拦住睡眠**；其余（卡住/异常退出/探针不可用/
  * 探测异常）一律按停滞处理 → 正常睡眠（停滞计时沿用最后事件时刻，不再刷新成 now，否则会永远睡不着）。
  * 仅在采样窗口内「探测未决」时跳过本轮（最多延后一个巡检周期，10min）。
  */
-type SessState = 'running' | 'ended' | 'probing' | 'stalled';
+type SessState = 'running' | 'ended' | 'probing' | 'suspect' | 'stalled';
 /** 深度睡眠状态机快照（供 UI 消费；接线待办见 docs/ui-todo.md） */
 export interface DeepSleepStatus {
     enabled: boolean;
@@ -66,6 +73,7 @@ export interface DeepSleepStatus {
     running: number;
     ended: number;
     probing: number;
+    suspect: number;
     stalled: number;
     nextEligibleAt: number;
     sessions: {

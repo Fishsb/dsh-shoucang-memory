@@ -40,6 +40,10 @@ export interface Config {
     deepSleepProbe: boolean;
     deepSleepProbeAfterMs: number;
     deepSleepProbeWindowMs: number;
+    deepSleepProbeSamples: number;
+    deepSleepProbeConfirm: number;
+    deepSleepProbeRetries: number;
+    deepSleepProbeMaxMs: number;
 }
 export declare const Config: any;
 export declare function applyScheduler(ctx: Context, config: Config): void;

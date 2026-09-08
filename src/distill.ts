@@ -56,6 +56,11 @@ export interface DistillConfig {
   deepSleepProbe: boolean
   deepSleepProbeAfterMs: number
   deepSleepProbeWindowMs: number
+  // 探测可靠性加固（2026-09-08）：多轮采样 + 多信号交叉 + 卡住二次确认 + 失败重试 + 总时长兜底
+  deepSleepProbeSamples: number
+  deepSleepProbeConfirm: number
+  deepSleepProbeRetries: number
+  deepSleepProbeMaxMs: number
 }
 
 /**
@@ -70,14 +75,17 @@ export interface DistillConfig {
  *              ┌───────────┬────────────┬─────────────┬────────────┐
  *     输出在增长│ 无增长+会话还在│ 无增长+会话消失│ 探针不可用/异常│
  *              ▼           ▼            ▼             ▼
- *          RUNNING      STALLED       ENDED          ENDED
- *        (正常长任务)   (卡住告警)   (异常退出)   (无法确认，正常睡)
+ *          RUNNING      SUSPECT      ENDED          ENDED
+ *        (正常长任务)  (待复核，阻塞)  (异常退出)   (无法确认，正常睡)
+ *                          │ 连续 confirm 轮无增长（或状态活跃但无增长=证据冲突）
+ *                          ▼
+ *                       STALLED（已确认卡住，不阻塞）
  *
  * 用户拍板口径（2026-09-08）：**只有确认「长线任务正在推进」才拦住睡眠**；其余（卡住/异常退出/探针不可用/
  * 探测异常）一律按停滞处理 → 正常睡眠（停滞计时沿用最后事件时刻，不再刷新成 now，否则会永远睡不着）。
  * 仅在采样窗口内「探测未决」时跳过本轮（最多延后一个巡检周期，10min）。
  */
-type SessState = 'running' | 'ended' | 'probing' | 'stalled'
+type SessState = 'running' | 'ended' | 'probing' | 'suspect' | 'stalled'
 
 /** 深度睡眠状态机快照（供 UI 消费；接线待办见 docs/ui-todo.md） */
 export interface DeepSleepStatus {
@@ -89,6 +97,7 @@ export interface DeepSleepStatus {
   running: number
   ended: number
   probing: number
+  suspect: number
   stalled: number
   nextEligibleAt: number
   sessions: { sid: string; state: SessState; lastEventAt: number; lastEndAt: number; probeResult?: string }[]
@@ -100,7 +109,10 @@ interface SessRec {
   lastEventAt: number // 最近一次任意会话事件（活跃信号 A）
   lastEndAt: number // 最近一次 turn/end(completed)（停滞计时起点）
   probeAt: number // 最近一次探测发起时刻
-  probeResult?: 'long-run' | 'stall' | 'exit' | 'no-transcript' | 'error' // 探测结论（审计可查）
+  probeRound: number // 已发起探测轮次（失败重试计数）
+  stallRound: number // 连续「无输出增长」轮次（达到 confirm 才落 stalled）
+  probeEvidence?: { rounds: number; samples: number; deltaBytes: number; alive: boolean; active: boolean } // 末次证据（排查用）
+  probeResult?: 'long-run' | 'stall' | 'suspect' | 'conflict' | 'exit' | 'no-transcript' | 'error' // 探测结论（审计可查）
 }
 
 // ── 蒸馏裁决契约 v3.1（事实源=记忆仓 engine/distill-contract.md；守藏为执行宿主，契约文本不改动语义）──
@@ -493,10 +505,15 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): { getDe
   const noteEvent = (sid: string, isTurnEnd: boolean): void => {
     const now = Date.now()
     lastActivityAt = now
-    const rec = sessions.get(sid) || { sid, state: 'running' as SessState, lastEventAt: now, lastEndAt: 0, probeAt: 0 }
+    const rec = sessions.get(sid) || { sid, state: 'running' as SessState, lastEventAt: now, lastEndAt: 0, probeAt: 0, probeRound: 0, stallRound: 0 }
     rec.lastEventAt = now
-    if (isTurnEnd) { rec.state = 'ended'; rec.lastEndAt = now; rec.probeResult = undefined; rec.probeAt = 0 }
-    else { rec.state = 'running'; rec.probeAt = 0 }
+    // 任何新事件都让会话「复活」：清掉探测/卡住计数（卡住的会话若恢复输出，不应继续按 stall 处理）
+    rec.state = isTurnEnd ? 'ended' : 'running'
+    if (isTurnEnd) rec.lastEndAt = now
+    rec.probeAt = 0
+    rec.probeRound = 0
+    rec.stallRound = 0
+    rec.probeResult = undefined
     sessions.set(sid, rec)
   }
   // 启动水位回放：取蒸馏审计最新时间（重启不重置停滞判定）；同时回放上次深度睡眠时间（痕迹窗口起点）
@@ -691,71 +708,115 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): { getDe
   }
 
   /**
-   * 输出增长探测（状态机 PROBING）：对「running 但长时间无事件」的会话采样 transcript 两次，
-   * 比对 mtime/size —— 增长=正常长任务；不增长且会话已消失=异常退出；不增长但会话还在=疑似卡住。
+   * 输出增长探测（状态机 PROBING，加固版 2026-09-08）——**避免一次采样错判就把长任务睡掉**：
+   *   ① 多轮采样：`deepSleepProbeSamples`（默认 3）轮 × `deepSleepProbeWindowMs`，任一轮检出增长即判长任务；
+   *   ② 多信号交叉：转录 size/mtime 增长（主证据）+ 事件心跳（探测期间来事件即中止，回 RUNNING）
+   *      + agent 存活 + agent.status 活跃态；状态活跃但无增长=**证据冲突**，不直接判卡住，转 suspect 复核；
+   *   ③ 卡住需连续 `deepSleepProbeConfirm`（默认 2）轮确认，首轮落 **suspect**（阻塞睡眠，下轮巡检复核）；
+   *   ④ 探针不可用/异常：内部重试 `deepSleepProbeRetries`（默认 2）次，仍失败才按「无法确认 → 正常睡」处理；
+   *   ⑤ 总时长 `deepSleepProbeMaxMs` 兜底，防悬挂；停滞计时一律沿用 lastEventAt（不刷新成 now，否则永不睡）。
    */
   const probeSession = (rec: SessRec): void => {
     if (rec.state === 'probing') return
     rec.state = 'probing'
     rec.probeAt = Date.now()
+    rec.probeRound = (rec.probeRound || 0) + 1
     const short = rec.sid.slice(0, 8)
+    const samples = Math.max(1, Number(config.deepSleepProbeSamples) || 3)
+    const confirm = Math.max(1, Number(config.deepSleepProbeConfirm) || 2)
+    const retries = Math.max(1, Number(config.deepSleepProbeRetries) || 2)
     const windowMs = Math.max(5000, Number(config.deepSleepProbeWindowMs) || 60000)
+    const maxMs = Math.max(windowMs * samples + 30000, Number(config.deepSleepProbeMaxMs) || 600000)
+    const started = Date.now()
+    const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+    const agentAlive = (): boolean => { try { return !!ctx.agents.get(rec.sid) } catch { return false } }
+    const agentActive = (): boolean => { try { const a = ctx.agents.get(rec.sid); const s = a && a.status; return !!s && s !== 'idle' } catch { return false } }
     void (async () => {
       try {
-        const file = await locateTranscript(rec.sid)
+        // ① 定位转录（失败重试 retries 次；期间若来新事件则中止）
+        let file: string | null = null
+        for (let i = 0; i < retries && !file; i++) {
+          file = await locateTranscript(rec.sid)
+          if (!file && i < retries - 1) await sleep(windowMs)
+          if (rec.state !== 'probing') return // 新事件打断 → 交回状态机，不覆盖
+        }
         if (!file) {
-          // 探针不可用 → 无法证明是长任务 → 按用户口径「除长线任务外都正常睡」：计入停滞（不刷新水位，否则会永不睡）
           rec.probeResult = 'no-transcript'
           rec.state = 'ended'
           rec.lastEndAt = rec.lastEventAt
-          log(`deep sleep probe: ${short} 探针不可用（无转录路径）→ 无法确认为长任务，按停滞处理（正常睡眠）；请检查记忆仓 locate-transcript-probe 是否就位`)
-          audit({ kind: 'deep-sleep-probe', sid: short, result: 'no-transcript', note: '探针不可用，无法确认长任务，按停滞处理' })
+          log(`deep sleep probe: ${short} 探针不可用（已重试 ${retries} 次）→ 无法确认为长任务，按停滞处理（正常睡眠）；请检查记忆仓 locate-transcript-probe 是否就位`)
+          audit({ kind: 'deep-sleep-probe', sid: short, result: 'no-transcript', rounds: rec.probeRound, note: '探针不可用，无法确认长任务，按停滞处理' })
           return
         }
+        // ② 多轮采样：任一轮 size/mtime 增长 → long-run
         const snap = (): { mtimeMs: number; size: number } | null => {
-          try { const st = statSync(file); return { mtimeMs: st.mtimeMs, size: st.size } } catch { return null }
+          try { const st = statSync(file as string); return { mtimeMs: st.mtimeMs, size: st.size } } catch { return null }
         }
-        const s1 = snap()
-        if (!s1) {
-          // 停滞计时沿用最后事件时刻（已超阈值 → 下轮即睡），不刷新成 now（否则再等 3h）
-          rec.probeResult = 'exit'; rec.state = 'ended'; rec.lastEndAt = rec.lastEventAt
-          audit({ kind: 'deep-sleep-probe', sid: short, result: 'exit', note: '转录文件不可读' })
-          return
+        let prev = snap()
+        let grew = false, delta = 0, rounds = 1
+        for (let i = 1; i < samples; i++) {
+          await sleep(windowMs)
+          if (rec.state !== 'probing') return // 事件心跳：探测期间会话恢复活跃 → 中止
+          if (Date.now() - started > maxMs) break
+          const cur = snap()
+          if (!cur) break
+          if (prev && (cur.size !== prev.size || cur.mtimeMs > prev.mtimeMs)) { grew = true; delta = cur.size - prev.size; rounds = i + 1; break }
+          prev = cur
+          rounds = i + 1
         }
-        await new Promise((r) => setTimeout(r, windowMs))
-        const alive = ((): boolean => { try { return !!ctx.agents.get(rec.sid) } catch { return false } })()
-        const s2 = snap()
-        if (!s2) {
-          rec.probeResult = 'exit'; rec.state = 'ended'; rec.lastEndAt = rec.lastEventAt
-          log(`deep sleep probe: ${short} 转录不可读 → 视为结束（正常睡眠）`)
-          audit({ kind: 'deep-sleep-probe', sid: short, result: 'exit' })
-          return
-        }
-        if (s2.mtimeMs > s1.mtimeMs || s2.size !== s1.size) {
+        if (rec.state !== 'probing') return
+        if (grew) {
           rec.probeResult = 'long-run'
           rec.state = 'running'
-          rec.lastEventAt = Date.now() // 确认仍在输出 → 刷新水位，过 3h 再复查
-          log(`deep sleep probe: ${short} 输出仍在增长（+${s2.size - s1.size}B）→ 正常长任务，不睡`)
-          audit({ kind: 'deep-sleep-probe', sid: short, result: 'long-run', deltaBytes: s2.size - s1.size })
-        } else if (!alive) {
+          rec.lastEventAt = Date.now() // 唯一会刷新水位的分支（确认长任务，3h 后再复查）
+          rec.stallRound = 0
+          rec.probeEvidence = { rounds, samples, deltaBytes: delta, alive: true, active: true }
+          log(`deep sleep probe: ${short} 第 ${rounds}/${samples} 轮检出输出增长（+${delta}B）→ 正常长任务，不睡`)
+          audit({ kind: 'deep-sleep-probe', sid: short, result: 'long-run', deltaBytes: delta, rounds, samples })
+          return
+        }
+        // ③ 无增长：二次确认存活（防瞬时查找失败误判 exit）
+        const alive1 = agentAlive()
+        if (!alive1) await sleep(3000)
+        const alive = alive1 && agentAlive()
+        const active = agentActive()
+        rec.probeEvidence = { rounds, samples, deltaBytes: 0, alive, active }
+        if (!alive) {
           rec.probeResult = 'exit'
           rec.state = 'ended'
           rec.lastEndAt = rec.lastEventAt
-          log(`deep sleep probe: ${short} 会话已消失且无输出 → 异常退出（正常睡眠）`)
-          audit({ kind: 'deep-sleep-probe', sid: short, result: 'exit', note: '会话已退出' })
-        } else {
+          log(`deep sleep probe: ${short} ${samples} 轮无增长且会话已消失（二次确认）→ 异常退出（正常睡眠）`)
+          audit({ kind: 'deep-sleep-probe', sid: short, result: 'exit', rounds, samples, note: '会话已退出（二次确认）' })
+          return
+        }
+        if (active) {
+          // 证据冲突：状态说活跃但输出没长 → 不判卡住，转 suspect 复核（宁可多等一轮，不误判长任务）
+          rec.state = 'suspect'
+          rec.probeResult = 'conflict'
+          log(`deep sleep probe: ${short} 无输出增长但 agent 状态活跃 → 证据冲突，转 suspect 下轮复核`)
+          audit({ kind: 'deep-sleep-probe', sid: short, result: 'conflict', rounds, samples, note: '状态活跃但无输出增长，复核' })
+          return
+        }
+        // ④ 卡住需连续 confirm 轮确认
+        const sr = (rec.stallRound || 0) + 1
+        rec.stallRound = sr
+        if (sr >= confirm) {
           rec.probeResult = 'stall'
           rec.state = 'stalled'
-          log(`deep sleep probe: ${short} 无输出增长但会话仍在 → 疑似卡住/异常，不阻塞睡眠（请人工确认）`)
-          audit({ kind: 'deep-sleep-probe', sid: short, result: 'stall', idleMin: Math.round((Date.now() - rec.lastEventAt) / 60000), note: '疑似卡住：无输出增长但会话未退出' })
+          log(`deep sleep probe: ${short} 连续 ${sr}/${confirm} 轮无输出增长（会话仍在）→ 确认卡住，不阻塞睡眠（请人工确认）`)
+          audit({ kind: 'deep-sleep-probe', sid: short, result: 'stall', rounds, samples, stallRound: sr, idleMin: Math.round((Date.now() - rec.lastEventAt) / 60000), note: '疑似卡住：连续无输出增长且会话未退出' })
+        } else {
+          rec.state = 'suspect'
+          rec.probeResult = 'suspect'
+          log(`deep sleep probe: ${short} 第 ${sr}/${confirm} 次无增长 → suspect，下轮巡检复核（期间阻塞睡眠）`)
+          audit({ kind: 'deep-sleep-probe', sid: short, result: 'suspect', rounds, samples, stallRound: sr })
         }
       } catch (e) {
-        // 探测异常同样按停滞处理（除已确认长任务外，其余一律正常睡）
         rec.probeResult = 'error'
         rec.state = 'ended'
         rec.lastEndAt = rec.lastEventAt
         log(`deep sleep probe err ${short}: ${String((e as Error)?.message || e).slice(0, 120)} → 按停滞处理（正常睡眠）`)
-        audit({ kind: 'deep-sleep-probe', sid: short, result: 'error', note: String((e as Error)?.message || e).slice(0, 120) })
+        audit({ kind: 'deep-sleep-probe', sid: short, result: 'error', rounds: rec.probeRound, note: String((e as Error)?.message || e).slice(0, 120) })
       }
     })()
   }
@@ -769,9 +830,12 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): { getDe
     let probing = 0, stalled = 0, ended = 0, running = 0
     for (const [sid, rec] of sessions) {
       try { if (!ctx.agents.get(sid)) { sessions.delete(sid); continue } } catch { sessions.delete(sid); continue }
-      // 状态机推进：running 且无事件 ≥ probeAfter → 发起探测确认真活跃（长任务/卡住/退出）
-      if (rec.state === 'running' && now - rec.lastEventAt >= probeAfter && config.deepSleepProbe) probeSession(rec)
-      if (rec.state === 'probing') { probing++; continue } // 未决 → 保守跳过本轮（不睡）
+      // 状态机推进：running 且无事件 ≥ probeAfter → 发起探测；suspect → 下轮巡检复核（卡住需连续确认）
+      if (config.deepSleepProbe) {
+        if (rec.state === 'running' && now - rec.lastEventAt >= probeAfter) probeSession(rec)
+        else if (rec.state === 'suspect') probeSession(rec)
+      }
+      if (rec.state === 'probing' || rec.state === 'suspect') { probing++; continue } // 未决/待复核 → 阻塞本轮（不睡）
       if (rec.state === 'stalled') { stalled++; continue } // 已确认无输出 → 不阻塞睡眠
       if (rec.state === 'ended') ended++; else running++
       const act = rec.state === 'ended' ? rec.lastEndAt : rec.lastEventAt
@@ -790,13 +854,14 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): { getDe
   const getDeepSleepStatus = (): DeepSleepStatus => {
     let hottest = sessions.size ? 0 : lastActivityAt
     const list: DeepSleepStatus['sessions'] = []
-    let running = 0, ended = 0, probing = 0, stalled = 0
+    let running = 0, ended = 0, probing = 0, stalled = 0, suspect = 0
     for (const rec of sessions.values()) {
       if (rec.state === 'probing') probing++
+      else if (rec.state === 'suspect') suspect++
       else if (rec.state === 'stalled') stalled++
       else if (rec.state === 'ended') ended++
       else running++
-      if (rec.state !== 'stalled' && rec.state !== 'probing') {
+      if (rec.state !== 'stalled' && rec.state !== 'probing' && rec.state !== 'suspect') {
         const act = rec.state === 'ended' ? rec.lastEndAt : rec.lastEventAt
         if (act > hottest) hottest = act
       }
@@ -808,7 +873,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): { getDe
       probeAfterMs: Number(config.deepSleepProbeAfterMs) || (Number(config.deepSleepIdleMs) || 10800000),
       lastActivityAt: hottest,
       lastDeepSleepAt,
-      running, ended, probing, stalled,
+      running, ended, probing, suspect, stalled,
       nextEligibleAt: hottest + (Number(config.deepSleepIdleMs) || 10800000),
       sessions: list,
     }

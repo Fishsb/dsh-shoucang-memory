@@ -16,7 +16,9 @@
 | `sessions[]` | `{ sid, state, lastEventAt, lastEndAt, probeResult }` | 会话列表：状态色点 + 停滞时长 + 探测结论（long-run/stall/exit/no-transcript） |
 
 - 状态配色建议：`running` 绿（活跃）、`ended` 灰（已结束）、`probing` 蓝闪烁（探测中）、`stalled` 红（疑似卡住，需人工确认）。
-- `probeResult` 取值与 UI 文案：`long-run`=正常长任务（不睡）、`stall`=疑似卡住（不阻塞，告警）、`exit`=异常退出（正常睡）、`no-transcript`=探针不可用（无法确认→正常睡，提示排查探针）、`error`=探测异常（正常睡）。**只有 `long-run` 会拦住睡眠**。
+- `probeResult` 取值与 UI 文案：`long-run`=正常长任务（**唯一拦睡**）、`suspect`=待复核（阻塞睡眠）、`conflict`=证据冲突（状态活跃但无输出增长，阻塞睡眠待复核）、`stall`=已确认卡住（不阻塞，红告警请人工确认）、`exit`=异常退出（正常睡）、`no-transcript`=探针不可用（重试后仍失败→正常睡，提示排查探针）、`error`=探测异常（正常睡）。
+- 计数新增 `suspect`（与 `probing` 同属「未决/阻塞」），UI 上两者都显示为待定色（蓝），`stalled` 红色、`ended` 灰、`running` 绿。
+- 可展示末次证据 `probeEvidence`（rounds/samples/deltaBytes/alive/active）与 `stallRound`/`probeRound`，便于排查误判。
 - 接线点：panel 侧需拿到 `registerDistill` 返回值（当前 scheduler 未接收返回值，`applyScheduler` 里 `registerDistill(...)` 直接丢弃，接线时改为保存引用并挂到 HTTP RPC）。
 
 ## T2 · 睡眠/唤醒时间判断的可视化与可调（等 UI）
