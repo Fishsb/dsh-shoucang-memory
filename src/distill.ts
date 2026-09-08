@@ -86,7 +86,7 @@ export interface DistillConfig {
  */
 type SessState = 'running' | 'ended' | 'probing' | 'suspect' | 'stalled'
 
-/** 深度睡眠状态机快照（供 UI 消费；接线待办见 docs/ui-todo.md） */
+/** 深度睡眠状态机快照（UI 已接线：deepsleep-share.ts 惰性桥接 → panel `GET /deepsleep` → client.js「深度睡眠」视图） */
 export interface DeepSleepStatus {
   enabled: boolean
   idleMs: number
@@ -978,7 +978,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     }).finally(() => { deepSleepRunning = false })
   }
 
-  /** 状态机快照（供 UI 消费；接线待办见 docs/ui-todo.md）——后续面板展示/手动触发都读这里 */
+  /** 状态机快照——面板展示 / 手动触发（POST /deepsleep/trigger）/ 配置读写（/deepsleep/config）均读这里 */
   const getDeepSleepStatus = (): DeepSleepStatus => {
     let hottest = sessions.size ? 0 : lastActivityAt
     const list: DeepSleepStatus['sessions'] = []

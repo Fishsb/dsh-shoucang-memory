@@ -60,7 +60,7 @@ export interface DistillConfig {
  * 仅在采样窗口内「探测未决」时跳过本轮（最多延后一个巡检周期，10min）。
  */
 type SessState = 'running' | 'ended' | 'probing' | 'suspect' | 'stalled';
-/** 深度睡眠状态机快照（供 UI 消费；接线待办见 docs/ui-todo.md） */
+/** 深度睡眠状态机快照（UI 已接线：deepsleep-share.ts 惰性桥接 → panel `GET /deepsleep` → client.js「深度睡眠」视图） */
 export interface DeepSleepStatus {
     enabled: boolean;
     idleMs: number;
