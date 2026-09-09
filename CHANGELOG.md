@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### Added
+- **蒸馏/深睡模型独立配置 + 宿主模型选择（2026-09-10，用户拍板"LLM 直接用 Harness 模型体系"）**：① 后端拆独立键 `distillProvider/distillModel`（蒸馏）+ `sleepProvider/sleepModel`（深睡），各自可指定宿主模型或空=回落共用键→继承主会话；宿主 LLM 枚举桥 `schedulerShare.llmModels()`（listProviders→listModels 扁平）+ `GET /llm/models`（实测 53 宿主模型）；distill.ts `resolveLlm` 具体键优先回落。② UI 参数调节新增「蒸馏/深睡模型」卡——两个 Provider→Model 两级联动下拉（仿 AnythingLLM LLMProviderModelPicker），含「继承主会话」空选项，数据源 /llm/models，写 /distill/config（白名单补 4 键）。蒸馏节流区移除旧文本输入（双入口消除）。③ 向量与模型卡样式优化（Provider 胶囊按钮组 sc-prov-btns + 统一操作按钮 sc-vec-actions）。验证：选 ollama→列 ollama 模型、选 deepseek-v4-flash→scheduler.json 落盘、还原继承正常、vision 无重叠。commits cd36201/a9b3da9/7a45d43。
+
 ### Fixed
 - **蒸馏稳健性 + 积压扫尾（2026-09-10，实态排查：多工作区会话数小时未蒸馏）**：`src/distill.ts`——① **inactive context 根因修复**：热重载/重载风暴后旧 fiber 遗留 idle 定时器在 ctx 失效后仍触发 → spawn 必报 `cannot get required service "subagents" in inactive context`，窗口全部失败且无重试（实锤 21:37–22:11Z 连续 6 次）；新增 ctx.effect 清理（dispose 时清空 idleTimers/distilling）+ spawn 失败按错误分类静默跳过（水位保留），不再污染 providerFailCount；② **积压扫尾 sweepBacklog**：启动 30s + 每 10min 巡检所有仍存根的根会话，凡水位<内存末事件 seq、已出 10min 宽限期（FSM running/probing/suspect 与宽限内跳过）即自动补蒸馏——首扫即恢复 lk-FF/project-nav 4 个积压会话（3e2b5004 入册 2 / 9a7d7ef9 入册 4 / 5f024550 入册 5 / 471aca03 入册 2），当前活跃会话正确跳过；③ **预筛大段放宽**（用户拍板）：`prescanMinChars` 缺省 4000，增量 ≥ 阈值跳过信号词预筛直接蒸馏——信息密集无关键词会话不再整段丢弃推水位；④ **日志 sid 可辨识**：`sid.slice(0,8)` 恒为 'session-' 前缀导致全部日志无会话辨识度，改 `sidShort` 取 uuid 中段。附带修正：llm 指纹标签对齐独立模型键（distillProvider/distillModel）。验证：typecheck/build/hardcode 零错误；重载后首扫 6 会话补蒸馏、4 个 completed 水位推进、fclass（gate-reject/ok/dispatch-failed）+ llm=inherited 落审计。
 
