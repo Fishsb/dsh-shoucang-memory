@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### Added
+- **S3 能力自省工具 `assistant_capabilities`（2026-09-09，assistant-focus-plan S3）**：只读工具，任务认领前自查「现在能做什么/边界在哪」——返回三段聚合：① 当前 Agent 可见工具面按族归类（`ctx.tools.schemas(exec.agent)`，DSH 官方同款用法；族=记忆/执行/文件/检索/视觉/治理/开发/编排/技能）；② 记忆库边界纪律（AGENT.md `[边界]`/`[原则]` 行，常注入）；③ suite 装配状态。只读无副作用。验证：typecheck/build/check-hardcode 零错误；lib 同步部署位 + 热重载 active。
+
 ### Fixed
 - **write_gate § 小节存在性校验补缺（2026-09-09，S1 实证发现）**：此前指针只校验 `notes/<f>.md` 文件存在、**不校验 §小节真实存在**——深睡产物曾指向 `notes/flows.md §深睡蒸馏` 空壳小节仍 gate=pass。现 `memory_write_gate.mjs` 增加小节存在性核对（匹配口径=read_section.mjs 权威：title===kw || 双向包含，支持 `§A/§B` 并列与括号日期小节名）；只对格式通过的行检查（格式违规 exit 4 不被小节错 exit 2 抢占）。同步修正测试夹具的虚构 `§调试流程` 为真实小节 + 新增 3 用例（真实过/空壳拒/缩写过）→ **35 PASS / 0 FAIL**。
 - **助理目标 S1 深睡实证闭环（2026-09-09，主线 exit 达成）**：手动 POST /deepsleep/trigger 消费 flow-candidate → 归纳子代理 stop=completed（audit：added 1 / profiles 0 / gate pass）→ **AGENT.md 产出首条带源指针 `[路径]` 行**（`[路径] 深睡记忆蒸馏 · ①区间起点先取值显式传参 ②按判据三通道提炼 ③done 才推进水位 → notes/flows.md §深睡蒸馏`）+ 晨起摘要 delta.md 生成（1 行，注入下会话热记忆「🧠 最近成长」实证）。配套：notes/flows.md 补建 §深睡蒸馏 锚点小节。方案文档 `docs/assistant-focus-plan.md` 落盘（S1-S6 阶段施工参照）。
