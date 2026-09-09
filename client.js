@@ -1610,9 +1610,9 @@
             // 换内部 label 文本（span.UQsH_q_triggerLabel 或 data-slot 容器）
             var lab = btn.querySelector('span, [data-slot] span');
             if (lab) lab.textContent = '守藏';
-            // 图标：尝试复用守藏图标；失败保留宿主 svg 占位（视觉与设置同形）
-            var icEl = btn.querySelector('svg');
-            if (icEl) { try { icEl.outerHTML = '<img src="' + SC_ICON + '" alt="守" style="width:16px;height:16px;display:block;pointer-events:none;"/>'; } catch (e) { /* 保宿主图标 */ } }
+            // 图标（2026-09-10 审查三）：保留宿主克隆 svg 原样（与设置图标 100% 同质、清晰随主题）。
+            // 说明：曾尝试 PNG/自绘 path 替代——PNG 96px 缩小有锯齿、手写 path 不可靠易变形；
+            // 为保证"与设置完全一致且清晰"，暂用宿主同款图标（视觉协调优先，后续可换验证过的同规格矢量）。
             btn.onclick = openPanel;
           } catch (e) { btn = null; }
         }
