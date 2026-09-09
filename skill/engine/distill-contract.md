@@ -5,6 +5,7 @@
 > **v4（2026-09-08 用户拍板，单库化）：pmg 项目卡库已随治理插件整体移除，守藏只有一个记忆库。** 守藏执行宿主已升级 v4（src/distill.ts DEFAULT_DISTILL_PROMPT 为权威实现）——R2 跨项目细粒度条文改入 notes（原 generic 板块承接）；R3 项目专属事实直写项目工作区 `docs/devref/shoucang/`（workspace 由会话转录反解，反解不到=无归属如实丢弃）；新增 `profiles` 双画像通道（USER/AGENT，Q2 归谁落地）。本文档其余章节保留作 v3 沿革，与 v4 冲突处**以 v4 为准**。
 > **v5（2026-09-10 用户拍板，WikiSkill 借鉴：结构化教训留痕）**：`appends` 条目新增**可选** `rootCause`/`avoidWhen`（各 ≤30 字）——教训/踩坑类浓缩（notes/lessons.md 或 [lesson] 语境）带根因 WHY 与「不适用」场景才可复用，宿主写入时自动追加「- 根因：…」「- 不适用：…」两行（正文小节级，read_section 原样返回供检索端判适用性）；`newIndex`/`profiles`/其余字段与判定语义不变，**v4 旧输出（无此二字段）照常受理**。守藏执行宿主已升级 v5（src/distill.ts DEFAULT_DISTILL_PROMPT 为权威实现）。
 > **树层义（2026-09-10，文档先行）**：分裂判据链语义= memory-core-model §2.7（并入 L1 vs 裂 L2 分面 vs 子面提级新 L1，禁跳层）；`###` 经 `父/子` 路径自动建、`##` 需锚；读取走二级展开协议（L1 正文 → L2 标题清单 → 选面展开）。DEFAULT_DISTILL_PROMPT 判据句与此对齐列为后续档。
+> **树由模型自动维护（2026-09-10 拍板）**：结构决策归模型——蒸馏写侧并入/裂 L2；深睡 treeOps 通道（契约档·待落地）允许模型输出 split/merge/rename/move/attach-clone 结构操作 JSON，宿主只守不变量（锚/指针不悬空/无孤儿/归档可回滚/write_gate/health/幂等）。层义为模型规范非硬白名单。v5.4"深睡不新建/不合并小节"禁令在 treeOps 落地时解除（当前蒸馏写侧照旧）。
 > v1（ADR-0004 内嵌）→ v2：加第一层归属路由 → v3（2026-09-06 用户拍板）：判定锚从类别改为粒度——两库的区别不是主题类别，而是粒度与功能：记忆库=粗粒度方向指引，项目卡库=细粒度规范/事实 → **v3.1（2026-09-06 用户拍板）：格式传递**——`newIndex`/`appends.text` 内嵌记忆库 spec §8 教程式与索引行模板（**条目格式权威 = memory-whitelist-spec.md §8**），蒸馏产出不再凭示意自由发挥。
 
 ## 归属路由（第一层，先于四问）
