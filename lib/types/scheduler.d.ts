@@ -1,10 +1,11 @@
 /**
- * @dsh-external/shoucang-scheduler — 守藏调度执行器（suite-manager 只读模块）。
- * 由 dev_scaffold_plugin 生成；2026-09-05 重定义（HANDOVER #2）：
- * 旧「记忆归档调度（boards 三板块/R1-R5/W1-W3）」语义已按拍板废弃（facts F-003/F-004），
- * 本模块重定义为插件集合（suite）的**只读装配检测**——shoucang_suite 工具。
+ * @dsh-external/shoucang-scheduler — 守藏调度执行器。
+ * 沿革：2026-09-05 重定义为 suite 只读装配检测（HANDOVER #2，旧 boards 三板块废弃）；
+ * 2026-09-08 三合一后本模块承载 = ① suite 装配检测（shoucang_suite，矩阵单一实现在 targets.ts）
+ * + ② 蒸馏器装配与回归工具（shoucang_verify / shoucang_targets_probe，蒸馏器本体在 distill.ts）
+ * + ③ 自持配置通道加载（~/.dsh/suite/scheduler.json 启动期覆盖 Config 缺省）。
  *
- * 装配检测口径（facts F-006 零硬编码红线：不写死机器路径，运行时经 env/home 探测）：
+ * 装配检测口径（零硬编码红线：不写死机器路径，运行时经 env/home 探测）：
  *   1. injected 基准：注入器 registry.json（$DSH_HOME/super-injector/registry.json，dev 注入装配）
  *   2. profile 基准：$DSH_HOME/profiles/<profile>/package.json 的 dependencies + dsh.profile.bundles
  *      （bundle 装配；多 profile 全扫，逐 profile 归属）

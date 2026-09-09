@@ -1,4 +1,4 @@
-# UI 待办清单（守藏面板）
+# UI 待办清单（守藏面板）——已归档：实现记录
 
 > 状态（2026-09-08 续做）：**T1 + T2 均已落地**。内核数据接口（registerDistill 三函数）+ 跨插件共享引用（deepsleep-share.ts）+ panel 三路由（/deepsleep、/deepsleep/trigger、/deepsleep/config）+ client.js「深度睡眠」视图全部打通，typecheck/build/check-hardcode ✅。下面为原始契约与实现记录。
 
