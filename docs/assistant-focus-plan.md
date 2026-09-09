@@ -40,7 +40,7 @@
 | **S2 晨起摘要 delta 注入** | 验证深睡后 delta.md 生成 + 下会话热记忆顶部出现「最近成长」 | ✅ 2026-09-09 实证：新会话注入文本顶部出现「🧠 最近成长」含 [路径] 行（panel.ts readDawnDelta → buildHotMemoryText 接线复核通过） |
 | **S3 能力自省工具** | 新增只读工具 `assistant_capabilities`（当前工具面/权限/可写范围清单），挂 router 第①步自查 | ✅ 2026-09-09：工具注册（scheduler.ts，`ctx.tools.schemas(exec.agent)` 按族聚合 + AGENT.md [边界]/[原则] + suite 装配）；typecheck/build 全绿，lib 同步热重载 |
 | **S4 episodes/转正启用** | 每成功任务写 episode；flow-candidate 满门槛自动转正（成功≥2 跨会话≥2） | ✅ 2026-09-09：episode 触发放宽（蒸馏裁决完成即记含 route/outcome，不只入册时）；flow-candidate `intentTokens` 指纹同型聚合 + 成功次数/跨会话计数（指纹验证：异型交集1不误并/同型交集5聚合）；深睡材料转正候选置顶 + prompt 判据补门槛句；存量 2 候选迁移新格式（commit c05f77a） |
-| **S5 召回零命中动作** | 零命中返回「近似主题 + 建议检索词 + pending 提醒」，不再静默 | 待做：构造 miss 查询可观测到兜底输出 |
+| **S5 召回零命中动作** | 零命中返回「近似主题 + 建议检索词 + pending 提醒」，不再静默 | ✅ 2026-09-09：`recallApprox` 零命中降级（建议词=库内出现过的高判别 token；库内主题地图=notes 小节清单 ≤12）；设计验证修正（词法零命中逐行匹配必空 → 主题地图为真价值）；shoucang_recall 零命中分支改「建议词+主题地图+沉淀提醒」（commit ccc2123） |
 | **S6 观测与收尾** | 自然跑 2-3 天：蒸馏/深睡正常、无 JSON 失败复现；架构文档按指纹重生成；vector 更新 | 待做：无 P0 复现；nav/vector/文档三者一致 |
 
 > 向量档（路线⑤）与打扰度影子**不主动开**，按 roadmap 判据（漏检实锤/召回率下降/影子样本校准）再启用。
