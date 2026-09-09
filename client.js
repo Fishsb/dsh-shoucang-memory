@@ -303,9 +303,10 @@
         view.appendChild(el('div', 'sc-desc', '注入参数（全局，写 ~/.dsh/suite/scheduler.json）与运行时通道。改动即时写回（scheduler.json 备份先行）。面板 root 仅管理「配置原文」的 boards 显示项——注入配置已迁全局，不再随 root 切换变化。'));
         // 注入配置全局值（P1-2：global 优先；parsed 回落兼容旧 root YAML）
         var g = global || {};
+        // R1：global 是最终生效值（scheduler ?? 默认），不回 root YAML——显示=实际注入值
         function gVal(key, fallback) { return (g[key] !== undefined && g[key] !== null) ? g[key] : fallback; }
         // 画像 persona 四档滑块：关闭 / 仅注入我 / 仅注入你 / 全注入
-        var personaMode = String(gVal('persona', parsed.flags['injection.persona'] || 'both'));
+        var personaMode = String(gVal('persona', 'both'));
         var PERSONA_TIERS = [['off', '关闭'], ['me', '仅注入我'], ['you', '仅注入你'], ['both', '全注入']];
         var pItem = el('div', 'setting-item');
         var pInfo = el('div', 'setting-item-info');
@@ -339,7 +340,7 @@
           }));
         });
         // 热记忆注入强度（五格滑块：off/low/medium/high/smart）
-        var levelMode = String(gVal('level', parsed.injection_level || 'smart'));
+        var levelMode = String(gVal('level', 'smart'));
         var LEVEL_TIERS = [['off', 'off'], ['low', 'low'], ['medium', 'medium'], ['high', 'high'], ['smart', 'smart']];
         var lItem = el('div', 'setting-item');
         var lInfo = el('div', 'setting-item-info');
@@ -383,10 +384,10 @@
           item.appendChild(info); item.appendChild(wrap);
           return item;
         }
-        view.appendChild(numSetting('注入总预算 injection.max_tokens', '整轮指针注入的 token 预算（100–8000，默认 3000；中文粗估 ~2 字符/token），超出整体裁切——全局 scheduler.json', gVal('max_tokens', parsed.max_tokens != null ? parsed.max_tokens : 3000), 'injection.max_tokens', 'tokens'));
-        view.appendChild(numSetting('agent 画像上限 injection.agent_max_chars', 'AGENT.md（含 [原则] 习得原则与 [路径] 任务路径）注入字符上限，逐行裁切不切半行；0=不裁（默认，靠容量门 3000 兜底）——全局 scheduler.json', gVal('agent_max_chars', parsed.caps_agent != null ? parsed.caps_agent : 0), 'injection.agent_max_chars', '字符'));
-        view.appendChild(numSetting('用户画像上限 injection.user_max_chars', 'USER.md 注入字符上限；0=不裁（默认，靠容量门 2000 兜底）——全局 scheduler.json', gVal('user_max_chars', parsed.caps_user != null ? parsed.caps_user : 0), 'injection.user_max_chars', '字符'));
-        view.appendChild(numSetting('知识索引上限 injection.memory_max_chars', 'MEMORY.md 注入字符上限（在档位行数基础上二次裁切）；0=不裁（默认）——全局 scheduler.json', gVal('memory_max_chars', parsed.caps_memory != null ? parsed.caps_memory : 0), 'injection.memory_max_chars', '字符'));
+        view.appendChild(numSetting('注入总预算 injection.max_tokens', '整轮指针注入的 token 预算（100–8000，默认 3000；中文粗估 ~2 字符/token），超出整体裁切——全局 scheduler.json', gVal('max_tokens', 3000), 'injection.max_tokens', 'tokens'));
+        view.appendChild(numSetting('agent 画像上限 injection.agent_max_chars', 'AGENT.md（含 [原则] 习得原则与 [路径] 任务路径）注入字符上限，逐行裁切不切半行；0=不裁（默认，靠容量门 3000 兜底）——全局 scheduler.json', gVal('agent_max_chars', 0), 'injection.agent_max_chars', '字符'));
+        view.appendChild(numSetting('用户画像上限 injection.user_max_chars', 'USER.md 注入字符上限；0=不裁（默认，靠容量门 2000 兜底）——全局 scheduler.json', gVal('user_max_chars', 0), 'injection.user_max_chars', '字符'));
+        view.appendChild(numSetting('知识索引上限 injection.memory_max_chars', 'MEMORY.md 注入字符上限（在档位行数基础上二次裁切）；0=不裁（默认）——全局 scheduler.json', gVal('memory_max_chars', 0), 'injection.memory_max_chars', '字符'));
 
         // 2026-09-10 审查收敛：以下旧控件已移除——
         //  archive/lifecycle/merge 组（蒸馏空闲 idle_review_ms/归档模式/成熟时长/指纹阈值等）消费端为 v15 单库化前
@@ -438,12 +439,29 @@
             var swCtl = el('div', 'setting-item-control'); swCtl.appendChild(sw);
             swItem.appendChild(swCtl);
             vzone.appendChild(swItem);
-            // provider 展示（本地/云端）
+            // provider/端点/模型编辑（R2：本地↔云端切换——写 /embed/config，改后需清缓存重建）
             var curUrl = (s2.running && s2.running.baseUrl) || 'http://127.0.0.1:9915/v1';
             var curModel = (s2.running && s2.running.model) || 'bge-m3';
-            vzone.appendChild(embRead2('端点 baseUrl', '本地 bge-m3 GPU（缺省）或云端 OpenAI 兼容 /embeddings', curUrl));
-            vzone.appendChild(embRead2('嵌入模型', '本地 bge-m3（1024d q8）；换云端如 text-embedding-3-small', curModel));
-            vzone.appendChild(embRead2('API Key env', '本地免 key；云端填 key 所在环境变量名', (s2.running && s2.running.apiKeyEnv) || 'EMBED_API_KEY'));
+            var curKeyEnv = (s2.running && s2.running.apiKeyEnv) || 'EMBED_API_KEY';
+            var cfgItem = el('div', 'setting-item');
+            var cfgInfo = el('div', 'setting-item-info');
+            cfgInfo.appendChild(el('div', 'setting-item-name', '端点/模型配置（本地↔云端切换）'));
+            cfgInfo.appendChild(el('div', 'setting-item-desc', '本地缺省 http://127.0.0.1:9915/v1 + bge-m3（免 key）；切云端填云端 /v1 端点 + 模型名。保存写 scheduler.json（重载后生效，需清缓存重建）。'));
+            cfgItem.appendChild(cfgInfo);
+            var cfgWrap = el('div'); cfgWrap.style.cssText = 'display:flex;flex-direction:column;gap:6px;flex:none;align-items:flex-end;';
+            var uInp = el('input'); uInp.className = 'sc-input'; uInp.value = curUrl; uInp.style.width = '300px'; uInp.title = 'embedBaseUrl';
+            var mInp = el('input'); mInp.className = 'sc-input'; mInp.value = curModel; mInp.style.width = '180px'; mInp.title = 'embedModel';
+            var kInp = el('input'); kInp.className = 'sc-input'; kInp.value = curKeyEnv; kInp.style.width = '180px'; kInp.title = 'embedApiKeyEnv';
+            var cfgBtn = el('button', 'sc-btn subtle', '保存配置');
+            cfgBtn.type = 'button'; cfgBtn.style.cssText = 'padding:3px 12px;font-size:11.5px;';
+            cfgBtn.addEventListener('click', function () {
+              api('/embed/config', { method: 'POST', body: JSON.stringify({ embedBaseUrl: uInp.value.trim(), embedModel: mInp.value.trim(), embedApiKeyEnv: kInp.value.trim() }) })
+                .then(function () { status('✓ 端点/模型已保存（重载后生效——若换模型请点「清缓存重建」）'); })
+                .catch(fail);
+            });
+            cfgWrap.appendChild(uInp); cfgWrap.appendChild(mInp); cfgWrap.appendChild(kInp); cfgWrap.appendChild(cfgBtn);
+            cfgItem.appendChild(cfgWrap);
+            vzone.appendChild(cfgItem);
             // P0（2026-09-10）：清缓存重建——换 embedding 模型后旧向量失效，须清后按新模型重嵌
             var clearRow = el('div', 'setting-item');
             var clearInfo = el('div', 'setting-item-info');
@@ -463,19 +481,26 @@
             var clearCtl = el('div', 'setting-item-control'); clearCtl.appendChild(clearBtn);
             clearRow.appendChild(clearCtl);
             vzone.appendChild(clearRow);
+            // R2（2026-09-10）：服务未就绪引导——新装用户默认无 bge 服务（词法兜底运行，语义未启用）
+            if (st === 'off' || st === 'unreachable') {
+              var guide = el('div');
+              guide.appendChild(el('div', 'sc-mem-group-title', '如何启用语义检索'));
+              var g1 = el('div', 'setting-item');
+              var g1i = el('div', 'setting-item-info');
+              g1i.appendChild(el('div', 'setting-item-name', '方案 A · 本地 GPU 服务（推荐，零 token 成本）'));
+              g1i.appendChild(el('div', 'setting-item-desc', '需自备 bge-m3 嵌入服务（OpenAI 兼容 /v1/embeddings，端口 9915）。当前检测不可达。'));
+              g1.appendChild(g1i);
+              guide.appendChild(g1);
+              var g2 = el('div', 'setting-item');
+              var g2i = el('div', 'setting-item-info');
+              g2i.appendChild(el('div', 'setting-item-name', '方案 B · 云端 API'));
+              g2i.appendChild(el('div', 'setting-item-desc', '手写 ~/.dsh/suite/scheduler.json：embedBaseUrl=云端端点 + embedModel=模型名 + embedApiKeyEnv=key 环境变量名；改后重载并「清缓存重建」。'));
+              g2.appendChild(g2i);
+              guide.appendChild(g2);
+              guide.appendChild(el('div', 'sc-desc', '未配置时自动词法召回（可用但无语义）；配置后本页 provider 变就绪。'));
+              vzone.appendChild(guide);
+            }
           }).catch(function (e) { vzone.textContent = ''; vzone.appendChild(el('div', 'sc-desc', '向量状态不可用: ' + e.message)); });
-        }
-        function embRead2(name, desc, value) {
-          var it = el('div', 'setting-item');
-          var info = el('div', 'setting-item-info');
-          info.appendChild(el('div', 'setting-item-name', name));
-          info.appendChild(el('div', 'setting-item-desc', desc));
-          var val = el('span', 'sc-vec-label');
-          val.textContent = (value != null && value !== '') ? String(value) : '（空）';
-          val.style.maxWidth = '340px';
-          info.appendChild(val);
-          it.appendChild(info);
-          return it;
         }
         view.appendChild(vzone);
         refreshVecZone();
@@ -666,7 +691,7 @@
       /** 索引指针行（tag pill + subject + notes 指针），点击直达 notes 小节。 */
       /** 知识索引行渲染：按 tag 语义分组排序（环境→工具→流程→教训→发布→画像→其他），组内保持书写序（稳定排序）。 */
       var TAG_ORDER = ['env', 'tool', 'flow', 'lesson', 'release', 'user', 'agent'];
-      function renderIndexRows(container, lines, returnRender, editable) {
+      function renderIndexRows(container, lines, returnRender) {
         var arr = (lines || []).slice();
         arr.sort(function (a, b) {
           var ia = TAG_ORDER.indexOf(String(a.tag || '').toLowerCase()); if (ia === -1) ia = TAG_ORDER.length;
@@ -679,33 +704,11 @@
           row.appendChild(el('span', 'sc-idx-subject', ln.subject || ''));
           if (ln.pointer) row.appendChild(el('span', 'sc-idx-pointer', ln.pointer));
           var ptr = ln.pointer, sec = String(ln.pointer || '').split('§')[1] || '';
+          // R3：索引行只读（指针，编辑会与 notes 详情错位）——点击进详情小节，编辑在详情页做
           row.addEventListener('click', function () { openMemoryNote(ptr, sec.trim() || null, returnRender); });
-          // U5：画像行编辑（editable=true 仅画像板块传入；走 /memory/edit 门禁，不破坏行结构）
-          if (editable) {
-            var ebtn = el('button', 'sc-btn subtle', '编辑');
-            ebtn.type = 'button';
-            ebtn.style.cssText = 'padding:1px 8px;font-size:11px;flex:none;color:var(--sc-muted);';
-            ebtn.addEventListener('click', function (ev) {
-              ev.stopPropagation();
-              editIndexLine(ln, editable === true ? editFile : null, returnRender);
-            });
-            row.appendChild(ebtn);
-          }
+          row.title = (ln.subject || '') + (ln.pointer ? ' → ' + ln.pointer : '') + ' · 点击进详情';
           container.appendChild(row);
         });
-      }
-      /** U5：画像行编辑（行内编辑 → /memory/edit → 刷新；file 由调用方给出避免误判） */
-      var editFile = null; // renderPersona 渲染某文件行时置为 'USER.md'|'AGENT.md'
-      function editIndexLine(ln, file, returnRender) {
-        if (!ln || !ln.raw) { status('无原始行可编辑'); return; }
-        var nl = window.prompt('编辑' + (file || '索引') + '行（保留 [tag] 主题 · 概况 → 指针 格式）：', ln.raw);
-        if (nl == null || !nl.trim()) return;
-        api('/memory/edit', { method: 'POST', body: JSON.stringify({ file: file || 'MEMORY.md', line: ln.raw.trim(), newText: nl.trim() }) })
-          .then(function () {
-            status('✓ 已更新' + (file || '') + '行');
-            if (returnRender) api('/memory/overview').then(function (r) { returnRender(refs.view, r); }).catch(fail);
-          })
-          .catch(fail);
       }
       /** ISO → 本地 'MM-DD HH:MM'（蒸馏水位展示用）。 */
       function fmtTime(iso) {
@@ -781,8 +784,7 @@
           view.appendChild(el('div', 'sc-mem-group-title', f.label + ' · ' + (f.lines || []).length));
           if (!(f.lines || []).length) { view.appendChild(el('div', 'sc-mem-empty', '（暂无指针行）')); return; }
           var list = el('div', 'sc-idx-list');
-          editFile = String(f.name || '').replace(/\.md$/, '') + '.md'; // 供编辑按钮定位正确文件（USER/AGENT）
-          renderIndexRows(list, f.lines, renderPersona, true); // 画像来源：返回时回画像板块；可编辑
+          renderIndexRows(list, f.lines, renderPersona); // 画像来源：返回时回画像板块；索引行只读，编辑进详情
           view.appendChild(list);
         });
         status('画像 · ' + totalRows + ' 条指针');
@@ -1093,29 +1095,74 @@
           if (data.backrefs.length > 8) bl.appendChild(el('div', 'sc-mem-sub muted', '… 共 ' + data.backrefs.length + ' 处引用'));
           view.appendChild(bl);
         }
-        data.sections.forEach(function (sec) {
-          var head = el('div', 'sc-mem-group-title');
+        // v5.4 树状：递归渲染小节树（## 顶层 → children ###/#### 子树逐层展开）
+        function renderSecNode(sec, depth, container) {
+          var pad = Math.min(depth, 4) * 14; // 子树缩进（最多 4 层视觉缩进）
+          var head = el('div', 'sc-mem-group-title' + (depth > 0 ? ' sub' : ''));
           var arrow = el('span', 'sc-sec-arrow', '▸');
           head.appendChild(arrow);
           head.appendChild(document.createTextNode(sec.title));
+          head.title = '点击展开/收起' + (depth > 0 ? '（子树）' : '');
           head.style.cursor = 'pointer';
-          head.title = '点击展开/收起';
-          head.style.display='flex'; head.style.alignItems='baseline'; head.style.gap='6px';
+          head.style.cssText = 'display:flex;align-items:baseline;gap:6px;padding-left:' + pad + 'px;';
           var body = el('div', 'sc-card-body');
           body.style.maxHeight = 'none';
           body.style.display = 'none';
-          body.textContent = sec.body || '（空小节）';
+          body.textContent = sec.body || (sec.children && sec.children.length ? '' : '（空小节）');
+          var editSec = el('button', 'sc-btn subtle', '✎ 编辑此小节');
+          editSec.type = 'button';
+          editSec.style.cssText = 'margin:2px 0 6px ' + pad + 'px;padding:2px 10px;font-size:11px;color:var(--sc-accent);display:none;';
+          editSec.addEventListener('click', function () { editNoteSection(data, sec, view); });
+          var kidsWrap = el('div'); kidsWrap.style.cssText = 'display:none;';
           var toggle = function () {
-            var open = body.style.display !== 'none';
-            body.style.display = open ? 'none' : 'block';
+            var open = body.style.display !== 'none' || kidsWrap.style.display !== 'none';
+            if (open) { body.style.display = 'none'; kidsWrap.style.display = 'none'; editSec.style.display = 'none'; }
+            else {
+              body.style.display = 'block';
+              editSec.style.display = 'inline-block';
+              if (sec.children && sec.children.length) kidsWrap.style.display = 'block';
+            }
             arrow.textContent = open ? '▸' : '▾';
             head.style.color = open ? '' : 'var(--sc-accent)';
           };
           head.addEventListener('click', toggle);
-          view.appendChild(head);
-          view.appendChild(body);
+          container.appendChild(head);
+          container.appendChild(body);
+          container.appendChild(editSec);
+          if (sec.children && sec.children.length) {
+            (sec.children || []).forEach(function (c) { renderSecNode(c, depth + 1, kidsWrap); });
+            container.appendChild(kidsWrap);
+          }
+        }
+        (data.sections || []).forEach(function (sec) { renderSecNode(sec, 0, view); });
+        status(data.rel + ' · ' + (data.sections || []).length + ' 顶层小节（树状，点击逐层展开；编辑在节点细节）');
+      }
+      /** R3：notes 小节正文编辑（走 /memory/section-edit 门禁；索引指针不动，只改详情正文） */
+      function editNoteSection(data, sec, view) {
+        if (!data || !data.rel || !sec) return;
+        var bodyTxt = sec.body || '';
+        var ta = el('textarea', 'sc-input'); ta.style.cssText = 'width:100%;min-height:120px;font-family:ui-monospace,monospace;font-size:12px;';
+        ta.value = bodyTxt;
+        var wrap = el('div');
+        wrap.appendChild(el('div', 'sc-desc', '编辑 §' + sec.title + ' 正文（' + data.rel + '）——保留开头摘要行最佳；保存走写门（备份+容量红线），索引指针不变。'));
+        wrap.appendChild(ta);
+        var bar = el('div'); bar.style.cssText = 'display:flex;gap:8px;margin-top:6px;';
+        var saveBtn = el('button', 'sc-btn', '保存正文');
+        saveBtn.type = 'button';
+        saveBtn.addEventListener('click', function () {
+          var next = ta.value.trim();
+          if (!next) { status('正文不能为空——如需清空请用删除'); return; }
+          saveBtn.disabled = true; saveBtn.textContent = '保存中…';
+          api('/memory/section-edit', { method: 'POST', body: JSON.stringify({ rel: data.rel, section: sec.title, newBody: next }) })
+            .then(function () { status('✓ §' + sec.title + ' 正文已保存（write_gate 通过）'); api('/memory/sections?rel=' + encodeURIComponent(data.rel) + (data.root === 'suite' ? '&root=suite' : '')).then(function (r) { renderNoteSections(view, r); }).catch(fail); })
+            .catch(function (e) { saveBtn.disabled = false; saveBtn.textContent = '保存正文'; fail(e); });
         });
-        status(data.rel + ' · ' + data.sections.length + ' 小节（点击标题展开）');
+        var cancelBtn = el('button', 'sc-btn subtle', '取消');
+        cancelBtn.type = 'button';
+        cancelBtn.addEventListener('click', function () { view.removeChild(wrap); });
+        bar.appendChild(saveBtn); bar.appendChild(cancelBtn);
+        wrap.appendChild(bar);
+        view.appendChild(wrap);
       }
 
       /** 记忆板块：Obsidian 仓库文件夹（文件树 + 笔记预览 + 属性块 + 双链跳转）。 */

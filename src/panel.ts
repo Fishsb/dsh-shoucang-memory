@@ -494,14 +494,16 @@ export function applyPanel(ctx: Context, config: Config): void {
   route('/config', (_req, res) => {
     const file = configFileOf()
     const sched = readSuiteConfig()
+    // R1（2026-09-10）：global 返回**最终生效值**（scheduler 键 ?? 默认）——UI 显示与实际注入逐键守卫一致，
+    // 不回 root YAML（旧值可能残留误导）。默认与 buildHotMemoryText 相同：max_tokens=3000、三上限=0。
     const globalCfg = {
       persona: String(sched.injectPersona ?? 'both'),
       level: String(sched.injectLevel ?? 'smart'),
       hot_memory: sched.hotMemory !== false,
-      max_tokens: typeof sched.injectMaxTokens === 'number' ? sched.injectMaxTokens : null,
-      agent_max_chars: typeof sched.injectAgentMaxChars === 'number' ? sched.injectAgentMaxChars : null,
-      user_max_chars: typeof sched.injectUserMaxChars === 'number' ? sched.injectUserMaxChars : null,
-      memory_max_chars: typeof sched.injectMemoryMaxChars === 'number' ? sched.injectMemoryMaxChars : null,
+      max_tokens: typeof sched.injectMaxTokens === 'number' ? sched.injectMaxTokens : 3000,
+      agent_max_chars: typeof sched.injectAgentMaxChars === 'number' ? sched.injectAgentMaxChars : 0,
+      user_max_chars: typeof sched.injectUserMaxChars === 'number' ? sched.injectUserMaxChars : 0,
+      memory_max_chars: typeof sched.injectMemoryMaxChars === 'number' ? sched.injectMemoryMaxChars : 0,
     }
     // P2：无 root 也能调注入（全局 scheduler.json）——root 仅管理 boards 显示与旧 YAML；返回 global 供 UI 渲染
     if (!file) return sendJson(res, 200, { text: null, parsed: null, error: 'no-active-root', global: globalCfg })
@@ -889,19 +891,40 @@ export function applyPanel(ctx: Context, config: Config): void {
     if (!existsSync(abs)) return sendJson(res, 404, { error: 'note not found' })
     try {
       const text = readFileSync(abs, 'utf8')
-      const sections: Array<{ title: string; line: number; body: string }> = []
+      // v5.4 树状：多层标题解析——## 为顶层 section，其下 ###/#### 递归收集为 children（子树）
+      interface SecNode { title: string; line: number; body: string; children: SecNode[]; titleLevel: number }
       const lines = text.split(/\r?\n/)
-      let cur: { title: string; line: number; body: string[] } | null = null
-      for (let i = 0; i < lines.length; i++) {
-        const m = lines[i].match(/^##\s+(.+)$/)
-        if (m) {
-          if (cur) sections.push({ title: cur.title, line: cur.line, body: cur.body.join('\n').trim() })
-          cur = { title: m[1].trim(), line: i + 1, body: [] }
-        } else if (cur) {
-          cur.body.push(lines[i])
+      const sections: SecNode[] = []
+      const stack: Array<{ node: SecNode; body: string[] }> = []
+      const heading = (l: string): { level: number; title: string } | null => {
+        const m = l.match(/^(#{1,6})\s+(.+)$/)
+        return m ? { level: m[1].length, title: m[2].trim() } : null
+      }
+      const flush = (): void => {
+        while (stack.length) {
+          const top = stack.pop()!
+          top.node.body = top.body.join('\n').trim()
+          if (stack.length) stack[stack.length - 1].node.children.push(top.node)
+          else sections.push(top.node)
         }
       }
-      if (cur) sections.push({ title: cur.title, line: cur.line, body: cur.body.join('\n').trim() })
+      for (let i = 0; i < lines.length; i++) {
+        const h = heading(lines[i])
+        if (h && h.level >= 2) { // 记忆小节从 ## 起（# 是文件标题）
+          // 弹栈到父层级（level-1 的标题）
+          while (stack.length && stack[stack.length - 1].node.titleLevel >= h.level) {
+            const top = stack.pop()!
+            top.node.body = top.body.join('\n').trim()
+            if (stack.length) stack[stack.length - 1].node.children.push(top.node)
+            else sections.push(top.node)
+          }
+          const node: SecNode = { title: h.title, titleLevel: h.level, line: i + 1, body: '', children: [] }
+          stack.push({ node, body: [] })
+        } else if (stack.length) {
+          stack[stack.length - 1].body.push(lines[i])
+        }
+      }
+      flush()
       // U3：反链聚合（Logseq/思源借鉴）——扫三索引 + notes 全文，找指向「本文件 §小节」的引用行
       const backrefs: Array<{ from: string; line: string }> = []
       try {
