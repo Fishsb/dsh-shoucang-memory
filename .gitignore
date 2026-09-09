@@ -12,6 +12,8 @@ __pycache__/
 # 本地环境
 .env
 *.local
+# 本机面板实例配置（登记 D:\FF\shoucang 为守藏 root 时生成；含本机可调值，不入公开仓）
+shoucang.config.yaml
 
 # ---- 瞬态数据 ----
 .internal/
