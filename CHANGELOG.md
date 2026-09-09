@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Fixed
+- **深度睡眠「本日无痕迹」恒真 bug（2026-09-09 实跑确诊，上线以来归纳从未真正执行过）**：触发流程先 `lastDeepSleepAt = now` 推进水位、后调 `runDeepSleep()`，而窗口起点 `traceSince() = max(今日 0 点, lastDeepSleepAt)` 在其内部求值时已读到被改成 now 的水位 → 扫描窗口退化成 `[now, now]`，任何文件 mtime 都不可能 ≥ now → 每次审计 `no-traces`（日志实锤：窗口起点恒等于触发时刻）。修复：① 窗口起点在推进水位**之前**取值，经参数显式传入 `runDeepSleep(since)` / `gatherDeepSleepTraces(root, since)`；② 返回值细分 `done / failed / no-traces` 三态——水位只在 `done`（真正消化了材料）时保持推进，`failed` 与 `no-traces` 一律回滚（当日稍晚产生的痕迹不被划出窗口，且不会重复回想）；③ 手动触发（POST /deepsleep/trigger）同样按上次水位取窗口，消化成功才推进水位，防自动巡检重复回想同一批材料。**端到端验证**：造真实痕迹（2 个 pending 候选 + 1 条 notes 今日条目）后手动触发——窗口识别 3,453 字符（起点=今日 0 点，不再是触发时刻）→ 归纳子代理跑通（首轮 stop=aborted 触发 10min 超时兜底、水位正确回滚；次轮 stop=completed）→ 审计留痕；产出 no-op（`原则 +0`）为内容判断层合规保守（pending 仅背景材料、不作合法源指针），非工程故障。
+- **蒸馏跳过观测盲区（2026-09-09）**：门槛跳过（增量 < minTurnChars）与预筛跳过（无信号词且无 pending 候选）此前只进日志不落审计——审计里只见真实 run，「蒸馏为什么没跑」无法从数据区分是没触发还是被挡。现两类跳过均写 `distill-skip` 审计条目（带 reason 与字符数），后续可从 distill-audit 直接统计触发率/跳过率。
+
 ### Added
 - **蒸馏节流组持久化 UI 通道（2026-09-09，settings-audit P1 缺口补齐）**：`enableDistill` / `idleWakeMs` / `minTurnChars` / `distillPrescan` / `llmProvider` / `llmModel` 六键此前只有插件 Config（schemastery UI 改了不持久），只能手写 `~/.dsh/suite/scheduler.json`——现经新增 `GET+POST /distill/config`（单 handler 按 method 分发，与 /deepsleep/config 同模式，避开宿主按路径去重的插件树崩溃坑）读写同一文件：POST 走 `validateDistillConfig` 校验（布尔/≥60000/≥0/字符串）+ 备份先行原子写，GET 返回 `running`（scheduler 运行时真值，经 `scheduler-share.ts` 惰性桥接新增 `distillConfig()` 暴露，**缺省值仍单一实现于 scheduler.Config**）+ `persisted`；client.js「参数调节」页底部新增「蒸馏节流（运行时通道）」分组（两开关 + 空闲分钟 + 最少字符 + 模型 provider/model，逐项即时保存），**改动需重载生效**已在 UI 与文档明示。settings-guide §0/§2 同步（新增 2.2 面板可调 6 键，原手写清单收敛为 2.3）。typecheck/build/check-hardcode 零错误。
 - **注入容量预算三板块可调（2026-09-09 用户拍板）**：面板「参数调节」页新增四个数字输入——注入总预算 `injection.max_tokens`（100–8000 tokens，v16 接通生效，缺省 3000 与原硬编码一致）+ 三板块字符上限 `injection.agent_max_chars` / `injection.user_max_chars` / `injection.memory_max_chars`（0=不裁保持现行行为；逐行累加裁切不切半行，裁切时注入尾注提示）；panel.ts parseView//set 白名单+范围校验（[0,20000]）同步，buildHotMemoryText 消费全链接通。config example 与 vault 模板同步（模板零消费的 injection.smart.* 残留节顺势替换为新增键，三方缺省统一 3000）。

@@ -20,6 +20,7 @@ export interface DeepSleepApi {
     runDeepSleepNow: () => Promise<{
         ok: boolean;
         error?: string;
+        result?: 'done' | 'failed' | 'no-traces';
     }>;
     /** 运行中深度睡眠配置键（T2「可调」的展示源；持久化写 ~/.dsh/suite/scheduler.json） */
     getConfig: () => {

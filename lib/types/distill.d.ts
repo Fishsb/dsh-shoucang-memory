@@ -88,6 +88,7 @@ export declare function registerDistill(ctx: AppContext, config: DistillConfig):
     runDeepSleepNow: () => Promise<{
         ok: boolean;
         error?: string;
+        result?: 'done' | 'failed' | 'no-traces';
     }>;
     getConfig: () => {
         enableDeepSleep: boolean;

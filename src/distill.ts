@@ -192,7 +192,7 @@ const textOf = (r: RunResult): string => (r.out + (r.err ? '\n[stderr] ' + r.err
 // ── 蒸馏器主体 ──
 export function registerDistill(ctx: AppContext, config: DistillConfig): {
   getDeepSleepStatus: () => DeepSleepStatus
-  runDeepSleepNow: () => Promise<{ ok: boolean; error?: string }>
+  runDeepSleepNow: () => Promise<{ ok: boolean; error?: string; result?: 'done' | 'failed' | 'no-traces' }>
   getConfig: () => {
     enableDeepSleep: boolean
     deepSleepIdleMs: number
@@ -423,6 +423,9 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       try { candFiles = readdirSync(pendDir).filter((f) => /^\d{4}-\d{2}-\d{2}-.*\.md$/.test(f)).sort() } catch { candFiles = [] }
       if (!deltaText || deltaText.length < (config.minTurnChars ?? 200)) {
         writeWatermark(sid, maxSeq)
+        // 跳过也留审计痕（观测盲区修复 2026-09-09：此前门槛/预筛跳过只进日志，审计里只见真实 run，
+        // 「蒸馏为什么没跑」无法从数据区分——是没触发还是被挡）
+        audit({ sid, kind: 'distill-skip', reason: 'below-min-chars', chars: deltaText.length })
         log(`distill: ${sid.slice(0, 8)} 增量 ${deltaText.length} 字符 < 门槛，水位推进 ${lastSeq}→${maxSeq}（不蒸馏）`)
         return
       }
@@ -430,6 +433,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         const hasSig = hasDistillSignals(deltaText)
         if (!hasSig && candFiles.length === 0) {
           writeWatermark(sid, maxSeq)
+          audit({ sid, kind: 'distill-skip', reason: 'prescan-no-signal', chars: deltaText.length })
           log(`distill: ${sid.slice(0, 8)} 预筛跳过（增量 ${deltaText.length} 字符无信号词 & pending 无候选），水位推进 ${lastSeq}→${maxSeq}`)
           return
         }
@@ -578,8 +582,9 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
   }
 
   // 当天痕迹收集（深度睡眠作用域=本日）
-  const gatherDeepSleepTraces = (memRoot: string): string => {
-    const since = traceSince()
+  // since 由调用方显式传入：**必须在推进 lastDeepSleepAt 之前取值**（否则窗口起点=当前时刻 → 恒零痕迹，
+  // 见 deepSleepCheck 的调用处注释；此坑曾让深度睡眠自上线起从未真正归纳过任何材料）。
+  const gatherDeepSleepTraces = (memRoot: string, since: number): string => {
     const parts: string[] = []
     // 窗口内文件枚举（pending 按 mtime 判定，不解析文件名日期——文件名是 UTC 口径，本地日切会跨日错配）
     const pendFiles = ((): string[] => {
@@ -736,16 +741,17 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
   }
 
   /** 返回 'done'=本轮窗口已消化（推进水位）；'failed'=瞬时故障（回滚水位，下轮可重试同一批痕迹） */
-  const runDeepSleep = async (): Promise<'done' | 'failed'> => {
+  const runDeepSleep = async (sinceArg?: number): Promise<'done' | 'failed' | 'no-traces'> => {
     try {
+      const since = sinceArg ?? traceSince()
       const resolved = resolveTarget()
       if (!resolved.present) {
         log('deep sleep: 记忆库缺席（部署残缺），跳过')
-        return 'done'
+        return 'failed'
       }
-      const traces = gatherDeepSleepTraces(resolved.root)
-      if (!traces) { log(`deep sleep: 本日无痕迹，跳过（窗口起点 ${new Date(traceSince()).toLocaleString()}）`); audit({ kind: 'deep-sleep', result: 'no-traces' }); return 'done' }
-      log(`deep sleep: 窗口内痕迹 ${traces.length} 字符（起点 ${new Date(traceSince()).toLocaleString()}）`)
+      const traces = gatherDeepSleepTraces(resolved.root, since)
+      if (!traces) { log(`deep sleep: 本日无痕迹，跳过（窗口起点 ${new Date(since).toLocaleString()}）`); audit({ kind: 'deep-sleep', result: 'no-traces' }); return 'no-traces' }
+      log(`deep sleep: 窗口内痕迹 ${traces.length} 字符（起点 ${new Date(since).toLocaleString()}）`)
       const currentPrinciples = (() => { try { return readFileSync(join(resolved.root, 'AGENT.md'), 'utf8') } catch { return '' } })()
       const currentList = currentPrinciples.split(/\r?\n/).map((l) => l.trim()).filter((l) => /^\[原则\]/.test(l)).join('\n') || '（暂无条目）'
       // 双画像巩固材料：现行 USER/AGENT 画像全文（行格式门禁的 replace 依据）
@@ -967,11 +973,15 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     if (hottest <= lastDeepSleepAt) return // 本轮停滞窗口已消化（新活动推进水位后重新武装）
     deepSleepRunning = true
     const prevDeepSleepAt = lastDeepSleepAt
+    // 窗口起点必须在推进水位**之前**取：lastDeepSleepAt 一旦置为 now，traceSince() 会退化成
+    // max(今日 0 点, now)=now，痕迹扫描窗口变成 [now, now] → 恒「本日无痕迹」（2026-09-09 实修）。
+    const since = traceSince()
     lastDeepSleepAt = now
     log(`deep sleep: 触发（停滞 ${Math.round((now - hottest) / 60000)}min ≥ 阈值 ${Math.round(idleMs / 60000)}min · 会话态 running=${running} ended=${ended} stalled=${stalled}）`)
-    runDeepSleep().then((r) => {
-      // 瞬时故障（无 parent / 子代理异常）→ 水位回滚，否则同一批痕迹会被永久划出窗口
-      if (r === 'failed') { lastDeepSleepAt = prevDeepSleepAt; log('deep sleep: 本轮失败，水位回滚（同一批痕迹下轮可重试）') }
+    runDeepSleep(since).then((r) => {
+      // 水位回滚：瞬时故障（no-parent / 子代理异常）与「本日无痕迹」都算未消化——
+      // 后者若不回滚，当日稍晚产生的痕迹也会被划在窗口外（窗口起点=上次水位）。
+      if (r !== 'done') { lastDeepSleepAt = prevDeepSleepAt; log(`deep sleep: 本轮未消化（${r}），水位回滚（同一批痕迹下轮可重试）`) }
     }).catch((e) => {
       lastDeepSleepAt = prevDeepSleepAt
       log(`deep sleep err: ${String((e as Error)?.message || e).slice(0, 120)}（水位回滚）`)
@@ -1008,12 +1018,15 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
   }
 
   /** 手动触发入口（T2 面板「立即归纳一次」）：复用 deepSleepRunning 并发守卫，避免与自动巡检重叠。 */
-  const runDeepSleepNow = async (): Promise<{ ok: boolean; error?: string }> => {
+  const runDeepSleepNow = async (): Promise<{ ok: boolean; error?: string; result?: 'done' | 'failed' | 'no-traces' }> => {
     if (deepSleepRunning) return { ok: false, error: 'deep-sleep-already-running' }
     deepSleepRunning = true
     try {
-      await runDeepSleep()
-      return { ok: true }
+      // 手动触发同样按「上次水位」取窗口；只有真正消化（done）才推进水位，避免自动巡检重复回想同一批材料
+      const since = traceSince()
+      const r = await runDeepSleep(since)
+      if (r === 'done') lastDeepSleepAt = Date.now()
+      return { ok: true, result: r }
     } catch (e) {
       return { ok: false, error: String((e as Error)?.message || e).slice(0, 160) }
     } finally {

@@ -18,7 +18,7 @@ export interface DeepSleepApi {
   /** 状态机快照（供 UI 轮询展示） */
   getDeepSleepStatus: () => DeepSleepStatus
   /** 手动触发一次深度睡眠归纳（复用 runDeepSleep，含 deepSleepRunning 并发守卫） */
-  runDeepSleepNow: () => Promise<{ ok: boolean; error?: string }>
+  runDeepSleepNow: () => Promise<{ ok: boolean; error?: string; result?: 'done' | 'failed' | 'no-traces' }>
   /** 运行中深度睡眠配置键（T2「可调」的展示源；持久化写 ~/.dsh/suite/scheduler.json） */
   getConfig: () => {
     enableDeepSleep: boolean
