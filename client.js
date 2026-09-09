@@ -639,46 +639,85 @@
           info.appendChild(el('div', 'setting-item-name', label));
           info.appendChild(el('div', 'setting-item-desc', desc));
           item.appendChild(info);
-          var wrap = el('div'); wrap.style.cssText = 'display:flex;flex-direction:column;gap:5px;flex:none;align-items:flex-end;';
-          // 模式：继承 or 指定
+          var wrap = el('div'); wrap.style.cssText = 'display:flex;flex-direction:column;gap:6px;flex:none;align-items:flex-end;';
+          // 继承开关（2026-09-10 用户反馈：厂商下拉应纯净——继承独立成开关，选"指定"才展开厂商→模型）
           var inherit = (llmVal[keyP] || '') === '';
-          var sel = el('select', 'sc-input'); sel.style.width = '300px';
-          var mode = el('select', 'sc-input'); mode.style.width = '300px';
-          function rebuildProvider() {
-            // 宿主 provider 列表（去重）+ 继承
-            mode.textContent = '';
-            var oInh = el('option'); oInh.value = ''; oInh.textContent = '继承主会话（默认）'; oInh.selected = inherit; mode.appendChild(oInh);
-            var seen = {};
-            (hostModels || []).forEach(function (m) { if (!seen[m.provider]) { seen[m.provider] = 1; var o = el('option'); o.value = m.provider; o.textContent = m.provider + '（' + m.name + '）'; if (m.provider === llmVal[keyP]) o.selected = true; mode.appendChild(o); } });
-            if (!inherit && !seen[llmVal[keyP]]) { var oo = el('option'); oo.value = llmVal[keyP]; oo.textContent = llmVal[keyP] + '（已存）'; oo.selected = true; mode.appendChild(oo); }
+          var seg = el('div', 'sc-persona-slider'); seg.style.cssText = 'width:300px;height:30px;margin:0;';
+          var segInh = el('div', 'sc-persona-cell' + (inherit ? ' active' : ''), '继承主会话');
+          var segCus = el('div', 'sc-persona-cell' + (inherit ? '' : ' active'), '指定厂商');
+          var provSel = el('select', 'sc-input'); provSel.style.width = '300px';
+          var modelSel = el('select', 'sc-input'); modelSel.style.width = '300px';
+          // 厂商下拉：只列厂商（去重、去括号样例）
+          function rebuildProv() {
+            provSel.textContent = '';
+            var seen = {}, first = null;
+            (hostModels || []).forEach(function (m) {
+              if (!seen[m.provider]) { seen[m.provider] = 1; if (!first) first = m.provider; }
+            });
+            var providers = Object.keys(seen);
+            if (inherit) {
+              var ph = el('option'); ph.value = ''; ph.textContent = providers.length ? '（厂商）' : '（无可用厂商——回 Harness 配置）';
+              provSel.appendChild(ph); provSel.disabled = true;
+            } else {
+              provSel.disabled = false;
+              (providers.length ? providers : ['']).forEach(function (pid) {
+                var o = el('option'); o.value = pid; o.textContent = pid || '（无）';
+                o.selected = pid === llmVal[keyP] || (!pid && !providers.length);
+                provSel.appendChild(o);
+              });
+            }
           }
+          // 模型下拉：仅显示选中厂商的模型
           function rebuildModel() {
-            sel.textContent = '';
-            if (inherit) { var od = el('option'); od.value = ''; od.textContent = '—'; sel.appendChild(od); sel.disabled = true; return; }
-            sel.disabled = false;
-            var curP = llmVal[keyP] || '';
+            modelSel.textContent = '';
+            if (inherit) {
+              var ph2 = el('option'); ph2.value = ''; ph2.textContent = '跟随主会话';
+              modelSel.appendChild(ph2); modelSel.disabled = true;
+              return;
+            }
+            if (!provSel.value && provSel.options.length) provSel.value = provSel.options[0].value; // 首次指定：默认第一个厂商
+            var curP = provSel.value;
             var list = (hostModels || []).filter(function (m) { return m.provider === curP; });
             var seen = {};
-            list.forEach(function (m) { if (!seen[m.id]) { seen[m.id] = 1; var o = el('option'); o.value = m.id; o.textContent = m.name && m.name !== m.id ? m.id + ' — ' + m.name : m.id; if (m.id === llmVal[keyM]) o.selected = true; sel.appendChild(o); } });
-            if (!list.length) { var oe = el('option'); oe.value = ''; oe.textContent = '（该 provider 无可用模型——回 Harness 配置）'; sel.appendChild(oe); }
+            modelSel.disabled = false;
+            list.forEach(function (m) { if (!seen[m.id]) { seen[m.id] = 1; var o = el('option'); o.value = m.id; o.textContent = m.name && m.name !== m.id ? m.id + ' — ' + m.name : m.id; if (m.id === llmVal[keyM]) o.selected = true; modelSel.appendChild(o); } });
+            if (!list.length) { var oe = el('option'); oe.value = ''; oe.textContent = '（该厂商无模型——回 Harness 配置）'; modelSel.appendChild(oe); }
+            // 若已存 model 不在当前厂商列表，默认选第一个
+            if (!modelSel.value && list.length) modelSel.value = list[0].id;
           }
-          mode.addEventListener('change', function () {
-            inherit = mode.value === '';
-            var patch = {};
-            if (inherit) { patch[keyP] = ''; patch[keyM] = ''; }
-            else { patch[keyP] = mode.value; patch[keyM] = llmVal[keyM] || ((hostModels || []).find(function (m) { return m.provider === mode.value; }) || {}).id || ''; }
-            llmVal[keyP] = patch[keyP]; llmVal[keyM] = patch[keyM];
+          function applyMode(inheritNow) {
+            inherit = inheritNow;
+            segInh.classList.toggle('active', inherit);
+            segCus.classList.toggle('active', !inherit);
+            // 动态显隐厂商下拉（继承时不显示；指定时插入到模型下拉前）
+            if (provSel.parentElement !== wrap) wrap.insertBefore(provSel, modelSel);
+            provSel.style.display = inherit ? 'none' : '';
+            if (inherit) { llmVal[keyP] = ''; llmVal[keyM] = ''; saveLlm({ [keyP]: '', [keyM]: '' }); }
+            rebuildProv(); rebuildModel();
+          }
+          segInh.onclick = function () { applyMode(true); };
+          segCus.onclick = function () { applyMode(false); };
+          provSel.addEventListener('change', function () {
+            llmVal[keyP] = provSel.value;
+            llmVal[keyM] = ''; // 换厂商清空模型待选
             rebuildModel();
-            saveLlm(patch);
+            saveLlm({ [keyP]: provSel.value, [keyM]: llmVal[keyM] });
           });
-          sel.addEventListener('change', function () { llmVal[keyM] = sel.value; saveLlm({ [keyM]: sel.value }); });
+          modelSel.addEventListener('change', function () {
+            llmVal[keyM] = modelSel.value;
+            saveLlm({ [keyM]: modelSel.value });
+          });
           function saveLlm(patch) {
             api('/distill/config', { method: 'POST', body: JSON.stringify(patch) })
               .then(function () { status('✓ 模型配置已写（重载后生效）'); })
               .catch(fail);
           }
-          rebuildProvider(); rebuildModel();
-          wrap.appendChild(mode); wrap.appendChild(sel);
+          seg.appendChild(segInh); seg.appendChild(segCus);
+          rebuildProv(); rebuildModel();
+          wrap.appendChild(seg);
+          wrap.appendChild(provSel); // 先插入（初始可能隐藏）
+          wrap.appendChild(modelSel);
+          provSel.style.display = inherit ? 'none' : ''; // 继承态隐藏厂商下拉
           item.appendChild(wrap);
           container.appendChild(item);
         }
