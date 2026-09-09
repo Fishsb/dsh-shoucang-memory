@@ -1075,6 +1075,29 @@
         }
         view.appendChild(g1);
 
+        /* ── 路线③ 本月成长（审计聚合 + AGENT 画像快照；零定时器，纯读） ── */
+        var gGrowth = data.growth;
+        if (gGrowth) {
+          group('本月成长 · ' + gGrowth.month);
+          var g3 = el('div', 'sc-mem-grid');
+          var s3 = gGrowth.sleep || {}, d3 = gGrowth.distill || {}, n3 = gGrowth.now || {};
+          g3.appendChild(mkStat('深睡归纳', String(s3.passes || 0) + ' 次', '习得 ' + String(s3.principleAdded || 0) + ' · 替换 ' + String(s3.replaced || 0) + ' · 画像 ' + String(s3.profilesAdded || 0)));
+          g3.appendChild(mkStat('蒸馏', String(d3.runs || 0) + ' 次', '成功 ' + String(d3.ok || 0) + ' · 异常 ' + String(d3.bad || 0) + ' · 预筛跳过 ' + String(d3.skips || 0)));
+          g3.appendChild(mkStat('AGENT 画像', String(n3.tagRows != null ? n3.tagRows : '—') + ' 行', '原则 ' + String(n3.principleRows || 0) + ' · 路径 ' + String(n3.pathRows || 0) + ' · ' + String(n3.agentChars || 0) + ' 字符'));
+          view.appendChild(g3);
+          var rds = gGrowth.recentDeep || [];
+          if (rds.length) {
+            view.appendChild(el('div', 'sc-mem-group-title', '本月有效深睡产出'));
+            var dl3 = el('div', 'sc-idx-list');
+            rds.forEach(function (r) {
+              dl3.appendChild(el('div', 'sc-mem-sub', String(r.at || '').slice(0, 10) + '  原则 +' + String(r.added || 0) + '/替换 ' + String(r.replaced || 0) + ' · 画像 +' + String(r.profiles || 0) + ' · gate=' + String(r.gate || '')));
+            });
+            view.appendChild(dl3);
+          } else if ((s3.passes || 0) > 0) {
+            view.appendChild(el('div', 'sc-mem-empty', '本月深睡有运行但无产出（内容判据合规保守：材料不足宁缺毋滥）'));
+          }
+        }
+
         /* ── §2 记忆库状态（MEMORY 容量 + pending；百分比只在进度条，卡不重复） ── */
         group('记忆库状态');
         var g2 = el('div', 'sc-mem-grid');
