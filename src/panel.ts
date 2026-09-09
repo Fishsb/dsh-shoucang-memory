@@ -1220,6 +1220,66 @@ export function applyPanel(ctx: Context, config: Config): void {
     } catch (e) { sendJson(res, 500, { error: String(e) }) }
   })
 
+  // M1（2026-09-10 蓝图，照抄 AnythingLLM customModels.js 枚举骨架）：
+  // /embed/test —— 探测 baseUrl 并枚举可用嵌入模型。OpenAI 兼容 GET {base}/v1/models；
+  // 不可枚举服务（如守藏 bge 仅 /v1/embeddings）降级探测 /health → 标 fixed 提示固定模型。
+  // 永不 throw、失败降级 {models:[], error}；验活=枚举非空或 /health 通；协议纯 fetch 零依赖。
+  route('/embed/test', async (req, res) => {
+    try {
+      const body = (await readBody(req).catch(() => ({}))) as { baseUrl?: string; apiKey?: string }
+      const raw = String(body.baseUrl || '').trim().replace(/\/+$/, '')
+      if (!raw) return sendJson(res, 400, { error: 'baseUrl required' })
+      let parsed: URL
+      try { parsed = new URL(raw) } catch { return sendJson(res, 200, { models: [], error: 'URL 无效（需含 http:// 或 https://）' }) }
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return sendJson(res, 200, { models: [], error: '仅支持 http/https' })
+      // 宿主进程全局 fetch 被 DSH patch（实测 11434 经 fetch 不通、node:http 通）——
+      // /embed/test 用 node:http/https 模块直连（不依赖 fetch），规避宿主 fetch 层限制。
+      const key = String(body.apiKey || '').trim()
+      const t0 = Date.now()
+      const fin = (models: Array<{ id: string; name?: string }>, error: string | null, extra: Record<string, unknown> = {}) =>
+        sendJson(res, 200, { baseUrl: raw, models, error, latencyMs: Date.now() - t0, ...extra })
+      const httpGet = async (url: string, withAuth: boolean): Promise<{ status: number; body: string }> => {
+        let target: URL
+        try { target = new URL(url) } catch { return { status: 0, body: 'bad url' } }
+        const lib = target.protocol === 'https:' ? 'https' : 'http'
+        const mod = await import(lib) as typeof import('node:http')
+        return new Promise((resolve) => {
+          const headers: Record<string, string> = {}
+          if (withAuth && key) headers.Authorization = `Bearer ${key}`
+          const req = mod.get(target, { headers, timeout: 6000 }, (res) => {
+            let d = ''
+            res.on('data', (c: Buffer) => { d += c.toString() })
+            res.on('end', () => resolve({ status: res.statusCode ?? 0, body: d.slice(0, 200000) }))
+          })
+          req.on('error', () => resolve({ status: 0, body: 'network error' }))
+          req.on('timeout', () => { req.destroy(); resolve({ status: 0, body: 'timeout' }) })
+        })
+      }
+      // ① OpenAI 兼容枚举（GET {base}/v1/models）
+      try {
+        const r = await httpGet(raw + '/v1/models', true)
+        if (r.status >= 200 && r.status < 300) {
+          let j: { data?: Array<{ id: string }> } = {}
+          try { j = JSON.parse(r.body) as { data?: Array<{ id: string }> } } catch { /* 非 JSON */ }
+          const models = (j.data || []).map((m) => ({ id: m.id, name: m.id }))
+          if (models.length) return fin(models, null, { mode: 'openai-compatible' })
+          return fin(models, null, { mode: 'openai-compatible', empty: true })
+        }
+        if (r.status !== 404 && r.status !== 0) return fin([], `服务不可达（HTTP ${r.status}）`, { mode: 'openai-compatible' })
+      } catch { /* 404/网络错 → health 降级 */ }
+      // ② 无 /v1/models → 降级 /health（bge 类自建服务）
+      try {
+        const r = await httpGet(raw.replace(/\/v1$/, '') + '/health', false)
+        if (r.status >= 200 && r.status < 300) {
+          let j: { model?: string; dims?: number } = {}
+          try { j = JSON.parse(r.body) as { model?: string; dims?: number } } catch { /* */ }
+          return fin([], null, { mode: 'health-fixed', fixedModel: j.model || 'bge-m3', dims: j.dims, hint: '服务在但无 /models——用固定模型 ' + (j.model || 'bge-m3') })
+        }
+        return fin([], '服务不可达（/v1/models 与 /health 均无响应）', { mode: 'health' })
+      } catch { return fin([], '服务不可达（网络错误）', { mode: 'none' }) }
+    } catch (e) { sendJson(res, 500, { error: String(e) }) }
+  })
+
   // P0（2026-09-10 审查）：清向量缓存——换 embedding 模型后旧向量必须失效，否则新旧混用语义失真。
   // 清磁盘 .vector-cache.jsonl + 内存；下次召回按新模型惰性重嵌（vec.ts model 指纹已保证不误用旧向量）。
   route('/vector/cache/clear', (_req, res) => {
