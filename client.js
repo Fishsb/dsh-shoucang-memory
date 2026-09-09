@@ -616,6 +616,86 @@
         if (window._scVecTimer) { clearInterval(window._scVecTimer); window._scVecTimer = null; }
         window._scVecTimer = setInterval(function () { try { refreshVecZone(); } catch (e) { /* 轮询异常静默 */ } }, 30000);
 
+        // ── LLM 模型配置（2026-09-10 用户拍板：蒸馏/深睡模型直接用 Harness 宿主模型体系，各自独立可选）──
+        // 数据源 GET /llm/models（宿主 listProviders→listModels）；「继承主会话」= 空键。
+        // 仿 AnythingLLM LLMProviderModelPicker：provider→model 两级联动 + 空=继承。
+        view.appendChild(el('div', 'sc-h1', '蒸馏/深睡模型'));
+        view.appendChild(el('div', 'sc-desc', '蒸馏与深度睡眠各自可选宿主模型（直接用 DeepSeek Harness 模型——先在 Harness 配置好模型，这里下拉选即可）。「继承主会话」= 不指定，跟随当前会话模型。改动写 scheduler.json，需重载生效。'));
+        var llmCard = el('div');
+        var hostModels = null; // GET /llm/models 缓存 [{provider,id,name}]
+        var llmVal = {}; // 当前持久值 {distillProvider,distillModel,sleepProvider,sleepModel}
+        function renderLlmSelect(container, keyP, keyM, label, desc) {
+          var item = el('div', 'setting-item');
+          var info = el('div', 'setting-item-info');
+          info.appendChild(el('div', 'setting-item-name', label));
+          info.appendChild(el('div', 'setting-item-desc', desc));
+          item.appendChild(info);
+          var wrap = el('div'); wrap.style.cssText = 'display:flex;flex-direction:column;gap:5px;flex:none;align-items:flex-end;';
+          // 模式：继承 or 指定
+          var inherit = (llmVal[keyP] || '') === '';
+          var sel = el('select', 'sc-input'); sel.style.width = '300px';
+          var mode = el('select', 'sc-input'); mode.style.width = '300px';
+          function rebuildProvider() {
+            // 宿主 provider 列表（去重）+ 继承
+            mode.textContent = '';
+            var oInh = el('option'); oInh.value = ''; oInh.textContent = '继承主会话（默认）'; oInh.selected = inherit; mode.appendChild(oInh);
+            var seen = {};
+            (hostModels || []).forEach(function (m) { if (!seen[m.provider]) { seen[m.provider] = 1; var o = el('option'); o.value = m.provider; o.textContent = m.provider + '（' + m.name + '）'; if (m.provider === llmVal[keyP]) o.selected = true; mode.appendChild(o); } });
+            if (!inherit && !seen[llmVal[keyP]]) { var oo = el('option'); oo.value = llmVal[keyP]; oo.textContent = llmVal[keyP] + '（已存）'; oo.selected = true; mode.appendChild(oo); }
+          }
+          function rebuildModel() {
+            sel.textContent = '';
+            if (inherit) { var od = el('option'); od.value = ''; od.textContent = '—'; sel.appendChild(od); sel.disabled = true; return; }
+            sel.disabled = false;
+            var curP = llmVal[keyP] || '';
+            var list = (hostModels || []).filter(function (m) { return m.provider === curP; });
+            var seen = {};
+            list.forEach(function (m) { if (!seen[m.id]) { seen[m.id] = 1; var o = el('option'); o.value = m.id; o.textContent = m.name && m.name !== m.id ? m.id + ' — ' + m.name : m.id; if (m.id === llmVal[keyM]) o.selected = true; sel.appendChild(o); } });
+            if (!list.length) { var oe = el('option'); oe.value = ''; oe.textContent = '（该 provider 无可用模型——回 Harness 配置）'; sel.appendChild(oe); }
+          }
+          mode.addEventListener('change', function () {
+            inherit = mode.value === '';
+            var patch = {};
+            if (inherit) { patch[keyP] = ''; patch[keyM] = ''; }
+            else { patch[keyP] = mode.value; patch[keyM] = llmVal[keyM] || ((hostModels || []).find(function (m) { return m.provider === mode.value; }) || {}).id || ''; }
+            llmVal[keyP] = patch[keyP]; llmVal[keyM] = patch[keyM];
+            rebuildModel();
+            saveLlm(patch);
+          });
+          sel.addEventListener('change', function () { llmVal[keyM] = sel.value; saveLlm({ [keyM]: sel.value }); });
+          function saveLlm(patch) {
+            api('/distill/config', { method: 'POST', body: JSON.stringify(patch) })
+              .then(function () { status('✓ 模型配置已写（重载后生效）'); })
+              .catch(fail);
+          }
+          rebuildProvider(); rebuildModel();
+          wrap.appendChild(mode); wrap.appendChild(sel);
+          item.appendChild(wrap);
+          container.appendChild(item);
+        }
+        function renderLlmCard() {
+          llmCard.textContent = '';
+          // 两用途：蒸馏 / 深睡（独立键，空=回落 llmProvider/llmModel→继承）
+          renderLlmSelect(llmCard, 'distillProvider', 'distillModel', '蒸馏模型', '事件蒸馏（会话闲置提炼可复用知识）用的模型。继承=跟随主会话。');
+          renderLlmSelect(llmCard, 'sleepProvider', 'sleepModel', '深睡归纳模型', '深度睡眠（离线回想提炼 [原则]/[路径] 画像成长）用的模型。继承=跟随主会话。');
+          var note = el('div', 'sc-mem-sub muted'); note.textContent = hostModels ? '宿主可用 ' + hostModels.length + ' 个模型' : '读取宿主模型…';
+          llmCard.appendChild(note);
+        }
+        api('/llm/models').then(function (r) {
+          hostModels = (r && r.models) || [];
+          llmCard.textContent = '';
+          // 读当前持久值
+          return api('/distill/config').then(function (d) {
+            var run = (d && d.running) || {}, p = (d && d.persisted) || {};
+            llmVal.distillProvider = run.distillProvider != null ? run.distillProvider : (p.distillProvider || '');
+            llmVal.distillModel = run.distillModel != null ? run.distillModel : (p.distillModel || '');
+            llmVal.sleepProvider = run.sleepProvider != null ? run.sleepProvider : (p.sleepProvider || '');
+            llmVal.sleepModel = run.sleepModel != null ? run.sleepModel : (p.sleepModel || '');
+            renderLlmCard();
+          });
+        }).catch(function () { llmCard.appendChild(el('div', 'sc-desc', '⚠ 宿主模型不可用')); });
+        view.appendChild(llmCard);
+
         // ── 蒸馏节流（运行时通道 · 2026-09-09 新增）──
         // 背景：enableDistill/idleWakeMs/minTurnChars/distillPrescan/llmProvider/llmModel 六个键有插件 Config
         // 但不持久（注入插件不进 loader 配置持久化），此前只能手写 ~/.dsh/suite/scheduler.json；
@@ -674,8 +754,7 @@
           dZone.appendChild(distillToggle('distillPrescan', '零成本预筛 distillPrescan', 'spawn 前先扫增量信号词 + pending 候选，皆无则跳过（不唤醒 LLM，省成本）', val('distillPrescan', true)));
           dZone.appendChild(distillInput('idleWakeMs', '空闲唤醒 idleWakeMs', 'turn 结束后空闲满此时长才蒸馏（≥1 分钟，默认 10 分钟）', Math.round(val('idleWakeMs', 600000) / 60000), 'minutes', 1));
           dZone.appendChild(distillInput('minTurnChars', '本轮最少字符 minTurnChars', '本轮新增正文少于此值跳过蒸馏（水位仍推进；0=不设限，默认 200）', val('minTurnChars', 200), 'chars'));
-          dZone.appendChild(distillInput('llmProvider', '蒸馏模型 provider llmProvider', '蒸馏子代理指定 provider；留空=继承主会话模型（连败≥2 次自动回落继承）', val('llmProvider', ''), 'text'));
-          dZone.appendChild(distillInput('llmModel', '蒸馏模型 llmModel', '蒸馏子代理指定 model；留空=继承主会话模型', val('llmModel', ''), 'text'));
+          // 模型配置已移至上方「蒸馏/深睡模型」卡（2026-09-10）——此处不再重复 provider/model 文本输入
           if (d && d.active === false) {
             dZone.appendChild(el('div', 'sc-desc', '⚠ 调度器未就绪：显示值为持久文件值，运行时值需插件激活后读取'));
           }

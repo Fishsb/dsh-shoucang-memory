@@ -1020,7 +1020,7 @@ export function applyPanel(ctx: Context, config: Config): void {
   }
 
   /** 蒸馏节流组键（键名同 scheduler.Config；UI 通道写入 ~/.dsh/suite/scheduler.json，重载生效） */
-  const DISTILL_CONFIG_KEYS = ['enableDistill', 'idleWakeMs', 'minTurnChars', 'distillPrescan', 'llmProvider', 'llmModel'] as const
+  const DISTILL_CONFIG_KEYS = ['enableDistill', 'idleWakeMs', 'minTurnChars', 'distillPrescan', 'llmProvider', 'llmModel', 'distillProvider', 'distillModel', 'sleepProvider', 'sleepModel'] as const
 
   /** 蒸馏节流组配置键校验（与 scheduler.Config 同约束）；返回错误串或 null */
   const validateDistillConfig = (c: Record<string, unknown>): string | null => {
@@ -1036,6 +1036,10 @@ export function applyPanel(ctx: Context, config: Config): void {
     }
     if ('llmProvider' in c && typeof c.llmProvider !== 'string') return 'llmProvider 须为字符串'
     if ('llmModel' in c && typeof c.llmModel !== 'string') return 'llmModel 须为字符串'
+    if ('distillProvider' in c && typeof c.distillProvider !== 'string') return 'distillProvider 须为字符串'
+    if ('distillModel' in c && typeof c.distillModel !== 'string') return 'distillModel 须为字符串'
+    if ('sleepProvider' in c && typeof c.sleepProvider !== 'string') return 'sleepProvider 须为字符串'
+    if ('sleepModel' in c && typeof c.sleepModel !== 'string') return 'sleepModel 须为字符串'
     return null
   }
 
