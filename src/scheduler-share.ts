@@ -5,16 +5,28 @@
  * （index.ts 先 applyPanel 后 applyScheduler）。panel 的 /suite RPC 需要
  * 「suite 装配矩阵」数据，而成员表（config.members）与双基准扫描都归 scheduler 持有——
  * 算法本体在 targets.ts 的 suiteAssemblyMatrix（单一实现），此处只桥接调用入口：
- *   - scheduler 启动期把 { suiteScan } 写入 schedulerShare.api；
+ *   - scheduler 启动期把 { suiteScan, distillConfig } 写入 schedulerShare.api；
  *   - panel 路由在请求时读取；读不到（scheduler 未启用/未就绪）则返回空态，不报错。
  *
  * 红线：type-only 引用 targets 的 SuiteMemberRow，无运行时循环依赖；无硬编码机器路径。
  */
 import type { SuiteMemberRow } from './targets.js'
 
+/** 蒸馏节流组运行时配置（持久化通道同深度睡眠：~/.dsh/suite/scheduler.json，改动需重载生效） */
+export interface DistillRuntimeConfig {
+  enableDistill: boolean
+  idleWakeMs: number
+  minTurnChars: number
+  distillPrescan: boolean
+  llmProvider: string
+  llmModel: string
+}
+
 export interface SchedulerShareApi {
   /** suite 装配矩阵（targets.suiteAssemblyMatrix 的绑定入口，成员表=调度器 config.members） */
   suiteScan: () => { members: SuiteMemberRow[]; summary: string }
+  /** 蒸馏节流组运行时值（GET /distill/config 的 running 源；缺省值单一实现在 scheduler.Config） */
+  distillConfig: () => DistillRuntimeConfig
 }
 
 /** 共享引用：请求时惰性读取（可能为 null=scheduler 未就绪） */

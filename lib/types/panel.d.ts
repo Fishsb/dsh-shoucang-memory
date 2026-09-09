@@ -7,6 +7,7 @@
  *   记忆：  GET /memory/overview · GET /memory/sections（双根 root=suite|memory）
  *   集合：  GET /suite（suiteAssemblyMatrix 经 schedulerShare 桥接）
  *   深睡：  GET /deepsleep · POST /deepsleep/trigger · GET+POST /deepsleep/config（单 handler 按 method 分发）
+ *   蒸馏：  GET+POST /distill/config（节流组持久通道，同深睡：单 handler 按 method 分发）
  *   巩固轮：GET /idle/status · POST /idle/consolidate
  *   向量/模型：GET /vector/status · POST /vector/build · GET /model/list · POST /model/pull|progress|import|deploy
  *   注入：  GET /inject/preview · GET /inject/stats（R1 热记忆注入 systemPrompt.context）

@@ -545,6 +545,70 @@
         // ── 首次渲染 + 自动轮询（面板开着即刷新）──
         renderVectorZone(lList, iLabel, iBtnWrap);
         startVectorPoll(lList, iLabel, iBtnWrap);
+        // ── 蒸馏节流（运行时通道 · 2026-09-09 新增）──
+        // 背景：enableDistill/idleWakeMs/minTurnChars/distillPrescan/llmProvider/llmModel 六个键有插件 Config
+        // 但不持久（注入插件不进 loader 配置持久化），此前只能手写 ~/.dsh/suite/scheduler.json；
+        // 现经 /distill/config 读写同一文件（与深度睡眠同通道），**改动需重载插件后生效**。
+        view.appendChild(el('div', 'sc-h1', '蒸馏节流（运行时通道）'));
+        view.appendChild(el('div', 'sc-desc', '写入自持配置 ~/.dsh/suite/scheduler.json（深度睡眠同通道）。改动不会立刻作用到在跑的会话——**需重载插件后生效**。缺省：蒸馏开 / 空闲 10 分钟 / 本轮最少 200 字符 / 预筛开 / 模型继承主会话。'));
+        var dZone = el('div');
+        dZone.appendChild(el('div', 'sc-desc', '读取中…'));
+        view.appendChild(dZone);
+        function distillSave(patch, onFail) {
+          return api('/distill/config', { method: 'POST', body: JSON.stringify(patch) })
+            .then(function () { status('✓ 已写入 ' + Object.keys(patch).join(',') + '（重载后生效）'); })
+            .catch(function (e) { fail(e); if (onFail) onFail(); });
+        }
+        function distillToggle(key, name, desc, initial) {
+          var item = el('div', 'setting-item');
+          var info = el('div', 'setting-item-info');
+          info.appendChild(el('div', 'setting-item-name', name));
+          info.appendChild(el('div', 'setting-item-desc', desc));
+          var sw = el('input', 'checkbox-container'); sw.type = 'checkbox'; sw.checked = !!initial;
+          sw.onchange = function () {
+            var patch = {}; patch[key] = sw.checked;
+            distillSave(patch, function () { sw.checked = !sw.checked; });
+          };
+          item.appendChild(info); item.appendChild(sw);
+          return item;
+        }
+        function distillInput(key, name, desc, initial, kind, min) {
+          var item = el('div', 'setting-item');
+          var info = el('div', 'setting-item-info');
+          info.appendChild(el('div', 'setting-item-name', name));
+          info.appendChild(el('div', 'setting-item-desc', desc));
+          var wrap = el('div'); wrap.style.cssText = 'display:flex;align-items:center;gap:6px;flex:none;';
+          var inp = el('input'); inp.className = 'sc-input'; inp.value = String(initial);
+          if (kind === 'minutes') { inp.type = 'number'; inp.min = String(min || 1); inp.step = '1'; inp.style.width = '96px'; }
+          else if (kind === 'chars') { inp.type = 'number'; inp.min = '0'; inp.step = '50'; inp.style.width = '96px'; }
+          else { inp.type = 'text'; inp.placeholder = '留空=继承主会话模型'; inp.style.width = '180px'; }
+          var unitEl = el('span', 'sc-range-label', kind === 'minutes' ? '分钟' : (kind === 'chars' ? '字符' : ''));
+          inp.onchange = function () {
+            var v;
+            if (kind === 'text') v = inp.value.trim();
+            else v = Math.max(kind === 'minutes' ? (min || 1) : 0, parseInt(inp.value, 10) || 0);
+            var patch = {}; patch[key] = kind === 'minutes' ? v * 60000 : v;
+            distillSave(patch, function () { inp.value = String(initial); });
+          };
+          wrap.appendChild(inp); wrap.appendChild(unitEl);
+          item.appendChild(info); item.appendChild(wrap);
+          return item;
+        }
+        api('/distill/config').then(function (d) {
+          var r = (d && d.running) || {};
+          var p = (d && d.persisted) || {};
+          function val(k, dflt) { return r[k] != null ? r[k] : (p[k] != null ? p[k] : dflt); }
+          dZone.textContent = '';
+          dZone.appendChild(distillToggle('enableDistill', '守藏蒸馏器 enableDistill', '关=不注册蒸馏器（/suite 等只读视图仍可用）；改动需重载生效', val('enableDistill', true)));
+          dZone.appendChild(distillToggle('distillPrescan', '零成本预筛 distillPrescan', 'spawn 前先扫增量信号词 + pending 候选，皆无则跳过（不唤醒 LLM，省成本）', val('distillPrescan', true)));
+          dZone.appendChild(distillInput('idleWakeMs', '空闲唤醒 idleWakeMs', 'turn 结束后空闲满此时长才蒸馏（≥1 分钟，默认 10 分钟）', Math.round(val('idleWakeMs', 600000) / 60000), 'minutes', 1));
+          dZone.appendChild(distillInput('minTurnChars', '本轮最少字符 minTurnChars', '本轮新增正文少于此值跳过蒸馏（水位仍推进；0=不设限，默认 200）', val('minTurnChars', 200), 'chars'));
+          dZone.appendChild(distillInput('llmProvider', '蒸馏模型 provider llmProvider', '蒸馏子代理指定 provider；留空=继承主会话模型（连败≥2 次自动回落继承）', val('llmProvider', ''), 'text'));
+          dZone.appendChild(distillInput('llmModel', '蒸馏模型 llmModel', '蒸馏子代理指定 model；留空=继承主会话模型', val('llmModel', ''), 'text'));
+          if (d && d.active === false) {
+            dZone.appendChild(el('div', 'sc-desc', '⚠ 调度器未就绪：显示值为持久文件值，运行时值需插件激活后读取'));
+          }
+        }).catch(function (e) { dZone.textContent = ''; dZone.appendChild(el('div', 'sc-desc', '⚠ 读取失败：' + e.message)); });
       }
 
       function fmtVectorStatus(d) {

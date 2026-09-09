@@ -9,7 +9,8 @@
 |---|---|---|---|
 | **面板·参数调节页** | `<面板根目录>/shoucang.config.yaml` | 布尔开关 / 滑块 / 下拉，写前自动备份 `.bak-*` | 注入类立即生效；蒸馏/归档类下一轮触发时读取 |
 | **面板·深度睡眠页** | `~/.dsh/suite/scheduler.json` | 5 个滑块 + 立即归纳按钮 + 暂停到明天 | **需重载插件/重启宿主生效** |
-| **手写 JSON** | `~/.dsh/suite/scheduler.json` | 无 UI 的键（蒸馏节流/模型等）手写 | 同上，重载生效 |
+| **面板·参数调节页（蒸馏节流组）** | `~/.dsh/suite/scheduler.json` | 蒸馏节流 6 键：开关 / 预筛 / 空闲分钟 / 最少字符 / 模型 provider+model | 同上，重载生效 |
+| **手写 JSON** | `~/.dsh/suite/scheduler.json` | 深度睡眠探测参数等无 UI 键手写 | 同上，重载生效 |
 
 ---
 
@@ -76,7 +77,7 @@
 
 ## 2. scheduler.json 设置项（深度睡眠 + 蒸馏器，自持持久通道）
 
-> 面板「深度睡眠」页前 5 个可滑块调节；其余目前只能手写 `~/.dsh/suite/scheduler.json`（键名即下表键名）。改动均需**重载插件/重启宿主**生效。
+> 面板「深度睡眠」页 5 键可滑块调节，「参数调节」页底部「蒸馏节流」组 6 键可调（2026-09-09 接通）；其余只能手写 `~/.dsh/suite/scheduler.json`（键名即下表键名）。改动均需**重载插件/重启宿主**生效。
 
 ### 2.1 面板可调（5 键）
 
@@ -88,7 +89,20 @@
 | deepSleepProbeAfterMs | 10800000（3h） | running 无事件满此时长发起探测 |
 | deepSleepProbeWindowMs | 60000（60s） | 探测采样间隔 |
 
-### 2.2 无 UI（手写 JSON）
+### 2.2 面板可调 · 蒸馏节流组（6 键，2026-09-09 接通）
+
+> 位置：面板「参数调节」页底部「蒸馏节流（运行时通道）」分组，经 `GET/POST /distill/config` 读写同一 `scheduler.json`。
+> 此 6 键此前只有插件 Config（schemastery UI 改了不持久），只能手写 JSON —— 现已全部面板化。**改动需重载插件/重启宿主生效**（写的是自持配置文件，scheduler 启动时才覆盖 Config 缺省）。
+
+| 键 | 缺省 | 作用 |
+|---|---|---|
+| enableDistill | true | 守藏蒸馏器总开关。关=不注册蒸馏器（/suite 等只读视图仍可用） |
+| distillPrescan | true | 零成本预筛：spawn 前扫增量信号词 + pending 候选，皆无则跳过（不唤醒 LLM） |
+| idleWakeMs | 600000（10min） | turn 结束后空闲满此时长才蒸馏（面板按**分钟**输入，≥1 分钟）——控制触发频率 |
+| minTurnChars | 200 | 本轮新增正文少于此字符数跳过蒸馏（水位仍推进）；0=不设限 |
+| llmProvider / llmModel | ""（继承主会话） | 蒸馏/归纳子代理指定模型；留空=继承主会话模型（连败 ≥2 次自动回落继承） |
+
+### 2.3 无 UI（手写 JSON）
 
 | 键 | 缺省 | 作用 |
 |---|---|---|
@@ -97,11 +111,6 @@
 | deepSleepProbeRetries | 2 | 探针异常重试次数 |
 | deepSleepProbeMaxMs | 600000（10min） | 单轮探测总时长兜底（防悬挂） |
 | deepSleepDaemonParent | false | 无会话场景兜底：自建守护 parent 承载归纳子代理（**未验证路径，保持关**） |
-| **enableDistill** | true | ⚠️ **蒸馏器本体总开关——无任何 UI**（想关只能手写 JSON；schemastery UI 改了不持久） |
-| **idleWakeMs** | 600000（10min） | ⚠️ turn 结束后空闲满此时长才蒸馏——控制蒸馏触发频率，无 UI |
-| **minTurnChars** | 200 | ⚠️ 本轮新增正文少于此字符数跳过蒸馏（水位仍推进）——省 token 闸门，无 UI |
-| **distillPrescan** | true | ⚠️ 预筛开关：无信号词且无 pending 候选则不唤醒 LLM 子代理，无 UI |
-| **llmProvider / llmModel** | ""（继承主会话） | ⚠️ 蒸馏/归纳子代理用哪个模型，无 UI |
 | distillPrompt | "" | 蒸馏子代理 persona 覆盖（空=内建 v4 契约），高级键 |
 | verify_enabled | true | shoucang_verify 回归工具开关 |
 | members | [] | suite 外部成员表（结构性配置，非调节属性） |
@@ -158,7 +167,9 @@
 | 控制画像是否注入 | persona 档位（me=只 agent 画像 / you=只用户画像 / off=都不注） |
 | 限某个板块膨胀 | 对应 *_max_chars 设正数（如 agent_max_chars=2000） |
 | 别自动归档 | lifecycle.archive.apply_confirm=true（只出报告不落盘）；彻底停：lifecycle.enabled=false 或 interval_hours=0 |
-| 觉得蒸馏太频繁 | 手写 scheduler.json：调大 idleWakeMs / 调大 minTurnChars / distillPrescan=true |
+| 觉得蒸馏太频繁 | 参数调节页「蒸馏节流」组：调大 idleWakeMs / 调大 minTurnChars / distillPrescan=true（重载生效） |
+| 蒸馏想换模型 | 参数调节页「蒸馏节流」组：llmProvider + llmModel（留空=继承主会话模型） |
+| 临时停掉蒸馏 | 参数调节页「蒸馏节流」组：enableDistill 关（重载生效；只读视图仍可用） |
 | 关闭深度睡眠 | 深度睡眠页 enableDeepSleep 关（=暂停到明天） |
 | 卡住误判长任务 | 深度睡眠页调大 deepSleepProbeAfterMs；或手写 deepSleepProbeConfirm=3 |
 | 归档太激进/太保守 | archive.age_days 调大/调小；min_confidence 调高/调低 |
