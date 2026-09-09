@@ -506,7 +506,7 @@ export function applyPanel(ctx: Context, config: Config): void {
   route('/toggle', async (req, res) => {
     const body = await readBody(req)
     const key = typeof body.key === 'string' ? body.key : ''
-    const allowed = ['boards.persona', 'boards.memory', 'boards.wiki', 'injection.hot_memory', 'archive.enabled', 'lifecycle.enabled', 'scheduler.enabled', 'lifecycle.archive.apply_confirm', 'merge.enabled']
+    const allowed = ['boards.memory', 'injection.hot_memory'] // 2026-09-10 收敛：archive/lifecycle/merge/scheduler 组为旧 Python 链路遗留，无消费端，已从面板移除
     if (!allowed.includes(key)) return sendJson(res, 400, { error: `key 不允许：${key}` })
     const file = configFileOf()
     if (!file) return sendJson(res, 400, { error: 'no-active-root' })
@@ -534,17 +534,9 @@ export function applyPanel(ctx: Context, config: Config): void {
       'injection.agent_max_chars': [],
       'injection.user_max_chars': [],
       'injection.memory_max_chars': [],
-      'lifecycle.archive.min_confidence': [],
-      'lifecycle.archive.age_days': [],
-      'lifecycle.archive.mode': ['age', 'fixed'],
-      'lifecycle.archive.fixed_time': [],
-      'merge.fingerprint_threshold': [],
-      'merge.complement_floor': [],
-      'idle.sessions_dir': [],
-      'archive.idle_review_ms': [],
-      'archive.ttl_multiplier': [],
-      'lifecycle.interval_hours': [],
-      // 向量配置在模型「部署/导入」时自动写入，面板不允许手工改（2026-08-27 定稿；如需高级定制走配置原文 YAML）
+      // 2026-09-10 收敛：archive/lifecycle/merge 组键消费端为旧 Python 链路（_meta/*.py 已不随包分发），
+      // 无真消费——保留只会误导用户。已从白名单移除（真蒸馏/归档走 scheduler.json 通道）。
+      'embedding.dimension': [],
     }
     // 数值范围校验（时间类）
     const RANGE: Record<string, [number, number]> = {
