@@ -113,8 +113,6 @@ export function applyPanel(ctx: Context, config: Config): void {
     disposers.push(webServer.register({ kind: 'exact', path, handler }))
   }
 
-  const idleState = { lastActiveAt: 0, lastDistillAt: 0, lastSettleAt: 0, running: false }
-
   const configFileOf = (): string | null => {
     const root = activeRootOf()
     return root ? join(root.path, CONFIG_FILE) : null
@@ -538,15 +536,8 @@ export function applyPanel(ctx: Context, config: Config): void {
       // 无真消费——保留只会误导用户。已从白名单移除（真蒸馏/归档走 scheduler.json 通道）。
       'embedding.dimension': [],
     }
-    // 数值范围校验（时间类）
+    // 数值范围校验（2026-09-10 收敛：仅注入组 + embedding.dimension；archive/lifecycle/merge 死键已随白名单移除）
     const RANGE: Record<string, [number, number]> = {
-      'archive.idle_review_ms': [60000, 3600000], // 1–60 分钟（毫秒）
-      'lifecycle.archive.age_days': [0.1, 30],
-      'lifecycle.archive.min_confidence': [0, 100],
-      'merge.fingerprint_threshold': [0.1, 1],
-      'merge.complement_floor': [0.05, 0.9],
-      'archive.ttl_multiplier': [0.5, 10],
-      'lifecycle.interval_hours': [1, 168],
       'injection.max_tokens': [100, 8000],
       // v16：板块容量上限范围（0=不裁，上限留足写门容量的 6 倍余量）
       'injection.agent_max_chars': [0, 20000],
@@ -555,12 +546,8 @@ export function applyPanel(ctx: Context, config: Config): void {
       'embedding.dimension': [16, 8192], // 常见嵌入维度范围
     }
     if (!(key in allowed)) return sendJson(res, 400, { error: `key 不允许：${key}` })
-    if (!value && key !== 'idle.sessions_dir') return sendJson(res, 400, { error: 'value required' })
+    if (!value) return sendJson(res, 400, { error: 'value required' })
     if (allowed[key].length && !allowed[key].includes(value)) return sendJson(res, 400, { error: `枚举值非法：${key} ∈ ${allowed[key].join('|')}` })
-    if (key === 'lifecycle.archive.fixed_time') {
-      if (!/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(value)) return sendJson(res, 400, { error: 'fixed_time 须为 HH:MM（如 21:30）' })
-      value = `"${value}"` // YAML 时间对象防护：归档时刻保持字符串
-    }
     if (RANGE[key] && !(Number(value) >= RANGE[key][0] && Number(value) <= RANGE[key][1])) {
       return sendJson(res, 400, { error: `数值越界：${key} ∈ [${RANGE[key][0]}, ${RANGE[key][1]}]` })
     }
@@ -1098,314 +1085,17 @@ export function applyPanel(ctx: Context, config: Config): void {
       disposers.push(sp.context({
         name: 'shoucang-hot-memory',
         order: 88, // mneme: user-settings=85 / memory=90 —— 守藏热记忆在其间
-        text: () => { injectMeta.calls++; injectMeta.lastAt = Date.now(); idleState.lastActiveAt = Date.now(); return buildHotMemoryText() },
+        text: () => { injectMeta.calls++; injectMeta.lastAt = Date.now(); return buildHotMemoryText() },
       }))
       ctx.logger?.info?.('[shoucang] R1 热记忆注入挂点已注册 (systemPrompt.context: shoucang-hot-memory)')
     } else {
       ctx.logger?.warn?.('[shoucang] systemPrompt 能力不可用，R1 热记忆注入未注册')
     }
   // ── 空闲巩固轮（Letta-heartbeat 模式 · 2026-08-27）：蒸馏/合并/归档/结算 一体化 ──
-  const PY = process.env.SHOUCANG_PY || 'python' // 零硬编码红线：本机解释器经 env 指定
-  const _metaOf = (): string => { const r = activeRootOf(); return r ? join(r.path, '_meta') : '' }
-  // 2d 配额代码化（落地方案）：idle 轮内 py 进程调用硬上限——防蒸馏/归档风暴失控（配合 _writeFacts 单轮落笔 15 上限）。
-// 仅 consolidateRound 会话内计配额；RPC（/model/* /vector/* 等）为交互路径不受限（修：此前全局计数使 RPC 也被拒）
-let pyRoundCalls = 0
-let inConsolidate = false
-const MAX_PY_PER_ROUND = 24
-  const _runPy = (args: string[]): string => {
-    if (inConsolidate) {
-      if (++pyRoundCalls > MAX_PY_PER_ROUND) {
-        ctx.logger?.warn?.(`[shoucang] py 轮内配额超限(>${MAX_PY_PER_ROUND} 次)，本轮后续调用被拒`)
-        return JSON.stringify({ error: 'py-call-quota-exceeded', quota: MAX_PY_PER_ROUND })
-      }
-    }
-    try { return execFileSync(PY, args, { encoding: 'utf8', timeout: 180000, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }) as string }
-    catch (e) { const ee = e as { stderr?: Buffer | string; message?: string }; const err = typeof ee.stderr === 'string' ? ee.stderr : ((ee.stderr as Buffer) || Buffer.from('')).toString() || ee.message || String(e); ctx.logger?.warn?.(`[shoucang][idle] py 失败: ${String(err).slice(0, 160)}`); return String(err) }
-  }
   const _cfgOf = (): { cfg: ReturnType<typeof parseView>; file: string } | null => {
     const f = configFileOf(); if (!f || !existsSync(f)) return null
     try { return { cfg: parseView(readFileSync(f, 'utf8')), file: f } } catch { return null }
   }
-  const _sessionsDir = (cfg: { sessions_dir?: string } | null | ReturnType<typeof parseView>): string => {
-    const c = String((cfg as { sessions_dir?: string } | null)?.sessions_dir || '').trim()
-    if (c) return c
-    const env = process.env.SHOUCANG_SESSIONS_DIR
-    if (env) return env
-    // 会话目录缺省探测走 dshHome()（DSH_HOME || ~/.dsh），与插件其余路径同一事实源（此前用 USERPROFILE 只在 Windows 成立）
-    const probe = join(dshHome(), 'sessions')
-    return existsSync(probe) ? probe : ''
-  }
-  const _latestSession = (dir: string): string => {
-    let best = '', bestMs = 0
-    const scan = (d: string, depth: number): void => {
-      let items: import('node:fs').Dirent[] = []
-      try { items = readdirSync(d, { withFileTypes: true }) as unknown as import('node:fs').Dirent[] } catch { return }
-      for (const ent of items) {
-        if (ent.name.startsWith('.')) continue
-        const full = join(d, ent.name)
-        if (ent.isDirectory()) { if (depth < 4) scan(full, depth + 1); continue }
-        try {
-          const st = statSync(full)
-          if (!st.isFile() || st.size < 64) continue
-          if (!/\.(jsonl|zstd|zst|json)$/i.test(ent.name)) continue
-          if (/\.bak-/.test(ent.name)) continue
-          if (st.mtimeMs > bestMs) { bestMs = st.mtimeMs; best = full }
-        } catch { /* skip */ }
-      }
-    }
-    scan(dir, 0)
-    return best
-  }
-  const _decodeBuf = (buf: Buffer): string => {
-    if (buf[0] === 0x28 && buf[1] === 0xb5 && buf[2] === 0x2f && buf[3] === 0xfd) {
-      const parts: Buffer[] = []
-      let i = 0
-      while (i + 4 <= buf.length) {
-        if (buf[i] === 0x28 && buf[i + 1] === 0xb5 && buf[i + 2] === 0x2f && buf[i + 3] === 0xfd) {
-          let j = i + 4
-          while (j + 4 <= buf.length && !(buf[j] === 0x28 && buf[j + 1] === 0xb5 && buf[j + 2] === 0x2f && buf[j + 3] === 0xfd)) j++
-          try { parts.push((zstdDecompressSync as unknown as (b: Buffer) => Buffer)(buf.subarray(i + 4, j))) } catch { /* frame skip */ }
-          i = j
-        } else i++
-      }
-      return Buffer.concat(parts).toString('utf8')
-    }
-    return buf.toString('utf8')
-  }
-  const _maxSeq = (text: string): number => {
-    let max = 0
-    const re = /"seq"\s*:\s*(\d+)/g
-    let m: RegExpExecArray | null
-    while ((m = re.exec(text))) { const n = parseInt(m[1], 10); if (n > max) max = n }
-    return max || text.split('\n').length
-  }
-  const _registryRead = (): Record<string, { cutoff?: number }> => {
-    const f = join(_metaOf(), '.distilled-sessions.json')
-    if (!existsSync(f)) return {}
-    try {
-      // 注册表实际形状：{ version, sessions: [{ id, cutoff, ... }]} —— 数组转映射（2026-08-27 修复：此前按对象属性查找永远 miss，增量蒸馏从不生效）
-      const j = JSON.parse(readFileSync(f, 'utf8')) as { sessions?: Array<{ id?: string; cutoff?: number }> }
-      const out: Record<string, { cutoff?: number }> = {}
-      for (const s of j.sessions || []) { if (s && s.id) out[s.id] = { cutoff: s.cutoff } }
-      return out
-    } catch { return {} }
-  }
-  const _markDistilled = (sid: string, cutoff: number): void => {
-    const meta = _metaOf()
-    if (!meta) return
-    _runPy([join(meta, 'explicit_facts_extractor.py'), '--mark-distilled', sid, '--cutoff', String(cutoff)])
-  }
-  const _writeFacts = (facts: Array<{ text?: string; type?: string }>): { written: number; filtered: number; capped: number } => {
-    const meta = _metaOf(); const root = activeRootOf()
-    if (!meta || !root || !facts.length) return { written: 0, filtered: 0, capped: 0 }
-    let written = 0, filtered = 0, capped = 0
-    const seenSlugs = new Set<string>()
-    const MAX_WRITES_PER_RUN = 15 // 单轮落笔上限（2026-08-27 风暴修复：101 条垃圾一次性入库的教训）
-    for (const [i, f] of facts.entries()) {
-      const txt = String(f.text || '').trim()
-      if (!txt) continue
-      // 写门前置质量门：与提取端 _is_garbage 同口径兜底（无 CJK 正文 / 工程残迹 / 结构碎片 / 多行 / 表格行 / 无句号收尾）
-      const head = txt.slice(0, 80)
-      if (!/[\u4e00-\u9fff]/.test(head) || /^\W{4,}/.test(txt.slice(0, 24)) || /\{\s*"/.test(head)
-        || /^[A-Za-z0-9_/:.\s-]*(GET|POST)\s+\//.test(txt)
-        || txt.includes('\n') || txt.trimStart().startsWith('|') || txt.includes(' | ') || txt.includes('`')
-        || !/[。！？]$/.test(txt)
-        || /不要记|别记|不用记|勿记|别写进记忆|无需记录|不必记录|别惦记/.test(txt)) { filtered++; continue }
-      if (written + 1 > MAX_WRITES_PER_RUN) { capped++; continue }
-      let slug = (txt.replace(/^[-*•\s·]+/, '').replace(/[\\/:*?"<>|{}()[\]·\s]/g, '-') || ('fact-' + i)).slice(0, 24)
-      slug = slug.replace(/^-+/, '') || ('fact-' + i)
-      // 批内去重：同名合并进同一条，不产生 -1/-2 序列文件
-      if (seenSlugs.has(slug)) {
-        written += 0; continue
-      }
-      seenSlugs.add(slug)
-      const tmp = join(tmpdir(), 'shoucang-fact-' + Date.now() + '-' + i + '.md') // i 避免同毫秒碰撞（2026-08-27 修复：此前循环共用同名 tmp 内容互相污染）
-      const md = '---\ntype: memory\nname: ' + slug + '\ntitle: "' + txt.slice(0, 20).replace(/"/g, '') + '"\nsubtype: ref\nstage: daily\nconfidence: 60\ncreated: ' + new Date().toISOString().slice(0, 10) + '\nupdated: ' + new Date().toISOString().slice(0, 10) + '\ndescription: 空闲巩固-蒸馏\n---\n\n' + txt + '\n'
-      writeFileSync(tmp, md, 'utf8')
-      const out = _runPy([join(meta, 'merge_check.py'), tmp, '--dir', '日记忆', '--apply'])
-      if (out.includes('已写入') || out.includes('已合并')) { written++; continue }
-      // 写门未落笔且非重复合并 → 视为被拒（如 suspect 分支异常），计数观察
-      if (!out.includes('decision')) filtered++
-    }
-    return { written, filtered, capped }
-  }
-  const consolidateRound = (force = false): Record<string, unknown> => {
-    const root = activeRootOf()
-    if (!root) return { ok: false, error: 'no-active-root' }
-    const got = _cfgOf()
-    const res: { at: string; steps: Record<string, unknown>; skipped?: string; error?: string } = { at: new Date().toISOString(), steps: {} }
-    const rawIdle = got ? (got.cfg as { idle_review_ms?: number }).idle_review_ms : undefined
-    const idleMs = (rawIdle === undefined || rawIdle === null) ? 600000 : Number(rawIdle) // 0=禁用（falsy 修复）
-    // 1b 心跳活动门（落地方案）：会话源最新文件 mtime 作为「用户活跃」旁证——R1 注入 off 时
-    // lastActiveAt 不再随注入装配更新，但用户发消息会刷新会话 jsonl，据此不误触发心跳
-    let sessionActiveMs = 0
-    const idleSessDir = got ? _sessionsDir(got.cfg) : ''
-    if (idleSessDir) {
-      const f = _latestSession(idleSessDir)
-      if (f) { try { sessionActiveMs = statSync(f).mtimeMs } catch { /* stat 失败忽略 */ } }
-    }
-    const activeSince = Math.max(idleState.lastActiveAt, sessionActiveMs)
-    if (!force && idleMs > 0 && Date.now() - activeSince < idleMs) { res.skipped = 'not-idle-yet'; return res }
-    if (idleState.running) { res.skipped = 'already-running'; return res }
-    pyRoundCalls = 0 // 2d 配额：每轮开始归零
-    inConsolidate = true // 配额仅作用于 consolidate 会话内（RPC 交互路径不受限）
-    idleState.running = true
-    try {
-      const meta = _metaOf()
-      const dir = _sessionsDir(got ? got.cfg : null)
-      if (dir && meta) {
-        const file = _latestSession(dir)
-        if (!file) { res.steps.distill = { note: 'sessions_dir 内无会话文件' } }
-        else {
-          let text = ''
-          if (/\.zst(a|d)?$/i.test(file)) {
-            const dec = _runPy([join(meta, 'session_decode.py'), file, join(tmpdir(), 'shoucang-session-dec.jsonl')])
-            text = readFileSync(join(tmpdir(), 'shoucang-session-dec.jsonl'), 'utf8')
-          } else {
-            try { text = _decodeBuf(readFileSync(file)) } catch { text = '' }
-          }
-          // sid 带会话目录名（session-<uuid>）：同名 session.jsonl.zstd 导出互不污染 cutoff 边界
-          const _segs = file.split(/[\\/]/)
-          const _fname = _segs.pop() || 's'
-          const _folder = _segs.pop() || ''
-          const sid = 'idle-' + (_folder ? _folder.replace(/[^A-Za-z0-9._-]+/g, '-') + '-' : '') + _fname.replace(/\.(zst|zstd|jsonl|md|txt)$/i, '')
-          const tmp = join(tmpdir(), 'shoucang-session-' + Date.now() + '.jsonl')
-          writeFileSync(tmp, text, 'utf8')
-          const reg = _registryRead()[sid]
-          const args = [join(meta, 'explicit_facts_extractor.py'), tmp, '--session', sid]
-          if (reg && reg.cutoff != null) args.push('--cutoff', String(reg.cutoff))
-          const out = _runPy(args)
-          let facts: Array<{ text?: string; type?: string }> = []
-          try { const j = JSON.parse(out) as { facts?: Array<{ text?: string; type?: string }> }; facts = Array.isArray(j.facts) ? j.facts : [] } catch { /* parse fail */ }
-          if (facts.length) {
-            const w = _writeFacts(facts)
-            _markDistilled(sid, _maxSeq(text))
-            res.steps.distill = { session: sid, facts: facts.length, written: w.written, filtered: w.filtered, capped: w.capped, attach: true }
-            idleState.lastDistillAt = Date.now()
-          } else {
-            res.steps.distill = { session: sid, facts: 0, note: '无新事实或已蒸馏', raw: out.slice(-90) }
-          }
-          try { unlinkSync(tmp) } catch { /* 残留无害 */ }
-        }
-      } else {
-        res.steps.distill = { note: '无会话源（需配置 idle.sessions_dir）' }
-      }
-      const rawInterval = got ? (got.cfg as { interval_hours?: number }).interval_hours : undefined
-      const intervalH = (rawInterval === undefined || rawInterval === null) ? 24 : Number(rawInterval) // 0=禁用（falsy 修复）
-      if (meta && intervalH > 0 && Date.now() - idleState.lastSettleAt >= intervalH * 3600000) {
-        const out = _runPy([join(meta, 'lifecycle_settle.py'), 'settle', '--apply'])
-        res.steps.settle = { ran: true, rawTail: out.slice(-100) }
-        idleState.lastSettleAt = Date.now()
-      } else { res.steps.settle = { ran: false } }
-    } catch (e) {
-      res.error = String(e).slice(0, 200)
-    } finally {
-      idleState.running = false
-      inConsolidate = false // 配额会话结束
-    }
-    return res
-  }
-  route('/idle/status', (_req, res) => {
-    const got = _cfgOf()
-    sendJson(res, 200, { ...idleState, now: Date.now(), idleMs: got ? (got.cfg as { idle_review_ms?: number }).idle_review_ms ?? 600000 : 600000, sessionsDir: _sessionsDir(got ? got.cfg : null) })
-  })
-  route('/idle/consolidate', async (_req, res) => {
-    sendJson(res, 200, consolidateRound(true))
-  })
-
-  // ---- 向量检索（召回面）：配置体检 + 重建/迁移重嵌 ----
-  const _runVector = (args: string[]): { out: string; raw: string } => {
-    const meta = _metaOf()
-    if (!meta) return { out: JSON.stringify({ error: 'no-active-root' }), raw: '' }
-    const raw = _runPy([join(meta, 'vector_search.py'), ...args])
-    let out = ''
-    try { out = raw.trim(); JSON.parse(out) } catch (e) { out = raw.trim() }
-    return { out, raw }
-  }
-  route('/vector/status', (_req, res) => {
-    const r = _runVector(['check'])
-    sendJson(res, 200, safeJson(r.out))
-  })
-  route('/vector/build', async (req, res) => {
-    const body = await readBody(req).catch(() => ({}))
-    const force = !!(body as { force?: boolean }).force
-    const r = _runVector(['build', ...(force ? ['--force'] : [])])
-    if (force) injectCache.at = 0 // 索引重建后注入无关，但保持缓存策略一致
-    const js = safeJson(r.out)
-    sendJson(res, 200, { ...js, force })
-  })
-
-  // ---- 向量模型一键下载/部署（2026-08-27 · 框架+可选下载） ----
-  const _runModel = (args: string[]): { out: string; ok: boolean } => {
-    const meta = _metaOf()
-    if (!meta) return { out: JSON.stringify({ error: 'no-active-root' }), ok: false }
-    const raw = _runPy([join(meta, 'model_manager.py'), ...args])
-    const j = safeJson(raw.trim() || '{}')
-    return { out: raw.trim(), ok: !(j as { error?: string }).error }
-  }
-  route('/model/list', (_req, res) => {
-    const r = _runModel(['list'])
-    sendJson(res, 200, r.ok ? safeJson(r.out) : { error: r.out.slice(0, 400) })
-  })
-  route('/model/pull', async (req, res) => {
-    const body = await readBody(req).catch(() => ({})) as { id?: string; repo?: string; dim?: number }
-    const id = String(body.id || '').trim()
-    const repo = String(body.repo || '').trim()
-    if (!id || !repo) return sendJson(res, 400, { error: '需要 id 与 repo' })
-    const meta = _metaOf()
-    if (!meta) return sendJson(res, 400, { error: 'no-active-root' })
-    // 后台下载（模型数百 MB，同步会卡 RPC）：detached spawn + 前端轮询 /model/progress
-    const py = PY
-    const child = spawn(py as string, [join(meta, 'model_manager.py'), 'pull', id, repo, '--dim', String(body.dim || 1024)],
-      { detached: true, stdio: 'ignore', windowsHide: true })
-    child.unref()
-    sendJson(res, 200, { ok: true, started: true, id, repo, hint: '轮询 /model/progress' })
-  })
-  route('/model/progress', async (req, res) => {
-    const body = await readBody(req).catch(() => ({})) as { id?: string }
-    const id = String(body.id || '').trim()
-    if (!id) return sendJson(res, 400, { error: 'id required' })
-    const r = _runModel(['progress', id])
-    sendJson(res, 200, safeJson(r.out))
-  })
-  route('/model/import', async (_req, res) => {
-    // 打开本地文件夹选择器：复用插件生态的 ctx.directoryPicker.pick()（系统对话框）
-    const picker = (ctx as unknown as { directoryPicker?: { pick(signal?: AbortSignal): Promise<string | null> } }).directoryPicker
-    if (!picker?.pick) return sendJson(res, 400, { error: 'directoryPicker 能力不可用（宿主未装配目录选择器）' })
-    let dir: string | null = null
-    try { dir = await picker.pick() } catch (e) { return sendJson(res, 500, { error: '目录选择器失败: ' + String((e as Error).message || e).slice(0, 160) }) }
-    if (!dir) return sendJson(res, 200, { ok: false, cancelled: true })
-    const r = _runModel(['import', dir])
-    const j = safeJson(r.out) as { error?: string }
-    // 只登记不接管配置：用户点「部署并启用」时才自动写 embedding（单一职责）
-    sendJson(res, 200, { ...(j as Record<string, unknown>), picked: dir })
-  })
-  route('/model/deploy', async (req, res) => {
-    const body = await readBody(req).catch(() => ({})) as { id?: string; port?: number; dim?: number }
-    const id = String(body.id || '').trim()
-    if (!id) return sendJson(res, 400, { error: 'id required' })
-    const r = _runModel(['deploy', id, ...(body.port ? ['--port', String(body.port)] : []), ...(body.dim ? ['--dim', String(body.dim)] : [])])
-    const j = safeJson(r.out) as { ok?: boolean; port?: number; dim?: number; error?: string }
-    if (!j.error) {
-      // 一键生效：自动写 embedding 配置（setKey 定位既有行；写前备份）
-      const file = configFileOf()
-      if (file && j.port) {
-        let next: string | null = null
-        try {
-          next = setKey(readFileSync(file, 'utf8'), 'shoucang.embedding.base_url', `http://127.0.0.1:${j.port}`)
-          if (next) {
-            next = setKey(next, 'shoucang.embedding.model', id)
-            if (next && j.dim) next = setKey(next, 'shoucang.embedding.dimension', String(j.dim))
-          }
-        } catch { next = null }
-        if (next) { backupThenWrite(file, next); injectCache.at = 0 }
-      }
-    }
-    sendJson(res, 200, { ...j, configured: !j.error && !!j.port })
-  })
-
-  // U1（2026-09-09，ui-impl-plan）：向量运行态只读端点——展示真实链路（vec.ts + GPU 服务），
-  // 替代旧 /vector/status（驱动已退役 vector_search.py）。零 token 增量：纯只读状态。
   route('/vector/status2', (_req, res) => {
     try {
       const p = readSuiteConfig() as Record<string, unknown>
@@ -1564,9 +1254,9 @@ const MAX_PY_PER_ROUND = 24
     } catch (e) { sendJson(res, 500, { error: String(e) }) }
   })
 
-  const hb = setInterval(() => { try { consolidateRound(false) } catch { /* 心跳异常不阻塞 */ } }, 60000)
-  disposers.push(() => clearInterval(hb))
-
+  // 2026-09-10 审查 P1：60s 空闲巩固轮心跳已移除——consolidateRound 调用的 _meta/*.py（explicit_facts_extractor/
+  // lifecycle_settle/session_decode）为 v15 单库化前遗留，不随包分发（新装用户 meta 恒空→每轮静默空转）。
+  // 真蒸馏由 distill.ts armIdleTimer（turn 结束 idleWakeMs 后）+ scheduler.ts 独立驱动，无需此心跳。
 
     return () => { for (const d of disposers) d() }
   }, '@dsh-external/shoucang-panel: http rpc + hot memory injection')
