@@ -483,7 +483,8 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         const _aw = typeof a.avoidWhen === 'string' && a.avoidWhen.trim() ? `\n- 不适用：${a.avoidWhen.trim()}` : ''
         // 小节名归一化（2026-09-10 实锤：模型偶发输出带前导 § 的 section → memory-append 按字面找不到既有锚，
         // 整条落点失败 dispatch-failed）：去前导 §、把路径间游离 § 规整为 /（保留 父/子 路径语义）
-        const _sec = String(a.section || '').trim().replace(/^§+/, '').replace(/(\/)?\s*§+/g, '$1')
+        // 2026-09-10 再实锤：模型还可能输出 '## 小节名'（带 markdown 标记，如 741dc51b 落点失败）→ 一并归一化
+        const _sec = String(a.section || '').trim().replace(/^[§#]+\s*/, '').replace(/(\/)?\s*[§#]+\s*/g, '$1')
         if (!_sec) { failed++; continue }
         const r = await memAppend(String(a.target), 'append', _base + _rc + _aw, _sec, resolved)
         if (r.status === 0) added++; else { failed++; log(`distill 落点失败 ${a.target}§${a.section}: ${textOf(r).slice(0, 120)}`) }
@@ -1501,8 +1502,21 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
           let maxSeq = lastSeq
           for (const e of a.session.snapshotEvents()) { const s = (e as any).seq ?? 0; if (s > lastSeq && s > maxSeq) maxSeq = s }
           if (maxSeq > lastSeq) {
+            // 跨实例 claim 锁（2026-09-10 实锤：重叠 fiber 的 30s 首扫会同时抢同一积压窗口 → 471aca03 被双蒸馏双写）：
+            // 在途 claim（25min 内）→ 跳过；过期 claim → 覆盖重试；无增量时顺手清理陈旧 claim。
+            const claimDir = join(kRoot, 'audit', 'claims')
+            const claimFile = join(claimDir, sid + '.json')
+            try {
+              let claim: any = null
+              try { claim = JSON.parse(readFileSync(claimFile, 'utf8')) } catch { /* 无 claim */ }
+              if (claim && Date.now() - (claim.at || 0) < 25 * 60000) { continue } // 在途，其他 fiber 已接管
+              mkdirSync(claimDir, { recursive: true })
+              writeFileSync(claimFile, JSON.stringify({ at: Date.now(), lastSeq, maxSeq }), 'utf8')
+            } catch { /* claim 失败不阻塞 */ }
             log(`sweep: ${sidShort(sid)} 水位 ${lastSeq}→${maxSeq} 有未消化增量，补蒸馏`)
             void distillAgent(a).catch(() => { /* distillAgent 内部已兜底 */ })
+          } else {
+            try { unlinkSync(join(kRoot, 'audit', 'claims', sid + '.json')) } catch { /* 无 claim 可清 */ }
           }
         } catch { /* 单会话扫尾失败静默 */ }
       }
