@@ -48,14 +48,18 @@
 | deepSleepProbeAfterMs | 3h | running 无事件满此时长发起探测 |
 | deepSleepProbeWindowMs | 60s | 探测采样间隔 |
 
-### 2.2 参数调节·蒸馏节流组（6 键）
+### 2.2 参数调节·「蒸馏/深睡模型」卡 + 蒸馏节流组
+> **模型配置（2026-09-10 用户拍板：LLM 直接用 Harness 宿主模型体系）**：参数调节页「蒸馏/深睡模型」卡——
+> 蒸馏与深睡**各自独立**选宿主模型（Provider→Model 两级下拉，含「继承主会话」空选项）。数据源=宿主模型
+> 枚举（先在 Harness 配好模型，这里直接选）。选模型写 scheduler.json，**重载生效**。
+
 | 键 | 缺省 | 作用 |
 |---|---|---|
-| enableDistill | true | 蒸馏器总开关 |
-| distillPrescan | true | 零成本预筛（无信号词无候选则跳过，不唤醒 LLM） |
-| idleWakeMs | 10min | turn 结束空闲满此时长才蒸馏（控制触发频率） |
-| minTurnChars | 200 | 本轮新增少于此时跳过蒸馏（水位仍推进） |
-| llmProvider / llmModel | "" | 蒸馏子代理指定模型（空=继承主会话；连败回落继承） |
+| distillProvider / distillModel | "" | 蒸馏子代理指定宿主 provider/model（空=回落 llmProvider/llmModel→继承主会话） |
+| sleepProvider / sleepModel | "" | 深睡归纳子代理指定宿主 provider/model（同上回落） |
+| llmProvider / llmModel | "" | 共用回落键（distill/sleep 未单独指定时用；空=继承主会话） |
+
+**节流组**（同区下方）：enableDistill / distillPrescan / idleWakeMs / minTurnChars 见原表（模型项已移至上方卡）。
 
 ### 2.3 参数调节·向量与模型（embed 组，2026-09-09）
 > UI（2026-09-10 M2 改造，仿 AnythingLLM/Open WebUI）：**Provider 预设卡**（本地 bge-m3 / Ollama / LM Studio /
