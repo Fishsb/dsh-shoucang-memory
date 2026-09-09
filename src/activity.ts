@@ -165,7 +165,7 @@ export async function activityAggregate(memRoot: string, hooks: ActivityHooks): 
     saveRows(actFile, rows)
 
     // 5) 审计 + 遗忘候选清单（只读建议文件，供 audit-protocol §3 处置）
-    audit({ kind: 'activity', tracked: rows.size, active, warm, cold, archiveCands: archiveCands.length, at: now })
+    audit({ kind: 'activity', tracked: rows.size, active, warm, cold, archiveCands: archiveCands.length })
     log(`activity: 跟踪 ${rows.size}（active ${active} / warm ${warm} / cold ${cold}）遗忘候选 ${archiveCands.length}`)
     if (archiveCands.length) {
       try {
