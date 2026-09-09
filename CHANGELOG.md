@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Added
+- **树状记忆 v5.4（2026-09-10，用户拍板演进式多层树）**：记忆/画像/索引=**运行期自动生长的树**（索引指针冠层→notes 子树层层分裂，全部由蒸馏/深睡搭建，无手工摆设位）。落地——memory-core-model 升版 v5.4（树状知识结构语义：分裂归蒸馏/整编归深睡/指针只读）；`/memory/sections` **多层标题树解析**（## 顶层 → children ###/#### 递归）；详情页**递归树状渲染**（子树缩进逐层展开 + 每节点「编辑此小节」）；`memory-append.mjs` **section 路径分裂**（`父/子/孙` 逐级定位，深层小节不存在自动新建 ###；顶层 ## 仍须锚）——四场景实测（归父/分裂###/再入命中/分裂####）；深睡 prompt 加树状纪律（分裂归事件蒸馏，深睡不改 JSON 契约）。索引指针**只读**（编辑在树节点细节正文，指针手工改会与详情错位）。验证：sections API 三层解析实证、flows 详情 DOM 树节点渲染实证、35 PASS/0 FAIL。commits 8a078a7/f1ec828。
 - **配置体系审查全量修复 P0-P2（2026-09-10，config-audit 报告落地）**：P0——参数调节清死键/死UI（archive/lifecycle/merge 组 + 旧「向量检索」区 + 孤儿函数 193 行全删，消费端=_meta/*.py 已不随包分发；/set /toggle 白名单收窄到真有效键；client 111KB→90KB）+ vec 缓存加 **model 指纹**（cacheKey=file+hash+model，换模型旧向量自动失效重嵌，杜绝新旧混用）+ `/vector/cache/clear` 端点与「清缓存重建」按钮。P1——60s 空闲巩固轮心跳移除 + /idle//vector/status|build//model/* 死端点 + consolidateRound 孤儿链删除（panel.ts 1571→1264 行；真蒸馏由 distill.ts armIdleTimer 独立驱动已实证）+ **注入配置迁全局 scheduler.json**（inject* 键；切 root 不再影响注入，root YAML 回落兼容）。P2——新装首开零配置可用（无 root 也能调注入）+ settings-guide 三通道重写。验证：typecheck/build/hardcode 零错误、35 PASS/0 FAIL、核心端点 200/死端点 404、注入双画像实测、向量缓存 model 指纹实证。commits 4fdd207/46ad727/494e053/eb6cf86/8f5284d。
 
 ### Changed
