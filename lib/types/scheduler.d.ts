@@ -37,6 +37,9 @@ export interface Config {
     distillModel: string;
     sleepProvider: string;
     sleepModel: string;
+    capAgent: number;
+    capUser: number;
+    capMemory: number;
     enableDeepSleep: boolean;
     deepSleepIdleMs: number;
     deepSleepProbe: boolean;

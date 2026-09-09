@@ -30,6 +30,7 @@ import {
   type Whitelist, type RouteTarget,
 } from './targets.js'
 import { recallRanked, semanticSim, type EmbedCfg } from './vec.js'
+import { activityAggregate } from './activity.js'
 
 type AppContext = {
   tools: { register(tool: unknown): unknown }
@@ -1562,6 +1563,13 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         await consolidateTree(resolved.root)
       } catch (e) {
         log(`deep sleep: consolidation 失败（跳过，继续深睡）: ${String((e as Error)?.message || e).slice(0, 120)}`)
+      }
+      // v7 A 步：条目活性聚合（2026-09-10，方案 docs/memory-activity-model.md）——consolidation 之后、归纳之前：
+      // 命中聚合 → ACT-R 式状态迁移（active/warm/cold）→ 遗忘候选清单（只建议不删除）；失败仅 log。
+      try {
+        await activityAggregate(resolved.root, { audit, log })
+      } catch (e) {
+        log(`deep sleep: activity 聚合失败（跳过，继续深睡）: ${String((e as Error)?.message || e).slice(0, 120)}`)
       }
       const traces = gatherDeepSleepTraces(resolved.root, since)
       // 无痕迹=无事可归纳，不调用 LLM、不留审计（防每巡检周期一条 no-traces 的膨胀与空转感）——

@@ -47,6 +47,9 @@ export interface DistillConfig {
     activationTOff?: number;
     activationCooldownSteps?: number;
     activationTopK?: number;
+    capAgent?: number;
+    capUser?: number;
+    capMemory?: number;
     embedEnabled?: boolean;
     embedBaseUrl?: string;
     embedModel?: string;
