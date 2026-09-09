@@ -5,6 +5,14 @@ export interface EmbedCfg {
     model: string;
     apiKeyEnv: string;
 }
+export declare const vecStats: {
+    queries: number;
+    lastMode: "lexical" | "fusion";
+    lastMs: number;
+    lastAt: number;
+    lastQuery: string;
+    lastHit: string;
+};
 export declare function cosine(a: number[], b: number[]): number;
 /**
  * 读侧召回（向量档就绪时）：词法 topK 打底 → 行向量惰性补齐 → dense topK 候选 → 0.7dense ⊕ 0.3lex 融合重排。

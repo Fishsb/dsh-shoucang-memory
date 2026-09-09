@@ -24,6 +24,24 @@ const CACHE_FILE = (): string => join(knowledgeRoot(), '.vector-cache.jsonl')
 /** in-memory 行向量缓存（file+line → hash+vec）；进程内热用，首次读盘 */
 const memCache = new Map<string, { file: string; line: string; hash: number; vec: number[] }>()
 
+// U1（2026-09-09）：召回运行态统计（轻量内存，供 /vector/status2 与 overview.vector 展示；不入库非事实源）
+export const vecStats = {
+  queries: 0,
+  lastMode: 'lexical' as 'lexical' | 'fusion',
+  lastMs: 0,
+  lastAt: 0,
+  lastQuery: '',
+  lastHit: '',
+}
+const noteQuery = (mode: 'lexical' | 'fusion', ms: number, query: string, hit: string): void => {
+  vecStats.queries++
+  vecStats.lastMode = mode
+  vecStats.lastMs = ms
+  vecStats.lastAt = Date.now()
+  vecStats.lastQuery = String(query || '').slice(0, 80)
+  vecStats.lastHit = String(hit || '').slice(0, 100)
+}
+
 export function cosine(a: number[], b: number[]): number {
   if (!a.length || a.length !== b.length) return 0
   let dot = 0, na = 0, nb = 0
@@ -94,8 +112,14 @@ async function embedTexts(cfg: EmbedCfg, texts: string[]): Promise<number[][] | 
 export async function recallRanked(
   root: string, query: string, topK: number, scope: 'agent' | 'all', cfg: EmbedCfg,
 ): Promise<{ rows: RecallRow[]; tokens: string[]; mode: 'lexical' | 'fusion' }> {
+  const t0 = Date.now()
+  const hitOf = (rows: RecallRow[]): string => (rows[0] && rows[0].line) || ''
+  const finish = (rows: RecallRow[], tokens: string[], mode: 'lexical' | 'fusion') => {
+    noteQuery(mode, Date.now() - t0, query, hitOf(rows))
+    return { rows, tokens, mode }
+  }
   const { rows, tokens } = recallIndex(root, query, Math.max(topK, 8), scope) // 打底多取，供融合裁剪
-  if (!cfg.enabled) return { rows: rows.slice(0, topK), tokens, mode: 'lexical' }
+  if (!cfg.enabled) return finish(rows.slice(0, topK), tokens, 'lexical')
   try {
     loadCache()
     // 词法打底空 → 全量索引行（薄行，数十行级）作为向量检索池；词法非空 → 用词法候选池
@@ -132,9 +156,9 @@ export async function recallRanked(
         }
       }
     }
-    if (!vecRows.length) return { rows: rows.slice(0, topK), tokens, mode: 'lexical' } // 向量不可用 → 词法
+    if (!vecRows.length) return finish(rows.slice(0, topK), tokens, 'lexical') // 向量不可用 → 词法
     const qv = await embedTexts(cfg, [query.slice(0, 512)])
-    if (!qv || !qv[0] || !qv[0].length) return { rows: rows.slice(0, topK), tokens, mode: 'lexical' }
+    if (!qv || !qv[0] || !qv[0].length) return finish(rows.slice(0, topK), tokens, 'lexical')
     const dense = vecRows.map((x) => ({ row: x.row, sim: cosine(qv[0], x.vec) })).sort((a, b) => b.sim - a.sim).slice(0, topK)
     const lexMax = Math.max(1, ...dense.map((d) => d.row.score))
     const denseMin = Math.min(...dense.map((d) => d.sim))
@@ -145,6 +169,6 @@ export async function recallRanked(
       .sort((a, b) => b.fused - a.fused)
       .slice(0, topK)
     const out = fused.map((f) => ({ ...f.row, score: Math.round(f.fused * 100) }))
-    return { rows: out, tokens, mode: 'fusion' }
-  } catch { return { rows: rows.slice(0, topK), tokens, mode: 'lexical' } }
+    return finish(out, tokens, 'fusion')
+  } catch { return finish(rows.slice(0, topK), tokens, 'lexical') }
 }

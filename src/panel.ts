@@ -25,7 +25,8 @@ import { tmpdir } from 'node:os'
 import { gunzipSync, zstdDecompressSync } from 'node:zlib'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { homedir } from 'node:os'
-import { dshHome, knowledgeRoot } from './targets.js'
+import { dshHome, knowledgeRoot, memoryLibRoot } from './targets.js'
+import { vecStats } from './vec.js'
 import { deepSleepShare } from './deepsleep-share.js'
 import { schedulerShare } from './scheduler-share.js'
 import { fileURLToPath } from 'node:url'
@@ -788,6 +789,49 @@ export function applyPanel(ctx: Context, config: Config): void {
           .filter((l) => { try { return l.trim() && (JSON.parse(l) as { done?: boolean }).done === false } catch { return false } })
           .length
       } catch { return 0 } })()
+      // U3：delta（晨起摘要，结构版）——读 suite/knowledge/delta.md
+      const delta = ((): { present: boolean; staleAt?: string; rows?: string[]; injections?: number } => {
+        try {
+          const f = join(knowledgeRoot(), 'delta.md')
+          if (!existsSync(f)) return { present: false }
+          const o = JSON.parse(readFileSync(f, 'utf8')) as { staleAt?: string; rows?: string[]; injections?: number }
+          return { present: true, staleAt: o.staleAt, rows: (o.rows || []).slice(0, 3), injections: o.injections || 0 }
+        } catch { return { present: false } }
+      })()
+      // U3：向量简态（复用 status2 同源计算；供记忆板块 §7 展示，省一次轮询）
+      const vectorMini = ((): { enabled: boolean; provider: string; cacheLines: number } => {
+        try {
+          const p = readSuiteConfig() as Record<string, unknown>
+          const enabled = p.embedEnabled === false ? false : true
+          const baseUrl = String((p as { embedBaseUrl?: unknown }).embedBaseUrl || 'http://127.0.0.1:9915/v1')
+          let provider = enabled ? 'cloud' : 'off'
+          let cacheLines = 0
+          try { const f = join(knowledgeRoot(), '.vector-cache.jsonl'); if (existsSync(f)) cacheLines = readFileSync(f, 'utf8').split('\n').filter((l) => l.trim()).length } catch { /* */ }
+          if (enabled && /^https?:\/\/(127\.0\.0\.1|localhost):9915/.test(baseUrl)) provider = vecStats.queries ? (vecStats.lastMode === 'fusion' ? 'fusion' : 'lexical') : 'gpu-ready'
+          return { enabled, provider, cacheLines }
+        } catch { return { enabled: false, provider: 'off', cacheLines: 0 } }
+      })()
+      // U3：周 diff（成长增量）——从 distill-audit 聚合近 7 天 [原则]/[路径] 落点（episodes + audit）
+      const weekDiff = ((): { added: string[]; removed: string[]; deepAdded: number } => {
+        const added: string[] = [], removed: string[] = []
+        let deepAdded = 0
+        try {
+          const since = Date.now() - 7 * 86400e3
+          const f = join(knowledgeRoot(), 'audit', 'distill-audit.jsonl')
+          if (existsSync(f)) {
+            for (const l of readFileSync(f, 'utf8').split('\n')) {
+              if (!l.trim()) continue
+              try {
+                const o = JSON.parse(l) as { at?: string; kind?: string; added?: number }
+                if (o.at && Date.parse(o.at) >= since) {
+                  if (o.kind === 'deep-sleep' && o.added) deepAdded += Number(o.added) || 0
+                }
+              } catch { /* 坏行 */ }
+            }
+          }
+        } catch { /* 无审计 */ }
+        return { added, removed, deepAdded }
+      })()
       sendJson(res, 200, {
         present: true,
         ...mem,
@@ -797,6 +841,9 @@ export function applyPanel(ctx: Context, config: Config): void {
         suite: suite ? { present: true, ...suite } : { present: false },
         distillStats: distillStatsOf(),
         growth: growthOf(),
+        delta,
+        vector: vectorMini,
+        weekDiff,
         now: new Date().toISOString(),
       })
     } catch (e) { sendJson(res, 500, { error: String(e) }) }
@@ -832,7 +879,28 @@ export function applyPanel(ctx: Context, config: Config): void {
         }
       }
       if (cur) sections.push({ title: cur.title, line: cur.line, body: cur.body.join('\n').trim() })
-      sendJson(res, 200, { present: true, root: rootParam, rel, name: rel.split('/').pop() ?? '', text, sections })
+      // U3：反链聚合（Logseq/思源借鉴）——扫三索引 + notes 全文，找指向「本文件 §小节」的引用行
+      const backrefs: Array<{ from: string; line: string }> = []
+      try {
+        const relStem = rel.replace(/^notes\//, '').replace(/\.md$/, '')
+        const scanFiles = ['MEMORY.md', 'USER.md', 'AGENT.md', ...NOTE_RELS.filter((w) => w !== 'INDEX').map((w) => `notes/${w}.md`)]
+        const sectionTitles = new Set(sections.map((s) => s.title.replace(/\s*（20\d{2}.*）\s*$/, '').trim()))
+        for (const sf of scanFiles) {
+          const sfAbs = join(base, sf)
+          if (!existsSync(sfAbs) || sfAbs === abs) continue
+          const raw = readFileSync(sfAbs, 'utf8')
+          for (const l of raw.split(/\r?\n/)) {
+            const t = l.trim()
+            if (!/notes\/[A-Za-z0-9_-]+\.md\s*§/.test(t)) continue
+            // 指向本文件？
+            if (!t.includes(`notes/${relStem}.md`) && !t.includes(relStem + '.md')) continue
+            const cited = (t.match(/notes\/[A-Za-z0-9_-]+\.md\s*§(.+)$/) || [])[1] || ''
+            const hits = cited.split('/').some((s) => { const kw = s.replace(/^§/, '').trim(); if (!kw) return false; const tl = kw; return [...sectionTitles].some((st) => st === tl || st.includes(tl) || tl.includes(st)) })
+            if (hits || !cited) backrefs.push({ from: sf.replace(/\.md$/, ''), line: t.slice(0, 120) })
+          }
+        }
+      } catch { /* 反链扫描失败不阻塞正文 */ }
+      sendJson(res, 200, { present: true, root: rootParam, rel, name: rel.split('/').pop() ?? '', text, sections, backrefs: backrefs.slice(0, 20) })
     } catch (e) { sendJson(res, 500, { error: String(e) }) }
   })
 
@@ -1343,6 +1411,157 @@ const MAX_PY_PER_ROUND = 24
     }
     sendJson(res, 200, { ...j, configured: !j.error && !!j.port })
   })
+
+  // U1（2026-09-09，ui-impl-plan）：向量运行态只读端点——展示真实链路（vec.ts + GPU 服务），
+  // 替代旧 /vector/status（驱动已退役 vector_search.py）。零 token 增量：纯只读状态。
+  route('/vector/status2', (_req, res) => {
+    try {
+      const p = readSuiteConfig() as Record<string, unknown>
+      // 缺省语义对齐 scheduler.Config：embedEnabled 缺省 true、本地 bge-m3（无键=缺省开）
+      const enabled = p.embedEnabled === false ? false : true
+      const baseUrl = String((p as { embedBaseUrl?: unknown }).embedBaseUrl || 'http://127.0.0.1:9915/v1')
+      const model = String((p as { embedModel?: unknown }).embedModel || 'bge-m3')
+      const apiKeyEnv = String((p as { embedApiKeyEnv?: unknown }).embedApiKeyEnv || 'EMBED_API_KEY')
+      const running = { enabled, baseUrl, model, apiKeyEnv }
+      // 探测本地服务 → provider 标签（子进程清 NODE_OPTIONS 防 inspector 残留干扰）
+      let provider = 'off', localOk = false
+      const local = /^https?:\/\/(127\.0\.0\.1|localhost):9915/.test(baseUrl)
+      if (enabled && local) {
+        try {
+          const env2: Record<string, string | undefined> = { ...process.env, NODE_OPTIONS: '' }
+          const r = execFileSync('node', ['-e', 'fetch("http://127.0.0.1:9915/health").then(r=>r.json()).then(j=>console.log(JSON.stringify(j))).catch(()=>process.exit(1))'], { encoding: 'utf8', timeout: 8000, windowsHide: true, stdio: ['ignore','pipe','ignore'], env: env2 as NodeJS.ProcessEnv })
+          const j = JSON.parse(String(r).trim()) as { provider?: string }
+          provider = j.provider || 'local'
+          localOk = true
+        } catch { provider = 'unreachable' }
+      } else if (enabled) provider = 'cloud'
+      // 缓存统计
+      let cacheLines = 0, cacheKB = 0
+      try { const f = join(knowledgeRoot(), '.vector-cache.jsonl'); if (existsSync(f)) { const st = statSync(f); cacheKB = Math.round(st.size / 1024); cacheLines = readFileSync(f, 'utf8').split('\n').filter((l) => l.trim()).length } } catch { /* 无缓存 */ }
+      const stats = { queries: vecStats.queries, lastMode: vecStats.lastMode, lastMs: vecStats.lastMs, lastAt: vecStats.lastAt, lastQuery: vecStats.lastQuery, lastHit: vecStats.lastHit }
+      sendJson(res, 200, { ok: true, running, persisted: p, provider, localOk, cache: { lines: cacheLines, kb: cacheKB }, stats })
+    } catch (e) { sendJson(res, 500, { error: String(e) }) }
+  })
+
+  // U1：/embed/config —— 向量 provider 持久通道（GET 展示 persisted ／ POST 校验写入 scheduler.json）
+  // 同 /deepsleep/config：GET 与 POST 合并同一 handler 按 method 分发（宿主按路径去重，拆分注册会拖垮插件树）。
+  const EMBED_CONFIG_KEYS = ['embedEnabled', 'embedBaseUrl', 'embedModel', 'embedApiKeyEnv']
+  const validateEmbedConfig = (patch: Record<string, unknown>): string | null => {
+    if ('embedEnabled' in patch && typeof patch.embedEnabled !== 'boolean') return 'embedEnabled must be boolean'
+    if ('embedBaseUrl' in patch && typeof patch.embedBaseUrl !== 'string') return 'embedBaseUrl must be string'
+    if ('embedModel' in patch && typeof patch.embedModel !== 'string') return 'embedModel must be string'
+    if ('embedApiKeyEnv' in patch && typeof patch.embedApiKeyEnv !== 'string') return 'embedApiKeyEnv must be string'
+    return null
+  }
+  route('/embed/config', async (req, res) => {
+    try {
+      if (req.method === 'POST') {
+        const body = (await readBody(req).catch(() => ({}))) as Record<string, unknown>
+        const patch: Record<string, unknown> = {}
+        for (const k of EMBED_CONFIG_KEYS) if (k in body) patch[k] = body[k]
+        if (!Object.keys(patch).length) return sendJson(res, 400, { error: 'no-embed-keys' })
+        const err = validateEmbedConfig(patch)
+        if (err) return sendJson(res, 400, { error: err })
+        const merged = { ...readSuiteConfig(), ...patch }
+        writeSuiteConfig(merged)
+        ctx.logger?.info?.(`[shoucang] embed config updated: ${Object.keys(patch).join(',')}（重载后生效）`)
+        return sendJson(res, 200, { ok: true, merged, reloadRequired: true })
+      }
+      sendJson(res, 200, { persisted: readSuiteConfig() })
+    } catch (e) { sendJson(res, 500, { error: String(e) }) }
+  })
+
+  // U2（2026-09-09，ui-impl-plan）：记忆写端点（编辑/删除/批准）——全部走既有门禁：
+  //   edit/remove → 临时文件整改 → memory_write_gate（exit 0 才 rename；失败回滚不落盘）
+  //   approve → 候选移 .processed（确认有价值，内容由蒸馏正常入册；候选无结构化小节不强行归纳）
+  // 安全网：file 白名单 + 前端 confirm（remove）+ write_gate 备份。用户显式触发，非热路径。
+  const NOTE_WRITE_RELS = ['env', 'tools', 'flows', 'lessons', 'release', 'user', 'agent'] // 7 件（INDEX 禁写）
+  const isWritable = (file: string): boolean => {
+    if (file === 'MEMORY.md' || file === 'USER.md' || file === 'AGENT.md') return true
+    return NOTE_WRITE_RELS.includes(String(file).replace(/^notes[\\/]/, '').replace(/\.md$/, ''))
+  }
+  const gateWrite = (target: string, tmpPath: string): { ok: boolean; reason?: string; out?: string } => {
+    try {
+      const gate = join(memoryLibRoot(), 'scripts', 'memory_write_gate.mjs')
+      if (!existsSync(gate)) return { ok: false, reason: 'write_gate 未就位' }
+      const r = execFileSync('node', [gate, target, tmpPath], { encoding: 'utf8', timeout: 30000, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, MEMORY_ROOT: memoryLibRoot() } }) as unknown as string
+      return { ok: true, out: String(r) }
+    } catch (e) {
+      const ee = e as { status?: number; stderr?: Buffer | string; message?: string }
+      return { ok: false, reason: `gate exit=${ee.status ?? '?'}`, out: typeof ee.stderr === 'string' ? ee.stderr : ((ee.stderr as Buffer) || Buffer.from('')).toString() || ee.message || '' }
+    }
+  }
+  const readMemFile = (file: string): { text: string | null; abs: string } => {
+    const abs = join(memoryLibRoot(), file)
+    try { return { text: readFileSync(abs, 'utf8'), abs } } catch { return { text: null, abs } }
+  }
+  const writeMemViaGate = (file: string, nextText: string): { ok: boolean; reason?: string; out?: string } => {
+    const abs = join(memoryLibRoot(), file)
+    const tmp = abs + '.ui-tmp'
+    try { writeFileSync(tmp, nextText, 'utf8') } catch (e) { return { ok: false, reason: 'tmp write fail: ' + String((e as Error).message).slice(0, 80) } }
+    const g = gateWrite(file, tmp)
+    if (g.ok) { try { renameSync(tmp, abs); return { ok: true, out: g.out || '' } } catch (e) { return { ok: false, reason: 'rename fail: ' + String((e as Error).message).slice(0, 80) } } }
+    try { unlinkSync(tmp) } catch { /* 清理失败无害 */ }
+    return g
+  }
+  route('/memory/edit', async (req, res) => {
+    try {
+      const body = (await readBody(req).catch(() => ({}))) as { file?: string; line?: string; newText?: string }
+      const file = String(body.file || '').trim()
+      const oldLine = String(body.line || '').trim()
+      const newText = String(body.newText || '').trim()
+      if (!isWritable(file)) return sendJson(res, 400, { error: 'file not writable: ' + file })
+      if (!oldLine) return sendJson(res, 400, { error: 'line required' })
+      const { text } = readMemFile(file)
+      if (text == null) return sendJson(res, 404, { error: 'file not found' })
+      const lines = text.split(/\r?\n/)
+      const normOld = oldLine.replace(/\s+/g, '')
+      const idx = lines.findIndex((l) => l.trim() === oldLine || l.replace(/\s+/g, '') === normOld)
+      if (idx < 0) return sendJson(res, 404, { error: 'line not found (可能已被修改，请刷新)' })
+      lines[idx] = newText || oldLine
+      const r = writeMemViaGate(file, lines.join('\n'))
+      if (!r.ok) return sendJson(res, 400, { error: r.reason, detail: (r.out || '').slice(0, 300) })
+      injectCache.at = 0
+      return sendJson(res, 200, { ok: true })
+    } catch (e) { sendJson(res, 500, { error: String(e) }) }
+  })
+  route('/memory/remove', async (req, res) => {
+    try {
+      const body = (await readBody(req).catch(() => ({}))) as { file?: string; line?: string }
+      const file = String(body.file || '').trim()
+      const oldLine = String(body.line || '').trim()
+      if (!isWritable(file)) return sendJson(res, 400, { error: 'file not writable' })
+      if (!oldLine) return sendJson(res, 400, { error: 'line required' })
+      const { text } = readMemFile(file)
+      if (text == null) return sendJson(res, 404, { error: 'file not found' })
+      const lines = text.split(/\r?\n/)
+      const before = lines.length
+      const kept = lines.filter((l) => l.trim() !== oldLine)
+      if (kept.length === before) return sendJson(res, 404, { error: 'line not found' })
+      const r = writeMemViaGate(file, kept.join('\n'))
+      if (!r.ok) return sendJson(res, 400, { error: r.reason, detail: (r.out || '').slice(0, 300) })
+      injectCache.at = 0
+      return sendJson(res, 200, { ok: true })
+    } catch (e) { sendJson(res, 500, { error: String(e) }) }
+  })
+  route('/memory/approve', async (req, res) => {
+    try {
+      const body = (await readBody(req).catch(() => ({}))) as { pendingFile?: string }
+      const pf = String(body.pendingFile || '').trim().replace(/^.*[\\/]/, '')
+      if (!/^[\w\u4e00-\u9fa5-]+\.md$/.test(pf)) return sendJson(res, 400, { error: 'bad pending file' })
+      // 双区支持：优先 flow-candidates（待转正候选），其次根 pending
+      const pendRoot = join(knowledgeRoot(), 'pending')
+      let src = join(pendRoot, 'flow-candidates', pf)
+      let zone = 'flow-candidates'
+      if (!existsSync(src)) { src = join(pendRoot, pf); zone = 'pending' }
+      if (!existsSync(src)) return sendJson(res, 404, { error: 'candidate not found' })
+      // approved 移区（与蒸馏成功处理一致：.processed 子目录，蒸馏采集不递归不回流）
+      const procDir = zone === 'flow-candidates' ? join(pendRoot, 'flow-candidates', '.processed') : join(pendRoot, '.processed')
+      try { mkdirSync(procDir, { recursive: true }); renameSync(src, join(procDir, pf)) } catch (e) { return sendJson(res, 500, { error: 'move fail: ' + String((e as Error).message).slice(0, 100) }) }
+      return sendJson(res, 200, { ok: true, moved: zone + '/.processed/' + pf })
+    } catch (e) { sendJson(res, 500, { error: String(e) }) }
+  })
+
   const hb = setInterval(() => { try { consolidateRound(false) } catch { /* 心跳异常不阻塞 */ } }, 60000)
   disposers.push(() => clearInterval(hb))
 
