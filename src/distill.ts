@@ -1229,17 +1229,16 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       else if (sim < actConf.off && st.state !== 'idle') { st.state = 'idle' }
       st.prevScore = sim
       actState.set(sid, st)
-      if (emit || prev !== st.state) {
-        try {
-          mkdirSync(dirname(actShadowFile), { recursive: true })
-          appendFileSync(actShadowFile, JSON.stringify({
-            at: new Date().toISOString(), kind: 'activation-step', sid: sid.slice(0, 8),
-            state: st.state, prev, sim: Number(sim.toFixed(3)), tOn: actConf.on, tOff: actConf.off,
-            emit, tokens: tokens.length, hit: rows.length ? rows[0].line.slice(0, 120) : '',
-            pointers: rows.slice(0, 2).map((r) => r.pointer), excerpt: text.slice(0, 60),
-          }) + '\n', 'utf8')
-        } catch { /* 影子日志失败静默 */ }
-      }
+      // 影子校准：每个有打分的 user 消息都落一行（跃迁/emit 也落）——样本分布是阈值校准原料，宁密勿稀
+      try {
+        mkdirSync(dirname(actShadowFile), { recursive: true })
+        appendFileSync(actShadowFile, JSON.stringify({
+          at: new Date().toISOString(), kind: 'activation-step', sid: sid.slice(0, 8),
+          state: st.state, prev, sim: Number(sim.toFixed(3)), tOn: actConf.on, tOff: actConf.off,
+          emit, tokens: tokens.length, hit: rows.length ? rows[0].line.slice(0, 120) : '',
+          pointers: rows.slice(0, 2).map((r) => r.pointer), excerpt: text.slice(0, 60),
+        }) + '\n', 'utf8')
+      } catch { /* 影子日志失败静默 */ }
     } catch { /* 观察零抛出 */ }
   }
 
