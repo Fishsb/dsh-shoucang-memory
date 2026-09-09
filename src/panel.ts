@@ -478,6 +478,12 @@ export function applyPanel(ctx: Context, config: Config): void {
       cap_user: typeof sched.capUser === 'number' ? sched.capUser : (typeof sched.injectUserMaxChars === 'number' ? sched.injectUserMaxChars : CAP_GATES['USER.md']),
       cap_memory: typeof sched.capMemory === 'number' ? sched.capMemory : (typeof sched.injectMemoryMaxChars === 'number' ? sched.injectMemoryMaxChars : CAP_GATES['MEMORY.md']),
       actual: { agent: fileChars('AGENT.md'), user: fileChars('USER.md'), memory: fileChars('MEMORY.md') },
+      // v7 活性/遗忘/加深校准阈值（2026-09-10：/config 返回供 UI 渲染；缺省同 scheduler zod 默认 14/44/90/5/35）
+      activityWarmDays: typeof sched.activityWarmDays === 'number' ? sched.activityWarmDays : 14,
+      activityColdDays: typeof sched.activityColdDays === 'number' ? sched.activityColdDays : 44,
+      activityArchiveDays: typeof sched.activityArchiveDays === 'number' ? sched.activityArchiveDays : 90,
+      activityHotHits: typeof sched.activityHotHits === 'number' ? sched.activityHotHits : 5,
+      recallColdFactorPercent: typeof sched.recallColdFactorPercent === 'number' ? sched.recallColdFactorPercent : 35,
     }
     // P2：无 root 也能调注入（全局 scheduler.json）——root 仅管理 boards 显示与旧 YAML；返回 global 供 UI 渲染
     if (!file) return sendJson(res, 200, { text: null, parsed: null, error: 'no-active-root', global: globalCfg })
@@ -552,6 +558,12 @@ export function applyPanel(ctx: Context, config: Config): void {
       // 2026-09-10 收敛：archive/lifecycle/merge 组键消费端为旧 Python 链路（_meta/*.py 已不随包分发），
       // 无真消费——保留只会误导用户。已从白名单移除（真蒸馏/归档走 scheduler.json 通道）。
       'embedding.dimension': [],
+      // 2026-09-10：v7 活性/遗忘/加深校准阈值（数值类；scheduler zod 属性名同键，值=天/命中次数/百分比）
+      'activityWarmDays': [],
+      'activityColdDays': [],
+      'activityArchiveDays': [],
+      'activityHotHits': [],
+      'recallColdFactorPercent': [],
     }
     // 数值范围校验（2026-09-10 收敛：仅注入组 + embedding.dimension；archive/lifecycle/merge 死键已随白名单移除）
     const RANGE: Record<string, [number, number]> = {
@@ -563,6 +575,12 @@ export function applyPanel(ctx: Context, config: Config): void {
       'injection.cap_user': [100, 30000],
       'injection.cap_memory': [100, 30000],
       'embedding.dimension': [16, 8192], // 常见嵌入维度范围
+      // v7 活性/遗忘/加深校准阈值范围（同 scheduler zod min/max）
+      'activityWarmDays': [1, 120], // active→warm 无命中天数
+      'activityColdDays': [2, 365], // warm→cold 无命中天数
+      'activityArchiveDays': [30, 730], // cold 且最近命中超此天数 → 遗忘候选
+      'activityHotHits': [1, 50], // 近 30 天命中 ≥ 此值 → 加深候选 B
+      'recallColdFactorPercent': [5, 95], // 召回降权系数（%）
     }
     if (!(key in allowed)) return sendJson(res, 400, { error: `key 不允许：${key}` })
     if (!value) return sendJson(res, 400, { error: 'value required' })
@@ -581,6 +599,12 @@ export function applyPanel(ctx: Context, config: Config): void {
       'injection.cap_agent': 'capAgent',
       'injection.cap_user': 'capUser',
       'injection.cap_memory': 'capMemory',
+      // v7 活性/遗忘/加深校准阈值：键名与 scheduler zod 属性名一致（数值 Number 化写入 scheduler.json 顶层）
+      'activityWarmDays': 'activityWarmDays',
+      'activityColdDays': 'activityColdDays',
+      'activityArchiveDays': 'activityArchiveDays',
+      'activityHotHits': 'activityHotHits',
+      'recallColdFactorPercent': 'recallColdFactorPercent',
     }
     const schedKey = SCHED_KEY[key]
     if (!schedKey) return sendJson(res, 400, { error: `key 无全局映射：${key}` })

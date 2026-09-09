@@ -54,6 +54,11 @@ export interface DistillConfig {
     embedBaseUrl?: string;
     embedModel?: string;
     embedApiKeyEnv?: string;
+    activityWarmDays?: number;
+    activityColdDays?: number;
+    activityArchiveDays?: number;
+    activityHotHits?: number;
+    recallColdFactorPercent?: number;
 }
 /**
  * 会话活跃状态机（Session Activity FSM）——深度睡眠「是否算停滞」的唯一判据源。

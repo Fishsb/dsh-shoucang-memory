@@ -400,6 +400,34 @@
         view.appendChild(numSetting('AGENT.md 容量门 cap_agent', 'agent 画像记忆库容量（字符）：蒸馏/深睡写入超限会被 write_gate 拒（AGENT.md 当前实际 ' + (actualChars.agent || 0) + ' 字符）。**不影响任务执行注入**——注入总看完整画像', gVal('cap_agent', 3000), 'injection.cap_agent', '字符'));
         view.appendChild(numSetting('USER.md 容量门 cap_user', '用户画像记忆库容量（字符）：写入超限被拒（当前实际 ' + (actualChars.user || 0) + ' 字符）。不影响任务执行注入', gVal('cap_user', 2000), 'injection.cap_user', '字符'));
         view.appendChild(numSetting('MEMORY.md 容量门 cap_memory', '知识索引记忆库容量（字符）：写入超限被拒（当前实际 ' + (actualChars.memory || 0) + ' 字符）。注入按档位行数不受此限', gVal('cap_memory', 3000), 'injection.cap_memory', '字符'));
+        // ── v7 活性/遗忘 · 校准阈值（2026-09-10）：条目活性状态机判定天数 + 融合召回降权系数；
+        //    经 /set 写入 scheduler.json，深睡巡检/召回运行时生效（缺省 14/44/90/5/35 与 scheduler zod 默认一致）
+        view.appendChild(el('div', 'sc-h1', '活性/遗忘 · 校准阈值（v7）'));
+        view.appendChild(el('div', 'sc-desc', '记忆条目活性状态机（active→warm→cold）与遗忘/加深候选的判定阈值，以及融合召回对 cold/retired 条目的降权系数。改动经 /set 即时写回 scheduler.json（与注入/蒸馏配置同通道，重载后按新阈值运行）。'));
+        view.appendChild(numSetting('活性降级 warm 阈值 activityWarmDays', 'active→warm 无命中天数（缺省 14）', gVal('activityWarmDays', 14), 'activityWarmDays', '天')); // 与 scheduler zod 默认一致
+        view.appendChild(numSetting('遗忘冷降 cold 阈值 activityColdDays', 'warm→cold 无命中天数（缺省 44 = warm+30）', gVal('activityColdDays', 44), 'activityColdDays', '天')); // 与 scheduler zod 默认一致
+        view.appendChild(numSetting('遗忘候选 archive 阈值 activityArchiveDays', 'cold 后超此天数未命中 → 遗忘候选清单（缺省 90，只建议不删除）', gVal('activityArchiveDays', 90), 'activityArchiveDays', '天')); // 与 scheduler zod 默认一致
+        view.appendChild(numSetting('加深候选命中数 activityHotHits', '近 30 天命中 ≥ 此值 → 加深候选 B（缺省 5，喂深睡归纳）', gVal('activityHotHits', 5), 'activityHotHits', '次')); // 与 scheduler zod 默认一致
+        // 百分比项：numSetting 的 step=100 不适用百分比（会出问题），自建输入块（step=5, min=5, max=95，parseInt 后 clamp [5,95]）
+        var pctItem = el('div', 'setting-item');
+        var pctInfo = el('div', 'setting-item-info');
+        pctInfo.appendChild(el('div', 'setting-item-name', '召回冷条目降权 recallColdFactorPercent'));
+        pctInfo.appendChild(el('div', 'setting-item-desc', 'cold/retired 小节在融合召回中的降权系数（百分比 → /100；缺省 35%，后端范围校验 [5,95] 兜底）'));
+        var pctWrap = el('div'); pctWrap.style.cssText = 'display:flex;align-items:center;gap:6px;flex:none;';
+        var pctInp = el('input'); pctInp.type = 'number'; pctInp.className = 'sc-input'; pctInp.style.width = '96px'; pctInp.min = '5'; pctInp.max = '95'; pctInp.step = '5'; pctInp.value = String(gVal('recallColdFactorPercent', 35)); // 与 scheduler zod 默认一致
+        var pctUnit = el('span', 'sc-range-label', '%');
+        pctInp.onchange = function () {
+          var raw = parseInt(pctInp.value, 10);
+          if (isNaN(raw)) raw = 35;
+          var v = Math.max(5, Math.min(95, raw));
+          pctInp.value = String(v);
+          api('/set', { method: 'POST', body: JSON.stringify({ key: 'recallColdFactorPercent', value: String(v) }) })
+            .then(function () { status('✓ recallColdFactorPercent = ' + v + '%'); })
+            .catch(fail);
+        };
+        pctWrap.appendChild(pctInp); pctWrap.appendChild(pctUnit);
+        pctItem.appendChild(pctInfo); pctItem.appendChild(pctWrap);
+        view.appendChild(pctItem);
         // 当前实际注入统计（调用 /inject/preview 算 token：中文 ~2 字符/token）
         var injectInfo = el('div', 'sc-desc');
         injectInfo.style.cssText = 'margin:2px 0 10px;font-size:12px;color:var(--sc-accent);';

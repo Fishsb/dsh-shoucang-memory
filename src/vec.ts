@@ -18,6 +18,7 @@ export interface EmbedCfg {
   baseUrl: string // OpenAI 兼容 /v1/embeddings
   model: string
   apiKeyEnv: string // 从进程环境变量取 key（不落盘/不入 repo）
+  coldFactor?: number // v7 召回降权系数（缺省 0.35；UI 可调 recallColdFactorPercent → /100）
 }
 
 const CACHE_FILE = (): string => join(knowledgeRoot(), '.vector-cache.jsonl')
@@ -36,8 +37,9 @@ export const vecStats = {
   lastQuery: '',
   lastHit: '',
 }
-// ── v7 活性降权（2026-09-10）：读 memRoot/audit/activity.jsonl 条目状态；cold/retired 条目在融合召回中降权 0.35，
-//    active/warm 不惩罚（"久未使用自然靠后"——执行时噪音抑制；向量不可用/文件缺失 = 无惩罚，闭环不中断）──
+// ── v7 活性降权（2026-09-10）：读 memRoot/audit/activity.jsonl 条目状态；cold/retired 条目在融合召回中按
+//    cfg.coldFactor 降权（缺省 0.35，UI 可调 recallColdFactorPercent → /100）；active/warm 不惩罚
+//    （"久未使用自然靠后"——执行时噪音抑制；向量不可用/文件缺失 = 无惩罚，闭环不中断）──
 interface ActEntry { s: string; status: string }
 const actCache = new Map<string, { at: number; byFile: Map<string, ActEntry[]> }>()
 function loadActivityByFile(root: string): Map<string, ActEntry[]> {
@@ -60,17 +62,17 @@ function loadActivityByFile(root: string): Map<string, ActEntry[]> {
   actCache.set(root, { at: Date.now(), byFile })
   return byFile
 }
-function activityFactor(byFile: Map<string, ActEntry[]>, row: RecallRow): number {
+function activityFactor(byFile: Map<string, ActEntry[]>, row: RecallRow, coldFactor: number = 0.35): number {
   const f = (row.pointer || '').replace(/^notes\//, '')
   const list = byFile.get(f)
   if (!list) return 1
   // 从索引行指针尾提取 § 锚 token（可并列 §A/§B 或多行）
   const tail = (row.line || '').split('→').pop() || ''
   const tokens = tail.split(/\s*[\/§]\s*/).map((t) => t.trim()).filter((t) => t && !t.startsWith('notes/') && !t.includes('.md'))
-  let best = 1 // warm=1（中性）；cold/retired（以 cold 存）→ 0.35，取最差命中
+  let best = 1 // warm=1（中性）；cold/retired（以 cold 存）→ coldFactor（v7 UI 可调，缺省 0.35），取最差命中
   for (const e of list) {
     if (e.status !== 'cold' && e.status !== 'warm') continue
-    if (tokens.some((t) => t === e.s || t.includes(e.s) || e.s.includes(t))) best = Math.min(best, e.status === 'cold' ? 0.35 : 1)
+    if (tokens.some((t) => t === e.s || t.includes(e.s) || e.s.includes(t))) best = Math.min(best, e.status === 'cold' ? coldFactor : 1)
   }
   return best
 }
@@ -234,8 +236,9 @@ export async function recallRanked(
     const denseMax = Math.max(...dense.map((d) => d.sim))
     const span = Math.max(1e-9, denseMax - denseMin)
     const actByFile = loadActivityByFile(root) // root = 记忆索引根（activity.jsonl 同根）
+    const factor = cfg.coldFactor ?? 0.35 // v7 降权系数：EmbedCfg.coldFactor（UI 调 recallColdFactorPercent → /100；缺省 0.35）
     const fused = dense
-      .map((d) => ({ ...d, fused: (0.7 * (d.sim - denseMin) / span + 0.3 * (d.row.score / lexMax)) * activityFactor(actByFile, d.row) }))
+      .map((d) => ({ ...d, fused: (0.7 * (d.sim - denseMin) / span + 0.3 * (d.row.score / lexMax)) * activityFactor(actByFile, d.row, factor) }))
       .sort((a, b) => b.fused - a.fused)
       .slice(0, topK)
     const out = fused.map((f) => ({ ...f.row, score: Math.round(f.fused * 100) }))

@@ -32,10 +32,6 @@ export interface ActivityRow {
 }
 
 const DAY = 86400_000
-const WARM_DAYS = 14
-const COLD_DAYS = 44 // 14 + 30
-const ARCHIVE_NO_HIT_DAYS = 90
-const HOT_HITS30 = 5 // B：30 天窗命中阈值（方案 §8，待校准）
 
 function dayKey(d: number): string {
   const x = new Date(d)
@@ -70,7 +66,20 @@ function saveRows(file: string, rows: Map<string, ActivityRow>): void {
   } catch { /* 落盘失败静默（派生数据可重建） */ }
 }
 
-export async function activityAggregate(memRoot: string, hooks: ActivityHooks): Promise<void> {
+/**
+ * v7 条目活性聚合（A 步）。
+ * 阈值经 opts 传入（UI 通道：面板「参数调节」→ /set → scheduler.json → distill 深睡巡检调用本函数）；
+ * 缺省 14/44/90/5 与 scheduler zod 默认一致（activityWarmDays/activityColdDays/activityArchiveDays/activityHotHits）。
+ */
+export async function activityAggregate(
+  memRoot: string,
+  hooks: ActivityHooks,
+  opts?: Partial<{ warmDays: number; coldDays: number; archiveDays: number; hotHits: number }>,
+): Promise<void> {
+  const warmDays = opts?.warmDays ?? 14 // active→warm 无命中天数
+  const coldDays = opts?.coldDays ?? 44 // warm→cold 无命中天数（= warm+30）
+  const archiveDays = opts?.archiveDays ?? 90 // cold 且最近命中超此天数 → 遗忘候选
+  const hotHits = opts?.hotHits ?? 5 // B：30 天窗命中阈值（方案 §8，UI 可调）
   const { audit, log } = hooks
   const now = Date.now()
   const auditDir = join(memRoot, 'audit')
@@ -158,19 +167,19 @@ export async function activityAggregate(memRoot: string, hooks: ActivityHooks): 
     for (const row of rows.values()) {
       if (row.retired) { row.status = 'cold'; retired++; continue }
       const daysSince = row.lastHit ? (now - row.lastHit) / DAY : Infinity
-      if (row.lastHit !== null && daysSince < WARM_DAYS) { row.status = 'active'; active++ }
-      else if (row.lastHit !== null && daysSince < COLD_DAYS) { row.status = 'warm'; warm++ }
+      if (row.lastHit !== null && daysSince < warmDays) { row.status = 'active'; active++ }
+      else if (row.lastHit !== null && daysSince < coldDays) { row.status = 'warm'; warm++ }
       else {
         row.status = 'cold'
         cold++
         const neverHit = row.lastHit === null && row.hits === 0
-        const staleHit = row.lastHit !== null && daysSince > ARCHIVE_NO_HIT_DAYS
+        const staleHit = row.lastHit !== null && daysSince > archiveDays
         if (neverHit || staleHit) {
           archiveCands.push({ key: row.key, f: row.f, s: row.s, hits: row.hits, days: neverHit ? 'never' : `${Math.round(daysSince)}d` })
         }
       }
       // B 加深候选：非 retired + 近 30 天命中 ≥ 阈值
-      if (!row.retired && (row.hits30 || 0) >= HOT_HITS30) {
+      if (!row.retired && (row.hits30 || 0) >= hotHits) {
         hotCands.push({ key: row.key, f: row.f, s: row.s, hits30: row.hits30 })
       }
     }
@@ -196,7 +205,7 @@ export async function activityAggregate(memRoot: string, hooks: ActivityHooks): 
         const f = join(auditDir, `activity-hot-${dayKey(now)}.md`)
         writeFileSync(f, [
           '# 加深候选（v7 B · ' + dayKey(now) + '）', '',
-          '> 近 30 天命中 ≥' + HOT_HITS30 + ' 的高频小节：深睡归纳时可经 pointerOps 扩容概况 / principles 提炼原则（宿主 gate 把关）；本清单不改内容。', '',
+          '> 近 30 天命中 ≥' + hotHits + ' 的高频小节：深睡归纳时可经 pointerOps 扩容概况 / principles 提炼原则（宿主 gate 把关）；本清单不改内容。', '',
           '| 小节 | 30天命中 |', '|---|---|',
           ...hotCands.slice(0, 30).map((c) => `| \`${c.f} §${c.s}\` | ${c.hits30} |`), '',
           `共 ${hotCands.length} 条。`,

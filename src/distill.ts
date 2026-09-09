@@ -85,6 +85,12 @@ export interface DistillConfig {
   embedBaseUrl?: string // OpenAI 兼容 embeddings 基址
   embedModel?: string // embedding 模型名
   embedApiKeyEnv?: string // key 环境变量名（本地免 key）
+  // v7 校准阈值（缺省 14/44/90/5/35，UI 可调）
+  activityWarmDays?: number // active→warm 无命中天数（缺省 14）
+  activityColdDays?: number // warm→cold 无命中天数（缺省 44）
+  activityArchiveDays?: number // cold 且最近命中超过该天数 → 遗忘候选（缺省 90）
+  activityHotHits?: number // 近 30 天命中 ≥ 此值 → 加深候选 B（缺省 5）
+  recallColdFactorPercent?: number // 召回降权系数（百分比 → /100；缺省 35）
 }
 
 /**
@@ -1566,8 +1572,14 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       }
       // v7 A 步：条目活性聚合（2026-09-10，方案 docs/memory-activity-model.md）——consolidation 之后、归纳之前：
       // 命中聚合 → ACT-R 式状态迁移（active/warm/cold）→ 遗忘候选清单（只建议不删除）；失败仅 log。
+      // 阈值走 scheduler.json（activityWarmDays/ColdDays/ArchiveDays/HotHits，UI 可调），缺省 14/44/90/5。
       try {
-        await activityAggregate(resolved.root, { audit, log })
+        await activityAggregate(resolved.root, { audit, log }, {
+          warmDays: Number(config.activityWarmDays) || 14,
+          coldDays: Number(config.activityColdDays) || 44,
+          archiveDays: Number(config.activityArchiveDays) || 90,
+          hotHits: Number(config.activityHotHits) || 5,
+        })
       } catch (e) {
         log(`deep sleep: activity 聚合失败（跳过，继续深睡）: ${String((e as Error)?.message || e).slice(0, 120)}`)
       }
@@ -1975,6 +1987,8 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     baseUrl: String(config.embedBaseUrl || ''),
     model: String(config.embedModel || ''),
     apiKeyEnv: String(config.embedApiKeyEnv || ''),
+    // v7 召回降权系数（UI 可调：recallColdFactorPercent，% → /100；缺省 35% → 0.35）
+    coldFactor: (Number(config.recallColdFactorPercent) > 0 ? Number(config.recallColdFactorPercent) : 35) / 100,
   })
 
   // 路线④ 打扰度观察（v6 向量政策 2026-09-10：打分改 recallRanked 融合召回——dense 主、lexical 稳；

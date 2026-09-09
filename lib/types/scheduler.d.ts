@@ -60,6 +60,11 @@ export interface Config {
     embedBaseUrl: string;
     embedModel: string;
     embedApiKeyEnv: string;
+    activityWarmDays: number;
+    activityColdDays: number;
+    activityArchiveDays: number;
+    activityHotHits: number;
+    recallColdFactorPercent: number;
 }
 export declare const Config: any;
 export declare function applyScheduler(ctx: Context, config: Config): void;

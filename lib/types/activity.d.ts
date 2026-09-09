@@ -7,12 +7,20 @@ export interface ActivityRow {
     f: string;
     s: string;
     hits: number;
+    hits30: number;
     lastHit: number | null;
     firstSeen: number;
     status: 'active' | 'warm' | 'cold';
+    retired?: boolean;
 }
 /**
- * 活性聚合（v1）：只读 access.log + 索引指针 §锚 建立条目宇宙 → 命中计数 → ACT-R 式状态迁移 → 遗忘候选清单。
- * 纯本地、零 LLM、零删除；任何失败只降级（跳过该文件），绝不抛出。
+ * v7 条目活性聚合（A 步）。
+ * 阈值经 opts 传入（UI 通道：面板「参数调节」→ /set → scheduler.json → distill 深睡巡检调用本函数）；
+ * 缺省 14/44/90/5 与 scheduler zod 默认一致（activityWarmDays/activityColdDays/activityArchiveDays/activityHotHits）。
  */
-export declare function activityAggregate(memRoot: string, hooks: ActivityHooks): Promise<void>;
+export declare function activityAggregate(memRoot: string, hooks: ActivityHooks, opts?: Partial<{
+    warmDays: number;
+    coldDays: number;
+    archiveDays: number;
+    hotHits: number;
+}>): Promise<void>;

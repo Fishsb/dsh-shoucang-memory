@@ -4,6 +4,7 @@ export interface EmbedCfg {
     baseUrl: string;
     model: string;
     apiKeyEnv: string;
+    coldFactor?: number;
 }
 export declare const vecStats: {
     queries: number;
