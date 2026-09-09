@@ -39,7 +39,7 @@
 | **S1 深睡实证闭环**（主线 exit） | 手动触发深睡（POST /deepsleep/trigger），消费 flow-candidate（1vem5v/o0cboi）→ 产出首条带源指针 `[路径]` 行；同轮产出 USER/AGENT 画像更新 | ✅ 2026-09-09 达成：`grep '^\[路径\]' AGENT.md` 非空（首条 [路径] 深睡记忆蒸馏）；audit deep-sleep stop=completed gate=pass；晨起摘要 delta 生成 + 注入实证；配套 write_gate §小节存在性校验补缺（35 PASS/0 FAIL） |
 | **S2 晨起摘要 delta 注入** | 验证深睡后 delta.md 生成 + 下会话热记忆顶部出现「最近成长」 | ✅ 2026-09-09 实证：新会话注入文本顶部出现「🧠 最近成长」含 [路径] 行（panel.ts readDawnDelta → buildHotMemoryText 接线复核通过） |
 | **S3 能力自省工具** | 新增只读工具 `assistant_capabilities`（当前工具面/权限/可写范围清单），挂 router 第①步自查 | ✅ 2026-09-09：工具注册（scheduler.ts，`ctx.tools.schemas(exec.agent)` 按族聚合 + AGENT.md [边界]/[原则] + suite 装配）；typecheck/build 全绿，lib 同步热重载 |
-| **S4 episodes/转正启用** | 每成功任务写 episode；flow-candidate 满门槛自动转正（成功≥2 跨会话≥2） | 待做：episodes 持续增长；出现自动转正记录 |
+| **S4 episodes/转正启用** | 每成功任务写 episode；flow-candidate 满门槛自动转正（成功≥2 跨会话≥2） | ✅ 2026-09-09：episode 触发放宽（蒸馏裁决完成即记含 route/outcome，不只入册时）；flow-candidate `intentTokens` 指纹同型聚合 + 成功次数/跨会话计数（指纹验证：异型交集1不误并/同型交集5聚合）；深睡材料转正候选置顶 + prompt 判据补门槛句；存量 2 候选迁移新格式（commit c05f77a） |
 | **S5 召回零命中动作** | 零命中返回「近似主题 + 建议检索词 + pending 提醒」，不再静默 | 待做：构造 miss 查询可观测到兜底输出 |
 | **S6 观测与收尾** | 自然跑 2-3 天：蒸馏/深睡正常、无 JSON 失败复现；架构文档按指纹重生成；vector 更新 | 待做：无 P0 复现；nav/vector/文档三者一致 |
 
