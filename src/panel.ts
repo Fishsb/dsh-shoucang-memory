@@ -252,7 +252,7 @@ export function applyPanel(ctx: Context, config: Config): void {
     // P1-2（2026-09-10）：注入配置作用域迁全局——优先读 ~/.dsh/suite/scheduler.json 的 injection 键，
     // 回落 root config YAML（旧配置兼容），都无 → 缺省。切 root 不再影响注入（与记忆/蒸馏同域）。
     const sched = (() => { try { return readSuiteConfig() } catch { return {} } })()
-    const hasSchedInject = 'injectLevel' in sched || 'injectPersona' in sched || 'hotMemory' in sched
+    const hasSchedInject = 'injectLevel' in sched || 'injectPersona' in sched || 'hotMemory' in sched || 'injectAgentMaxChars' in sched || 'injectUserMaxChars' in sched || 'injectMemoryMaxChars' in sched
     if (hasSchedInject) {
       if (typeof sched.injectLevel === 'string') level = sched.injectLevel
       if (typeof sched.injectPersona === 'string') personaMode = sched.injectPersona
