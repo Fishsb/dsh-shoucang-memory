@@ -223,13 +223,21 @@ const RECALL_STOP = new Set([
   '继续', '开始', '完成', '现在', '今天', '昨天',
 ])
 
-/** 查询 → 检索 token（ASCII 词 + 中文连续串 ≥2，去停用词去重；全小写） */
+/** 查询 → 检索 token（ASCII 词 + 中文短语；中文长句先按停用词切分，仍 ≥6 字再补三字滑窗，支持部分重叠命中；去重全小写） */
 export function extractRecallTokens(text: string): string[] {
   const t = String(text || '').toLowerCase()
   const out: string[] = []
-  const add = (w: string): void => { if (w && !RECALL_STOP.has(w) && !out.includes(w)) out.push(w) }
+  const add = (w: string): void => { if (w && w.length >= 2 && !RECALL_STOP.has(w) && !out.includes(w)) out.push(w) }
   for (const m of t.matchAll(ASCII_WORD)) add(m[0])
-  for (const m of t.matchAll(CJK_RUN)) add(m[0])
+  for (const m of t.matchAll(CJK_RUN)) {
+    const run = m[0]
+    let segs = [run]
+    for (const s of RECALL_STOP) if (s.length >= 2) segs = segs.flatMap((x) => (x.includes(s) ? x.split(s) : [x])).filter(Boolean)
+    for (const seg of segs) {
+      add(seg)
+      if (seg.length >= 6) for (let i = 0; i + 3 <= seg.length; i++) add(seg.slice(i, i + 3))
+    }
+  }
   return out
 }
 

@@ -73,7 +73,7 @@ export interface GateResult {
 export declare function gateMemoryAppend(a: {
     target?: string;
 }, wl: Whitelist): GateResult;
-/** 查询 → 检索 token（ASCII 词 + 中文连续串 ≥2，去停用词去重；全小写） */
+/** 查询 → 检索 token（ASCII 词 + 中文短语；中文长句先按停用词切分，仍 ≥6 字再补三字滑窗，支持部分重叠命中；去重全小写） */
 export declare function extractRecallTokens(text: string): string[];
 export interface RecallRow {
     file: string;
