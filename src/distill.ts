@@ -134,18 +134,21 @@ Q2 画像判定：**用户的稳定偏好/背景/禁忌**（非一次性需求�
 {"route":"memory","appends":[{"target":"notes/tools.md","section":"<既有 ## 小节名>","text":"教程式浓缩：目标一句+编号步骤+注意，≤120字"}],"newIndex":[{"target":"MEMORY.md","line":"[tag] 主题 · 概况短语/短语/短语 → notes/x.md §小节"}],"profiles":[{"target":"USER|AGENT","section":"≤12字小节名","text":"≤80字一句话"}],"projectCards":[{"cardType":"how-to|reference|decision","title":"≤20字","text":"≤200字","source":"≤30字"}],"skipped":[{"title":"...","reason":"≤30字"}]}
 约束：route=memory → 填 appends/newIndex（target 白名单 notes/tools.md notes/flows.md notes/lessons.md notes/env.md notes/release.md；section 必须既有 ## 小节名；**text 教程式三段**「目标：… 1. … 2. … 注意：…」只写方向指引级浓缩——目标形态/步骤轮廓/关键注意点，不搬细节条文，纯事实类可省步骤保留目标行；**newIndex.line 格式权威=记忆库 spec §8**：[tag] 主题 · 概况短语/短语/短语 → notes/<file>.md §小节，定界符 ·=段界 /=短语界 →=指针，主题≤12字名词性禁冒号复合，概况名词短语 / 分隔、≤30字、高判别实词（专名/数值/路径关键词）、禁日期溯源），profiles/projectCards 留空；profiles 仅在 route=memory 时可填（0-2 条，宁缺毋滥，须是稳定画像而非一次性事实）；route=project → 填 projectCards（cardType: how-to=操作步骤/reference=契约事实/decision=架构决策），其余留空；route=discard → 除 skipped 全空；与 route 不匹配的条目宿主拒收。`
 
-// ── 深度睡眠归纳契约（v16：习得原则并入 agent 画像 AGENT.md；睡眠=agent 的反思进化迭代——认识自己也认识用户）──
-export const DEEP_SLEEP_PROMPT = `你是深度睡眠归纳子代理（守藏记忆·agent 画像成长引擎，audit-protocol §5）。任务：像人睡前回想当天经历一样，回顾给定「当天记忆痕迹」——**反思必须双通道成对：认识自己（提炼习得原则写入 AGENT.md）+ 认识用户（更新用户画像 USER.md）**，仅其一即反思不完整。原则=多条经验反复提纯凝成的跨任务泛化指引（巩固记忆；主动遗忘=提纯下放，不是删除）。
+// ── 深度睡眠归纳契约（v17：习得原则与通用任务路径 [路径] 并入 agent 画像 AGENT.md；成败信号入材料；睡眠=agent 的反思进化迭代——认识自己也认识用户）──
+export const DEEP_SLEEP_PROMPT = `你是深度睡眠归纳子代理（守藏记忆·agent 画像成长引擎，audit-protocol §5）。任务：像人睡前回想当天经历一样，回顾给定「当天记忆痕迹」——**反思三通道：认识自己（提炼习得原则写入 AGENT.md）+ 认识用户（更新用户画像 USER.md）+ 沉淀通用任务路径（[路径] 行写入 AGENT.md，对标 AWM）**，仅认识自己或认识用户其一即反思不完整。原则=多条经验反复提纯凝成的跨任务泛化指引（巩固记忆；主动遗忘=提纯下放，不是删除）；路径=可复用任务类型的步骤序列（具体值必须变量化）。
 判定规则：
-- 同主题 ≥3 条痕迹，或单主题当日反复命中 → 提炼 1 条原则；支撑不足的一律不提炼。
+- **原则判据**：同主题 ≥3 条痕迹，或单主题当日反复命中 → 提炼 1 条原则；支撑不足的一律不提炼（路径判据见下，二者区分勿混）。
 - 原则=一句方向指引（对齐 R1 粒度锚：目标形态/步骤轮廓/关键注意点），不搬细节条文。
-- 源指针只能指向给定痕迹中真实出现过的 notes/<file>.md §小节（1-2 个小节）；行格式严格为（AGENT.md 索引行格式，概况段即原则一句）：\`[原则] <主题 · 一句泛化> → notes/<file>.md §小节A/§小节B\`（主题 ≤12 字、概况 ≤30 字、禁日期戳）
+- **路径判据**：同一任务类型在窗口内出现 ≥2 次（痕迹/运行统计可见重复模式）→ 归纳 1 条路径；**只归纳成功走通的任务**，失败任务只进原则教训（AWM：只从成功学）。
+- 路径行格式：\`[路径] <任务类型 ≤10 字> · <步骤概要 ≤40 字，用 ①②③ 串联> → notes/flows.md §小节\`；**具体值必须变量化**（如 <项目名>/<端口>/<文件名>——不抽象=过拟合单例）。
+- 材料若含「窗口内任务运行统计」：先做成败对比（ExpeL 式）——异常集中出现的环节才是真因所在；对比结论仍受跨工作区红线约束，不得把单项目细节写成原则/路径。
+- 源指针只能指向给定痕迹中真实出现过的 notes/<file>.md §小节（1-2 个小节）；行格式严格为（AGENT.md 索引行格式，概况段即原则一句或路径概要）：\`[原则] <主题 · 一句泛化> → notes/<file>.md §小节A/§小节B\`（主题 ≤12 字、概况 ≤30 字、禁日期戳）或 \`[路径]\`（格式见上，概要 ≤40 字）
 - **跨工作区红线**：记忆库是全局单库，痕迹可能来自多个工作区，而原则会常驻注入到**所有**工作区会话。含项目专名/具体路径/版本号/一次性事实的经验一律不提炼（skipped 注明「项目专属」）；只在单一项目语境成立的结论同样不提炼——宁缺毋滥，误注入比漏提炼危害大。
 - pending 内容尚未入册 notes 的，不得作为源指针（仅作背景理解）；找不到 notes 锚点就不提炼（宁缺毋滥）。
-- 与既有原则冲突时用 replace（match=既有原则行原文，须逐字来自给定「现行原则」清单）；否则 add。
+- 与既有原则/路径冲突时用 replace（match=既有行原文，须逐字来自给定「现行原则/路径」清单）；否则 add。
 - 独立完成：不 spawn 子代理、不使用任何工具，只依据给定材料。
 输出：只输出一行 JSON（不要 reasoning、不要其他文本）：
-{"principles":[{"action":"add","text":"[原则] 排障先看根因 · 先验证成本低再修改成本高 → notes/lessons.md §A/§B"},{"action":"replace","match":"[原则] 既有原则原文行","text":"[原则] ... → notes/tools.md §C"}],"profileOps":[{"target":"USER.md","action":"add","section":"沟通偏好","text":"- ... ← 源: notes/lessons.md §A"}],"skipped":[{"title":"...","reason":"≤30字"}]}
+{"principles":[{"action":"add","text":"[原则] 排障先看根因 · 先验证成本低再修改成本高 → notes/lessons.md §A/§B"},{"action":"add","text":"[路径] DSH 插件升级 · ①提交推送 ②cp 覆盖 lib ③sc restart ④四端点 200 → notes/flows.md §升级"},{"action":"replace","match":"[原则] 既有原则原文行","text":"[原则] ... → notes/tools.md §C"}],"profileOps":[{"target":"USER.md","action":"add","section":"沟通偏好","text":"- ... ← 源: notes/lessons.md §A"}],"skipped":[{"title":"...","reason":"≤30字"}]}
 无足够素材 → {"principles":[],"profileOps":[],"skipped":[]}。
 
 双画像巩固（反思的另一通道=认识用户；与原则同判据、同红线）：
@@ -647,10 +650,33 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         parts.push('### 本日 access 检索命中\n' + [...agg.entries()].map(([k, v]) => `- ${k} ×${v}`).join('\n'))
       }
     } catch { /* 无 access.log=无 */ }
+    // 4) 窗口内蒸馏运行统计（成败对比材料；ExpeL 式信号；2026-09-09 v17）
+    //    只取「带 stop 字段」的 distill-run 行：writeDispatch 与 distillAgent 会双写审计（前两者无 stop），
+    //    直接过滤 kind 会把每次 run 计 2 次——此处以 stop 存在为唯一 run 记号（distillAgent 汇总行）。
+    //    红线：只给统计与 stop/route 字段，不携带 target 文件名与 reason 全文（可能含项目专名，跨工作区红线）。
+    try {
+      let runs = 0, ok = 0, bad = 0, mem = 0, proj = 0, rej = 0
+      for (const l of readFileSync(auditFile, 'utf8').split('\n')) {
+        if (!l.trim()) continue
+        try {
+          const o = JSON.parse(l) as { at?: string; kind?: string; stop?: string; route?: string; rejected?: number }
+          if (o.kind !== 'distill-run' || typeof o.stop !== 'string') continue
+          if (!Number.isNaN(Date.parse(String(o.at))) && Date.parse(String(o.at)) < since) continue
+          runs++
+          if (o.stop === 'completed') ok++; else bad++
+          if (o.route === 'memory') mem++; else if (o.route === 'project') proj++
+          rej += Number(o.rejected) || 0
+        } catch { /* 坏行跳过 */ }
+      }
+      if (runs > 0) {
+        const stat = `### 窗口内任务运行统计（成败对比材料；ExpeL 式信号）\n- 蒸馏运行 ${runs} 次：成功（stop=completed）${ok} / 异常（error/timeout/aborted）${bad}；写入分布 memory ${mem} 条 / project ${proj} 条 / 拒收 ${rej} 条`
+        parts.push(stat.length > 800 ? stat.slice(0, 800) : stat)
+      }
+    } catch { /* 无审计文件=无统计 */ }
     return parts.join('\n\n')
   }
 
-  // 习得原则落盘（v16：并入 AGENT.md）：宿主拼装新全文 → write_gate 校验（容量/指针/行格式）→ 原子替换（冲突=原地 replace）
+  // 习得原则/任务路径落盘（v17：[原则]/[路径] 并入 AGENT.md）：宿主拼装新全文 → write_gate 校验（容量/指针/行格式）→ 原子替换（冲突=原地 replace）
   const applyPrinciples = async (memRoot: string, out: any): Promise<{ added: number; replaced: number; skipped: number; gate: string }> => {
     const principlesPath = join(memRoot, 'AGENT.md')
     const gateScript = join(memoryLibRoot(), 'scripts', 'memory_write_gate.mjs')
@@ -663,7 +689,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     let added = 0, replaced = 0, skipped = 0
     for (const p of ((out && Array.isArray(out.principles)) ? out.principles : [])) {
       const text = String((p && p.text) || '').trim()
-      if (!/^\[原则\].+→\s*notes\/[A-Za-z0-9_-]+\.md/.test(text)) { skipped++; continue } // 行格式宿主预检（gate 亦校验 [tag] 索引行）
+      if (!/^\[(原则|路径)\].+→\s*notes\/[A-Za-z0-9_-]+\.md/.test(text)) { skipped++; continue } // 行格式宿主预检（v17：[路径] 同行门禁；gate 亦校验 [tag] 索引行）
       if (p && p.action === 'replace') {
         const match = String(p.match || '').trim()
         const idx = lines.findIndex((l) => l.trim() === match)
@@ -758,7 +784,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       if (!traces) { log(`deep sleep: 窗口内无痕迹（起点 ${new Date(since).toLocaleString()}），窗口滑到当前，本轮不睡`); return 'no-traces' }
       log(`deep sleep: 窗口内痕迹 ${traces.length} 字符（起点 ${new Date(since).toLocaleString()}）`)
       const currentPrinciples = (() => { try { return readFileSync(join(resolved.root, 'AGENT.md'), 'utf8') } catch { return '' } })()
-      const currentList = currentPrinciples.split(/\r?\n/).map((l) => l.trim()).filter((l) => /^\[原则\]/.test(l)).join('\n') || '（暂无条目）'
+      const currentList = currentPrinciples.split(/\r?\n/).map((l) => l.trim()).filter((l) => /^\[(原则|路径)\]/.test(l)).join('\n') || '（暂无条目）'
       // 双画像巩固材料：现行 USER/AGENT 画像全文（行格式门禁的 replace 依据）
       const currentProfiles = ['USER.md', 'AGENT.md'].map((f) => {
         let body = ''
@@ -769,7 +795,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       const userInput = [
         '## 当天记忆痕迹（作用域=本日，不做全库扫描）',
         traces,
-        `## 现行原则（冲突时 replace，match 逐字取自此清单）\n${currentList}`,
+        `## 现行原则/路径（冲突时 replace，match 逐字取自此清单）\n${currentList}`,
         `## 现行画像（profileOps 的 replace match 逐字取自此处）\n${currentProfiles}`,
         '请按规则处理：提炼跨任务泛化原则与双画像更新指令，输出 JSON。',
       ].join('\n\n')

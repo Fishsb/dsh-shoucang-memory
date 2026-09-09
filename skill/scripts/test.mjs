@@ -415,5 +415,28 @@ try {
   fs.rmSync(tg, { recursive: true, force: true });
 } catch (e) { fail++; console.log('❌ 习得原则门禁/体检（异常: ' + failMsg(e) + '）'); }
 
+// 26) v17 [路径] 任务路径行门禁（对标 AWM）：正常 exit 0 / 步内 → 违规 exit 4 / 概要 >40 字 exit 4 / 体检 tags 含 '路径'
+try {
+  const tj = makeContainer();
+  const gate = path.join(tj, 'scripts', 'memory_write_gate.mjs');
+  const a1 = path.join(tj, 'a1.txt');
+  fs.writeFileSync(a1, '[路径] DSH 插件升级 · ①构建验证 ②覆盖 lib ③重启 ④四端点 200 → notes/lessons.md §调试流程\n');
+  run('路径门-正常', 'node', [gate, 'AGENT.md', a1], [0]);
+  const a2 = path.join(tj, 'a2.txt');
+  fs.writeFileSync(a2, '[路径] 升级 · ①备份 → ②覆盖 → ③重启 → notes/lessons.md §调试流程\n');
+  run('路径门-步内箭头', 'node', [gate, 'AGENT.md', a2], [4]);
+  const a3 = path.join(tj, 'a3.txt');
+  fs.writeFileSync(a3, '[路径] 升级 · ' + '①②'.repeat(30) + ' → notes/lessons.md §调试流程\n');
+  run('路径门-概要超40字', 'node', [gate, 'AGENT.md', a3], [4]);
+  fs.appendFileSync(path.join(tj, 'AGENT.md'), '\n[路径] DSH 插件升级 · ①构建 ②覆盖 lib ③重启 ④验证 → notes/lessons.md §调试流程\n');
+  const hp2 = execFileSync('node', [path.join(tj, 'scripts', 'memory_health_check.mjs')], { encoding: 'utf8', cwd: tj, env: { ...process.env, MEMORY_ROOT: tj } });
+  const agentSeg = (hp2.split('=== AGENT.md')[1] || '').split('===')[0]; // AGENT 段
+  // tags 含 '路径' → 追加的 [路径] 行不得被判无标签：无标签为 0，或夹具自身有不合规行时该行不得出现在样例里
+  const okPath = /无标签: 0/.test(agentSeg) || !/DSH 插件升级/.test(agentSeg);
+  if (okPath) pass++; else fail++;
+  console.log(`${okPath ? '✅' : '❌'} v17-[路径] 行门禁（正常0/步内箭头4/超40字4/体检 tag 含路径）`);
+  fs.rmSync(tj, { recursive: true, force: true });
+} catch (e) { fail++; console.log('❌ v17-[路径] 行门禁（异常: ' + failMsg(e) + '）'); }
+
 console.log(`\n结果: ${pass} PASS / ${fail} FAIL`);
 process.exit(fail ? 1 : 0);

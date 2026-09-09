@@ -250,7 +250,7 @@ export function applyPanel(ctx: Context, config: Config): void {
       } catch { /* 缺配置用默认 */ }
     }
     if (level === 'off' || !hotMemoryOn) { injectCache.text = ''; return '' }
-    // 指针式注入：agent 画像（含 [原则] 习得原则）+ 用户画像 + 知识索引一行一条（[tag] 主题 · 概况 → notes/x.md §小节），Agent 按需 get_file 拉详情
+    // 指针式注入：agent 画像（含 [原则] 习得原则与 [路径] 任务路径）+ 用户画像 + 知识索引一行一条（[tag] 主题 · 概况 → notes/x.md §小节），Agent 按需 get_file 拉详情
     const readIdx = (name: string): string[] => {
       try {
         return readFileSync(join(memRoot, name), 'utf8').split(/\r?\n/).map((l) => l.trim()).filter((l) => /^\[.+\]/.test(l))
@@ -276,7 +276,7 @@ export function applyPanel(ctx: Context, config: Config): void {
     if (!userRes.lines.length && !agentRes.lines.length && !memRes.lines.length) { injectCache.text = ''; return '' }
     const lines: string[] = [`[守藏·热记忆] 记忆库指针（${memRoot}；详情按指针 get_file 拉对应 notes §小节）：`]
     if (agentRes.lines.length) {
-      lines.push('agent 画像（AGENT.md；含 [原则] 习得原则——跨任务方向指引，①③步优先读）：')
+      lines.push('agent 画像（AGENT.md；含 [原则] 习得原则与 [路径] 任务路径——跨任务方向指引/脚本骨架，①③步优先读）：')
       for (const l of agentRes.lines) lines.push(`- ${l}`)
       if (agentRes.trimmed) lines.push('…（agent 画像超出注入上限已裁切）')
     }
@@ -622,7 +622,7 @@ export function applyPanel(ctx: Context, config: Config): void {
   const MEM_INDEX_FILES: Array<{ file: string; label: string }> = [
     { file: 'MEMORY.md', label: '知识索引 MEMORY' },
     { file: 'USER.md', label: '用户画像 USER' },
-    { file: 'AGENT.md', label: 'Agent 画像 AGENT（含 [原则] 习得原则）' },
+    { file: 'AGENT.md', label: 'Agent 画像 AGENT（含 [原则] 习得原则与 [路径] 任务路径）' },
   ]
   const NOTE_RELS = ['env', 'tools', 'flows', 'lessons', 'release', 'user', 'agent', 'INDEX']
   /** 容量上限单一事实源 = engine/target-registry.json（读失败回退默认值；v16：PRINCIPLES 退役、AGENT 3000） */

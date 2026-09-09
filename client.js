@@ -311,7 +311,7 @@
         var pItem = el('div', 'setting-item');
         var pInfo = el('div', 'setting-item-info');
         pInfo.appendChild(el('div', 'setting-item-name', '画像 persona 注入档位 injection.persona'));
-        pInfo.appendChild(el('div', 'setting-item-desc', 'v16 已生效：关闭=不注入画像；仅注入我=只注入 agent 画像 AGENT.md（含 [原则] 习得原则）；仅注入你=只注入用户画像 USER.md；全注入=双画像（默认）'));
+        pInfo.appendChild(el('div', 'setting-item-desc', 'v17 已生效：关闭=不注入画像；仅注入我=只注入 agent 画像 AGENT.md（含 [原则] 习得原则与 [路径] 任务路径）；仅注入你=只注入用户画像 USER.md；全注入=双画像（默认）'));
         var slider = el('div', 'sc-persona-slider');
         PERSONA_TIERS.forEach(function (tier, i) {
           var cell = el('div', 'sc-persona-cell' + (tier[0] === personaMode ? ' active' : ''));
@@ -384,7 +384,7 @@
           return item;
         }
         view.appendChild(numSetting('注入总预算 injection.max_tokens', '整轮指针注入的 token 预算（100–8000，默认 3000；中文粗估 ~2 字符/token），超出整体裁切——v16 起生效', parsed.max_tokens != null ? parsed.max_tokens : 3000, 'injection.max_tokens', 'tokens'));
-        view.appendChild(numSetting('agent 画像上限 injection.agent_max_chars', 'AGENT.md（含 [原则] 习得原则）注入字符上限，逐行裁切不切半行；0=不裁（默认，靠容量门 3000 兜底）', parsed.caps_agent != null ? parsed.caps_agent : 0, 'injection.agent_max_chars', '字符'));
+        view.appendChild(numSetting('agent 画像上限 injection.agent_max_chars', 'AGENT.md（含 [原则] 习得原则与 [路径] 任务路径）注入字符上限，逐行裁切不切半行；0=不裁（默认，靠容量门 3000 兜底）', parsed.caps_agent != null ? parsed.caps_agent : 0, 'injection.agent_max_chars', '字符'));
         view.appendChild(numSetting('用户画像上限 injection.user_max_chars', 'USER.md 注入字符上限；0=不裁（默认，靠容量门 2000 兜底）', parsed.caps_user != null ? parsed.caps_user : 0, 'injection.user_max_chars', '字符'));
         view.appendChild(numSetting('知识索引上限 injection.memory_max_chars', 'MEMORY.md 注入字符上限（在档位行数基础上二次裁切）；0=不裁（默认）', parsed.caps_memory != null ? parsed.caps_memory : 0, 'injection.memory_max_chars', '字符'));
 

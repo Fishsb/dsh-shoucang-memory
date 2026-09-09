@@ -27,7 +27,7 @@
         "AGENT.md": 3000
       },
       "pendingDir": "pending",
-      "comment": "；v16 习得原则并入 agent 画像（PRINCIPLES.md 退役，AGENT.md 容量扩至 3,000，[原则] 行唯一写入口=深度睡眠归纳 pass）"
+      "comment": "；v16 习得原则并入 agent 画像（PRINCIPLES.md 退役，AGENT.md 容量扩至 3,000，[原则] 行唯一写入口=深度睡眠归纳 pass）；v17 新增 [路径] 行（通用任务路径，对标 AWM，同门禁同写入口）"
     }
   }
 }

@@ -28,10 +28,11 @@ if (outFile) {
 // 索引文件（主文档=会话注入面）：按行解析，标题行（#）与空行不算条目
 // v9：容量红线只对主文档生效；详情子文档为按需读取层，不设硬限（超 NOTES_WARN 仅提示）
 // v16：PRINCIPLES.md 独立层退役——习得原则 [原则] 行并入 AGENT.md，AGENT 容量 2,000→3,000
+// v17：AGENT tags 增 '路径'——[路径] 通用任务路径行（对标 AWM，概要 ≤40 字）
 const INDEX_FILES = [
   { name: 'MEMORY.md', limit: 3000, tags: ['env', 'tool', 'flow', 'lesson'] },
   { name: 'USER.md', limit: 2000, tags: ['身份', '环境', '硬件', '偏好', '习惯'] },
-  { name: 'AGENT.md', limit: 3000, tags: ['身份', '使命', '边界', '偏好', '习惯', '经验', '演化', '教训', '原则'] },
+  { name: 'AGENT.md', limit: 3000, tags: ['身份', '使命', '边界', '偏好', '习惯', '经验', '演化', '教训', '原则', '路径'] },
 ];
 // 详情子文档（注册表见 notes/INDEX.md；缺少任一 → exit 4）
 const NOTES = ['env.md', 'tools.md', 'flows.md', 'lessons.md', 'release.md', 'user.md', 'agent.md'];

@@ -26,6 +26,8 @@ const isNotes = /^notes[\\/]/.test(targetPath) || base.startsWith('notes');
 
 // v9：主文档（注入面）硬限扩容；辅助文档不拦截（仅超 NOTES_WARN 提示）
 // v16：PRINCIPLES.md 独立层退役——习得原则以 [原则] 行并入 AGENT.md，AGENT 容量 2,000→3,000
+// v17：AGENT.md 索引行新增 [路径] 通用任务路径（对标 AWM）——概况段上限按标签区分：普通行 ≤30 字、[路径] 概要 ≤40 字；
+//      [路径] 步内禁用 →（与 → notes/ 指针歧义，步骤请用 ①②③ 串联）
 const LIMITS = { 'MEMORY.md': 3000, 'USER.md': 2000, 'AGENT.md': 3000 };
 const NOTES_WARN = 8000;
 
@@ -56,8 +58,11 @@ if (base === 'MEMORY.md' || base === 'USER.md' || base === 'AGENT.md') {
     const short = line.length > 30 ? line.slice(0, 28) + '…' : line;
     if (!line.includes('·')) { formatIssues.push('缺概况段(·): ' + short); continue; }
     if (!/→\s*notes\//.test(line)) formatIssues.push('缺 notes 指针(→): ' + short);
+    const isPath = line.startsWith('[路径]');
+    const arrowCount = (line.match(/→/g) || []).length;
     const summary = line.split('·').slice(1).join('·').split('→')[0].replace(/\s+/g, '');
-    if (summary.length > 30) formatIssues.push('概况超30字(' + summary.length + '): ' + summary.slice(0, 30) + '…');
+    if (isPath && arrowCount > 1) formatIssues.push('路径步骤勿用 →（与 → notes/ 指针歧义），请用 ①②③ 串联: ' + short);
+    else if (summary.length > (isPath ? 40 : 30)) formatIssues.push((isPath ? '路径概要超40字' : '概况超30字') + '(' + summary.length + '): ' + summary.slice(0, 30) + '…');
     if (/（?20\d{2}-\d{1,2}-\d{1,2}）?/.test(line)) formatIssues.push('禁带日期戳（维护元信息归 notes/INDEX.md）: ' + short);
     const topic = line.slice(line.indexOf(']') + 1).split('·')[0].trim();
     if (topic.replace(/\s/g, '').length > 12) formatHints.push('主题超12字（建议精简，不拦截）: ' + short);
