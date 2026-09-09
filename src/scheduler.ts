@@ -44,8 +44,13 @@ export interface Config {
   minTurnChars: number // 本轮新增正文少于此字符数则跳过蒸馏（水位仍推进）
   distillPrescan: boolean // 预筛：spawn 前扫增量信号词 + pending 候选，皆无则跳过（零 LLM 成本）
   distillPrompt: string // 蒸馏子代理 persona 覆盖（缺省内建 v5 契约）
-  llmProvider: string // 蒸馏子代理指定 provider（空=继承主会话模型）
-  llmModel: string // 蒸馏子代理指定 model（空=继承主会话模型）
+  llmProvider: string // 子代理 provider 缺省（空=继承主会话模型）——distill/sleep 未单独指定时回落
+  llmModel: string // 子代理 model 缺省（空=继承主会话模型）
+  // 2026-09-10 用户拍板：蒸馏/深睡各自独立模型（直接用 Harness 模型体系）
+  distillProvider: string // 蒸馏子代理 provider（空=回落 llmProvider→继承主会话）
+  distillModel: string
+  sleepProvider: string // 深睡归纳子代理 provider（空=回落 llmProvider→继承主会话）
+  sleepModel: string
   // ═══ 深度睡眠归纳（v16：习得原则并入 agent 画像 AGENT.md；2026-09-08 拍板机制，2026-09-09 拍板定位）═══
   enableDeepSleep: boolean // 深度睡眠巡检开关（停滞 ≥deepSleepIdleMs 自动归纳 [原则] 行入 AGENT.md）
   deepSleepIdleMs: number // 停滞判定：无任何根会话活动持续此毫秒数才触发（缺省 3 小时）
@@ -90,8 +95,13 @@ export const Config: any = z.object({
   minTurnChars: z.number().min(0).default(200).description('本轮新增正文少于此字符数跳过蒸馏（水位仍推进）'),
   distillPrescan: z.boolean().default(true).description('预筛：无信号词且无 pending 候选则不唤醒 LLM 子代理'),
   distillPrompt: z.string().default('').description('蒸馏子代理 persona 覆盖（缺省内建 v5 契约）'),
-  llmProvider: z.string().default('').description('蒸馏子代理 provider（空=继承主会话模型）'),
-  llmModel: z.string().default('').description('蒸馏子代理 model（空=继承主会话模型）'),
+  llmProvider: z.string().default('').description('子代理 provider 缺省（空=继承主会话模型）——distill/sleep 未单独指定时回落此键'),
+  llmModel: z.string().default('').description('子代理 model 缺省（空=继承主会话模型）——distill/sleep 未单独指定时回落此键'),
+  // 2026-09-10 用户拍板：蒸馏/深睡模型各自独立配置（直接用 Harness 模型体系，下拉选宿主模型）
+  distillProvider: z.string().default('').description('蒸馏子代理 provider（空=回落 llmProvider → 继承主会话）'),
+  distillModel: z.string().default('').description('蒸馏子代理 model（空=回落 llmModel → 继承主会话）'),
+  sleepProvider: z.string().default('').description('深睡归纳子代理 provider（空=回落 llmProvider → 继承主会话）'),
+  sleepModel: z.string().default('').description('深睡归纳子代理 model（空=回落 llmModel → 继承主会话）'),
   enableDeepSleep: z.boolean().default(true).description('深度睡眠归纳：全部会话停滞 ≥deepSleepIdleMs 自动提炼习得原则写入 agent 画像 AGENT.md（[原则] 行），同 pass 反思双通道维护 USER 画像'),
   deepSleepIdleMs: z.number().min(600000).default(10800000).description('停滞判定阈值（毫秒）：无任何会话活动持续满此时长触发深度睡眠归纳（缺省 3 小时）'),
   deepSleepProbe: z.boolean().default(true).description('输出增长探测：会话 running 但长时间无事件时，采样转录文件两次确认是长任务还是卡住'),
@@ -136,6 +146,26 @@ function applySuiteConfigFile(config: Config): void {
 
 export function applyScheduler(ctx: Context, config: Config): void {
   applySuiteConfigFile(config)
+  // LLM 模型枚举（2026-09-10：直接用 Harness 模型体系——listProviders→listModels 扁平；供蒸馏/深睡下拉）
+  const llmModels = async (): Promise<Array<{ provider: string; id: string; name: string }>> => {
+    const out: Array<{ provider: string; id: string; name: string }> = []
+    try {
+      const llm = (ctx as { llm?: unknown }).llm as { listProviders?: () => unknown[]; listModels?: (p: string) => Promise<Array<{ id: string; name?: string }>> } | undefined
+      if (!llm || typeof llm.listProviders !== 'function') return out
+      const providers = llm.listProviders() || []
+      for (const p of providers) {
+        const pid = String((p as { id?: string; provider?: string; name?: string })?.id ?? (p as { provider?: string })?.provider ?? (p as { name?: string })?.name ?? '')
+        if (!pid) continue
+        if (typeof llm.listModels === 'function') {
+          try {
+            const ms = await llm.listModels(pid)
+            for (const m of ms || []) out.push({ provider: pid, id: m.id, name: m.name || m.id })
+          } catch { /* 单 provider 枚举失败跳过 */ }
+        }
+      }
+    } catch { /* 宿主 llm 不可用=空 */ }
+    return out
+  }
   ctx.effect(
     () =>
       ctx.tools.register(
@@ -427,6 +457,10 @@ export function applyScheduler(ctx: Context, config: Config): void {
       distillPrompt: config.distillPrompt,
       llmProvider: config.llmProvider,
       llmModel: config.llmModel,
+      distillProvider: config.distillProvider,
+      distillModel: config.distillModel,
+      sleepProvider: config.sleepProvider,
+      sleepModel: config.sleepModel,
       enableDeepSleep: config.enableDeepSleep,
       deepSleepIdleMs: config.deepSleepIdleMs,
       deepSleepProbe: config.deepSleepProbe,
@@ -456,7 +490,12 @@ export function applyScheduler(ctx: Context, config: Config): void {
         distillPrescan: config.distillPrescan,
         llmProvider: config.llmProvider,
         llmModel: config.llmModel,
+        distillProvider: config.distillProvider,
+        distillModel: config.distillModel,
+        sleepProvider: config.sleepProvider,
+        sleepModel: config.sleepModel,
       }),
+      llmModels,
     }
   } else {
     // 蒸馏器关闭也要给 panel 提供装配矩阵（/suite 是只读视图，与蒸馏无关）
@@ -469,7 +508,12 @@ export function applyScheduler(ctx: Context, config: Config): void {
         distillPrescan: config.distillPrescan,
         llmProvider: config.llmProvider,
         llmModel: config.llmModel,
+        distillProvider: config.distillProvider,
+        distillModel: config.distillModel,
+        sleepProvider: config.sleepProvider,
+        sleepModel: config.sleepModel,
       }),
+      llmModels,
     }
   }
 }

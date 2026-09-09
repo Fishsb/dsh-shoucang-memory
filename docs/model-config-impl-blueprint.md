@@ -76,3 +76,19 @@ const EMBED_PROVIDERS = [
 - 协议：仅 OpenAI 兼容 /v1（Ollama/LM Studio/llama.cpp/bge 全支持）+ Ollama /api/tags 变体——AnythingLLM 同款
 - 零新 npm 依赖（纯 fetch；AnythingLLM 用 openai SDK 但我们仅枚举，SDK 非必需）
 - 状态机/降级约定照抄 AnythingLLM（永不 throw / 枚举=验活 / 失败空列表）
+
+## 6. LLM 模型配置统一模式（2026-09-10 用户拍板：所有大模型配置都走宿主模型选择）
+> 蒸馏/深睡等 **LLM 类配置 ≠ 向量**（向量=本地/云端 embedding 服务枚举）。LLM 直接用 **DeepSeek Harness
+> 自身模型体系**：先配好 Harness 模型 → 插件里下拉选即可，不发明第二套。
+
+- **数据源（宿主现成 API，不造轮子）**：
+  - `ctx.llm.listProviders()` → provider 路由（宿主注册的 adapter）
+  - `ctx.llm.listModels(provider)` → `Promise<LlmModelInfo[]>`（{provider,id,name}——下拉全要素）
+  - `ctx.llm.listConfigurableProviders()` → 可配置 provider 目录（含 dormant）
+- **桥**：schedulerShare 加 `llmModels(): Promise<Array<{provider,id,name}>>`（scheduler 侧有 ctx.llm，逐 provider listModels 扁平）→ panel `GET /llm/models` 经桥取
+- **配置键**（用户拍板拆独立）：`distillProvider/distillModel`（蒸馏）+ `sleepProvider/sleepModel`（深睡），
+  各自支持「继承主会话(空)」或选宿主具体模型；未设回落旧共用 llmProvider/llmModel（向后兼容）
+- **消费端改造**：distill.ts L583(蒸馏) L973(深睡) 从共用键改读各自键+回落
+- **UI**：参数调节拆两卡片（用户拍板）——「向量模型」卡（M2 现状优化）+「蒸馏/深睡模型」卡
+  （每个：继承主会话 / 宿主模型两级下拉，仿 AnythingLLM LLMPreference 同构模式）
+- 验证：GET /llm/models 返回宿主真实模型；选模型写 scheduler.json → 蒸馏/深睡各自用对应模型

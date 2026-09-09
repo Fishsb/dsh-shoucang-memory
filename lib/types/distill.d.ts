@@ -26,6 +26,10 @@ export interface DistillConfig {
     distillPrompt: string;
     llmProvider: string;
     llmModel: string;
+    distillProvider: string;
+    distillModel: string;
+    sleepProvider: string;
+    sleepModel: string;
     enableDeepSleep: boolean;
     deepSleepIdleMs: number;
     deepSleepProbe: boolean;

@@ -48,6 +48,11 @@ export interface DistillConfig {
   distillPrompt: string
   llmProvider: string
   llmModel: string
+  // 2026-09-10：蒸馏/深睡各自独立模型（空=回落 llmProvider/llmModel → 继承主会话）
+  distillProvider: string
+  distillModel: string
+  sleepProvider: string
+  sleepModel: string
   // ═══ 深度睡眠归纳（v16：习得原则并入 agent 画像 AGENT.md；2026-09-08 用户拍板：全部会话停滞 ≥3h 自动执行）═══
   enableDeepSleep: boolean
   deepSleepIdleMs: number
@@ -337,6 +342,13 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     } catch { /* listProviders 不可用时静默 */ }
   }
 
+  // 2026-09-10：蒸馏/深睡各自独立模型——具体键有值用之，否则回落共用键（仍空=继承主会话）
+  const resolveLlm = (sp: string, sm: string): { provider: string; model: string } | null => {
+    if (sp && sm) return { provider: sp, model: sm }
+    if (config.llmProvider && config.llmModel) return { provider: config.llmProvider, model: config.llmModel }
+    return null
+  }
+
   const extractDelta = (agent: any, lastSeq: number): { maxSeq: number; text: string } => {
     const events = agent.session.snapshotEvents()
     let maxSeq = lastSeq
@@ -580,8 +592,9 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         '请按规则处理：裁决可复用知识点并输出入册指令 JSON。',
       ].join('\n\n')
 
-      const useProvider = config.llmProvider && config.llmModel && providerFailCount < 2
-      const agentOptions = useProvider ? { provider: config.llmProvider, model: config.llmModel } : undefined
+      const resolvedLlm = resolveLlm(config.distillProvider, config.distillModel)
+      const useProvider = !!resolvedLlm && providerFailCount < 2
+      const agentOptions = useProvider ? { provider: resolvedLlm!.provider, model: resolvedLlm!.model } : undefined
       const ac = new AbortController()
       const timeout = setTimeout(() => { try { ac.abort(new Error('distill timeout 10min')) } catch { /* */ } }, 600000)
       try {
@@ -970,8 +983,9 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         `## 现行画像（profileOps 的 replace match 逐字取自此处）\n${currentProfiles}`,
         '请按规则处理：提炼跨任务泛化原则与双画像更新指令，输出 JSON。',
       ].join('\n\n')
-      const useProvider = config.llmProvider && config.llmModel && providerFailCount < 2
-      const agentOptions = useProvider ? { provider: config.llmProvider, model: config.llmModel } : undefined
+      const resolvedLlm = resolveLlm(config.sleepProvider, config.sleepModel)
+      const useProvider = !!resolvedLlm && providerFailCount < 2
+      const agentOptions = useProvider ? { provider: resolvedLlm!.provider, model: resolvedLlm!.model } : undefined
       const ac = new AbortController()
       const timeout = setTimeout(() => { try { ac.abort(new Error('deep sleep timeout 10min')) } catch { /* */ } }, 600000)
       let parent = pickParent()

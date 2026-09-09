@@ -20,6 +20,10 @@ export interface DistillRuntimeConfig {
   distillPrescan: boolean
   llmProvider: string
   llmModel: string
+  distillProvider: string
+  distillModel: string
+  sleepProvider: string
+  sleepModel: string
 }
 
 export interface SchedulerShareApi {
@@ -27,6 +31,8 @@ export interface SchedulerShareApi {
   suiteScan: () => { members: SuiteMemberRow[]; summary: string }
   /** 蒸馏节流组运行时值（GET /distill/config 的 running 源；缺省值单一实现在 scheduler.Config） */
   distillConfig: () => DistillRuntimeConfig
+  /** 宿主 LLM 模型清单（2026-09-10：listProviders→listModels 扁平；供蒸馏/深睡模型下拉选——直接用 Harness 模型体系） */
+  llmModels: () => Promise<Array<{ provider: string; id: string; name: string }>>
 }
 
 /** 共享引用：请求时惰性读取（可能为 null=scheduler 未就绪） */
