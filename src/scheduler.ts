@@ -19,7 +19,8 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import z from 'schemastery'
 import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { dshHome, selftestMatrix, suiteAssemblyMatrix, memoryLibRoot, recallIndex } from './targets.js'
+import { dshHome, selftestMatrix, suiteAssemblyMatrix, memoryLibRoot } from './targets.js'
+import { recallRanked } from './vec.js'
 import { registerDistill } from './distill.js'
 import { deepSleepShare } from './deepsleep-share.js'
 import { schedulerShare } from './scheduler-share.js'
@@ -65,6 +66,11 @@ export interface Config {
   activationTOff: number // 滞回下阈（初值 0.52）
   activationCooldownSteps: number // 触发后冷却步数（缺省 3）
   activationTopK: number // 召回条数（缺省 3）
+  // ═══ 路线⑤ 向量档（可选、默认关；派生缓存非事实源，未配置/失败自动降级词法）═══
+  embedEnabled: boolean // 融合召回开关（缺省关；开=0.7dense ⊕ 0.3lex）
+  embedBaseUrl: string // OpenAI 兼容 embeddings 基址（如 https://api.openai.com/v1；留空=关）
+  embedModel: string // embedding 模型名
+  embedApiKeyEnv: string // API key 所在环境变量名（不落盘/不入库）
 }
 
 export const Config: any = z.object({
@@ -102,6 +108,10 @@ export const Config: any = z.object({
   activationTOff: z.number().min(0).max(1).default(0.52).description('滞回下阈：sim<此值 → 回到 idle（防阈值抖动）'),
   activationCooldownSteps: z.number().min(0).default(3).description('触发后冷却步数，防连续打扰'),
   activationTopK: z.number().min(1).max(5).default(3).description('每次观察召回条数'),
+  embedEnabled: z.boolean().default(false).description('路线⑤ 向量融合召回（缺省关；开=dense0.7+lexical0.3，未配置/失败自动降级纯词法）'),
+  embedBaseUrl: z.string().default('').description('OpenAI 兼容 /embeddings 基址（如 https://api.openai.com/v1，留空=关）'),
+  embedModel: z.string().default('').description('embedding 模型名（如 text-embedding-3-small）'),
+  embedApiKeyEnv: z.string().default('EMBED_API_KEY').description('API key 环境变量名（进程 env，不落盘）'),
 })
 
 // —— 自持配置文件（契约 v3 落地通道；dshHome 等路径探测统一来自 targets.ts，单一事实源）——
@@ -307,12 +317,20 @@ export function applyScheduler(ctx: Context, config: Config): void {
           output: { schema: { type: 'string' }, render: (_a: unknown, v: unknown) => [{ type: 'text', text: String(v) }] },
           async execute(args: any) {
             const root = memoryLibRoot()
-            const { rows, tokens } = recallIndex(root, String(args?.query || ''), Math.min(5, Number(args?.topK) || 3), args?.scope === 'agent' ? 'agent' : 'all')
+            const query = String(args?.query || '')
+            const topK = Math.min(5, Number(args?.topK) || 3)
+            const scope = args?.scope === 'agent' ? 'agent' : 'all'
+            const { rows, tokens, mode } = await recallRanked(root, query, topK, scope, {
+              enabled: !!config.embedEnabled,
+              baseUrl: config.embedBaseUrl,
+              model: config.embedModel,
+              apiKeyEnv: config.embedApiKeyEnv || 'EMBED_API_KEY',
+            })
             if (!rows.length) {
               return `shoucang_recall：无命中（库 ${root}；token=${tokens.join(',') || '空'}）\n- 无经验可用 = 新手态：直接按常识开干，收尾把差异沉淀为候选，同类第二次即可转正成经验。`
             }
             return [
-              `shoucang_recall：命中 ${rows.length} 条（token=${tokens.join(',')}）`,
+              `shoucang_recall：命中 ${rows.length} 条（${mode === 'fusion' ? 'dense0.7+lexical0.3 融合' : '词法'}；token=${tokens.join(',')}）`,
               ...rows.map((r) => `- [${r.file}] ${r.line}`),
               '提示：以上为薄行指针，命中后按 `→ notes/…` 读详情小节；相似≠适用，展开前核对任务类型。',
             ].join('\n')

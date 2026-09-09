@@ -49,6 +49,10 @@ export interface Config {
     activationTOff: number;
     activationCooldownSteps: number;
     activationTopK: number;
+    embedEnabled: boolean;
+    embedBaseUrl: string;
+    embedModel: string;
+    embedApiKeyEnv: string;
 }
 export declare const Config: any;
 export declare function applyScheduler(ctx: Context, config: Config): void;
