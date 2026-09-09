@@ -1,5 +1,7 @@
 # human-loop-roadmap.md — 人化执行体系优化方案总览
 
+> ⚠️ **历史文档（2026-09-08）**：文中「四级层级 / PRINCIPLES 原则层」设计已被 spec v16 取代（三级层级、原则并入 AGENT 画像），仅供回溯，勿当现行规则。现行权威：`skill/memory-whitelist-spec.md`（v16）。
+
 > 2026-09-08 全部优化方案 consolidated：本会话完成「人类执行决策路径」检索研究后，落地到守藏技能的全量改动与待决项。
 > 性质：路线图（非协议）；各项落地时按 whitelist spec §7 变更机制走。
 > **逐批次执行规格 → `human-loop-impl-plan.md`**（每批次精确文件改动/锚点/验证/回退）。

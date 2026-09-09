@@ -4,7 +4,7 @@
  * 事件链（ADR-0004 模式）：ctx.on('session/event') turn/end(completed) 且 root agent → per-agent idle 定时器
  *   → 到点且 agent idle → 内存增量（snapshotEvents 水位后）→ 预筛（信号词 + pending 候选；皆无则跳过不唤醒）
  *   → spawn 蒸馏子代理（maxDepth=1，10min 超时 race）→ 结构化 JSON（route=memory|project|discard）
- *   → targets.ts 动态路由 + 各库白名单门禁（不符合不存）→ 零拷贝写入（memory-append / devref-card）
+ *   → targets.ts 动态路由 + 白名单门禁（不符合不存）→ 零拷贝写入（memory-append；R3 项目事实直写 workspace devref）
  *   → 水位推进（suite/knowledge/audit/distill-watermark.jsonl）→ 蒸馏审计（distill-audit.jsonl，UI 统计卡数据源）。
  *
  * 深度睡眠归纳（v16：习得原则并入 agent 画像 AGENT.md；2026-09-08 拍板机制、2026-09-09 拍板定位=agent 的反思进化迭代）：独立巡检定时器（10min）检测「全部会话停滞 ≥3h」→ 触发一次。
@@ -570,16 +570,18 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       } catch { /* 坏行跳过 */ }
     }
   } catch { /* 无审计文件=新装 */ }
+  // 全新启动（审计里从无消化记录）：水位从启动时刻起算——首轮睡眠只看启动后的新痕迹，
+  // 不把既有全历史 notes/pending 一股脑当材料（那是一次性的激进归纳）。
+  if (!lastDeepSleepAt) lastDeepSleepAt = Date.now()
 
   /**
-   * 痕迹窗口起点 = max(本日 0 点, 上次深度睡眠时刻)——
+   * 痕迹窗口起点 = 上次深度睡眠水位（纯水位语义，2026-09-09 拍板重构）——
    * ① 统一用 mtime/时间戳比较，规避 pending 文件名日期为 UTC（`toISOString` 切片）与本地日期跨日不一致导致的漏收；
-   * ② 同一天多次触发时不重复喂同一批材料（已归纳的不再回想）。
+   * ② 同一天多次触发时不重复喂同一批材料（已归纳的不再回想）；
+   * ③ **不再叠加「本日 0 点」下限**：0 点切会把午夜前产生、午夜后才睡眠的痕迹永久划出窗口（日切丢痕迹）；
+   *    纯水位下「无痕迹滑窗」与「消化后推进」都只会把起点移到更晚，未来产生的痕迹 mtime 必然更晚，永不丢失。
    */
-  const traceSince = (): number => {
-    const d = new Date(); d.setHours(0, 0, 0, 0)
-    return Math.max(d.getTime(), Number(lastDeepSleepAt) || 0)
-  }
+  const traceSince = (): number => Number(lastDeepSleepAt) || 0
 
   // 当天痕迹收集（深度睡眠作用域=本日）
   // since 由调用方显式传入：**必须在推进 lastDeepSleepAt 之前取值**（否则窗口起点=当前时刻 → 恒零痕迹，
@@ -750,7 +752,9 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         return 'failed'
       }
       const traces = gatherDeepSleepTraces(resolved.root, since)
-      if (!traces) { log(`deep sleep: 本日无痕迹，跳过（窗口起点 ${new Date(since).toLocaleString()}）`); audit({ kind: 'deep-sleep', result: 'no-traces' }); return 'no-traces' }
+      // 无痕迹=无事可归纳，不调用 LLM、不留审计（防每巡检周期一条 no-traces 的膨胀与空转感）——
+      // 「没有材料就不需要睡眠」：窗口直接滑到当前，未来痕迹 mtime 必然晚于水位，永不丢失。
+      if (!traces) { log(`deep sleep: 窗口内无痕迹（起点 ${new Date(since).toLocaleString()}），窗口滑到当前，本轮不睡`); return 'no-traces' }
       log(`deep sleep: 窗口内痕迹 ${traces.length} 字符（起点 ${new Date(since).toLocaleString()}）`)
       const currentPrinciples = (() => { try { return readFileSync(join(resolved.root, 'AGENT.md'), 'utf8') } catch { return '' } })()
       const currentList = currentPrinciples.split(/\r?\n/).map((l) => l.trim()).filter((l) => /^\[原则\]/.test(l)).join('\n') || '（暂无条目）'
@@ -979,9 +983,12 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     lastDeepSleepAt = now
     log(`deep sleep: 触发（停滞 ${Math.round((now - hottest) / 60000)}min ≥ 阈值 ${Math.round(idleMs / 60000)}min · 会话态 running=${running} ended=${ended} stalled=${stalled}）`)
     runDeepSleep(since).then((r) => {
-      // 水位回滚：瞬时故障（no-parent / 子代理异常）与「本日无痕迹」都算未消化——
-      // 后者若不回滚，当日稍晚产生的痕迹也会被划在窗口外（窗口起点=上次水位）。
-      if (r !== 'done') { lastDeepSleepAt = prevDeepSleepAt; log(`deep sleep: 本轮未消化（${r}），水位回滚（同一批痕迹下轮可重试）`) }
+      // 水位语义：done（消化了材料）与 no-traces（确认无材料）都把窗口滑到当前——未来痕迹 mtime 必然
+      // 更晚，不丢；只有 failed（有材料但没消化成，如 no-parent / 子代理异常）回滚，同一批下轮重试。
+      // 这同时消解空转：无材料滑窗后 hottest ≤ 水位 → 后续巡检直接 return，不再每 10min 重触发。
+      if (r === 'failed') { lastDeepSleepAt = prevDeepSleepAt; log('deep sleep: 本轮未消化（failed），水位回滚（同一批痕迹下轮可重试）') }
+      else lastDeepSleepAt = now
+    }).catch((e) => {
     }).catch((e) => {
       lastDeepSleepAt = prevDeepSleepAt
       log(`deep sleep err: ${String((e as Error)?.message || e).slice(0, 120)}（水位回滚）`)
@@ -1022,10 +1029,10 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     if (deepSleepRunning) return { ok: false, error: 'deep-sleep-already-running' }
     deepSleepRunning = true
     try {
-      // 手动触发同样按「上次水位」取窗口；只有真正消化（done）才推进水位，避免自动巡检重复回想同一批材料
+      // 手动触发同样按上次水位取窗口；done（消化）/ no-traces（确认无材料）都推进水位防重复回想，failed 回滚
       const since = traceSince()
       const r = await runDeepSleep(since)
-      if (r === 'done') lastDeepSleepAt = Date.now()
+      if (r !== 'failed') lastDeepSleepAt = Date.now()
       return { ok: true, result: r }
     } catch (e) {
       return { ok: false, error: String((e as Error)?.message || e).slice(0, 160) }

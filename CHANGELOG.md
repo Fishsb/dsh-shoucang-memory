@@ -5,6 +5,12 @@
 ## [Unreleased]
 
 ### Fixed
+- **深度睡眠空转（2026-09-09 用户指出，上一轮修复的副作用当场实测复现）**：no-traces 回滚水位后 `hottest > lastDeepSleepAt` 恒成立 → 每 10min 巡检重触发一次、每次留一条 no-traces 审计（实测 14:34-18:28 间 6 连发，按此节奏每天 144 条）。重构为**纯水位语义**：① `traceSince()` 去掉「本日 0 点」下限——0 点切会把午夜前产生、午夜后才睡的痕迹永久划出窗口（日切丢痕），纯水位下窗口只会移到更晚、未来痕迹 mtime 必然更晚永不丢失；② 窗口内**确认无痕迹 → 本轮不睡**（不调 LLM、不留审计，窗口直接滑到当前），后续巡检因 `hottest ≤ 水位` 直接 return，空转消失——「没有材料就不需要睡眠」；③ 只有 failed（有材料但没消化成）才回滚重试；④ 全新启动（审计从无消化记录）水位从进程启动时刻起算，首轮不把既有全历史 notes 一股脑当材料；⑤ 作用域口径同步：spec/audit-protocol/README 由「当天痕迹」改为「自上次归纳以来的新痕迹」。验证：typecheck/build/hardcode 零错误 + 测试 28 PASS。
+
+### Changed
+- **白名单重构审查（2026-09-09，v15/v16 多次调整后的全量对账）**：① **target-registry.json 删除 `project` 卡库死节**（旧 pmg cards/how-to|reference|decision 三卡册结构，v15 单库化后零消费——panel 只读 memory.capacity、targets.ts 用内建白名单、knowledge-append 运行时零调用；R3 现行为蒸馏器直写 `<workspace>/docs/devref/shoucang/` 不经注册表）；② memory 节与 targets.ts BUILTIN、write_gate LIMITS 三方对账一致（三索引 MEMORY/USER/AGENT + notes 七类 + 容量 3000/2000/3000）；③ PRINCIPLES / boards / pmg 全仓扫描确认残留均为「退役说明/变更记录」性质注释，无活性引用；④ `docs/human-loop-impl-plan.md` / `human-loop-roadmap.md` 顶部补历史文档标注（四索引/PRINCIPLES 口径已被 v16 取代，防误导检索）；⑤ distill.ts 头注释「devref-card」旧说法更正为 workspace 直写。
+
+### Fixed
 - **深度睡眠「本日无痕迹」恒真 bug（2026-09-09 实跑确诊，上线以来归纳从未真正执行过）**：触发流程先 `lastDeepSleepAt = now` 推进水位、后调 `runDeepSleep()`，而窗口起点 `traceSince() = max(今日 0 点, lastDeepSleepAt)` 在其内部求值时已读到被改成 now 的水位 → 扫描窗口退化成 `[now, now]`，任何文件 mtime 都不可能 ≥ now → 每次审计 `no-traces`（日志实锤：窗口起点恒等于触发时刻）。修复：① 窗口起点在推进水位**之前**取值，经参数显式传入 `runDeepSleep(since)` / `gatherDeepSleepTraces(root, since)`；② 返回值细分 `done / failed / no-traces` 三态——水位只在 `done`（真正消化了材料）时保持推进，`failed` 与 `no-traces` 一律回滚（当日稍晚产生的痕迹不被划出窗口，且不会重复回想）；③ 手动触发（POST /deepsleep/trigger）同样按上次水位取窗口，消化成功才推进水位，防自动巡检重复回想同一批材料。**端到端验证**：造真实痕迹（2 个 pending 候选 + 1 条 notes 今日条目）后手动触发——窗口识别 3,453 字符（起点=今日 0 点，不再是触发时刻）→ 归纳子代理跑通（首轮 stop=aborted 触发 10min 超时兜底、水位正确回滚；次轮 stop=completed）→ 审计留痕；产出 no-op（`原则 +0`）为内容判断层合规保守（pending 仅背景材料、不作合法源指针），非工程故障。
 - **蒸馏跳过观测盲区（2026-09-09）**：门槛跳过（增量 < minTurnChars）与预筛跳过（无信号词且无 pending 候选）此前只进日志不落审计——审计里只见真实 run，「蒸馏为什么没跑」无法从数据区分是没触发还是被挡。现两类跳过均写 `distill-skip` 审计条目（带 reason 与字符数），后续可从 distill-audit 直接统计触发率/跳过率。
 

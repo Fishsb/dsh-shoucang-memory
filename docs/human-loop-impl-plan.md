@@ -1,5 +1,7 @@
 # human-loop-impl-plan.md — 人化执行体系实施方案（逐批次执行规格）
 
+> ⚠️ **历史文档（2026-09-08 批次 0-5 已全部落地）**：本文描述的「四索引 / PRINCIPLES 原则层」等口径已被 spec v16 取代（三索引、`[原则]` 行并入 AGENT.md），仅供回溯当时决策与执行方式，勿当现行规则。现行权威：`skill/memory-whitelist-spec.md`（v16）。
+
 > 配套 `human-loop-roadmap.md` 批次表的落地规格：每批次列出精确文件改动（含锚点）、验证命令、回退方式。
 > 执行纪律：每批次独立提交（CHANGELOG 留痕）→ check-hardcode → 批次内测试 → 再进下一批。
 
