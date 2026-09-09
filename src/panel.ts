@@ -25,7 +25,7 @@ import { tmpdir } from 'node:os'
 import { gunzipSync, zstdDecompressSync } from 'node:zlib'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { homedir } from 'node:os'
-import { dshHome } from './targets.js'
+import { dshHome, knowledgeRoot } from './targets.js'
 import { deepSleepShare } from './deepsleep-share.js'
 import { schedulerShare } from './scheduler-share.js'
 import { fileURLToPath } from 'node:url'
@@ -218,6 +218,19 @@ export function applyPanel(ctx: Context, config: Config): void {
 
   const injectCache: { root: string | null; at: number; text: string } = { root: null, at: 0, text: '' }
   const injectMeta = { calls: 0, lastAt: 0 } // 提示词装配调用计数（实测新会话注入）
+  // 路线② 晨起摘要读取：深睡 delta（suite/knowledge/delta.md，≤3 行，48h 有效；delta 永非事实源，过期即弃）
+  const readDawnDelta = (personaMode: string): string => {
+    if (personaMode === 'off') return ''
+    try {
+      const f = join(knowledgeRoot(), 'delta.md')
+      if (!existsSync(f)) return ''
+      const o = JSON.parse(readFileSync(f, 'utf8')) as { staleAt?: string; rows?: string[] }
+      if (o.staleAt && Date.parse(o.staleAt) < Date.now()) return ''
+      const rows = Array.isArray(o.rows) ? o.rows.slice(0, 3).filter((r): r is string => typeof r === 'string' && !!r.trim()) : []
+      if (!rows.length) return ''
+      return ['🧠 最近成长（上次深睡归纳，带源指针可核验）：', ...rows.map((r) => `  ${r.trim()}`)].join('\n')
+    } catch { return '' }
+  }
   // 数据根：守藏自有记忆库（三索引体系，与蒸馏写入权威根一致）；MEMORY_ROOT 可覆盖
   const memoryRootOf = (): string => {
     const env = process.env.MEMORY_ROOT?.trim()
@@ -291,8 +304,16 @@ export function applyPanel(ctx: Context, config: Config): void {
       if (memRes.trimmed) lines.push('…（知识索引超出注入上限已裁切）')
     }
     const budget = Math.max(400, maxTokens * 2) // 中文粗估 ~2 字符/token（v16：max_tokens 接通，缺省 3000=3000 字符与旧硬编码一致）
+    // 路线② 晨起摘要插入（预留其字节再裁切正文，保证 delta 不被预算吞掉；persona=off 不注入）
+    const deltaText = readDawnDelta(personaMode)
     let text = lines.join('\n')
-    if (text.length > budget) text = text.slice(0, budget) + '\n…（指针注入已按预算裁切）'
+    if (deltaText) {
+      const keep = Math.max(0, budget - deltaText.length)
+      if (text.length > keep) text = text.slice(0, keep) + (text.length > keep ? '\n…（指针注入已按预算裁切）' : '')
+      text = deltaText + (text ? '\n' + text : '')
+    } else if (text.length > budget) {
+      text = text.slice(0, budget) + '\n…（指针注入已按预算裁切）'
+    }
     injectCache.text = text
     return text
   }

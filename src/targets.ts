@@ -212,6 +212,56 @@ export function gateMemoryAppend(a: { target?: string }, wl: Whitelist): GateRes
   return { ok: false, reason: `白名单不符: ${t || '(空)'} 不在 ${wl.library} 收录范围（indexTargets=[${wl.indexTargets.join(',')}] notes=[${wl.notes.join(',')}]）` }
 }
 
+// —— 读侧召回（路线②，词法地板）：确定性零依赖 top-k 薄行检索（向量接入前的缺省召回）——
+
+const CJK_RUN = /[\u4e00-\u9fa5]{2,}/g
+const ASCII_WORD = /[a-z0-9][a-z0-9._/#+-]{1,}/g
+const RECALL_STOP = new Set([
+  '一个', '一下', '一直', '一些', '为了', '之后', '之前', '以上', '以下', '什么', '他们', '你们', '我们',
+  '应该', '需要', '可以', '不能', '不要', '没有', '进行', '这个', '那个', '这样', '那样', '然后', '还是',
+  '但是', '因为', '所以', '如果', '就是', '不是', '怎么', '如何', '哪些', '哪个', '请问', '麻烦', '帮我',
+  '继续', '开始', '完成', '现在', '今天', '昨天',
+])
+
+/** 查询 → 检索 token（ASCII 词 + 中文连续串 ≥2，去停用词去重；全小写） */
+export function extractRecallTokens(text: string): string[] {
+  const t = String(text || '').toLowerCase()
+  const out: string[] = []
+  const add = (w: string): void => { if (w && !RECALL_STOP.has(w) && !out.includes(w)) out.push(w) }
+  for (const m of t.matchAll(ASCII_WORD)) add(m[0])
+  for (const m of t.matchAll(CJK_RUN)) add(m[0])
+  return out
+}
+
+export interface RecallRow { file: string; tag: string; line: string; score: number; pointer: string }
+
+const TAG_WEIGHT: Record<string, number> = { 路径: 3, 原则: 2 }
+
+/** 词法召回：AGENT.md（[原则]/[路径]/画像行）+ MEMORY/USER 索引行，按 token 命中 × 标签权重排序（路径 > 原则 > 其余） */
+export function recallIndex(root: string, query: string, topK = 3, scope: 'agent' | 'all' = 'all'): { rows: RecallRow[]; tokens: string[] } {
+  const tokens = extractRecallTokens(query)
+  const rows: RecallRow[] = []
+  if (!tokens.length) return { rows, tokens }
+  const files = scope === 'all' ? ['AGENT.md', 'MEMORY.md', 'USER.md'] : ['AGENT.md']
+  for (const file of files) {
+    let raw = ''
+    try { raw = readFileSync(join(root, file), 'utf8') } catch { continue }
+    for (const l of raw.split(/\r?\n/)) {
+      const line = l.trim()
+      const tagM = line.match(/^\[([^\] ]+)\]/)
+      if (!tagM || !/→\s*notes\//.test(line)) continue
+      let score = 0
+      for (const tk of tokens) if (line.includes(tk)) score++
+      if (!score) continue
+      score *= (TAG_WEIGHT[tagM[1]] || 1)
+      const ptrM = line.match(/→\s*(notes\/[A-Za-z0-9_-]+\.md)/)
+      rows.push({ file, tag: tagM[1], line, score, pointer: ptrM ? ptrM[1] : '' })
+    }
+  }
+  rows.sort((a, b) => (b.score - a.score) || a.file.localeCompare(b.file))
+  return { rows: rows.slice(0, topK), tokens }
+}
+
 // —— 自测：单库解析 + 白名单门禁抽样 ——
 
 export function selftestMatrix(): string[] {

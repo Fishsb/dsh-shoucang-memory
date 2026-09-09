@@ -73,4 +73,18 @@ export interface GateResult {
 export declare function gateMemoryAppend(a: {
     target?: string;
 }, wl: Whitelist): GateResult;
+/** 查询 → 检索 token（ASCII 词 + 中文连续串 ≥2，去停用词去重；全小写） */
+export declare function extractRecallTokens(text: string): string[];
+export interface RecallRow {
+    file: string;
+    tag: string;
+    line: string;
+    score: number;
+    pointer: string;
+}
+/** 词法召回：AGENT.md（[原则]/[路径]/画像行）+ MEMORY/USER 索引行，按 token 命中 × 标签权重排序（路径 > 原则 > 其余） */
+export declare function recallIndex(root: string, query: string, topK?: number, scope?: 'agent' | 'all'): {
+    rows: RecallRow[];
+    tokens: string[];
+};
 export declare function selftestMatrix(): string[];
