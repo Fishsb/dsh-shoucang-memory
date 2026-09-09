@@ -244,19 +244,17 @@ export function applyPanel(ctx: Context, config: Config): void {
     let level = 'smart'
     let hotMemoryOn = true
     let personaMode = 'both'
-    let maxTokens = 3000
     let capAgent = 0
     let capUser = 0
     let capMemory = 0
     // P1-2（2026-09-10）：注入配置作用域迁全局——优先读 ~/.dsh/suite/scheduler.json 的 injection 键，
     // 回落 root config YAML（旧配置兼容），都无 → 缺省。切 root 不再影响注入（与记忆/蒸馏同域）。
     const sched = (() => { try { return readSuiteConfig() } catch { return {} } })()
-    const hasSchedInject = 'injectLevel' in sched || 'injectPersona' in sched || 'hotMemory' in sched || 'injectMaxTokens' in sched
+    const hasSchedInject = 'injectLevel' in sched || 'injectPersona' in sched || 'hotMemory' in sched
     if (hasSchedInject) {
       if (typeof sched.injectLevel === 'string') level = sched.injectLevel
       if (typeof sched.injectPersona === 'string') personaMode = sched.injectPersona
       if (typeof sched.hotMemory === 'boolean') hotMemoryOn = sched.hotMemory
-      if (typeof sched.injectMaxTokens === 'number') maxTokens = sched.injectMaxTokens
       if (typeof sched.injectAgentMaxChars === 'number') capAgent = sched.injectAgentMaxChars
       if (typeof sched.injectUserMaxChars === 'number') capUser = sched.injectUserMaxChars
       if (typeof sched.injectMemoryMaxChars === 'number') capMemory = sched.injectMemoryMaxChars
@@ -269,7 +267,6 @@ export function applyPanel(ctx: Context, config: Config): void {
           level = view.injection_level ?? 'smart'
           hotMemoryOn = view.flags['injection.hot_memory'] !== false
           personaMode = String(view.flags['injection.persona'] ?? 'both') // v16：off|me|you|both 接通生效（me=AGENT 画像 / you=USER 画像）
-          if (view.max_tokens != null) maxTokens = view.max_tokens // v16：总预算接通（原硬编码漂移键）
           capAgent = view.caps_agent ?? 0 // v16：板块容量上限（字符，0=不裁）
           capUser = view.caps_user ?? 0
           capMemory = view.caps_memory ?? 0
@@ -317,17 +314,11 @@ export function applyPanel(ctx: Context, config: Config): void {
       for (const l of memRes.lines) lines.push(`- ${l}`)
       if (memRes.trimmed) lines.push('…（知识索引超出注入上限已裁切）')
     }
-    const budget = Math.max(400, maxTokens * 2) // 中文粗估 ~2 字符/token（v16：max_tokens 接通，缺省 3000=3000 字符与旧硬编码一致）
-    // 路线② 晨起摘要插入（预留其字节再裁切正文，保证 delta 不被预算吞掉；persona=off 不注入）
+    // 2026-09-10 用户拍板：去掉总预算（max_tokens）裁切——注入内容=双画像+记忆指针（薄行），
+    // 由各板块字符上限（caps）独立控制；delta 晨起摘要直接前置（内容极少，不需预算预留）
     const deltaText = readDawnDelta(personaMode)
     let text = lines.join('\n')
-    if (deltaText) {
-      const keep = Math.max(0, budget - deltaText.length)
-      if (text.length > keep) text = text.slice(0, keep) + (text.length > keep ? '\n…（指针注入已按预算裁切）' : '')
-      text = deltaText + (text ? '\n' + text : '')
-    } else if (text.length > budget) {
-      text = text.slice(0, budget) + '\n…（指针注入已按预算裁切）'
-    }
+    if (deltaText) text = deltaText + '\n' + text
     injectCache.text = text
     return text
   }
@@ -380,8 +371,7 @@ export function applyPanel(ctx: Context, config: Config): void {
       if (p === 'shoucang.merge.complement_floor') out.merge_floor = parseFloat(value) || undefined
       if (p === 'shoucang.injection.persona') out.flags['injection.persona'] = value.replace(/^['"]|['"]$/g, '')
       if (p === 'shoucang.injection.level') out.injection_level = value.replace(/^['"]|['"]$/g, '')
-      // v16：注入预算与板块容量上限（0 合法=不裁，显式 isNaN 检查防 falsy 丢失）
-      if (p === 'shoucang.injection.max_tokens') { const n = parseInt(value, 10); if (!isNaN(n)) out.max_tokens = n }
+      // v16：板块容量上限（0 合法=不裁，显式 isNaN 检查防 falsy 丢失）；max_tokens 总预算已退役（2026-09-10）
       if (p === 'shoucang.injection.agent_max_chars') { const n = parseInt(value, 10); if (!isNaN(n)) out.caps_agent = n }
       if (p === 'shoucang.injection.user_max_chars') { const n = parseInt(value, 10); if (!isNaN(n)) out.caps_user = n }
       if (p === 'shoucang.injection.memory_max_chars') { const n = parseInt(value, 10); if (!isNaN(n)) out.caps_memory = n }
@@ -496,14 +486,18 @@ export function applyPanel(ctx: Context, config: Config): void {
     const sched = readSuiteConfig()
     // R1（2026-09-10）：global 返回**最终生效值**（scheduler 键 ?? 默认）——UI 显示与实际注入逐键守卫一致，
     // 不回 root YAML（旧值可能残留误导）。默认与 buildHotMemoryText 相同：max_tokens=3000、三上限=0。
+    // 2026-09-10：注入板块上限默认=实际文件量（全量语义）；用户配过才用配值（配小于实际=裁切）
+    const fileChars = (name: string): number => {
+      try { const base = join(dshHome(), 'skills', 'managing-memory'); const t = readFileSync(join(base, name), 'utf8'); return t.replace(/\s+/g, '').length } catch { return 0 }
+    }
     const globalCfg = {
       persona: String(sched.injectPersona ?? 'both'),
       level: String(sched.injectLevel ?? 'smart'),
       hot_memory: sched.hotMemory !== false,
-      max_tokens: typeof sched.injectMaxTokens === 'number' ? sched.injectMaxTokens : 3000,
-      agent_max_chars: typeof sched.injectAgentMaxChars === 'number' ? sched.injectAgentMaxChars : 0,
-      user_max_chars: typeof sched.injectUserMaxChars === 'number' ? sched.injectUserMaxChars : 0,
-      memory_max_chars: typeof sched.injectMemoryMaxChars === 'number' ? sched.injectMemoryMaxChars : 0,
+      agent_max_chars: typeof sched.injectAgentMaxChars === 'number' ? sched.injectAgentMaxChars : fileChars('AGENT.md'),
+      user_max_chars: typeof sched.injectUserMaxChars === 'number' ? sched.injectUserMaxChars : fileChars('USER.md'),
+      memory_max_chars: typeof sched.injectMemoryMaxChars === 'number' ? sched.injectMemoryMaxChars : fileChars('MEMORY.md'),
+      actual: { agent: fileChars('AGENT.md'), user: fileChars('USER.md'), memory: fileChars('MEMORY.md') },
     }
     // P2：无 root 也能调注入（全局 scheduler.json）——root 仅管理 boards 显示与旧 YAML；返回 global 供 UI 渲染
     if (!file) return sendJson(res, 200, { text: null, parsed: null, error: 'no-active-root', global: globalCfg })
@@ -567,8 +561,7 @@ export function applyPanel(ctx: Context, config: Config): void {
     const allowed: Record<string, string[]> = {
       'injection.level': ['off', 'low', 'medium', 'high', 'smart'],
       'injection.persona': ['off', 'me', 'you', 'both'],
-      'injection.max_tokens': [],
-      // v16：注入板块容量上限（字符，0=不裁）
+      // v16：注入板块容量上限（字符，0=不裁）；max_tokens 总预算已退役（2026-09-10）
       'injection.agent_max_chars': [],
       'injection.user_max_chars': [],
       'injection.memory_max_chars': [],
@@ -578,7 +571,6 @@ export function applyPanel(ctx: Context, config: Config): void {
     }
     // 数值范围校验（2026-09-10 收敛：仅注入组 + embedding.dimension；archive/lifecycle/merge 死键已随白名单移除）
     const RANGE: Record<string, [number, number]> = {
-      'injection.max_tokens': [100, 8000],
       // v16：板块容量上限范围（0=不裁，上限留足写门容量的 6 倍余量）
       'injection.agent_max_chars': [0, 20000],
       'injection.user_max_chars': [0, 20000],
@@ -595,7 +587,6 @@ export function applyPanel(ctx: Context, config: Config): void {
     const SCHED_KEY: Record<string, string> = {
       'injection.level': 'injectLevel',
       'injection.persona': 'injectPersona',
-      'injection.max_tokens': 'injectMaxTokens',
       'injection.agent_max_chars': 'injectAgentMaxChars',
       'injection.user_max_chars': 'injectUserMaxChars',
       'injection.memory_max_chars': 'injectMemoryMaxChars',
