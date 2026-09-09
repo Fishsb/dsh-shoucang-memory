@@ -150,6 +150,7 @@ Q2 画像判定：**用户的稳定偏好/背景/禁忌**（非一次性需求�
 约束：route=memory → 填 appends/newIndex（target 白名单 notes/tools.md notes/flows.md notes/lessons.md notes/env.md notes/release.md；section 必须既有 ## 小节名；**text 教程式三段**「目标：… 1. … 2. … 注意：…」只写方向指引级浓缩——目标形态/步骤轮廓/关键注意点，不搬细节条文，纯事实类可省步骤保留目标行；**newIndex.line 格式权威=记忆库 spec §8**：[tag] 主题 · 概况短语/短语/短语 → notes/<file>.md §小节，定界符 ·=段界 /=短语界 →=指针，主题≤12字名词性禁冒号复合，概况名词短语 / 分隔、≤30字、高判别实词（专名/数值/路径关键词）、禁日期溯源），profiles/projectCards 留空；profiles 仅在 route=memory 时可填（0-2 条，宁缺毋滥，须是稳定画像而非一次性事实）；route=project → 填 projectCards（cardType: how-to=操作步骤/reference=契约事实/decision=架构决策），其余留空；route=discard → 除 skipped 全空；与 route 不匹配的条目宿主拒收。教训/踩坑类（notes/lessons.md 或 [lesson] 语境）可在 appends 条目附可选 rootCause/avoidWhen（各 ≤30 字，v5）——宿主写入时自动追加「- 根因：…」「- 不适用：…」两行，让教训带 WHY 与不适用条件（对标 WikiSkill pattern 双记 + When NOT to Apply），其余条目省略。`
 
 // ── 深度睡眠归纳契约（v17：习得原则与通用任务路径 [路径] 并入 agent 画像 AGENT.md；成败信号入材料；睡眠=agent 的反思进化迭代——认识自己也认识用户）──
+// v17.2（2026-09-10 用户拍板 v6）：新增 pointerOps 通道——索引指针自动维护（扩容概况/重构指针 §/去重留优），只允许 update 不增删（新增=蒸馏 newIndex 唯一性硬门）。
 export const DEEP_SLEEP_PROMPT = `你是深度睡眠归纳子代理（守藏记忆·agent 画像成长引擎，audit-protocol §5）。任务：像人睡前回想当天经历一样，回顾给定「当天记忆痕迹」——**反思三通道：认识自己（提炼习得原则写入 AGENT.md）+ 认识用户（更新用户画像 USER.md）+ 沉淀通用任务路径（[路径] 行写入 AGENT.md，对标 AWM）**，仅认识自己或认识用户其一即反思不完整。原则=多条经验反复提纯凝成的跨任务泛化指引（巩固记忆；主动遗忘=提纯下放，不是删除）；路径=可复用任务类型的步骤序列（具体值必须变量化）。
 判定规则：
 - **原则判据**：同主题 ≥3 条痕迹，或单主题当日反复命中 → 提炼 1 条原则；支撑不足的一律不提炼（路径判据见下，二者区分勿混）。
@@ -164,12 +165,17 @@ export const DEEP_SLEEP_PROMPT = `你是深度睡眠归纳子代理（守藏记�
 - **v5.4 树状纪律**：notes 小节的**结构生长（分裂新子节）由事件蒸馏自动完成**（写侧按内容量归并 vs 分裂 ###）；你**不新建/不合并 notes 小节**（深睡聚焦画像/原则/路径提炼，树形整编——合并冗余子节/降级冷枝——在树出现冗余后由后续整编步骤做，本契约不改 JSON 结构）。源指针仍指向真实存在的 §小节（含子节路径如 §父节/子节 若材料中已存在）。
 - 独立完成：不 spawn 子代理、不使用任何工具，只依据给定材料。
 输出：只输出一行 JSON（不要 reasoning、不要其他文本）：
-{"principles":[{"action":"add","text":"[原则] 排障先看根因 · 先验证成本低再修改成本高 → notes/lessons.md §A/§B"},{"action":"add","text":"[路径] DSH 插件升级 · ①提交推送 ②cp 覆盖 lib ③sc restart ④四端点 200 → notes/flows.md §升级"},{"action":"replace","match":"[原则] 既有原则原文行","text":"[原则] ... → notes/tools.md §C"}],"profileOps":[{"target":"USER.md","action":"add","section":"沟通偏好","text":"- ... ← 源: notes/lessons.md §A"}],"skipped":[{"title":"...","reason":"≤30字"}]}
-无足够素材 → {"principles":[],"profileOps":[],"skipped":[]}。
+{"principles":[{"action":"add","text":"[原则] 排障先看根因 · 先验证成本低再修改成本高 → notes/lessons.md §A/§B"},{"action":"add","text":"[路径] DSH 插件升级 · ①提交推送 ②cp 覆盖 lib ③sc restart ④四端点 200 → notes/flows.md §升级"},{"action":"replace","match":"[原则] 既有原则原文行","text":"[原则] ... → notes/tools.md §C"}],"profileOps":[{"target":"USER.md","action":"add","section":"沟通偏好","text":"- ... ← 源: notes/lessons.md §A"}],"pointerOps":[{"target":"MEMORY.md","action":"update","match":"[lesson] 网络坑 · 旧概况短语 → notes/lessons.md §网络坑","line":"[lesson] 网络坑 · 新概况短语 → notes/lessons.md §网络坑"}],"skipped":[{"title":"...","reason":"≤30字"}]}
+无足够素材 → {"principles":[],"profileOps":[],"pointerOps":[],"skipped":[]}。
 
 双画像巩固（反思的另一通道=认识用户；与原则同判据、同红线）：
 - 回顾给定「现行画像」（USER=用户画像 / AGENT=你的自我画像）与当天痕迹，若发现：**用户跨任务稳定的偏好/背景/禁忌**（非一次性需求）→ profileOps target=USER.md；**你自身反复出现的稳定做法/能力边界/常犯错误教训**（可跨任务复用的自我认知）→ target=AGENT.md。
-- 每条必须带 notes 源指针（行内 \`← 源: notes/<file>.md §小节\`），无锚不提炼；与既有画像行冲突用 replace（match=既有行原文，须逐字来自给定现行画像）；宁缺毋滥。`
+- 每条必须带 notes 源指针（行内 \`← 源: notes/<file>.md §小节\`），无锚不提炼；与既有画像行冲突用 replace（match=既有行原文，须逐字来自给定现行画像）；宁缺毋滥。
+索引指针自动维护（v6：只允许 pointerOps update 原地替换整行，**禁止新增/删除索引行**——新增归蒸馏 newIndex 且已有唯一性硬门；删除归审计裁决）：
+- 扩容：小节正文显著增补 / 概况过时 / 主题出现新要点 → update 只刷新概况短语（保 标签/主题/指针 指向；概况 ≤30 字名词短语）。
+- 重构：小节改名/合并导致指针 § 失效或漂移 → update 指针 §（概况如需一并刷新）。
+- 去重：现行清单中同 标签+主题 出现两行 → 保留信息更全/命中更高者，update 被留行合并概况（绝不双写）。
+- match 一律逐字取自「现行画像 / 现行知识索引」清单；无锚不 update，拿不准不动。`
 
 // ── 预筛信号词（零拷贝优先动态加载记忆仓 engine/signals.mjs；不可达时内嵌兜底副本，与 engine 同源）──
 const PRESCAN_STRONG = ['记住', '以后', '注意', '踩坑', '原来是这样', '应该改成', '别再用', '纠正', '别忘了', '务必']
@@ -486,7 +492,37 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         if (!ni || !ni.line) { failed++; continue }
         const t = String(ni.target || 'MEMORY.md')
         if (!gate(t)) continue
-        const r = await memAppend(t, 'new', String(ni.line).trim(), '-', resolved)
+        const nl = String(ni.line).trim()
+        // 指针唯一性硬门（2026-09-10 用户拍板 v6：同类同事实的指针只允许一个）——
+        // ① 精确键=同文件 同[标签]+同主题 → 拒；② 语义近似=标签同 + 主题 bigram 重叠 ≥0.66（双方 ≥2 token）→ 拒并留原指针。
+        const mNew = nl.match(/^\[([^\]\s]+)\]\s*([^·]+?)\s*·/)
+        if (mNew) {
+          const tagNew = mNew[1]
+          const themeNew = mNew[2].trim()
+          const tn = intentTokens(themeNew)
+          let dup = 'none'
+          try {
+            for (const ol of readFileSync(join(resolved.root, t), 'utf8').split(/\r?\n/)) {
+              const m = ol.match(/^\[([^\]\s]+)\]\s*([^·]+?)\s*·/)
+              if (!m || m[1] !== tagNew) continue
+              const themeOld = m[2].trim()
+              if (themeOld === themeNew) { dup = 'exact'; break }
+              const to = intentTokens(themeOld)
+              if (tn.length >= 2 && to.length >= 2) {
+                const inter = tn.filter((x) => to.includes(x)).length
+                const union = new Set([...tn, ...to]).size
+                if (union > 0 && inter / union >= 0.66) { dup = 'approx'; break }
+              }
+            }
+          } catch { /* 目标文件不存在=无既有行 */ }
+          if (dup !== 'none') {
+            rejected++
+            audit({ sid, kind: 'gate-reject', target: t, reason: `dup-index-topic:${dup}` })
+            log(`distill 拒收: 索引行重复（${dup} ${tagNew}/${themeNew.slice(0, 20)}），保留原指针（同类同事实唯一）`)
+            continue
+          }
+        }
+        const r = await memAppend(t, 'new', nl, '-', resolved)
         if (r.status === 0) added++; else { failed++; log(`distill 新索引失败: ${textOf(r).slice(0, 120)}`) }
       }
       // 双画像：Q2「归谁」的 USER/AGENT 通道（宿主直写，格式/容量/去重门禁）
@@ -918,6 +954,54 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     }
   }
 
+  // 指针扩容/重构（v6 用户拍板：索引指针自动维护通道=深睡 pointerOps）——
+  // 只允许 action=update（原地替换整行），禁止新增/删除行（新增=蒸馏 newIndex 且过唯一性硬门；删除=审计裁决）。
+  // match 须逐字命中既有行；同文 no-op；最终整文件走 memory_write_gate 全校验（容量/指针小节/行格式）后原子 rename。
+  const applyPointerOps = async (memRoot: string, out: any): Promise<{ updated: number; skipped: number; gate: string }> => {
+    const gateScript = join(memoryLibRoot(), 'scripts', 'memory_write_gate.mjs')
+    if (!existsSync(gateScript)) return { updated: 0, skipped: 0, gate: 'write_gate 未就位' }
+    const ops = (out && Array.isArray(out.pointerOps)) ? out.pointerOps : []
+    let updated = 0, skipped = 0
+    const byTarget = new Map<string, { match: string; line: string }[]>()
+    for (const op of ops) {
+      if (!op || !['MEMORY.md', 'USER.md', 'AGENT.md'].includes(String(op.target)) || String(op.action) !== 'update') { skipped++; continue }
+      const line = String(op.line || '').trim()
+      const match = String(op.match || '').trim()
+      if (!match || !/^\[[^\]\s]+\]/.test(line) || !/→\s*notes\//.test(line)) { skipped++; continue } // 行格式宿主预检（写门仍会校验）
+      if (!byTarget.has(String(op.target))) byTarget.set(String(op.target), [])
+      byTarget.get(String(op.target))!.push({ match, line })
+    }
+    if (!byTarget.size) return { updated, skipped, gate: 'no-op' }
+    let gate = 'ok'
+    for (const [target, list] of byTarget) {
+      const p = join(memRoot, target)
+      let content = ''
+      try { content = readFileSync(p, 'utf8') } catch { skipped += list.length; continue }
+      const lines = content.split(/\r?\n/)
+      let changed = false
+      for (const op of list) {
+        const idx = lines.findIndex((l) => l.trim() === op.match)
+        if (idx < 0) { skipped++; continue }
+        if (lines[idx].trim().toLowerCase() === op.line.toLowerCase()) continue // 同文 no-op
+        lines[idx] = op.line
+        changed = true
+        updated++
+      }
+      if (!changed) continue
+      const tmpPath = p + '.tmp'
+      try {
+        writeFileSync(tmpPath, lines.join('\n').replace(/\n{3,}/g, '\n\n').replace(/\s+$/, '\n'), 'utf8')
+        const g = await runNode(config.nodeBin, gateScript, [target, tmpPath], { env: { MEMORY_ROOT: memRoot }, timeout: 20000 })
+        if (g.status === 0) { renameSync(tmpPath, p) } else {
+          try { unlinkSync(tmpPath) } catch { /* */ }
+          gate = `gate exit=${g.status}`
+          log(`deep sleep: pointerOps write_gate 拒收（${target}）: ${textOf(g).slice(0, 120)}`)
+        }
+      } catch (e) { try { unlinkSync(tmpPath) } catch { /* */ }; gate = '落盘异常' }
+    }
+    return { updated, skipped, gate }
+  }
+
   /**
    * 深睡 parent 兜底（2026-09-08 修复：无 parent 直接崩 —— reading 'options'）。
    * 悖论：深睡在「全部会话停滞/结束」时触发，此时 ctx.agents.roots() 常为空，
@@ -991,13 +1075,21 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         try { body = readFileSync(join(resolved.root, f), 'utf8') } catch { /* 无文件=空 */ }
         return `### ${f}\n${body.trim() || '（空）'}`
       }).join('\n\n')
+      // v6 指针自动维护材料：现行 MEMORY 索引行（pointerOps 扩容/重构的 match 逐字取自此处；USER/AGENT 行已在现行画像）
+      const currentMemIndex = (() => {
+        try {
+          const b = readFileSync(join(resolved.root, 'MEMORY.md'), 'utf8')
+          return b.split(/\r?\n/).map((l) => l.trim()).filter((l) => /^\[[^\]\s]+\]/.test(l)).join('\n') || '（暂无条目）'
+        } catch { return '（无 MEMORY.md）' }
+      })()
       validateProvider()
       const userInput = [
         '## 当天记忆痕迹（作用域=本日，不做全库扫描）',
         traces,
         `## 现行原则/路径（冲突时 replace，match 逐字取自此清单）\n${currentList}`,
         `## 现行画像（profileOps 的 replace match 逐字取自此处）\n${currentProfiles}`,
-        '请按规则处理：提炼跨任务泛化原则与双画像更新指令，输出 JSON。',
+        `## 现行知识索引（MEMORY.md；pointerOps 扩容/重构的 match 逐字取自此处）\n${currentMemIndex}`,
+        '请按规则处理：提炼跨任务泛化原则与双画像/知识索引更新指令，输出 JSON。',
       ].join('\n\n')
       const resolvedLlm = resolveLlm(config.sleepProvider, config.sleepModel)
       const useProvider = !!resolvedLlm && providerFailCount < 2
@@ -1049,8 +1141,12 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
             if (r === 'added') profileAdded++
           }
         }
-        log(`deep sleep: stop=${stop} 原则 +${app.added}/替换 ${app.replaced}/跳过 ${app.skipped}（${app.gate}）画像 +${profileAdded}`)
-        audit({ kind: 'deep-sleep', stop, added: app.added, replaced: app.replaced, skipped: app.skipped, profiles: profileAdded, gate: app.gate })
+        // v6 指针自动维护：pointerOps（update 原地替换整行，走 write_gate；扩容概况/重构指针 §）
+        const ptrRes = (stop === 'completed' && out)
+          ? await applyPointerOps(resolved.root, out)
+          : { updated: 0, skipped: 0, gate: `stop=${stop}` }
+        log(`deep sleep: stop=${stop} 原则 +${app.added}/替换 ${app.replaced}/跳过 ${app.skipped}（${app.gate}）画像 +${profileAdded} 指针更新 ${ptrRes.updated}/跳过 ${ptrRes.skipped}（${ptrRes.gate}）`)
+        audit({ kind: 'deep-sleep', stop, added: app.added, replaced: app.replaced, skipped: app.skipped, profiles: profileAdded, pointers: ptrRes.updated, ptrSkipped: ptrRes.skipped, gate: app.gate })
         if (stop === 'completed') {
           // 路线② 晨起摘要 delta：深睡消化后的行级 diff（新增/替换 [原则]/[路径]/画像行 ≤3）→ suite/knowledge/delta.md
           // 语义：delta 是「最近变化的新闻」，AGENT.md/USER.md 是档案全本；delta 永非事实源，过期即弃（下轮深睡覆盖）。
