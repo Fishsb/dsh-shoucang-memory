@@ -153,6 +153,7 @@ export const DEEP_SLEEP_PROMPT = `你是深度睡眠归纳子代理（守藏记�
 - **跨工作区红线**：记忆库是全局单库，痕迹可能来自多个工作区，而原则会常驻注入到**所有**工作区会话。含项目专名/具体路径/版本号/一次性事实的经验一律不提炼（skipped 注明「项目专属」）；只在单一项目语境成立的结论同样不提炼——宁缺毋滥，误注入比漏提炼危害大。
 - pending 内容尚未入册 notes 的，不得作为源指针（仅作背景理解）；找不到 notes 锚点就不提炼（宁缺毋滥）。
 - 与既有原则/路径冲突时用 replace（match=既有行原文，须逐字来自给定「现行原则/路径」清单）；否则 add。
+- **v5.4 树状纪律**：notes 小节的**结构生长（分裂新子节）由事件蒸馏自动完成**（写侧按内容量归并 vs 分裂 ###）；你**不新建/不合并 notes 小节**（深睡聚焦画像/原则/路径提炼，树形整编——合并冗余子节/降级冷枝——在树出现冗余后由后续整编步骤做，本契约不改 JSON 结构）。源指针仍指向真实存在的 §小节（含子节路径如 §父节/子节 若材料中已存在）。
 - 独立完成：不 spawn 子代理、不使用任何工具，只依据给定材料。
 输出：只输出一行 JSON（不要 reasoning、不要其他文本）：
 {"principles":[{"action":"add","text":"[原则] 排障先看根因 · 先验证成本低再修改成本高 → notes/lessons.md §A/§B"},{"action":"add","text":"[路径] DSH 插件升级 · ①提交推送 ②cp 覆盖 lib ③sc restart ④四端点 200 → notes/flows.md §升级"},{"action":"replace","match":"[原则] 既有原则原文行","text":"[原则] ... → notes/tools.md §C"}],"profileOps":[{"target":"USER.md","action":"add","section":"沟通偏好","text":"- ... ← 源: notes/lessons.md §A"}],"skipped":[{"title":"...","reason":"≤30字"}]}
