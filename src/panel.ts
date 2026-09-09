@@ -26,7 +26,7 @@ import { gunzipSync, zstdDecompressSync } from 'node:zlib'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { homedir } from 'node:os'
 import { dshHome, knowledgeRoot, memoryLibRoot } from './targets.js'
-import { vecStats } from './vec.js'
+import { vecStats, clearVecCache } from './vec.js'
 import { deepSleepShare } from './deepsleep-share.js'
 import { schedulerShare } from './scheduler-share.js'
 import { fileURLToPath } from 'node:url'
@@ -1468,6 +1468,16 @@ const MAX_PY_PER_ROUND = 24
         return sendJson(res, 200, { ok: true, merged, reloadRequired: true })
       }
       sendJson(res, 200, { persisted: readSuiteConfig() })
+    } catch (e) { sendJson(res, 500, { error: String(e) }) }
+  })
+
+  // P0（2026-09-10 审查）：清向量缓存——换 embedding 模型后旧向量必须失效，否则新旧混用语义失真。
+  // 清磁盘 .vector-cache.jsonl + 内存；下次召回按新模型惰性重嵌（vec.ts model 指纹已保证不误用旧向量）。
+  route('/vector/cache/clear', (_req, res) => {
+    try {
+      const r = clearVecCache()
+      injectCache.at = 0 // 缓存清理后召回将重建，注入无关但保持缓存策略一致
+      sendJson(res, 200, r)
     } catch (e) { sendJson(res, 500, { error: String(e) }) }
   })
 

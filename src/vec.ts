@@ -9,7 +9,7 @@
  *  - 融合参照 M7 benchmark：dense 0.7 + lexical 0.3（min-max 归一后加权），dense 主、lexical 稳。
  *  - 零硬编码路径；缓存落 <knowledgeRoot>/.vector-cache.jsonl；provider 不可用自动降级词法，闭环不中断。
  */
-import { readFileSync, existsSync, mkdirSync, appendFileSync, writeFileSync } from 'node:fs'
+import { readFileSync, existsSync, mkdirSync, appendFileSync, writeFileSync, unlinkSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { knowledgeRoot, recallIndex, type RecallRow } from './targets.js'
 
@@ -21,8 +21,10 @@ export interface EmbedCfg {
 }
 
 const CACHE_FILE = (): string => join(knowledgeRoot(), '.vector-cache.jsonl')
-/** in-memory 行向量缓存（file+line → hash+vec）；进程内热用，首次读盘 */
-const memCache = new Map<string, { file: string; line: string; hash: number; vec: number[] }>()
+/** in-memory 行向量缓存（file+line+model → hash+vec）；进程内热用，首次读盘 */
+const memCache = new Map<string, { file: string; line: string; hash: number; vec: number[]; model: string }>()
+/** 缓存 model 指纹（2026-09-10 审查 P0）：换 embedding 模型后旧向量必须失效重嵌，否则新旧向量混用语义失真 */
+const cacheKey = (file: string, hash: number, model: string): string => file + '\u0000' + hash + '\u0000' + model
 
 // U1（2026-09-09）：召回运行态统计（轻量内存，供 /vector/status2 与 overview.vector 展示；不入库非事实源）
 export const vecStats = {
@@ -50,6 +52,17 @@ export function cosine(a: number[], b: number[]): number {
   return dot / (Math.sqrt(na) * Math.sqrt(nb))
 }
 
+/** 清向量缓存（2026-09-10 P0）：删磁盘缓存 + 清内存——换 embedding 模型后调用，旧模型向量全部失效 */
+export function clearVecCache(): { cleared: boolean; removed: number; reason?: string } {
+  let removed = 0
+  try {
+    const f = CACHE_FILE()
+    if (existsSync(f)) { unlinkSync(f); removed++ }
+  } catch (e) { return { cleared: false, removed, reason: 'cache unlink fail: ' + String((e as Error).message).slice(0, 80) } }
+  memCache.clear()
+  return { cleared: true, removed }
+}
+
 const lineHash = (s: string): number => {
   let h = 0
   for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0
@@ -64,19 +77,21 @@ function loadCache(): void {
     for (const l of readFileSync(f, 'utf8').split('\n')) {
       if (!l.trim()) continue
       try {
-        const o = JSON.parse(l) as { file: string; line: string; hash: number; vec: number[] }
-        memCache.set(o.file + '\u0000' + o.hash, o)
+        const o = JSON.parse(l) as { file: string; line: string; hash: number; vec: number[]; model?: string }
+        // 旧缓存（无 model 字段）不载入内存——缺失指纹=无法确证模型一致，宁缺毋滥待重嵌
+        if (!o.model) continue
+        memCache.set(cacheKey(o.file, o.hash, o.model), { file: o.file, line: o.line, hash: o.hash, vec: o.vec, model: o.model })
       } catch { /* 坏行跳过 */ }
     }
   } catch { /* 无缓存 */ }
 }
 
-function saveLine(file: string, line: string, hash: number, vec: number[]): void {
+function saveLine(file: string, line: string, hash: number, vec: number[], model: string): void {
   try {
     const f = CACHE_FILE()
     mkdirSync(dirname(f), { recursive: true })
-    appendFileSync(f, JSON.stringify({ file, line, hash, vec }) + '\n', 'utf8')
-    memCache.set(file + '\u0000' + hash, { file, line, hash, vec })
+    appendFileSync(f, JSON.stringify({ file, line, hash, vec, model }) + '\n', 'utf8')
+    memCache.set(cacheKey(file, hash, model), { file, line, hash, vec, model })
   } catch { /* 写缓存失败=下次重嵌，无害 */ }
 }
 
@@ -140,9 +155,10 @@ export async function recallRanked(
     }
     const need: RecallRow[] = []
     const vecRows: Array<{ row: RecallRow; vec: number[] }> = []
+    const mdl = String(cfg.model || 'bge-m3') // 缓存模型指纹（换模型→旧向量不命中→重嵌）
     for (const r of pool) {
       const h = lineHash(r.line)
-      const hit = memCache.get(r.file + '\u0000' + h)
+      const hit = memCache.get(cacheKey(r.file, h, mdl))
       if (hit) vecRows.push({ row: r, vec: hit.vec })
       else need.push(r)
     }
@@ -152,7 +168,7 @@ export async function recallRanked(
       if (vecs && vecs.length === batch.length) {
         for (let i = 0; i < batch.length; i++) {
           const v = vecs[i]
-          if (v && v.length) { saveLine(batch[i].file, batch[i].line, lineHash(batch[i].line), v); vecRows.push({ row: batch[i], vec: v }) }
+          if (v && v.length) { saveLine(batch[i].file, batch[i].line, lineHash(batch[i].line), v, mdl); vecRows.push({ row: batch[i], vec: v }) }
         }
       }
     }

@@ -14,6 +14,12 @@ export declare const vecStats: {
     lastHit: string;
 };
 export declare function cosine(a: number[], b: number[]): number;
+/** 清向量缓存（2026-09-10 P0）：删磁盘缓存 + 清内存——换 embedding 模型后调用，旧模型向量全部失效 */
+export declare function clearVecCache(): {
+    cleared: boolean;
+    removed: number;
+    reason?: string;
+};
 /**
  * 读侧召回（向量档就绪时）：词法 topK 打底 → 行向量惰性补齐 → dense topK 候选 → 0.7dense ⊕ 0.3lex 融合重排。
  * 返回行附带 fused/dense；向量不可用（未配置/失败/缓存空且无 key）时 = 纯词法结果（dense=undefined）。
