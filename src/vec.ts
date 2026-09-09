@@ -96,6 +96,17 @@ function saveLine(file: string, line: string, hash: number, vec: number[], model
   } catch { /* 写缓存失败=下次重嵌，无害 */ }
 }
 
+/**
+ * 通用语义相似（v6 向量政策第二批 2026-09-10）：任意两段文本的向量余弦（dense 决策信号）。
+ * 未启用/失败 → null（调用方自行词法/阈值兜底，闭环不中断）。嵌入不落缓存（单次使用）。
+ */
+export async function semanticSim(a: string, b: string, cfg: EmbedCfg): Promise<number | null> {
+  if (!cfg.enabled || !cfg.baseUrl || !cfg.model || !a.trim() || !b.trim()) return null
+  const vs = await embedTexts(cfg, [a.slice(0, 512), b.slice(0, 512)])
+  if (!vs || vs.length < 2 || !vs[0] || !vs[0].length || !vs[1] || !vs[1].length) return null
+  return cosine(vs[0], vs[1])
+}
+
 async function embedTexts(cfg: EmbedCfg, texts: string[]): Promise<number[][] | null> {
   if (!cfg.enabled || !cfg.baseUrl || !cfg.model) return null
   try {

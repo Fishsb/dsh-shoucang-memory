@@ -29,7 +29,7 @@ import {
   dshHome, knowledgeRoot, memoryLibRoot, memorySkillPresent, resolveTarget, loadWhitelist, gateMemoryAppend, recallIndex,
   type Whitelist, type RouteTarget,
 } from './targets.js'
-import { recallRanked, type EmbedCfg } from './vec.js'
+import { recallRanked, semanticSim, type EmbedCfg } from './vec.js'
 
 type AppContext = {
   tools: { register(tool: unknown): unknown }
@@ -268,13 +268,14 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     for (let i = 0; i + 1 < zh.length; i++) out.add(zh.slice(i, i + 2))
     return [...out]
   }
-  const ensureFlowCandidate = (sid: string, intent: string): void => {
+  const ensureFlowCandidate = async (sid: string, intent: string): Promise<void> => {
     if (!intent || intent.length < 8) return
     try {
       mkdirSync(candidateDir, { recursive: true })
       const day = new Date().toISOString().slice(0, 10)
       // 同型聚合（memory-core-model §4 转正数据源）：intent 指纹与既有候选「类型线索」共享 ≥2 token 视为同型，
       // 追加本次源会话 + 成功计数到既有文件（跨会话可见重复 → 深睡可归纳 [路径]），否则新建候选。
+      // v6 向量第二批：词法无同型时再走语义（dense ≥0.80 保守并，补措辞迥异漏网；embed 未启用/失败=新建）
       const tokens = intentTokens(intent)
       let matched: string | null = null
       let matchedScore = 0
@@ -287,6 +288,23 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
           const inter = tokens.filter((tk) => existing.includes(tk)).length
           if (inter >= 2 && inter > matchedScore) { matched = f; matchedScore = inter }
         } catch { /* 坏候选跳过 */ }
+      }
+      if (!matched) {
+        try {
+          const ecfg = embedCfgOf()
+          if (ecfg.enabled) {
+            let bestSim = 0.8
+            for (const f of existsSync(candidateDir) ? readdirSync(candidateDir).filter((x) => x.endsWith('.md')) : []) {
+              try {
+                const body = readFileSync(join(candidateDir, f), 'utf8')
+                const m = body.match(/- 类型线索：(.+)/)
+                if (!m) continue
+                const s = await semanticSim(intent, m[1].trim(), ecfg)
+                if (s !== null && s > bestSim) { bestSim = s; matched = f }
+              } catch { /* 坏候选跳过 */ }
+            }
+          }
+        } catch { /* 语义匹配失败=按词法结论（新建） */ }
       }
       if (matched) {
         const fp = join(candidateDir, matched)
@@ -508,6 +526,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
           const themeNew = mNew[2].trim()
           const tn = intentTokens(themeNew)
           let dup = 'none'
+          const sameTagLines: string[] = []
           try {
             for (const ol of readFileSync(join(resolved.root, t), 'utf8').split(/\r?\n/)) {
               const m = ol.match(/^\[([^\]\s]+)\]\s*([^·]+?)\s*·/)
@@ -520,8 +539,24 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
                 const union = new Set([...tn, ...to]).size
                 if (union > 0 && inter / union >= 0.66) { dup = 'approx'; break }
               }
+              sameTagLines.push(ol.trim())
             }
           } catch { /* 目标文件不存在=无既有行 */ }
+          // ③ 向量近似（v6 第二批 2026-09-10）：embed 可用时对同标签既有行整行语义比对（去指针段），
+          //    高阈值 0.80 保守拒并——补词法漏网的「措辞迥异同事实」；未启用/失败自动跳过（精确+词法已兜底）
+          if (dup === 'none' && sameTagLines.length && tn.length >= 1) {
+            try {
+              const ecfg = embedCfgOf()
+              if (ecfg.enabled) {
+                const headOf = (l: string): string => { const i = l.indexOf('→'); return (i >= 0 ? l.slice(0, i) : l).trim() }
+                const qText = headOf(nl)
+                for (const ol of sameTagLines) {
+                  const s = await semanticSim(qText, headOf(ol), ecfg)
+                  if (s !== null && s >= 0.8) { dup = 'sem'; break }
+                }
+              }
+            } catch { /* 语义拒并失败=按既有词法结论 */ }
+          }
           if (dup !== 'none') {
             rejected++
             audit({ sid, kind: 'gate-reject', target: t, reason: `dup-index-topic:${dup}` })
@@ -705,7 +740,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         if (stop === 'completed' && out) {
           const intent = intentOf(deltaText)
           recordEpisode({ sid, intent: intent.slice(0, 120), route, fclass, llm: llmLabel, outcome: disp.targetLib, added: disp.added, rejected: disp.rejected, failed: disp.failed, lib: disp.targetLib })
-          if (route !== 'discard') ensureFlowCandidate(sid, intent)
+          if (route !== 'discard') await ensureFlowCandidate(sid, intent)
         }
         if (stop === 'completed' && out) {
           writeWatermark(sid, maxSeq)
