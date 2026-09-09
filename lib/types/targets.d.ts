@@ -87,4 +87,14 @@ export declare function recallIndex(root: string, query: string, topK?: number, 
     rows: RecallRow[];
     tokens: string[];
 };
+/**
+ * S5 近似召回（零命中兜底）：全文命中（score≥1）为空的降级分析。
+ * 词法近似的本质限制：零全文命中 = 无任何 token 命中任何行，逐行部分匹配（recallApprox 原设计）必然同为空——
+ * 真价值是给「库内主题地图」：列 notes/ 各文件小节（按关键词/语义标注），让 agent 知道库里有哪类话题可换问法，
+ * 并给出建议检索词（查询中属库内已知领域的 token，若有）。只读。
+ */
+export declare function recallApprox(root: string, query: string, scope?: 'agent' | 'all'): {
+    near: RecallRow[];
+    suggest: string[];
+};
 export declare function selftestMatrix(): string[];

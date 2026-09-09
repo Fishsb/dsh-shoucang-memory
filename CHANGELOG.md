@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Changed
+- **S5 召回零命中兜底（2026-09-09，assistant-focus-plan S5）**：`src/targets.ts` + `src/scheduler.ts` —— 新增 `recallApprox`（零命中降级分析）：① 建议检索词 = 查询 token 中在索引行出现过的高判别词（该领域库内有、换措辞可命中）；② **库内主题地图** = notes/ 各文件小节清单（换问法的线索，至多 12 条）——设计验证修正：词法零命中时逐行部分匹配必为空（与 recallIndex 同构），真价值是主题地图而非伪近似。`shoucang_recall` 零命中分支由静默新手态改输出「建议词 + 主题地图 + pending 提醒」。验证：typecheck/build/check-hardcode 零错误；行为验证（真零命中查询 → 主题地图 12 条 / 库内词场景 → 建议词正确）；lib 同步 + 热重载。
 - **S4 episode/转正数据源硬化（2026-09-09，assistant-focus-plan S4）**：`src/distill.ts` —— ① **episode 触发放宽**：蒸馏「裁决完成」（stop=completed && out，无论入册多少）即留轻 episode（含 route/outcome），不再只在入册>0 时记——episode=「任务发生+结果」的同类判定/转正数据源（memory-core-model §3.1），discard 也是有效裁决；② **flow-candidate 同型聚合**：`ensureFlowCandidate` 新增 `intentTokens` 语义指纹（CJK 双字滑动 + 英文≥4 词），与既有候选类型线索共享 ≥2 token 判同型 → 追加本次源会话并累计 `成功次数/跨会话` 计数（同会话去重），否则新建；③ **深睡材料第 5 段转正置顶**：候选按「成功≥2 且跨会话≥2」转正门槛排序置顶，深睡可据此直接归纳 [路径]（memory-core-model §4）；④ `DEEP_SLEEP_PROMPT` 路径判据补转正门槛句。存量 2 候选迁移新格式（计数=1）。验证：typecheck/build/check-hardcode 零错误；lib 同步部署 + 热重载 active。
 
 ### Added

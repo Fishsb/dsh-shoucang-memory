@@ -19,7 +19,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import z from 'schemastery'
 import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { dshHome, selftestMatrix, suiteAssemblyMatrix, memoryLibRoot } from './targets.js'
+import { dshHome, selftestMatrix, suiteAssemblyMatrix, memoryLibRoot, recallApprox } from './targets.js'
 import { recallRanked } from './vec.js'
 import { registerDistill } from './distill.js'
 import { deepSleepShare } from './deepsleep-share.js'
@@ -327,7 +327,18 @@ export function applyScheduler(ctx: Context, config: Config): void {
               apiKeyEnv: config.embedApiKeyEnv || 'EMBED_API_KEY',
             })
             if (!rows.length) {
-              return `shoucang_recall：无命中（库 ${root}；token=${tokens.join(',') || '空'}）\n- 无经验可用 = 新手态：直接按常识开干，收尾把差异沉淀为候选，同类第二次即可转正成经验。`
+              // S5 召回零命中兜底（assistant-focus-plan S5）：不再静默新手态——
+              // 给「库内主题地图 + 建议检索词 + pending 提醒」：near=notes/ 各文件小节清单（换问法的线索），
+              // 建议词=库内出现过的查询高判别 token；并提醒收尾沉淀（跨会话第二次同型即转正成经验）。
+              const { near, suggest } = recallApprox(root, query, scope === 'agent' ? 'agent' : 'all')
+              const out: string[] = [`shoucang_recall：无全文命中（库 ${root}；token=${tokens.join(',') || '空'}）`]
+              if (suggest.length) out.push(`建议：查询词中「${suggest.join(' / ')}」在库内出现过——换措辞/组合重试（用库内术语）更易命中`)
+              if (near.length) {
+                out.push('库内主题地图（可围绕以下话题换问法，或 get_file 直读详情）：')
+                out.push(...near.map((r) => `- ${r.line}`))
+              } else out.push('库内暂无 notes 主题（记忆库尚空/新库）——首次经验收尾沉淀候选，同类第二次跨会话即转正')
+              out.push('下一步：按上面线索换词重试；确认经验有价值 → 收尾四步沉淀候选，不静默丢弃')
+              return out.join('\n')
             }
             return [
               `shoucang_recall：命中 ${rows.length} 条（${mode === 'fusion' ? 'dense0.7+lexical0.3 融合' : '词法'}；token=${tokens.join(',')}）`,
