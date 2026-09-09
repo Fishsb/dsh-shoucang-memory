@@ -35,9 +35,27 @@ const tmpText = fs.readFileSync(tmp, 'utf8');
 const chars = tmpText.replace(/\s+/g, '').length;
 
 const issues = [];
+// notes 根与小节索引（v17 § 存在性校验共用；模块级避免作用域分裂）
+const notesDir = join(skillDir, 'notes');
+const sectionIndexCache = {};
+const listSections = (stem) => {
+  if (sectionIndexCache[stem]) return sectionIndexCache[stem];
+  const f = join(notesDir, stem + '.md');
+  const out = new Set();
+  if (fs.existsSync(f)) {
+    const body = fs.readFileSync(f, 'utf8');
+    for (const m of body.matchAll(/^##\s+(.+?)\s*$/gm)) {
+      out.add(String(m[1]).replace(/\s*（20\d{2}[-/]\d{1,2}[-/]\d{1,2}）\s*$/, '').trim());
+    }
+  }
+  sectionIndexCache[stem] = out;
+  return out;
+};
+
 // 指针核对：MEMORY.md / USER.md / AGENT.md 的拟写入内容会引用 notes/ 子文档（v16：PRINCIPLES.md 退役，习得原则并入 AGENT.md）
+// v17 补缺（2026-09-09 实态：深睡产物指向 notes/flows.md §深睡蒸馏 空壳小节仍 gate=pass——只校验了文件存在）：
+// 索引行指针必须指向**真实存在的 §小节**（含「A/B 斜杠双小节」与「小节名含括号日期」两种形态），空壳小节=悬空指针 exit 2。
 if (base === 'MEMORY.md' || base === 'USER.md' || base === 'AGENT.md') {
-  const notesDir = join(skillDir, 'notes');
   const indexText = fs.existsSync(join(notesDir, 'INDEX.md')) ? fs.readFileSync(join(notesDir, 'INDEX.md'), 'utf8') : '';
   for (const m of tmpText.matchAll(/notes\/([A-Za-z0-9_-]+)\.md/g)) {
     if (!fs.existsSync(join(notesDir, m[1] + '.md'))) issues.push('指针悬空: notes/' + m[1] + '.md 不存在');
@@ -56,17 +74,33 @@ if (base === 'MEMORY.md' || base === 'USER.md' || base === 'AGENT.md') {
     const line = raw.trim();
     if (!line.startsWith('[') || !line.includes(']')) continue;
     const short = line.length > 30 ? line.slice(0, 28) + '…' : line;
-    if (!line.includes('·')) { formatIssues.push('缺概况段(·): ' + short); continue; }
-    if (!/→\s*notes\//.test(line)) formatIssues.push('缺 notes 指针(→): ' + short);
+    let lineOk = true;
+    if (!line.includes('·')) { formatIssues.push('缺概况段(·): ' + short); lineOk = false; }
+    if (!/→\s*notes\//.test(line)) { formatIssues.push('缺 notes 指针(→): ' + short); lineOk = false; }
     const isPath = line.startsWith('[路径]');
     const arrowCount = (line.match(/→/g) || []).length;
     const summary = line.split('·').slice(1).join('·').split('→')[0].replace(/\s+/g, '');
-    if (isPath && arrowCount > 1) formatIssues.push('路径步骤勿用 →（与 → notes/ 指针歧义），请用 ①②③ 串联: ' + short);
-    else if (summary.length > (isPath ? 40 : 30)) formatIssues.push((isPath ? '路径概要超40字' : '概况超30字') + '(' + summary.length + '): ' + summary.slice(0, 30) + '…');
-    if (/（?20\d{2}-\d{1,2}-\d{1,2}）?/.test(line)) formatIssues.push('禁带日期戳（维护元信息归 notes/INDEX.md）: ' + short);
+    if (isPath && arrowCount > 1) { formatIssues.push('路径步骤勿用 →（与 → notes/ 指针歧义），请用 ①②③ 串联: ' + short); lineOk = false; }
+    else if (summary.length > (isPath ? 40 : 30)) { formatIssues.push((isPath ? '路径概要超40字' : '概况超30字') + '(' + summary.length + '): ' + summary.slice(0, 30) + '…'); lineOk = false; }
+    if (/（?20\d{2}-\d{1,2}-\d{1,2}）?/.test(line)) { formatIssues.push('禁带日期戳（维护元信息归 notes/INDEX.md）: ' + short); lineOk = false; }
     const topic = line.slice(line.indexOf(']') + 1).split('·')[0].trim();
     if (topic.replace(/\s/g, '').length > 12) formatHints.push('主题超12字（建议精简，不拦截）: ' + short);
     else if (/[:：]/.test(topic)) formatHints.push('主题含冒号复合（补充说明移概况或详情，不拦截）: ' + short);
+    // § 小节存在性（仅在行格式通过后检查——格式已违规的行报 exit 4，不再叠小节错）
+    // 匹配口径=read_section.mjs 权威：title===kw || title.includes(kw) || kw.includes(title)（双向包含，§=关键词锚）
+    if (lineOk) {
+      const pm = line.match(/notes\/([A-Za-z0-9_-]+)\.md\s*§(.+)$/);
+      if (pm) {
+        const titles = [...listSections(pm[1])];
+        // § 后可能并列多小节「§A/§B」或单小节名（可含空格/括号），逐个核对
+        for (const part of pm[2].split('/')) {
+          const kw = part.replace(/^§/, '').trim().toLowerCase();
+          if (!kw || /^[→（]/.test(kw)) continue;
+          const hit = titles.some((t) => { const tl = t.toLowerCase(); return tl === kw || tl.includes(kw) || kw.includes(tl); });
+          if (!hit) issues.push('指针悬空小节: notes/' + pm[1] + '.md §' + kw + ' 不存在（先建小节或修正指针）');
+        }
+      }
+    }
   }
 }
 

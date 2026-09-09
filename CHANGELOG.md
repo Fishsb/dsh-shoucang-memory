@@ -5,6 +5,8 @@
 ## [Unreleased]
 
 ### Fixed
+- **write_gate § 小节存在性校验补缺（2026-09-09，S1 实证发现）**：此前指针只校验 `notes/<f>.md` 文件存在、**不校验 §小节真实存在**——深睡产物曾指向 `notes/flows.md §深睡蒸馏` 空壳小节仍 gate=pass。现 `memory_write_gate.mjs` 增加小节存在性核对（匹配口径=read_section.mjs 权威：title===kw || 双向包含，支持 `§A/§B` 并列与括号日期小节名）；只对格式通过的行检查（格式违规 exit 4 不被小节错 exit 2 抢占）。同步修正测试夹具的虚构 `§调试流程` 为真实小节 + 新增 3 用例（真实过/空壳拒/缩写过）→ **35 PASS / 0 FAIL**。
+- **助理目标 S1 深睡实证闭环（2026-09-09，主线 exit 达成）**：手动 POST /deepsleep/trigger 消费 flow-candidate → 归纳子代理 stop=completed（audit：added 1 / profiles 0 / gate pass）→ **AGENT.md 产出首条带源指针 `[路径]` 行**（`[路径] 深睡记忆蒸馏 · ①区间起点先取值显式传参 ②按判据三通道提炼 ③done 才推进水位 → notes/flows.md §深睡蒸馏`）+ 晨起摘要 delta.md 生成（1 行，注入下会话热记忆「🧠 最近成长」实证）。配套：notes/flows.md 补建 §深睡蒸馏 锚点小节。方案文档 `docs/assistant-focus-plan.md` 落盘（S1-S6 阶段施工参照）。
 - **架构补足第一批（2026-09-09，实态审计驱动：R3 项目事实丢失 + 深睡/蒸馏 JSON 失败水位误推进）**：`src/distill.ts` —— ① `resolveWorkspace` 增加瞬态容错（转录定位失败重试 3 次 × 1.5s 退避；路径已定位但无 workspace 归属=永久，不重试）；② `writeDispatch` route=project 且 workspace 反解失败时，projectCards **不再整批拒收丢弃**（审计实锤：route=project 入册 0/拒收 6，6 条全同因「workspace 反解失败」）——改为幂等降级落 `pending/`（`<date>-project-defer-<slug>.md`，符合蒸馏候选命名规范 → 下轮随 pending 重新裁决：workspace 恢复则直写 devref、确认泛化则入 notes；同题文件已存在不去重堆积），跨工作区红线不变（降级=暂存待认领，不落全局 notes/索引）；③ 深睡与蒸馏「stop=completed 但 out=null（JSON 解析失败，日志实锤 `Unexpected end of JSON input`×2）」一律按 failed 回滚水位——此前 completed 即 done 会推进水位，把整批痕迹/增量永久划出窗口（归纳/蒸馏结果整轮丢失）。验证：typecheck/build/check-hardcode 零错误 + 测试 32 PASS / 0 FAIL。
 
 ### Added

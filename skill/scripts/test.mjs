@@ -400,7 +400,7 @@ try {
   const tg = makeContainer();
   const gate = path.join(tg, 'scripts', 'memory_write_gate.mjs');
   const p1 = path.join(tg, 'p1.txt');
-  fs.writeFileSync(p1, '[原则] 排障先看根因 · 先验证成本低再修改成本高 → notes/lessons.md §调试流程\n');
+  fs.writeFileSync(p1, '[原则] 排障先看根因 · 先验证成本低再修改成本高 → notes/lessons.md §网络坑\n');
   run('原则门-正常', 'node', [gate, 'AGENT.md', p1], [0]);
   const p2 = path.join(tg, 'p2.txt');
   fs.writeFileSync(p2, ('[原则] 超限填充 · 原则填充内容超限'.repeat(200) + ' → notes/lessons.md §x') + '\n');
@@ -420,15 +420,15 @@ try {
   const tj = makeContainer();
   const gate = path.join(tj, 'scripts', 'memory_write_gate.mjs');
   const a1 = path.join(tj, 'a1.txt');
-  fs.writeFileSync(a1, '[路径] DSH 插件升级 · ①构建验证 ②覆盖 lib ③重启 ④四端点 200 → notes/lessons.md §调试流程\n');
+  fs.writeFileSync(a1, '[路径] DSH 插件升级 · ①构建验证 ②覆盖 lib ③重启 ④四端点 200 → notes/lessons.md §网络坑\n');
   run('路径门-正常', 'node', [gate, 'AGENT.md', a1], [0]);
   const a2 = path.join(tj, 'a2.txt');
-  fs.writeFileSync(a2, '[路径] 升级 · ①备份 → ②覆盖 → ③重启 → notes/lessons.md §调试流程\n');
+  fs.writeFileSync(a2, '[路径] 升级 · ①备份 → ②覆盖 → ③重启 → notes/lessons.md §网络坑\n');
   run('路径门-步内箭头', 'node', [gate, 'AGENT.md', a2], [4]);
   const a3 = path.join(tj, 'a3.txt');
-  fs.writeFileSync(a3, '[路径] 升级 · ' + '①②'.repeat(30) + ' → notes/lessons.md §调试流程\n');
+  fs.writeFileSync(a3, '[路径] 升级 · ' + '①②'.repeat(30) + ' → notes/lessons.md §网络坑\n');
   run('路径门-概要超40字', 'node', [gate, 'AGENT.md', a3], [4]);
-  fs.appendFileSync(path.join(tj, 'AGENT.md'), '\n[路径] DSH 插件升级 · ①构建 ②覆盖 lib ③重启 ④验证 → notes/lessons.md §调试流程\n');
+  fs.appendFileSync(path.join(tj, 'AGENT.md'), '\n[路径] DSH 插件升级 · ①构建 ②覆盖 lib ③重启 ④验证 → notes/lessons.md §网络坑\n');
   const hp2 = execFileSync('node', [path.join(tj, 'scripts', 'memory_health_check.mjs')], { encoding: 'utf8', cwd: tj, env: { ...process.env, MEMORY_ROOT: tj } });
   const agentSeg = (hp2.split('=== AGENT.md')[1] || '').split('===')[0]; // AGENT 段
   // tags 含 '路径' → 追加的 [路径] 行不得被判无标签：无标签为 0，或夹具自身有不合规行时该行不得出现在样例里
@@ -437,6 +437,23 @@ try {
   console.log(`${okPath ? '✅' : '❌'} v17-[路径] 行门禁（正常0/步内箭头4/超40字4/体检 tag 含路径）`);
   fs.rmSync(tj, { recursive: true, force: true });
 } catch (e) { fail++; console.log('❌ v17-[路径] 行门禁（异常: ' + failMsg(e) + '）'); }
+
+// 27) § 小节存在性校验（2026-09-09 补缺：深睡产物曾指向 notes/flows.md §深睡蒸馏 空壳小节仍 gate=pass）：
+//     真实小节 exit 0 / 空壳小节 exit 2 / 关键词缩写（双向包含）exit 0
+try {
+  const tx = makeContainer();
+  const gate = path.join(tx, 'scripts', 'memory_write_gate.mjs');
+  const s1 = path.join(tx, 's1.txt');
+  fs.writeFileSync(s1, '[原则] 排障先看根因 · 先验证成本低再修改成本高 → notes/lessons.md §网络坑\n');
+  run('小节门-真实小节', 'node', [gate, 'AGENT.md', s1], [0]);
+  const s2 = path.join(tx, 's2.txt');
+  fs.writeFileSync(s2, '[原则] 排障先看根因 · 先验证成本低再修改成本高 → notes/lessons.md §深睡蒸馏\n');
+  run('小节门-空壳小节拒', 'node', [gate, 'AGENT.md', s2], [2]);
+  const s3 = path.join(tx, 's3.txt');
+  fs.writeFileSync(s3, '[路径] 深睡归纳 · ①起点先取值 ②三通道提炼 ③done 推进水位 → notes/lessons.md §网络坑\n');
+  run('小节门-关键词缩写', 'node', [gate, 'AGENT.md', s3], [0]);
+  fs.rmSync(tx, { recursive: true, force: true });
+} catch (e) { fail++; console.log('❌ § 小节存在性校验（异常: ' + failMsg(e) + '）'); }
 
 console.log(`\n结果: ${pass} PASS / ${fail} FAIL`);
 process.exit(fail ? 1 : 0);
