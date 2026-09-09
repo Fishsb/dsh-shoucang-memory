@@ -47,6 +47,10 @@ export interface DistillConfig {
     activationTOff?: number;
     activationCooldownSteps?: number;
     activationTopK?: number;
+    embedEnabled?: boolean;
+    embedBaseUrl?: string;
+    embedModel?: string;
+    embedApiKeyEnv?: string;
 }
 /**
  * 会话活跃状态机（Session Activity FSM）——深度睡眠「是否算停滞」的唯一判据源。

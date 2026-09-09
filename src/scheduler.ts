@@ -477,6 +477,10 @@ export function applyScheduler(ctx: Context, config: Config): void {
       activationTOff: config.activationTOff,
       activationCooldownSteps: config.activationCooldownSteps,
       activationTopK: config.activationTopK,
+      embedEnabled: config.embedEnabled,
+      embedBaseUrl: config.embedBaseUrl,
+      embedModel: config.embedModel,
+      embedApiKeyEnv: config.embedApiKeyEnv,
     })
     // 跨模块桥接：状态机 API 供 panel /deepsleep RPC 惰性读取；suite 矩阵供 panel /suite RPC 复用同一实现；
     // 蒸馏节流组运行时值供 panel /distill/config 展示（缺省值单一实现=本文件 Config，panel 不复制）

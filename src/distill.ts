@@ -29,6 +29,7 @@ import {
   dshHome, knowledgeRoot, memoryLibRoot, memorySkillPresent, resolveTarget, loadWhitelist, gateMemoryAppend, recallIndex,
   type Whitelist, type RouteTarget,
 } from './targets.js'
+import { recallRanked, type EmbedCfg } from './vec.js'
 
 type AppContext = {
   tools: { register(tool: unknown): unknown }
@@ -74,6 +75,11 @@ export interface DistillConfig {
   activationTOff?: number // 滞回下阈（缺省 0.52）
   activationCooldownSteps?: number // 触发后冷却步数（缺省 3）
   activationTopK?: number // 召回条数（缺省 3）
+  // ═══ v6 向量政策（2026-09-10 用户拍板：项目各环节凡向量可提质处皆用之，质量优先；效率问题遇到再解）═══
+  embedEnabled?: boolean // 嵌入开关（scheduler embedEnabled；本地 bge-m3 零 token）
+  embedBaseUrl?: string // OpenAI 兼容 embeddings 基址
+  embedModel?: string // embedding 模型名
+  embedApiKeyEnv?: string // key 环境变量名（本地免 key）
 }
 
 /**
@@ -632,9 +638,17 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         candIncluded.push(f)
         return chunk
       }).join('\n')
+      // v6 向量政策：给裁决 agent 喂「相关既有记忆」上下文（recallRanked 融合召回）——Q0 已有归属 / Q3 能合并
+      // 判定从此有库内证据（命中既有同主题时模型应走 skipped/合并而非新建，降低重复入册）；未启用/失败自动省略
+      let relMemLines = ''
+      try {
+        const rres = await recallRanked(memoryLibRoot(), deltaText.slice(0, 512), 5, 'all', embedCfgOf())
+        if (rres.rows.length) relMemLines = rres.rows.map((r) => `- ${r.line}`).join('\n')
+      } catch { /* 相关记忆上下文失败=省略 */ }
       const userInput = [
         `## 待蒸馏会话\nsessionId=${sid}（内存增量，水位 ${lastSeq}→${maxSeq}）`,
         `## 会话增量正文\n${deltaText}`,
+        relMemLines ? `## 相关既有记忆（recallRanked 召回，Q0 已有归属 / Q3 合并判据；命中即视为已覆盖候选）\n${relMemLines}` : '（相关既有记忆：未启用向量或零命中，按无历史裁决）',
         candIncluded.length ? `## 待固化候选（pending/ 中 ${candIncluded.length}/${candFiles.length} 个，预算 ${CAND_BUDGET} 字符内）\n${candText}` : (candFiles.length ? '（待固化候选超预算，本轮不携带；候选保留 pending 待下轮）' : '（无待固化候选）'),
         '请按规则处理：裁决可复用知识点并输出入册指令 JSON。',
       ].join('\n\n')
@@ -1447,7 +1461,17 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     cooldown: Math.max(0, Number(config.activationCooldownSteps) || 3),
     topK: Math.min(5, Math.max(1, Number(config.activationTopK) || 3)),
   }
-  const activationStep = (sid: string, event: any): void => {
+  // v6 向量政策：embed cfg 单一构造（取自 DistillConfig 可选字段，与 scheduler vec 通道同源；未配置=词法降级）
+  const embedCfgOf = (): EmbedCfg => ({
+    enabled: !!(config.embedEnabled && config.embedBaseUrl && config.embedModel),
+    baseUrl: String(config.embedBaseUrl || ''),
+    model: String(config.embedModel || ''),
+    apiKeyEnv: String(config.embedApiKeyEnv || ''),
+  })
+
+  // 路线④ 打扰度观察（v6 向量政策 2026-09-10：打分改 recallRanked 融合召回——dense 主、lexical 稳；
+  // sim 口径随 mode：fusion 的 score=0..100（已 min-max 归一）→ /100；lexical=命中数/tokens。阈值随影子样本再校准）
+  const activationStep = async (sid: string, event: any): Promise<void> => {
     try {
       if (!event) return
       const d = event.data || {}
@@ -1455,9 +1479,12 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       let text = ''
       for (const c of arr) if (c && c.type === 'text' && typeof c.text === 'string') text += c.text
       if (event.type !== 'user/message' || !text.trim()) return
-      const { rows, tokens } = recallIndex(memoryLibRoot(), text, actConf.topK, 'all')
-      if (!tokens.length) return
-      const sim = Math.min(1, (rows.length ? rows[0].score : 0) / tokens.length)
+      const rres = await recallRanked(memoryLibRoot(), text, actConf.topK, 'all', embedCfgOf())
+      const { rows, tokens } = rres
+      if (!tokens.length && !rows.length) return
+      const sim = !rows.length ? 0
+        : rres.mode === 'fusion' ? Math.min(1, (rows[0].score || 0) / 100)
+        : Math.min(1, rows[0].score / (tokens.length || 1))
       let st = actState.get(sid) || { state: 'idle', cooldown: 0, prevScore: 0 }
       const prev = st.state
       let emit = false
@@ -1470,7 +1497,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       try {
         mkdirSync(dirname(actShadowFile), { recursive: true })
         appendFileSync(actShadowFile, JSON.stringify({
-          at: new Date().toISOString(), kind: 'activation-step', sid: sid.slice(0, 8), mode: config.activationPrefetch ? 'prefetch-armed' : 'shadow',
+          at: new Date().toISOString(), kind: 'activation-step', sid: sidShort(sid), rmode: rres.mode, mode: config.activationPrefetch ? 'prefetch-armed' : 'shadow',
           state: st.state, prev, sim: Number(sim.toFixed(3)), tOn: actConf.on, tOff: actConf.off,
           emit, tokens: tokens.length, hit: rows.length ? rows[0].line.slice(0, 120) : '',
           pointers: rows.slice(0, 2).map((r) => r.pointer), excerpt: text.slice(0, 60),
@@ -1534,7 +1561,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       if (origin === 'subagent') return
       noteEvent(sid, false)
       rememberAgent(a) // 深睡 parent 兜底缓存（任意根会话事件都刷新）
-      if (config.activationShadow !== false || config.activationPrefetch) activationStep(sid, event) // 路线④：影子默认开；prefetch 置位后决策通路照走（影子行 mode 区分），实际注入仍待影子校准（后续档）
+      if (config.activationShadow !== false || config.activationPrefetch) void activationStep(sid, event) // 路线④：影子默认开；prefetch 置位后决策通路照走（影子行 mode 区分），实际注入仍待影子校准（后续档）
     } catch { /* 状态迁移零抛出 */ }
   })
   ctx.effect(() => {
