@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### Added
+- **UI U1-U6 落地（2026-09-10，ui-impl-plan 施工图）**：后端——`/vector/status2`（真实 GPU provider 探测+缓存+vecStats，替代退役 vector_search.py）、`/embed/config`（GET+POST 合并写 scheduler.json）、`/memory/edit|remove|approve`（走 write_gate 门禁：临时文件整改→gate→rename 失败回滚；approve 双区 flow-candidates/pending→.processed）、overview 增 delta/vector/weekDiff、sections 增 backrefs 反链。前端——记忆板块 §0 状态徽章（蒸馏/向量/pending）+ §7 向量状态 + §8 delta + §9 周 diff、pending 行批准/忽略按钮、notes 详情被引用反链、画像行编辑（editable 行尾按钮）、参数调节「向量与模型·当前链路」节（30s 轮询防泄漏）。约束达成：画像/记忆板块分区结构零改动（只尾部/行尾 append）、sc-* 样式语言保留、写全走门禁、注入 M8 零改动。验证：端点 curl 实证（status2=DmlExecutionProvider/编辑改还原/remove 404/approve 双区）、35 PASS/0 FAIL。commits 50cf715+66209cd。
+
 ### Changed
 - **向量默认启用（本地 bge-m3 · GPU/DirectML，2026-09-09 用户拍板「按电脑性能配、质量为先 + 控 token/效率」）**：① `vec.ts` 词法打底空时不再直接返回——向量开则全量索引薄行池做 dense 检索（语义相似但措辞不同的真正价值场景）；本地端点免 key（localhost 无鉴权，云端仍须 API key）；② `scheduler.ts` embed 缺省开（embedEnabled true + embedBaseUrl `http://127.0.0.1:9915/v1` + model bge-m3；云端可配键不变）；③ 基础设施：下载 Xenova/bge-m3 q8（543MB，多语言 1024d，检索损失 <5%，=原 cjs 服务 dtype 配置）→ 建 D 盘 venv `D:\AI\venv-bge`（onnxruntime-directml 1.24.4）→ 新 GPU 服务 `bge-m3-openai-server-gpu.py`（DmlExecutionProvider 驱动 2070S，XLMRobertaTokenizer + q8 ONNX + cls pooling + L2 归一，OpenAI/Ollama 双兼容）→ nssm dsh-bge-embed 固化（AUTO_START）。实测：GPU 显存 ~1.6-2GB、融合召回缓存后 **200-300ms/查询**、语义查询精准命中（踩坑→网络坑教训/排障→排障原则/偏好→用户画像）。commit dfafb11。
 - **S5 召回零命中兜底（2026-09-09，assistant-focus-plan S5）**：`src/targets.ts` + `src/scheduler.ts` —— 新增 `recallApprox`（零命中降级分析）：① 建议检索词 = 查询 token 中在索引行出现过的高判别词（该领域库内有、换措辞可命中）；② **库内主题地图** = notes/ 各文件小节清单（换问法的线索，至多 12 条）——设计验证修正：词法零命中时逐行部分匹配必为空（与 recallIndex 同构），真价值是主题地图而非伪近似。`shoucang_recall` 零命中分支由静默新手态改输出「建议词 + 主题地图 + pending 提醒」。验证：typecheck/build/check-hardcode 零错误；行为验证（真零命中查询 → 主题地图 12 条 / 库内词场景 → 建议词正确）；lib 同步 + 热重载。

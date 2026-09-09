@@ -174,3 +174,7 @@
 | 卡住误判长任务 | 深度睡眠页调大 deepSleepProbeAfterMs；或手写 deepSleepProbeConfirm=3 |
 | 归档太激进/太保守 | archive.age_days 调大/调小；min_confidence 调高/调低 |
 | 重复合并太敏感 | merge.fingerprint_threshold 调低（更容易判重复）；补充合并边界 complement_floor |
+| 开/关语义召回 | 参数调节页「向量与模型·当前链路」：embedEnabled 开关（**重载生效**）；provider/缓存/召回状态同节可见 |
+| 向量换云端 | 手写 scheduler.json：embedBaseUrl / embedModel / embedApiKeyEnv（本地 bge-m3 免 key；云端须设 key env） |
+| 改画像/记忆条目 | 画像板块行尾「编辑」按钮（走 write_gate 门禁，exit 0 才落盘）；删除由同一写通道后端支持 |
+| 处理候选队列 | 记忆板块 pending 行「批准/忽略」（移 .processed；内容由后续蒸馏正常入册） |

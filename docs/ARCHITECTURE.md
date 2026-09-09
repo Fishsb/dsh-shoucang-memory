@@ -58,6 +58,12 @@ L4 交互（DSH Web GUI）
 - **模型选择说明**：q8 量化 = 原 cjs 服务 dtype 配置；嵌入模型 int8 检索损失 <5%（[HF 量化](https://huggingface.co/blog/embedding-quantization) 实证 94-100%），质量/资源/速度最佳平衡。
 - **缓存非事实源**：行文本是权威，`.vector-cache.jsonl` 可随时删除重建（行 hash 失效即重嵌）。
 
+### 5.1 面板能力面（2026-09-10 U1-U6 后）
+
+展示端点（只读、零 token）：`/vector/status2`（provider 探测+缓存+vecStats，替代退役 vector_search.py）· overview 增 `delta/vector/weekDiff` · sections 增 `backrefs`（反链聚合）。
+写端点（用户显式触发、全走门禁）：`/embed/config`（GET+POST 合并，写 scheduler.json，重载生效）· `/memory/edit|remove`（临时文件→write_gate→rename 失败回滚）· `/memory/approve`（候选→.processed，双区 flow-candidates/pending）。
+前端：记忆板块 §0 状态徽章（蒸馏/向量/pending）+ §7 向量 + §8 delta + §9 周 diff；画像行编辑；pending 批准/忽略；notes 反链；参数「向量与模型·当前链路」节。约束：画像/记忆板块结构零改动（追加式），sc-* 样式语言保留。
+
 ## 6. 质量门（写侧防线）
 
 - `write_gate`：容量红线 + §小节存在性（read_section 双向包含口径）+ 格式（索引行标签/日期/指针）。
