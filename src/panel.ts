@@ -244,9 +244,11 @@ export function applyPanel(ctx: Context, config: Config): void {
     let level = 'smart'
     let hotMemoryOn = true
     let personaMode = 'both'
-    let capAgent = 0
-    let capUser = 0
-    let capMemory = 0
+    // 2026-09-10：上限默认=容量门硬边界（AGENT/MEMORY 3000、USER 2000）——内容写门强制不可超，
+    // 故默认=容量门=允许全量；用户设更小才裁切
+    let capAgent = 3000
+    let capUser = 2000
+    let capMemory = 3000
     // P1-2（2026-09-10）：注入配置作用域迁全局——优先读 ~/.dsh/suite/scheduler.json 的 injection 键，
     // 回落 root config YAML（旧配置兼容），都无 → 缺省。切 root 不再影响注入（与记忆/蒸馏同域）。
     const sched = (() => { try { return readSuiteConfig() } catch { return {} } })()
@@ -484,9 +486,10 @@ export function applyPanel(ctx: Context, config: Config): void {
   route('/config', (_req, res) => {
     const file = configFileOf()
     const sched = readSuiteConfig()
-    // R1（2026-09-10）：global 返回**最终生效值**（scheduler 键 ?? 默认）——UI 显示与实际注入逐键守卫一致，
-    // 不回 root YAML（旧值可能残留误导）。默认与 buildHotMemoryText 相同：max_tokens=3000、三上限=0。
-    // 2026-09-10：注入板块上限默认=实际文件量（全量语义）；用户配过才用配值（配小于实际=裁切）
+    // 2026-09-10（修正）：上限 vs 实际量——上限是稳定配置（用户设的边界）；未配时默认=容量门硬边界
+    // （AGENT/MEMORY 3000、USER 2000：写门强制内容不可超，故默认=容量门=允许全量且 UI 数字稳定）；
+    // actual = 当前实际量（动态参考，随内容成长变化，仅展示不参与配置）
+    const CAP_GATES: Record<string, number> = { 'AGENT.md': 3000, 'USER.md': 2000, 'MEMORY.md': 3000 }
     const fileChars = (name: string): number => {
       try { const base = join(dshHome(), 'skills', 'managing-memory'); const t = readFileSync(join(base, name), 'utf8'); return t.replace(/\s+/g, '').length } catch { return 0 }
     }
@@ -494,9 +497,9 @@ export function applyPanel(ctx: Context, config: Config): void {
       persona: String(sched.injectPersona ?? 'both'),
       level: String(sched.injectLevel ?? 'smart'),
       hot_memory: sched.hotMemory !== false,
-      agent_max_chars: typeof sched.injectAgentMaxChars === 'number' ? sched.injectAgentMaxChars : fileChars('AGENT.md'),
-      user_max_chars: typeof sched.injectUserMaxChars === 'number' ? sched.injectUserMaxChars : fileChars('USER.md'),
-      memory_max_chars: typeof sched.injectMemoryMaxChars === 'number' ? sched.injectMemoryMaxChars : fileChars('MEMORY.md'),
+      agent_max_chars: typeof sched.injectAgentMaxChars === 'number' ? sched.injectAgentMaxChars : CAP_GATES['AGENT.md'],
+      user_max_chars: typeof sched.injectUserMaxChars === 'number' ? sched.injectUserMaxChars : CAP_GATES['USER.md'],
+      memory_max_chars: typeof sched.injectMemoryMaxChars === 'number' ? sched.injectMemoryMaxChars : CAP_GATES['MEMORY.md'],
       actual: { agent: fileChars('AGENT.md'), user: fileChars('USER.md'), memory: fileChars('MEMORY.md') },
     }
     // P2：无 root 也能调注入（全局 scheduler.json）——root 仅管理 boards 显示与旧 YAML；返回 global 供 UI 渲染
