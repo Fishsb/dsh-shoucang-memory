@@ -297,12 +297,15 @@
         return item;
       }
 
-      function renderViewToggles(view, parsed) {
+      function renderViewToggles(view, parsed, global) {
         view.textContent = '';
         view.appendChild(el('div', 'sc-h1', '参数调节'));
-        view.appendChild(el('div', 'sc-desc', '守藏根目录的运行参数：布尔开关一键切换、注入档位滑块调节，改动即时写回配置文件（备份先行）。标量参数（预算/阈值/时间窗）经「配置原文」编辑，后续逐步收编为本页控件。'));
+        view.appendChild(el('div', 'sc-desc', '注入参数（全局，写 ~/.dsh/suite/scheduler.json）与运行时通道。改动即时写回（scheduler.json 备份先行）。面板 root 仅管理「配置原文」的 boards 显示项——注入配置已迁全局，不再随 root 切换变化。'));
+        // 注入配置全局值（P1-2：global 优先；parsed 回落兼容旧 root YAML）
+        var g = global || {};
+        function gVal(key, fallback) { return (g[key] !== undefined && g[key] !== null) ? g[key] : fallback; }
         // 画像 persona 四档滑块：关闭 / 仅注入我 / 仅注入你 / 全注入
-        var personaMode = parsed.flags['injection.persona'] || 'both';
+        var personaMode = String(gVal('persona', parsed.flags['injection.persona'] || 'both'));
         var PERSONA_TIERS = [['off', '关闭'], ['me', '仅注入我'], ['you', '仅注入你'], ['both', '全注入']];
         var pItem = el('div', 'setting-item');
         var pInfo = el('div', 'setting-item-info');
@@ -326,7 +329,8 @@
         pItem.appendChild(pInfo); pItem.appendChild(slider);
         view.appendChild(pItem);
         SWITCH_KEYS.forEach(function (it) {
-          var cur = parsed.flags[it[0]];
+          // P1-2：hot_memory 显示全局 scheduler.json 值（root YAML flags 已非真源）
+          var cur = it[0] === 'injection.hot_memory' ? gVal('hot_memory', true) : parsed.flags[it[0]];
           if (typeof cur !== 'boolean') return;
           view.appendChild(makeToggle(it[0], it[1], it[2], cur, function (key, sw) {
             api('/toggle', { method: 'POST', body: JSON.stringify({ key: key }) })
@@ -335,7 +339,7 @@
           }));
         });
         // 热记忆注入强度（五格滑块：off/low/medium/high/smart）
-        var levelMode = parsed.injection_level || 'smart';
+        var levelMode = String(gVal('level', parsed.injection_level || 'smart'));
         var LEVEL_TIERS = [['off', 'off'], ['low', 'low'], ['medium', 'medium'], ['high', 'high'], ['smart', 'smart']];
         var lItem = el('div', 'setting-item');
         var lInfo = el('div', 'setting-item-info');
@@ -379,10 +383,10 @@
           item.appendChild(info); item.appendChild(wrap);
           return item;
         }
-        view.appendChild(numSetting('注入总预算 injection.max_tokens', '整轮指针注入的 token 预算（100–8000，默认 3000；中文粗估 ~2 字符/token），超出整体裁切——v16 起生效', parsed.max_tokens != null ? parsed.max_tokens : 3000, 'injection.max_tokens', 'tokens'));
-        view.appendChild(numSetting('agent 画像上限 injection.agent_max_chars', 'AGENT.md（含 [原则] 习得原则与 [路径] 任务路径）注入字符上限，逐行裁切不切半行；0=不裁（默认，靠容量门 3000 兜底）', parsed.caps_agent != null ? parsed.caps_agent : 0, 'injection.agent_max_chars', '字符'));
-        view.appendChild(numSetting('用户画像上限 injection.user_max_chars', 'USER.md 注入字符上限；0=不裁（默认，靠容量门 2000 兜底）', parsed.caps_user != null ? parsed.caps_user : 0, 'injection.user_max_chars', '字符'));
-        view.appendChild(numSetting('知识索引上限 injection.memory_max_chars', 'MEMORY.md 注入字符上限（在档位行数基础上二次裁切）；0=不裁（默认）', parsed.caps_memory != null ? parsed.caps_memory : 0, 'injection.memory_max_chars', '字符'));
+        view.appendChild(numSetting('注入总预算 injection.max_tokens', '整轮指针注入的 token 预算（100–8000，默认 3000；中文粗估 ~2 字符/token），超出整体裁切——全局 scheduler.json', gVal('max_tokens', parsed.max_tokens != null ? parsed.max_tokens : 3000), 'injection.max_tokens', 'tokens'));
+        view.appendChild(numSetting('agent 画像上限 injection.agent_max_chars', 'AGENT.md（含 [原则] 习得原则与 [路径] 任务路径）注入字符上限，逐行裁切不切半行；0=不裁（默认，靠容量门 3000 兜底）——全局 scheduler.json', gVal('agent_max_chars', parsed.caps_agent != null ? parsed.caps_agent : 0), 'injection.agent_max_chars', '字符'));
+        view.appendChild(numSetting('用户画像上限 injection.user_max_chars', 'USER.md 注入字符上限；0=不裁（默认，靠容量门 2000 兜底）——全局 scheduler.json', gVal('user_max_chars', parsed.caps_user != null ? parsed.caps_user : 0), 'injection.user_max_chars', '字符'));
+        view.appendChild(numSetting('知识索引上限 injection.memory_max_chars', 'MEMORY.md 注入字符上限（在档位行数基础上二次裁切）；0=不裁（默认）——全局 scheduler.json', gVal('memory_max_chars', parsed.caps_memory != null ? parsed.caps_memory : 0), 'injection.memory_max_chars', '字符'));
 
         // 2026-09-10 审查收敛：以下旧控件已移除——
         //  archive/lifecycle/merge 组（蒸馏空闲 idle_review_ms/归档模式/成熟时长/指纹阈值等）消费端为 v15 单库化前
@@ -1321,7 +1325,7 @@
           api('/config').then(function (r) {
             if (!r.parsed) { status(r.error === 'no-active-root' ? '未激活根目录——请到「配置原文」页根目录区添加。' : (r.error || '')); return; }
             status('已加载 ' + (r.file || ''));
-            renderViewToggles(refs.view, r.parsed);
+            renderViewToggles(refs.view, r.parsed, r.global || null);
           }).catch(fail);
         } else if (name === 'deepsleep') {
           renderDeepSleep(refs.view);
