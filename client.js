@@ -594,6 +594,25 @@
             vzone.appendChild(embRead2('端点 baseUrl', '本地 bge-m3 GPU（缺省）或云端 OpenAI 兼容 /embeddings', curUrl));
             vzone.appendChild(embRead2('嵌入模型', '本地 bge-m3（1024d q8）；换云端如 text-embedding-3-small', curModel));
             vzone.appendChild(embRead2('API Key env', '本地免 key；云端填 key 所在环境变量名', (s2.running && s2.running.apiKeyEnv) || 'EMBED_API_KEY'));
+            // P0（2026-09-10）：清缓存重建——换 embedding 模型后旧向量失效，须清后按新模型重嵌
+            var clearRow = el('div', 'setting-item');
+            var clearInfo = el('div', 'setting-item-info');
+            clearInfo.appendChild(el('div', 'setting-item-name', '向量缓存'));
+            clearInfo.appendChild(el('div', 'setting-item-desc', '缓存按 模型+行文本 指纹命中；换模型/改云端后点「清缓存重建」，下次召回按新模型自动重嵌（39 行薄行，~秒级）'));
+            clearRow.appendChild(clearInfo);
+            var clearBtn = el('button', 'sc-btn subtle', '清缓存重建');
+            clearBtn.type = 'button';
+            clearBtn.style.cssText = 'padding:4px 12px;font-size:12px;flex:none;';
+            clearBtn.addEventListener('click', function () {
+              if (!window.confirm('清空向量缓存并重建？换模型后必须执行（否则旧向量混用导致语义失真）。')) return;
+              clearBtn.disabled = true; clearBtn.textContent = '清理中…';
+              api('/vector/cache/clear', { method: 'POST', body: '{}' })
+                .then(function (r) { status('✓ 向量缓存已清' + (r && r.removed ? '（删除 ' + r.removed + '）' : '') + '——下次召回按当前模型自动重嵌'); clearBtn.disabled = false; clearBtn.textContent = '清缓存重建'; })
+                .catch(function (e) { clearBtn.disabled = false; clearBtn.textContent = '清缓存重建'; fail(e); });
+            });
+            var clearCtl = el('div', 'setting-item-control'); clearCtl.appendChild(clearBtn);
+            clearRow.appendChild(clearCtl);
+            vzone.appendChild(clearRow);
           }).catch(function (e) { vzone.textContent = ''; vzone.appendChild(el('div', 'sc-desc', '向量状态不可用: ' + e.message)); });
         }
         function embRead2(name, desc, value) {
