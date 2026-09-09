@@ -58,11 +58,14 @@
 | llmProvider / llmModel | "" | 蒸馏子代理指定模型（空=继承主会话；连败回落继承） |
 
 ### 2.3 参数调节·向量与模型（embed 组，2026-09-09）
+> UI（2026-09-10 M2 改造，仿 AnythingLLM/Open WebUI）：**Provider 预设卡**（本地 bge-m3 / Ollama / LM Studio /
+> 自定义云端 OpenAI 兼容）点选自动填服务地址 → **浏览器直连探测并列出可用模型下拉**（选 Ollama 自动列已装模型；
+> 选 bge 类无 /models 的服务自动降级 /health 显示固定模型）→ 选模型保存。对小白：不用手填地址+模型名，点选即可。
 | 键 | 缺省 | 作用 |
 |---|---|---|
 | embedEnabled | true | 语义召回开关（关=纯词法） |
-| embedBaseUrl | http://127.0.0.1:9915/v1 | 本地 bge-m3 GPU 或云端 OpenAI 兼容 |
-| embedModel | bge-m3 | 嵌入模型（1024d）；**换模型后点「清缓存重建」**（缓存带 model 指纹，旧向量不混用） |
+| embedBaseUrl | http://127.0.0.1:9915/v1 | 本地 bge-m3 GPU 或云端 OpenAI 兼容（/v1 根） |
+| embedModel | bge-m3 | 嵌入模型（1024d）；**换模型/换服务后点「清缓存重建」**（缓存带 model+baseUrl 指纹，自动失效不混用） |
 | embedApiKeyEnv | EMBED_API_KEY | 云端 key 所在环境变量名（本地免 key） |
 
 ### 2.4 无 UI（手写 JSON）
