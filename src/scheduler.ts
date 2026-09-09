@@ -58,6 +58,13 @@ export interface Config {
   deepSleepProbeRetries: number // 探针不可用/异常时重试次数（缺省 2）
   deepSleepProbeMaxMs: number // 单轮探测总时长兜底（缺省 10 分钟，防悬挂）
   deepSleepDaemonParent: boolean // 无会话场景兜底：是否自建守护 parent 承载归纳子代理（缺省关；宿主新建空 agent 场景未验证）
+  // ═══ 路线④ 打扰度观察（shadow-first MVP：默认只写影子日志不注入；active 待影子校准后拍板）═══
+  activationShadow: boolean // 观察打分+落 activation-shadow.jsonl（缺省开；不注入上下文）
+  activationPrefetch: boolean // active 注入开关（缺省关；注入接线=后续档）
+  activationTOn: number // 滞回上阈（初值 0.62，影子校准后调）
+  activationTOff: number // 滞回下阈（初值 0.52）
+  activationCooldownSteps: number // 触发后冷却步数（缺省 3）
+  activationTopK: number // 召回条数（缺省 3）
 }
 
 export const Config: any = z.object({
@@ -89,6 +96,12 @@ export const Config: any = z.object({
   deepSleepProbeRetries: z.number().min(1).default(2).description('探针不可用或异常时的重试次数（缺省 2）'),
   deepSleepProbeMaxMs: z.number().min(30000).default(600000).description('单轮探测总时长兜底（毫秒，缺省 10 分钟，防悬挂）'),
   deepSleepDaemonParent: z.boolean().default(false).description('无会话场景兜底：自建守护 parent 承载归纳子代理（宿主新建空 agent 路径未经验证，默认关）'),
+  activationShadow: z.boolean().default(true).description('路线④ 打扰度影子观察：每轮 user 消息按词法打分（recallIndex），滞回+冷却，只落 activation-shadow.jsonl，不注入上下文——默认开，攒样本校准阈值'),
+  activationPrefetch: z.boolean().default(false).description('路线④ active 注入（缺省关）：影子校准满意后开启；注入接线为后续档'),
+  activationTOn: z.number().min(0).max(1).default(0.62).description('滞回上阈：sim≥此值且冷却结束 → prefetch/emit（初值待影子校准）'),
+  activationTOff: z.number().min(0).max(1).default(0.52).description('滞回下阈：sim<此值 → 回到 idle（防阈值抖动）'),
+  activationCooldownSteps: z.number().min(0).default(3).description('触发后冷却步数，防连续打扰'),
+  activationTopK: z.number().min(1).max(5).default(3).description('每次观察召回条数'),
 })
 
 // —— 自持配置文件（契约 v3 落地通道；dshHome 等路径探测统一来自 targets.ts，单一事实源）——
@@ -328,6 +341,12 @@ export function applyScheduler(ctx: Context, config: Config): void {
       deepSleepProbeRetries: config.deepSleepProbeRetries,
       deepSleepProbeMaxMs: config.deepSleepProbeMaxMs,
       deepSleepDaemonParent: config.deepSleepDaemonParent,
+      activationShadow: config.activationShadow,
+      activationPrefetch: config.activationPrefetch,
+      activationTOn: config.activationTOn,
+      activationTOff: config.activationTOff,
+      activationCooldownSteps: config.activationCooldownSteps,
+      activationTopK: config.activationTopK,
     })
     // 跨模块桥接：状态机 API 供 panel /deepsleep RPC 惰性读取；suite 矩阵供 panel /suite RPC 复用同一实现；
     // 蒸馏节流组运行时值供 panel /distill/config 展示（缺省值单一实现=本文件 Config，panel 不复制）

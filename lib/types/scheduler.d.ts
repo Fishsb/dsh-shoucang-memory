@@ -43,6 +43,12 @@ export interface Config {
     deepSleepProbeRetries: number;
     deepSleepProbeMaxMs: number;
     deepSleepDaemonParent: boolean;
+    activationShadow: boolean;
+    activationPrefetch: boolean;
+    activationTOn: number;
+    activationTOff: number;
+    activationCooldownSteps: number;
+    activationTopK: number;
 }
 export declare const Config: any;
 export declare function applyScheduler(ctx: Context, config: Config): void;

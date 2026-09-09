@@ -36,6 +36,12 @@ export interface DistillConfig {
     deepSleepDaemonParent: boolean;
     deepSleepProbeRetries: number;
     deepSleepProbeMaxMs: number;
+    activationShadow?: boolean;
+    activationPrefetch?: boolean;
+    activationTOn?: number;
+    activationTOff?: number;
+    activationCooldownSteps?: number;
+    activationTopK?: number;
 }
 /**
  * 会话活跃状态机（Session Activity FSM）——深度睡眠「是否算停滞」的唯一判据源。

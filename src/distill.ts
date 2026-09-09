@@ -26,7 +26,7 @@ import { appendFileSync, mkdirSync, readFileSync, writeFileSync, existsSync, rea
 import { join, dirname } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import {
-  dshHome, knowledgeRoot, memoryLibRoot, memorySkillPresent, resolveTarget, loadWhitelist, gateMemoryAppend,
+  dshHome, knowledgeRoot, memoryLibRoot, memorySkillPresent, resolveTarget, loadWhitelist, gateMemoryAppend, recallIndex,
   type Whitelist, type RouteTarget,
 } from './targets.js'
 
@@ -61,6 +61,13 @@ export interface DistillConfig {
   deepSleepDaemonParent: boolean // 无会话兜底：自建守护 parent（默认关，宿主新建空 agent 路径未验证）
   deepSleepProbeRetries: number
   deepSleepProbeMaxMs: number
+  // ═══ 路线④ 打扰度观察（shadow-first MVP 2026-09-09：默认只打影子日志不注入；active 注入待影子校准后拍板开启）═══
+  activationShadow?: boolean // 观察打分+落 activation-shadow.jsonl（缺省开）
+  activationPrefetch?: boolean // active 注入开关（缺省关；注入接线=v5.2 §5 后续档）
+  activationTOn?: number // 滞回上阈（缺省 0.62；sim = top1 score / token 数，初值待影子校准）
+  activationTOff?: number // 滞回下阈（缺省 0.52）
+  activationCooldownSteps?: number // 触发后冷却步数（缺省 3）
+  activationTopK?: number // 召回条数（缺省 3）
 }
 
 /**
@@ -1192,8 +1199,52 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     try { const sid = session && session.id; const t = idleTimers.get(sid); if (t) { clearTimeout(t); idleTimers.delete(sid) } } catch { /* */ }
     try { sessions.delete(session && session.id) } catch { /* */ }
   })
+  // ═══ 路线④ 打扰度观察（shadow-first MVP）：打分/滞回/冷却/落影子日志，默认不做上下文注入 ═══
+  // 设计（v5.2 §5 + §9④）：先攒 activation-shadow.jsonl 真实样本校准阈值（T_on/T_off 初值 0.62/0.52），
+  // 校准满意后再由用户开 activationPrefetch 走 active（注入接线=后续档，非本 MVP）。
+  const actShadowFile = join(kRoot, 'audit', 'activation-shadow.jsonl')
+  const actState = new Map<string, { state: 'idle' | 'prefetch'; cooldown: number; prevScore: number }>()
+  const actConf = {
+    on: Number(config.activationTOn) || 0.62,
+    off: Number(config.activationTOff) || 0.52,
+    cooldown: Math.max(0, Number(config.activationCooldownSteps) || 3),
+    topK: Math.min(5, Math.max(1, Number(config.activationTopK) || 3)),
+  }
+  const activationStep = (sid: string, event: any): void => {
+    try {
+      if (!event) return
+      const d = event.data || {}
+      const arr = Array.isArray(d.content) ? d.content : []
+      let text = ''
+      for (const c of arr) if (c && c.type === 'text' && typeof c.text === 'string') text += c.text
+      if (event.type !== 'user/message' || !text.trim()) return
+      const { rows, tokens } = recallIndex(memoryLibRoot(), text, actConf.topK, 'all')
+      if (!tokens.length) return
+      const sim = Math.min(1, (rows.length ? rows[0].score : 0) / tokens.length)
+      let st = actState.get(sid) || { state: 'idle', cooldown: 0, prevScore: 0 }
+      const prev = st.state
+      let emit = false
+      if (st.cooldown > 0) st.cooldown--
+      if (sim >= actConf.on && st.cooldown === 0 && st.state === 'idle') { st.state = 'prefetch'; emit = true; st.cooldown = actConf.cooldown }
+      else if (sim < actConf.off && st.state !== 'idle') { st.state = 'idle' }
+      st.prevScore = sim
+      actState.set(sid, st)
+      if (emit || prev !== st.state) {
+        try {
+          mkdirSync(dirname(actShadowFile), { recursive: true })
+          appendFileSync(actShadowFile, JSON.stringify({
+            at: new Date().toISOString(), kind: 'activation-step', sid: sid.slice(0, 8),
+            state: st.state, prev, sim: Number(sim.toFixed(3)), tOn: actConf.on, tOff: actConf.off,
+            emit, tokens: tokens.length, hit: rows.length ? rows[0].line.slice(0, 120) : '',
+            pointers: rows.slice(0, 2).map((r) => r.pointer), excerpt: text.slice(0, 60),
+          }) + '\n', 'utf8')
+        } catch { /* 影子日志失败静默 */ }
+      }
+    } catch { /* 观察零抛出 */ }
+  }
+
   // 状态机活跃信号：**任意**根会话事件 → RUNNING（长任务持续产生 chunk/tool 事件即持续刷新水位）
-  ctx.on('session/event', (session: any, _event: any) => {
+  ctx.on('session/event', (session: any, event: any) => {
     try {
       const sid = session && session.id
       if (!sid) return
@@ -1203,6 +1254,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       if (origin === 'subagent') return
       noteEvent(sid, false)
       rememberAgent(a) // 深睡 parent 兜底缓存（任意根会话事件都刷新）
+      if (config.activationShadow !== false) activationStep(sid, event) // 路线④ 打扰度影子观察
     } catch { /* 状态迁移零抛出 */ }
   })
   ctx.effect(() => {
