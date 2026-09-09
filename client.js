@@ -1323,9 +1323,11 @@
           }).catch(fail);
         } else if (name === 'toggles') {
           api('/config').then(function (r) {
-            if (!r.parsed) { status(r.error === 'no-active-root' ? '未激活根目录——请到「配置原文」页根目录区添加。' : (r.error || '')); return; }
-            status('已加载 ' + (r.file || ''));
-            renderViewToggles(refs.view, r.parsed, r.global || null);
+            // P2：注入配置全局可用（无 root 也能调——global 来自 scheduler.json）
+            if (!r.global) { status(r.error === 'no-active-root' ? '未激活根目录——请到「配置原文」页根目录区添加。' : (r.error || '')); return; }
+            if (!r.parsed) status('注入参数已全局可用（scheduler.json）；root 未登记——「记忆板块显示」开关待登记后可用。');
+            else status('已加载 ' + (r.file || ''));
+            renderViewToggles(refs.view, r.parsed || {}, r.global);
           }).catch(fail);
         } else if (name === 'deepsleep') {
           renderDeepSleep(refs.view);
