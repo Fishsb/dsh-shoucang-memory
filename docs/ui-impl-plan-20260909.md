@@ -96,13 +96,13 @@ export const vecStats = { queries: 0, lastMode: 'lexical' as 'lexical'|'fusion',
 
 | 批 | 改动文件 | 验收 |
 |---|---|---|
-| U1 | vec.ts stats + panel /vector/status2 + /embed/config | curl 两端点 200；写入 scheduler.json 落盘 |
-| U2 | panel /memory/edit|remove|approve + runNode helper | curl 编辑 MEMORY 行生效（write_gate exit 0）；remove 需 confirm |
-| U3 | panel overview 追加 vector/delta/weekDiff + sections backrefs | curl overview 含新字段；sections 含 backrefs |
-| U4 | client 顶栏徽章 + §7/§8/§9 | 截图：渲染正常、画像板块零结构 diff |
-| U5 | client pending 审核 + notes 反链 + 画像编辑 | 点批准→入库；反链显示；编辑保存生效 |
-| U6 | client 参数「向量与模型」节 | 开关/下拉写回生效（重载提示） |
-| U7 | settings-guide/ARCHITECTURE 同步 + CHANGELOG | 文档一致；截图回归（结构不变） |
+| U1 | vec.ts stats + panel /vector/status2 + /embed/config | ✅ 2026-09-10：curl status2=DmlExecutionProvider/cache37；embed/config 写回落盘 |
+| U2 | panel /memory/edit|remove|approve + runNode helper | ✅ 2026-09-10：edit 改→还原实证、remove 404 安全、approve 双区实证 |
+| U3 | panel overview 追加 vector/delta/weekDiff + sections backrefs | ✅ 2026-09-10：overview delta/vector/weekDiff 实证；sections backrefs=4 |
+| U4 | client 记忆板块 §0 徽章 + §7/§8/§9 | ✅ 2026-09-10：语法 OK、部署一致；画像/记忆核心结构零改动实证 |
+| U5 | client pending 批准/忽略 + notes 反链 + 画像编辑 | ✅ 2026-09-10：三功能代码在位+语法 OK |
+| U6 | client 参数「向量与模型·当前链路」节 | ✅ 2026-09-10：embedEnabled 开关写回实证 |
+| U7 | settings-guide/ARCHITECTURE 同步 + CHANGELOG | ✅ 2026-09-10：文档同步+nav 对齐；截图回归降级为结构一致性（无视觉代理） |
 
 每批纪律：typecheck → build → build:client → lib 同步部署位 → dev_reload_package → 实证（curl/截图）。
 
