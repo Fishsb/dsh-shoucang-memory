@@ -545,6 +545,75 @@
         // ── 首次渲染 + 自动轮询（面板开着即刷新）──
         renderVectorZone(lList, iLabel, iBtnWrap);
         startVectorPoll(lList, iLabel, iBtnWrap);
+
+        // ── U6「向量与模型 · 当前链路」（2026-09-09）：真实 vec.ts+GPU 服务的状态与开关——
+        // 旧「向量检索」区驱动已退役 vector_search.py 链路；本节展示/控制新链路（本地 bge-m3 GPU / 云端可配）。
+        // 数据源：GET /vector/status2（运行态+provider+缓存）+ GET/POST /embed/config（scheduler.json，重载生效）。
+        view.appendChild(el('div', 'sc-h1', '向量与模型 · 当前链路'));
+        view.appendChild(el('div', 'sc-desc', '语义召回（vec.ts + bge-m3）运行态与开关。改动写 ~/.dsh/suite/scheduler.json，**需重载插件后生效**。本地 GPU 零 token；换云端在下方填 baseUrl/model。'));
+        var vzone = el('div');
+        function refreshVecZone() {
+          api('/vector/status2').then(function (s2) {
+            vzone.textContent = '';
+            // 状态行（pill 风格，复用 sc-ds-badges）
+            var vb = el('div', 'sc-ds-badges');
+            var st = (s2.provider || 'off');
+            var b0 = el('div', 'sc-ds-badge ' + (st === 'DmlExecutionProvider' ? 'running' : st === 'off' || st === 'unreachable' ? 'stalled' : 'ended'));
+            b0.appendChild(el('span', 'dot'));
+            b0.appendChild(el('span', null, 'provider ' + st));
+            vb.appendChild(b0);
+            var b1 = el('div', 'sc-ds-badge ended'); b1.appendChild(el('span', 'dot'));
+            b1.appendChild(el('span', null, '缓存 ' + String((s2.cache && s2.cache.lines) || 0) + ' 行'));
+            vb.appendChild(b1);
+            if (s2.stats && s2.stats.queries) {
+              var b2 = el('div', 'sc-ds-badge ended'); b2.appendChild(el('span', 'dot'));
+              b2.appendChild(el('span', null, '召回 ' + String(s2.stats.queries) + ' 次 · ' + String(s2.stats.lastMode || '') + ' · ' + String(s2.stats.lastMs || 0) + 'ms'));
+              b2.title = '最近查询: ' + String(s2.stats.lastQuery || '');
+              vb.appendChild(b2);
+            }
+            vzone.appendChild(vb);
+            // 开关（embedEnabled）
+            var sw = el('input'); sw.type = 'checkbox'; sw.className = 'checkbox-container';
+            sw.checked = !!(s2.running && s2.running.enabled);
+            sw.addEventListener('change', function () {
+              api('/embed/config', { method: 'POST', body: JSON.stringify({ embedEnabled: sw.checked }) })
+                .then(function () { status('✓ 向量 ' + (sw.checked ? '开' : '关') + '（重载后生效）'); })
+                .catch(function (e) { fail(e); sw.checked = !sw.checked; });
+            });
+            var swItem = el('div', 'setting-item');
+            var swInfo = el('div', 'setting-item-info');
+            swInfo.appendChild(el('div', 'setting-item-name', '语义召回开关 embedEnabled'));
+            swInfo.appendChild(el('div', 'setting-item-desc', '开=融合召回（dense0.7+lexical0.3）；关=纯词法。写 scheduler.json'));
+            swItem.appendChild(swInfo);
+            var swCtl = el('div', 'setting-item-control'); swCtl.appendChild(sw);
+            swItem.appendChild(swCtl);
+            vzone.appendChild(swItem);
+            // provider 展示（本地/云端）
+            var curUrl = (s2.running && s2.running.baseUrl) || 'http://127.0.0.1:9915/v1';
+            var curModel = (s2.running && s2.running.model) || 'bge-m3';
+            vzone.appendChild(embRead2('端点 baseUrl', '本地 bge-m3 GPU（缺省）或云端 OpenAI 兼容 /embeddings', curUrl));
+            vzone.appendChild(embRead2('嵌入模型', '本地 bge-m3（1024d q8）；换云端如 text-embedding-3-small', curModel));
+            vzone.appendChild(embRead2('API Key env', '本地免 key；云端填 key 所在环境变量名', (s2.running && s2.running.apiKeyEnv) || 'EMBED_API_KEY'));
+          }).catch(function (e) { vzone.textContent = ''; vzone.appendChild(el('div', 'sc-desc', '向量状态不可用: ' + e.message)); });
+        }
+        function embRead2(name, desc, value) {
+          var it = el('div', 'setting-item');
+          var info = el('div', 'setting-item-info');
+          info.appendChild(el('div', 'setting-item-name', name));
+          info.appendChild(el('div', 'setting-item-desc', desc));
+          var val = el('span', 'sc-vec-label');
+          val.textContent = (value != null && value !== '') ? String(value) : '（空）';
+          val.style.maxWidth = '340px';
+          info.appendChild(val);
+          it.appendChild(info);
+          return it;
+        }
+        view.appendChild(vzone);
+        refreshVecZone();
+        // 视图级轮询：先清旧再建（renderViewToggles 重渲染时防定时器叠加泄漏）
+        if (window._scVecTimer) { clearInterval(window._scVecTimer); window._scVecTimer = null; }
+        window._scVecTimer = setInterval(function () { try { refreshVecZone(); } catch (e) { /* 轮询异常静默 */ } }, 30000);
+
         // ── 蒸馏节流（运行时通道 · 2026-09-09 新增）──
         // 背景：enableDistill/idleWakeMs/minTurnChars/distillPrescan/llmProvider/llmModel 六个键有插件 Config
         // 但不持久（注入插件不进 loader 配置持久化），此前只能手写 ~/.dsh/suite/scheduler.json；
@@ -921,7 +990,7 @@
       /** 索引指针行（tag pill + subject + notes 指针），点击直达 notes 小节。 */
       /** 知识索引行渲染：按 tag 语义分组排序（环境→工具→流程→教训→发布→画像→其他），组内保持书写序（稳定排序）。 */
       var TAG_ORDER = ['env', 'tool', 'flow', 'lesson', 'release', 'user', 'agent'];
-      function renderIndexRows(container, lines, returnRender) {
+      function renderIndexRows(container, lines, returnRender, editable) {
         var arr = (lines || []).slice();
         arr.sort(function (a, b) {
           var ia = TAG_ORDER.indexOf(String(a.tag || '').toLowerCase()); if (ia === -1) ia = TAG_ORDER.length;
@@ -935,8 +1004,32 @@
           if (ln.pointer) row.appendChild(el('span', 'sc-idx-pointer', ln.pointer));
           var ptr = ln.pointer, sec = String(ln.pointer || '').split('§')[1] || '';
           row.addEventListener('click', function () { openMemoryNote(ptr, sec.trim() || null, returnRender); });
+          // U5：画像行编辑（editable=true 仅画像板块传入；走 /memory/edit 门禁，不破坏行结构）
+          if (editable) {
+            var ebtn = el('button', 'sc-btn subtle', '编辑');
+            ebtn.type = 'button';
+            ebtn.style.cssText = 'padding:1px 8px;font-size:11px;flex:none;color:var(--sc-muted);';
+            ebtn.addEventListener('click', function (ev) {
+              ev.stopPropagation();
+              editIndexLine(ln, editable === true ? editFile : null, returnRender);
+            });
+            row.appendChild(ebtn);
+          }
           container.appendChild(row);
         });
+      }
+      /** U5：画像行编辑（行内编辑 → /memory/edit → 刷新；file 由调用方给出避免误判） */
+      var editFile = null; // renderPersona 渲染某文件行时置为 'USER.md'|'AGENT.md'
+      function editIndexLine(ln, file, returnRender) {
+        if (!ln || !ln.raw) { status('无原始行可编辑'); return; }
+        var nl = window.prompt('编辑' + (file || '索引') + '行（保留 [tag] 主题 · 概况 → 指针 格式）：', ln.raw);
+        if (nl == null || !nl.trim()) return;
+        api('/memory/edit', { method: 'POST', body: JSON.stringify({ file: file || 'MEMORY.md', line: ln.raw.trim(), newText: nl.trim() }) })
+          .then(function () {
+            status('✓ 已更新' + (file || '') + '行');
+            if (returnRender) api('/memory/overview').then(function (r) { returnRender(refs.view, r); }).catch(fail);
+          })
+          .catch(fail);
       }
       /** ISO → 本地 'MM-DD HH:MM'（蒸馏水位展示用）。 */
       function fmtTime(iso) {
@@ -1012,7 +1105,8 @@
           view.appendChild(el('div', 'sc-mem-group-title', f.label + ' · ' + (f.lines || []).length));
           if (!(f.lines || []).length) { view.appendChild(el('div', 'sc-mem-empty', '（暂无指针行）')); return; }
           var list = el('div', 'sc-idx-list');
-          renderIndexRows(list, f.lines, renderPersona); // 画像来源：返回时回画像板块
+          editFile = String(f.name || '').replace(/\.md$/, '') + '.md'; // 供编辑按钮定位正确文件（USER/AGENT）
+          renderIndexRows(list, f.lines, renderPersona, true); // 画像来源：返回时回画像板块；可编辑
           view.appendChild(list);
         });
         status('画像 · ' + totalRows + ' 条指针');
@@ -1038,6 +1132,30 @@
           return card;
         };
         var group = function (t) { view.appendChild(el('div', 'sc-mem-group-title', t)); };
+
+        /* ── §0 状态徽章行（U4，ui-impl-plan：后台进程状态可见——Cognee/dsh-auto-memory 借鉴；复用 sc-ds-badges） ── */
+        var badges = el('div', 'sc-ds-badges');
+        var ds0 = data.distillStats;
+        if (ds0) {
+          var bDist = el('div', 'sc-ds-badge ' + ((ds0.runs || 0) ? 'ended' : 'running'));
+          bDist.appendChild(el('span', 'dot'));
+          bDist.appendChild(el('span', null, '蒸馏 ' + String(ds0.runs || 0) + ' 次' + (ds0.last ? '' : ' · 待命中')));
+          badges.appendChild(bDist);
+        }
+        if (data.vector && data.vector.enabled !== false) {
+          var vp = data.vector.provider || 'off';
+          var bVec = el('div', 'sc-ds-badge ' + (vp === 'fusion' ? 'running' : vp === 'off' || vp === 'unreachable' ? 'stalled' : 'ended'));
+          bVec.appendChild(el('span', 'dot'));
+          bVec.appendChild(el('span', null, '向量 ' + (vp === 'fusion' ? '融合' : vp === 'gpu-ready' ? 'GPU就绪' : vp === 'lexical' ? '词法' : vp === 'cloud' ? '云端' : vp === 'unreachable' ? '服务未连' : '关')));
+          badges.appendChild(bVec);
+        }
+        if (data.pending && data.pending.count) {
+          var bPend = el('div', 'sc-ds-badge suspect');
+          bPend.appendChild(el('span', 'dot'));
+          bPend.appendChild(el('span', null, '候选 ' + String(data.pending.count)));
+          badges.appendChild(bPend);
+        }
+        if (badges.childNodes.length) view.appendChild(badges);
 
         /* ── §1 蒸馏运行（等大一排；sparkline 保留在卡内） ── */
         group('蒸馏运行');
@@ -1141,16 +1259,38 @@
           view.appendChild(idxWrap);
         }
 
-        /* ── §4 pending 候选队列 ── */
+        /* ── §4 pending 候选队列（U5：行尾加批准/忽略——Cursor/Mem0 审核态借鉴；写走 /memory/approve 门禁） ── */
         if (data.pending && data.pending.count) {
           group('pending 候选队列 · ' + data.pending.count + ' 条');
           var plist = el('div', 'sc-pointer-list');
           (data.pending.recent || []).forEach(function (p2) {
-            var name = String(p2.name || '').replace(/\.md$/, '');
-            plist.appendChild(makeMemoryPointerRow(name, null, (p2.mtime || '').slice(0, 10)));
+            var row = makeMemoryPointerRow(String(p2.name || '').replace(/\.md$/, ''), null, (p2.mtime || '').slice(0, 10));
+            // 批准=确认有价值（移 .processed 跳过后续蒸馏裁决）；忽略=同语义手动处置；均只读安全
+            var act = el('div'); act.style.cssText = 'display:flex;gap:6px;flex:none;align-items:center;';
+            var fname = String(p2.name || '');
+            var okBtn = el('button', 'sc-btn subtle', '批准');
+            okBtn.type = 'button';
+            okBtn.style.cssText = 'padding:3px 10px;font-size:11.5px;color:var(--sc-ok,var(--sc-accent));';
+            okBtn.addEventListener('click', function () {
+              api('/memory/approve', { method: 'POST', body: JSON.stringify({ pendingFile: fname }) })
+                .then(function () { status('✓ 已批准 ' + fname + '（移 .processed，内容由蒸馏正常入册）'); })
+                .catch(fail);
+            });
+            var rmBtn = el('button', 'sc-btn subtle', '忽略');
+            rmBtn.type = 'button';
+            rmBtn.style.cssText = 'padding:3px 10px;font-size:11.5px;color:var(--sc-muted);';
+            rmBtn.addEventListener('click', function () {
+              if (!window.confirm('忽略并移出候选队列：' + fname + '？')) return;
+              api('/memory/approve', { method: 'POST', body: JSON.stringify({ pendingFile: fname }) })
+                .then(function () { status('已忽略 ' + fname); })
+                .catch(fail);
+            });
+            act.appendChild(okBtn); act.appendChild(rmBtn);
+            row.appendChild(act);
+            plist.appendChild(row);
           });
           view.appendChild(plist);
-          view.appendChild(el('div', 'sc-desc', '共 ' + data.pending.count + ' 条（仅显示最近 ' + (data.pending.recent || []).length + ' 条）· 只读展示'));
+          view.appendChild(el('div', 'sc-desc', '共 ' + data.pending.count + ' 条（仅显示最近 ' + (data.pending.recent || []).length + ' 条）· 批准=确认有价值入册，忽略=移出队列'));
         }
 
         /* ── §5 notes 详情小节 ── */
@@ -1201,6 +1341,44 @@
           view.appendChild(el('div', 'sc-mem-empty', '守藏本地知识区未启用（suite/knowledge 不存在）'));
         }
 
+        /* ── §7 向量召回状态（U4，ui-impl-plan：只读展示真实链路 vec.ts+GPU；复用 sc-mem-grid/sc-ds-badges） ── */
+        if (data.vector && data.vector.enabled !== false) {
+          group('向量召回 · ' + (data.vector.provider || 'off'));
+          var g7 = el('div', 'sc-mem-grid');
+          g7.appendChild(mkStat('provider', String(data.vector.provider || '—'), '本地 bge-m3 · DirectML GPU'));
+          g7.appendChild(mkStat('向量缓存', String(data.vector.cacheLines || 0) + ' 行', '行 hash 惰性补齐 · 可随时重建'));
+          g7.appendChild(mkStat('语义召回', data.vector.provider === 'fusion' ? '融合中' : data.vector.provider === 'gpu-ready' ? '就绪' : '—', 'dense0.7 ⊕ lexical0.3'));
+          view.appendChild(g7);
+          if (data.vector.provider === 'off' || data.vector.provider === 'unreachable') {
+            view.appendChild(el('div', 'sc-mem-empty', '向量服务未就绪（本地 bge-m3 :9915）——词法召回兜底运行，语义召回待服务启动'));
+          }
+        }
+
+        /* ── §8 晨起摘要 delta（U4：深睡产出可见物；只读，存在才渲染） ── */
+        if (data.delta && data.delta.present && data.delta.rows && data.delta.rows.length) {
+          group('最近成长 delta · 深睡产出');
+          var dl8 = el('div', 'sc-idx-list');
+          data.delta.rows.forEach(function (row) {
+            var r8 = el('div', 'sc-idx-row');
+            r8.appendChild(el('span', 'sc-idx-subject', String(row).replace(/^\[/, '[')));
+            dl8.appendChild(r8);
+          });
+          view.appendChild(dl8);
+          var staleNote = '';
+          if (data.delta.staleAt) {
+            try { var remain = Math.max(0, new Date(data.delta.staleAt) - Date.now()); staleNote = ' · 剩余 ' + Math.ceil(remain / 3600e3) + 'h 有效'; } catch (e) { /* */ }
+          }
+          view.appendChild(el('div', 'sc-mem-sub muted', '本次深睡归纳产出（48h 有效' + staleNote + '）· 已在会话注入可见'));
+        }
+
+        /* ── §9 本周成长 diff（U4：增量可见物——Basic Memory 借鉴：总量已有成长卡，此处补增量） ── */
+        if (data.weekDiff && ((data.weekDiff.deepAdded || 0) > 0)) {
+          group('本周成长 · 增量');
+          var g9 = el('div', 'sc-mem-grid');
+          g9.appendChild(mkStat('深睡新习得', String(data.weekDiff.deepAdded || 0) + ' 条', '近 7 天 [原则]/[路径] 归纳'));
+          view.appendChild(g9);
+        }
+
         status('记忆 · MEMORY ' + (memoryFile ? memoryFile.chars + '/' + memoryFile.cap + ' · ' + (memoryFile.lines || []).length + ' 行' : '不可用') + ' · 蒸馏 ' + (ds ? String(ds.runs || 0) + ' 次' : '—'));
       }
 
@@ -1223,6 +1401,22 @@
         });
         view.appendChild(back);
         view.scrollTop = 0; // 二级视图自身从顶部开始读
+        // U5：反链聚合（Logseq/思源借鉴）——引用此文件小节的来源清单
+        if (data.backrefs && data.backrefs.length) {
+          var bl = el('div');
+          bl.appendChild(el('div', 'sc-mem-group-title', '被引用 · ' + data.backrefs.length));
+          var bList = el('div', 'sc-idx-list');
+          data.backrefs.slice(0, 8).forEach(function (br) {
+            var row = el('div', 'sc-idx-row');
+            row.appendChild(el('span', 'sc-idx-tag', String(br.from || '').split('/').pop()));
+            row.appendChild(el('span', 'sc-idx-subject', String(br.line || '').slice(0, 90)));
+            row.title = br.line || '';
+            bList.appendChild(row);
+          });
+          bl.appendChild(bList);
+          if (data.backrefs.length > 8) bl.appendChild(el('div', 'sc-mem-sub muted', '… 共 ' + data.backrefs.length + ' 处引用'));
+          view.appendChild(bl);
+        }
         data.sections.forEach(function (sec) {
           var head = el('div', 'sc-mem-group-title');
           var arrow = el('span', 'sc-sec-arrow', '▸');
