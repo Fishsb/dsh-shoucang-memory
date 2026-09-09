@@ -1592,9 +1592,23 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         } catch { return '（无 MEMORY.md）' }
       })()
       validateProvider()
+      // 本地日键（与 activity.ts dayKey 同口径：文件名 activity-hot-<YYYY-MM-DD>.md）
+      const _now = new Date()
+      const _p2 = (n: number): string => String(n).padStart(2, '0')
+      const dayKeyLocal = `${_now.getFullYear()}-${_p2(_now.getMonth() + 1)}-${_p2(_now.getDate())}`
+      // v7 B 加深上下文：活性聚合产出的今日高频小节清单（仅建议——是否扩容概况/提炼原则由本归纳按既有判据决定，宿主 gate 把关）
+      const hotCtx = (() => {
+        try {
+          const f = join(resolved.root, 'audit', `activity-hot-${dayKeyLocal}.md`)
+          if (!existsSync(f)) return ''
+          const body = readFileSync(f, 'utf8').split('\n').filter((l) => l.startsWith('|')).slice(1, 20).join('\n')
+          return body ? `## 活性高频小节（近30天命中≥5；如需扩容概况经 pointerOps.update、如需提炼原则经 principles）\n${body}` : ''
+        } catch { return '' }
+      })()
       const userInput = [
         '## 当天记忆痕迹（作用域=本日，不做全库扫描）',
         traces,
+        hotCtx || '（无活性高频小节）',
         `## 现行原则/路径（冲突时 replace，match 逐字取自此清单）\n${currentList}`,
         `## 现行画像（profileOps 的 replace match 逐字取自此处）\n${currentProfiles}`,
         `## 现行知识索引（MEMORY.md；pointerOps 扩容/重构的 match 逐字取自此处）\n${currentMemIndex}`,
