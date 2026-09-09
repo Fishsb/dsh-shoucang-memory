@@ -439,29 +439,137 @@
             var swCtl = el('div', 'setting-item-control'); swCtl.appendChild(sw);
             swItem.appendChild(swCtl);
             vzone.appendChild(swItem);
-            // provider/端点/模型编辑（R2：本地↔云端切换——写 /embed/config，改后需清缓存重建）
+            // M2（2026-09-10 方案1·浏览器直连）：Provider 预设卡 + URL(datalist) + 模型下拉三态。
+            // 探测由浏览器 fetch 目标服务（绕 DSH 宿主 panel 网络限制；Ollama/9915 CORS 均放行）。
+            // 照抄 AnythingLLM EmbeddingSelection + Open WebUI 三态模式（考古蓝图 docs/model-config-impl-blueprint.md）。
             var curUrl = (s2.running && s2.running.baseUrl) || 'http://127.0.0.1:9915/v1';
             var curModel = (s2.running && s2.running.model) || 'bge-m3';
             var curKeyEnv = (s2.running && s2.running.apiKeyEnv) || 'EMBED_API_KEY';
-            var cfgItem = el('div', 'setting-item');
-            var cfgInfo = el('div', 'setting-item-info');
-            cfgInfo.appendChild(el('div', 'setting-item-name', '端点/模型配置（本地↔云端切换）'));
-            cfgInfo.appendChild(el('div', 'setting-item-desc', '本地缺省 http://127.0.0.1:9915/v1 + bge-m3（免 key）；切云端填云端 /v1 端点 + 模型名。保存写 scheduler.json（重载后生效，需清缓存重建）。'));
-            cfgItem.appendChild(cfgInfo);
-            var cfgWrap = el('div'); cfgWrap.style.cssText = 'display:flex;flex-direction:column;gap:6px;flex:none;align-items:flex-end;';
-            var uInp = el('input'); uInp.className = 'sc-input'; uInp.value = curUrl; uInp.style.width = '300px'; uInp.title = 'embedBaseUrl';
-            var mInp = el('input'); mInp.className = 'sc-input'; mInp.value = curModel; mInp.style.width = '180px'; mInp.title = 'embedModel';
-            var kInp = el('input'); kInp.className = 'sc-input'; kInp.value = curKeyEnv; kInp.style.width = '180px'; kInp.title = 'embedApiKeyEnv';
-            var cfgBtn = el('button', 'sc-btn subtle', '保存配置');
-            cfgBtn.type = 'button'; cfgBtn.style.cssText = 'padding:3px 12px;font-size:11.5px;';
-            cfgBtn.addEventListener('click', function () {
-              api('/embed/config', { method: 'POST', body: JSON.stringify({ embedBaseUrl: uInp.value.trim(), embedModel: mInp.value.trim(), embedApiKeyEnv: kInp.value.trim() }) })
-                .then(function () { status('✓ 端点/模型已保存（重载后生效——若换模型请点「清缓存重建」）'); })
-                .catch(fail);
+            var EMBED_PROVIDERS = [
+              { id: 'bge', name: '本地 bge-m3（守藏 GPU）', base: 'http://127.0.0.1:9915/v1', noEnum: true },
+              { id: 'ollama', name: 'Ollama', base: 'http://127.0.0.1:11434/v1' },
+              { id: 'lmstudio', name: 'LM Studio', base: 'http://127.0.0.1:1234/v1' },
+              { id: 'custom', name: '自定义 OpenAI 兼容（云端）', base: '' }
+            ];
+            var provItem = el('div', 'setting-item');
+            var provInfo = el('div', 'setting-item-info');
+            provInfo.appendChild(el('div', 'setting-item-name', '语义检索来源'));
+            provInfo.appendChild(el('div', 'setting-item-desc', '选服务 → 自动填地址 → 下方自动探测并列出可用模型（浏览器直连）。换服务/模型后请点「清缓存重建」。'));
+            provItem.appendChild(provInfo);
+            var provWrap = el('div'); provWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;flex:none;max-width:420px;justify-content:flex-end;';
+            EMBED_PROVIDERS.forEach(function (p) {
+              var card = el('button', 'sc-btn' + (curUrl.indexOf(p.base) === 0 && p.base ? ' primary' : ''), p.name);
+              card.type = 'button';
+              card.style.cssText = 'padding:4px 12px;font-size:11.5px;' + (curUrl.indexOf(p.base) === 0 && p.base ? 'color:var(--sc-accent);border-color:var(--sc-accent);' : '');
+              card.addEventListener('click', function () {
+                uInp.value = p.base;
+                var all = provWrap.querySelectorAll('button');
+                all.forEach(function (b) { b.style.color = ''; b.style.borderColor = ''; });
+                card.style.color = 'var(--sc-accent)'; card.style.borderColor = 'var(--sc-accent)';
+                if (p.id === 'custom') { uInp.value = ''; uInp.focus(); }
+                enumModels(); // 立即探测
+              });
+              provWrap.appendChild(card);
             });
-            cfgWrap.appendChild(uInp); cfgWrap.appendChild(mInp); cfgWrap.appendChild(kInp); cfgWrap.appendChild(cfgBtn);
-            cfgItem.appendChild(cfgWrap);
-            vzone.appendChild(cfgItem);
+            provItem.appendChild(provWrap);
+            vzone.appendChild(provItem);
+            // URL + datalist 预设 + key env
+            var urlItem = el('div', 'setting-item');
+            var urlInfo = el('div', 'setting-item-info');
+            urlInfo.appendChild(el('div', 'setting-item-name', '服务地址（OpenAI 兼容 /v1 根）'));
+            urlInfo.appendChild(el('div', 'setting-item-desc', '如 http://127.0.0.1:9915/v1 或 http://localhost:11434/v1；改完回车自动探测。'));
+            urlItem.appendChild(urlInfo);
+            var urlWrap = el('div'); urlWrap.style.cssText = 'display:flex;flex-direction:column;gap:5px;flex:none;align-items:flex-end;';
+            var uInp = el('input', 'sc-input'); uInp.value = curUrl; uInp.style.width = '320px'; uInp.placeholder = 'http://127.0.0.1:9915/v1';
+            var dlist = el('datalist'); dlist.id = 'sc-embed-endpoints';
+            ['http://127.0.0.1:9915/v1', 'http://localhost:11434/v1', 'http://127.0.0.1:1234/v1', 'https://api.openai.com/v1', 'https://api.deepseek.com/v1'].forEach(function (ep) {
+              var o = el('option'); o.value = ep; dlist.appendChild(o);
+            });
+            document.body.appendChild(dlist);
+            uInp.setAttribute('list', 'sc-embed-endpoints');
+            var mSel = el('select', 'sc-input'); mSel.style.width = '320px'; mSel.title = 'embedModel';
+            var kInp = el('input', 'sc-input'); kInp.value = curKeyEnv; kInp.style.width = '200px'; kInp.title = 'embedApiKeyEnv'; kInp.placeholder = 'key 环境变量名（本地免填）';
+            var probeHint = el('div', 'sc-mem-sub muted'); probeHint.style.cssText = 'max-width:320px;font-size:11px;';
+            urlWrap.appendChild(uInp); urlWrap.appendChild(mSel); urlWrap.appendChild(kInp); urlWrap.appendChild(probeHint);
+            urlItem.appendChild(urlWrap);
+            vzone.appendChild(urlItem);
+            // 保存 + 状态行
+            var saveWrap = el('div'); saveWrap.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;align-items:center;';
+            var probeBtn = el('button', 'sc-btn subtle', '重新探测');
+            probeBtn.type = 'button'; probeBtn.style.cssText = 'padding:3px 12px;font-size:11.5px;';
+            probeBtn.addEventListener('click', enumModels);
+            var saveBtn = el('button', 'sc-btn', '保存配置');
+            saveBtn.type = 'button'; saveBtn.style.cssText = 'padding:3px 14px;font-size:12px;';
+            saveBtn.addEventListener('click', function () {
+              saveBtn.disabled = true; saveBtn.textContent = '保存中…';
+              api('/embed/config', { method: 'POST', body: JSON.stringify({ embedBaseUrl: uInp.value.trim(), embedModel: mSel.value || curModel, embedApiKeyEnv: kInp.value.trim() || 'EMBED_API_KEY' }) })
+                .then(function () { status('✓ 已保存（重载后生效——若换了服务/模型请点「清缓存重建」）'); saveBtn.disabled = false; saveBtn.textContent = '保存配置'; })
+                .catch(function (e) { saveBtn.disabled = false; saveBtn.textContent = '保存配置'; fail(e); });
+            });
+            saveWrap.appendChild(probeBtn); saveWrap.appendChild(saveBtn);
+            vzone.appendChild(saveWrap);
+            // 浏览器直连枚举（三态：加载/空/失败/成功）——方案1 绕宿主 panel 网络限制
+            var probing = false;
+            var probeDone = false; // ①+② 全程只结算一次（fetch 链 + health 降级共享）
+            function setSelectState(disabled, placeholder) {
+              mSel.disabled = disabled;
+              mSel.textContent = '';
+              var opt = el('option'); opt.value = ''; opt.textContent = placeholder || '选择模型…';
+              mSel.appendChild(opt);
+            }
+            function enumModels() {
+              var b = uInp.value.trim().replace(/\/+$/, '');
+              var root = b.replace(/\/v1$/, ''); // 统一服务根（uInp 可能带 /v1 或不带）
+              probeDone = false;
+              if (!root) { setSelectState(true, '先填写服务地址'); probeHint.textContent = ''; return; }
+              // 校验 URL
+              try { var u = new URL(root); if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error('x'); } catch (e) { setSelectState(true, 'URL 无效'); probeHint.textContent = '需 http(s):// 开头'; return; }
+              if (probing) return;
+              probing = true; setSelectState(true, '加载可用模型中…'); probeHint.textContent = '';
+              var finish = function (models, mode, note) {
+                if (probeDone) return; probeDone = true; probing = false;
+                if (models && models.length) {
+                  mSel.disabled = false; mSel.textContent = '';
+                  models.forEach(function (md) {
+                    var o = el('option'); o.value = md.id;
+                    o.textContent = md.id + (isEmbedLike(md.id) ? '（嵌入）' : '');
+                    if (md.id === curModel) o.selected = true;
+                    mSel.appendChild(o);
+                  });
+                  probeHint.textContent = '✓ ' + models.length + ' 个模型 · ' + (mode || '') + (note ? ' · ' + note : '');
+                } else {
+                  setSelectState(true, '（无可枚举模型）');
+                  probeHint.textContent = note || '未探测到模型';
+                }
+              };
+              // ① OpenAI 兼容 GET {root}/v1/models（浏览器直连；CORS 由服务端控制）
+              fetch(root + '/v1/models', { signal: AbortSignal.timeout(6000) })
+                .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+                .then(function (j) {
+                  var models = ((j && j.data) || []).map(function (m) { return { id: m.id }; });
+                  if (models.length) { finish(models, 'openai-compatible'); return; }
+                  probeHealth(root, finish); // 空 data → 尝试 bge 降级
+                })
+                .catch(function () { probeHealth(root, finish); });
+            }
+            function isEmbedLike(id) { return /embed|bge|m3|nomic|e5|text-embed/i.test(String(id)); }
+            function probeHealth(root, finish) {
+              fetch(root + '/health', { signal: AbortSignal.timeout(5000) })
+                .then(function (r) { if (!r.ok) throw new Error('x'); return r.json(); })
+                .then(function (j) {
+                  var fixed = (j && j.model) || 'bge-m3';
+                  finish([{ id: fixed }], 'health-fixed', '服务在但无 /models——用固定 ' + fixed + (j && j.dims ? '（' + j.dims + 'd）' : ''));
+                })
+                .catch(function () {
+                  if (!probeDone) { probeDone = true; probing = false; }
+                  setSelectState(true, '（连接失败）');
+                  probeHint.textContent = '无法连接该服务（/v1/models 与 /health 均无响应）——检查地址/服务是否在跑/CORS';
+                });
+            }
+            // URL 变化 → 自动重探（onBlur 提交，非击键）
+            uInp.addEventListener('change', function () { enumModels(); });
+            probeHint.textContent = curModel ? '当前：' + curModel + ' @ ' + curUrl : '';
+            enumModels(); // 初始自动探测
             // P0（2026-09-10）：清缓存重建——换 embedding 模型后旧向量失效，须清后按新模型重嵌
             var clearRow = el('div', 'setting-item');
             var clearInfo = el('div', 'setting-item-info');
