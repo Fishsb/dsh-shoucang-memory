@@ -5,6 +5,9 @@
 ## [Unreleased]
 
 ### Added
+- **配置体系审查全量修复 P0-P2（2026-09-10，config-audit 报告落地）**：P0——参数调节清死键/死UI（archive/lifecycle/merge 组 + 旧「向量检索」区 + 孤儿函数 193 行全删，消费端=_meta/*.py 已不随包分发；/set /toggle 白名单收窄到真有效键；client 111KB→90KB）+ vec 缓存加 **model 指纹**（cacheKey=file+hash+model，换模型旧向量自动失效重嵌，杜绝新旧混用）+ `/vector/cache/clear` 端点与「清缓存重建」按钮。P1——60s 空闲巩固轮心跳移除 + /idle//vector/status|build//model/* 死端点 + consolidateRound 孤儿链删除（panel.ts 1571→1264 行；真蒸馏由 distill.ts armIdleTimer 独立驱动已实证）+ **注入配置迁全局 scheduler.json**（inject* 键；切 root 不再影响注入，root YAML 回落兼容）。P2——新装首开零配置可用（无 root 也能调注入）+ settings-guide 三通道重写。验证：typecheck/build/hardcode 零错误、35 PASS/0 FAIL、核心端点 200/死端点 404、注入双画像实测、向量缓存 model 指纹实证。commits 4fdd207/46ad727/494e053/eb6cf86/8f5284d。
+
+### Changed
 - **UI U1-U6 落地（2026-09-10，ui-impl-plan 施工图）**：后端——`/vector/status2`（真实 GPU provider 探测+缓存+vecStats，替代退役 vector_search.py）、`/embed/config`（GET+POST 合并写 scheduler.json）、`/memory/edit|remove|approve`（走 write_gate 门禁：临时文件整改→gate→rename 失败回滚；approve 双区 flow-candidates/pending→.processed）、overview 增 delta/vector/weekDiff、sections 增 backrefs 反链。前端——记忆板块 §0 状态徽章（蒸馏/向量/pending）+ §7 向量状态 + §8 delta + §9 周 diff、pending 行批准/忽略按钮、notes 详情被引用反链、画像行编辑（editable 行尾按钮）、参数调节「向量与模型·当前链路」节（30s 轮询防泄漏）。约束达成：画像/记忆板块分区结构零改动（只尾部/行尾 append）、sc-* 样式语言保留、写全走门禁、注入 M8 零改动。验证：端点 curl 实证（status2=DmlExecutionProvider/编辑改还原/remove 404/approve 双区）、35 PASS/0 FAIL。commits 50cf715+66209cd。
 
 ### Changed
