@@ -51,11 +51,14 @@ health 覆盖：缺失(4)/重复(3)/指针·格式(5)/超限(2)。异常 → 按
 `archive-timer --pending-list` 取队列 → `archive-check <sid>` 查看 → 四裁决（ADD/NOOP/MERGE/SUPERSEDE）→ `archive-mark --done` → `--dequeue <sid>` 清队；或直接编辑 pending 候选。
 蒸馏链路协议（触发/预筛/契约/安全阀）事实源 → `engine/distill-contract.md`；兜底 CLI（--due/--drain/--status 等）已注册为 DSH 原生工具（`_dsh_external_dsh_managing_memory_*`），语义见工具描述。
 
-## §8 第一性原理闭环核验（审计增问，ADR-0005 配套）
+## §8 第一性原理闭环核验（审计增问，ADR-0005 配套；2026-09-10 扩为六问——WikiSkill 借鉴：失败归类回流 + raw 抽验 + 回归窗）
 
-每轮审计必答三问：
+每轮审计必答以下问题：
 1. **本期是否有 ≥2 次同类问题？** 核验方式：`grep -l "同类:" pending\*.md` + candidate_grep 召回对照——同一 `同类: <主题>` 出现 ≥2 次 → 对应根本解（ADR/机制/契约变更）是否已落地？未落地 → 升级为审计处置项（同门禁效力）。
 2. **现有规则/门禁是否被绕过 ≥1 次？** 有 → §0 反思规则本身是否缺陷（规则失效≠违规者的错）→ 提出规则修订候选。
-3. **route 分流质量抽验**：grep 插件日志 `route=` 统计 memory/project/discard 分布与 projectCards 落点成功率；R1/R2 误判嫌疑（如 memory 路由连出空数组）→ 复核 distill-contract 判定锚。
+3. **route 分流质量抽验**：优先对照 `audit/raw-stub/stub.jsonl`（结构化事实源，见第 5 问），或 grep 插件日志 `route=` 统计 memory/project/discard 分布与 projectCards 落点成功率；R1/R2 误判嫌疑（如 memory 路由连出空数组）→ 复核 distill-contract 判定锚。
+4. **蒸馏失败归类聚合（fclass，WikiSkill「失败即知识」回流）**：grep `distill-audit.jsonl` 带 `fclass=` 的 distill-run 行（**只取带 stop 字段的行**——writeDispatch 与 distillAgent 双写审计，直接按 kind 过滤会翻倍），按类统计 top：`json-parse` → 契约/截断问题；`gate-reject` → 白名单或四问锚；`dispatch-failed` → 落盘链路；`provider-fail`/`agent-stop` → LLM 路由；持续上升或突增的类 → 升级处置项（失败模式回流成规则修订信号）。
+5. **raw-stub 存根抽验**：`audit/raw-stub/stub.jsonl` 行数与 distill-audit 带 stop 行数、route 分布一致性核对——存根为不可变元数据（不含正文），是第 3 问的结构化事实源与契约升级离线重放底座（对标 WikiSkill raw/ 只存证据）。
+6. **规则变更回归窗（对标 WikiSkill Gating，轻量版）**：本窗若存在白名单/规则语义变更（spec §7 账本 accept 行）→ 核验无回归：`memory_health_check` exit 0、无新增绕过（第 2 问）、route/fclass 分布未劣化；有回归 → 按账本回退路径（快照/git revert/重走 §7）执行处置。放行标准=「无回归」而非「有提升」——避免 WikiSkill 严格门排除铺路性变更的缺陷。
 
 核验结果写入审计报告（audit\<日期>.md）尾部。

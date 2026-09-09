@@ -43,7 +43,7 @@ export interface Config {
   idleWakeMs: number // 唤醒判定：turn 结束后空闲满此毫秒数才蒸馏（缺省 10 分钟）
   minTurnChars: number // 本轮新增正文少于此字符数则跳过蒸馏（水位仍推进）
   distillPrescan: boolean // 预筛：spawn 前扫增量信号词 + pending 候选，皆无则跳过（零 LLM 成本）
-  distillPrompt: string // 蒸馏子代理 persona 覆盖（缺省内建 v4 契约）
+  distillPrompt: string // 蒸馏子代理 persona 覆盖（缺省内建 v5 契约）
   llmProvider: string // 蒸馏子代理指定 provider（空=继承主会话模型）
   llmModel: string // 蒸馏子代理指定 model（空=继承主会话模型）
   // ═══ 深度睡眠归纳（v16：习得原则并入 agent 画像 AGENT.md；2026-09-08 拍板机制，2026-09-09 拍板定位）═══
@@ -89,7 +89,7 @@ export const Config: any = z.object({
   idleWakeMs: z.number().min(60000).default(600000).description('唤醒判定：turn 结束后空闲满此毫秒数才蒸馏（缺省 10 分钟）'),
   minTurnChars: z.number().min(0).default(200).description('本轮新增正文少于此字符数跳过蒸馏（水位仍推进）'),
   distillPrescan: z.boolean().default(true).description('预筛：无信号词且无 pending 候选则不唤醒 LLM 子代理'),
-  distillPrompt: z.string().default('').description('蒸馏子代理 persona 覆盖（缺省内建 v4 契约）'),
+  distillPrompt: z.string().default('').description('蒸馏子代理 persona 覆盖（缺省内建 v5 契约）'),
   llmProvider: z.string().default('').description('蒸馏子代理 provider（空=继承主会话模型）'),
   llmModel: z.string().default('').description('蒸馏子代理 model（空=继承主会话模型）'),
   enableDeepSleep: z.boolean().default(true).description('深度睡眠归纳：全部会话停滞 ≥deepSleepIdleMs 自动提炼习得原则写入 agent 画像 AGENT.md（[原则] 行），同 pass 反思双通道维护 USER 画像'),

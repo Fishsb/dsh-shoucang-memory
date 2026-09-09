@@ -3,6 +3,7 @@
 > 蒸馏子代理 persona 的唯一权威定义。各插件 spawn 蒸馏子代理时以本文档「裁决提示词模板」为事实源（可整段内嵌，注明来源）。
 > v1（ADR-0004 内嵌）→ v2：加第一层归属路由 → v3（2026-09-06 用户拍板）：判定锚从类别改为粒度——两库的区别不是主题类别，而是粒度与功能：记忆库=粗粒度方向指引，项目卡库=细粒度规范/事实 → **v3.1（2026-09-06 用户拍板）：格式传递**——`newIndex`/`appends.text` 内嵌记忆库 spec §8 教程式与索引行模板（**条目格式权威 = memory-whitelist-spec.md §8**），蒸馏产出不再凭示意自由发挥。
 > **v4（2026-09-08 用户拍板，单库化）：pmg 项目卡库已随治理插件整体移除，守藏只有一个记忆库。** 守藏执行宿主已升级 v4（src/distill.ts DEFAULT_DISTILL_PROMPT 为权威实现）——R2 跨项目细粒度条文改入 notes（原 generic 板块承接）；R3 项目专属事实直写项目工作区 `docs/devref/shoucang/`（workspace 由会话转录反解，反解不到=无归属如实丢弃）；新增 `profiles` 双画像通道（USER/AGENT，Q2 归谁落地）。本文档其余章节保留作 v3 沿革，与 v4 冲突处**以 v4 为准**。
+> **v5（2026-09-10 用户拍板，WikiSkill 借鉴：结构化教训留痕）**：`appends` 条目新增**可选** `rootCause`/`avoidWhen`（各 ≤30 字）——教训/踩坑类浓缩（notes/lessons.md 或 [lesson] 语境）带根因 WHY 与「不适用」场景才可复用，宿主写入时自动追加「- 根因：…」「- 不适用：…」两行（正文小节级，read_section 原样返回供检索端判适用性）；`newIndex`/`profiles`/其余字段与判定语义不变，**v4 旧输出（无此二字段）照常受理**。守藏执行宿主已升级 v5（src/distill.ts DEFAULT_DISTILL_PROMPT 为权威实现）。
 > v1（ADR-0004 内嵌）→ v2：加第一层归属路由 → v3（2026-09-06 用户拍板）：判定锚从类别改为粒度——两库的区别不是主题类别，而是粒度与功能：记忆库=粗粒度方向指引，项目卡库=细粒度规范/事实 → **v3.1（2026-09-06 用户拍板）：格式传递**——`newIndex`/`appends.text` 内嵌记忆库 spec §8 教程式与索引行模板（**条目格式权威 = memory-whitelist-spec.md §8**），蒸馏产出不再凭示意自由发挥。
 
 ## 归属路由（第一层，先于四问）
@@ -42,7 +43,7 @@ Q0 已有归属？（已被 skill/项目治理文档承载 → 不写）→ Q1 �
 ```json
 {
   "route": "memory|project|discard",
-  "appends":   [{"target":"notes/tools.md","section":"<既有 ## 小节名>","text":"教程式浓缩：目标一句+编号步骤+注意，≤120字"}],
+  "appends":   [{"target":"notes/lessons.md","section":"<既有 ## 小节名>","text":"教程式浓缩：目标一句+编号步骤+注意，≤120字","rootCause":"≤30字 WHY 根因（教训类可选）","avoidWhen":"≤30字 不适用场景（教训类可选）"}],
   "newIndex":  [{"target":"MEMORY.md","line":"[tag] 主题 · 概况短语/短语/短语 → notes/x.md §小节"}],
   "projectCards": [{"cardType":"how-to|reference|decision","board":"generic|project","title":"≤20字","text":"≤200字","source":"≤30字"}],
   "migrationHint": "<仅 route=project 时填：若正文显示该项目开发知识密集（如连续踩坑/多契约），≤30字提示宿主安排卡库迁移复核>",
@@ -55,6 +56,7 @@ Q0 已有归属？（已被 skill/项目治理文档承载 → 不写）→ Q1 �
 - `route`：**主判定**（对整轮增量的主导归属；混合内容以主要价值为准，其余进 skipped）。
 - route=memory → 填 `appends`/`newIndex`（target 白名单 notes/tools|flows|lessons|env|release.md；section 必须既有小节名；无可写则空数组）：
   - **`appends.text`（v3.1 教程式浓缩）**：`目标：… 1. … 2. … 注意：…` 三段式——只写**方向指引级**（目标形态/步骤轮廓/关键注意点），不搬细节条文；纯事实类可省步骤保留目标行；≤120 字。
+  - **`rootCause` / `avoidWhen`（v5 可选）**：仅教训/踩坑类条目（notes/lessons.md 或 [lesson] 语境）使用——WHY 根因与不适用场景（对标 WikiSkill pattern 双记 + When NOT to Apply）；宿主写入小节正文时自动追加「- 根因：…」「- 不适用：…」两行，read_section 原样返回；缺省省略，v4 旧输出无此字段照常受理。
   - **`newIndex.line`（v3.1 格式权威 = spec §8）**：`[tag] 主题 · 概况短语/短语/短语 → notes/<file>.md §小节`——定界符三分工（`·`段界 `/`短语界 `→`指针）；主题 ≤12 字名词性禁冒号复合；概况名词短语 `/` 分隔、≤30 字、高判别实词（专名/数值/路径关键词）、禁日期/溯源/维护元信息。
 - route=project → 填 `projectCards`：
   - 卡类型：how-to=操作步骤 / reference=契约事实 / decision=架构决策

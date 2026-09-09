@@ -207,6 +207,9 @@
 | 3 | 同步更新 **体检脚本标签正则 / 容量上限 / NOTES 列表**（若涉及） | 机械化投影一致 |
 | 4 | 更新 **CHANGELOG**（本规格 + managing-memory README） | 变更留痕 |
 | 5 | 运行 `memory_health_check.mjs` 复检 | 退出码 0 为准 |
+| 6 | 写「变更账本」行（见本节约束段） | accept/reject 均留痕，含回退路径 |
+
+> **变更账本（2026-09-10 · WikiSkill 借鉴：被否提案=知识）**：每笔白名单/规则语义变更（**含被否的尝试**）在本规格「变更记录」或 CHANGELOG 追加账本行：`<日期> <变更项> 语义摘要 | 预期效果 | accept/reject | 回退路径`——被否变更同样留痕（回退路径=快照/git revert/重走 §7），变更前先查账本避免重复已失败方向（对标 WikiSkill skill-impact.md：被拒提案与 diff/结果留审计链，供下轮提案者参考）。回归窗核验见 audit-protocol §8 第 6 问。
 
 > 例外：容量红线的上调需用户确认（涉及结构代价），下调可直接走流程精简。其他白名单条目按此表执行。
 >
@@ -250,6 +253,8 @@
 ```
 ## <小节标题>（YYYY-MM-DD）
 - 要点行（单行事实/命令/路径）
+- 根因：<WHY，教训/踩坑类条目可选；对标 WikiSkill pattern「WHY 而非 WHAT」，普通条目省略>
+- 不适用：<反例场景，可选；让检索端能判断何时不该用本条>
 ```
 
 - **小节名即稳定锚（定位键）**：索引 § 与 `## 小节标题` 内容一致即定位；**永不含行号**——内容增删/插入小节不影响指针，仅重命名小节时需同步索引行。
@@ -290,3 +295,4 @@
 - 2026-09-08（v15，单库化 + 双画像通道 + 项目事实直写工作区，用户拍板）：**① 单库化**——pmg 项目卡库随治理插件整体移除，守藏只有一个记忆库（`~/.dsh/skills/managing-memory`）；取消 route=project 的 pmg-cards/local-pending 二分与 `[board:*]` 板块；**R2 跨项目细粒度条文改入 notes**（原 generic 板块承接），**R3 项目专属事实直写项目工作区 `<workspace>/docs/devref/shoucang/`**（workspace 由会话转录反解；反解不到=无归属如实丢弃，跨工作区红线）。**② 双画像写入口**——USER.md（用户画像，「人」的画像）与 AGENT.md（agent 自我画像=助理的自我认知；库中其余 notes/原则/索引皆为 agent 为履行助理职责积累的自身资产）新增写入通道：蒸馏 `profiles`（route=memory 时 0-2 条，Q2 归谁落地）+ 深度睡眠 `profileOps`（add/replace，须 notes 源指针，与原则同红线）；宿主直写，门禁=target 白名单+小节防注入+单条 ≤160 字符+库容量 ≤2,000+去重+replace 须 match 逐字存在。
 - 2026-09-09（v16，原则层并入 agent 画像，用户拍板「记忆插件最终是一个能一直学习反思迭代的 agent 助理角色」）：**PRINCIPLES.md 退役**——跨任务泛化原则改以 `[原则]` 索引行并入 AGENT.md（agent 画像=成长档案：定位/做法/边界/教训/习得原则；蒸馏=学习、深度睡眠归纳=睡前反思内化、replace=迭代）；§0 定位表/记忆定义/层级句（四级→三级，L0 以 `[原则]` 行类别存于 AGENT.md）/§5.5 AGENT 白名单（加 `[原则]` 标签行）与容量（2,000→**3,000**）/§5.8 整节改写/§6.1 判定流/§7 写门目标同步；write_gate/health_check/深度睡眠契约/注入面（panel）机械投影同步。PRINCIPLES.md 原件归档 audit/，不再建档注入。
 - 2026-09-09（v17.1，§小节存在性校验 + 深睡实证闭环，实态驱动）：**① write_gate 指针校验从文件级扩到 §小节级**（S1 实证发现：深睡产物曾指向 `notes/flows.md §深睡蒸馏` 空壳小节仍 gate=pass——文件存在≠小节存在）；匹配口径=read_section.mjs 权威双向包含（title===kw || title.includes(kw) || kw.includes(title)，支持 `§A/§B` 并列与「小节名（括号日期）」）；只对格式通过的行检查（格式违规 exit 4 不被小节错 exit 2 抢占）。**② 深睡契约 v17 exit 实证达成**：手动 trigger → AGENT.md 产出首条带源指针 `[路径]` 行（source=窗口真实教训）+ 晨起摘要 delta 注入「🧠 最近成长」可观测；源指针小节先行补建（`flows.md §深睡蒸馏`）。落地物：`docs/assistant-focus-plan.md`（助理目标方案 v1，S1-S6 阶段）。
+- 2026-09-10（v18，WikiSkill 借鉴：失败留痕与适用性元数据，用户拍板一次做彻底）：**① §7 新增第 6 步「变更账本」**——每笔白名单/规则语义变更（含被否尝试）记 `语义 | 预期效果 | accept/reject | 回退路径`（对标 WikiSkill skill-impact.md 被拒提案留审计链），变更前先查账本避免重复已失败方向；**② §8 详情小节模板新增两条可选行**——`- 根因：<WHY>` 与 `- 不适用：<反例场景>`（对标 WikiSkill pattern 双记 + SKILL.md When NOT to Apply），由蒸馏契约 v5 的 appends 可选字段 rootCause/avoidWhen 经宿主写入自动追加；普通条目省略、write_gate 格式校验不受影响（`- ` 要点行形态不变）。回归窗核验规则见 audit-protocol §8 第 6 问。

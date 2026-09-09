@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+### Changed
+- **WikiSkill 借鉴全量落地 · 蒸馏审计失败归类 + LLM 指纹 + raw 裁决存根（2026-09-10，用户拍板一次做彻底）**：`src/distill.ts`——① distill-run 审计行加 `fclass` 失败归类（json-parse / provider-fail / agent-stop / dispatch-failed / gate-reject / discard / ok）与 `llm` 指纹（指定 provider/model 或 inherited），episode 同补——失败环节首次可按类聚合（audit-protocol §8 第 4 问回流）；② 新增 `audit/raw-stub/stub.jsonl` 不可变裁决元数据存根（watermark/chars/route/stop/fclass/llm/outShape 计数，**不含正文**，隐私安全）——route 分流抽验（§8 第 5 问）与契约升级离线重放的数据底座（对标 WikiSkill raw/ 只存证据）；③ 两处 distill-skip 审计补 fclass；④ 路线④ activationStep 在 `activationPrefetch` 置位时照走决策通路（影子行记 `mode=prefetch-armed|shadow`），实际注入仍待影子校准后拍板（借鉴 6 只接通路不默认开）。
+- **蒸馏契约 v4→v5 · 教训带根因与适用边界（2026-09-10，用户拍板）**：`DEFAULT_DISTILL_PROMPT` + `skill/engine/distill-contract.md` + scheduler 注释同步——`appends` 条目可选 `rootCause`/`avoidWhen`（各 ≤30 字）：教训/踩坑类浓缩带 WHY 与「不适用」场景（对标 WikiSkill pattern 双记 + SKILL.md When NOT to Apply），`writeDispatch` 写入小节正文时自动追加「- 根因：…」「- 不适用：…」两行；v4 旧输出（无此二字段）照常受理，向后兼容。
+
+### Added
+- **白名单变更账本 + 审计回归窗（2026-09-10，WikiSkill 借鉴：被否提案=知识 + 轻量验证门控）**：`skill/memory-whitelist-spec.md` §7 新增第 6 步「写变更账本」（含被否尝试，回退路径必填，对标 WikiSkill skill-impact.md）+ 详情小节模板两条可选行（根因/不适用，spec v18）；`skill/audit-protocol.md` §8 三问扩六问——新增 fclass 失败归类聚合、raw-stub 存根抽验、规则变更回归窗（health exit0 + 无新绕过 + route/fclass 分布未劣化；回归 → 按账本回退路径处置；放行标准=无回归而非有提升）。
+
 ### Added
 - **模型配置小白友好化 M0-M2（2026-09-10，用户要求"地址+名字对小白不友好"）**：参考/照抄 AnythingLLM `customModels.js` + Open WebUI 枚举/下拉代码（11+ 产品调研 + 代码考古，非自研）。M0——vec 缓存指纹加 **baseUrl**（换服务但同名 model 不再误用旧向量）。M1——`/embed/test` 后端枚举（OpenAI 兼容 `/v1/models`；bge 类无 /models 降级 /health→固定模型；协议纯 node:http 零依赖）。M2——UI **Provider 预设卡 + URL(datalist) + 浏览器直连枚举模型下拉三态**（选 Ollama 自动列已装模型/选 bge 降级 health/自定义云端；embedding 名弱分类标「嵌入」；URL 改后自动重探）。实测：Ollama → 下拉列出 10 模型 ✓；bge → health-fixed。发现并绕过：DSH 宿主对 panel 进程外联 11434 的网络限制（浏览器直连方案）。commits 前批 + cb72942。
 - **树状记忆 v5.4（2026-09-10，用户拍板演进式多层树）**：记忆/画像/索引=**运行期自动生长的树**（索引指针冠层→notes 子树层层分裂，全部由蒸馏/深睡搭建，无手工摆设位）。落地——memory-core-model 升版 v5.4（树状知识结构语义：分裂归蒸馏/整编归深睡/指针只读）；`/memory/sections` **多层标题树解析**（## 顶层 → children ###/#### 递归）；详情页**递归树状渲染**（子树缩进逐层展开 + 每节点「编辑此小节」）；`memory-append.mjs` **section 路径分裂**（`父/子/孙` 逐级定位，深层小节不存在自动新建 ###；顶层 ## 仍须锚）——四场景实测（归父/分裂###/再入命中/分裂####）；深睡 prompt 加树状纪律（分裂归事件蒸馏，深睡不改 JSON 契约）。索引指针**只读**（编辑在树节点细节正文，指针手工改会与详情错位）。验证：sections API 三层解析实证、flows 详情 DOM 树节点渲染实证、35 PASS/0 FAIL。commits 8a078a7/f1ec828。
