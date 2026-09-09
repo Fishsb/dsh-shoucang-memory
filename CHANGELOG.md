@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- **蒸馏稳健性 + 积压扫尾（2026-09-10，实态排查：多工作区会话数小时未蒸馏）**：`src/distill.ts`——① **inactive context 根因修复**：热重载/重载风暴后旧 fiber 遗留 idle 定时器在 ctx 失效后仍触发 → spawn 必报 `cannot get required service "subagents" in inactive context`，窗口全部失败且无重试（实锤 21:37–22:11Z 连续 6 次）；新增 ctx.effect 清理（dispose 时清空 idleTimers/distilling）+ spawn 失败按错误分类静默跳过（水位保留），不再污染 providerFailCount；② **积压扫尾 sweepBacklog**：启动 30s + 每 10min 巡检所有仍存根的根会话，凡水位<内存末事件 seq、已出 10min 宽限期（FSM running/probing/suspect 与宽限内跳过）即自动补蒸馏——首扫即恢复 lk-FF/project-nav 4 个积压会话（3e2b5004 入册 2 / 9a7d7ef9 入册 4 / 5f024550 入册 5 / 471aca03 入册 2），当前活跃会话正确跳过；③ **预筛大段放宽**（用户拍板）：`prescanMinChars` 缺省 4000，增量 ≥ 阈值跳过信号词预筛直接蒸馏——信息密集无关键词会话不再整段丢弃推水位；④ **日志 sid 可辨识**：`sid.slice(0,8)` 恒为 'session-' 前缀导致全部日志无会话辨识度，改 `sidShort` 取 uuid 中段。附带修正：llm 指纹标签对齐独立模型键（distillProvider/distillModel）。验证：typecheck/build/hardcode 零错误；重载后首扫 6 会话补蒸馏、4 个 completed 水位推进、fclass（gate-reject/ok/dispatch-failed）+ llm=inherited 落审计。
+
 ### Changed
 - **WikiSkill 借鉴全量落地 · 蒸馏审计失败归类 + LLM 指纹 + raw 裁决存根（2026-09-10，用户拍板一次做彻底）**：`src/distill.ts`——① distill-run 审计行加 `fclass` 失败归类（json-parse / provider-fail / agent-stop / dispatch-failed / gate-reject / discard / ok）与 `llm` 指纹（指定 provider/model 或 inherited），episode 同补——失败环节首次可按类聚合（audit-protocol §8 第 4 问回流）；② 新增 `audit/raw-stub/stub.jsonl` 不可变裁决元数据存根（watermark/chars/route/stop/fclass/llm/outShape 计数，**不含正文**，隐私安全）——route 分流抽验（§8 第 5 问）与契约升级离线重放的数据底座（对标 WikiSkill raw/ 只存证据）；③ 两处 distill-skip 审计补 fclass；④ 路线④ activationStep 在 `activationPrefetch` 置位时照走决策通路（影子行记 `mode=prefetch-armed|shadow`），实际注入仍待影子校准后拍板（借鉴 6 只接通路不默认开）。
 - **蒸馏契约 v4→v5 · 教训带根因与适用边界（2026-09-10，用户拍板）**：`DEFAULT_DISTILL_PROMPT` + `skill/engine/distill-contract.md` + scheduler 注释同步——`appends` 条目可选 `rootCause`/`avoidWhen`（各 ≤30 字）：教训/踩坑类浓缩带 WHY 与「不适用」场景（对标 WikiSkill pattern 双记 + SKILL.md When NOT to Apply），`writeDispatch` 写入小节正文时自动追加「- 根因：…」「- 不适用：…」两行；v4 旧输出（无此二字段）照常受理，向后兼容。

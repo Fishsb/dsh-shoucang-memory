@@ -23,6 +23,7 @@ export interface DistillConfig {
     idleWakeMs: number;
     minTurnChars: number;
     distillPrescan: boolean;
+    prescanMinChars?: number;
     distillPrompt: string;
     llmProvider: string;
     llmModel: string;
