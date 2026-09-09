@@ -49,13 +49,14 @@ L4 交互（DSH Web GUI）
 
 **注入恒有界**：三索引行数受容量红线（字符数）约束 → 注入字节稳定 → 前缀缓存热。此即「画像指针 + 多层设计」省 token 的核心机理。
 
-## 5. 向量召回（M9，2026-09-09 默认启用）
+## 5. 向量召回（M9，2026-09-09 默认启用 · 本地 GPU）
 
-- **Provider**：本地 bge-m3（OpenAI 兼容桥 :9915，dtype q8，1024d）——本地=零 token、离线；云端可配置（embedBaseUrl/embedModel/embedApiKeyEnv 键已在，供切换）。
-- **融合**：词法 top≥8 打底 → 行向量惰性补齐 → dense topK → **dense 0.7 ⊕ lexical 0.3**（min-max 归一）。
-- **token/效率账**：读侧每查询仅嵌入 ≤8 候选行 + 1 查询行 → 本地零 token；行向量缓存 `.vector-cache.jsonl`（行 hash 惰性增量）→ 首查后免重复嵌入。
-- **降级闭环**：未配置/无 key/超时/失败 → 自动降级纯词法，闭环不中断（召回永可用）。
-- **缓存非事实源**：行文本是权威，缓存可随时删重建。
+- **Provider**：本地 bge-m3（Xenova q8 543MB，多语言 1024d）→ **DirectML GPU 推理**（onnxruntime-directml + DmlExecutionProvider 驱动 NVIDIA；服务 `bge-m3-openai-server-gpu.py`，nssm AUTO_START :9915，OpenAI/Ollama 双兼容）。GPU=零 token、离线、显存 ~2GB（8GB 卡余量足）；云端可配置（embedBaseUrl/embedModel/embedApiKeyEnv 键在，切换即用）。
+- **融合**：词法 top≥8 打底 → 行向量惰性补齐 → dense topK → **dense 0.7 ⊕ lexical 0.3**（min-max 归一）；**词法打底空 → 全量索引薄行池 dense 检索**（语义相似措辞不同的价值场景，不因词法空而漏召）。
+- **token/效率账**：每查询嵌入 ≤8 候选行 + 1 查询（本地零 token）；行向量缓存 `.vector-cache.jsonl`（行 hash 惰性增量）→ 首查全量 ~1.7s、缓存后 **200-300ms/查询**。
+- **降级闭环**：provider 不可用/超时/失败 → 自动降级纯词法，闭环不中断。
+- **模型选择说明**：q8 量化 = 原 cjs 服务 dtype 配置；嵌入模型 int8 检索损失 <5%（[HF 量化](https://huggingface.co/blog/embedding-quantization) 实证 94-100%），质量/资源/速度最佳平衡。
+- **缓存非事实源**：行文本是权威，`.vector-cache.jsonl` 可随时删除重建（行 hash 失效即重嵌）。
 
 ## 6. 质量门（写侧防线）
 
