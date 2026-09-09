@@ -108,10 +108,10 @@ export const Config: any = z.object({
   activationTOff: z.number().min(0).max(1).default(0.52).description('滞回下阈：sim<此值 → 回到 idle（防阈值抖动）'),
   activationCooldownSteps: z.number().min(0).default(3).description('触发后冷却步数，防连续打扰'),
   activationTopK: z.number().min(1).max(5).default(3).description('每次观察召回条数'),
-  embedEnabled: z.boolean().default(false).description('路线⑤ 向量融合召回（缺省关；开=dense0.7+lexical0.3，未配置/失败自动降级纯词法）'),
-  embedBaseUrl: z.string().default('').description('OpenAI 兼容 /embeddings 基址（如 https://api.openai.com/v1，留空=关）'),
-  embedModel: z.string().default('').description('embedding 模型名（如 text-embedding-3-small）'),
-  embedApiKeyEnv: z.string().default('EMBED_API_KEY').description('API key 环境变量名（进程 env，不落盘）'),
+  embedEnabled: z.boolean().default(true).description('向量融合召回（2026-09-09 缺省开；本地 bge-m3 零 token；未配置/失败自动降级纯词法）'),
+  embedBaseUrl: z.string().default('http://127.0.0.1:9915/v1').description('OpenAI 兼容 /embeddings 基址（缺省本地 bge-m3 桥；换云端改此键）'),
+  embedModel: z.string().default('bge-m3').description('embedding 模型名（缺省本地 bge-m3；换云端如 text-embedding-3-small）'),
+  embedApiKeyEnv: z.string().default('EMBED_API_KEY').description('API key 环境变量名（本地免 key；云端须设，不落盘）'),
 })
 
 // —— 自持配置文件（契约 v3 落地通道；dshHome 等路径探测统一来自 targets.ts，单一事实源）——
