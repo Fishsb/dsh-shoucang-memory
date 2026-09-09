@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### Changed
+- **S4 episode/转正数据源硬化（2026-09-09，assistant-focus-plan S4）**：`src/distill.ts` —— ① **episode 触发放宽**：蒸馏「裁决完成」（stop=completed && out，无论入册多少）即留轻 episode（含 route/outcome），不再只在入册>0 时记——episode=「任务发生+结果」的同类判定/转正数据源（memory-core-model §3.1），discard 也是有效裁决；② **flow-candidate 同型聚合**：`ensureFlowCandidate` 新增 `intentTokens` 语义指纹（CJK 双字滑动 + 英文≥4 词），与既有候选类型线索共享 ≥2 token 判同型 → 追加本次源会话并累计 `成功次数/跨会话` 计数（同会话去重），否则新建；③ **深睡材料第 5 段转正置顶**：候选按「成功≥2 且跨会话≥2」转正门槛排序置顶，深睡可据此直接归纳 [路径]（memory-core-model §4）；④ `DEEP_SLEEP_PROMPT` 路径判据补转正门槛句。存量 2 候选迁移新格式（计数=1）。验证：typecheck/build/check-hardcode 零错误；lib 同步部署 + 热重载 active。
+
 ### Added
 - **S3 能力自省工具 `assistant_capabilities`（2026-09-09，assistant-focus-plan S3）**：只读工具，任务认领前自查「现在能做什么/边界在哪」——返回三段聚合：① 当前 Agent 可见工具面按族归类（`ctx.tools.schemas(exec.agent)`，DSH 官方同款用法；族=记忆/执行/文件/检索/视觉/治理/开发/编排/技能）；② 记忆库边界纪律（AGENT.md `[边界]`/`[原则]` 行，常注入）；③ suite 装配状态。只读无副作用。验证：typecheck/build/check-hardcode 零错误；lib 同步部署位 + 热重载 active。
 
