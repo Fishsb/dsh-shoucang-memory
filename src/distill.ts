@@ -1051,7 +1051,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     rec.state = 'probing'
     rec.probeAt = Date.now()
     rec.probeRound = (rec.probeRound || 0) + 1
-    const short = rec.sid.slice(0, 8)
+    const short = (rec.sid.startsWith('session-') ? rec.sid.slice(8, 16) : rec.sid.slice(0, 8))
     const samples = Math.max(1, Number(config.deepSleepProbeSamples) || 3)
     const confirm = Math.max(1, Number(config.deepSleepProbeConfirm) || 2)
     const retries = Math.max(1, Number(config.deepSleepProbeRetries) || 2)
@@ -1209,7 +1209,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         const act = rec.state === 'ended' ? rec.lastEndAt : rec.lastEventAt
         if (act > hottest) hottest = act
       }
-      list.push({ sid: rec.sid.slice(0, 8), state: rec.state, lastEventAt: rec.lastEventAt, lastEndAt: rec.lastEndAt, probeResult: rec.probeResult })
+      list.push({ sid: (rec.sid.startsWith('session-') ? rec.sid.slice(8, 16) : rec.sid.slice(0, 8)), state: rec.state, lastEventAt: rec.lastEventAt, lastEndAt: rec.lastEndAt, probeResult: rec.probeResult })
     }
     return {
       enabled: !!config.enableDeepSleep,
