@@ -21,19 +21,21 @@
 
 ## 1. 全局注入配置（scheduler.json，参数调节页 · 2026-09-10 迁入）
 
-> 键：`injectPersona` / `injectLevel` / `injectMaxTokens` / `injectAgentMaxChars` / `injectUserMaxChars` /
+> 键：`injectPersona` / `injectLevel` / `injectAgentMaxChars` / `injectUserMaxChars` /
 > `injectMemoryMaxChars` / `hotMemory`。参数调节页对应控件：
-> persona 四档滑块、热记忆强度五档、hot_memory 开关、总预算与三板块上限数值框。
+> persona 四档滑块、热记忆强度五档、hot_memory 开关、三板块上限数值框。
+> 注入内容 = 双画像（AGENT.md 含 [原则]/[路径] + USER.md）+ 知识索引 MEMORY.md 指针行；
+> 参数调节页显示**当前直接注入 ≈ N token** 实时统计（每轮随提示词注入）。
+> 2026-09-10 起**无总预算**（注入为薄行指针，不需整体预算裁切；各板块上限独立控）。
 
 | 键 | 缺省 | 范围/枚举 | 作用 |
 |---|---|---|---|
 | injectPersona | both | off\|me\|you\|both | 画像注入范围：off=不注 / me=只 agent 画像 AGENT.md / you=只用户画像 USER.md / both=双画像 |
 | injectLevel | smart | off\|low\|medium\|high\|smart | MEMORY 知识索引热取行数：0/2/4/8/smart=10 |
 | hotMemory | true | 布尔 | 注入总闸（关=任何画像与索引都不注入） |
-| injectMaxTokens | 3000 | 100–8000 | 注入 token 总预算（中文 ~2 字符/token），超出整体裁切 |
-| injectAgentMaxChars | 0 | 0–20000 | AGENT.md 注入字符上限（0=不裁，靠容量门 3000 兜底） |
-| injectUserMaxChars | 0 | 0–20000 | USER.md 注入字符上限（0=不裁，靠容量门 2000 兜底） |
-| injectMemoryMaxChars | 0 | 0–20000 | MEMORY.md 注入字符上限（档位行数后二次裁切；0=不裁） |
+| injectAgentMaxChars | 实际文件量 | 0–20000 | AGENT.md 注入字符上限；**默认=当前实际量（全量）**，设更小才逐行裁切 |
+| injectUserMaxChars | 实际文件量 | 0–20000 | USER.md 注入字符上限；同上 |
+| injectMemoryMaxChars | 实际文件量 | 0–20000 | MEMORY.md 注入字符上限（档位行数后二次裁切）；同上 |
 
 改动即时反映到下一轮注入（缓存作废）；面板写回自动备份。
 
