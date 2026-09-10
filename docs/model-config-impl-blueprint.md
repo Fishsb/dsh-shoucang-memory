@@ -1,5 +1,7 @@
 # 模型配置实施蓝图（照抄 AnythingLLM customModels.js · 2026-09-10）
 
+> ⚠ **时点文档（2026-09-10）——文中「自建 9915 桥」路线已于 2026-09-11 被取代**：现行向量承载 = **Ollama `bge-m3`** @ `http://127.0.0.1:11434/v1`（本机免 key、OpenAI 兼容 `/v1/embeddings`），见 `ARCHITECTURE.md` §Provider 与 `settings-guide.md` 的 `embedBaseUrl` 行。旧自建桥（`bge-m3-openai-server-gpu.py` + nssm 服务 `dsh-bge-embed` :9915）已随 nssm 卸载停用；**模型资产仍在 `D:\AI\models\bge-m3`，随时可复活**。本文保留原样作为**当时**的实施蓝图，正文中的 9915 预设与端点假设（如"bge 无 /models 降级 /health"）**不代表现状**。
+
 > 来源：AnythingLLM `server/utils/helpers/customModels.js` 代码考古（实测 API 抓取，blob URL 在报告）。
 > 用途：DSH 插件 M1(/embed/test) + M2(Provider 卡+模型下拉) 的照抄骨架。协议零新依赖纯 fetch。
 > 对齐审查修正：D1（baseUrl 带 /v1）、D2（bge 无 /models 降级 /health）、D3（缓存指纹加 baseUrl）。
