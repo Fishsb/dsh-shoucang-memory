@@ -31,6 +31,7 @@ import {
 } from './targets.js'
 import { recallRanked, semanticSim, type EmbedCfg } from './vec.js'
 import { activityAggregate } from './activity.js'
+import { applyTreeOps, type TreeOp } from './treeops.js'
 
 type AppContext = {
   tools: { register(tool: unknown): unknown }
@@ -168,6 +169,7 @@ Q2 画像判定：**用户的稳定偏好/背景/禁忌**（非一次性需求�
 
 // ── 深度睡眠归纳契约（v17：习得原则与通用任务路径 [路径] 并入 agent 画像 AGENT.md；成败信号入材料；睡眠=agent 的反思进化迭代——认识自己也认识用户）──
 // v17.2（2026-09-10 用户拍板 v6）：新增 pointerOps 通道——索引指针自动维护（扩容概况/重构指针 §/去重留优），只允许 update 不增删（新增=蒸馏 newIndex 唯一性硬门）。
+// v17.3（2026-09-10 用户拍板 treeOps v1）：深睡可提 rename/merge 结构操作（宿主执行守不变量），v5.4「深睡不新建/不合并小节」禁令解除；分裂新 ### 仍归蒸馏写侧。
 export const DEEP_SLEEP_PROMPT = `你是深度睡眠归纳子代理（守藏记忆·agent 画像成长引擎，audit-protocol §5）。任务：像人睡前回想当天经历一样，回顾给定「当天记忆痕迹」——**反思三通道：认识自己（提炼习得原则写入 AGENT.md）+ 认识用户（更新用户画像 USER.md）+ 沉淀通用任务路径（[路径] 行写入 AGENT.md，对标 AWM）**，仅认识自己或认识用户其一即反思不完整。原则=多条经验反复提纯凝成的跨任务泛化指引（巩固记忆；主动遗忘=提纯下放，不是删除）；路径=可复用任务类型的步骤序列（具体值必须变量化）。
 判定规则：
 - **原则判据**：同主题 ≥3 条痕迹，或单主题当日反复命中 → 提炼 1 条原则；支撑不足的一律不提炼（路径判据见下，二者区分勿混）。
@@ -179,11 +181,11 @@ export const DEEP_SLEEP_PROMPT = `你是深度睡眠归纳子代理（守藏记�
 - **跨工作区红线**：记忆库是全局单库，痕迹可能来自多个工作区，而原则会常驻注入到**所有**工作区会话。含项目专名/具体路径/版本号/一次性事实的经验一律不提炼（skipped 注明「项目专属」）；只在单一项目语境成立的结论同样不提炼——宁缺毋滥，误注入比漏提炼危害大。
 - pending 内容尚未入册 notes 的，不得作为源指针（仅作背景理解）；找不到 notes 锚点就不提炼（宁缺毋滥）。
 - 与既有原则/路径冲突时用 replace（match=既有行原文，须逐字来自给定「现行原则/路径」清单）；否则 add。
-- **v5.4 树状纪律**：notes 小节的**结构生长（分裂新子节）由事件蒸馏自动完成**（写侧按内容量归并 vs 分裂 ###）；你**不新建/不合并 notes 小节**（深睡聚焦画像/原则/路径提炼，树形整编——合并冗余子节/降级冷枝——在树出现冗余后由后续整编步骤做，本契约不改 JSON 结构）。源指针仍指向真实存在的 §小节（含子节路径如 §父节/子节 若材料中已存在）。
+- **v17.3 树由模型自动维护（2026-09-10 拍板）**：**你可以**在确有语义收益时提出 \`treeOps\` 结构操作（rename/merge），宿主执行并守不变量（归档可回滚/锚存在/指针集内重写/无孤儿）；分裂新 ### 仍由蒸馏写侧负责；宁缺毋滥，拿不准不出 treeOps。源指针仍指向真实存在的 §小节（含子节路径如 §父节/子节 若材料中已存在）。
 - 独立完成：不 spawn 子代理、不使用任何工具，只依据给定材料。
 输出：只输出一行 JSON（不要 reasoning、不要其他文本）：
-{"principles":[{"action":"add","text":"[原则] 排障先看根因 · 先验证成本低再修改成本高 → notes/lessons.md §A/§B"},{"action":"add","text":"[路径] DSH 插件升级 · ①提交推送 ②cp 覆盖 lib ③sc restart ④四端点 200 → notes/flows.md §升级"},{"action":"replace","match":"[原则] 既有原则原文行","text":"[原则] ... → notes/tools.md §C"}],"profileOps":[{"target":"USER.md","action":"add","section":"沟通偏好","text":"- ... ← 源: notes/lessons.md §A"}],"pointerOps":[{"target":"MEMORY.md","action":"update","match":"[lesson] 网络坑 · 旧概况短语 → notes/lessons.md §网络坑","line":"[lesson] 网络坑 · 新概况短语 → notes/lessons.md §网络坑"}],"skipped":[{"title":"...","reason":"≤30字"}]}
-无足够素材 → {"principles":[],"profileOps":[],"pointerOps":[],"skipped":[]}。
+{"principles":[{"action":"add","text":"[原则] 排障先看根因 · 先验证成本低再修改成本高 → notes/lessons.md §A/§B"},{"action":"add","text":"[路径] DSH 插件升级 · ①提交推送 ②cp 覆盖 lib ③sc restart ④四端点 200 → notes/flows.md §升级"},{"action":"replace","match":"[原则] 既有原则原文行","text":"[原则] ... → notes/tools.md §C"}],"profileOps":[{"target":"USER.md","action":"add","section":"沟通偏好","text":"- ... ← 源: notes/lessons.md §A"}],"pointerOps":[{"target":"MEMORY.md","action":"update","match":"[lesson] 网络坑 · 旧概况短语 → notes/lessons.md §网络坑","line":"[lesson] 网络坑 · 新概况短语 → notes/lessons.md §网络坑"}],"treeOps":[{"action":"rename","file":"lessons.md","oldTitle":"旧名","newTitle":"新名"}],"skipped":[{"title":"...","reason":"≤30字"}]}
+无足够素材 → {"principles":[],"profileOps":[],"pointerOps":[],"treeOps":[],"skipped":[]}。
 
 双画像巩固（反思的另一通道=认识用户；与原则同判据、同红线）：
 - 回顾给定「现行画像」（USER=用户画像 / AGENT=你的自我画像）与当天痕迹，若发现：**用户跨任务稳定的偏好/背景/禁忌**（非一次性需求）→ profileOps target=USER.md；**你自身反复出现的稳定做法/能力边界/常犯错误教训**（可跨任务复用的自我认知）→ target=AGENT.md。
@@ -1603,6 +1605,24 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
           return b.split(/\r?\n/).map((l) => l.trim()).filter((l) => /^\[[^\]\s]+\]/.test(l)).join('\n') || '（暂无条目）'
         } catch { return '（无 MEMORY.md）' }
       })()
+      // v17.3 treeOps 材料：现行树节清单（treeOps 的 file/oldTitle/dropTitle/keepTitle 必须逐字取自该段；
+      // 每个小节一行 `notes/文件:标题`，含层级标记；无树节输出一行「（无）」）
+      const currentTreeSections = (() => {
+        try {
+          const nd = join(resolved.root, 'notes')
+          const files = readdirSync(nd).filter((f) => /\.md$/i.test(f) && f.toLowerCase() !== 'index.md').sort()
+          const rows: string[] = []
+          for (const f of files) {
+            const body = readFileSync(join(nd, f), 'utf8')
+            for (const m of body.matchAll(/^(#{2,4})[ \t]+(.*)$/gm)) {
+              const title = String(m[2] || '').trim()
+              if (!title) continue
+              rows.push(`notes/${f} ${'#'.repeat(m[1].length)} ${title}`)
+            }
+          }
+          return rows.length ? rows.join('\n') : '（无）'
+        } catch { return '（无）' }
+      })()
       validateProvider()
       // 本地日键（与 activity.ts dayKey 同口径：文件名 activity-hot-<YYYY-MM-DD>.md）
       const _now = new Date()
@@ -1624,6 +1644,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         `## 现行原则/路径（冲突时 replace，match 逐字取自此清单）\n${currentList}`,
         `## 现行画像（profileOps 的 replace match 逐字取自此处）\n${currentProfiles}`,
         `## 现行知识索引（MEMORY.md；pointerOps 扩容/重构的 match 逐字取自此处）\n${currentMemIndex}`,
+        `## 现行树节清单（treeOps 的 file/oldTitle/dropTitle/keepTitle 必须逐字取自此处；每个小节一行 \`notes/文件:标题\`，含 ## 与 ### 全部）\n${currentTreeSections}`,
         '请按规则处理：提炼跨任务泛化原则与双画像/知识索引更新指令，输出 JSON。',
       ].join('\n\n')
       const resolvedLlm = resolveLlm(config.sleepProvider, config.sleepModel)
@@ -1680,8 +1701,12 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         const ptrRes = (stop === 'completed' && out)
           ? await applyPointerOps(resolved.root, out)
           : { updated: 0, skipped: 0, gate: `stop=${stop}` }
-        log(`deep sleep: stop=${stop} 原则 +${app.added}/替换 ${app.replaced}/跳过 ${app.skipped}（${app.gate}）画像 +${profileAdded} 指针更新 ${ptrRes.updated}/跳过 ${ptrRes.skipped}（${ptrRes.gate}）`)
-        audit({ kind: 'deep-sleep', stop, added: app.added, replaced: app.replaced, skipped: app.skipped, profiles: profileAdded, pointers: ptrRes.updated, ptrSkipped: ptrRes.skipped, gate: app.gate })
+        // v17.3 树自动维护：treeOps（rename/merge；模型提案 → 宿主执行守不变量——归档可回滚/锚存在/指针集内重写/无孤儿/幂等）
+        const treeRes = (stop === 'completed' && out && Array.isArray(out.treeOps))
+          ? await applyTreeOps(resolved.root, out.treeOps, { audit, log })
+          : { applied: 0, skipped: 0, archived: 0 }
+        log(`deep sleep: stop=${stop} 原则 +${app.added}/替换 ${app.replaced}/跳过 ${app.skipped}（${app.gate}）画像 +${profileAdded} 指针更新 ${ptrRes.updated}/跳过 ${ptrRes.skipped}（${ptrRes.gate}）树 ops ${treeRes.applied}/跳过 ${treeRes.skipped}/归档 ${treeRes.archived}`)
+        audit({ kind: 'deep-sleep', stop, added: app.added, replaced: app.replaced, skipped: app.skipped, profiles: profileAdded, pointers: ptrRes.updated, ptrSkipped: ptrRes.skipped, tree: treeRes.applied, treeSkipped: treeRes.skipped, gate: app.gate })
         if (stop === 'completed') {
           // 路线② 晨起摘要 delta：深睡消化后的行级 diff（新增/替换 [原则]/[路径]/画像行 ≤3）→ suite/knowledge/delta.md
           // 语义：delta 是「最近变化的新闻」，AGENT.md/USER.md 是档案全本；delta 永非事实源，过期即弃（下轮深睡覆盖）。
