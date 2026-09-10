@@ -18,7 +18,7 @@ export interface DistillChunks {
  * - truncatedTail：分段天然不丢尾（每段都会被逐轮处理），故恒为 false——「还有后续段未处理」由调用方按
  *   chunks.length 与本轮段数上限（MAX_CHUNKS_PER_RUN）判定（水位停在已处理段的 endSeq，下一触发续传）。
  */
-export declare function buildEventChunks(agent: any, lastSeq: number, chunkChars?: number): DistillChunks;
+export declare function buildEventChunks(agent: any, lastSeq: number, chunkChars?: number, eventsOf?: any[]): DistillChunks;
 type AppContext = {
     tools: {
         register(tool: unknown): unknown;
