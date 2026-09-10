@@ -1981,6 +1981,19 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       } catch (e) {
         log(`deep sleep: consolidation 失败（跳过，继续深睡）: ${String((e as Error)?.message || e).slice(0, 120)}`)
       }
+      // 真实读采集（2026-09-10 ACT-023）：`access.log` 只覆盖 read_section 路径，agent 的真实读
+      // （read/grep/glob/pwsh 命中记忆库）零埋点 ⇒ 活性/遗忘/回想强度三模型失真（假冷）。
+      // 先由 harvest-access.mjs 从**会话转录**按「会话 seq 水位」增量采集真实读到 `access-real.jsonl`，
+      // 再由 activityAggregate 合并两源（聚合是每轮按日志全量重算，故无需改判定逻辑）。
+      // 失败仅 log，绝不阻断深睡（同 below 各步的收敛策略）。
+      try {
+        await runNode(config.nodeBin, join(resolved.root, 'scripts', 'harvest-access.mjs'), [], {
+          env: { MEMORY_ROOT: resolved.root, ...capEnv() },
+          timeout: 120000,
+        })
+      } catch (e) {
+        log(`deep sleep: 真实读采集失败（跳过，按既有日志聚合）: ${String((e as Error)?.message || e).slice(0, 120)}`)
+      }
       // v7 A 步：条目活性聚合（2026-09-10，方案 docs/memory-activity-model.md）——consolidation 之后、归纳之前：
       // 命中聚合 → ACT-R 式状态迁移（active/warm/cold）→ 遗忘候选清单（只建议不删除）；失败仅 log。
       // 阈值走 scheduler.json（activityWarmDays/ColdDays/ArchiveDays/HotHits，UI 可调），缺省 14/44/90/5。

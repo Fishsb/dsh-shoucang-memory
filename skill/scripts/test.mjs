@@ -523,5 +523,29 @@ try {
   fs.rmSync(noBank, { recursive: true, force: true });
 } catch (e) { fail += 2; console.log('❌ 召回评测器（异常: ' + failMsg(e) + '）'); }
 
+// 29) 真实读采集器 harvest-access（ACT-023）：转录 → access-real.jsonl；水位幂等（复跑 0 新增）
+try {
+  const th = makeContainer();
+  // 夹具隔离：容器并入的真实 audit/access-real.jsonl 与水位会让「记录数」失去意义（假绿），先清掉
+  for (const f of ['access-real.jsonl', 'access-real-watermark.json']) fs.rmSync(path.join(th, 'audit', f), { force: true });
+  const sd2 = path.join(th, 'sessions', 'proj', 'session-h1');
+  fs.mkdirSync(sd2, { recursive: true });
+  const rp2 = path.join(th, 'notes', 'env.md').replace(/\\/g, '\\\\');
+  fs.writeFileSync(path.join(sd2, 'session.jsonl'),
+    JSON.stringify({ type: 'tool/call', seq: 1, time: Date.now(), data: { name: 'read', arguments: '{"file_path":"' + rp2 + '"}' } }) + '\n');
+  const hs = path.join(th, 'scripts', 'harvest-access.mjs');
+  const hArgs = ['--bank', th, '--sessions', path.join(th, 'sessions')];
+  const r1 = execOut('node', [hs, ...hArgs], { cwd: th });
+  const outF = path.join(th, 'audit', 'access-real.jsonl');
+  const n1 = fs.existsSync(outF) ? fs.readFileSync(outF, 'utf8').split('\n').filter(Boolean).length : 0;
+  const r2 = execOut('node', [hs, ...hArgs], { cwd: th });
+  const n2 = fs.existsSync(outF) ? fs.readFileSync(outF, 'utf8').split('\n').filter(Boolean).length : 0;
+  const okH = r1.code === 0 && n1 > 0 && n2 === n1; // 首跑有记录；复跑按水位幂等不新增
+  if (okH) pass++; else fail++;
+  console.log(`${okH ? '✅' : '❌'} 真实读采集器（记录 ${n1} → 复跑 ${n2}，幂等）` +
+    (okH ? '' : ` [诊断: code1=${r1.code} code2=${r2.code} out1=${JSON.stringify(r1.out.slice(0, 120))}]`));
+  fs.rmSync(th, { recursive: true, force: true });
+} catch (e) { fail++; console.log('❌ 真实读采集器（异常: ' + failMsg(e) + '）'); }
+
 console.log(`\n结果: ${pass} PASS / ${fail} FAIL`);
 process.exit(fail ? 1 : 0);
