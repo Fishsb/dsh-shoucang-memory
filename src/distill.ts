@@ -326,7 +326,10 @@ function runNode(nodeBin: string, scriptPath: string, args: string[], opts?: { c
     let out = '', err = '', killed = false
     const child = spawn(nodeBin || 'node', [scriptPath, ...args], {
       cwd: opts?.cwd, maxBuffer: 8 * 1024 * 1024, windowsHide: true,
-      env: opts?.env ? { ...process.env, ...opts.env } : process.env,
+      // 2026-09-10 实锤修复：宿主 process.env 含 NODE_OPTIONS（inspector --inspect=9445），子进程继承后
+      // 端口冲突 → Node 启动异常（status=null / 无 stdout），所有 runNode 子脚本静默失效。
+      // 统一清空 NODE_OPTIONS（子脚本无需 inspector），彻底消除该干扰。
+      env: { ...process.env, NODE_OPTIONS: '', ...(opts?.env || {}) },
     } as any)
     const to = setTimeout(() => { killed = true; try { child.kill() } catch { /* */ } }, opts?.timeout ?? 60000)
     child.stdout?.on('data', (d) => { out += d })
@@ -532,16 +535,20 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     for (let attempt = 1; attempt <= 3; attempt++) {
       let file: string | null = null
       try { file = await locateTranscript(sid) } catch { file = null }
+      if (!file) log(`ws 反解: 转录定位失败 attempt=${attempt} sid=${sid.slice(0, 18)}`)
       if (file) {
         // ① 权威：转录首行 session.cwd
         try {
           const cwdProbe = join(memoryLibRoot(), 'scripts', 'transcript-cwd-probe.mjs')
           if (existsSync(cwdProbe)) {
-            const r = await runNode(config.nodeBin, cwdProbe, [file], { timeout: 10000 })
+            const r = await runNode(config.nodeBin, cwdProbe, [file], { timeout: 30000 })
             const wsCwd = r.status === 0 ? textOf(r).trim() : ''
             if (wsCwd && /^[A-Za-z]:[\\/]/.test(wsCwd)) return wsCwd
+            log(`ws 反解: cwd 探针无结果 status=${r.status} out=${JSON.stringify(textOf(r).slice(0, 80))}`)
+          } else {
+            log(`ws 反解: cwd 探针缺失 ${cwdProbe}`)
           }
-        } catch { /* cwd 探针失败走目录 decode 兜底 */ }
+        } catch (e) { log(`ws 反解: cwd 探针异常 ${String((e as Error)?.message || e).slice(0, 80)}`) }
         // ② 兜底：目录名 decode（盘符冒号补全）
         const m = file.match(/sessions[\\/]+(--.+?--)[\\/]/)
         if (m) {
@@ -746,6 +753,44 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       return { added, rejected, failed, targetLib: 'workspace' }
     }
     return { added, rejected, failed, targetLib: 'none' }
+  }
+
+  // ── pending defer 卡直写（2026-09-10：project-defer 是「已裁决为项目卡」的降级暂存——workspace 恢复后
+  //    应直接直写该工作区 devref，不再让 LLM 重裁决（重裁决会按本轮会话 route 一刀切导致项目卡被 skip 丢失）。
+  //    flush 成功后移入 .processed（防重复）；workspace 仍不可解则留 pending 等下轮。──
+  const flushDeferCards = async (): Promise<{ written: number; kept: number }> => {
+    let written = 0, kept = 0
+    let files: string[] = []
+    try { files = readdirSync(pendDir).filter((f) => /^\d{4}-\d{2}-\d{2}-project-defer-.*\.md$/.test(f)) } catch { return { written, kept } }
+    for (const f of files) {
+      try {
+        const raw = readFileSync(join(pendDir, f), 'utf8')
+        const sidM = raw.match(/^-\s*源会话：\s*(session-\S+)/m)
+        const titleM = raw.match(/^#\s*\[project-defer\]\s*(.+)$/m)
+        const typeM = raw.match(/^-\s*卡类型：\s*(\S+)/m)
+        if (!sidM || !titleM) { kept++; log(`defer 保留 ${f.slice(0, 40)}: 解析失败 sid=${!!sidM} title=${!!titleM}`); continue }
+        const ws = await resolveWorkspace(sidM[1].trim())
+        if (!ws) { kept++; log(`defer 保留 ${f.slice(0, 40)}: workspace 不可解（sid=${sidM[1].trim().slice(0, 18)}）`); continue } // workspace 仍不可解：留 pending
+        const title = titleM[1].trim()
+        const cardType = ['how-to', 'reference', 'decision'].includes(String(typeM ? typeM[1].trim() : '')) ? String(typeM![1].trim()) : 'reference'
+        const bodyIdx = raw.indexOf('待蒸馏重裁决或人工认领')
+        const body = bodyIdx >= 0 ? raw.slice(bodyIdx + '待蒸馏重裁决或人工认领'.length).trim() : ''
+        const dir = join(ws, 'docs', 'devref', 'shoucang')
+        mkdirSync(dir, { recursive: true })
+        const date = new Date().toISOString().slice(0, 10)
+        const slug = title.replace(/[^\w\u4e00-\u9fa5]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30) || 'card'
+        const out = join(dir, `${date}-${cardType}-${slug}.md`)
+        // 幂等：目标卡已存在（同 slug）→ 直接清理 pending（视为已回流）
+        if (!existsSync(out)) writeFileSync(out, `# [项目事实] ${cardType} · ${title}\n\n- 卡类型：${cardType}\n- 溯源：（defer 回流 ${f}）\n- 源会话：${sidM[1].trim()}\n- 工作区：${ws}\n\n${body}\n`, 'utf8')
+        const procDir = join(pendDir, '.processed')
+        try { mkdirSync(procDir, { recursive: true }); renameSync(join(pendDir, f), join(procDir, f)) } catch { /* 移动失败：下轮重试 */ }
+        written++
+        audit({ kind: 'defer-flush', target: title, workspace: ws, cardType, file: f, sid: sidM[1].trim() })
+        log(`defer 回流: ${title.slice(0, 30)} → ${ws}/docs/devref/shoucang/`)
+      } catch (e) { kept++; log(`defer 回流失败 ${f.slice(0, 30)}: ${String((e as Error)?.message || e).slice(0, 100)}`) }
+    }
+    if (written || kept) log(`defer 回流汇总: 写入 ${written} / 保留 ${kept}`)
+    return { written, kept }
   }
 
   const distillAgent = async (agent: any): Promise<void> => {
@@ -2233,6 +2278,8 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
   // 无 FSM 记录的历史会话（如重启前已结束的）一律视为积压候选直接补。
   const sweepBacklog = async (): Promise<void> => {
     try {
+      // 先回流 pending defer 卡（workspace 恢复后直写 devref；周期扫尾也覆盖）
+      try { await flushDeferCards() } catch { /* 回流失败不阻断扫尾 */ }
       const roots = (ctx.agents && typeof ctx.agents.roots === 'function') ? ctx.agents.roots() : []
       for (const a of roots) {
         try {
@@ -2331,6 +2378,8 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
   // ── 手动蒸馏触发（2026-09-10：pending 回流闭环——参数调节「立即处理 pending」调此）──
   const runDistillNow = async (): Promise<{ ok: boolean; sessions: number; note?: string }> => {
     try {
+      // 先回流 pending defer 卡（workspace 恢复后直写 devref，不等 LLM 重裁决）
+      const fl = await flushDeferCards()
       const roots = (ctx.agents && typeof ctx.agents.roots === 'function') ? ctx.agents.roots() : []
       let n = 0
       for (const a of roots) {
@@ -2343,7 +2392,8 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
           n++
         } catch { /* 单会话跳过 */ }
       }
-      return { ok: true, sessions: n, note: n ? `蒸馏 ${n} 个根会话（含 pending 候选回流）` : '无可用根会话（活跃中/子代理）——等闲置自动蒸馏' }
+      const flNote = fl.written ? `（defer 回流 ${fl.written} 张卡${fl.kept ? `，保留 ${fl.kept}` : ''}）` : (fl.kept ? `（defer 待认领 ${fl.kept}：workspace 仍不可解）` : '')
+      return { ok: true, sessions: n, note: `蒸馏 ${n} 个根会话${flNote}` }
     } catch (e) {
       return { ok: false, sessions: 0, note: String((e as Error)?.message || e).slice(0, 120) }
     }
