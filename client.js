@@ -1819,6 +1819,25 @@
       // cordis client plugin 激活：注入 slots（满足契约）+ DOM 入口始终挂载（React 不可用时真实入口）
       function apply(ctx) {
         mount(); // root + mask + CSS（幂等）
+        // 2026-09-10：窗口重新聚焦时刷新当前视图——面板停留期间后台数据（蒸馏/深睡/记忆写入）变化，
+        // 切回窗口即取最新；仅面板打开时生效 + 1.5s 防抖（轻量替代全局轮询）。
+        if (!window.__scFocusBound) {
+          window.__scFocusBound = true;
+          var lastFocusRefresh = 0;
+          var focusRefresh = function () {
+            try {
+              var mk = document.getElementById('scpanl-mask');
+              if (!mk || !mk.classList.contains('open')) return; // 面板未打开=不刷
+              if (document.hidden) return; // 页面隐藏中不刷（visibilitychange 返回时再刷）
+              var now = Date.now();
+              if (now - lastFocusRefresh < 1500) return; // 防抖
+              lastFocusRefresh = now;
+              refreshCurrentView();
+            } catch (e) { /* 聚焦刷新零抛出 */ }
+          };
+          window.addEventListener('focus', focusRefresh);
+          document.addEventListener('visibilitychange', function () { if (!document.hidden) focusRefresh(); });
+        }
         // 0.1.2 起 React slot 按钮与 DOM 直插按钮（mountSidebarEntry）会同时显示为两个入口，
         // 暂禁用 slot 按钮、只保留 DOM 直插真实入口；如需恢复 React slot 改回 true。
         var ENABLE_SLOT_BUTTON = false;
