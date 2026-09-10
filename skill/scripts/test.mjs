@@ -11,7 +11,10 @@ import { fileURLToPath } from 'node:url';
 const repoDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..'); // 公开树（规则/引擎/脚本）
 // 数据根：MEMORY_ROOT 显式 > 自动探测 _memory/（ADR-0006 开发仓布局）> repoDir（生产技能副本旧布局兼容）
 const dataDir = process.env.MEMORY_ROOT
-  || (fs.existsSync(path.join(repoDir, '_memory', 'MEMORY.md')) ? path.join(repoDir, '_memory') : repoDir);
+  || (fs.existsSync(path.join(repoDir, '_memory', 'MEMORY.md')) ? path.join(repoDir, '_memory')
+    // ADR-0006 开发仓布局：数据在「仓根 `_memory/`」，而脚本在「<仓根>/skill/scripts/」——repoDir 指向 skill/，
+    // 故须再向上一层探测；缺此分支时开发仓内 dataDir 落回 skill/（无 MEMORY.md）→ 夹具 ENOENT 中止整套。
+    : (fs.existsSync(path.join(repoDir, '..', '_memory', 'MEMORY.md')) ? path.join(repoDir, '..', '_memory') : repoDir));
 const health = path.join(repoDir, 'scripts', 'memory_health_check.mjs');
 const gate = path.join(repoDir, 'scripts', 'memory_write_gate.mjs');
 const cand = path.join(repoDir, 'scripts', 'candidate_grep.mjs');
@@ -21,6 +24,20 @@ function makeContainer() {
   fs.cpSync(repoDir, t, { recursive: true, filter: (s) => !/(node_modules|\\.git(?:[\\\\/]|$)|_memory|\\.internal|\\.gov-bench)/.test(s) });
   if (dataDir !== repoDir) { for (const e of fs.readdirSync(dataDir, { withFileTypes: true })) fs.cpSync(path.join(dataDir, e.name), path.join(t, e.name), { recursive: true, force: true }); }
   return t;
+}
+
+// 夹具净化（体检类）：体检退出码是 **max 语义**（5>4>3>2），故「容量」类用例的容器必须不含指针/格式类问题，
+// 否则容器里既有的 5 级问题会压过容量的 2，用例永远拿不到期望码 —— 真实库积累告警后即失效（2026-09-10 实测）。
+// 只净化夹具副本，不改真实库。（同 cleanContainer 的隔离思路，见下方归档段）
+function sanitizeIndexes(c) {
+  for (const name of ['MEMORY.md', 'USER.md', 'AGENT.md']) {
+    const p = path.join(c, name);
+    if (!fs.existsSync(p)) continue;
+    const kept = fs.readFileSync(p, 'utf8').split(/\r?\n/)
+      .filter((l) => !/^\s*[-[]/.test(l) || /→\s*notes\//.test(l));
+    fs.writeFileSync(p, kept.join('\n'));
+  }
+  return c;
 }
 
 let pass = 0, fail = 0;
@@ -38,14 +55,36 @@ function run(label, cmd, args, expected, root) {
   }
 }
 
-// 1) 真实目录体检 → exit 0（健康）或 2（容量>85% 警戒态，合法运行态如固化后索引 96%）
-run('体检-真实目录', 'node', [health], [0, 2]);
+// 取输出而不因非零退出抛错：体检在真实库上会带告警退出（max 语义 5>4>3>2），
+// 而下列用例断言的是「输出内容」（零召回清单 / AGENT 段 / 标签样例），与退出码无关。
+// 同 runC（archive-check）既有先例：非零也取 stdout。
+function execOut(cmd, args, opts) {
+  try { return { code: 0, out: execFileSync(cmd, args, { encoding: 'utf8', ...opts }) }; }
+  catch (e) { return { code: e.status ?? -1, out: String(e.stdout || '') }; }
+}
 
-// 2) 构造超容量副本 → exit 2（填充量动态计算：目标 ~90%，不随夹具尺寸漂移）
-const t1 = makeContainer();
+// 1) 真实目录体检 —— 冒烟：必须跑完并给出「档内退出码」。
+// 注：真实库是活的，会合法积累告警级问题（无指针索引行 / 未登记元数据主题 / 失效 archive mark 等），
+// 而体检退出码是 max 语义（5>4>3>2），故不能断言健康码 0/2 —— 那会随库增长而红（2026-09-10 实测 exit=5）。
+// 「健康路径 → 0」由 1b 净容器用例覆盖。
+run('体检-真实目录（冒烟：档内码）', 'node', [health], [0, 2, 3, 4, 5]);
+
+// 1b) 净容器体检 → exit 0（健康路径回归覆盖：夹具净化 + 压低容量至 85% 以下，纯夹具操作）
+const t0 = sanitizeIndexes(makeContainer());
+{
+  const p0 = path.join(t0, 'MEMORY.md');
+  const ls0 = fs.readFileSync(p0, 'utf8').split(/\r?\n/);
+  while (ls0.length > 3 && ls0.join('\n').replace(/\s/g, '').length > 0.8 * 3000) ls0.pop();
+  fs.writeFileSync(p0, ls0.join('\n'));
+}
+run('体检-净容器', 'node', [health, t0], [0]);
+fs.rmSync(t0, { recursive: true, force: true });
+
+// 2) 构造超容量副本 → exit 2（先净化掉指针/格式类问题，再垫到 ~90%：>85% 警戒线且 <100% 硬限）
+const t1 = sanitizeIndexes(makeContainer());
 const memPath = path.join(t1, 'MEMORY.md');
 const baseChars = fs.readFileSync(memPath, 'utf8').replace(/\s/g, '').length;
-const padChars = Math.ceil(0.9 * 3000) - baseChars; // 90% 目标：>85% 警戒线且 <100% 硬限
+const padChars = Math.max(0, Math.ceil(0.9 * 3000) - baseChars); // 夹取到 0：真实库可能已超 90%，原算式曾致 repeat(-58) 中止整套
 fs.appendFileSync(memPath, '\n[env] 测试填充（2026-09-01）[agent] → notes/env.md §填充：' + '填充内容'.repeat(Math.ceil(padChars / 4)));
 run('体检-超容量>85%', 'node', [health, t1], [2]);
 
@@ -249,6 +288,7 @@ try {
 // 19) 会话发现：静默未 mark 会话 → due 自动建 mark → 立即处理（fired 或 rearm），真实会话零触碰
 try {
   const ta = makeContainer();
+  cleanContainer(ta); // 必须净化：真实库 progress log 非空（含真实 mark），否则容器内「借尸还魂」的 mark 会让 due2.count===0 幂等断言必败（见 L143-144 注释）
   const sessRoot = path.join(ta, 'sessions', 'proj');
   const sd = path.join(sessRoot, 'session-d1');
   fs.mkdirSync(sd, { recursive: true });
@@ -381,13 +421,13 @@ try {
 
 // 24) health_check 零召回清单：稀疏 access.log → 报告含「零召回主题」段（降级提纯候选输出，exit 0/2 均可）
 try {
-  const tf = makeContainer();
+  const tf = sanitizeIndexes(makeContainer());
   // 构造稀疏 access.log：只命中 env.md 一个小节，其余 notes 小节应进零召回清单
   const envText = fs.readFileSync(path.join(tf, 'notes', 'env.md'), 'utf8');
   const hitSec = (envText.match(/^## (.+?)（/m) || [null, 'DSH 环境'])[1];
   fs.mkdirSync(path.join(tf, 'audit'), { recursive: true });
   fs.writeFileSync(path.join(tf, 'audit', 'access.log'), JSON.stringify({ t: '2026-09-08T00:00:00Z', f: 'notes/env.md', s: hitSec }) + '\n');
-  const out = execFileSync('node', [path.join(tf, 'scripts', 'memory_health_check.mjs')], { encoding: 'utf8', cwd: tf, env: { ...process.env, MEMORY_ROOT: tf } });
+  const out = execOut('node', [path.join(tf, 'scripts', 'memory_health_check.mjs')], { cwd: tf, env: { ...process.env, MEMORY_ROOT: tf } }).out;
   const listed = (out.match(/零召回主题 (\d+) 个/) || [])[1];
   const okFmt = /零召回主题 \d+ 个/.test(out) && /提纯降级/.test(out) && Number(listed) > 0;
   if (okFmt) pass++; else fail++;
@@ -397,7 +437,7 @@ try {
 
 // 25) 习得原则写门与体检（v16：[原则] 行并入 AGENT.md）：正常 exit 0 / 超限 exit 1 / 格式违规 exit 4 / 体检 AGENT 段含原则 tag
 try {
-  const tg = makeContainer();
+  const tg = sanitizeIndexes(makeContainer());
   const gate = path.join(tg, 'scripts', 'memory_write_gate.mjs');
   const p1 = path.join(tg, 'p1.txt');
   fs.writeFileSync(p1, '[原则] 排障先看根因 · 先验证成本低再修改成本高 → notes/lessons.md §网络坑\n');
@@ -408,7 +448,7 @@ try {
   const p3 = path.join(tg, 'p3.txt');
   fs.writeFileSync(p3, '[经验] 缺概况段与指针行\n');
   run('原则门-格式违规', 'node', [gate, 'AGENT.md', p3], [4]);
-  const hp = execFileSync('node', [path.join(tg, 'scripts', 'memory_health_check.mjs')], { encoding: 'utf8', cwd: tg, env: { ...process.env, MEMORY_ROOT: tg } });
+  const hp = execOut('node', [path.join(tg, 'scripts', 'memory_health_check.mjs')], { cwd: tg, env: { ...process.env, MEMORY_ROOT: tg } }).out;
   const okP = /=== AGENT\.md/.test(hp) && /3,?000|3000/.test(hp);
   if (okP) pass++; else fail++;
   console.log(`${okP ? '✅' : '❌'} health-AGENT 段（容量 3000 输出，v16 原则并入）`);
@@ -417,7 +457,7 @@ try {
 
 // 26) v17 [路径] 任务路径行门禁（对标 AWM）：正常 exit 0 / 步内 → 违规 exit 4 / 概要 >40 字 exit 4 / 体检 tags 含 '路径'
 try {
-  const tj = makeContainer();
+  const tj = sanitizeIndexes(makeContainer());
   const gate = path.join(tj, 'scripts', 'memory_write_gate.mjs');
   const a1 = path.join(tj, 'a1.txt');
   fs.writeFileSync(a1, '[路径] DSH 插件升级 · ①构建验证 ②覆盖 lib ③重启 ④四端点 200 → notes/lessons.md §网络坑\n');
@@ -429,7 +469,7 @@ try {
   fs.writeFileSync(a3, '[路径] 升级 · ' + '①②'.repeat(30) + ' → notes/lessons.md §网络坑\n');
   run('路径门-概要超40字', 'node', [gate, 'AGENT.md', a3], [4]);
   fs.appendFileSync(path.join(tj, 'AGENT.md'), '\n[路径] DSH 插件升级 · ①构建 ②覆盖 lib ③重启 ④验证 → notes/lessons.md §网络坑\n');
-  const hp2 = execFileSync('node', [path.join(tj, 'scripts', 'memory_health_check.mjs')], { encoding: 'utf8', cwd: tj, env: { ...process.env, MEMORY_ROOT: tj } });
+  const hp2 = execOut('node', [path.join(tj, 'scripts', 'memory_health_check.mjs')], { cwd: tj, env: { ...process.env, MEMORY_ROOT: tj } }).out;
   const agentSeg = (hp2.split('=== AGENT.md')[1] || '').split('===')[0]; // AGENT 段
   // tags 含 '路径' → 追加的 [路径] 行不得被判无标签：无标签为 0，或夹具自身有不合规行时该行不得出现在样例里
   const okPath = /无标签: 0/.test(agentSeg) || !/DSH 插件升级/.test(agentSeg);
