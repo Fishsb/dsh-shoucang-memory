@@ -495,5 +495,33 @@ try {
   fs.rmSync(tx, { recursive: true, force: true });
 } catch (e) { fail++; console.log('❌ § 小节存在性校验（异常: ' + failMsg(e) + '）'); }
 
+// 28) 召回评测器 recall-eval（只读观测工具，MCL/P0 观测面）：夹具会话 → 四项口径可复现；
+//     无索引库 → 显式 exit 2（**防假零值**：探针为空时①恒 0，与「未被取用」不可区分，故必须报错）
+try {
+  const tk = makeContainer();
+  const sessDir = path.join(tk, 'sessions', 'proj', 'session-eval1');
+  fs.mkdirSync(sessDir, { recursive: true });
+  const rp = path.join(tk, 'notes', 'env.md').replace(/\\/g, '\\\\');
+  fs.writeFileSync(path.join(sessDir, 'session.jsonl'), [
+    JSON.stringify({ type: 'user/message', seq: 1, data: { content: [{ type: 'text', text: '任务' }] } }),
+    JSON.stringify({ type: 'tool/call', seq: 2, data: { name: 'shoucang_recall', arguments: '{"query":"x"}' } }),
+    JSON.stringify({ type: 'tool/call', seq: 3, data: { name: 'read', arguments: '{"file_path":"' + rp + '"}' } }),
+  ].join('\n') + '\n');
+  const jr = execOut('node', [path.join(tk, 'scripts', 'recall-eval.mjs'), '--sessions', path.join(tk, 'sessions'), '--bank', tk, '--n', '5', '--json'], { cwd: tk });
+  let okEval = false;
+  try { const j = JSON.parse(jr.out); okEval = j.totals.turns === 1 && j.totals.recallTool === 1 && j.totals.follow === 1; } catch { okEval = false; }
+  if (okEval) pass++; else fail++;
+  console.log(`${okEval ? '✅' : '❌'} 召回评测器（夹具会话：1 轮 / 召回 1 / 跟读 1）` +
+    (okEval ? '' : ` [诊断: exit=${jr.code} out=${JSON.stringify(jr.out.slice(0, 160))}]`));
+
+  const noBank = fs.mkdtempSync(path.join(os.tmpdir(), 'amem-nobank-'));
+  const r2 = execOut('node', [path.join(tk, 'scripts', 'recall-eval.mjs'), '--sessions', path.join(tk, 'sessions'), '--bank', noBank, '--n', '3'], { cwd: tk });
+  const okGuard = r2.code === 2;
+  if (okGuard) pass++; else fail++;
+  console.log(`${okGuard ? '✅' : '❌'} 召回评测器-防假零值（无索引库 → exit 2，不得静默 0）`);
+  fs.rmSync(tk, { recursive: true, force: true });
+  fs.rmSync(noBank, { recursive: true, force: true });
+} catch (e) { fail += 2; console.log('❌ 召回评测器（异常: ' + failMsg(e) + '）'); }
+
 console.log(`\n结果: ${pass} PASS / ${fail} FAIL`);
 process.exit(fail ? 1 : 0);
