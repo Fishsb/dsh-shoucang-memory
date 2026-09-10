@@ -23,25 +23,28 @@ if (raw === null) {
 }
 
 const lines = raw.split(/\r?\n/);
-const hIdx = [];
-lines.forEach((l, i) => { if (/^## /.test(l)) hIdx.push(i); });
+// ADR-015：两级检索单元（## 大节 + ### 子节）。读取终点 = 下一个**同级或更高级**标题：
+// 读 ### 子节止于下一个 ##/###；读 ## 大节仍止于下一个 ##（保持既有行为，向后兼容）。
+const heads = [];
+lines.forEach((l, i) => { const m = l.match(/^(#{2,3})\s+(.*)$/); if (m) heads.push({ i, lvl: m[1].length, title: m[2] }); });
 
 const kw = String(sectionArg).trim().toLowerCase();
 let start = -1;
-for (const i of hIdx) {
-  const title = lines[i].slice(3).toLowerCase();
-  if (title === kw || title.includes(kw) || kw.includes(title)) { start = i; break; }
+for (const h of heads) {
+  const title = h.title.toLowerCase();
+  if (title === kw || title.includes(kw) || kw.includes(title)) { start = h.i; break; }
 }
 
 if (start === -1) {
   console.error(`小节「${sectionArg}」不存在。可用小节：`);
-  for (const i of hIdx) console.error(`  - ${lines[i].slice(3)}`);
+  for (const h of heads) console.error(`  - ${h.title}`);
   process.exit(1);
 }
 
-const end = hIdx.find((i) => i > start) ?? lines.length;
+const hit = heads.find((h) => h.i === start);
+const end = (heads.find((h) => h.i > start && h.lvl <= hit.lvl) || { i: lines.length }).i;
 process.stdout.write(lines.slice(start, end).join('\n') + '\n');
-console.log(`\n# src: ${fileArg} :: ${lines[start].slice(3)}（${end - start} 行，行号${start + 1}-${end}，勿依赖行号定位）`);
+console.log(`\n# src: ${fileArg} :: ${lines[start].replace(/^#+\s*/, '')}（${end - start} 行，行号${start + 1}-${end}，勿依赖行号定位）`);
 
 // 访问记录（生命周期"检索命中"判据核验；失败静默不阻塞）
 try {

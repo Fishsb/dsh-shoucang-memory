@@ -96,7 +96,7 @@ try {
     try {
       const raw = await readFile(p, 'utf8');
       const chars = raw.replace(/\s/g, '').length;
-      const sections = (raw.match(/^## /gm) || []).length;
+      const sections = (raw.match(/^#{2,3} /gm) || []).length; // ADR-015：## 大节 + ### 子节
       console.log(`${n}: ${chars} 字符 ${sections} 小节 ${chars > NOTES_WARN ? `⚠️ 超 ${NOTES_WARN} 警戒线（按需拆分，不拦截）` : '✅'}`);
     } catch {
       console.log(`[FAIL] notes/${n}: 缺失`);
@@ -193,7 +193,7 @@ try {
     const files = (await readdir(notesDir)).filter((f) => f.endsWith('.md') && f !== 'INDEX.md');
     for (const f of files) {
       const raw = await readFile(join(notesDir, f), 'utf8');
-      for (const m of raw.matchAll(/^## (.+)$/gm)) {
+      for (const m of raw.matchAll(/^#{2,3} (.+)$/gm)) {
         const sec = m[1].replace(/（[^）]*）$/, '').trim();
         if (!counts[`${f} §${sec}`] && !normCounts[`${f} §${sec}`]) zeroList.push(`${f} §${sec}`);
       }

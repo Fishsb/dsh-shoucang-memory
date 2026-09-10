@@ -50,7 +50,8 @@ const listSections = (stem) => {
   const out = new Set();
   if (fs.existsSync(f)) {
     const body = fs.readFileSync(f, 'utf8');
-    for (const m of body.matchAll(/^##\s+(.+?)\s*$/gm)) {
+    // ADR-015：小节枚举纳入 ### 子节（两级检索单元）⇒ §子节 指针可选，不再误判悬空
+    for (const m of body.matchAll(/^#{2,3}\s+(.+?)\s*$/gm)) {
       out.add(String(m[1]).replace(/\s*（20\d{2}[-/]\d{1,2}[-/]\d{1,2}）\s*$/, '').trim());
     }
   }
