@@ -71,8 +71,8 @@ export interface DistillChunks { chunks: DistillChunk[]; maxSeq: number; truncat
  * - truncatedTail：分段天然不丢尾（每段都会被逐轮处理），故恒为 false——「还有后续段未处理」由调用方按
  *   chunks.length 与本轮段数上限（MAX_CHUNKS_PER_RUN）判定（水位停在已处理段的 endSeq，下一触发续传）。
  */
-export function buildEventChunks(agent: any, lastSeq: number, chunkChars: number = CHUNK_CHARS): DistillChunks {
-  const events = agent.session.snapshotEvents()
+export function buildEventChunks(agent: any, lastSeq: number, chunkChars: number = CHUNK_CHARS, eventsOf?: any[]): DistillChunks {
+  const events = eventsOf || agent.session.snapshotEvents()
   let maxSeq = lastSeq
   const chunks: DistillChunk[] = []
   let cur: { startSeq: number; endSeq: number; parts: string[]; len: number } | null = null
@@ -388,6 +388,23 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     for (let i = 0; i + 1 < zh.length; i++) out.add(zh.slice(i, i + 2))
     return [...out]
   }
+  // 项目卡标题相似度（2026-09-10）：英文词 ≥2（含 vec 等短词）+ 中文 2-gram；
+  // 相似度 = 交集/min(|A|,|B|) ≥0.6 —— 比指针门 Jaccard 宽松，适配「标题短、同事实不同措辞」
+  // （实测「vec缓存指纹与重建机制」vs「vec 缓存模型指纹与重建」用 intentTokens+Jaccard 仅 0.45 漏判）
+  const cardTokens = (text: string): string[] => {
+    const t = String(text || '').replace(/[^\w\u4e00-\u9fa5]+/g, ' ').trim()
+    const out = new Set<string>()
+    for (const w of t.split(' ')) if (/[A-Za-z0-9]/.test(w) && w.length >= 2) out.add(w.toLowerCase())
+    const zh = (t.match(/[\u4e00-\u9fa5]+/g) || []).join('')
+    for (let i = 0; i + 1 < zh.length; i++) out.add(zh.slice(i, i + 2))
+    return [...out]
+  }
+  const cardSimilar = (a: string, b: string): number => {
+    const A = cardTokens(a), B = cardTokens(b)
+    if (!A.length || !B.length) return 0
+    const inter = A.filter((x) => B.includes(x)).length
+    return inter / Math.min(A.length, B.length)
+  }
   const ensureFlowCandidate = async (sid: string, intent: string): Promise<void> => {
     if (!intent || intent.length < 8) return
     try {
@@ -477,8 +494,78 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     } catch { /* 无水位文件=全新 */ }
     return map
   }
-  const writeWatermark = (sessionId: string, lastSeq: number): void => {
-    try { mkdirSync(dirname(watermarkFile), { recursive: true }); appendFileSync(watermarkFile, JSON.stringify({ sessionId, lastSeq, at: new Date().toISOString() }) + '\n', 'utf8') } catch { /* 静默 */ }
+  const writeWatermark = (sessionId: string, lastSeq: number, agent?: any): void => {
+    try {
+      // 双证随行（2026-09-10 v19）：格式代 + 锚点事件指纹。缺失则退化为纯数字水位（与旧行同构）。
+      const ver = sessionFormatVersionOf(agent)
+      const fp = agentFingerprintAt(agent, lastSeq)
+      mkdirSync(dirname(watermarkFile), { recursive: true })
+      appendFileSync(watermarkFile, JSON.stringify({
+        sessionId, lastSeq, at: new Date().toISOString(),
+        ...(ver === undefined ? {} : { formatVersion: ver }),
+        ...(fp === null ? {} : { fp }),
+      }) + '\n', 'utf8')
+    } catch { /* 静默 */ }
+  }
+
+  // ═══ 水位双证校验（2026-09-10 v19：抗会话格式代际迁移的 seq 重排）═══
+  // 背景（alpha V0→V3 迁移实锤）：DSH 会话格式升级时 seq 被**密集重排**并插入 system/message 行，
+  // 同一个数字不再指向同一个事件；守藏水位是自持的 sessionId→lastSeq 数字，迁移后：
+  //   ① 若 live seq 空间比记录的小 → 增量窗口被放大成整会话 → LLM 成本爆炸 + 重复入册；
+  //   ② 若 live seq 空间更大 → 事件在挪位后的序号上未被消费 → 静默跳过一段真实增量。
+  // 两种都无声出错，故记录时同时落「格式代 + 锚点事件指纹」，读取时双证一致才信任：
+  //   - 格式代不同（v0/v1/v2 → v3）= 已发生迁移 → 作废全量重蒸（宁可重蒸，不可错漏）；
+  //   - 锚点事件指纹（type|time|data 长度）不符 = 序号空间被重排 → 同样作废；
+  //   - 两证皆缺（v19 前的历史水位行）= 不可验证 → 不信任（重蒸一次，随后被新行升级为双证）。
+  const sessionFormatVersionOf = (agent: any): number | undefined => {
+    try { const v = agent?.session?.header?.version; return typeof v === 'number' ? v : undefined } catch { return undefined }
+  }
+  /** 锚点事件指纹：记录时刻 lastSeq 处事件的 type|time|data 长度（seq 重排后此三元组随之改变）。 */
+  const agentFingerprintAt = (agent: any, seq: number): string | null => {
+    try {
+      if (!(seq > 0) || typeof agent?.session?.eventAt !== 'function') return null
+      const e: any = agent.session.eventAt(seq)
+      if (!e) return null
+      let dl = -1
+      try { dl = JSON.stringify(e.data ?? null).length } catch { /* 不可序列化 → -1 */ }
+      return `${e.type || '?'}|${e.time ?? -1}|${dl}`
+    } catch { return null }
+  }
+  /**
+   * 未验证水位行的一次性收尾（作废留痕）：**跳到当前 live maxSeq 并写双证**，而不是写 0。
+   * 为何不是 0：写 0 的行没有可用锚点（seq 0 无事件）→ 下次读仍判「不可验证」→ 每轮全量重蒸，形成死循环。
+   * 为何跳到 maxSeq 是安全的：作废的三种情形（格式代变更 / 锚点指纹不符 / 双证缺失的历史行）都意味着
+   * 「已消费边界」不可定位——不可定位就无法安全重蒸（可能错位重蒸整会话，也可能错位跳过），
+   * 故从当前边界继续；旧版本已消费的部分由旧版本负责，不重复也不再回补。
+   * 代价明确且可接受：不可定位的那一段增量不再回补（宁可少蒸一次，不可错位重蒸/错位跳过）。
+   */
+  const discardWatermark = (sid: string, reason: string, agent: any, wm: any): void => {
+    let maxSeq = 0
+    try {
+      if (typeof agent?.session?.snapshotEvents === 'function') {
+        for (const e of agent.session.snapshotEvents()) { const s = (e as any).seq ?? 0; if (s > maxSeq) maxSeq = s }
+      }
+    } catch { /* 快照不可用 → 退化为 0（该会话下轮重扫，无害） */ }
+    writeWatermark(sid, maxSeq, agent)
+    try {
+      audit({ sid, kind: 'watermark-invalidated', reason, prevSeq: wm?.lastSeq ?? null, prevVersion: wm?.formatVersion ?? null, version: sessionFormatVersionOf(agent) ?? null, restartFrom: maxSeq })
+    } catch { /* 审计失败静默 */ }
+    log(`watermark: ${sidShort(sid)} 双证失效（${reason}）→ 从当前边界 ${maxSeq} 继续（prevSeq=${wm?.lastSeq ?? '-'} prevVer=${wm?.formatVersion ?? '-'} ver=${sessionFormatVersionOf(agent) ?? '-'}）`)
+  }
+  /** 取单一可信任基线；返回 null = 无水位/双证失效（走全量窗口）；否则为可信任的 { lastSeq, formatVersion, fp }。 */
+  const resolveWatermark = (sid: string, agent: any, mapCache?: Map<string, any>): { lastSeq: number; formatVersion: number; fp: string } | null => {
+    const wm = (mapCache || readWatermarks()).get(sid)
+    if (!wm) return null
+    const lastSeq = Number(wm.lastSeq || 0)
+    if (lastSeq <= 0) return null
+    const liveVer = sessionFormatVersionOf(agent)
+    const recVer = typeof wm.formatVersion === 'number' ? wm.formatVersion : undefined
+    if (recVer === undefined || liveVer === undefined) { discardWatermark(sid, 'unverifiable-legacy', agent, wm); return null }
+    if (liveVer !== recVer) { discardWatermark(sid, `format-migrated ${recVer}→${liveVer}`, agent, wm); return null }
+    const fp = agentFingerprintAt(agent, lastSeq)
+    if (fp === null || wm.fp === undefined || wm.fp === null) { discardWatermark(sid, 'fingerprint-unavailable', agent, wm); return null }
+    if (fp !== wm.fp) { discardWatermark(sid, `seq-space-shifted (${String(wm.fp).slice(0, 40)} ≠ ${fp.slice(0, 40)})`, agent, wm); return null }
+    return { lastSeq, formatVersion: recVer, fp }
   }
 
   // LLM 路由连败弃用（坑位补强：连败≥2 回落继承主会话模型，成功后复位）
@@ -737,10 +824,29 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       const dir = join(workspace, 'docs', 'devref', 'shoucang')
       const cardTypes = ['how-to', 'reference', 'decision']
       const date = new Date().toISOString().slice(0, 10)
+      // 2026-09-10：project 卡去重门（防多轮蒸馏同主题重复产卡）——读 devref 已有卡标题，
+      // 同标签语义近似（主题 bigram 重叠 ≥0.66，双方 ≥2 token）→ 判重跳过并审计（与 MEMORY 指针唯一性同口径）。
+      const existingCardTitles = ((): string[] => {
+        try {
+          return readdirSync(dir).filter((f) => f.endsWith('.md')).map((f) => {
+            try { const m = readFileSync(join(dir, f), 'utf8').match(/^#\s*\[项目事实\][^·]*·\s*(.+)$/m); return m ? m[1].trim() : '' } catch { return '' }
+          }).filter(Boolean)
+        } catch { return [] }
+      })()
+      const cardDupOf = (title: string): string | null => {
+        if (cardTokens(title).length < 2) return null
+        for (const ex of existingCardTitles) {
+          if (ex === title) return ex
+          if (cardSimilar(title, ex) >= 0.6) return ex
+        }
+        return null
+      }
       for (const pc of cards) {
         if (!pc || !pc.title || !pc.text) { failed++; continue }
         const cardType = cardTypes.includes(String(pc.cardType || '')) ? String(pc.cardType) : 'reference'
         if (!cardTypes.includes(String(pc.cardType || ''))) { rejected++; audit({ sid, kind: 'gate-reject', target: pc.title, reason: `cardType=${pc.cardType} 不在 [${cardTypes.join(',')}]` }); continue }
+        const dupOf = cardDupOf(String(pc.title))
+        if (dupOf) { rejected++; audit({ sid, kind: 'gate-reject', target: pc.title, reason: `项目卡重复（语义近似既有卡「${dupOf}」）——跳过防重复产卡`, lib: 'workspace' }); log(`distill 项目卡判重跳过: ${String(pc.title).slice(0, 30)}（≈ ${dupOf.slice(0, 30)}）`); continue }
         try {
           const slug = String(pc.title).replace(/[^\w\u4e00-\u9fa5]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30) || 'card'
           mkdirSync(dir, { recursive: true })
@@ -780,13 +886,26 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         const date = new Date().toISOString().slice(0, 10)
         const slug = title.replace(/[^\w\u4e00-\u9fa5]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30) || 'card'
         const out = join(dir, `${date}-${cardType}-${slug}.md`)
-        // 幂等：目标卡已存在（同 slug）→ 直接清理 pending（视为已回流）
-        if (!existsSync(out)) writeFileSync(out, `# [项目事实] ${cardType} · ${title}\n\n- 卡类型：${cardType}\n- 溯源：（defer 回流 ${f}）\n- 源会话：${sidM[1].trim()}\n- 工作区：${ws}\n\n${body}\n`, 'utf8')
+        // 2026-09-10：语义判重（防同主题重复卡，与蒸馏直写同口径）——近似既有卡则只清 pending 不重复写
+        const dupTitle = ((): string | null => {
+          if (cardTokens(title).length < 2) return null
+          try {
+            for (const ef of readdirSync(dir).filter((x) => x.endsWith('.md'))) {
+              const m = readFileSync(join(dir, ef), 'utf8').match(/^#\s*\[项目事实\][^·]*·\s*(.+)$/m)
+              if (!m) continue
+              const ex = m[1].trim()
+              if (ex === title) return ex
+              if (cardSimilar(title, ex) >= 0.6) return ex
+            }
+          } catch { /* 读取失败=不判重 */ }
+          return null
+        })()
+        if (!dupTitle && !existsSync(out)) writeFileSync(out, `# [项目事实] ${cardType} · ${title}\n\n- 卡类型：${cardType}\n- 溯源：（defer 回流 ${f}）\n- 源会话：${sidM[1].trim()}\n- 工作区：${ws}\n\n${body}\n`, 'utf8')
         const procDir = join(pendDir, '.processed')
         try { mkdirSync(procDir, { recursive: true }); renameSync(join(pendDir, f), join(procDir, f)) } catch { /* 移动失败：下轮重试 */ }
         written++
-        audit({ kind: 'defer-flush', target: title, workspace: ws, cardType, file: f, sid: sidM[1].trim() })
-        log(`defer 回流: ${title.slice(0, 30)} → ${ws}/docs/devref/shoucang/`)
+        audit({ kind: 'defer-flush', target: title, workspace: ws, cardType, file: f, sid: sidM[1].trim(), ...(dupTitle ? { dupOf: dupTitle } : {}) })
+        log(`defer 回流: ${title.slice(0, 30)} → ${ws}/docs/devref/shoucang/${dupTitle ? `（判重跳过 ≈${dupTitle.slice(0, 24)}）` : ''}`)
       } catch (e) { kept++; log(`defer 回流失败 ${f.slice(0, 30)}: ${String((e as Error)?.message || e).slice(0, 100)}`) }
     }
     if (written || kept) log(`defer 回流汇总: 写入 ${written} / 保留 ${kept}`)
@@ -809,17 +928,20 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     distilling.add(sid)
     try {
       validateProvider()
-      const wm = readWatermarks().get(sid)
-      const lastSeq = wm ? (wm.lastSeq || 0) : 0
+      // v19（2026-09-10）：水位不再是裸数字——经「格式代 + 锚点事件指纹」双证校验，迁移/序号重排即作废全量重蒸。
+      // 快照只取一次（同一数组喂水位增量计算 + 分段器），避免全量 snapshotEvents 被重复物化。
+      const wmEvents: any[] = agent.session.snapshotEvents()
+      const baseline = resolveWatermark(sid, agent)
+      const lastSeq = baseline ? baseline.lastSeq : 0
       // v18 分段蒸馏（2026-09-10）：整窗按 CHUNK_CHARS/事件边界切段后逐段蒸馏——每段成功即推水位到该段 endSeq
       // （断点续传），段间紧凑清单 manifest 续上下文防同轮重复入册；修复旧「整窗一次注入 24k 截断丢尾 / 失败整窗重蒸」。
-      const { chunks, maxSeq } = buildEventChunks(agent, lastSeq, CHUNK_CHARS)
+      const { chunks, maxSeq } = buildEventChunks(agent, lastSeq, CHUNK_CHARS, wmEvents)
       const totalChars = chunks.reduce((n, c) => n + c.text.length, 0)
       let candFiles: string[] = []
       try { candFiles = readdirSync(pendDir).filter((f) => /^\d{4}-\d{2}-\d{2}-.*\.md$/.test(f)).sort() } catch { candFiles = [] }
       // 门槛（below-min 语义保持现状）：整窗文本总字符 < minTurnChars（chunks 空=无增量/全无文本事件）→ 跳过并推进水位
       if (!chunks.length || totalChars < (config.minTurnChars ?? 200)) {
-        writeWatermark(sid, maxSeq)
+        writeWatermark(sid, maxSeq, agent)
         // 跳过也留审计痕（观测盲区修复 2026-09-09：此前门槛/预筛跳过只进日志，审计里只见真实 run，
         // 「蒸馏为什么没跑」无法从数据区分——是没触发还是被挡）
         audit({ sid, kind: 'distill-skip', reason: 'below-min-chars', fclass: 'below-min', chars: totalChars })
@@ -834,7 +956,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         const bigDelta = totalChars >= prescanMin
         const hasSig = bigDelta || hasDistillSignals(chunks[0].text)
         if (!hasSig && candFiles.length === 0) {
-          writeWatermark(sid, maxSeq)
+          writeWatermark(sid, maxSeq, agent)
           audit({ sid, kind: 'distill-skip', reason: 'prescan-no-signal', fclass: 'prescan-no-signal', chars: totalChars })
           log(`distill: ${sidShort(sid)} 预筛跳过（增量 ${totalChars} 字符无信号词 & pending 无候选），水位推进 ${lastSeq}→${maxSeq}`)
           return
@@ -938,7 +1060,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
             recordEpisode({ sid, intent: intent.slice(0, 120), route, fclass, llm: llmLabel, outcome: disp.targetLib, added: disp.added, rejected: disp.rejected, failed: disp.failed, lib: disp.targetLib })
             if (route !== 'discard') await ensureFlowCandidate(sid, intent)
             // v18 核心：段成功立即推水位到该段 endSeq（断点续传——失败/截断不再丢尾；整窗处理完自然到达 maxSeq）
-            writeWatermark(sid, chunk.endSeq)
+            writeWatermark(sid, chunk.endSeq, agent)
             log(`distill: ${sidShort(sid)} 段${k + 1}/${segLimit} completed，水位推进 ${wmNow}→${chunk.endSeq}${chunk.endSeq < maxSeq ? `（整窗尚余 ${chunks.length - k - 1} 段，下轮续传）` : '（整窗蒸馏完成，水位=maxSeq）'}`)
             wmNow = chunk.endSeq
             // 段间紧凑清单续上下文：本段裁决一行（供同轮后段查重/合并，勿重复入册；超 MANIFEST_CAP 丢最早行）
@@ -1714,14 +1836,47 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
   // DSH 子代理会话 header.origin='subagent' 且 header.parentSession=父会话 id；子代理在跑 = 父会话仍在干活。
   const isSubagentAgent = (a: any): boolean => { try { return a?.session?.header?.origin === 'subagent' } catch { return false } }
   const parentSidOf = (a: any): string | null => { try { const p = a?.session?.header?.parentSession; return typeof p === 'string' && p ? p : null } catch { return null } }
-  /** 该会话是否有运行中的子代理后代（沿 parentSession 上溯 ≤4 层；status==='running' 才算活跃） */
+  // 子代理活动双通道（2026-09-10 二修，E2E 实证 ctx.agents.list() 记录未必带 live status）：
+  // ① 事件通道：收到任意子代理事件即记「该父会话有子代在跑」（3 分钟新鲜度，防僵尸残留）；
+  // ② 枚举通道：list() 扫 subagent 记录并用 ctx.agents.get(id) 取 live agent 判 status==='running'。
+  const childSeen = new Map<string, Map<string, number>>() // parentSid -> childSid -> lastSeen
+  let globalChildSeen = 0 // 父归属解析失败时的全局兜底（宁少蒸勿切碎）
+  const CHILD_ACTIVE_MS = 180000
+  const noteChildActivity = (parentSid: string | null, childSid: string): void => {
+    const now = Date.now()
+    if (!parentSid) { globalChildSeen = now; return }
+    let m = childSeen.get(parentSid)
+    if (!m) { m = new Map(); childSeen.set(parentSid, m) }
+    m.set(childSid, now)
+  }
+  const dropChild = (childSid: string): void => {
+    for (const [p, m] of childSeen) { if (m.delete(childSid) && !m.size) childSeen.delete(p) }
+  }
+  /** 该会话是否有运行中的子代理后代（事件通道 + live status 枚举通道） */
   const hasActiveSubagents = (sid: string): boolean => {
+    const now = Date.now()
+    try {
+      const m = childSeen.get(sid)
+      if (m) {
+        for (const [child, seen] of m) {
+          const live = ctx.agents.get(child)
+          if (live && live.status === 'running') return true
+          if (now - seen < CHILD_ACTIVE_MS) return true
+          m.delete(child)
+        }
+        if (!m.size) childSeen.delete(sid)
+      }
+      if (globalChildSeen && now - globalChildSeen < CHILD_ACTIVE_MS) return true
+    } catch { /* 事件通道异常→继续走枚举通道 */ }
     try {
       for (const a of ctx.agents.list() || []) {
         if (!isSubagentAgent(a)) continue
-        let p = parentSidOf(a); let depth = 0
+        const live = ctx.agents.get(a.id)
+        if (!(live && live.status === 'running')) continue
+        let p = parentSidOf(a) || parentSidOf(live); let depth = 0
+        if (!p) return true // 归属解析失败：宁少蒸勿切碎（保守）
         while (p && depth++ < 4) {
-          if (p === sid) return a?.status === 'running'
+          if (p === sid) return true
           const pa = ctx.agents.get(p); p = pa ? parentSidOf(pa) : null
         }
       }
@@ -2198,8 +2353,9 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       const agent = ctx.agents.get(sid)
       if (!agent) return
       const origin = agent.session && agent.session.header && agent.session.header.origin
-      if (origin === 'subagent') { // 子代理 turn/end = 父会话仍在干活（2026-09-10）：刷新父会话活动，不武装蒸馏
+      if (origin === 'subagent') { // 子代理 turn/end = 父会话仍在干活（2026-09-10）：记子代活动+刷新父会话，不武装蒸馏
         const p = parentSidOf(agent)
+        noteChildActivity(p, sid)
         if (p) noteEvent(p, false)
         return
       }
@@ -2209,10 +2365,12 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
   })
   ctx.on('agent/disposed', ({ agent }: any) => {
     try { const t = idleTimers.get(agent.id); if (t) { clearTimeout(t); idleTimers.delete(agent.id) } } catch { /* */ }
+    try { dropChild(agent.id) } catch { /* */ } // 子代理出表：清其活动标记（防僵尸阻止蒸馏）
     try { sessions.delete(agent.id) } catch { /* */ }
   })
   ctx.on('session/disposed', (session: any) => {
     try { const sid = session && session.id; const t = idleTimers.get(sid); if (t) { clearTimeout(t); idleTimers.delete(sid) } } catch { /* */ }
+    try { dropChild(session && session.id) } catch { /* */ }
     try { sessions.delete(session && session.id) } catch { /* */ }
   })
   // ═══ 路线④ 打扰度观察（shadow-first MVP）：打分/滞回/冷却/落影子日志，默认不做上下文注入 ═══
@@ -2294,10 +2452,13 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
             if (rec.state === 'running' || rec.state === 'probing' || rec.state === 'suspect') continue
             if (rec.lastEndAt && Date.now() - rec.lastEndAt < config.idleWakeMs) continue // 仍在宽限期，等 idle 定时器
           }
-          const wm = readWatermarks().get(sid)
-          const lastSeq = wm ? (wm.lastSeq || 0) : 0
+          // v19：水位走同一双证校验（resolveWatermark）——失效即从 0 重扫，扫尾与 idle 通路口径一致；
+          // 快照取一次供增量比对与后续蒸馏复用（避免同一会话被物化两遍）。
+          const base = resolveWatermark(sid, a)
+          const lastSeq = base ? base.lastSeq : 0
+          const sweepEvents: any[] = a.session.snapshotEvents()
           let maxSeq = lastSeq
-          for (const e of a.session.snapshotEvents()) { const s = (e as any).seq ?? 0; if (s > lastSeq && s > maxSeq) maxSeq = s }
+          for (const e of sweepEvents) { const s = (e as any).seq ?? 0; if (s > lastSeq && s > maxSeq) maxSeq = s }
           if (maxSeq > lastSeq) {
             // 跨实例 claim 锁（2026-09-10 实锤：重叠 fiber 的 30s 首扫会同时抢同一积压窗口 → 471aca03 被双蒸馏双写）：
             // 在途 claim（25min 内）→ 跳过；过期 claim → 覆盖重试；无增量时顺手清理陈旧 claim。
@@ -2328,8 +2489,9 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       const a = ctx.agents.get(sid)
       if (!a) return
       const origin = a.session && a.session.header && a.session.header.origin
-      if (origin === 'subagent') { // 子代理任意事件 = 父会话任务仍在推进（2026-09-10 修复停滞误判）
+      if (origin === 'subagent') { // 子代理任意事件 = 父会话任务仍在推进（2026-09-10）：记子代活动+刷新父会话活动
         const p = parentSidOf(a)
+        noteChildActivity(p, sid)
         if (p) noteEvent(p, false)
         return
       }
