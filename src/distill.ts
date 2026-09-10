@@ -1853,7 +1853,19 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
   // 子代理感知（2026-09-10 实态修复：主会话"派子代理执行、等返回"期间被误判空闲/停滞）：
   // DSH 子代理会话 header.origin='subagent' 且 header.parentSession=父会话 id；子代理在跑 = 父会话仍在干活。
   const isSubagentAgent = (a: any): boolean => { try { return a?.session?.header?.origin === 'subagent' } catch { return false } }
-  const parentSidOf = (a: any): string | null => { try { const p = a?.session?.header?.parentSession; return typeof p === 'string' && p ? p : null } catch { return null } }
+  // 父会话 id 解析（2026-09-10 三修）：E2E 实证记录对象上 header.parentSession 可能取不到（当时三会话同判 busy=走了全局兜底）
+  // → 多字段探测（live session header / record header / options / 直挂字段），全失败才回落全局兜底。
+  const parentSidOf = (a: any): string | null => {
+    try {
+      const cands = [
+        a?.session?.header?.parentSession, a?.session?.header?.parent, a?.session?.parentSession,
+        a?.session?.record?.header?.parentSession, a?.session?.record?.parentSession,
+        a?.options?.parentSession, a?.options?.parentId, a?.parentSession, a?.parentId, a?.parent?.id,
+      ]
+      for (const c of cands) if (typeof c === 'string' && c) return c
+      return null
+    } catch { return null }
+  }
   // 子代理活动双通道（2026-09-10 二修，E2E 实证 ctx.agents.list() 记录未必带 live status）：
   // ① 事件通道：收到任意子代理事件即记「该父会话有子代在跑」（3 分钟新鲜度，防僵尸残留）；
   // ② 枚举通道：list() 扫 subagent 记录并用 ctx.agents.get(id) 取 live agent 判 status==='running'。
