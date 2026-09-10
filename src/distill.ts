@@ -389,7 +389,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     return [...out]
   }
   // 项目卡标题相似度（2026-09-10）：英文词 ≥2（含 vec 等短词）+ 中文 2-gram；
-  // 相似度 = 交集/min(|A|,|B|) ≥0.6 —— 比指针门 Jaccard 宽松，适配「标题短、同事实不同措辞」
+  // 相似度 = 交集/min(|A|,|B|) ≥0.42 —— 比指针门 Jaccard 宽松，适配「标题短、同事实不同措辞」（实测同类对 0.444~1.0、异主题 ≤0.30）
   // （实测「vec缓存指纹与重建机制」vs「vec 缓存模型指纹与重建」用 intentTokens+Jaccard 仅 0.45 漏判）
   const cardTokens = (text: string): string[] => {
     const t = String(text || '').replace(/[^\w\u4e00-\u9fa5]+/g, ' ').trim()
@@ -837,7 +837,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         if (cardTokens(title).length < 2) return null
         for (const ex of existingCardTitles) {
           if (ex === title) return ex
-          if (cardSimilar(title, ex) >= 0.6) return ex
+          if (cardSimilar(title, ex) >= 0.42) return ex
         }
         return null
       }
@@ -895,7 +895,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
               if (!m) continue
               const ex = m[1].trim()
               if (ex === title) return ex
-              if (cardSimilar(title, ex) >= 0.6) return ex
+              if (cardSimilar(title, ex) >= 0.42) return ex
             }
           } catch { /* 读取失败=不判重 */ }
           return null
@@ -2452,8 +2452,8 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
             if (rec.state === 'running' || rec.state === 'probing' || rec.state === 'suspect') continue
             if (rec.lastEndAt && Date.now() - rec.lastEndAt < config.idleWakeMs) continue // 仍在宽限期，等 idle 定时器
           }
-          // v19：水位走同一双证校验（resolveWatermark）——失效即从 0 重扫，扫尾与 idle 通路口径一致；
-          // 快照取一次供增量比对与后续蒸馏复用（避免同一会话被物化两遍）。
+          // v19：水位走同一双证校验（resolveWatermark）——失效时由 discardWatermark 从当前边界续写并落审计，
+          // 扫尾与 idle 通路口径一致（单一实现，勿在此另写判定）；快照取一次供增量比对与后续蒸馏复用。
           const base = resolveWatermark(sid, a)
           const lastSeq = base ? base.lastSeq : 0
           const sweepEvents: any[] = a.session.snapshotEvents()
