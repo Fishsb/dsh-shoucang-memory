@@ -93,20 +93,29 @@ const t2 = makeContainer();
 fs.appendFileSync(path.join(t2, 'MEMORY.md'), '\n[env] 悬空指针（2026-09-01）[agent] → notes/nofile.md');
 run('体检-悬空指针', 'node', [health, t2], [5]);
 
+// 门禁用例基座：**必须压到容量线以下**。真实 MEMORY.md 已近容量门（2026-09-11 实测 2935/3000 = 98%），
+// 直接在其上追加任意一行就会先撞 exit 1（容量），从而**掩蔽**用例真正要验的码（如悬空 exit 2）——
+// 与 ACT-028 修过的「夹具未隔离缺陷类」同一类问题，此处是**门禁侧的漏网**。
+const gateBase = (p) => {
+  const lines = fs.readFileSync(path.join(dataDir, 'MEMORY.md'), 'utf8').split(/\r?\n/);
+  while (lines.length > 3 && lines.join('\n').replace(/\s/g, '').length > 0.8 * 3000) lines.pop();
+  fs.writeFileSync(p, lines.join('\n'));
+  return p;
+};
+
 // 4) 门禁-正常 → exit 0
-const g1 = path.join(t2, 'gate1.txt');
-fs.copyFileSync(path.join(dataDir, 'MEMORY.md'), g1);
+const g1 = gateBase(path.join(t2, 'gate1.txt'));
 run('门禁-正常', 'node', [gate, 'MEMORY.md', g1], [0]);
 
 // 5) 门禁-超容量 → exit 1
 const g2 = path.join(t2, 'gate2.txt');
-fs.copyFileSync(path.join(dataDir, 'MEMORY.md'), g2);
+fs.copyFileSync(g1, g2);
 fs.appendFileSync(g2, '\n§\n' + '[env] 超量（2026-09-01）[agent]：' + '内容'.repeat(1000));
 run('门禁-超容量', 'node', [gate, 'MEMORY.md', g2], [1]);
 
 // 6) 门禁-悬空指针 → exit 2
 const g3 = path.join(t2, 'gate3.txt');
-fs.copyFileSync(path.join(dataDir, 'MEMORY.md'), g3);
+fs.copyFileSync(g1, g3);
 fs.appendFileSync(g3, '\n§\n[env] 悬空（2026-09-01）[agent]：细节→ notes/nofile.md');
 run('门禁-悬空指针', 'node', [gate, 'MEMORY.md', g3], [2]);
 
