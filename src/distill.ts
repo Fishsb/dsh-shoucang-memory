@@ -2299,7 +2299,6 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       if (r === 'failed') { lastDeepSleepAt = prevDeepSleepAt; log('deep sleep: 本轮未消化（failed），水位回滚（同一批痕迹下轮可重试）') }
       else lastDeepSleepAt = now
     }).catch((e) => {
-    }).catch((e) => {
       lastDeepSleepAt = prevDeepSleepAt
       log(`deep sleep err: ${String((e as Error)?.message || e).slice(0, 120)}（水位回滚）`)
     }).finally(() => { deepSleepRunning = false })
