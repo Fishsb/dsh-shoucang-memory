@@ -6,6 +6,9 @@
  *   → spawn 蒸馏子代理（maxDepth=1，10min 超时 race）→ 结构化 JSON（route=memory|project|discard）
  *   → targets.ts 动态路由 + 白名单门禁（不符合不存）→ 零拷贝写入（memory-append；R3 项目事实直写 workspace devref）
  *   → 水位推进（suite/knowledge/audit/distill-watermark.jsonl）→ 蒸馏审计（distill-audit.jsonl，UI 统计卡数据源）。
+ *   v18 分段蒸馏（2026-09-10）：增量先由 buildEventChunks 按 CHUNK_CHARS/事件边界切段（不劈事件），distillAgent
+ *   逐段 spawn——每段成功即推水位到该段 endSeq（断点续传，失败只停本段下轮续、不整窗重蒸）、段间紧凑清单 manifest
+ *   续上下文防同轮重复入册、单轮至多 MAX_CHUNKS_PER_RUN 段；修复旧「整窗一次注入 24k 截断丢尾 / 失败整窗重蒸」。
  *
  * 深度睡眠归纳（v16：习得原则并入 agent 画像 AGENT.md；2026-09-08 拍板机制、2026-09-09 拍板定位=agent 的反思进化迭代）：独立巡检定时器（10min）检测「全部会话停滞 ≥3h」→ 触发一次。
  *   判据=**会话活跃状态机**（见 SessRec 注释）：任意事件→RUNNING，turn/end→ENDED；RUNNING 无事件 ≥probeAfterMs
@@ -753,29 +756,35 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       validateProvider()
       const wm = readWatermarks().get(sid)
       const lastSeq = wm ? (wm.lastSeq || 0) : 0
-      const { maxSeq, text: deltaText } = extractDelta(agent, lastSeq)
+      // v18 分段蒸馏（2026-09-10）：整窗按 CHUNK_CHARS/事件边界切段后逐段蒸馏——每段成功即推水位到该段 endSeq
+      // （断点续传），段间紧凑清单 manifest 续上下文防同轮重复入册；修复旧「整窗一次注入 24k 截断丢尾 / 失败整窗重蒸」。
+      const { chunks, maxSeq } = buildEventChunks(agent, lastSeq, CHUNK_CHARS)
+      const totalChars = chunks.reduce((n, c) => n + c.text.length, 0)
       let candFiles: string[] = []
       try { candFiles = readdirSync(pendDir).filter((f) => /^\d{4}-\d{2}-\d{2}-.*\.md$/.test(f)).sort() } catch { candFiles = [] }
-      if (!deltaText || deltaText.length < (config.minTurnChars ?? 200)) {
+      // 门槛（below-min 语义保持现状）：整窗文本总字符 < minTurnChars（chunks 空=无增量/全无文本事件）→ 跳过并推进水位
+      if (!chunks.length || totalChars < (config.minTurnChars ?? 200)) {
         writeWatermark(sid, maxSeq)
         // 跳过也留审计痕（观测盲区修复 2026-09-09：此前门槛/预筛跳过只进日志，审计里只见真实 run，
         // 「蒸馏为什么没跑」无法从数据区分——是没触发还是被挡）
-        audit({ sid, kind: 'distill-skip', reason: 'below-min-chars', fclass: 'below-min', chars: deltaText.length })
-        log(`distill: ${sidShort(sid)} 增量 ${deltaText.length} 字符 < 门槛，水位推进 ${lastSeq}→${maxSeq}（不蒸馏）`)
+        audit({ sid, kind: 'distill-skip', reason: 'below-min-chars', fclass: 'below-min', chars: totalChars })
+        log(`distill: ${sidShort(sid)} 增量 ${totalChars} 字符 < 门槛，水位推进 ${lastSeq}→${maxSeq}（不蒸馏）`)
         return
       }
       if (config.distillPrescan !== false) {
         // 2026-09-10 用户拍板：大段增量强制蒸馏——信息密集但无信号词的会话（如研究/工具流）不再被预筛整段丢弃
+        // v18 分段口径：信号词判定按首段文本（首段=窗口最早 ≤CHUNK_CHARS 前缀，窗口小于预算时即整窗）；
+        // 大段强制阈值按整窗总字符（保留现状语义：增量 ≥prescanMin 强制蒸馏，与切段与否无关）
         const prescanMin = Number(config.prescanMinChars) > 0 ? Number(config.prescanMinChars) : 4000
-        const bigDelta = deltaText.length >= prescanMin
-        const hasSig = bigDelta || hasDistillSignals(deltaText)
+        const bigDelta = totalChars >= prescanMin
+        const hasSig = bigDelta || hasDistillSignals(chunks[0].text)
         if (!hasSig && candFiles.length === 0) {
           writeWatermark(sid, maxSeq)
-          audit({ sid, kind: 'distill-skip', reason: 'prescan-no-signal', fclass: 'prescan-no-signal', chars: deltaText.length })
-          log(`distill: ${sidShort(sid)} 预筛跳过（增量 ${deltaText.length} 字符无信号词 & pending 无候选），水位推进 ${lastSeq}→${maxSeq}`)
+          audit({ sid, kind: 'distill-skip', reason: 'prescan-no-signal', fclass: 'prescan-no-signal', chars: totalChars })
+          log(`distill: ${sidShort(sid)} 预筛跳过（增量 ${totalChars} 字符无信号词 & pending 无候选），水位推进 ${lastSeq}→${maxSeq}`)
           return
         }
-        log(`distill: ${sidShort(sid)} 预筛通过（信号词=${hasSig}${bigDelta ? `，大段 ${deltaText.length}≥${prescanMin} 强制蒸馏` : ''}，pending 候选=${candFiles.length}），进入蒸馏`)
+        log(`distill: ${sidShort(sid)} 预筛通过（信号词=${hasSig}${bigDelta ? `，大段 ${totalChars}≥${prescanMin} 强制蒸馏` : ''}，pending 候选=${candFiles.length}），进入分段蒸馏`)
       }
       // 候选按文件粒度装填：预算内进 prompt，放不下的整文件留 pending 下轮（防截断外候选被整批归档丢失知识）
       const CAND_BUDGET = 12000
@@ -784,99 +793,126 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       const candText = candFiles.map((f) => {
         let body = ''
         try { body = readFileSync(join(pendDir, f), 'utf8') } catch { return '' }
-        const chunk = `### 源 ${f}\n${body}`
-        if (chunk.length > candBudget) return '' // 本文件装不下：不进本轮，保留 pending
-        candBudget -= chunk.length + 1 // +1 join('\n') 分隔符
+        const candBlock = `### 源 ${f}\n${body}`
+        if (candBlock.length > candBudget) return '' // 本文件装不下：不进本轮，保留 pending
+        candBudget -= candBlock.length + 1 // +1 join('\n') 分隔符
         candIncluded.push(f)
-        return chunk
+        return candBlock
       }).join('\n')
-      // v6 向量政策：给裁决 agent 喂「相关既有记忆」上下文（recallRanked 融合召回）——Q0 已有归属 / Q3 能合并
-      // 判定从此有库内证据（命中既有同主题时模型应走 skipped/合并而非新建，降低重复入册）；未启用/失败自动省略
-      let relMemLines = ''
-      try {
-        const rres = await recallRanked(memoryLibRoot(), deltaText.slice(0, 512), 5, 'all', embedCfgOf())
-        if (rres.rows.length) relMemLines = rres.rows.map((r) => `- ${r.line}`).join('\n')
-      } catch { /* 相关记忆上下文失败=省略 */ }
-      const userInput = [
-        `## 待蒸馏会话\nsessionId=${sid}（内存增量，水位 ${lastSeq}→${maxSeq}）`,
-        `## 会话增量正文\n${deltaText}`,
-        relMemLines ? `## 相关既有记忆（recallRanked 召回，Q0 已有归属 / Q3 合并判据；命中即视为已覆盖候选）\n${relMemLines}` : '（相关既有记忆：未启用向量或零命中，按无历史裁决）',
-        candIncluded.length ? `## 待固化候选（pending/ 中 ${candIncluded.length}/${candFiles.length} 个，预算 ${CAND_BUDGET} 字符内）\n${candText}` : (candFiles.length ? '（待固化候选超预算，本轮不携带；候选保留 pending 待下轮）' : '（无待固化候选）'),
-        '请按规则处理：裁决可复用知识点并输出入册指令 JSON。',
-      ].join('\n\n')
 
+      // ═══ v18 分段主循环（2026-09-10）：每段一次性 spawn（与现状同参数），段间连续性由 manifest 紧凑清单承接；
+      // 「可复用子代理 + 全上下文」列为后续可选档（规格已定，本轮不实现）。
+      // 每段成功（stop=completed && out）→ 既有 route 判定 + writeDispatch + episode 留痕 + 立即 writeWatermark(该段 endSeq)；
+      // 段失败 → 记录 log/审计并 break：水位停在失败段前（已成功段已推进）→ 下一触发从失败段断点续传，前段不重蒸。
       const resolvedLlm = resolveLlm(config.distillProvider, config.distillModel)
       const useProvider = !!resolvedLlm && providerFailCount < 2
       const agentOptions = useProvider ? { provider: resolvedLlm!.provider, model: resolvedLlm!.model } : undefined
-      const ac = new AbortController()
-      const timeout = setTimeout(() => { try { ac.abort(new Error('distill timeout 10min')) } catch { /* */ } }, 600000)
-      try {
-        const run2 = await ctx.subagents.start('spawn', {
-          label: `distill-${sidShort(sid)}`,
-          parent: agent,
-          signal: ac.signal,
-          maxDepth: 1,
-          ...(agentOptions ? { agentOptions } : {}),
-          prompt: [{ type: 'text', text: userInput }],
-          persona: config.distillPrompt || DEFAULT_DISTILL_PROMPT,
-          toolFilter: { allow: [] },
-        })
-        const result = await Promise.race([
-          run2.result,
-          new Promise((resolve) => setTimeout(() => resolve({ stopReason: 'timeout' } as any), 600000)),
-        ]) as any
-        clearTimeout(timeout)
-        const stop = result && result.stopReason
-        const out = parseAgentJson(result, `distill ${sidShort(sid)}`) // 子代理输出 → JSON（剥离代码栅栏+容错提取，与深睡共用同一实现）
-        if (stop === 'completed' && out) providerFailCount = 0
-        else if (useProvider && (stop !== 'completed' || !out)) providerFailCount++
-        const rawRoute = (out && typeof out.route === 'string') ? out.route.trim().toLowerCase() : ''
-        const route = ['memory', 'project', 'discard'].includes(rawRoute) ? rawRoute : 'memory' // 归一化+未知回退 memory（宁滥勿丢）
-        const workspace = await resolveWorkspace(sid)
-        const disp = route === 'discard'
-          ? { added: 0, rejected: 0, failed: 0, targetLib: 'none' }
-          : await writeDispatch(sid, out, route, workspace)
-        log(`distill: ${sidShort(sid)} stop=${stop} route=${route} → ${disp.targetLib} 入册 ${disp.added} / 拒收 ${disp.rejected} / 失败 ${disp.failed}`)
-        // WikiSkill 借鉴：失败归类 fclass（供审计聚合/深睡根因回流）+ LLM 指纹（大小模型蒸馏质量实证的数据底座）
-        const llmLabel = useProvider && resolvedLlm ? `${resolvedLlm.provider}/${resolvedLlm.model}` : 'inherited'
-        const fclass = !out ? 'json-parse'
-          : stop !== 'completed' ? (useProvider ? 'provider-fail' : 'agent-stop')
-          : route === 'discard' ? 'discard'
-          : disp.failed > 0 ? 'dispatch-failed'
-          : disp.rejected > 0 ? 'gate-reject'
-          : 'ok'
-        audit({ sid, kind: 'distill-run', route, stop, fclass, llm: llmLabel, targetLib: disp.targetLib, added: disp.added, rejected: disp.rejected, failed: disp.failed })
-        recordStub({ sid, watermark: [lastSeq, maxSeq], chars: deltaText.length, route, stop, fclass, llm: llmLabel, disp: { added: disp.added, rejected: disp.rejected, failed: disp.failed, targetLib: disp.targetLib }, outShape: out ? { appends: (out.appends || []).length, newIndex: (out.newIndex || []).length, profiles: (out.profiles || []).length, projectCards: (out.projectCards || []).length, skipped: (out.skipped || []).length } : null })
-        if (disp.added > 0 && candIncluded.length) {
-          const procDir = join(pendDir, '.processed')
-          try { mkdirSync(procDir, { recursive: true }); for (const f of candIncluded) { try { renameSync(join(pendDir, f), join(procDir, f)) } catch { /* */ } } } catch { /* */ }
+      const segLimit = Math.min(chunks.length, MAX_CHUNKS_PER_RUN)
+      const MANIFEST_CAP = 1500 // 同轮前段固化清单字符上限（超出丢最早行；只服务同轮后段查重/合并）
+      let manifest = ''
+      let wmNow = lastSeq
+      let anyAdded = false
+      for (let k = 0; k < segLimit; k++) {
+        const chunk = chunks[k]
+        let segOk = false
+        let ac: AbortController | null = null
+        let abortTimer: ReturnType<typeof setTimeout> | null = null
+        let raceTimer: ReturnType<typeof setTimeout> | null = null
+        try {
+          // v6 向量政策：给裁决 agent 喂「相关既有记忆」上下文（recallRanked 融合召回，query=本段 text 前 512）——
+          // Q0 已有归属 / Q3 能合并 判定从此有库内证据；未启用/失败自动省略
+          let relMemLines = ''
+          try {
+            const rres = await recallRanked(memoryLibRoot(), chunk.text.slice(0, 512), 5, 'all', embedCfgOf())
+            if (rres.rows.length) relMemLines = rres.rows.map((r) => `- ${r.line}`).join('\n')
+          } catch { /* 相关记忆上下文失败=省略 */ }
+          const userInput = [
+            `## 待蒸馏会话\nsessionId=${sid}（分段蒸馏，本段 seq ${chunk.startSeq}→${chunk.endSeq}，共 ${chunks.length} 段第 ${k + 1} 段）`,
+            `## 会话增量正文（本段）\n${chunk.text}`,
+            manifest ? `## 同轮前段固化清单（防重复入册/可引用合并，勿重复入册）\n${manifest}` : '（同轮前段固化清单：无——本段为当前触发首段；后续段将携带本段裁决清单防重复入册）',
+            relMemLines ? `## 相关既有记忆（recallRanked 召回，Q0 已有归属 / Q3 合并判据；命中即视为已覆盖候选）\n${relMemLines}` : '（相关既有记忆：未启用向量或零命中，按无历史裁决）',
+            candIncluded.length ? `## 待固化候选（pending/ 中 ${candIncluded.length}/${candFiles.length} 个，预算 ${CAND_BUDGET} 字符内）\n${candText}` : (candFiles.length ? '（待固化候选超预算，本轮不携带；候选保留 pending 待下轮）' : '（无待固化候选）'),
+            '请按规则处理：裁决本段可复用知识点并输出入册指令 JSON。',
+          ].join('\n\n')
+
+          ac = new AbortController()
+          abortTimer = setTimeout(() => { try { ac?.abort(new Error('distill timeout 10min')) } catch { /* */ } }, 600000)
+          const run2 = await ctx.subagents.start('spawn', {
+            label: `distill-${sidShort(sid)}`,
+            parent: agent,
+            signal: ac.signal,
+            maxDepth: 1,
+            ...(agentOptions ? { agentOptions } : {}),
+            prompt: [{ type: 'text', text: userInput }],
+            persona: config.distillPrompt || DEFAULT_DISTILL_PROMPT,
+            toolFilter: { allow: [] },
+          })
+          const result = await Promise.race([
+            run2.result,
+            new Promise((resolve) => { raceTimer = setTimeout(() => resolve({ stopReason: 'timeout' } as any), 600000) }),
+          ]) as any
+          if (abortTimer) { clearTimeout(abortTimer); abortTimer = null }
+          if (raceTimer) { clearTimeout(raceTimer); raceTimer = null }
+          const stop = result && result.stopReason
+          const out = parseAgentJson(result, `distill ${sidShort(sid)}`) // 子代理输出 → JSON（剥离代码栅栏+容错提取，与深睡共用同一实现）
+          if (stop === 'completed' && out) providerFailCount = 0
+          else if (useProvider && (stop !== 'completed' || !out)) providerFailCount++
+          const rawRoute = (out && typeof out.route === 'string') ? out.route.trim().toLowerCase() : ''
+          const route = ['memory', 'project', 'discard'].includes(rawRoute) ? rawRoute : 'memory' // 归一化+未知回退 memory（宁滥勿丢）
+          const workspace = await resolveWorkspace(sid)
+          const disp = route === 'discard'
+            ? { added: 0, rejected: 0, failed: 0, targetLib: 'none' }
+            : await writeDispatch(sid, out, route, workspace)
+          log(`distill: ${sidShort(sid)} 段${k + 1}/${segLimit}（seq ${chunk.startSeq}→${chunk.endSeq}）stop=${stop} route=${route} → ${disp.targetLib} 入册 ${disp.added} / 拒收 ${disp.rejected} / 失败 ${disp.failed}`)
+          // WikiSkill 借鉴：失败归类 fclass（供审计聚合/深睡根因回流）+ LLM 指纹（大小模型蒸馏质量实证的数据底座）
+          const llmLabel = useProvider && resolvedLlm ? `${resolvedLlm.provider}/${resolvedLlm.model}` : 'inherited'
+          const fclass = !out ? 'json-parse'
+            : stop !== 'completed' ? (useProvider ? 'provider-fail' : 'agent-stop')
+            : route === 'discard' ? 'discard'
+            : disp.failed > 0 ? 'dispatch-failed'
+            : disp.rejected > 0 ? 'gate-reject'
+            : 'ok'
+          // v18：审计行与 raw-stub 均带分段标记（chunk/chunkStart/chunkEnd/totalChunks）；stub watermark=该段推进区间（同步用该段 endSeq）
+          audit({ sid, kind: 'distill-run', route, stop, fclass, llm: llmLabel, targetLib: disp.targetLib, added: disp.added, rejected: disp.rejected, failed: disp.failed, chunk: k + 1, chunkStart: chunk.startSeq, chunkEnd: chunk.endSeq, totalChunks: chunks.length })
+          recordStub({ sid, watermark: [wmNow, chunk.endSeq], chars: chunk.text.length, route, stop, fclass, llm: llmLabel, disp: { added: disp.added, rejected: disp.rejected, failed: disp.failed, targetLib: disp.targetLib }, outShape: out ? { appends: (out.appends || []).length, newIndex: (out.newIndex || []).length, profiles: (out.profiles || []).length, projectCards: (out.projectCards || []).length, skipped: (out.skipped || []).length } : null, chunk: k + 1, chunkStart: chunk.startSeq, chunkEnd: chunk.endSeq, totalChunks: chunks.length })
+          if (stop === 'completed' && out) {
+            if (disp.added > 0) anyAdded = true
+            // 路线②：蒸馏裁决完成（stop=completed && out，无论入册多少）即留轻 episode——episode=「任务发生+结果」的
+            // 同类判定/转正数据源（memory-core-model §3.1）；入册或裁决非 discard 时再建/更新低置信任务候选
+            const intent = intentOf(chunk.text)
+            recordEpisode({ sid, intent: intent.slice(0, 120), route, fclass, llm: llmLabel, outcome: disp.targetLib, added: disp.added, rejected: disp.rejected, failed: disp.failed, lib: disp.targetLib })
+            if (route !== 'discard') await ensureFlowCandidate(sid, intent)
+            // v18 核心：段成功立即推水位到该段 endSeq（断点续传——失败/截断不再丢尾；整窗处理完自然到达 maxSeq）
+            writeWatermark(sid, chunk.endSeq)
+            log(`distill: ${sidShort(sid)} 段${k + 1}/${segLimit} completed，水位推进 ${wmNow}→${chunk.endSeq}${chunk.endSeq < maxSeq ? `（整窗尚余 ${chunks.length - k - 1} 段，下轮续传）` : '（整窗蒸馏完成，水位=maxSeq）'}`)
+            wmNow = chunk.endSeq
+            // 段间紧凑清单续上下文：本段裁决一行（供同轮后段查重/合并，勿重复入册；超 MANIFEST_CAP 丢最早行）
+            manifest = manifestPush(manifest, manifestLineFor(chunk.endSeq, route, out), MANIFEST_CAP)
+            segOk = true
+          } else {
+            // 水位保留：stop≠completed（error/timeout/aborted）或 stop=completed 但 out=null（JSON 解析失败，
+            // 2026-09-09 实锤「Unexpected end of JSON input」）都不算消化——本段不推进，下轮从本段续传
+            log(`distill: ${sidShort(sid)} 段${k + 1}/${segLimit} stop=${stop} out=${out ? 'ok' : 'null'}，本段失败——水位保留 ${wmNow}，下轮从本段（seq ${chunk.startSeq}）续传`)
+          }
+        } catch (e) {
+          if (abortTimer) { clearTimeout(abortTimer); abortTimer = null }
+          if (raceTimer) { clearTimeout(raceTimer); raceTimer = null }
+          const msg = String((e as Error)?.message || e)
+          if (msg.includes('inactive context')) {
+            // 旧 fiber 遗留定时器在 ctx 失效后触发（重载场景）：静默跳过、水位保留，由新实例积压扫尾补蒸馏（2026-09-10 修复）
+            log(`distill: ${sidShort(sid)} 段${k + 1} 旧 ctx 已失效（inactive context），跳过本轮（水位保留 ${wmNow}，待扫尾）`)
+          } else {
+            if (useProvider) providerFailCount++
+            log(`distill ERROR ${sidShort(sid)} 段${k + 1}: ${msg.slice(0, 200)}`)
+          }
         }
-        // 路线②：蒸馏裁决完成（stop=completed && out，无论入册多少）即留轻 episode——episode=「任务发生+结果」的
-        // 同类判定/转正数据源（memory-core-model §3.1），与是否入册无关（discard 也是有效裁决：该任务不值得记）；
-        // 入册或裁决非 discard 时再建/更新低置信任务候选（跨窗口记忆；同类二次出现供深睡跨窗归纳 [路径]）
-        if (stop === 'completed' && out) {
-          const intent = intentOf(deltaText)
-          recordEpisode({ sid, intent: intent.slice(0, 120), route, fclass, llm: llmLabel, outcome: disp.targetLib, added: disp.added, rejected: disp.rejected, failed: disp.failed, lib: disp.targetLib })
-          if (route !== 'discard') await ensureFlowCandidate(sid, intent)
-        }
-        if (stop === 'completed' && out) {
-          writeWatermark(sid, maxSeq)
-          log(`distill: ${sidShort(sid)} completed，水位推进 → ${maxSeq}`)
-        } else {
-          // 水位保留：stop≠completed（error/timeout/aborted）或 stop=completed 但 out=null（JSON 解析失败，
-          // 2026-09-09 实锤「Unexpected end of JSON input」）都不算消化——推进水位会把本窗口增量永久划出
-          log(`distill: ${sidShort(sid)} stop=${stop} out=${out ? 'ok' : 'null'}，水位保留 ${lastSeq} 待下轮重试`)
-        }
-      } catch (e) {
-        clearTimeout(timeout)
-        const msg = String((e as Error)?.message || e)
-        if (msg.includes('inactive context')) {
-          // 旧 fiber 遗留定时器在 ctx 失效后触发（重载场景）：静默跳过、水位保留，由新实例积压扫尾补蒸馏（2026-09-10 修复）
-          log(`distill: ${sidShort(sid)} 旧 ctx 已失效（inactive context），跳过本轮（水位保留，待扫尾）`)
-        } else {
-          if (useProvider) providerFailCount++
-          log(`distill ERROR ${sidShort(sid)}: ${msg.slice(0, 200)}`)
-        }
+        if (!segOk) break // v18：段失败即停——已成功段已推水位，本段未推 → 下轮从本段断点续传（前段不重蒸）
+      }
+      // pending 候选 .processed 移动（现语义：有段 added>0 且本轮携带候选）——循环后统一一次，
+      // 避免多段重复移同名（rename 幂等已有，统一处理更干净）
+      if (anyAdded && candIncluded.length) {
+        const procDir = join(pendDir, '.processed')
+        try { mkdirSync(procDir, { recursive: true }); for (const f of candIncluded) { try { renameSync(join(pendDir, f), join(procDir, f)) } catch { /* */ } } } catch { /* */ }
       }
     } catch (e) {
       log(`distill agent err ${sidShort(sid)}: ${String((e as Error)?.message || e).slice(0, 120)}`)
