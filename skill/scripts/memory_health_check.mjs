@@ -4,6 +4,9 @@
 //   缺省目录 = 脚本所在目录的上一级（自定位，不依赖 cwd）
 //   --out audit\<日期>.md：把完整报告归档到技能目录（可观测性：审计轨迹可回溯）
 // 适配纯索引格式：MEMORY/USER 按行解析（`[tag] 主题（日期）[溯源] → notes/x.md §小节`）
+// v18（ACT-030）：索引文件的行分两类——索引行（`[tag] … → notes/…`）与**画像行**（`- … ← 源: …`，
+//   写入口=蒸馏 profileUpdates / 深睡 profileOps）。画像行不参与索引行的标签/指针判定，但必须带 `← 源:`，
+//   缺源=exit 5。原先只认索引行 ⇒ 画像行被误判「无标签+无指针」长期假红（实测 AGENT 1 + USER 3 条）。
 // 退出码: 0=健康  2=任一文件容量>85%  3=存在重复条目  4=文件缺失  5=子文档/指针/格式问题
 import { readFile, readdir, writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
@@ -30,8 +33,8 @@ if (outFile) {
 // v16：PRINCIPLES.md 独立层退役——习得原则 [原则] 行并入 AGENT.md，AGENT 容量 2,000→3,000
 // v17：AGENT tags 增 '路径'——[路径] 通用任务路径行（对标 AWM，概要 ≤40 字）
 const INDEX_FILES = [
-  { name: 'MEMORY.md', limit: 3000, tags: ['env', 'tool', 'flow', 'lesson'] },
-  { name: 'USER.md', limit: 2000, tags: ['身份', '环境', '硬件', '偏好', '习惯'] },
+  { name: 'MEMORY.md', limit: 5000, tags: ['env', 'tool', 'flow', 'lesson'] },
+  { name: 'USER.md', limit: 3000, tags: ['身份', '环境', '硬件', '偏好', '习惯'] },
   { name: 'AGENT.md', limit: 3000, tags: ['身份', '使命', '边界', '偏好', '习惯', '经验', '演化', '教训', '原则', '路径'] },
 ];
 // 详情子文档（注册表见 notes/INDEX.md；缺少任一 → exit 4）
@@ -68,11 +71,19 @@ for (const { name, limit, tags } of INDEX_FILES) {
     if (seen.has(key)) duplicates.push(key);
     else seen.set(key, e);
   }
-  const noTag = entries.filter((e) => !new RegExp(`^\\[(${tags.join('|')})\\]`).test(e));
+  // v18（ACT-030 修复）：画像行是**与索引行并列的第二类合法行**——写入口=蒸馏 profileUpdates
+  //   （`- <文本> ← 源: distill <sid> <date>`）与深度睡眠 profileOps（`- <文本> ← 源: notes/x.md §小节`）。
+  //   体检原先只认索引行格式 ⇒ 每条画像行都被误判「无标签 + 无指针」并置 exit 5（实测 AGENT 1 + USER 3）。
+  //   现分离两类：画像行不参与索引行的标签/指针判定，但**必须带源标记**（`← 源:`），缺源仍 exit 5。
+  //   判据「`- ` 前缀」与写门同源（memory_write_gate 只对 `^[` 行做索引行格式校验）⇒ 两处口径一致。
+  const isProfileLine = (e) => /^-\s/.test(e);
+  const noTag = entries.filter((e) => !isProfileLine(e) && !new RegExp(`^\\[(${tags.join('|')})\\]`).test(e));
   const noDate = []; // v11：日期移入 INDEX 元数据表
   const noOwner = []; // v11：溯源移入 INDEX 元数据表
-  const noPointer = entries.filter((e) => !/→\s*notes\/[A-Za-z0-9_-]+\.md/.test(e));
+  const noPointer = entries.filter((e) => !isProfileLine(e) && !/→\s*notes\/[A-Za-z0-9_-]+\.md/.test(e));
   const noSummary = entries.filter((e) => /→/.test(e) && !/·\s*\S+/.test(e)); // 有指针但缺概况段（v10 规范）
+  const profiles = entries.filter(isProfileLine);
+  const profileNoSrc = profiles.filter((e) => !/←\s*源:\s*\S/.test(e));
 
   console.log(`\n=== ${name} (${p}) ===`);
   console.log(`字符数: ${chars} / ${limit} (${pct}%)${pct > 85 ? ' ⚠️ 超85%需审计' : pct > 80 ? ' ⚠️ 超80%需合并' : ''}`);
@@ -80,6 +91,8 @@ for (const { name, limit, tags } of INDEX_FILES) {
   if (duplicates.length) { console.log(`重复条目: ${duplicates.length} 条 ❌`); exitCode = Math.max(exitCode, 3); }
   else console.log('重复条目: 0 ✅');
   console.log(`无标签: ${noTag.length} ${noTag.length ? '❌' : '✅'} | 无日期戳: ${noDate.length}（v11 移入元数据表） | 缺溯源: ${noOwner.length}（v11 移入元数据表）`);
+  if (profiles.length) console.log(`画像行: ${profiles.length} 条（带源 ${profiles.length - profileNoSrc.length} / 缺源 ${profileNoSrc.length}）${profileNoSrc.length ? ' ❌' : ' ✅'}`);
+  if (profileNoSrc.length) { console.log(`画像行缺源标记: ${profileNoSrc.length} 条 ❌（${profileNoSrc.map((e) => e.slice(0, 30)).join(' | ')}）——每条画像行须带 \`← 源:\``); exitCode = Math.max(exitCode, 5); }
   if (noPointer.length) { console.log(`无指针索引行: ${noPointer.length} 条 ❌（${noPointer.map((e) => e.slice(0, 30)).join(' | ')}）`); exitCode = Math.max(exitCode, 5); }
   if (noSummary.length) console.log(`缺概况段索引行: ${noSummary.length} 条 ⚠️（规范 v10，应含 · 概况短语）`);
   else console.log('指针完整性: 全部索引行带 → 指针 ✅');
@@ -97,7 +110,11 @@ try {
       const raw = await readFile(p, 'utf8');
       const chars = raw.replace(/\s/g, '').length;
       const sections = (raw.match(/^#{2,3} /gm) || []).length; // ADR-015：## 大节 + ### 子节
-      console.log(`${n}: ${chars} 字符 ${sections} 小节 ${chars > NOTES_WARN ? `⚠️ 超 ${NOTES_WARN} 警戒线（按需拆分，不拦截）` : '✅'}`);
+      // v18：并列报「最大小节」——ADR-015 两级检索单元后，**单次跟读成本 = 小节体量**（非文件体量），
+      // 故文件级警戒线必须与最大小节一起判读，否则「文件超 8000」会被误读成读取代价失控。
+      const segs = raw.split(/^(?=#{2,3} )/m).filter((x) => /^#{2,3} /.test(x));
+      const maxSec = segs.reduce((mx, x) => Math.max(mx, x.replace(/\s/g, '').length), 0);
+      console.log(`${n}: ${chars} 字符 ${sections} 小节 最大小节 ${maxSec} 字 ${chars > NOTES_WARN ? `⚠️ 超 ${NOTES_WARN} 警戒线（按需拆分，不拦截；判读看最大小节）` : '✅'}`);
     } catch {
       console.log(`[FAIL] notes/${n}: 缺失`);
       exitCode = Math.max(exitCode, 4);
@@ -127,6 +144,7 @@ try {
     for (const idx of ['MEMORY.md', 'USER.md', 'AGENT.md']) {
       const idxRaw = await readFile(join(skillDir, idx), 'utf8').catch(() => '');
       for (const l of idxRaw.split(/\r?\n/).map((x) => x.trim()).filter((x) => x && !x.startsWith('#'))) {
+        if (/^-\s/.test(l)) continue; // v18：画像行非「子文档主题」（自由文本，无 tag/主题结构），不参与覆盖校验
         const topic = l.replace(/^\[[^\]]+\]\s*/, '').split('·')[0].split('→')[0].trim().split(/[=：]/)[0].slice(0, 8);
         if (topic && !metaSec.includes(topic)) missMeta.push(`${idx}:${topic}`);
       }

@@ -38,7 +38,7 @@
 - **P1 · metadata-only journal**：写库成功后向 `<库根>/audit/journal.jsonl` 追加一行 `{at, lib, file, section, charsBefore, charsAfter, runId}`——只记元数据，绝不记条目正文（隐私红线与 ADR-0006 记忆仓私人区原则一致）。收益：审计可回放，不看内容即可发现异常写入频率。
 - **P2 · 操作锁**：蒸馏 spawn 进行中（Promise.race 窗口内）拒绝对同库并发写（简单互斥标志即可，对标 host-owned apply 的防并发写）。当前单进程事件串行，风险低——列为防御性增强。
 - **P2 · 库级恢复点**：现在备份是单文件 copy；借鉴「干净复用 HEAD / 脏路径打 checkpoint」思路，在批量迁移 pending → cards 前（ADR-0005 阶段 3）对目标卡库目录做一次性 zip 快照，替代逐文件备份。
-- **P3 · 注入面字符预算对齐**：dsh-git-memory 的 untrusted 12KiB 与本库 capacity MEMORY.md 3000 字符语义同源；无需改代码，仅在 SKILL 文档标注「主文档即注入面，容量门禁即 token 预算」的对应关系，避免后续调大容量时忘了注入成本。
+- **P3 · 注入面字符预算对齐**：dsh-git-memory 的 untrusted 12KiB 与本库 capacity MEMORY.md 5,000 字符（2026-09-11 上调，原 3,000）语义同源；无需改代码，仅在 SKILL 文档标注「主文档即注入面，容量门禁即 token 预算」的对应关系，避免后续调大容量时忘了注入成本。
 
 ## 3. 非目标（明确不抄）
 

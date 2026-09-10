@@ -487,9 +487,9 @@ export function applyPanel(ctx: Context, config: Config): void {
     const file = configFileOf()
     const sched = readSuiteConfig()
     // 2026-09-10（修正）：上限 vs 实际量——上限是稳定配置（用户设的边界）；未配时默认=容量门硬边界
-    // （AGENT/MEMORY 3000、USER 2000：写门强制内容不可超，故默认=容量门=允许全量且 UI 数字稳定）；
+    // （画像 AGENT/USER 3000、记忆 MEMORY 5000（2026-09-11 用户拍板默认）：写门强制内容不可超，故默认=容量门=允许全量且 UI 数字稳定）；
     // actual = 当前实际量（动态参考，随内容成长变化，仅展示不参与配置）
-    const CAP_GATES: Record<string, number> = { 'AGENT.md': 3000, 'USER.md': 2000, 'MEMORY.md': 3000 }
+    const CAP_GATES: Record<string, number> = { 'AGENT.md': 3000, 'USER.md': 3000, 'MEMORY.md': 5000 }
     const fileChars = (name: string): number => {
       try { const base = join(dshHome(), 'skills', 'managing-memory'); const t = readFileSync(join(base, name), 'utf8'); return t.replace(/\s+/g, '').length } catch { return 0 }
     }
@@ -702,13 +702,40 @@ export function applyPanel(ctx: Context, config: Config): void {
     { file: 'AGENT.md', label: 'Agent 画像 AGENT（含 [原则] 习得原则与 [路径] 任务路径）' },
   ]
   const NOTE_RELS = ['env', 'tools', 'flows', 'lessons', 'release', 'user', 'agent', 'INDEX']
+  /* ── 本机向量端点判定（2026-09-11：不再写死 9915）─────────────────────────
+   * 背景：原实现把「本机嵌入服务」硬编码为 `:9915`（自建 bge-m3 桥，曾由 nssm 托管）；
+   * nssm 卸载 + 桥的 ONNX 模型资产被清后，本机改由 Ollama（11434，OpenAI 兼容）承载。
+   * 判定改为「任意 127.0.0.1/localhost 基址 = 本机」，探测顺序：/health（自建桥）→ <base>/models（OpenAI 兼容：Ollama/LM Studio）→ /api/tags（Ollama 原生）。
+   * 同步探测（execFileSync 子进程）：/vector/status2 是同步 handler，且清 NODE_OPTIONS 防 inspector 残留干扰。
+   */
+  const isLocalBase = (baseUrl: string): boolean => /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?/i.test(String(baseUrl || '').trim())
+  const probeLocalEmbed = (baseUrl: string): { ok: boolean; provider: string } => {
+    const base = String(baseUrl || '').trim().replace(/\/+$/, '')
+    let origin = base
+    try { origin = new URL(base).origin } catch { return { ok: false, provider: 'unreachable' } }
+    const urls = [base + '/health', base + '/models', origin + '/api/tags']
+    const probe = `(async()=>{for(const x of ${JSON.stringify(urls)}){try{const r=await fetch(x,{signal:AbortSignal.timeout(2500)});if(r.ok){console.log(JSON.stringify({ok:true,url:x,body:(await r.text()).slice(0,200)}));return}}catch(e){}}console.log(JSON.stringify({ok:false}))})()`
+    try {
+      const env2: Record<string, string | undefined> = { ...process.env, NODE_OPTIONS: '' }
+      const r = execFileSync('node', ['-e', probe], { encoding: 'utf8', timeout: 12000, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'], env: env2 as NodeJS.ProcessEnv })
+      const j = JSON.parse(String(r).trim()) as { ok?: boolean; url?: string; body?: string }
+      if (!j.ok) return { ok: false, provider: 'unreachable' }
+      const hit = String(j.url || '')
+      // ① 自建桥 /health 自带 provider（如 DmlExecutionProvider）；②/③ 本机 OpenAI 兼容（Ollama /v1/models、LM Studio）或 Ollama 原生 → gpu-ready（=「本机就绪」，沿用 UI 既有词表）
+      if (hit.endsWith('/health')) {
+        try { return { ok: true, provider: (JSON.parse(String(j.body)) as { provider?: string }).provider || 'local' } } catch { return { ok: true, provider: 'local' } }
+      }
+      return { ok: true, provider: 'gpu-ready' }
+    } catch { return { ok: false, provider: 'unreachable' } }
+  }
+
   /**
    * 容量上限单一事实源（2026-09-10 修复：与写门同源）。
    * 优先级：① ~/.dsh/suite/scheduler.json 的容量门 capAgent/capUser/capMemory（= write_gate 的 env SHOUCANG_CAP_*，
-   * 面板改容量门后 UI 立即联动）；② engine/target-registry.json 静态 capacity（旧源兼容）；③ 内建默认 3000/2000/3000。
+   * 面板改容量门后 UI 立即联动）；② engine/target-registry.json 静态 capacity（旧源兼容）；③ 内建默认画像 3000 / 记忆 5000。
    */
   const memoryCaps = (base: string): Record<string, number> => {
-    const out: Record<string, number> = { 'MEMORY.md': 3000, 'USER.md': 2000, 'AGENT.md': 3000 }
+    const out: Record<string, number> = { 'MEMORY.md': 5000, 'USER.md': 3000, 'AGENT.md': 3000 }
     // ② 旧源：target-registry 静态容量
     try {
       const reg = JSON.parse(readFileSync(join(base, 'engine', 'target-registry.json'), 'utf8')) as { targets?: { memory?: { capacity?: Record<string, number> } } }
@@ -738,7 +765,7 @@ export function applyPanel(ctx: Context, config: Config): void {
   const readIndexFile = (base: string, f: { file: string; label: string }, caps: Record<string, number>): MemIndexFile | null => {
     try {
       const text = readFileSync(join(base, f.file), 'utf8')
-      return { name: f.file, label: f.label, text, chars: charsOf(text), cap: caps[f.file] ?? 2000, lines: parseIndexLines(text) }
+      return { name: f.file, label: f.label, text, chars: charsOf(text), cap: caps[f.file] ?? 3000, lines: parseIndexLines(text) }
     } catch { return null }
   }
   /** notes 文件小节清单（标题+起始行；不含正文，正文走 /memory/sections） */
@@ -870,11 +897,11 @@ export function applyPanel(ctx: Context, config: Config): void {
         try {
           const p = readSuiteConfig() as Record<string, unknown>
           const enabled = p.embedEnabled === false ? false : true
-          const baseUrl = String((p as { embedBaseUrl?: unknown }).embedBaseUrl || 'http://127.0.0.1:9915/v1')
+          const baseUrl = String((p as { embedBaseUrl?: unknown }).embedBaseUrl || 'http://127.0.0.1:11434/v1')
           let provider = enabled ? 'cloud' : 'off'
           let cacheLines = 0
           try { const f = join(knowledgeRoot(), '.vector-cache.jsonl'); if (existsSync(f)) cacheLines = readFileSync(f, 'utf8').split('\n').filter((l) => l.trim()).length } catch { /* */ }
-          if (enabled && /^https?:\/\/(127\.0\.0\.1|localhost):9915/.test(baseUrl)) provider = vecStats.queries ? (vecStats.lastMode === 'fusion' ? 'fusion' : 'lexical') : 'gpu-ready'
+          if (enabled && isLocalBase(baseUrl)) provider = vecStats.queries ? (vecStats.lastMode === 'fusion' ? 'fusion' : 'lexical') : 'gpu-ready'
           return { enabled, provider, cacheLines }
         } catch { return { enabled: false, provider: 'off', cacheLines: 0 } }
       })()
@@ -1251,21 +1278,17 @@ export function applyPanel(ctx: Context, config: Config): void {
       const p = readSuiteConfig() as Record<string, unknown>
       // 缺省语义对齐 scheduler.Config：embedEnabled 缺省 true、本地 bge-m3（无键=缺省开）
       const enabled = p.embedEnabled === false ? false : true
-      const baseUrl = String((p as { embedBaseUrl?: unknown }).embedBaseUrl || 'http://127.0.0.1:9915/v1')
+      const baseUrl = String((p as { embedBaseUrl?: unknown }).embedBaseUrl || 'http://127.0.0.1:11434/v1')
       const model = String((p as { embedModel?: unknown }).embedModel || 'bge-m3')
       const apiKeyEnv = String((p as { embedApiKeyEnv?: unknown }).embedApiKeyEnv || 'EMBED_API_KEY')
       const running = { enabled, baseUrl, model, apiKeyEnv }
-      // 探测本地服务 → provider 标签（子进程清 NODE_OPTIONS 防 inspector 残留干扰）
+      // 探测本机服务 → provider 标签（子进程清 NODE_OPTIONS 防 inspector 残留干扰）
       let provider = 'off', localOk = false
-      const local = /^https?:\/\/(127\.0\.0\.1|localhost):9915/.test(baseUrl)
+      const local = isLocalBase(baseUrl)
       if (enabled && local) {
-        try {
-          const env2: Record<string, string | undefined> = { ...process.env, NODE_OPTIONS: '' }
-          const r = execFileSync('node', ['-e', 'fetch("http://127.0.0.1:9915/health").then(r=>r.json()).then(j=>console.log(JSON.stringify(j))).catch(()=>process.exit(1))'], { encoding: 'utf8', timeout: 8000, windowsHide: true, stdio: ['ignore','pipe','ignore'], env: env2 as NodeJS.ProcessEnv })
-          const j = JSON.parse(String(r).trim()) as { provider?: string }
-          provider = j.provider || 'local'
-          localOk = true
-        } catch { provider = 'unreachable' }
+        const p2 = probeLocalEmbed(baseUrl)
+        provider = p2.provider
+        localOk = p2.ok
       } else if (enabled) provider = 'cloud'
       // 缓存统计
       let cacheLines = 0, cacheKB = 0
@@ -1338,9 +1361,11 @@ export function applyPanel(ctx: Context, config: Config): void {
           req.on('timeout', () => { req.destroy(); resolve({ status: 0, body: 'timeout' }) })
         })
       }
-      // ① OpenAI 兼容枚举（GET {base}/v1/models）
+      // ① OpenAI 兼容枚举（GET {base}/models；base 已含 /v1 时不再重复拼接——2026-09-11 修：原实现恒拼 `raw + '/v1/models'`，
+      //    而 UI 预设与 vec.ts 用的 baseUrl 形如 `http://127.0.0.1:11434/v1` ⇒ 实际请求 `/v1/v1/models` 恒 404，Ollama 枚举静默失效）
+      const modelsUrl = /\/v1$/.test(raw) ? raw + '/models' : raw + '/v1/models'
       try {
-        const r = await httpGet(raw + '/v1/models', true)
+        const r = await httpGet(modelsUrl, true)
         if (r.status >= 200 && r.status < 300) {
           let j: { data?: Array<{ id: string }> } = {}
           try { j = JSON.parse(r.body) as { data?: Array<{ id: string }> } } catch { /* 非 JSON */ }

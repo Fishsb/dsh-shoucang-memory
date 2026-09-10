@@ -405,8 +405,19 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     const inter = A.filter((x) => B.includes(x)).length
     return inter / Math.min(A.length, B.length)
   }
+  // 候选噪声闸（2026-09-11 实测）：9 条存量候选中 3 条根本不是用户任务，而是**宿主注入样板**——
+  // 「Current runtime context…」运行态快照、「Background subagent/job …」后台完成通知、
+  // `<system-reminder>` 注入块。这类文本永不构成「可复用的任务类型」，进候选区只会污染深睡的同型判断
+  // （还会把不同会话的样板文本互相"同型合并"，制造假跨会话信号）。只按**行首/标志串**判，避免误杀真实任务。
+  const CANDIDATE_NOISE = [
+    /^Current runtime context\b/i,
+    /<system-reminder>/i,
+    /^Background (subagent|job)\b/i,
+    /^You are an AI agent\b/i,
+  ]
+  const isNoiseIntent = (s: string): boolean => CANDIDATE_NOISE.some((re) => re.test(String(s)))
   const ensureFlowCandidate = async (sid: string, intent: string): Promise<void> => {
-    if (!intent || intent.length < 8) return
+    if (!intent || intent.length < 8 || isNoiseIntent(intent)) return
     try {
       mkdirSync(candidateDir, { recursive: true })
       const day = new Date().toISOString().slice(0, 10)
@@ -446,21 +457,33 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       if (matched) {
         const fp = join(candidateDir, matched)
         const body = readFileSync(fp, 'utf8')
+        const cur = body.match(/- 类型线索：(.+)/)
+        const clue = cur ? cur[1].trim() : intent
         // 跨会话计数：源会话不重复追加；会话集合数=跨会话信号（供深睡「同类型 ≥2 次且跨会话」判据）
         const sids = [...new Set([...(body.match(/^- 源会话：(.+)$/gm) || []).map((l) => l.replace(/^- 源会话：/, '').trim()), sid])]
         const n = sids.length
-        const out = body
-          .replace(/- 源会话：[^\n]*(\n|$)/g, '')
-          .replace(/- 成功次数：[^\n]*\n/, '')
-          .replace(/- 跨会话：[^\n]*\n/, '')
-        const newBody = `${out.trim()}\n- 成功次数：${n}\n- 跨会话：${n}（${sids.slice(-4).join(', ')}${sids.length > 4 ? '…' : ''}）\n- 最近更新：${day}\n`
+        // 规范化整体重写（修 2026-09-11 实测缺陷）：原先只剔「源会话/成功次数/跨会话」三键，
+        // **「最近更新」从不剔除** ⇒ 每次同型合并都再追加一行，实测单个候选累积 40 条重复行
+        // （文件膨胀 + 「最近更新」语义失真）。现按固定字段序重建，任何字段都不会重复累积；
+        // 源会话改为**每会话一行**，使跨会话数可从文件自身复算（不再只依赖计数行）。
+        const newBody = [
+          '# 任务候选（低置信 · 跨窗口记忆）',
+          '',
+          `- 类型线索：${clue}`,
+          ...sids.map((s) => `- 源会话：${s}`),
+          `- 成功次数：${n}`,
+          `- 跨会话：${n}`,
+          '- 状态：候选（非源指针；仅供深睡跨窗口同型判断——同类成功 ≥2 且跨会话 ≥2 由深睡归纳为 [路径]）',
+          `- 最近更新：${day}`,
+          '',
+        ].join('\n')
         writeFileSync(fp, newBody, 'utf8')
         return
       }
       let hash = 0
       for (const c of intent) hash = (hash * 31 + c.charCodeAt(0)) >>> 0
       const f = join(candidateDir, `${day}-${hash.toString(36).slice(0, 6)}.md`)
-      writeFileSync(f, `# 任务候选（低置信 · 跨窗口记忆）\n\n- 类型线索：${intent}\n- 源会话：${sid}\n- 成功次数：1\n- 跨会话：1\n- 状态：候选（非源指针；仅供深睡跨窗口同型判断——同类成功 ≥2 且跨会话 ≥2 由深睡归纳为 [路径]）\n`, 'utf8')
+      writeFileSync(f, `# 任务候选（低置信 · 跨窗口记忆）\n\n- 类型线索：${intent}\n- 源会话：${sid}\n- 成功次数：1\n- 跨会话：1\n- 状态：候选（非源指针；仅供深睡跨窗口同型判断——同类成功 ≥2 且跨会话 ≥2 由深睡归纳为 [路径]）\n- 最近更新：${day}\n`, 'utf8')
     } catch { /* 候选落盘失败静默 */ }
   }
   const log = (msg: string): void => { try { mkdirSync(dirname(logFile), { recursive: true }); appendFileSync(logFile, '[' + new Date().toISOString() + '] ' + msg + '\n') } catch { /* 静默 */ } }
@@ -653,7 +676,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
   // 容量门实时读取（2026-09-10：面板调容量门后写门即时生效，不必重载插件）——
   // 优先 scheduler.json 的 capAgent/capUser/capMemory（= 面板同源），回落启动期 config 值。
   const liveCaps = (): { agent: number; user: number; memory: number } => {
-    const d = { agent: config.capAgent ?? 3000, user: config.capUser ?? 2000, memory: config.capMemory ?? 3000 }
+    const d = { agent: config.capAgent ?? 3000, user: config.capUser ?? 3000, memory: config.capMemory ?? 5000 }
     try {
       const s = JSON.parse(readFileSync(join(dshHome(), 'suite', 'scheduler.json'), 'utf8')) as Record<string, unknown>
       if (typeof s.capAgent === 'number' && s.capAgent > 0) d.agent = s.capAgent
@@ -725,6 +748,33 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       renameSync(tmp, file)
       return { st: 'added' }
     } catch { return { st: 'failed' } }
+  }
+
+  /**
+   * 索引行新增 → 同步登记 notes/INDEX.md「条目元数据表」（维护台账）。
+   * 判因（2026-09-11 ACT-030）：元数据表是「一行一主题」的维护台账，但 newIndex 通道从不登记
+   * ⇒ 体检「未登记元数据表主题」缺口随每次蒸馏持续增长（实测存量 36 条）。这里补齐**登记端**，
+   * 使台账随索引自动同步（幂等：同主题已存在则跳过）。失败不阻断索引写入——体检仍以 ⚠️ 暴露缺口。
+   */
+  const registerIndexMeta = (root: string, targetFile: string, indexLine: string, sid: string): void => {
+    try {
+      if (!['MEMORY.md', 'USER.md', 'AGENT.md'].includes(targetFile)) return
+      const idxFile = join(root, 'notes', 'INDEX.md')
+      if (!existsSync(idxFile)) return
+      // 主题口径与体检脚本一致：去标签 → 取 · 前 → 去 → 后 → 去 =/：复合前段
+      const topic = String(indexLine).replace(/^\[[^\]]+\]\s*/, '').split('·')[0].split('→')[0].trim().split(/[=：]/)[0].trim()
+      if (!topic) return
+      const body = readFileSync(idxFile, 'utf8')
+      const meta = body.split('## 条目元数据表')[1]
+      if (!meta || meta.includes(topic)) return
+      const row = `| ${topic} | ${new Date().toISOString().slice(0, 10)} | agent | active | 蒸馏 ${sidShort(sid)} 新增 |`
+      const lines = body.split('\n')
+      const note = lines.findIndex((l) => l.startsWith('> 维护规则：新增条目'))
+      lines.splice(note > -1 ? note : lines.length, 0, row)
+      const tmp = idxFile + '.tmp'
+      writeFileSync(tmp, lines.join('\n'), 'utf8')
+      renameSync(tmp, idxFile)
+    } catch { /* 台账登记失败不阻断索引写入 */ }
   }
 
   const writeDispatch = async (sid: string, out: any, route: string, workspace: string | null): Promise<{ added: number; rejected: number; failed: number; targetLib: string }> => {
@@ -809,7 +859,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
           }
         }
         const r = await memAppend(t, 'new', nl, '-', resolved)
-        if (r.status === 0) added++; else { failed++; log(`distill 新索引失败: ${textOf(r).slice(0, 120)}`) }
+        if (r.status === 0) { added++; registerIndexMeta(resolved.root, t, nl, sid) } else { failed++; log(`distill 新索引失败: ${textOf(r).slice(0, 120)}`) }
       }
       // 双画像：Q2「归谁」的 USER/AGENT 通道（宿主直写，格式/容量/去重门禁）
       const profiles = (out && Array.isArray(out.profiles)) ? out.profiles : []

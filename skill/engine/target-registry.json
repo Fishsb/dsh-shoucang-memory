@@ -22,12 +22,12 @@
         ]
       },
       "capacity": {
-        "MEMORY.md": 3000,
-        "USER.md": 2000,
+        "MEMORY.md": 5000,
+        "USER.md": 3000,
         "AGENT.md": 3000
       },
       "pendingDir": "pending",
-      "comment": "；v16 习得原则并入 agent 画像（PRINCIPLES.md 退役，AGENT.md 容量扩至 3,000，[原则] 行唯一写入口=深度睡眠归纳 pass）；v17 新增 [路径] 行（通用任务路径，对标 AWM，同门禁同写入口）"
+      "comment": "；v16 习得原则并入 agent 画像（PRINCIPLES.md 退役，AGENT.md 容量扩至 3,000，[原则] 行唯一写入口=深度睡眠归纳 pass）；v17 新增 [路径] 行（通用任务路径，对标 AWM，同门禁同写入口）；2026-09-11 容量默认调整（画像 3,000 · 记忆 5,000）——静态值仅为旧源兼容，权威=scheduler.json 容量门 capAgent/capUser/capMemory"
     }
   }
 }

@@ -30,11 +30,11 @@ const isNotes = /^notes[\\/]/.test(targetPath) || base.startsWith('notes');
 //      [路径] 步内禁用 →（与 → notes/ 指针歧义，步骤请用 ①②③ 串联）
 // 2026-09-10：容量门可被 env 覆盖（SHOUCANG_CAP_MEMORY/USER/AGENT）——守藏面板「容量门」可调；未设用默认红线
 const CAP_ENV = {
-  'MEMORY.md': Number(process.env.SHOUCANG_CAP_MEMORY) || 3000,
-  'USER.md': Number(process.env.SHOUCANG_CAP_USER) || 2000,
+  'MEMORY.md': Number(process.env.SHOUCANG_CAP_MEMORY) || 5000,
+  'USER.md': Number(process.env.SHOUCANG_CAP_USER) || 3000,
   'AGENT.md': Number(process.env.SHOUCANG_CAP_AGENT) || 3000,
 };
-const LIMITS = { 'MEMORY.md': 3000, 'USER.md': 2000, 'AGENT.md': 3000, ...CAP_ENV };
+const LIMITS = { 'MEMORY.md': 5000, 'USER.md': 3000, 'AGENT.md': 3000, ...CAP_ENV };
 const NOTES_WARN = 8000;
 
 const tmpText = fs.readFileSync(tmp, 'utf8');

@@ -25,7 +25,7 @@ L4 交互（DSH Web GUI）
 
 | 模块 | 载体 | 职责 | 效率设计 |
 |---|---|---|---|
-| **M1 画像** | `AGENT.md`(自)/`USER.md`(人) | 自我认知+用户认知，会话注入 | 薄行指针（非正文）；容量 3000/2000/3000 |
+| **M1 画像** | `AGENT.md`(自)/`USER.md`(人) | 自我认知+用户认知，会话注入 | 薄行指针（非正文）；容量画像 3000/3000 · 记忆 5000 |
 | **M2 情景** | `audit/episodes.jsonl` | 任务发生+结果（同类判定数据源） | 轻行 {sid,intent,route,outcome}；上限 256 淘汰 |
 | **M3 经验** | `notes/*.md` 索引行 | 泛化知识，按需懒展开 | 索引=指针；详情 read_section 按需 |
 | **M4 召回** | `shoucang_recall` + `recallApprox` | 任务前查经验 | 词法地板（0 依赖）；零命中给主题地图 |
@@ -49,13 +49,13 @@ L4 交互（DSH Web GUI）
 
 **注入恒有界**：三索引行数受容量红线（字符数）约束 → 注入字节稳定 → 前缀缓存热。此即「画像指针 + 多层设计」省 token 的核心机理。
 
-## 5. 向量召回（M9，2026-09-09 默认启用 · 本地 GPU）
+## 5. 向量召回（M9，2026-09-09 默认启用 · 本地免 token）
 
-- **Provider**：本地 bge-m3（Xenova q8 543MB，多语言 1024d）→ **DirectML GPU 推理**（onnxruntime-directml + DmlExecutionProvider 驱动 NVIDIA；服务 `bge-m3-openai-server-gpu.py`，nssm AUTO_START :9915，OpenAI/Ollama 双兼容）。GPU=零 token、离线、显存 ~2GB（8GB 卡余量足）；云端可配置（embedBaseUrl/embedModel/embedApiKeyEnv 键在，切换即用）。
+- **Provider（2026-09-11 更替）**：缺省 = **Ollama `http://127.0.0.1:11434/v1` + `bge-m3`**（官方库 1.2GB，多语言 1024d，OpenAI 兼容 `/v1/embeddings`，本机免 key）——Ollama 自身随登录自启，**不再需要 nssm 或任何服务管理器**。原路线为自建桥（Xenova q8 + onnxruntime-directml 的 `bge-m3-openai-server-gpu.py`，nssm AUTO_START :9915；服务已随 nssm 卸载停止，**但模型资产仍在 `D:\AI\models\bge-m3`（`onnx/model_quantized.onnx` 543MB）——2026-09-11 检查期以 9916 端口实测 2 秒可起、`/health` 返回 `{ok,model:bge-m3,dims:1024}`，随时可恢复**）——插件侧的「本机端点」判定已泛化为**任意 127.0.0.1/localhost 基址**（探测 `/health` → `/v1/models` → `/api/tags`），故自建桥 / LM Studio（:1234）/ 云端 OpenAI 兼容端点只需改 `embedBaseUrl`/`embedModel`/`embedApiKeyEnv`。零 token、离线；Ollama 常驻显存约 1GB（`OLLAMA_KEEP_ALIVE` 控制）。
 - **融合**：词法 top≥8 打底 → 行向量惰性补齐 → dense topK → **dense 0.7 ⊕ lexical 0.3**（min-max 归一）；**词法打底空 → 全量索引薄行池 dense 检索**（语义相似措辞不同的价值场景，不因词法空而漏召）。
-- **token/效率账**：每查询嵌入 ≤8 候选行 + 1 查询（本地零 token）；行向量缓存 `.vector-cache.jsonl`（行 hash 惰性增量）→ 首查全量 ~1.7s、缓存后 **200-300ms/查询**。
-- **降级闭环**：provider 不可用/超时/失败 → 自动降级纯词法，闭环不中断。
-- **模型选择说明**：q8 量化 = 原 cjs 服务 dtype 配置；嵌入模型 int8 检索损失 <5%（[HF 量化](https://huggingface.co/blog/embedding-quantization) 实证 94-100%），质量/资源/速度最佳平衡。
+- **token/效率账**：每查询嵌入 ≤48 候选行 + 1 查询（本地零 token）；行向量缓存 `.vector-cache.jsonl`（行 hash 惰性增量）→ 冷启（含模型加载）实测 **3.5s**、模型已载时 **~120ms/查询**。
+- **降级闭环**：provider 不可用/超时/失败 → 自动降级纯词法，闭环不中断（本机端点超时上限 30s、云端 8s——本地冷启动含模型加载，8s 会误判）。
+- **模型选择说明**：现行 = Ollama 官方库 `bge-m3`（1.2GB，自带量化）；原自建桥用 q8（= 原 cjs 服务 dtype 配置）。嵌入模型 int8 检索损失 <5%（[HF 量化](https://huggingface.co/blog/embedding-quantization) 实证 94-100%），质量/资源/速度平衡良好。
 - **缓存非事实源**：行文本是权威，`.vector-cache.jsonl` 可随时删除重建（行 hash 失效即重嵌）。
 
 ### 5.1 面板能力面（2026-09-10 U1-U6 后）

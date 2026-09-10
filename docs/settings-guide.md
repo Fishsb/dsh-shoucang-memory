@@ -70,7 +70,7 @@
 | 键 | 缺省 | 作用 |
 |---|---|---|
 | embedEnabled | true | 语义召回开关（关=纯词法） |
-| embedBaseUrl | http://127.0.0.1:9915/v1 | 本地 bge-m3 GPU 或云端 OpenAI 兼容（/v1 根） |
+| embedBaseUrl | http://127.0.0.1:11434/v1 | 本机 OpenAI 兼容 /v1 根（缺省 Ollama :11434，`ollama pull bge-m3`；自建桥 :9915 / LM Studio :1234 / 云端同键） |
 | embedModel | bge-m3 | 嵌入模型（1024d）；**换模型/换服务后点「清缓存重建」**（缓存带 model+baseUrl 指纹，自动失效不混用） |
 | embedApiKeyEnv | EMBED_API_KEY | 云端 key 所在环境变量名（本地免 key） |
 
@@ -100,7 +100,7 @@
 |---|---|---|
 | memoryHome | `~/.dsh/skills/managing-memory` | 记忆库根（固定全局，与 root 无关） |
 | suiteKnowledge | `~/.dsh/suite/knowledge` | 蒸馏事实源（固定全局） |
-| 容量红线 | MEMORY≤3000 / USER≤2000 / AGENT≤3000 字符 | write_gate 强制 |
+| 容量红线（缺省） | MEMORY≤5000 / USER≤3000 / AGENT≤3000 字符（2026-09-11 起默认；面板「容量门」capAgent/capUser/capMemory 可调，scheduler.json 为准） | write_gate 强制 |
 | 向量缓存 | `~/.dsh/suite/knowledge/.vector-cache.jsonl` | 行向量缓存（非事实源，可清重建） |
 
 ## 5. 已移除（2026-09-10 审查清理，防误导）

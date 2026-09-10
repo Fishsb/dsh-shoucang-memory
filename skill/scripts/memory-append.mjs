@@ -131,10 +131,17 @@ if (isNewIndexLine) {
 }
 
 // 容量门禁（主文档硬限；notes 不拦——全文件口径，同 write_gate）
-const LIMITS = { 'MEMORY.md': 3000, 'USER.md': 2000, 'AGENT.md': 2000 };
+// 2026-09-11：默认值与容量门同源（画像 AGENT/USER 3,000 · 记忆 MEMORY 5,000）；env SHOUCANG_CAP_* 可覆盖
+//（蒸馏/深睡调用 memory-append 时由宿主注入 = scheduler.json 实时容量门，见 src/distill.ts capEnv()）
+const CAP_ENV = {
+  'MEMORY.md': Number(process.env.SHOUCANG_CAP_MEMORY) || 5000,
+  'USER.md': Number(process.env.SHOUCANG_CAP_USER) || 3000,
+  'AGENT.md': Number(process.env.SHOUCANG_CAP_AGENT) || 3000,
+}
+const LIMITS = { 'MEMORY.md': 5000, 'USER.md': 3000, 'AGENT.md': 3000, ...CAP_ENV }
 if (isMain) {
   const chars = content.replace(/\s+/g, '').length;
-  const limit = LIMITS[norm] ?? 3000;
+  const limit = LIMITS[norm] ?? LIMITS['MEMORY.md'];
   if (chars > limit) { console.error(`exit=1 追加后超容量 ${chars}/${limit}（不写，需合并/下沉）`); process.exit(1); }
 }
 

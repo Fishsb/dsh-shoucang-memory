@@ -63,6 +63,9 @@ function execOut(cmd, args, opts) {
   catch (e) { return { code: e.status ?? -1, out: String(e.stdout || '') }; }
 }
 
+// 容量红线（= spec v20 默认：画像 3,000 · 记忆 5,000）——夹具尺寸一律由此推导，勿散落字面量
+const CAP = { 'MEMORY.md': 5000, 'USER.md': 3000, 'AGENT.md': 3000 }
+
 // 1) 真实目录体检 —— 冒烟：必须跑完并给出「档内退出码」。
 // 注：真实库是活的，会合法积累告警级问题（无指针索引行 / 未登记元数据主题 / 失效 archive mark 等），
 // 而体检退出码是 max 语义（5>4>3>2），故不能断言健康码 0/2 —— 那会随库增长而红（2026-09-10 实测 exit=5）。
@@ -74,7 +77,7 @@ const t0 = sanitizeIndexes(makeContainer());
 {
   const p0 = path.join(t0, 'MEMORY.md');
   const ls0 = fs.readFileSync(p0, 'utf8').split(/\r?\n/);
-  while (ls0.length > 3 && ls0.join('\n').replace(/\s/g, '').length > 0.8 * 3000) ls0.pop();
+  while (ls0.length > 3 && ls0.join('\n').replace(/\s/g, '').length > 0.8 * CAP['MEMORY.md']) ls0.pop();
   fs.writeFileSync(p0, ls0.join('\n'));
 }
 run('体检-净容器', 'node', [health, t0], [0]);
@@ -84,7 +87,7 @@ fs.rmSync(t0, { recursive: true, force: true });
 const t1 = sanitizeIndexes(makeContainer());
 const memPath = path.join(t1, 'MEMORY.md');
 const baseChars = fs.readFileSync(memPath, 'utf8').replace(/\s/g, '').length;
-const padChars = Math.max(0, Math.ceil(0.9 * 3000) - baseChars); // 夹取到 0：真实库可能已超 90%，原算式曾致 repeat(-58) 中止整套
+const padChars = Math.max(0, Math.ceil(0.9 * CAP['MEMORY.md']) - baseChars); // 夹取到 0：真实库可能已超 90%，原算式曾致 repeat(-58) 中止整套
 fs.appendFileSync(memPath, '\n[env] 测试填充（2026-09-01）[agent] → notes/env.md §填充：' + '填充内容'.repeat(Math.ceil(padChars / 4)));
 run('体检-超容量>85%', 'node', [health, t1], [2]);
 
@@ -93,12 +96,12 @@ const t2 = makeContainer();
 fs.appendFileSync(path.join(t2, 'MEMORY.md'), '\n[env] 悬空指针（2026-09-01）[agent] → notes/nofile.md');
 run('体检-悬空指针', 'node', [health, t2], [5]);
 
-// 门禁用例基座：**必须压到容量线以下**。真实 MEMORY.md 已近容量门（2026-09-11 实测 2935/3000 = 98%），
-// 直接在其上追加任意一行就会先撞 exit 1（容量），从而**掩蔽**用例真正要验的码（如悬空 exit 2）——
-// 与 ACT-028 修过的「夹具未隔离缺陷类」同一类问题，此处是**门禁侧的漏网**。
+// 门禁用例基座：**必须压到容量线以下**。真实 MEMORY.md 曾顶格（2026-09-11 改前实测 2935/3000 = 98%；
+// 容量门默认调为 5,000 后为 3109/5000 = 62%），直接在其上追加任意一行就会先撞 exit 1（容量），
+// 从而**掩蔽**用例真正要验的码（如悬空 exit 2）——与 ACT-028 修过的「夹具未隔离缺陷类」同一类问题，此处是**门禁侧的漏网**。
 const gateBase = (p) => {
   const lines = fs.readFileSync(path.join(dataDir, 'MEMORY.md'), 'utf8').split(/\r?\n/);
-  while (lines.length > 3 && lines.join('\n').replace(/\s/g, '').length > 0.8 * 3000) lines.pop();
+  while (lines.length > 3 && lines.join('\n').replace(/\s/g, '').length > 0.8 * CAP['MEMORY.md']) lines.pop();
   fs.writeFileSync(p, lines.join('\n'));
   return p;
 };
@@ -108,9 +111,15 @@ const g1 = gateBase(path.join(t2, 'gate1.txt'));
 run('门禁-正常', 'node', [gate, 'MEMORY.md', g1], [0]);
 
 // 5) 门禁-超容量 → exit 1
+// 追加量按实际基座推导：原固定 '内容'×1000=2,000 字在容量 5,000 下**不再必然越线**
+//（2026-09-11 实测基座 2,951 + 2,026 = 4,977 < 5,000 ⇒ 落成格式错 exit 4，用例假红）。
 const g2 = path.join(t2, 'gate2.txt');
 fs.copyFileSync(g1, g2);
-fs.appendFileSync(g2, '\n§\n' + '[env] 超量（2026-09-01）[agent]：' + '内容'.repeat(1000));
+{
+  const baseChars2 = fs.readFileSync(g2, 'utf8').replace(/\s/g, '').length;
+  const over = CAP['MEMORY.md'] - baseChars2 + 200; // 保证越过容量线 200 字（含追加行前缀）
+  fs.appendFileSync(g2, '\n§\n' + '[env] 超量（2026-09-01）[agent]：' + '内容'.repeat(Math.ceil(Math.max(0, over) / 2)));
+}
 run('门禁-超容量', 'node', [gate, 'MEMORY.md', g2], [1]);
 
 // 6) 门禁-悬空指针 → exit 2
@@ -555,6 +564,34 @@ try {
     (okH ? '' : ` [诊断: code1=${r1.code} code2=${r2.code} out1=${JSON.stringify(r1.out.slice(0, 120))}]`));
   fs.rmSync(th, { recursive: true, force: true });
 } catch (e) { fail++; console.log('❌ 真实读采集器（异常: ' + failMsg(e) + '）'); }
+
+// 30) 体检-画像行类（ACT-030 修复，v18）：画像行（`- … ← 源:`；写入口=蒸馏 profileUpdates / 深睡 profileOps）
+//     与索引行**并列**，不再是「格式违规」——体检不得再把它误判为「无标签 + 无指针」而假红 exit 5；
+//     但**缺源标记仍必须报**（否则等于放水，把无出处的自由文本当成合法记忆行）。
+//     断言用「AGENT.md 段的内容」（非退出码）：容器并入真实库的告警会按 max 语义压过期望码（套件既有结论）。
+try {
+  const tm = makeContainer();
+  const secOf = (out, name) => { const p = out.split(`=== ${name} (`)[1]; return p ? p.split('=== ')[0] : ''; };
+  const mhArgs = [path.join(tm, 'scripts', 'memory_health_check.mjs'), tm];
+  fs.writeFileSync(path.join(tm, 'AGENT.md'), [
+    '# AGENT 画像索引',
+    '',
+    '[原则] 夹具原则甲 · 概况 → notes/lessons.md §网络坑',
+    '',
+    '## 能力边界',
+    '- [边界] 夹具边界乙 · 不自重启 ← 源: notes/lessons.md §网络坑',
+  ].join('\n') + '\n');
+  const sec1 = secOf(execOut('node', mhArgs, { cwd: tm }).out, 'AGENT.md');
+  const withSrc = /画像行: 1 条（带源 1 \/ 缺源 0）/.test(sec1) && !/无指针索引行/.test(sec1) && /无标签: 0/.test(sec1);
+  fs.writeFileSync(path.join(tm, 'AGENT.md'), ['# AGENT 画像索引', '', '- [边界] 夹具边界乙 · 不自重启'].join('\n') + '\n');
+  const sec2 = secOf(execOut('node', mhArgs, { cwd: tm }).out, 'AGENT.md');
+  const noSrc = /画像行: 1 条（带源 0 \/ 缺源 1）/.test(sec2) && /画像行缺源标记: 1 条/.test(sec2);
+  const okCase = withSrc && noSrc;
+  if (okCase) pass++; else fail++;
+  console.log(`${okCase ? '✅' : '❌'} 体检-画像行类（带源不误判 / 缺源必报）` +
+    (okCase ? '' : ` [诊断: 带源=${withSrc} 缺源=${noSrc} sec1=${JSON.stringify(sec1.slice(0, 200))}]`));
+  fs.rmSync(tm, { recursive: true, force: true });
+} catch (e) { fail++; console.log('❌ 体检-画像行类（异常: ' + failMsg(e) + '）'); }
 
 console.log(`\n结果: ${pass} PASS / ${fail} FAIL`);
 process.exit(fail ? 1 : 0);
