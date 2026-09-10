@@ -348,6 +348,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     deepSleepProbeAfterMs: number
     deepSleepProbeWindowMs: number
   }
+  runDistillNow: () => Promise<{ ok: boolean; sessions: number; note?: string }>
 } {
   const SHORT = 'shoucang-scheduler'
   const logFile = join(dshHome(), 'super-injector', SHORT + '.log')
@@ -751,6 +752,15 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     const sid = agent.id as string
     if (distilling.has(sid)) return // 并发守卫：蒸馏在途（最长 10min）内再触发直接跳过（防双写/竞态）
     if (agent.status && agent.status !== 'idle') { log(`distill: ${sidShort(sid)} 已恢复活跃（status=${agent.status}），跳过`); return }
+    // 子代理守卫（2026-09-10 实态修复）：主会话派子代理执行并等待返回时，主会话 turn/end 已完成、status=idle、
+    // 但其子代理仍在 running——此时蒸馏只是把任务"做到一半"的内容切碎入册，且水位推进后不会重蒸。
+    // 处理：本轮推迟（不推水位、不消费），重新武装 idle 定时器；子代理完成时父会话会收到 followup 事件再触发。
+    if (hasActiveSubagents(sid)) {
+      audit({ sid, kind: 'distill-skip', reason: 'active-subagent', fclass: 'busy-subagent' })
+      log(`distill: ${sidShort(sid)} 有活跃子代理在跑（等待返回），推迟蒸馏（水位保留）`)
+      armIdleTimer(agent)
+      return
+    }
     distilling.add(sid)
     try {
       validateProvider()
@@ -1655,6 +1665,24 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
   let daemonParent: any = null
   const isValidParent = (p: any): boolean => !!p && typeof p === 'object' && !!p.options && !!p.ctx
   const rememberAgent = (a: any): void => { try { if (isValidParent(a)) lastParent = a } catch { /* */ } }
+  // 子代理感知（2026-09-10 实态修复：主会话"派子代理执行、等返回"期间被误判空闲/停滞）：
+  // DSH 子代理会话 header.origin='subagent' 且 header.parentSession=父会话 id；子代理在跑 = 父会话仍在干活。
+  const isSubagentAgent = (a: any): boolean => { try { return a?.session?.header?.origin === 'subagent' } catch { return false } }
+  const parentSidOf = (a: any): string | null => { try { const p = a?.session?.header?.parentSession; return typeof p === 'string' && p ? p : null } catch { return null } }
+  /** 该会话是否有运行中的子代理后代（沿 parentSession 上溯 ≤4 层；status==='running' 才算活跃） */
+  const hasActiveSubagents = (sid: string): boolean => {
+    try {
+      for (const a of ctx.agents.list() || []) {
+        if (!isSubagentAgent(a)) continue
+        let p = parentSidOf(a); let depth = 0
+        while (p && depth++ < 4) {
+          if (p === sid) return a?.status === 'running'
+          const pa = ctx.agents.get(p); p = pa ? parentSidOf(pa) : null
+        }
+      }
+    } catch { /* 查询失败=按无活跃子代理（保守不阻断） */ }
+    return false
+  }
   const pickParent = (): any | null => {
     try { for (const r of ctx.agents.roots() || []) if (isValidParent(r)) return r } catch { /* */ }
     try { for (const a of ctx.agents.list() || []) if (isValidParent(a)) return a } catch { /* */ }
@@ -2010,6 +2038,9 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     let probing = 0, stalled = 0, ended = 0, running = 0
     for (const [sid, rec] of sessions) {
       try { if (!ctx.agents.get(sid)) { sessions.delete(sid); continue } } catch { sessions.delete(sid); continue }
+      // 子代理守卫（2026-09-10 实态修复）：子代理在跑 = 父会话仍在干活——直接视为 running 且刷新活动，
+      // 既不发起"输出增长探测"（子代理写的是自己的转录，父转录不增长会被误判卡住），也不阻塞计数为停滞。
+      if (hasActiveSubagents(sid)) { rec.state = 'running'; rec.lastEventAt = now; running++; continue }
       // 状态机推进：running 且无事件 ≥ probeAfter → 发起探测；suspect → 下轮巡检复核（卡住需连续确认）
       if (config.deepSleepProbe) {
         if (rec.state === 'running' && now - rec.lastEventAt >= probeAfter) probeSession(rec)
@@ -2122,7 +2153,11 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       const agent = ctx.agents.get(sid)
       if (!agent) return
       const origin = agent.session && agent.session.header && agent.session.header.origin
-      if (origin === 'subagent') return
+      if (origin === 'subagent') { // 子代理 turn/end = 父会话仍在干活（2026-09-10）：刷新父会话活动，不武装蒸馏
+        const p = parentSidOf(agent)
+        if (p) noteEvent(p, false)
+        return
+      }
       noteEvent(sid, true) // 状态机：turn 完成 → ENDED（停滞计时起点）
       armIdleTimer(agent)
     } catch { /* 事件回调零抛出 */ }
@@ -2205,6 +2240,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
           const origin = a.session && a.session.header && a.session.header.origin
           if (origin === 'subagent') continue
           const sid = a.id
+          if (hasActiveSubagents(sid)) continue // 子代理在跑：任务未完，扫尾勿抢蒸（2026-09-10）
           if (distilling.has(sid)) continue
           const rec = sessions.get(sid)
           if (rec) {
@@ -2245,7 +2281,11 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       const a = ctx.agents.get(sid)
       if (!a) return
       const origin = a.session && a.session.header && a.session.header.origin
-      if (origin === 'subagent') return
+      if (origin === 'subagent') { // 子代理任意事件 = 父会话任务仍在推进（2026-09-10 修复停滞误判）
+        const p = parentSidOf(a)
+        if (p) noteEvent(p, false)
+        return
+      }
       noteEvent(sid, false)
       rememberAgent(a) // 深睡 parent 兜底缓存（任意根会话事件都刷新）
       if (config.activationShadow !== false || config.activationPrefetch) void activationStep(sid, event) // 路线④：影子默认开；prefetch 置位后决策通路照走（影子行 mode 区分），实际注入仍待影子校准（后续档）
@@ -2288,5 +2328,26 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     return () => { clearTimeout(t0); clearInterval(iv) }
   }, SHORT + ': distill sweep')
 
-  return { getDeepSleepStatus, runDeepSleepNow, getConfig }
+  // ── 手动蒸馏触发（2026-09-10：pending 回流闭环——参数调节「立即处理 pending」调此）──
+  const runDistillNow = async (): Promise<{ ok: boolean; sessions: number; note?: string }> => {
+    try {
+      const roots = (ctx.agents && typeof ctx.agents.roots === 'function') ? ctx.agents.roots() : []
+      let n = 0
+      for (const a of roots) {
+        try {
+          if (!a || !a.id || !a.session || typeof a.session.snapshotEvents !== 'function') continue
+          const origin = a.session && a.session.header && a.session.header.origin
+          if (origin === 'subagent') continue
+          if (distilling.has(a.id)) continue
+          await distillAgent(a).catch(() => { /* 单会话失败不阻断 */ })
+          n++
+        } catch { /* 单会话跳过 */ }
+      }
+      return { ok: true, sessions: n, note: n ? `蒸馏 ${n} 个根会话（含 pending 候选回流）` : '无可用根会话（活跃中/子代理）——等闲置自动蒸馏' }
+    } catch (e) {
+      return { ok: false, sessions: 0, note: String((e as Error)?.message || e).slice(0, 120) }
+    }
+  }
+
+  return { getDeepSleepStatus, runDeepSleepNow, getConfig, runDistillNow }
 }

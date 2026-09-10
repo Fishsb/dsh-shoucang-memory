@@ -30,6 +30,12 @@ export interface DeepSleepApi {
         deepSleepProbeAfterMs: number;
         deepSleepProbeWindowMs: number;
     };
+    /** 手动触发一轮蒸馏（2026-09-10：遍历根会话蒸馏，携带 pending 候选回流） */
+    runDistillNow: () => Promise<{
+        ok: boolean;
+        sessions: number;
+        note?: string;
+    }>;
 }
 /** 共享引用：请求时惰性读取（可能为 null=蒸馏器未启用/未就绪） */
 export declare const deepSleepShare: {

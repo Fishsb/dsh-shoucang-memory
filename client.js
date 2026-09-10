@@ -797,6 +797,28 @@
           dZone.appendChild(distillInput('idleWakeMs', '空闲唤醒 idleWakeMs', 'turn 结束后空闲满此时长才蒸馏（≥1 分钟，默认 10 分钟）', Math.round(val('idleWakeMs', 600000) / 60000), 'minutes', 1));
           dZone.appendChild(distillInput('minTurnChars', '本轮最少字符 minTurnChars', '本轮新增正文少于此值跳过蒸馏（水位仍推进；0=不设限，默认 200）', val('minTurnChars', 200), 'chars'));
           // 模型配置已移至上方「蒸馏/深睡模型」卡（2026-09-10）——此处不再重复 provider/model 文本输入
+          // 2026-09-10：立即处理 pending（project-defer 回流等）——手动触发一轮蒸馏
+          var pendRow = el('div', 'setting-item');
+          var pendInfo = el('div', 'setting-item-info');
+          pendInfo.appendChild(el('div', 'setting-item-name', '立即处理 pending 候选'));
+          pendInfo.appendChild(el('div', 'setting-item-desc', '手动触发一轮蒸馏——携带 pending/ 候选（如 project-defer 降级卡）重裁决入册。workspace 反解修复后 project 卡直写工作区 devref。'));
+          pendRow.appendChild(pendInfo);
+          var pendBtn = el('button', 'sc-btn subtle', '立即蒸馏一次');
+          pendBtn.type = 'button';
+          pendBtn.style.cssText = 'padding:5px 14px;font-size:12px;flex:none;';
+          pendBtn.addEventListener('click', function () {
+            pendBtn.disabled = true; pendBtn.textContent = '蒸馏中…（约 1-2 分钟）';
+            api('/distill/run', { method: 'POST', body: '{}' })
+              .then(function (rr) {
+                pendBtn.disabled = false; pendBtn.textContent = '立即蒸馏一次';
+                if (rr && rr.ok) status('✓ ' + (rr.note || '蒸馏完成'));
+                else status('⚠ ' + ((rr && rr.note) || '蒸馏未触发') + '——根会话活跃中会跳过，等闲置自动跑');
+              })
+              .catch(function (e) { pendBtn.disabled = false; pendBtn.textContent = '立即蒸馏一次'; fail(e); });
+          });
+          var pendCtl = el('div', 'setting-item-control'); pendCtl.appendChild(pendBtn);
+          pendRow.appendChild(pendCtl);
+          dZone.appendChild(pendRow);
           if (d && d.active === false) {
             dZone.appendChild(el('div', 'sc-desc', '⚠ 调度器未就绪：显示值为持久文件值，运行时值需插件激活后读取'));
           }

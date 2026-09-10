@@ -141,5 +141,10 @@ export declare function registerDistill(ctx: AppContext, config: DistillConfig):
         deepSleepProbeAfterMs: number;
         deepSleepProbeWindowMs: number;
     };
+    runDistillNow: () => Promise<{
+        ok: boolean;
+        sessions: number;
+        note?: string;
+    }>;
 };
 export {};
