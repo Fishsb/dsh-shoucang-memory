@@ -32,7 +32,10 @@ node skill/scripts/memory_health_check.mjs ~/.dsh/skills/managing-memory
 node D:/FF/.internal/arch/render/_tools/arch-check.mjs anchors .internal/arch/_anchors-SC-S07.json
 ```
 
-## 1. 第一步：工作树收干净（分组提交）
+## 1. 第一步：工作树收干净（分组提交）— ✅ **已执行（路线 A）**
+
+**结果**：`24f10dd fix(shoucang): 全模块链条审查修复（A/B/C 三级）+ 收口此前 ACT 批次`（49 files，+3045/−880；工作树残留 0）。
+提交前/后门禁各跑一遍：`typecheck` exit 0、`npm test` 40+30+18 PASS + `check-hardcode` ✅、架构档 9/9 新鲜。
 
 **问题**：工作树同时承载**两批**未提交改动——(a) 此前 ACT 批次（认知对照/分裂律/ACT-030），(b) 本轮审查修复。
 `src/distill.ts`、`src/panel.ts`、`src/activity.ts`、`src/treeops.ts` 等**同一文件内两批混杂**，因此**按文件无法干净切分**。
@@ -58,7 +61,15 @@ node D:/FF/.internal/arch/render/_tools/arch-check.mjs anchors .internal/arch/_a
 
 **提交后必做**：`git status --porcelain` 应为空；`npm test` 仍全绿；`nav_graph mode=arch` 应保持 `新鲜 9 / 过期 0`。
 
-## 2. 第二步：记忆库容量收口（`MEMORY.md` 98%）
+## 2. 第二步：记忆库容量收口（`MEMORY.md` 98%）— ✅ **已完成**
+
+**实测结果（2026-09-11）**：`MEMORY.md` **4988 → 2577 字符（非空白，98% → 52%）**、索引 **76 → 42 行**，体检 **exit=2 → exit=0**。
+做法：① 同族扇入合并（环境族 20→5、自托管族 14→4、Windows 族 12→2、假绿族 7→2、project-nav 3→1）；② 退役 `[lesson] DSH 开发知识迁移指引`（pmg 已移除）；
+③ **顺手修掉 gate 抓出的 6 处历史悬空 § 指针**（体检只查文件级，长期隐形）：`§记忆库结构设计`→`§记忆体系分工`、`release.md §发布链`→`flows.md §进度核查与发布自检`、`§记忆库规范/§指针非限制`→`§指针规范化与并发`、`tools.md §project-nav`→`lessons.md §行号与字节核验`、`§沙箱子进程`→`§沙箱与子进程`；
+④ 台账 `notes/INDEX.md` 41 行标 `merged 2026-09-11` + 1 行 `retired` + 补 10 行（体检「元数据表覆盖 ✅」）；
+⑤ 备份 `audit/backup-20260911-cap/{MEMORY.md.pre-consolidation, INDEX.md.pre-merge}`——**零物理删除，`notes/` 正文未动**。
+
+<details><summary>原方案（留档）</summary>
 
 现状：`MEMORY.md` **4908 / 5000（98%）**，体检退出码 2（>85% 需审计）；`notes/env.md` 9810 字、`lessons.md` 13129 字均已超 8000 警戒线。
 
@@ -75,7 +86,15 @@ node D:/FF/.internal/arch/render/_tools/arch-check.mjs anchors .internal/arch/_a
 
 **判据**：体检 `exit=0` 且 `MEMORY.md` ≤ 85%（≤4250 字符）；`npm test` 不回归。
 
-## 3. 第三步：`_memory/` 开发库 vs 生产库漂移
+</details>
+
+## 3. 第三步：`_memory/` 开发库 vs 生产库漂移 — ✅ **已执行（选项 1：明确分工）**
+
+**实测结果（2026-09-11）**：新增 `_memory/README.md` 写明「开发夹具区，**非生产库**（生产库 = `~/.dsh/skills/managing-memory`，由 `targets.memoryLibRoot()` 解析；`MEMORY_ROOT` 只影响脚本进程）」；
+退役层物理文件归档为 `_memory/audit/PRINCIPLES.md.retired-20260911`（v16 已把独立原则层并入 AGENT.md）；**零数据删除、零内容改动**。
+夹具可跑性实证：`MEMORY_ROOT=_memory node skill/scripts/memory_health_check.mjs` → **exit=0**（MEMORY 1083/5000）。
+
+<details><summary>原方案（留档）</summary>
 
 **判因**：插件读写唯一根 = `~/.dsh/skills/managing-memory`（`targets.memoryLibRoot()`）；`_memory/` 是**私人开发区**（gitignore）。
 实测两者 `MEMORY.md`/`USER.md`/`AGENT.md` + 6 个 notes **全不一致**，且 `_memory/PRINCIPLES.md` 是 v16 已退役的独立层（原则已并入 AGENT.md）。
@@ -89,6 +108,8 @@ node D:/FF/.internal/arch/render/_tools/arch-check.mjs anchors .internal/arch/_a
 | 3 合并 | 逐节比对手工并（`notes/INDEX.md` 元数据表按状态裁决） | 高 | 开发区有独有内容 |
 
 **判据**：`MEMORY_ROOT=<_memory> node skill/scripts/memory_health_check.mjs` 能跑通、`npm test` 全绿，且仓内文档不再暗示 `_memory/` 是生产库。
+
+</details>
 
 ## 4. 第四步：主线衔接（可选，非本次审查范围）
 
