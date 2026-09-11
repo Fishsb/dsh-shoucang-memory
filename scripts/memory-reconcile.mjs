@@ -6,7 +6,7 @@
 //   ② 产出健康度：上次成功写入 / 连续空转轮数 / 被拒率 / 材料量 / 下次可睡
 //   ③ 三层占比：P（always）/ R（任务门控）/ E（相关性门控）的条目数与注入占比
 // 用法: node scripts/memory-reconcile.mjs [--bank <库根>] [--json] [--out <文件>]
-import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs'
+import { readFileSync, existsSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -129,6 +129,32 @@ const shadow = {
   verdict: corrImpRel === null ? '样本不足（<8 对）' : Math.abs(corrImpRel) > 0.9 ? '⚠ importance 与 relevance 高度冗余（R-2：应删该分量）' : '✅ 分量不冗余（可进入 M5 切换评估）',
 }
 
+// ── ⑥ 笔记结构体检（**只报告建议，不自动改**——守「数据先问」：笔记是私人记忆数据）──
+//   实测发现（2026-09-11）：`notes/env.md` 的 `## DSH 环境` 下挂 10 个 `###`，其中 `Windows npm 执行策略`
+//   **同时**以独立 `##` 章节存在 ⇒ 主题重复 + 层级语义失真（`### 记忆库与内核概览` 显然不属于"环境"）。
+const notesDir = join(bank, 'notes')
+const norm = (s) => String(s).replace(/（[^）]*）/g, '').replace(/\([^)]*\)/g, '').trim()
+const notesHealth = { files: 0, chapters: 0, sections: 0, crowded: [], duplicateTopics: [] }
+try {
+  for (const f of readdirSync(notesDir).filter((x) => x.endsWith('.md'))) {
+    const t = readFileSync(join(notesDir, f), 'utf8')
+    const heads = t.split(/\r?\n/).map((l) => l.trim()).filter((l) => /^#{2,3} /.test(l))
+    if (!heads.length) continue
+    notesHealth.files++
+    const h2 = heads.filter((l) => l.startsWith('## ')).map((l) => norm(l.slice(3)))
+    const h3 = heads.filter((l) => l.startsWith('### ')).map((l) => norm(l.slice(4)))
+    notesHealth.chapters += h2.length
+    notesHealth.sections += h3.length
+    // 章节下 ### 数量（按出现顺序归章）
+    let cur = null
+    const perChapter = {}
+    for (const l of heads) { if (l.startsWith('## ')) { cur = norm(l.slice(3)); perChapter[cur] = 0 } else if (cur) perChapter[cur]++ }
+    for (const [k, n] of Object.entries(perChapter)) if (n >= 4) notesHealth.crowded.push({ file: `notes/${f}`, chapter: k, subSections: n })
+    // 同名主题既作 ### 又作 ## ⇒ 重复/错位
+    for (const s of h3) if (h2.includes(s)) notesHealth.duplicateTopics.push({ file: `notes/${f}`, topic: s })
+  }
+} catch (e) { notesHealth.scanError = String(e && e.message ? e.message : e).slice(0, 120) } // **不静默**：扫描失败必须可见（实测踩过 ReferenceError 被裸 catch 吞成"0 文件 = 健康"）
+
 const out = {
   window: { bank, stateRoot, ledgerPath, ledgerSince, ledgerRows: ledger.length },
   closure: { ok: closureOk, note: `自举基线（${baseline.at}）：此前历史行无回执，显式豁免；闭合只判定「基线之后」的未解释差异`, baseline, files: closure },
@@ -146,6 +172,7 @@ const out = {
   layers: { counts: layers, injectShare, profileCap: injectProfileRows },
   maturation,
   shadow,
+  notesHealth,
   samples: { ledgerRows: ledger.length, writeEvents: writeEvents.length, distillAuditRows: distillAudit.length, exemptionEvents: exemptionEvents.length },
 }
 const outFile = argOf('--out', '')
@@ -163,4 +190,8 @@ if (AS_JSON) {
   console.log(`     注入占比（估算）: P ${injectShare.P} 行（含画像 ≤${injectProfileRows}/档）· R 按任务命中 · E 按相关性 top-k`)
   console.log(`  ④ 成熟度: 小节 ${maturation.sections} 个 · 达 gate(≥${maturation.gate}) ${maturation.mature} 个${maturation.note ? '（' + maturation.note + '）' : ''}`)
   console.log(`  ⑤ 影子打分: ${shadow.rows} 行 / ${shadow.samples} 样本 · corr(importance,relevance)=${shadow.corrImpRel === null ? 'n/a' : shadow.corrImpRel.toFixed(3)} → ${shadow.verdict}`)
+  console.log(`  ⑥ 笔记结构体检（**建议，不自动改**——私人数据先问）：${notesHealth.files} 文件 / ${notesHealth.chapters} 章节 / ${notesHealth.sections} 子节`)
+  for (const c of notesHealth.crowded) console.log(`     ⚠ ${c.file} 的「${c.chapter}」下挂 ${c.subSections} 个 ###（疑似层级失真的收纳筐）`)
+  for (const d of notesHealth.duplicateTopics) console.log(`     ⚠ ${d.file}：「${d.topic}」既作 ### 又作 ##（主题重复/错位）`)
+  if (!notesHealth.crowded.length && !notesHealth.duplicateTopics.length) console.log('     ✅ 未发现层级错位或主题重复')
 }
