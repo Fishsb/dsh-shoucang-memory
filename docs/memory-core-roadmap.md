@@ -24,7 +24,7 @@
 | **M2 回执** | ✅ | 统一台账 `audit/ledger.jsonl` 落 `decision.ingest` 6 行；逐条裁决 + 并集总门 + 尾部贪心回退已实现（`perItemGate`） |
 | **M3 对账** | ✅ | `/reconcile` 出数：**上次有效深睡 2026-09-09 15:57 · 连续空转 5 轮 · 三层 P 12+2 / R 1 / E 44+7**；仓内与库内双布局逐字一致 |
 | **M4 影子打分 + 成熟度只记** | ✅（数据积累中） | `score-shadow.jsonl` 已产出（含 `old/imp/rec/v2`）；`maturation.jsonl` 29 小节 / 1 达 gate；对账器新增 ④⑤ 两段（含 R-2 相关性判据） |
-| **M5 切换** | 🟡 **已落地·默认未翻** | 开关齐备（`scoreWeights=v2` · `maturationEnforce=true` · `carriers.profile=0` 可回退）；**翻转需影子期证据**（R-2：corr(importance,relevance) ≤0.9） |
+| **M5 切换** | ✅ **已翻 scoreWeights=v2**（`maturationEnforce` 仍 false·有据） | 预注册判据 → 模拟测试（`shadow-sim`：α_imp 扫描选定 **0.25**，Jaccard 0.68 / corr −0.293）→ 走配置通道翻转并实测生效（影子日志 `mode:"v2"`）；**成熟度门拦阻率 96.6% → 明确不翻**。决策记录见 `docs/memory-m5-decision.md` |
 | **M6 治理收口** | ✅ | `spec §1.0` 载体契约与三层模型 + §5.5 `[性格]`/`[认知]`；`distill-contract` **v9**；本档进度表 |
 
 

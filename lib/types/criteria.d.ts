@@ -86,11 +86,11 @@ export declare const SURFACE_PARAMS: {
         };
     };
     readonly score: {
-        readonly mode: "legacy";
+        readonly mode: "v2";
         readonly alphaRel: 1;
-        readonly alphaImp: 0.35;
+        readonly alphaImp: 0.25;
         readonly alphaRec: 0.1;
-        readonly note: "v2.2 统一打分：score = α_rel·relevance(RRF) + α_imp·importance + α_rec·recency；mode=legacy 时用现行 relevance+activity（切换需影子期证据）";
+        readonly note: "v2.2 统一打分：score = α_rel·relevance(RRF) + α_imp·importance + α_rec·recency。**α_imp=0.25 由模拟证据选定**（scripts/shadow-sim.mjs 扫描：α=0.35→top-3 Jaccard 0.56 扰动过大；α=0.25→0.68 满足预注册判据 Jaccard≥0.6，且 corr(imp,rel)=−0.293 证明分量不冗余、扰动方向为『换进更重要条目』）。**mode=v2 已于 2026-09-11 翻转**（运行时开关 scheduler.scoreWeights=v2 同步）；回滚 = 两处同时回 legacy";
     };
     readonly recall: {
         readonly topK: 3;

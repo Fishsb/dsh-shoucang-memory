@@ -69,5 +69,19 @@ try {
   chk(true, '④生成投影与注册表一致')
 } catch { chk(false, '④投影过期（重跑 npm run gen:criteria）') }
 
+// ⑤ 写通道三方对齐（U3 教训机制化）：**每个 /set 白名单键都必须有映射**（SCHED_KEY 或 SUITE_BOOL 或 root-only）
+//    否则会出现「白名单放了但写入 400」这类实测缺陷（scoreWeights 就踩过）
+const schBlock = panel.slice(panel.indexOf('const SCHED_KEY'), panel.indexOf('const schedKey = SCHED_KEY'))
+const boolBlock = panel.slice(panel.indexOf('const SUITE_BOOL'), panel.indexOf('if (SUITE_BOOL[key])'))
+const allowedBlock = panel.slice(panel.indexOf('const allowed: Record<string, string[]> = {'), panel.indexOf('// 数值范围校验'))
+const allowedKeys = [...allowedBlock.matchAll(/'([A-Za-z_.]+)':\s*\[/g)].map((m) => m[1])
+const ROOT_ONLY = new Set(['boards.memory']) // boards.* 写 root YAML（设计如此）
+const unmapped = allowedKeys.filter((k) => !new RegExp(`'${k}':`).test(schBlock) && !new RegExp(`${k}: '`).test(boolBlock) && !new RegExp(`'${k}':`).test(boolBlock) && !ROOT_ONLY.has(k))
+chk(allowedKeys.length >= 10 && unmapped.length === 0, `⑤/set 白名单 ${allowedKeys.length} 键全部有写通道映射（未映射 ${unmapped.length}${unmapped.length ? ' → ' + unmapped.join(',') : ''}）`)
+const toggleBlock = panel.slice(panel.indexOf("route('/toggle'"), panel.indexOf("route('/set'"))
+const toggleKeys = [...toggleBlock.matchAll(/'([A-Za-z_.]+)'/g)].map((m) => m[1]).filter((k) => !['boards.memory', 'key', 'string', 'injection.hot_memory'].includes(k))
+const toggleUnmapped = ['injectRelevance', 'bankGit', 'mclEnabled', 'mclAudit', 'shadowScore', 'maturationEnforce'].filter((k) => !new RegExp(`${k}: '`).test(boolBlock) && !new RegExp(`'${k}':`).test(boolBlock))
+chk(toggleUnmapped.length === 0, `⑤/toggle 布尔键全部走 SUITE_BOOL（未映射 ${toggleUnmapped.length}${toggleUnmapped.length ? ' → ' + toggleUnmapped.join(',') : ''}）`)
+
 console.log(fail ? `\nFAIL（${fail} 项）` : '\nPASS（载体契约机检门全过）')
 process.exit(fail ? 1 : 0)

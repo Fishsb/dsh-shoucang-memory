@@ -80,7 +80,7 @@
 
 ## 生效权重与成熟度（v2.2）
 
-- 打分：mode=legacy · α_rel=1 / α_imp=0.35 / α_rec=0.1
+- 打分：mode=v2 · α_rel=1 / α_imp=0.25 / α_rec=0.1
 - 成熟度：A0=0.3 · step=0.2 · gate=0.5 · enforce=false（台账 audit/maturation.jsonl）
 - 触发：idleMs=10800000 · 新痕迹≥1 · 手动=true
 - P 层画像行上限：3 条/档（0=关闭）

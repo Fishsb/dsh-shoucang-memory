@@ -738,6 +738,9 @@ export function applyPanel(ctx: Context, config: Config): void {
       'mclBudgetChars': 'mclBudgetChars',
       'mclTopK': 'mclTopK',
       'recallFusion': 'recallFusion',
+      'scoreWeights': 'scoreWeights', // v2.2：打分公式开关（legacy|v2）
+      'injectProfileRows': 'injectProfileRows', // v2.2：P 层画像行每档上限（0=回滚）
+      'embedding.dimension': 'embedDim', // 历史遗留键：此前只登记白名单却无映射（实测 400）→ 补映射
     }
     const schedKey = SCHED_KEY[key]
     if (!schedKey) return sendJson(res, 400, { error: `key 无全局映射：${key}` })
