@@ -186,10 +186,22 @@ console.log(`\n② 现状判定（AST 结构断言）：`)
 for (const r of RULES) ok(r.pred(f0, skel), `${r.id} ${r.title}`, r.detail(f0, skel))
 
 console.log(`\n③ 反向证伪（每条规则的每个破坏变体，闸门都必须翻红）：`)
+// ⚠ 基线守卫（2026-09-12）：若某规则的**基线本身就是红的**，则「破坏后必须翻红」这条判据
+//   恒为真 ⇒ 本节空转全绿，读起来像"锁住了"，实际一个字都没验。这与「变体非空」是**两类**洞：
+//     · 变体非空 挡的是「replace 没命中」（变体没改到源码）
+//     · 基线守卫 挡的是「baseline 本就红」（改没改都红 ⇒ 判据失去分辨力）
+//   实测对照：文本版 `test-wiring-gate.mjs` 在 W4 锚点写错（`\}\.catch` 漏 `)`，命中 0）时，
+//   baseline 红，而 4 条「改坏必须翻红」全部 ✅ —— 就是这条洞。本件原来也有，现补。
 for (const r of RULES) {
+  const baseOk = r.pred(f0, skel)
   for (const [desc, fn] of r.breaks) {
     const mutated = fn(raw)
     if (mutated === raw) { ok(false, `${r.id} 变异未命中（源码已漂移，变体字符串失效）⇒ 按失败处理`, desc); continue }
+    if (!baseOk) {
+      ok(false, `${r.id} 基线已红 ⇒ 「破坏「${desc}」⇒ 翻红」判读无意义（先修基线再谈证伪）`,
+        '基线红时该判据恒真，本节会空转全绿')
+      continue
+    }
     const fm = analyse(mutated)
     const stillGreen = r.pred(fm, skeletonOf(mutated))
     ok(!stillGreen, `${r.id} 破坏「${desc}」⇒ 翻红`, stillGreen ? '破坏后闸门仍然绿 ⇒ 该规则没锁住' : '')
