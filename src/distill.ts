@@ -2604,7 +2604,16 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         // 子代理异常结束（stop=error/timeout/aborted）不算消化：回滚水位，同一批痕迹下轮可重试。
         // 2026-09-09 补缺：stop=completed 但 out=null（JSON 解析失败，如「Unexpected end of JSON input」实锤 ×2）
         // 同样不算消化——否则 done 分支推进水位，整批痕迹永久划出窗口（归纳结果整轮丢失）。
-        return (stop === 'completed' && out) ? 'done' : 'failed'
+        // 2026-09-11 补缺（静默丢料实锤）：**水位必须与「落地」解耦**——只按 stop=completed && out 判 done 会漏掉
+        //   「代理跑完但候选被门禁全数拒收」的轮次（app.gate 为 all-rejected / maturation-rejected / 尾部总门失败，
+        //   attempted>0 且 added=0）。此时判 done 会推进水位 → 被拒痕迹永久划出窗口 → 静默丢失（审计实证：
+        //   08:32:23.997Z attempted=3/added=0/all-rejected 与 08:48:10.129Z attempted=1/added=0/all-rejected，
+        //   两轮 stop=completed 即判 done 并滑窗，丢弃 4 条候选行）。故新增 landed 判据：
+        //   landed = added>0（有落地）| attempted===0（代理本就无新原则/路径提案，如纯 profileOps/pointerOps/
+        //   treeOps/forgetOps 轮或真·空轮——回滚会导致同一批痕迹无限重处理，必须仍判 done）；
+        //   仅当 attempted>0 && added===0（100% 拒收 = 材料损失）才判 failed，使水位回滚、同批痕迹下轮重试。
+        const landed = app.added > 0 || app.attempted === 0
+        return (stop === 'completed' && out && landed) ? 'done' : 'failed'
       } catch (e) {
         clearTimeout(timeout)
         if (useProvider) providerFailCount++
