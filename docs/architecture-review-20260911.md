@@ -98,4 +98,16 @@ TRIGGER.idleMs        → 0 处
 2. **再做 M**：F1-B 断言（把"写了不生效"变成机检红灯）+ F8 sha 断言 + F6 契约 —— 这三条都是**防止同类缺陷复发**的护栏，与我前几轮修掉的三次实测缺陷同族。
 3. **最后 B**（拍板后）：F1-A 让注册表成为唯一真源；F3-② 把自检移出水位路径。
 
+## 5. M 档已落地（2026-09-11 · 提交 `check-runner` 批次）——**F1 的范围被实测修正，比初判更广**
+
+| 项 | 落地 | 实测结果 |
+|---|---|---|
+| **F1-B 字段角色机检** | 新增 `scripts/check-field-usage.mjs`：注册表 `fieldRoles`（键=导出常量.字段，值=`runtime｜doc`）**双向校验**——声明 runtime 必须被消费、声明 doc 必须未被消费（标记说谎即红灯）。判据=**文件级**（常量被 import ∧ 文件内出现 `.字段` 属性访问形态），容别名（`s.alphaImp`）与 cast（`(CARRIERS as …).tags`），且**排除**常用词误判（`enforce`/`step` 作参数名时不再算消费——这是收紧前后各测一次才定准的） | **PASS（30 项角色与实现一致）**；同时暴露：**`L0` / `GATE` / `HEALTH` / `TRIGGER` 四个导出常量无人 import**、`SURFACE.*` 全块为 doc |
+| **F1 范围修正（重要）** | 初判"三处双源"（`SCORE.mode`/`SURFACE.injection`/`TRIGGER.idleMs`）**偏窄**：实测 **五块整体是 doc** —— `L0.*`（`evaluateL0` 用代码字面枚举，不读注册表取值域）、`SURFACE.*`（`recall.topK`/`fusion`/`threshold`/`rerank`/`mcl` 运行时真源在 `vec.ts`/`scheduler.ts`）、`GATE.*`、`HEALTH.*`、`TRIGGER.*`；真正 runtime 的只有 `SCORE.alphaRel/alphaImp/alphaRec`、`MATURATION.A0/step/gate`、`CARRIERS.tags` | ⇒ **B 档（F1-A）工作量较初判更大**：若要"注册表即真源"，需逐个接线（L0 取值域 → `evaluateL0`；SURFACE.recall/fusion → vec/scheduler；GATE/HEALTH → 两个 .mjs；TRIGGER → scheduler） |
+| **F8 部署面机检** | 新增 `scripts/check-deploy-sync.mjs`（同名件 sha1 比对；库根缺失 ⇒ **exit 3 诚实跳过**） | **当场抓到一次真实漂移**：`test-layering.mjs` 库内是**旧版**（我改过它却漏同步）⇒ 已同步，现 **一致 7 / 不一致 0** |
+| **F6 退出码契约统一** | 新增 `scripts/check-runner.mjs`（**唯一实现**契约 `0=pass · 3=skip(依赖缺失) · 其他=fail`），`npm test` 的检测段改为经它运行；`check:all` 便捷入口 | `npm test` 复跑：**5 pass / 0 skip** + 40+30+18+18 + check-hardcode ✅ |
+
+**这类护栏的价值已被证明**：F8 落地当天就抓出一次"库内跑旧逻辑"的漂移——此前只能靠人记得 `Copy-Item`。
+
+
 _建立 2026-09-11 · 依据：精确检索（注册表字段消费计数 / 路由计数 / 水位条件行号 / 退出码判读 / 部署面 sha / ADR 列表）+ 架构档与八份方案档通读。本报告只记录发现与建议，**除 F4 文档修正外未改任何代码**。_

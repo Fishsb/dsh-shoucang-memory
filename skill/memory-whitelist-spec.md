@@ -48,6 +48,8 @@
 - **写面清单（权限递减，全部留痕）**：① **面板**（用户显式操作 `/set|/toggle|/memory/*`）② **睡眠自检白名单窄动作**（仅 `rollback-scoreWeights`，依据 R-3；需显式开启 `selfCheckAutoRollback`；执行前备份 `scheduler.json.bak-selfcheck`，落台账 `adjust.rollback`）③ **手工编辑**（用户直接改文件）。三者写同一份 `~/.dsh/suite/scheduler.json`，**不得新增第四条写面**。
 - **深睡「done」的门槛 = 材料消化完成**（`stop==='completed' && out`），**不含落盘门禁的成败**：gate 全拒（`added=0`）仍算 done、**不回滚水位**（重跑只会再被拒一次并重复消耗 LLM）。落盘成败走**写入回执**（`audit/ledger.jsonl` 的 `type=write.consolidate`，含 `attempted/written/rejectLines/gateExit`），并与 `[flow] 深睡水位护栏` 并存：**护栏管"解析失败/异常 → failed 回滚"，回执管"写没写进去"**。
 - **自检触发范围**：**任何非 `no-traces`/`no-parent` 的深睡结束**都会跑睡眠期自检（含 `stop=error/aborted`——失败时更该看）；此外有定时（缺省 6h）与手动（`POST /selfcheck/run`）两条触发。三条路径共用同一实现并写同一条台账 `type=check.sleep`（`trigger` 字段区分）。
+- **检测件退出码契约（ADR-132 · 审查 F6）**：`0 = pass · 3 = skip（依赖缺失，不算失败）· 其他 = fail`。仓侧统一入口 = `node scripts/check-runner.mjs`（`npm test` 的检测段经它运行）；库侧 `sleep-selfcheck.mjs` 实现同一契约。
+- **字段角色契约（ADR-132 · 审查 F1）**：`engine/criteria.json#fieldRoles` 逐字段声明 `runtime`（**代码真消费**，改注册表即生效）或 `doc`（**仅文档/机检参考**，运行时真源在 `scheduler`/`vec` 等代码常量）。机检 `node scripts/check-field-usage.mjs` **双向校验**：声明 runtime 必须被消费、声明 doc 必须未被消费（标记说谎即红灯）。⚠ 当前 `L0`/`SURFACE`/`GATE`/`HEALTH`/`TRIGGER` 均为 doc——**改这些不生效**，要改行为请改对应的代码配置（详见审查报告 §5）。
 
 ### 1.1 判据分层（v2/ADR-122：**判据不是散文，是注册表**）
 
