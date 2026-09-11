@@ -52,6 +52,18 @@ let pass = 0, fail = 0
 const ok = (c, msg) => { if (c) { pass++; console.log(`  ✅ ${msg}`) } else { fail++; console.log(`  ❌ ${msg}`) } }
 const hits = (s, re) => (s.match(re) || []).length
 
+// ── 红因分桶（archi 2026-09-12「自伤型假红」）────────────────────────────────
+// 为什么必须分桶：三类红**方向不同**，混在一个 fail 计数里会把诊断指反——
+//   「结构」= 源码接线判据真的不成立 ⇒ 该改的是 **src/**；
+//   「变体失效」/「空转」= 本件自己失效（变体锚点漂移 / 基线已红）⇒ 该修的是 **本件**，
+//     此时源码一个字都没被证伪，exit=1 说的是"本件坏了"，读成"源码坏了"就是反的。
+// ⇒ 判别式：看红的来源是「结构断言」还是「本件自校验」；结构红=0 而自伤红>0 时显式告警。
+// 第四桶「漏网」= 变体把源码改坏了、本件却没翻红 ⇒ **这条接线根本没锁住**。
+// ⚠ 它的处置方向与「变体失效/空转」**相反**：后两者是"本件坏了、改本件"；漏网是"判据不够、去补判据/锁接线"。
+//   混桶会把"该去锁接线"误报成"该修本件"，故单列、且单独告警（archi 2026-09-12 第三亚型，team-lead 采纳）。
+const BUCKET = { 结构: 0, 变体失效: 0, 空转: 0, 漏检: 0 }
+const bad = (bucket, msg) => { fail++; BUCKET[bucket]++; console.log(`  ❌ [${bucket}] ${msg}`) }
+
 // 每条规则 = 一组「唯一性子断言」+ 一组「破坏变体」
 // 子断言格式：[正则, 期望命中次数, 说明]
 const RULES = [
@@ -168,24 +180,36 @@ for (const rule of RULES) {
   console.log(`\n[${rule.id}] ${rule.title}`)
   console.log(`  为什么锁它：${rule.why}`)
   const res = evalRule(src, rule)
-  for (const r of res) ok(r.pass, `${r.label}（命中 ${r.n}，期望 ${r.exp}）`)
+  for (const r of res) {
+    const label = `${r.label}（命中 ${r.n}，期望 ${r.exp}）`
+    if (r.pass) ok(true, label); else bad('结构', label)
+  }
   // 基线守卫：基线已红 ⇒ 下面的「改坏必须翻红」全部空转（任何变体都恒真），结论不可信
   const baseGreen = res.every((x) => x.pass)
-  ok(baseGreen, `${rule.id} 基线必须全绿（基线已红 ⇒ 反向证伪空转，下述变体一律判空转 FAIL）`)
+  if (baseGreen) ok(true, `${rule.id} 基线全绿（反向证伪有效）`)
+  else bad('空转', `${rule.id} 基线已红 ⇒ 反向证伪空转，下述变体一律判空转 FAIL`)
   // 反向证伪：把源码按「破坏变体」改写后，本规则**必须**翻红
   console.log(`  ── 反向证伪（改坏必须翻红）──`)
   for (const [name, mutate] of rule.breaks) {
     // 基线已红时不做变体判读：此时 stillGreen 恒 false ⇒ 会冒出一排假 ✅（archi 同型洞，614abbf）
-    if (!baseGreen) { ok(false, `基线已红，本变体判读无意义（空转）: ${name}`); continue }
-    const bad = mutate(src)
-    if (bad === src) { ok(false, `变体未生效（锚点字符串已漂移，该变体形同虚设）: ${name}`); continue }
-    const badRes = evalRule(bad, rule)
+    if (!baseGreen) { bad('空转', `基线已红，本变体判读无意义（空转）: ${name}`); continue }
+    const mutated = mutate(src)
+    if (mutated === src) { bad('变体失效', `变体未生效（锚点字符串已漂移，该变体形同虚设）: ${name}`); continue }
+    const badRes = evalRule(mutated, rule)
     const stillGreen = badRes.every((x) => x.pass)
-    ok(!stillGreen, `改坏后必须翻红: ${name}`)
+    if (stillGreen) bad('漏网', `改坏后**没**翻红（该接线根本没被本件锁住）: ${name}`)
+    else ok(true, `改坏后必须翻红: ${name}`)
   }
 }
 
 console.log('\n⚠ 本件是**文本级**门禁（非 G-A1 批准的 TS AST 版），只能证明「接线文本按预期形状存在」，' +
   '\n  **不能**证明接线真被执行：把目标行整行注释掉，本件仍会全绿。AST 版落地前请勿据此判定「接线已锁」。')
-console.log(`\n结果: ${pass} PASS / ${fail} FAIL`)
+// 自伤 = 变体失效 + 空转（该修**本件**）；漏网单列（该去**锁接线**）——两者处置方向相反，不得相加
+const selfHurt = BUCKET.变体失效 + BUCKET.空转
+console.log(`\n结果: ${pass} PASS / ${fail} FAIL（红因分解：结构 ${BUCKET.结构} · 变体失效 ${BUCKET.变体失效} · 空转 ${BUCKET.空转} · 漏网 ${BUCKET.漏网}）`)
+// ⚠ 防误读：结构红=0 而自伤红>0 ⇒ exit=1 说的是「本件坏了」，不是「源码接线坏了」，方向相反必须点破
+if (BUCKET.结构 === 0 && selfHurt > 0)
+  console.log('⚠ 本件的红**全部来自自伤/空转**：源码接线判据一个字都没被证伪 ⇒ 该修的是**本件**，不是源码')
+if (BUCKET.漏网 > 0)
+  console.log(`⚠ 有 ${BUCKET.漏网} 条变体改坏源码后本件**没**翻红 ⇒ 该接线根本没锁住：该去**补判据/锁接线**，不是修本件`)
 process.exit(fail === 0 ? 0 : 1)
