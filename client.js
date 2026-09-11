@@ -182,6 +182,15 @@
         '#sc-yaml:focus{border-color:var(--sc-accent);}',
         '.sc-statusbar{padding:8px 26px;border-top:1px solid var(--sc-border);font-size:11px;color:var(--sc-muted);',
         'min-height:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:var(--sc-bg1);}',
+        /* U1（ADR-122 UI）新增类：作用域/生效态徽章 · 折叠体 · 参数检索 —— 全部增量，不改既有 sc-* 语义 */
+        '.sc-ctrl-meta{display:flex;gap:6px;margin:4px 0 0;}',
+        '.sc-chip{font-size:11px;line-height:16px;padding:0 6px;border-radius:999px;border:1px solid var(--sc-border);color:var(--sc-muted);}',
+        '.sc-chip.warn{border-color:var(--sc-warn);color:var(--sc-warn);}',
+        '.sc-more-btn{margin:10px 0 4px;padding:6px 10px;border:1px solid var(--sc-border);border-radius:8px;color:var(--sc-muted);cursor:pointer;user-select:none;font-size:12px;}',
+        '.sc-more-btn:hover{background:var(--sc-hover);color:var(--sc-text);}',
+        '.sc-more-body{display:flex;flex-direction:column;}',
+        '.sc-search-bar{display:flex;align-items:center;gap:8px;margin:6px 0 2px;}',
+        '.sc-search-count{font-size:11px;color:var(--sc-faint);}',
 
         /* 旧板块列表/卡片头样式已删（2026-09-09 pmg 移除后清理：sc-board-list/sc-card/sc-card-head/
          * sc-card-name/sc-card-meta DOM 零使用；sc-card-body 保留——notes 小节折叠体在用） */
@@ -303,11 +312,54 @@
         // 遗留控件，其消费端（_meta/*.py）已不随包分发——保留只会误导用户"改了有效"。已移除。
       ];
 
+      /* ── U1（ADR-122 UI 优化）：作用域/生效态徽章 + 折叠 —— 全部为**增量**补节点/补类，
+       *    不改既有 sc-* 语义；回滚=还原 client.js（备份 client.js.pre-u1）。 ── */
+      // 控件元数据：写哪（作用域）+ 何时生效（生效态）。缺省 = 全局注入 / 即时。
+      var CTRL_META = {
+        'injection.hot_memory': { scope: '全局注入', effect: '即时' },
+        'boards.memory': { scope: '本 root', effect: '即时' },
+        'injection.level': { scope: '全局注入', effect: '即时' },
+        'injection.persona': { scope: '全局注入', effect: '即时' },
+        'injection.cap_agent': { scope: '写门容量', effect: '即时' },
+        'injection.cap_user': { scope: '写门容量', effect: '即时' },
+        'injection.cap_memory': { scope: '写门容量', effect: '即时' },
+        recallColdFactorPercent: { scope: '召回融合', effect: '即时' },
+        enableDeepSleep: { scope: '调度', effect: '需重载' },
+      };
+      function metaBadges(key) {
+        var m = CTRL_META[key] || { scope: '全局注入', effect: '即时' };
+        var box = el('div', 'sc-ctrl-meta');
+        box.appendChild(el('span', 'sc-chip', m.scope));
+        box.appendChild(el('span', 'sc-chip' + (m.effect === '需重载' ? ' warn' : ''), m.effect));
+        return box;
+      }
+      /** 折叠：把哨兵 mark 之后的所有兄弟节点收进可折叠体（零逐组改动 ⇒ 易回滚）
+       *  @param label 展开按钮文案；@param openDefault 是否默认展开 */
+      function scheduleFold(host, mark, label, openDefault) {
+        var nodes = [];
+        var n = mark.nextSibling;
+        while (n) { nodes.push(n); n = n.nextSibling; }
+        if (!nodes.length) { if (mark.parentNode) mark.parentNode.removeChild(mark); return; }
+        var body = el('div', 'sc-more-body');
+        nodes.forEach(function (x) { body.appendChild(x); });
+        host.removeChild(mark);
+        var open = !!openDefault;
+        var btn = el('div', 'sc-more-btn', open ? '收起 ▴' : label + ' ▾');
+        body.style.display = open ? '' : 'none';
+        btn.onclick = function () {
+          open = !open;
+          body.style.display = open ? '' : 'none';
+          btn.textContent = open ? '收起 ▴' : label + ' ▾';
+        };
+        host.appendChild(btn);
+        host.appendChild(body);
+      }
       function makeToggle(key, name, desc, initial, onToggle) {
         var item = el('div', 'setting-item');
         var info = el('div', 'setting-item-info');
         info.appendChild(el('div', 'setting-item-name', name));
         info.appendChild(el('div', 'setting-item-desc', desc));
+        info.appendChild(metaBadges(key)); // U1：作用域 + 生效态
         var sw = el('input', 'checkbox-container'); sw.type = 'checkbox'; sw.checked = !!initial;
         sw.onchange = function () { onToggle(key, sw); };
         item.appendChild(info); item.appendChild(sw);
@@ -318,6 +370,26 @@
         view.textContent = '';
         view.appendChild(el('div', 'sc-h1', '参数调节'));
         view.appendChild(el('div', 'sc-desc', '注入参数（全局，写 ~/.dsh/suite/scheduler.json）与运行时通道。改动即时写回（scheduler.json 备份先行）。面板 root 仅管理「配置原文」的 boards 显示项——注入配置已迁全局，不再随 root 切换变化。'));
+        /* U1：参数检索（前端过滤，零新端点）——匹配 name/desc/键名，隐藏不匹配行并报数 */
+        (function () {
+          var bar = el('div', 'sc-search-bar');
+          var q = el('input', 'sc-input'); q.type = 'search'; q.placeholder = '检索参数（名称 / 键名 / 说明）…';
+          var cnt = el('span', 'sc-search-count', '');
+          bar.appendChild(q); bar.appendChild(cnt);
+          q.oninput = function () {
+            var kw = String(q.value || '').trim().toLowerCase();
+            var items = view.querySelectorAll('.setting-item');
+            var hit = 0;
+            items.forEach(function (it) {
+              var t = (it.textContent || '').toLowerCase();
+              var show = !kw || t.indexOf(kw) > -1;
+              it.style.display = show ? '' : 'none';
+              if (show) hit++;
+            });
+            cnt.textContent = kw ? ('匹配 ' + hit + ' / ' + items.length + ' 项') : '';
+          };
+          view.appendChild(bar);
+        })();
         // 注入配置全局值（P1-2：global 优先；parsed 回落兼容旧 root YAML）
         var g = global || {};
         // R1：global 是最终生效值（scheduler ?? 默认），不回 root YAML——显示=实际注入值
@@ -344,7 +416,7 @@
           };
           slider.appendChild(cell);
         });
-        pItem.appendChild(pInfo); pItem.appendChild(slider);
+        pItem.appendChild(pInfo); pItem.appendChild(metaBadges('injection.persona')); pItem.appendChild(slider);
         view.appendChild(pItem);
         SWITCH_KEYS.forEach(function (it) {
           // P1-2：hot_memory 显示全局 scheduler.json 值（root YAML flags 已非真源）
@@ -379,7 +451,7 @@
           };
           lSlider.appendChild(cell);
         });
-        lItem.appendChild(lInfo); lItem.appendChild(lSlider);
+        lItem.appendChild(lInfo); lItem.appendChild(metaBadges('injection.level')); lItem.appendChild(lSlider);
         view.appendChild(lItem);
 
         // 注入容量预算（v16）：总预算 + 三板块字符上限（0=不裁）
@@ -398,7 +470,7 @@
               .catch(fail);
           };
           wrap.appendChild(inp); wrap.appendChild(unitEl);
-          item.appendChild(info); item.appendChild(wrap);
+          item.appendChild(info); item.appendChild(metaBadges(key)); item.appendChild(wrap);
           return item;
         }
         // 2026-09-10 用户拍板：三上限=记忆库「容量门」（蒸馏/扩增超限拒写），不裁注入——
@@ -1121,26 +1193,8 @@
         // v9：认知可视化——仅归档区（冷热分布 / 超 R 节 / 指针健康 已按 2026-09-11 用户要求移除）
         renderCognitionReport(view, 'memory');
 
-        /* ── v2（ADR-122）判据注册表卡：走**按需端点** /criteria，不新增常驻注入点（守「注入重复计费」红线） ── */
-        group('判据注册表（v2 · ADR-122）');
-        var critWrap = el('div', 'sc-mem-stats');
-        critWrap.appendChild(mkStat('判据源', '…', '读取中（engine/criteria-gate.json）'));
-        view.appendChild(critWrap);
-        api('/criteria').then(function (c) {
-          critWrap.textContent = '';
-          if (!c || !c.active) { critWrap.appendChild(mkStat('判据源', '未就绪', 'engine/criteria-gate.json 缺失（跑 npm run gen:criteria）')); return; }
-          var surf = c.surface || {};
-          var fus = surf.fusion || {};
-          var thr = surf.threshold || {};
-          var gate = c.rerankGate || {};
-          critWrap.appendChild(mkStat('注册表版本', String(c.version || '-'), '唯一事实源 skill/engine/criteria.json · 机检 npm run check:criteria'));
-          critWrap.appendChild(mkStat('融合 / 阈值', String(fus.kind || '-') + ' / ' + String(thr.metric || '-'), 'RRF(k=' + String(fus.k || '-') + ') 排序 · 绝对余弦 T_on=' + String(thr.tOn || '-') + ' 做阈值'));
-          critWrap.appendChild(mkStat('判据台账', String((c.ledger && c.ledger.rows) || 0) + ' 行', 'judgement-ledger.jsonl · 对账 node scripts/criteria-audit.mjs'));
-          critWrap.appendChild(mkStat('rerank 门', gate.ready ? '已达触发门' : '未达', '索引行 ' + String(gate.indexRows || 0) + ' / ' + String(gate.threshold || 200) + '（达门才评估引入 reranker）'));
-        }).catch(function () {
-          critWrap.textContent = '';
-          critWrap.appendChild(mkStat('判据源', '读取失败', 'GET /api/shoucang-panel/criteria'));
-        });
+        /* U1（ADR-122 UI）：判据注册表卡已**移出记忆板块** → 落在「运行」视图（renderRunExtras），
+         * 判因：记忆板块此前 11 组、判据卡又在最前，首屏过载（方案 §3 A5 自我修正）。 */
 
         /* ── §0 状态徽章行（U4，ui-impl-plan：后台进程状态可见——Cognee/dsh-auto-memory 借鉴；复用 sc-ds-badges） ── */
         var badges = el('div', 'sc-ds-badges');
@@ -1164,6 +1218,31 @@
           bPend.appendChild(el('span', null, '候选 ' + String(data.pending.count)));
           badges.appendChild(bPend);
         }
+        // U1（ADR-122 UI）：徽章扩容 3→7 —— 容量水位（同步）+ 认知环 / 判据台账 / 库版本（异步填充）
+        var memFile0 = null;
+        (data.indexes || []).forEach(function (f) { if (f.name === 'MEMORY.md') memFile0 = f; });
+        if (memFile0 && memFile0.cap) {
+          var pct0 = Math.round((memFile0.chars || 0) / memFile0.cap * 100);
+          var bCap = el('div', 'sc-ds-badge ' + (pct0 >= 85 ? 'stalled' : pct0 >= 60 ? 'suspect' : 'ended'));
+          bCap.appendChild(el('span', 'dot'));
+          bCap.appendChild(el('span', null, '记忆 ' + pct0 + '% · ' + (memFile0.chars || 0) + '/' + memFile0.cap));
+          badges.appendChild(bCap);
+        }
+        var bMcl = el('div', 'sc-ds-badge'); bMcl.appendChild(el('span', 'dot')); bMcl.appendChild(el('span', null, '认知环 …')); badges.appendChild(bMcl);
+        var bCrit = el('div', 'sc-ds-badge'); bCrit.appendChild(el('span', 'dot')); bCrit.appendChild(el('span', null, '判据台账 …')); badges.appendChild(bCrit);
+        var bGit = el('div', 'sc-ds-badge'); bGit.appendChild(el('span', 'dot')); bGit.appendChild(el('span', null, '库版本 …')); badges.appendChild(bGit);
+        var bText = function (b) { var s = b.querySelectorAll('span'); return s.length > 1 ? s[1] : null; };
+        api('/mcl/status').then(function (m) {
+          var t = bText(bMcl); if (t) t.textContent = '认知环 ' + (m && m.active ? ('快' + (m.fast || 0) + '/慢' + (m.slow || 0)) : '未装配');
+          bMcl.className = 'sc-ds-badge ' + (m && m.active ? 'ended' : 'stalled');
+        }).catch(function () { var t = bText(bMcl); if (t) t.textContent = '认知环 读取失败'; bMcl.className = 'sc-ds-badge stalled'; });
+        api('/criteria').then(function (c) {
+          var t = bText(bCrit); if (t) t.textContent = '判据台账 ' + (((c || {}).ledger || {}).rows || 0) + ' 行';
+          bCrit.className = 'sc-ds-badge ' + (c && c.active ? 'ended' : 'stalled');
+          var bg = (c || {}).bankGit || {};
+          var g = bText(bGit); if (g) g.textContent = '库版本 ' + (bg.commits || 0) + ' 提交';
+          bGit.className = 'sc-ds-badge ' + ((bg.commits || 0) ? 'ended' : 'stalled');
+        }).catch(function () { var t = bText(bCrit); if (t) t.textContent = '判据台账 读取失败'; bCrit.className = 'sc-ds-badge stalled'; });
         if (badges.childNodes.length) view.appendChild(badges);
 
         /* ── §1 蒸馏运行（等大一排；sparkline 保留在卡内） ── */
@@ -1295,6 +1374,11 @@
           view.appendChild(el('div', 'sc-desc', '共 ' + data.pending.count + ' 条（仅显示最近 ' + (data.pending.recent || []).length + ' 条）· 批准=确认有价值入册，忽略=移出队列'));
         }
 
+        /* U1：折叠哨兵 —— 之后的所有组（notes 详情 / 本地知识区 / 向量召回 / delta / 周增量）收进「展开更多」。
+         * 用 setTimeout(0) 自调度：本函数同步渲染完毕后才折叠，故无需改动任何后续分组代码（易回滚）。 */
+        var foldMark = el('div', 'sc-fold-mark');
+        view.appendChild(foldMark);
+        setTimeout(function () { scheduleFold(view, foldMark, '展开更多（notes 详情 / 本地知识区 / 向量 / 成长增量）'); }, 0);
         /* ── §5 notes 详情小节 ── */
         group('notes 详情小节');
         var nw = el('div', 'sc-notes-list');
@@ -1586,10 +1670,52 @@
         item.appendChild(info); item.appendChild(wrap);
         return item;
       }
+      /** U1（ADR-122 UI）：运行面扩展 —— 判据与对账 + 认知环（MCL）。
+       *  判因：这两块此前在记忆板块（判据卡在最前）→ 首屏过载；改落既有「运行」视图，数据走按需端点，零新增常驻注入。 */
+      function renderRunExtras(view) {
+        var group2 = function (t) { view.appendChild(el('div', 'sc-mem-group-title', t)); };
+        var mk = function (label, value, sub) {
+          var card = el('div', 'sc-mem-stat');
+          card.appendChild(el('div', 'sc-mem-stat-label', label));
+          card.appendChild(el('div', 'sc-mem-stat-value', value));
+          if (sub) card.appendChild(el('div', 'sc-mem-stat-sub', sub));
+          return card;
+        };
+        group2('判据与对账（v2 · ADR-122）');
+        var cw = el('div', 'sc-mem-stats');
+        cw.appendChild(mk('判据源', '…', '读取中'));
+        view.appendChild(cw);
+        api('/criteria').then(function (c) {
+          cw.textContent = '';
+          if (!c || !c.active) { cw.appendChild(mk('判据源', '未就绪', '跑 npm run gen:criteria')); return; }
+          var fus = ((c.surface || {}).fusion) || {};
+          var thr = ((c.surface || {}).threshold) || {};
+          var gate = c.rerankGate || {};
+          var bg = c.bankGit || {};
+          cw.appendChild(mk('注册表版本', String(c.version || '-'), '唯一事实源 criteria.json · 机检 check:criteria'));
+          cw.appendChild(mk('融合 / 阈值', String(fus.kind || '-') + ' / ' + String(thr.metric || '-'), 'RRF(k=' + String(fus.k || '-') + ') 排序 · 绝对余弦做阈值'));
+          cw.appendChild(mk('判据台账', String(((c.ledger || {}).rows) || 0) + ' 行', '对账 criteria-audit.mjs · 报告 audit/criteria-report-*.md'));
+          cw.appendChild(mk('rerank 门', gate.ready ? '已达' : '未达', '索引行 ' + String(gate.indexRows || 0) + ' / ' + String(gate.threshold || 200)));
+          cw.appendChild(mk('库版本', String(bg.commits || 0) + ' 提交', bg.lastAt ? ('最近 ' + fmtTime(bg.lastAt)) : '本地 git（可 diff/revert）'));
+        }).catch(function () { cw.textContent = ''; cw.appendChild(mk('判据源', '读取失败', '/criteria')); });
+        group2('认知环（MCL · 快/慢双通道）');
+        var mw = el('div', 'sc-mem-stats');
+        mw.appendChild(mk('状态', '…', '读取中'));
+        view.appendChild(mw);
+        api('/mcl/status').then(function (m) {
+          mw.textContent = '';
+          if (!m || !m.active) { mw.appendChild(mk('状态', '未装配', 'mclEnabled=false 或未注入')); return; }
+          mw.appendChild(mk('状态', m.enabled ? '启用' : '停用', '阈值 ' + m.familiarThreshold + ' · 材料预算 ' + m.budgetChars + ' 字符'));
+          mw.appendChild(mk('通道计数', '快 ' + (m.fast || 0) + ' / 慢 ' + (m.slow || 0), '末次 ' + (m.lastChannel || '-') + ' · sim ' + (m.lastSim != null ? m.lastSim : '-')));
+          mw.appendChild(mk('注入', String(m.injected || 0) + ' 次', 'Nudge ' + (m.nudged || 0) + ' 次 · 步数 ' + (m.steps || 0)));
+        }).catch(function () { mw.textContent = ''; mw.appendChild(mk('状态', '读取失败', '/mcl/status')); });
+      }
+
       function renderDeepSleep(view) {
         view.textContent = '';
         view.appendChild(el('div', 'sc-h1', '深度睡眠 · 会话状态机'));
         view.appendChild(el('div', 'sc-desc', '全部根会话停滞 ≥ 阈值后自动回想当天记忆、提炼原则层 PRINCIPLES.md。状态机区分「正常长任务 / 卡住 / 异常退出」：仅长任务正在推进才拦睡，其余正常睡。'));
+        renderRunExtras(view); // U1：判据与对账 + 认知环（从记忆板块移入运行面）
         api('/deepsleep').then(function (r) {
           if (!r.active) {
             view.appendChild(el('div', 'sc-desc', '深度睡眠归纳器当前未激活（蒸馏器 enableDistill 未启用或尚未就绪）。'));
