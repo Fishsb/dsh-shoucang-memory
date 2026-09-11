@@ -152,8 +152,52 @@ ok(idxQ.includes('[路径]') || idxQ.includes('[flow]'), 'A6 有查询时 gated 
 const rowsQ = (idxQ.match(/^-\s*\[/gm) || []).length
 ok(rowsQ <= 10, `A6b 按需进入的 gated 行受档位 cap 约束（实测 ${rowsQ} 行 ≤ smart cap 10）`)
 
+// A7：**全 gated 夹具**（= 真实库形状）——MEMORY.md 里**一条 P/always 都没有**。
+//   背景：这是本次修复自身引入的**回归**（2026-09-11 上机前代码审查发现，未上机即拦下）：
+//   `panel.ts` 的按需通道守卫原为 `if (q && relOn && allMem.length)`，而 `allMem` 在分层过滤后
+//   只剩 P/always 行 ⇒ 真实库 MEMORY.md（48 条索引行**全是 E 层 gated**）下 allMem 恒为空
+//   ⇒ 守卫恒假 ⇒ 相关性通道（契约指定的 gated 渲染器）**永不执行** ⇒ gated 有无查询都取不到
+//   ——正是 A6 要拦的「过度过滤」。**A6 夹具的 MEMORY.md 含 P 层行 ⇒ allMem 非空 ⇒ 守卫通过 ⇒ A6 假绿**。
+//   A7 补的就是这个盲区：把夹具摆成真库形状（全 gated），守卫再写错就会在这里红。
+const fixture2 = mkdtempSync(join(tmpdir(), 'sc-carrier-fixture2-'))
+mkdirSync(join(fixture2, 'notes'), { recursive: true })
+mkdirSync(join(fixture2, 'audit'), { recursive: true })
+writeFileSync(join(fixture2, 'MEMORY.md'), [
+  '[路径] R层任务路径 · 描述 → notes/flows.md §rA',
+  '[经验] E层情境经验 · 描述 → notes/lessons.md §eA',
+  '[tool] E层工具经验 · 描述 → notes/tools.md §eB',
+  '[flow] E层流程经验 · 描述 → notes/flows.md §eC',
+].join('\n') + '\n', 'utf8')
+writeFileSync(join(fixture2, 'USER.md'), '- [边界] 用户边界 ← 源: 会话\n', 'utf8')
+writeFileSync(join(fixture2, 'AGENT.md'), '- [性格] agent性格 ← 源: 会话\n', 'utf8')
+writeFileSync(join(fixture2, 'notes', 'INDEX.md'), '# notes/INDEX.md\n', 'utf8')
+
+process.env.MEMORY_ROOT = fixture2
+const mod2 = await import(pathToFileURL(panelJs).href + '?v=all-gated') // 破 ESM 缓存，让新 env 生效
+const hooks2 = []
+const ctx2 = {
+  webServer: { register: () => () => {} },
+  effect: (cb) => { try { cb() } catch { /* 非注入路径异常忽略 */ } return () => {} },
+  logger: { info: () => {}, warn: () => {} },
+  systemPrompt: { context: (h) => { hooks2.push(h); return () => {} } },
+}
+mod2.applyPanel(ctx2, { state_path: join(fixture2, 'state.json') })
+const hook2 = hooks2.find((h) => h && h.name === 'shoucang-hot-memory')
+const idx2 = (String(hook2 ? hook2.text(undefined) || '' : '')).split('知识索引（MEMORY.md')[1] || ''
+const leak2 = gTags.filter(([t]) => idx2.includes(`[${t}]`)).map(([t]) => t)
+ok(leak2.length === 0, `A7-1 全 gated 夹具：无查询时恒定注入面 0 条 gated（实测泄漏 ${leak2.length}：${leak2.join(',') || '无'}）`)
+// A7-2 = 回归点：有查询时 gated 必须仍能经相关性通道现身（守卫 `&& allMem.length` 会让它恒为 0）
+const ctxQ2 = { agent: { session: { snapshotEvents: () => [{ type: 'user/message', data: { content: [{ text: '任务路径 工具经验 流程经验' }] } }] } } }
+const idx2q = (String(hook2 ? hook2.text(ctxQ2) || '' : '')).split('知识索引（MEMORY.md')[1] || ''
+const gated2q = gTags.filter(([t]) => idx2q.includes(`[${t}]`)).map(([t]) => t)
+ok(gated2q.length > 0, `A7-2 全 gated 夹具：有查询时 gated 仍能经相关性通道现身（实测 ${gated2q.join(',') || '无'}）——「&& allMem.length」回归护栏`)
+// A7-3：回补的 gated 行仍受档位 cap 约束（防「能取回」滑向「无上限铺开」，与 A6b 同口径）
+const rows2q = (idx2q.match(/^-\s*\[/gm) || []).length
+ok(rows2q > 0 && rows2q <= 10, `A7-3 全 gated 夹具：回补的 gated 行受档位 cap 约束（实测 ${rows2q} 行，须 1~10）`)
+
 // ── 4. 结论 ──
 rmSync(fixtureRoot, { recursive: true, force: true })
+rmSync(fixture2, { recursive: true, force: true })
 console.log('')
 console.log('──────────────────────────────────────────────────────────')
 console.log(`结果: ${pass} PASS / ${fail} FAIL`)
