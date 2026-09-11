@@ -168,6 +168,8 @@ const hooks = () => ({ audit: () => {}, log: () => {} })
 {
   const root = mk()
   await applyTreeOps(root, [{ action: 'rename', file: 'lessons.md', oldTitle: '甲', newTitle: '甲新' }], hooks())
+  // 限定**已定位到小节**的成功分支（!x.outcome）：未定位（文件缺失/标题未找到/冲突）的归档记录
+  //   没有 headingOriginal/headingNew，若不限定，后人会补出永远红的断言（archi 2026-09-12 指出）
   const rec = recs(root).find((x) => x.action === 'rename' && !x.outcome)
   ok('R6 成功归档存在', !!rec)
   ok('R6 带 headingOriginal（原标题行原文）', rec && rec.headingOriginal === '## 甲', rec && rec.headingOriginal)
@@ -235,16 +237,21 @@ const hooks = () => ({ audit: () => {}, log: () => {} })
     `applied=${rA.applied} skipped=${rA.skipped} reasons=${JSON.stringify(recs(rootA).map((x) => x.reason))}`)
   // M6-b drop 未找到
   const rootB = mk()
+  const beforeB = readNote(rootB)
   const rB = await applyTreeOps(rootB, [{ action: 'merge', file: 'lessons.md', keepTitle: '甲', dropTitle: '查无此节' }], hooks())
   ok('M6-b drop 未找到 ⇒ skipped 且 reason 精确',
     rB.applied === 0 && rB.skipped === 1 && recs(rootB).some((x) => x.reason === 'drop 未找到/歧义'),
     `reasons=${JSON.stringify(recs(rootB).map((x) => x.reason))}`)
+  // archi 2026-09-12 要求：每条 skipped 都得带字节不变（9 条 skipped 断言原先只有 5 处带）
+  ok('M6-b 文件字节不变', readNote(rootB) === beforeB)
   // M6-c keep 未找到
   const rootC = mk()
+  const beforeC = readNote(rootC)
   const rC = await applyTreeOps(rootC, [{ action: 'merge', file: 'lessons.md', keepTitle: '查无此节', dropTitle: '甲' }], hooks())
   ok('M6-c keep 未找到 ⇒ skipped 且 reason 精确',
     rC.applied === 0 && rC.skipped === 1 && recs(rootC).some((x) => x.reason === 'keep 未找到/歧义'),
     `reasons=${JSON.stringify(recs(rootC).map((x) => x.reason))}`)
+  ok('M6-c 文件字节不变', readNote(rootC) === beforeC)
   // M6-d notes 文件缺失
   const rootD = mkdtempSync(join(tmpdir(), 'treeops-rm-mnonotes-'))
   roots.push(rootD)
