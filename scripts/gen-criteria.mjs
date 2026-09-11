@@ -119,7 +119,16 @@ const buildMd = () => {
  *   而 prompt 判据段里"30"出现 0 次 ⇒ **模型不知道有上限**。此处让约束进 prompt，门与 prompt 共用同一事实源。 */
 function formatConstraintLine() {
   const p = reg.ingest.criteria.find((c) => c.id === 'ingest.format.index-line').params
-  return `- **索引行格式硬门（写门 exit=4，超出即整条被拒）**：概况段普通行 ≤${p.summaryMax} 字、\`[路径]\` 概要 ≤${p.pathSummaryMax} 字；主题段 ≤${p.topicMax} 字为**软提示不拦截**；须含中间点「·」与 \`→ notes/… §…\` 指针，概况中禁写日期。**若内容压不进上限：把细节写进 notes 小节，索引行只留 ≤${p.summaryMax} 字概况**——切勿硬塞长句（长句会被整条丢弃，等于白提炼）。`
+  // **逐参数派生**（每个 hard 参数都对应一句 prompt 约束）——实测教训：只写"字数"漏了 forbidArrowInPath，
+  //   导致 [路径] 行因步骤内嵌 `→` 被整条拒（2026-09-11 深睡实测 gateExit=4 复现）。
+  const parts = []
+  parts.push(`概况段普通行 ≤${p.summaryMax} 字、\`[路径]\` 概要 ≤${p.pathSummaryMax} 字（超出即整条被拒）`)
+  parts.push(`主题段 ≤${p.topicMax} 字（软提示，不拦截）`)
+  if (p.forbidArrowInPath) parts.push('**`[路径]` 行的步骤内禁写 `→`**（会与 `→ notes/` 指针箭头歧义）——步骤一律用 ①②③ 串联')
+  if (p.requireMiddleDot) parts.push('必须含中间点「·」分隔主题与概况')
+  if (p.requirePointer) parts.push('必须以 `→ notes/<文件>.md §<小节>` 结尾')
+  if (p.banDate) parts.push('概况中禁写日期戳')
+  return `- **索引行格式硬门（写门 exit=4，违反任一条即整条被拒）**：${parts.join('；')}。**若内容压不进上限：把细节写进 notes 小节，索引行只留 ≤${p.summaryMax} 字概况**——切勿硬塞长句（长句会被整条丢弃，等于白提炼）。`
 }
 
 /** C · 脚本面扁平参数 */

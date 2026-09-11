@@ -172,6 +172,29 @@ TRIGGER.idleMs        → 0 处
 - **假阳性**：`/mcl/status` 未暴露 `topK`，我的测试脚本据此误判"`surface.mcl.topK` 未生效"——实查 `scheduler.ts:646 topK: Number(config.mclTopK)` ⇒ **早已生效**。已给端点补 `topK` 字段（提升可观测性），复跑后 7/7 注册表↔运行时一致。
 - **护栏覆盖缺口（已修）**：`check-deploy-sync` 此前只比对 `scripts/` ↔ 库，**漏了 `skill/scripts/`**（技能本体脚本）——本次 `memory_write_gate.mjs` 漏同步正是靠端到端验证才暴露。扩展后立刻抓到 2 件漂移（`skill/scripts/memory_write_gate.mjs` + 自身副本），现 **一致 24 / 未部署 12 / 不一致 0**。
 
+### 7.6 **修复效果实测（决定性）**：真实深睡三轮对比
+
+手动触发真实深睡（`POST /deepsleep/trigger`，每轮均 `HTTP 200 result=done`，耗时约 10s）：
+
+| 轮次 | 改动 | attempted | added | gate / 拒因 |
+|---|---|---|---|---|
+| 08:32 | **修复前** | 3 | **0** | `all-rejected` · 概况 31/38/36 字（超 30 字硬门） |
+| 08:48 | 仅把**字数**约束注入 prompt | 1 | **0** | `all-rejected gateExit=4` · **`[路径]` 步骤内嵌 `→` 与指针箭头歧义**（我漏派生了 `forbidArrowInPath`） |
+| **08:50** | **全参数派生**（`forbidArrowInPath`/`requireMiddleDot`/`requirePointer`/`banDate`/字数 全覆盖） | 1 | **1** | **`pass` gateExit=0** ✅ |
+
+**落盘核验（不是"接口成功"）**：① `AGENT.md` 实际含新行 `[路径] 插件运行时注入 · … ①…⑤ → notes/env.md §插件注入`（18 行 / 1053 字符）；② 台账 `write.consolidate` 最新 `verdict=written written=1 reason=pass gateExit=0`；③ **库 git 自动快照** `839b281 memory: deep-sleep @ 2026-09-11T08:50:59`；④ 对账健康度：**"上次有效深睡"由 2026-09-09 更新为 08:50:59**、连续空转 **0** 轮、R 层 +1（新写的 `[路径]` 行）；⑤ **下一轮注入面已可见该行**（闭环：prompt 约束 → 模型合规产出 → 写门通过 → 落盘 → 注入可见）。
+
+### 7.7 又两个发现（其一为测试侧假阳性，其一为真缺陷）
+
+| # | 结论 | 证据 |
+|---|---|---|
+| 4 | **撤回（测试侧假阳性）**：库 git "dubious ownership 失败" | 我的核验用裸 `git -C`；插件 `bank-git.mjs:22/24` **本就带 `-c safe.directory`** ⇒ 库 git 一直正常，且已有本轮快照 `839b281` |
+| **5** | **真缺陷（已修）**：对账"闭合 ⚠ 有差异"**报警疲劳** | 台账窗口覆盖不到 M2 之前的历史行 ⇒ 差异恒在、闭合判定失真。改为**自举基线**（首次运行落 `audit/row-baseline.json`）+ 只判定"基线之后"的**未解释差异** ⇒ 现 **✅ 未解释差异 0**，历史行显式豁免 |
+
+### 7.8 实测修正了自己审查结论的分级
+**F3-② 降级 🟡中 → 🟢低**：原按 `sleep-selfcheck` 超时上限 180s 估计"拖长深睡尾路径"，**实测 6 项检测仅 0.9 秒**（79 行库规模）⇒ 影响可忽略，不必为它改时序。
+
+
 
 
 

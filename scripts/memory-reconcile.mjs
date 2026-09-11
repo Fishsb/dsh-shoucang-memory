@@ -33,24 +33,39 @@ const carriers = (() => {
   return { tags: {} }
 })()
 
-// ── ① 行数闭合 ──
+// ── ① 行数闭合（**自举基线**：台账窗口只覆盖 M2 之后，历史行必须显式豁免，否则永远报差异 ⇒ 报警疲劳）──
+//   机制：首次运行记录 `audit/row-baseline.json`（各主档当时的行数 + 时间）；此后
+//   期望 = 基线 + **基线之后**的台账写入累计；`未解释差异 = 实际 − 期望`，只有它 ≠ 0 才算真问题。
 const writeEvents = ledger.filter((r) => String(r.type || '').startsWith('write.'))
 const exemptionEvents = ledger.filter((r) => String(r.type || '').startsWith('write.') && r.verdict && r.verdict !== 'written')
 const files = ['MEMORY.md', 'USER.md', 'AGENT.md']
-const closure = files.map((f) => {
-  let idx = 0, prof = 0
+const countRows = (bankDir, f) => {
   try {
-    const lines = readFileSync(join(bank, f), 'utf8').split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
-    idx = lines.filter((l) => /^\[.+\]/.test(l)).length
-    prof = lines.filter((l) => /^-\s/.test(l) && /←\s*源:/.test(l)).length
-  } catch { /* 缺文件 */ }
-  const written = writeEvents.filter((r) => String(r.target || '').includes(f)).reduce((n, r) => n + Number(r.written || 0), 0)
-  const attempted = writeEvents.filter((r) => String(r.target || '').includes(f)).reduce((n, r) => n + Number(r.attempted || 0), 0)
-  return { file: f, currentRows: idx + prof, indexRows: idx, profileRows: prof, writtenSinceLedger: written, attemptedSinceLedger: attempted, delta: (idx + prof) - written }
+    const lines = readFileSync(join(bankDir, f), 'utf8').split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+    return { idx: lines.filter((l) => /^\[.+\]/.test(l)).length, prof: lines.filter((l) => /^-\s/.test(l) && /←\s*源:/.test(l)).length }
+  } catch { return { idx: 0, prof: 0 } }
+}
+const baselinePath = join(auditDir, 'row-baseline.json')
+let baseline = null
+try { if (existsSync(baselinePath)) baseline = JSON.parse(readFileSync(baselinePath, 'utf8')) } catch { /* 损坏则重建 */ }
+if (!baseline) {
+  const snap = { at: new Date().toISOString(), note: '行数闭合的自举基线：此前的历史行无写入回执（M2 之前），显式豁免；此后按「基线 + 台账写入累计」判定', files: {} }
+  for (const f of files) { const c = countRows(bank, f); snap.files[f] = c.idx + c.prof }
+  try { mkdirSync(dirname(baselinePath), { recursive: true }); writeFileSync(baselinePath, JSON.stringify(snap, null, 2), 'utf8') } catch { /* 静默 */ }
+  baseline = snap
+}
+const baselineMs = Date.parse(baseline.at || '') || 0
+const closure = files.map((f) => {
+  const c = countRows(bank, f)
+  const written = writeEvents.filter((r) => String(r.target || '').includes(f) && Date.parse(r.at || '') >= baselineMs).reduce((n, r) => n + Number(r.written || 0), 0)
+  const attempted = writeEvents.filter((r) => String(r.target || '').includes(f) && Date.parse(r.at || '') >= baselineMs).reduce((n, r) => n + Number(r.attempted || 0), 0)
+  const base = Number(baseline.files?.[f] ?? 0)
+  const expected = base + written
+  return { file: f, currentRows: c.idx + c.prof, indexRows: c.idx, profileRows: c.prof, baselineRows: base, writtenSinceBaseline: written, attemptedSinceBaseline: attempted, unexplained: (c.idx + c.prof) - expected }
 })
 const ledgerSince = ledger.length ? ledger[0].at : null
-// 无写事件 ⇒ 无法对账（M2 之前的写入没有回执）→ 报「样本不足」而不是「有差异」
-const closureOk = writeEvents.length ? closure.every((c) => c.delta === 0) : null
+// ok ⇔ 所有文件的**未解释差异为 0**（历史行已由基线显式豁免）
+const closureOk = closure.every((c) => c.unexplained === 0)
 
 // ── ② 产出健康度 ──
 const dsRows = distillAudit.filter((r) => r.kind === 'deep-sleep')
@@ -116,7 +131,7 @@ const shadow = {
 
 const out = {
   window: { bank, stateRoot, ledgerPath, ledgerSince, ledgerRows: ledger.length },
-  closure: { ok: closureOk, note: 'write.* 回执仅覆盖 M2 之后的窗口；更早历史不可对账（显式豁免）', files: closure },
+  closure: { ok: closureOk, note: `自举基线（${baseline.at}）：此前历史行无回执，显式豁免；闭合只判定「基线之后」的未解释差异`, baseline, files: closure },
   health: {
     lastSuccessfulWrite: lastOk,
     deepSleepRounds: dsRows.length,
@@ -141,8 +156,8 @@ if (AS_JSON) {
   const pct = (v) => (v === null || v === undefined ? 'n/a' : `${(v * 100).toFixed(1)}%`)
   console.log(`账本对账（库=${bank}）`)
   console.log(`  台账: ${ledgerPath.split(/[\\/]/).pop()} · ${ledger.length} 行 · 起点 ${ledgerSince || '（空）'}`)
-  console.log(`  ① 闭合: ${closureOk === null ? `样本不足（本窗口无 write.* 回执，共 ${writeEvents.length} 条）` : closureOk ? '✅ 差异 0' : '⚠ 有差异（见下）'}`)
-  for (const c of out.closure.files) console.log(`     ${c.file}: 实际 ${c.currentRows} 行（索引 ${c.indexRows} + 画像 ${c.profileRows}）· 台账写入 ${c.writtenSinceLedger}（尝试 ${c.attemptedSinceLedger}）· 差异 ${c.delta}`)
+  console.log(`  ① 闭合: ${closureOk ? '✅ 未解释差异 0' : '⚠ 有未解释差异（见下）'}（自举基线 ${String(baseline.at).slice(0, 19)}；历史行显式豁免）`)
+  for (const c of out.closure.files) console.log(`     ${c.file}: 实际 ${c.currentRows} 行（索引 ${c.indexRows} + 画像 ${c.profileRows}）· 基线 ${c.baselineRows} + 台账写入 ${c.writtenSinceBaseline}（尝试 ${c.attemptedSinceBaseline}）· **未解释 ${c.unexplained}**`)
   console.log(`  ② 健康: 上次有效深睡 ${lastOk || '（无）'} · 连续空转 ${idleStreak} 轮 · 被拒率 ${pct(rejectRate)}（${rejected}/${writeEvents.length} 次写事件）`)
   console.log(`  ③ 三层: P ${layers.P.index} 索引 + ${layers.P.profile} 画像 · R ${layers.R.index} · E ${layers.E.index} 索引 + ${layers.E.profile} 画像`)
   console.log(`     注入占比（估算）: P ${injectShare.P} 行（含画像 ≤${injectProfileRows}/档）· R 按任务命中 · E 按相关性 top-k`)
