@@ -118,6 +118,21 @@ ok(deepSleepLanded('completed', {}, app({ attempted: 3, added: 0, gate: '落盘�
 ok(deepSleepLanded('completed', {}, app({ attempted: 3, added: 3, gate: 'pass' })) === true,
   '④ 对照组：gate=pass/added=3 ⇒ 仍判 done（不得误伤正常路径）')
 
+// ── G-19：landed 判据必须消费完整轮次结果（不只 principles 通道）──
+// 核心缺陷：纯 profileOps/pointerOps/treeOps/forgetOps 轮且全失败时，app.attempted===0 ⇒ 旧判据误判 done ⇒ 静默丢料。
+ok(deepSleepLanded('completed', {}, app({ attempted: 0, added: 0, gate: 'pass' }), { tried: 2, done: 0 }) === false,
+  '⑤ G-19 核心：纯其他通道轮且 2 件全未落地 ⇒ failed（旧判据误判 done ⇒ 静默丢料）')
+ok(deepSleepLanded('completed', {}, app({ attempted: 0, added: 0, gate: 'pass' }), { tried: 0, done: 0 }) === true,
+  '⑤ 对照组：五通道皆无提案（真·空轮）⇒ done（回滚会导致无限重处理，必须排除）')
+ok(deepSleepLanded('completed', {}, app({ attempted: 0, added: 0, gate: 'pass' }), { tried: 1, done: 3 }) === true,
+  '⑤ 其他通道有落地（done=3）⇒ done（不得因 principles 无产出而误判失败）')
+ok(deepSleepLanded('completed', {}, app({ attempted: 0, added: 0, gate: 'pass' })) === true,
+  '⑤ 向后兼容：不传 other ⇒ 与旧行为一致（attempted=0 ⇒ done），不引入回归')
+ok(deepSleepLanded('completed', {}, app({ attempted: 0, added: 0, gate: '落盘异常' }), { tried: 0, done: 5 }) === false,
+  '⑤ 纵深防御：失败 gate 优先于其他通道的成功（done=5 也不得判 done）')
+ok(deepSleepLanded('error', null, app({ attempted: 0, added: 0, gate: 'pass' }), { tried: 0, done: 0 }) === false,
+  '⑤ stop≠completed ⇒ failed（与通道结果无关，保持原语义）')
+
 console.log(`\n结果: ${pass} PASS / ${fail} FAIL`)
 process.exit(fail === 0 ? 0 : 1)
 

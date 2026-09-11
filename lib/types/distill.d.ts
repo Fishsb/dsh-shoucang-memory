@@ -154,16 +154,27 @@ export declare const isNoiseIntent: (s: string) => boolean;
  *  - `app.gate === 'write_gate 未就位'` → 门禁脚本缺席（applyPrinciples 早返回，attempted 恰为 0）属
  *    **基础设施失败**，不得因 attempted===0 误判 done ⇒ failed。
  *  - `app.added > 0` → 有落地 ⇒ done。
- *  - `app.attempted === 0` → 代理本就无新原则/路径提案（纯 profileOps/pointerOps/treeOps/forgetOps 轮或真·空轮）
- *    ⇒ done（回滚会导致同一批痕迹**无限重处理**，必须排除）。
+ *  - `app.attempted === 0` → 代理本就无新原则/路径提案（真·空轮）⇒ done。
  *  - `attempted>0 && added===0` → 100% 拒收 = 材料损失 ⇒ failed（水位回滚、同批下轮重试）。
+ *
+ * ⚠ G-19 修正（2026-09-12）：上述判据**只消费 principles 一个通道**（`app`）。深睡同轮另有
+ *   profileOps / pointerOps / treeOps / forgetOps 四个写入通道，其结果**从不进入判据** ⇒
+ *   「纯 profileOps/指针/树/遗忘 轮且全数失败」时 `app.attempted === 0` ⇒ 误判 landed:true
+ *   ⇒ 水位推进 ⇒ 那批材料永久关在窗外（静默丢料）。Rex 实测约占 9.5%~14.3% 轮次。
+ *   架构修法：**判据必须消费完整轮次结果，而非其子集**（与 G-16 同源——判据只认真实完整产出）。
+ *   取向：宁可重试（failed，幂等、可观测），不可静默丢料（landed，无声无息）。
  */
 export declare const COMMIT_FAILED_GATE = "\u843D\u76D8\u5F02\u5E38";
+/** 除 principles 外四通道的轮次汇总（G-19）：`tried`=该通道有提案且未落地数，`done`=成功落地数。 */
+export type DeepSleepOtherChannels = {
+    tried: number;
+    done: number;
+};
 export declare const deepSleepLanded: (stop: unknown, out: unknown, app: {
     attempted: number;
     added: number;
     gate: string;
-}) => boolean;
+}, other?: DeepSleepOtherChannels) => boolean;
 export declare const deepSleepReplayable: (o: {
     kind?: unknown;
     error?: unknown;
