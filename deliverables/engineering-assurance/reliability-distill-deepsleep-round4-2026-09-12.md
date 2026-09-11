@@ -1908,6 +1908,40 @@ if (!segOk) break
 - 19 个会话受影响
 - 82% 可由具体代码路径（`below-min` 推 `maxSeq`）解释 ⇒ **不是统计噪声，是确定的机制缺陷**
 
+### 28.8 G-4a 修复已落（`5b477e9` + `d06a0a9` + `d482456`）
+
+**改动**（只动 `src/distill.ts`）：
+
+- 新增模块级纯函数 `planSkipWatermark(hasUndigested, holdRounds, maxSeq)`——与 G-20 的 `planDiscardWrite` 同规格，可脱离宿主驱动
+- `below-min` / `prescan-no-signal` 两处**不再直接 `writeWatermark(sid, maxSeq, agent)`**：有未消化段 ⇒ **扣住不推**并记 `skipPlan=skip-held-for-undigested`
+- 顺带修掉一个次级缺陷：**段成功/强制推进时未清失败记账** ⇒ 会永久误判"存在未消化段"
+- 第三处（G-20 作废路径 `:496`）**已检查未改**：不写会整窗重蒸死循环，且已有 `planDiscardWrite` 守卫 + `watermark-invalidated/restartFrom` 独立记账。注释已标明它同属"会跨过未消化段"，但是既定的 G-20 取舍
+
+**死循环方案**：选 (a)——连续 `SKIP_HOLD_MAX = 3` 轮无进展 ⇒ 允许推 `maxSeq`，审计记 `skipPlan=skip-abandoned-after-hold`（显式记账、不静默）。Cody 否决了 (b)"推到安全边界"，理由成立：**below-min 时 chunks 为空/不足门槛，本就没有可寻址的安全边界，推边界等于不推，只是把死循环换个名字**。
+
+**`dispatch-failed-forced` 口径误导**：按兜底选项处理——**未动记账结构**，只在 `MAX_DISPATCH_RETRY` 旁写明"真实丢料发生在第 1 次失败后被跳过"，并在 skip 审计行加 `skipPlan` / `heldForUndigested` / `watermarkTo` 三字段承接。
+
+**⚠️ 我补的一刀**：`lib/` 起初未提交。插件加载的是 `lib/` 而非 `src/` ⇒ **src 有修复、lib 没带着 = 等于没修**，这与 G-16"已修复但未部署"是同一个病。已重编入库（`d482456`）。
+
+### 28.9 已知差距（不掩盖）
+
+**① "两组反向证伪"名不副实——两组都是 exit 0。**
+
+| 场景 | 结果 |
+|---|---|
+| A（失败段 + 紧随 below-min） | 轮1/2 扣住、轮3 放弃推 maxSeq，**A_EXIT=0** |
+| B（长期 below-min 无失败段） | 连续 100 轮照常推进，**B_EXIT=0** |
+
+⇒ 这只**验证了行为正确**，**没有证明守卫能变红**（破坏后必须 FAIL）。按本轮自己定的标准，这两组应叫"行为验证"，不是"反向证伪"。
+
+**② `planSkipWatermark` 这个新纯函数在 `scripts/` 里没有任何断言。**
+
+对比 G-20 的 `planDiscardWrite` 有 39+ 条断言。⇒ 按"能自动化就别靠纪律"的原则，这是个缺口。
+
+**为何本次不补**：§27 自检刚认定 87% 提交在检测件是过度投资，此时再加测试件与之冲突。⇒ **记为下一轮待办**，由使用者决定优先级。
+
+**③ `dispatchFailStreak` 内存态（次因）未动**——计数连 2 都没到过，修好重扫后才会显出影响。
+
 ---
 
 ## ⚠️ 仍待用户拍板（本轮不结的两项）
