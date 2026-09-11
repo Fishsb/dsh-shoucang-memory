@@ -36,6 +36,7 @@ const CHECKS = [
   ['scripts/test-watermark-guard.mjs'],
   ['scripts/test-atomic-write.mjs'],
   ['scripts/test-wiring-gate.mjs'],
+  ['scripts/test-treeops-rm.mjs'],
   ['skill/scripts/test.mjs'],
   ['scripts/check-hardcode.mjs', '__ROOT__'],
   ['scripts/check-srcmap.mjs'],
