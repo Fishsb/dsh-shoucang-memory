@@ -91,6 +91,29 @@ const injectShare = {
   E: null, // 相关性门控：按档位 top-k（见注入面统计）
 }
 
+// ── ④ 成熟度与影子打分（v2.2 M4）──
+// 成熟度台账在**库**内（数据属库：小节成熟度）—— `audit/maturation.jsonl` 相对库根
+const matRows = readJsonl(join(bank, 'audit', 'maturation.jsonl'))
+const gate = Number((() => { try { return JSON.parse(readFileSync(join(bank, 'engine', 'criteria.json'), 'utf8')).maturation.gate } catch { return 0.5 } })())
+const maturation = matRows.length
+  ? { sections: matRows.length, mature: matRows.filter((r) => Number(r.A) >= gate).length, gate, top: [...matRows].sort((a, b) => Number(b.A) - Number(a.A)).slice(0, 5) }
+  : { sections: 0, mature: 0, gate, top: [], note: '未扫描（跑 node scripts/maturation-scan.mjs）' }
+const shadowRows = readJsonl(join(auditDir, 'score-shadow.jsonl'))
+const pairs = shadowRows.flatMap((r) => (r.top || []).map((t) => [Number(t.imp), Number(t.old)])).filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b))
+const pearson = (xs) => {
+  const n = xs.length
+  if (n < 8) return null
+  const mx = xs.reduce((s, p) => s + p[0], 0) / n, my = xs.reduce((s, p) => s + p[1], 0) / n
+  let num = 0, dx = 0, dy = 0
+  for (const [x, y] of xs) { num += (x - mx) * (y - my); dx += (x - mx) ** 2; dy += (y - my) ** 2 }
+  return dx && dy ? num / Math.sqrt(dx * dy) : null
+}
+const corrImpRel = pearson(pairs)
+const shadow = {
+  rows: shadowRows.length, samples: pairs.length, corrImpRel,
+  verdict: corrImpRel === null ? '样本不足（<8 对）' : Math.abs(corrImpRel) > 0.9 ? '⚠ importance 与 relevance 高度冗余（R-2：应删该分量）' : '✅ 分量不冗余（可进入 M5 切换评估）',
+}
+
 const out = {
   window: { bank, stateRoot, ledgerPath, ledgerSince, ledgerRows: ledger.length },
   closure: { ok: closureOk, note: 'write.* 回执仅覆盖 M2 之后的窗口；更早历史不可对账（显式豁免）', files: closure },
@@ -106,6 +129,8 @@ const out = {
     materialCharsRecent: materialChars,
   },
   layers: { counts: layers, injectShare, profileCap: injectProfileRows },
+  maturation,
+  shadow,
   samples: { ledgerRows: ledger.length, writeEvents: writeEvents.length, distillAuditRows: distillAudit.length, exemptionEvents: exemptionEvents.length },
 }
 const outFile = argOf('--out', '')
@@ -121,4 +146,6 @@ if (AS_JSON) {
   console.log(`  ② 健康: 上次有效深睡 ${lastOk || '（无）'} · 连续空转 ${idleStreak} 轮 · 被拒率 ${pct(rejectRate)}（${rejected}/${writeEvents.length} 次写事件）`)
   console.log(`  ③ 三层: P ${layers.P.index} 索引 + ${layers.P.profile} 画像 · R ${layers.R.index} · E ${layers.E.index} 索引 + ${layers.E.profile} 画像`)
   console.log(`     注入占比（估算）: P ${injectShare.P} 行（含画像 ≤${injectProfileRows}/档）· R 按任务命中 · E 按相关性 top-k`)
+  console.log(`  ④ 成熟度: 小节 ${maturation.sections} 个 · 达 gate(≥${maturation.gate}) ${maturation.mature} 个${maturation.note ? '（' + maturation.note + '）' : ''}`)
+  console.log(`  ⑤ 影子打分: ${shadow.rows} 行 / ${shadow.samples} 样本 · corr(importance,relevance)=${shadow.corrImpRel === null ? 'n/a' : shadow.corrImpRel.toFixed(3)} → ${shadow.verdict}`)
 }

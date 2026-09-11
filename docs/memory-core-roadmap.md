@@ -10,11 +10,23 @@
 
 | 方案 | ADR | 状态 | 关键产物 | 待拍板点 |
 |---|---|---|---|---|
-| v2 判据可测 | ACT-122 | ✅ **已实现**（`25ec28f`/`61e8f10`） | `criteria.json` · 生成投影 · `check-criteria` · `criteria.ts` · `judgement-ledger` · RRF · 库 git | — |
+| v2 判据可测 | ACT-122 | ✅ **已实现**（`25ec28f`/`61e8f10`） | `criteria.json` · 生成投影 · `check-criteria` · `criteria.ts` · RRF · 库 git | — |
 | UI 优化 | — | ✅ **已实现**（`ed1ae08`…`9e98a52`） | 首屏 5 组 · 7 徽章 · 排版令牌 · 参数四桶 · 能力对齐 | — |
-| **v2.1 写入可测** | ACT-126 | 📋 方案 | 载体契约 · 写入回执 · 账本对账 · 触发数据化 | 是否开工 |
-| **v2.2 生效可建模** | ACT-128 | 📋 方案 | P/R/E 三层 · 统一打分 · 成熟度/priming | 是否开工 |
-| **本总纲** | ACT-034 | 📋 新增 | 字段合并 · 缺口补齐 · 统一路线 M0–M6 | 顺序确认 |
+| **v2.1 + v2.2 落地** | ACT-126/128/130 | ✅ **M0–M3 已实现**（`b339814`/`bf2bf87`）· M4/M5 **已落地待翻开关** | 载体契约 · `check-carriers` · 统一台账 · 逐条裁决 · `memory-reconcile` · 影子打分 · 成熟度扫描 | 是否翻 `scoreWeights=v2` / `maturationEnforce=true`（需影子期证据） |
+| **本总纲** | ACT-034 | ✅ 已出档并执行 | 字段合并 · 缺口补齐 · M0–M6 | 顺序确认 |
+
+### 实施进度（截至 2026-09-11）
+
+| 阶段 | 状态 | 出口判据实测 |
+|---|---|---|
+| **M0 前置** | ✅ | 注入面出现画像行（本会话 agent 3 条 + user 3 条 `← 源:`）；审计能读出被拒原文（`attempted`/`rejectedLines`/`gateExit`） |
+| **M1 契约化** | ✅ | `check-carriers` 常绿：18 标签 · 3 injectable 组合渲染器齐备且指向真实文件 · **体检 16 标签零漏登记** · 投影一致 |
+| **M2 回执** | ✅ | 统一台账 `audit/ledger.jsonl` 落 `decision.ingest` 6 行；逐条裁决 + 并集总门 + 尾部贪心回退已实现（`perItemGate`） |
+| **M3 对账** | ✅ | `/reconcile` 出数：**上次有效深睡 2026-09-09 15:57 · 连续空转 5 轮 · 三层 P 12+2 / R 1 / E 44+7**；仓内与库内双布局逐字一致 |
+| **M4 影子打分 + 成熟度只记** | ✅（数据积累中） | `score-shadow.jsonl` 已产出（含 `old/imp/rec/v2`）；`maturation.jsonl` 29 小节 / 1 达 gate；对账器新增 ④⑤ 两段（含 R-2 相关性判据） |
+| **M5 切换** | 🟡 **已落地·默认未翻** | 开关齐备（`scoreWeights=v2` · `maturationEnforce=true` · `carriers.profile=0` 可回退）；**翻转需影子期证据**（R-2：corr(importance,relevance) ≤0.9） |
+| **M6 治理收口** | ✅ | `spec §1.0` 载体契约与三层模型 + §5.5 `[性格]`/`[认知]`；`distill-contract` **v9**；本档进度表 |
+
 
 ## 1. 统一术语表（实现期**只许引用**，禁止另起名）
 

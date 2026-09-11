@@ -129,3 +129,28 @@ export declare const SURFACE_PARAMS: {
         readonly topK: 3;
     };
 };
+/** 成熟度（v2.2 E6）：A(0)=A0；每次**跨日再现** +step（上限 1.0）。distinctDays = 出现过的不同日数（−1 次首现）。 */
+export declare function activationOf(distinctDays: number, params?: {
+    readonly A0: 0.3;
+    readonly step: 0.2;
+    readonly gate: 0.5;
+    readonly enforce: false;
+    readonly note: "成熟度（v2.2 E6）：A(0)=A0；每次跨日再现 +step（上限 1.0）；只有 A≥gate 才允许升格为 [原则]/[路径]；A<gate 不注入但参与打分（implicit priming）。enforce=false 时只记录不强制（M4 影子期）。";
+    readonly ledger: "audit/maturation.jsonl";
+}): number;
+/** 升格成熟度门（v2.2）：enforce=false（缺省，M4 影子期）时恒放行，只回带 A 供台账记录 */
+export declare function maturationVerdict(A: number, enforce: boolean, params?: {
+    readonly A0: 0.3;
+    readonly step: 0.2;
+    readonly gate: 0.5;
+    readonly enforce: false;
+    readonly note: "成熟度（v2.2 E6）：A(0)=A0；每次跨日再现 +step（上限 1.0）；只有 A≥gate 才允许升格为 [原则]/[路径]；A<gate 不注入但参与打分（implicit priming）。enforce=false 时只记录不强制（M4 影子期）。";
+    readonly ledger: "audit/maturation.jsonl";
+}): Verdict;
+/** v2.2 统一打分（E 层）：score = α_rel·relevance + α_imp·importance + α_rec·recency（口径见 criteria.surface.score） */
+export declare function layeredScore(input: {
+    relevance: number;
+    importance: number;
+    recency: number;
+}): number;
+export declare function importanceOf(line: string): number;

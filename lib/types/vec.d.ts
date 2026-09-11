@@ -7,6 +7,10 @@ export interface EmbedCfg {
     coldFactor?: number;
     /** v2（ADR-122）：融合策略——'rrf'（缺省，排名融合 k=60）| 'weighted'（旧 min-max 加权，回滚用） */
     fusionKind?: 'rrf' | 'weighted';
+    /** v2.2（ADR-130）：打分公式 'legacy'（缺省）| 'v2'（α_rel/α_imp/α_rec 分层打分） */
+    scoreMode?: string;
+    /** v2.2：影子打分（并行算 v2 并写 audit/score-shadow.jsonl，不改排序） */
+    shadowScore?: boolean;
 }
 export declare const vecStats: {
     queries: number;

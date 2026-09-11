@@ -434,6 +434,8 @@ export function applyScheduler(ctx: Context, config: Config): void {
               apiKeyEnv: config.embedApiKeyEnv || 'EMBED_API_KEY',
               coldFactor: (Number(config.recallColdFactorPercent) > 0 ? Number(config.recallColdFactorPercent) : 35) / 100, // v7 UI 可调（% → 0.35 缺省）
               fusionKind: config.recallFusion === 'weighted' ? 'weighted' : 'rrf', // v2：融合策略（缺省 RRF；可回滚）
+              scoreMode: config.scoreWeights === 'v2' ? 'v2' : 'legacy', // v2.2：分层打分（缺省 legacy；切换需影子期证据）
+              shadowScore: config.shadowScore !== false, // v2.2：影子打分
             })
             if (!rows.length) {
               // S5 召回零命中兜底（assistant-focus-plan S5）：不再静默新手态——

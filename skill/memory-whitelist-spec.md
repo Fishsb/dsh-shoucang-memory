@@ -24,6 +24,23 @@
 
 ## 1. 总则
 
+### 1.0 载体契约与三层生效模型（v2.2 / ADR-130）
+
+> **唯一事实源 = `engine/criteria.json` 的 `carriers`**（人读投影见 `engine/criteria.md`「载体契约」表；机检 `node scripts/check-carriers.mjs`，纳入 `npm test`）。
+> **判据决定"收不收"，载体决定"写进去之后以什么形式存在、是否会被注进上下文"**——两件事必须都显式。
+
+| 层 | 语义 | 生效方式 | 判据（入册门槛） |
+|---|---|---|---|
+| **P · Persona/Identity** | 身份 · 使命 · 边界 · **性格** · **认知** · 演化 · 稳定习惯/偏好 | **always-on**（先占预算，**不参与相关性竞争**） | 跨环境稳定：≥2 环境 或 ≥3 次复现，且非任务专属 |
+| **R · Procedural** | `[路径]`（可复用任务步骤） | **任务型门控**（命中该任务类型才注入；复用认知环快通道的熟悉度分流） | 同型 ≥2 ∧ 跨会话 ≥2 ∧ 只从成功归纳 |
+| **E · Episodic/Semantic** | 教训 · 流程 · 环境事实 · 工具 · **经验/学习史** · 知识索引 | **相关性门控**（top-k 竞争，吃剩余预算） | 四问 + 唯一性硬门（§1.1 + §8） |
+
+- **载体三要素**：`{layer: P|R|E, form: index|profile|notes|audit, inject: always|gated|none}`。**P 必 always；R/E 必 gated 或 none**（机检强制——否则恒常层会与情境层抢预算）。
+- **读取面义务**：每种 `injectable` 组合都必须有渲染器（`always:index`/`always:profile`/`gated:index`）；**任一新标签都必须先在注册表登记并落到某个渲染器上**，否则机检失败。
+- **写入回执**：每次写入尝试落统一台账 `~/.dsh/suite/knowledge/audit/ledger.jsonl`（`type=decision.*` 判据 + `type=write.*` 写入，含 `attempted/written/verdict/reason/gateExit/rejectedLines`）；**门禁逐条裁决**——单条不合格不再拖垮整轮。
+- **成熟度**：`A = A0 + step·(跨日再现日数 − 1)`（缺省 A0=0.3/step=0.2/gate=0.5），由 `scripts/maturation-scan.mjs` 落 `audit/maturation.jsonl`；**`maturation.enforce=false`（缺省）只记录**，置 true 后 `A≥gate` 才允许升格为 `[原则]`/`[路径]`。
+- **统一打分（E 层，M5 开关）**：`score = α_rel·relevance(RRF) + α_imp·importance + α_rec·recency`（缺省 α_rel=1.00 / α_imp=0.35 / α_rec=0.10，**刻意压低 recency**）；`surface.score.mode=legacy`（缺省）时不启用，切换需影子期证据（`audit/score-shadow.jsonl` 的相关性分析）。
+
 ### 1.1 判据分层（v2/ADR-122：**判据不是散文，是注册表**）
 
 > **唯一事实源 = `engine/criteria.json`**；人读投影 = **`engine/criteria.md`**（生成，禁手写）；机检门 = `node scripts/check-criteria.mjs`（纳入 `npm test`）。
@@ -142,6 +159,8 @@
 | `[原则]` | **习得原则**（v15，原 L0 原则层并入）：多条经验反复提纯凝成的跨任务泛化方向指引；**唯一写入口 = 深度睡眠归纳 pass**（不走向问/蒸馏直写），行内概况即原则一句，指针指向归纳来源小节 | `[原则] 换路优于死磕 · 先验证成本低再修改成本高 → notes/lessons.md §A/§B` | 细节条文（归 notes）；一次性结论；未带源指针 |
 | `[路径]` | **通用任务路径**（v17，对标 AWM）：可复用任务类型的变量化步骤序列（具体值用 `<项目名>/<端口>` 占位）；**只从成功任务归纳**（判据=同类型窗口 ≥2 次）；唯一写入口=深度睡眠归纳 pass，行内概况即路径概要（≤40 字，用 ①②③ 串联，禁步内 `→`），指针指向 flows 小节 | `[路径] DSH 插件升级 · ①提交推送 ②cp 覆盖 lib ③sc restart ④四端点 200 → notes/flows.md §升级` | 单次任务具体步骤（归 notes）；失败任务（只进原则教训）；未变量化的细节 |
 | `[演化]` | 自我定位调整记录 | `[演化] 定位演进（2026-09-01）[owner] → ... §演化` | 一次性任务上下文 |
+| `[性格]`（v2.2 新增） | **行为/表达风格的稳定特征**（简洁、先证据后结论、不堆叠……）：跨环境恒常 | `[性格] 先验证再下结论 · 成本低者先行 → notes/agent.md §性格` | 单次任务的临时语气；与 [习惯] 重复的内容 |
+| `[认知]`（v2.2 新增） | **思维模式/方法论偏好**（架构优先、根因优先、判因后动……）：跨环境恒常 | `[认知] 架构优先 · 动手前先确认落在哪个架构节点 → notes/agent.md §认知` | 具体技术结论（归 notes/[原则]） |
 
 - **容量**：≤3,000 字符（v15 上调：原则行并入需要空间，原 v10 的 2,000；实测以 health 为准）；学习史小节增长优先走"拆分/合并"（重组 SOP）。
 

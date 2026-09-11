@@ -1,21 +1,26 @@
-# 蒸馏裁决契约（distill-contract v7 · 判据注册表化 + 双域分离 + 观测量）
+# 蒸馏裁决契约（distill-contract v9 · 判据注册表化 + 载体契约 + 写入回执 + 分层生效）
 
 > **权威实现 = `src/distill.ts` 的 `DEFAULT_DISTILL_PROMPT`（摄取域）与 `DEEP_SLEEP_PROMPT`（巩固域）**。
-> **判据唯一事实源 = `engine/criteria.json`** → 人读投影 `engine/criteria.md`（生成）→ 机检门 `node scripts/check-criteria.mjs`。
+> **判据唯一事实源 = `engine/criteria.json`** → 人读投影 `engine/criteria.md`（生成）→ 机检门 `check-criteria.mjs`（判据）+ **`check-carriers.mjs`（载体契约）**。
 > 本档只保留「**字段语义 + 调用时序 + 宿主不变量**」；**判据正文不再在此复述**（避免第 N 份拷贝）。
-> 与代码冲突时**以代码为准**，并请回改本档。
 >
-> 沿革（只留结论，历史见 `docs/history/ADR-0005` 等）：
-> - v1–v3：双库粒度二分（记忆库 vs pmg 项目卡库）+ board=generic|project。
-> - **v4（2026-09-08 单库化）**：pmg 整体移除 ⇒ **只有一个记忆库**；跨项目有用的细粒度条文也进 notes；项目专属事实直写
->   项目工作区 `docs/devref/shoucang/`；新增 `profiles` 双画像通道（USER/AGENT）。
-> - **v5（2026-09-10）**：`appends` 条目可选 `rootCause`/`avoidWhen`（教训带 WHY 与不适用边界）。
-> - **v5.1**：`profiles.target` 统一为 `USER.md`/`AGENT.md`（宿主另做归一化）。
-> - **v6（2026-09-11 契约对齐）**：删 pmg 时代残留声明；路由编号按现码重排；补分段水位/落盘失败不推水位/深睡通道表。
-> - **v7（2026-09-11 ADR-122 记忆核心 v2）**：① 判据段（R1–R4 + 四问 + Q2 画像判定）改为**生成投影** `INGEST_JUDGE`
->   （源=criteria.json）；② **四问降级为归属子判据组**；③ **删除「规则→SOUL.md」死支**（宿主无该写入通道）；
->   ④ 输出新增**可选 `judgement`**（L0 四维 + dup / evidence + cost）→ 宿主写 `judgement-ledger.jsonl` 供对账；
->   ⑤ **双域分离**：摄取域（会话→库）与巩固域（库→库）判据互不借词，接口=升格链状态机（spec §8）。
+> 沿革（只留结论；v1–v7 见 `docs/history/` 与 git 历史）：
+> - v4 单库化（pmg 移除）· v5 教训带 WHY/边界 · v6 契约对齐 · **v7 判据注册表化**（judgement 字段 + 四问降级 + 删 SOUL 死支）。
+> - **v8（v2.1）**：载体契约（carrier）· 写入回执（write-ledger）· 逐条裁决 · 账本对账。
+> - **v9（v2.2 · ADR-130）**：**三层生效模型**（P 恒常 / R 任务门控 / E 相关性门控）· **载体三要素**（layer/form/inject）· **统一打分**（α_rel/α_imp/α_rec）· **成熟度**（A 与 `maturation.enforce`）· 统一台账（`audit/ledger.jsonl`，decision.* + write.*）。
+
+## 0. 载体契约与三层（v9 新增，权威表见 engine/criteria.md）
+
+| 层 | 标签（agent / user / memory） | 生效 | 载体 |
+|---|---|---|---|
+| **P** | `[身份] [使命] [边界] [性格] [认知] [演化] [偏好] [习惯]`（双主体） | always-on（先占预算） | 索引行（全量按档位 cap）+ **画像行 `- … ← 源:`（≤`injection.carriers.profile` 条/档，缺省 3）** |
+| **R** | `[路径]` | 任务型门控 | 索引行（命中任务类型时注入） |
+| **E** | `[经验] [教训] [env] [tool] [flow] [lesson]` | 相关性门控 | 索引行（top-k）+ notes 详情（按需） |
+
+- **写入**：P 层画像行由 `profileOps`（摄取域）或深睡 `profileOps` 写入；R/E 索引行由 `principles`/`newIndex` 写入。
+- **回执**：每次写入尝试 → `audit/ledger.jsonl` 一行 `type=write.*`（`attempted/written/verdict/reason/gateExit/rejectedLines`）。
+- **成熟度**：`maturation.enforce=true` 时 `[原则]`/`[路径]` 升格需 `A≥gate`（A 见 `audit/maturation.jsonl`，`scripts/maturation-scan.mjs` 生成）。
+- **打分**：`surface.score.mode=v2` 时 E 层用 `α_rel·relevance + α_imp·importance + α_rec·recency`；`legacy`（缺省）用现行 relevance+activity。影子期数据见 `audit/score-shadow.jsonl`。
 
 ## 1. 顶层归属路由（蒸馏子代理第一步，逐条判定；**判据正文见 `engine/criteria.md`**）
 
