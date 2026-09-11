@@ -351,9 +351,16 @@ export const isNoiseIntent = (s: string): boolean => CANDIDATE_NOISE.some((re) =
  *    ⇒ done（回滚会导致同一批痕迹**无限重处理**，必须排除）。
  *  - `attempted>0 && added===0` → 100% 拒收 = 材料损失 ⇒ failed（水位回滚、同批下轮重试）。
  */
+// 落盘失败 gate 字面量（2026-09-12 G-16）：applyPrinciples **产出**、deepSleepLanded **消费**——
+//   单一定义，改一处两边同步。原先两边各写死一个字符串字面量，将来改任一侧都会**静默脱钩**
+//   （判据还在、门禁已失效，且不报错不测试红——Arch 2026-09-12 指出的漂移隐患）。
+export const COMMIT_FAILED_GATE = '落盘异常'
+
 export const deepSleepLanded = (stop: unknown, out: unknown, app: { attempted: number; added: number; gate: string }): boolean => {
   if (stop !== 'completed' || !out) return false
-  if (app.gate === 'write_gate 未就位') return false
+  // G-16 纵深防御（2026-09-12）：失败 gate 一律判 failed——即使上游把 added 误报成 >0（谎报），
+  //   判据侧也不认。只靠 producer 归零不够：applyPrinciples 在闭包内不可单测，谎报无人拦。
+  if (['write_gate 未就位', COMMIT_FAILED_GATE].includes(app.gate)) return false
   return app.added > 0 || app.attempted === 0
 }
 
@@ -373,6 +380,17 @@ export const deepSleepReplayable = (o: {
   if (['no-parent', 'no-traces'].includes(String(o.result))) return false
   if (o.landed !== undefined) return Boolean(o.landed)
   return true
+}
+
+// ── 原则落盘提交点（2026-09-12 G-16：抽成单一实现并**导出**，供单测直接驱动）──
+// 背景：applyPrinciples 是闭包内 const（:1576 附近），无 export，单测到不了；
+//   不抽则 G-16「rename 失败仍按 added>0 返回」只能靠人肉 review 兜，改天被人改回去也不会有任何断言变红。
+// 契约：成功 ⇒ ok=true 且 tmp 已消失；失败 ⇒ ok=false + err 字符串，且**不留孤儿 tmp**（尽量清理）。
+export const commitPrinciples = (tmpPath: string, targetPath: string): { ok: boolean; err?: string } => {
+  try { renameSync(tmpPath, targetPath); return { ok: true } } catch (e) {
+    try { unlinkSync(tmpPath) } catch { /* tmp 本就不存在 */ }
+    return { ok: false, err: String((e as any)?.message ?? e) }
+  }
 }
 
 // ── 预筛信号词（零拷贝优先动态加载记忆仓 engine/signals.mjs；不可达时内嵌兜底副本，与 engine 同源）──
@@ -1674,7 +1692,19 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       return { attempted, added: 0, replaced: 0, skipped: attempted, gate: reasonOf(g2.status), gateExit: lastExit, rejectedLines }
     }
     if (g2.ok) {
-      try { renameSync(principlesPath + '.tmp', principlesPath) } catch { /* */ }
+      // G-16（2026-09-12）：rename 失败必须**报失败**——原写法空 catch 吞异常后仍按 added>0 返回，
+      //   而 deepSleepLanded(:357) 判据只看 added/attempted（不读 gate），会把「没落盘」判成 landed:true
+      //   ⇒ 审计记已消化、水位推进、下轮不再重蒸 ⇒ 这批痕迹**静默永久丢失**（崩溃型，比拒收型更隐蔽）。
+      //   修法要点是 **added 归 0**（只改 gate 无效，见上）；replaced 一并归 0 免污染判据台账；失败留日志。
+      const cm = commitPrinciples(principlesPath + '.tmp', principlesPath)
+      if (!cm.ok) {
+        log(`deep sleep: 原则落盘失败（未写入，本轮判失败待重蒸）: ${cm.err}`)
+        // 不往 rejectedLines 追加（Cody 2026-09-12 纠正，我采纳）：① 审计行已带 gate/gateExit/landed
+        //   三字段，落盘失败在其中**直接可见**，追加是冗余；② 审计取 (rejectedLines||[]).slice(0,5)，
+        //   已有 ≥5 条时追加的标记会被切掉（push 到尾部 = 写了也白写）；③ rejectedLines 语义是
+        //   「被门禁拒收」，落盘失败不是拒收，混入会污染判据台账。可观测性由 log + 三字段承担。
+        return { attempted, added: 0, replaced: 0, skipped: attempted, gate: COMMIT_FAILED_GATE, gateExit: -1, rejectedLines }
+      }
       const addedN = acceptedItems.filter((i) => i.kind === 'add').length
       const replacedN = acceptedItems.filter((i) => i.kind === 'replace').length
       return { attempted, added: addedN, replaced: replacedN, skipped, gate: 'pass', gateExit: 0, rejectedLines }

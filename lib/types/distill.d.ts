@@ -158,6 +158,7 @@ export declare const isNoiseIntent: (s: string) => boolean;
  *    ⇒ done（回滚会导致同一批痕迹**无限重处理**，必须排除）。
  *  - `attempted>0 && added===0` → 100% 拒收 = 材料损失 ⇒ failed（水位回滚、同批下轮重试）。
  */
+export declare const COMMIT_FAILED_GATE = "\u843D\u76D8\u5F02\u5E38";
 export declare const deepSleepLanded: (stop: unknown, out: unknown, app: {
     attempted: number;
     added: number;
@@ -170,6 +171,10 @@ export declare const deepSleepReplayable: (o: {
     result?: unknown;
     landed?: unknown;
 }) => boolean;
+export declare const commitPrinciples: (tmpPath: string, targetPath: string) => {
+    ok: boolean;
+    err?: string;
+};
 export declare function registerDistill(ctx: AppContext, config: DistillConfig): {
     getDeepSleepStatus: () => DeepSleepStatus;
     runDeepSleepNow: () => Promise<{

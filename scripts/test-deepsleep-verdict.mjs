@@ -9,7 +9,10 @@
 //        ③ attempted===0 纯 ops 轮/真·空轮 ⇒ done（防无限重处理）④ stop≠completed / out 假值 ⇒ failed
 //        ⑤ write_gate 未就位（基础设施失败）⇒ failed ⑥ 部分接受 skipped>0 ⇒ done
 // 用法: node scripts/test-deepsleep-verdict.mjs
-import { deepSleepLanded, deepSleepReplayable } from '../lib/distill.js'
+import { deepSleepLanded, deepSleepReplayable, commitPrinciples } from '../lib/distill.js'
+import { mkdtempSync, writeFileSync, existsSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 
 let pass = 0, fail = 0
 const ok = (c, msg) => { if (c) { pass++; console.log(`✅ ${msg}`) } else { fail++; console.log(`❌ ${msg}`) } }
@@ -85,6 +88,35 @@ ok(deepSleepReplayable({ kind: 'deep-sleep', stop: 'completed', attempted: 0, ad
 ok(deepSleepReplayable({ kind: 'deep-sleep', stop: 'completed', attempted: 3, added: 3, landed: true }) === true,
   '⑥ landed=true（有落地）⇒ 可回放')
 ok(deepSleepReplayable({}) === false, '⑦ 空对象 ⇒ 不可回放（兜底）')
+
+// ── G-16 原则落盘提交点（commitPrinciples）── producer 侧 ─────────────────────
+// 背景（2026-09-12 二修二补）：applyPrinciples 内原写法 `try { renameSync() } catch {}` 空吞异常，
+//   随后仍按 added>0 返回 ⇒ deepSleepLanded 判 landed:true ⇒ 水位推进、下轮不重蒸 ⇒ **静默永久丢失**。
+//   applyPrinciples 是闭包内 const 无 export，单测到不了 ⇒ 抽出 commitPrinciples 才锁得住 producer。
+// 反向证伪：把 commitPrinciples 的 catch 改成 `return { ok: true }` ⇒ 下方 ② 全部翻红。
+console.log('\n── commitPrinciples 落盘提交点回归（G-16）──')
+const tdir = mkdtempSync(join(tmpdir(), 'sc-g16-'))
+const tTmp = join(tdir, 'p.tmp')
+const tOut = join(tdir, 'p.md')
+ok(typeof commitPrinciples === 'function', '① commitPrinciples 已导出（producer 侧可单测）')
+const r1 = commitPrinciples(tTmp, tOut) // tmp 不存在 ⇒ rename 必失败
+ok(r1.ok === false, '② tmp 不存在 ⇒ ok=false（rename 失败不得谎报成功——G-16 核心）')
+ok(typeof r1.err === 'string' && r1.err.length > 0, '② 失败带 err 字符串（供 log 记账）')
+ok(!existsSync(tOut), '② 失败后目标文件不得被创建')
+writeFileSync(tTmp, 'x', 'utf8')
+const r2 = commitPrinciples(tTmp, tOut)
+ok(r2.ok === true, '③ tmp 存在 ⇒ ok=true（正常落盘）')
+ok(existsSync(tOut), '③ 成功后目标文件存在')
+ok(!existsSync(tTmp), '③ 成功后 tmp 已消失（rename 语义，非复制）')
+rmSync(tdir, { recursive: true, force: true })
+
+// 判据侧纵深防御：即使 producer 把 added 谎报成 >0，失败 gate 也不得判 done
+ok(deepSleepLanded('completed', {}, app({ attempted: 5, added: 5, gate: '落盘异常' })) === false,
+  '④ 纵深防御：gate=落盘异常 且 added 被误报成 5 ⇒ 仍判 failed（谎报拦截，producer 回归的第二道闸）')
+ok(deepSleepLanded('completed', {}, app({ attempted: 3, added: 0, gate: '落盘异常' })) === false,
+  '④ gate=落盘异常（attempted=3/added=0）⇒ failed（G-16 修复形状）')
+ok(deepSleepLanded('completed', {}, app({ attempted: 3, added: 3, gate: 'pass' })) === true,
+  '④ 对照组：gate=pass/added=3 ⇒ 仍判 done（不得误伤正常路径）')
 
 console.log(`\n结果: ${pass} PASS / ${fail} FAIL`)
 process.exit(fail === 0 ? 0 : 1)
