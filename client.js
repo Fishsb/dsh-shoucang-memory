@@ -707,18 +707,27 @@
       /* ---- 6. UI：组件工厂（A2，消除 14 个 render 里的重复实现） ---- */
       var UI = {
         /* 标准设置行：标题 + 描述 + 右侧控件（对齐 Obsidian setting-item） */
+        /* 标准设置行：标题 + 描述 + 右侧控件（对齐 Obsidian setting-item）。
+         * opts:
+         *   cls          —— 附加类名
+         *   extra        —— 数组，追加进 setting-item-info（如作用域徽标）；用于覆盖"info 内还有额外子节点"的既有写法
+         *   wrapControl  —— true(默认) 包进 .setting-item-control；false = 直接挂 row（兼容既有未包装写法）
+         *   children     —— 数组，追加为 row 的平级子节点（如 info + badge + slider 三子节点形态）
+         * ⚠ 这三个开关是为**等价替换旧写法**而设：既有 DOM 结构千差万别（实测三处三种形态），
+         *   组件层必须能无损表达它们，否则替换就会改变 DOM —— 与"结构不变"要求冲突。 */
         item: function (name, desc, control, opts) {
           var o = opts || {};
           var row = el('div', 'setting-item' + (o.cls ? ' ' + o.cls : ''));
           var info = el('div', 'setting-item-info');
           if (name) info.appendChild(el('div', 'setting-item-name', name));
           if (desc) info.appendChild(el('div', 'setting-item-desc', desc));
+          (o.extra || []).forEach(function (n) { if (n) info.appendChild(n); });
           row.appendChild(info);
           if (control) {
-            var c = el('div', 'setting-item-control');
-            c.appendChild(control);
-            row.appendChild(c);
+            if (o.wrapControl === false) row.appendChild(control);
+            else { var c = el('div', 'setting-item-control'); c.appendChild(control); row.appendChild(c); }
           }
+          (o.children || []).forEach(function (n) { if (n) row.appendChild(n); });
           return row;
         },
         /* 开关 */
@@ -942,15 +951,11 @@
         host.appendChild(body);
       }
       function makeToggle(key, name, desc, initial, onToggle) {
-        var item = el('div', 'setting-item');
-        var info = el('div', 'setting-item-info');
-        info.appendChild(el('div', 'setting-item-name', name));
-        info.appendChild(el('div', 'setting-item-desc', desc));
-        info.appendChild(metaBadges(key)); // U1：作用域 + 生效态
+        // A2：改用 UI.item（DOM 等价）—— extra 承载作用域徽标；wrapControl:false 保持
+        // 既有「开关直接挂 item、无 .setting-item-control 包装」的结构，避免替换改变 DOM。
         var sw = el('input', 'checkbox-container'); sw.type = 'checkbox'; sw.checked = !!initial;
         sw.onchange = function () { onToggle(key, sw); };
-        item.appendChild(info); item.appendChild(sw);
-        return item;
+        return UI.item(name, desc, sw, { extra: [metaBadges(key)], wrapControl: false });
       }
 
       function renderViewToggles(view, parsed, global) {
