@@ -237,6 +237,53 @@ try {
 
 if (candStats) console.log(candStats);
 
+// ═══ v2（ADR-122）新增：判据参数投影 + 注入 token 账 + 放置审计（只提示，不改变 exit 语义）═══
+try {
+  const gatePath = join(skillDir, 'engine', 'criteria-gate.json');
+  let gate = null;
+  try { gate = JSON.parse(await readFile(gatePath, 'utf8')); } catch { gate = null; }
+  console.log(`\n判据参数源: ${gate ? `engine/criteria-gate.json（${gate.version}）` : '内建缺省（criteria-gate.json 未就位 → 常量散落风险）'}`);
+  const capsEff = gate?.caps || {};
+  const injectTokenEst = (chars) => Math.round(chars / 1.5); // 中英混排粗估（仅作预算监控，非精确计数）
+  const budget = gate?.surface?.injection?.budgetChars ?? 3000;
+  const capRows = gate?.surface?.injection?.levelCaps?.smart ?? 10; // smart 档注入行数（缺省 10）
+  let totalChars = 0
+  let injectChars = 0
+  for (const { name } of INDEX_FILES) {
+    try {
+      const t = await readFile(join(skillDir, name), 'utf8');
+      const lines = t.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
+      const chars = t.replace(/\s+/g, '').length;
+      totalChars += chars;
+      // 注入量口径：画像行（`- … ← 源:` 全量注入）+ 知识索引行按档位 cap 截断（其余靠指针懒加载，不进常驻面）
+      const profileLines = lines.filter((l) => /←\s*源:/.test(l));
+      const indexLines = lines.filter((l) => /^\[/.test(l));
+      const taken = profileLines.length + Math.min(capRows, indexLines.length);
+      const avg = indexLines.length ? indexLines.reduce((n, l) => n + l.replace(/\s+/g, '').length, 0) / indexLines.length : 0;
+      const est = profileLines.reduce((n, l) => n + l.replace(/\s+/g, '').length, 0) + avg * Math.min(capRows, indexLines.length);
+      injectChars += est;
+      console.log(`  ${name}: 全档 ${chars} 字符（${lines.length} 行 · 取 ${taken} 行 → 估算注入 ${Math.round(est)} 字符 ≈ ${injectTokenEst(est)} token；容量门 ${capsEff[name] ?? '内建'}）`);
+    } catch { /* 缺文件已由主流程报 */ }
+  }
+  console.log(`  注入面合计（估算）: ${Math.round(injectChars)} 字符 ≈ ${injectTokenEst(injectChars)} token（预算 ${budget} 字符 → 占比 ${(injectChars / budget * 100).toFixed(0)}%；全档体量 ${totalChars} 字符仅作参考）`);
+  // 放置审计：每主档的行标签必须在本档允许标签集内（防止"画像行误入 MEMORY / env 类误入 AGENT"）
+  const misplaced = [];
+  for (const { name, tags } of INDEX_FILES) {
+    try {
+      const t = await readFile(join(skillDir, name), 'utf8');
+      for (const l of t.split(/\r?\n/)) {
+        const s = l.trim();
+        const m = s.match(/^\[([^\]]+)\]/);
+        if (!m) continue;
+        if (!tags.includes(m[1])) misplaced.push(`${name}: [${m[1]}] ${s.slice(0, 30)}`);
+      }
+    } catch { /* 跳过 */ }
+  }
+  console.log(misplaced.length
+    ? `  放置审计: ⚠️ ${misplaced.length} 行标签不在本档白名单内 —— ${misplaced.slice(0, 4).join(' | ')}${misplaced.length > 4 ? ' …' : ''}`
+    : '  放置审计: 全部主档行标签在本档白名单内 ✅');
+} catch { /* 附加检查失败不影响主流程 */ }
+
 console.log(`\n退出码: ${exitCode} (0=健康 2=超85% 3=重复 4=缺失 5=子文档/指针/格式问题)`);
 
 // 审计归档（可观测性）：--out 指定相对技能目录的路径

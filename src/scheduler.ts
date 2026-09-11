@@ -97,6 +97,9 @@ export interface Config {
   embedBaseUrl: string // OpenAI 兼容 embeddings 基址（如 https://api.openai.com/v1；留空=关）
   embedModel: string // embedding 模型名
   embedApiKeyEnv: string // API key 所在环境变量名（不落盘/不入库）
+  // ═══ v2（ADR-122）检索与运维面 ═══
+  recallFusion: string // 融合策略：'rrf'（缺省，排名融合 k=60）| 'weighted'（旧 min-max 加权，回滚用）
+  bankGit: boolean // 记忆库本地 git 版本化（写后快照；缺省开，失败静默）
   // ═══ v7 记忆活性/遗忘/加深校准阈值（2026-09-10：可 UI 设置，缺省单一实现=本 schema 默认，UI 通道 /set → scheduler.json）═══
   activityWarmDays: number // active→warm 无命中天数（缺省 14）
   activityColdDays: number // warm→cold 无命中天数（缺省 44 = warm+30）
@@ -163,6 +166,8 @@ export const Config: any = z.object({
   embedBaseUrl: z.string().default('http://127.0.0.1:11434/v1').description('OpenAI 兼容 /embeddings 基址（缺省 Ollama :11434；自建桥/ LM Studio / 云端改此键）'),
   embedModel: z.string().default('bge-m3').description('embedding 模型名（缺省 bge-m3，Ollama 官方库 1.2GB；换云端如 text-embedding-3-small）'),
   embedApiKeyEnv: z.string().default('EMBED_API_KEY').description('API key 环境变量名（本地免 key；云端须设，不落盘）'),
+  recallFusion: z.string().default('rrf').description("融合策略：'rrf'（缺省，排名融合 k=60，对离群分稳健）| 'weighted'（旧 min-max 加权，回滚用）——见 skill/engine/criteria.json surface.fusion"),
+  bankGit: z.boolean().default(true).description('记忆库本地 git 版本化：每次成功写入后提交快照（可 diff/revert；库在 ~/.dsh 下不入公开树；失败静默）'),
   // ═══ v7 记忆活性/遗忘/加深校准阈值（2026-09-10：面板「参数调节」可调；缺省=本 schema 默认；schemastery 无 .int()，整数值由 UI parseInt + 默认/范围保证）═══
   activityWarmDays: z.number().min(1).max(120).default(14).description('活性降级：active→warm 无命中天数（缺省 14）'),
   activityColdDays: z.number().min(2).max(365).default(44).description('遗忘冷降：warm→cold 无命中天数（缺省 44 = warm+30）'),
@@ -410,6 +415,7 @@ export function applyScheduler(ctx: Context, config: Config): void {
               model: config.embedModel,
               apiKeyEnv: config.embedApiKeyEnv || 'EMBED_API_KEY',
               coldFactor: (Number(config.recallColdFactorPercent) > 0 ? Number(config.recallColdFactorPercent) : 35) / 100, // v7 UI 可调（% → 0.35 缺省）
+              fusionKind: config.recallFusion === 'weighted' ? 'weighted' : 'rrf', // v2：融合策略（缺省 RRF；可回滚）
             })
             if (!rows.length) {
               // S5 召回零命中兜底（assistant-focus-plan S5）：不再静默新手态——
@@ -541,6 +547,8 @@ export function applyScheduler(ctx: Context, config: Config): void {
       embedBaseUrl: config.embedBaseUrl,
       embedModel: config.embedModel,
       embedApiKeyEnv: config.embedApiKeyEnv,
+      recallFusion: config.recallFusion,
+      bankGit: config.bankGit,
       // v7 活性/遗忘/加深校准阈值（scheduler.Config 同键名直传，运行时生效）
       activityWarmDays: config.activityWarmDays,
       activityColdDays: config.activityColdDays,

@@ -194,6 +194,9 @@ export interface DistillConfig {
   embedBaseUrl?: string // OpenAI 兼容 embeddings 基址
   embedModel?: string // embedding 模型名
   embedApiKeyEnv?: string // key 环境变量名（本地免 key）
+  // ═══ v2（ADR-122）检索/运维面 ═══
+  recallFusion?: string // 融合策略：'rrf'（缺省，排名融合 k=60）| 'weighted'（旧 min-max 加权，回滚用）
+  bankGit?: boolean // 记忆库本地 git 版本化（写后快照；缺省开，失败静默）
   // v7 校准阈值（缺省 14/44/90/5/35，UI 可调）
   activityWarmDays?: number // active→warm 无命中天数（缺省 14）
   activityColdDays?: number // warm→cold 无命中天数（缺省 44）
@@ -254,46 +257,39 @@ interface SessRec {
   probeResult?: 'long-run' | 'stall' | 'suspect' | 'conflict' | 'exit' | 'no-transcript' | 'error' // 探测结论（审计可查）
 }
 
-// ── 蒸馏裁决契约 v5（v4 单库化之上，2026-09-10 WikiSkill 借鉴：失败即知识 + 教训带适用边界）──
+// ── 蒸馏裁决契约 v7（ADR-122 记忆核心 v2：判据段由 skill/engine/criteria.json 生成，禁手写）──
 // v4 变更：取消「记忆库 vs 项目卡库」粒度二分——跨项目有用的细粒度条文也进 notes；项目专属事实直写项目工作区 devref；
 //          新增 profiles 双画像通道（用户画像 USER + Agent 自我画像 AGENT，Q2「归谁」的落地写入通道）。
-// v5 变更：appends 条目可选 rootCause/avoidWhen——教训/踩坑类浓缩附 WHY 根因与「不适用」场景（对标 WikiSkill pattern
-//          双记 + SKILL.md When NOT to Apply），宿主写入时追加「- 根因：…」「- 不适用：…」两行；其余字段语义兼容 v4。
+// v5 变更：appends 条目可选 rootCause/avoidWhen——教训/踩坑类浓缩附 WHY 根因与「不适用」场景。
+// v7 变更（v2 架构）：① 判据段（R1-R4 + 四问 + Q2 画像判定）改为**生成投影** INGEST_JUDGE（源=criteria.json）；
+//          ② 四问**降级为归属子判据组**（不再是全局判据抬头）；③ **删除「规则→SOUL.md」死支**（宿主无该写入通道）；
+//          ④ 输出可带可选 `judgement`（L0 四维 + dup）→ 宿主写 judgement-ledger 供对账。
+import { INGEST_JUDGE, CONSOLIDATE_JUDGE, JUDGEMENT_HINT, LEDGER_FILE, CRITERIA_VERSION } from './criteria.generated.js'
+import { evaluateL0, promoteVerdict, demoteVerdict } from './criteria.js'
 export const DEFAULT_DISTILL_PROMPT = `你是知识整理蒸馏子代理（守藏契约 v5）。任务：从给定会话增量正文中，判定每条可复用知识的归属（第一层路由），再输出结构化入册指令（由宿主执行写入，你无需也不能直接写文件/跑命令）。
 判定锚（v4 单库）：只有一个记忆库——notes 存「下次做类似任务时给 agent 的方向」与跨项目有用的事实；项目专属事实不属于全局库，直写项目工作区。
-第一层归属路由（对每条候选按序判定）：
-- R1 泛化方向指引？这条知识的作用=下次做类似任务给大概方向？→ route=memory（粗粒度是特性，不要把细节条文塞进记忆库）
-- R2 官方规范/平台规则/工具用法等**跨项目有用**的细粒度条文 → route=memory（归 notes/tools 或 notes/lessons，教程式浓缩）
-- R3 某项目专属事实（项目结构/该项目用户拍板的决策/项目契约踩坑，只在单一项目语境有用）→ route=project（宿主直写该项目工作区 docs/devref/shoucang/）
-- R4 其余（一次性进度/可搜索公开知识/无实质/<relevant-memories>注入缓存/重复已有归属）→ route=discard
-- 同一条既像 R1/R2 又像 R3：跨项目可复用→memory；只在单一项目成立→project。既不跨项目也不属于当前会话项目→丢弃。
-- 拿不准 → route=memory 但 appends 留空记 skipped（宁缺毋滥）。
-route=memory 时续走四问：Q0 已有归属？Q1 下周用得上？Q2 归谁（notes 记忆 / USER 用户画像 / AGENT 自我画像）？Q3 能合并？
-Q2 画像判定：**用户的稳定偏好/背景/禁忌**（非一次性需求）→ profiles target=USER.md；**agent 自身的稳定做法/能力边界/常犯错误教训**（可跨任务复用的自我认知）→ profiles target=AGENT.md；一般知识→appends。
+${INGEST_JUDGE}
 委派禁令：**独立完成，绝不 spawn/委派任何子代理**（查重凭给定正文与你自身知识判断）。
 输出：只输出一行 JSON（不要 reasoning、不要其他文本）：
 {"route":"memory","appends":[{"target":"notes/tools.md","section":"<既有 ## 小节名，或「父/子」路径>","text":"教程式浓缩：目标一句+编号步骤+注意，≤120字"}],"newIndex":[{"target":"MEMORY.md","line":"[tag] 主题 · 概况短语/短语/短语 → notes/x.md §小节"}],"profiles":[{"target":"USER.md|AGENT.md","section":"≤12字小节名","text":"≤80字一句话"}],"projectCards":[{"cardType":"how-to|reference|decision","title":"≤20字","text":"≤200字","source":"≤30字"}],"skipped":[{"title":"...","reason":"≤30字"}]}
-约束：route=memory → 填 appends/newIndex（target 白名单 notes/tools.md notes/flows.md notes/lessons.md notes/env.md notes/release.md；section = 既有 ## 小节名，或「父/子」树状路径（子节不存在时宿主自动建 ###，v21）；**裂 ### 判据（spec §8.1 分裂律）**：目标 ## 小节**子树正文 > 1000 字**（R=一次读取单元）**或同级条目 > 6 条**（K，防横向膨胀）→ 裂出子节、用「父/子」路径写入；否则并入父节（宁并勿滥裂，一层必须缩小候选集才有意义）；**text 教程式三段**「目标：… 1. … 2. … 注意：…」只写方向指引级浓缩——目标形态/步骤轮廓/关键注意点，不搬细节条文，纯事实类可省步骤保留目标行；**newIndex.line 格式权威=记忆库 spec §8**：[tag] 主题 · 概况短语/短语/短语 → notes/<file>.md §小节，定界符 ·=段界 /=短语界 →=指针，主题≤12字名词性禁冒号复合，概况名词短语 / 分隔、≤30字、高判别实词（专名/数值/路径关键词）、禁日期溯源），profiles/projectCards 留空；profiles 仅在 route=memory 时可填（0-2 条，宁缺毋滥，须是稳定画像而非一次性事实）；route=project → 填 projectCards（cardType: how-to=操作步骤/reference=契约事实/decision=架构决策），其余留空；route=discard → 除 skipped 全空；与 route 不匹配的条目宿主拒收。教训/踩坑类（notes/lessons.md 或 [lesson] 语境）可在 appends 条目附可选 rootCause/avoidWhen（各 ≤30 字，v5）——宿主写入时自动追加「- 根因：…」「- 不适用：…」两行，让教训带 WHY 与不适用条件（对标 WikiSkill pattern 双记 + When NOT to Apply），其余条目省略。`
+约束：route=memory → 填 appends/newIndex（target 白名单 notes/tools.md notes/flows.md notes/lessons.md notes/env.md notes/release.md；section = 既有 ## 小节名，或「父/子」树状路径（子节不存在时宿主自动建 ###，v21）；**裂 ### 判据（spec §8.1 分裂律）**：目标 ## 小节**子树正文 > 1000 字**（R=一次读取单元）**或同级条目 > 6 条**（K，防横向膨胀）→ 裂出子节、用「父/子」路径写入；否则并入父节（宁并勿滥裂，一层必须缩小候选集才有意义）；**text 教程式三段**「目标：… 1. … 2. … 注意：…」只写方向指引级浓缩——目标形态/步骤轮廓/关键注意点，不搬细节条文，纯事实类可省步骤保留目标行；**newIndex.line 格式权威=记忆库 spec §8**：[tag] 主题 · 概况短语/短语/短语 → notes/<file>.md §小节，定界符 ·=段界 /=短语界 →=指针，主题≤12字名词性禁冒号复合，概况名词短语 / 分隔、≤30字、高判别实词（专名/数值/路径关键词）、禁日期溯源），profiles/projectCards 留空；profiles 仅在 route=memory 时可填（0-2 条，宁缺毋滥，须是稳定画像而非一次性事实）；route=project → 填 projectCards（cardType: how-to=操作步骤/reference=契约事实/decision=架构决策），其余留空；route=discard → 除 skipped 全空；与 route 不匹配的条目宿主拒收。教训/踩坑类（notes/lessons.md 或 [lesson] 语境）可在 appends 条目附可选 rootCause/avoidWhen（各 ≤30 字，v5）——宿主写入时自动追加「- 根因：…」「- 不适用：…」两行，让教训带 WHY 与不适用条件（对标 WikiSkill pattern 双记 + When NOT to Apply），其余条目省略。
+${JUDGEMENT_HINT}`
 
 // ── 深度睡眠归纳契约（v17：习得原则与通用任务路径 [路径] 并入 agent 画像 AGENT.md；成败信号入材料；睡眠=agent 的反思进化迭代——认识自己也认识用户）──
 // v17.2（2026-09-10 用户拍板 v6）：新增 pointerOps 通道——索引指针自动维护（扩容概况/重构指针 §/去重留优），只允许 update 不增删（新增=蒸馏 newIndex 唯一性硬门）。
 // v17.3（2026-09-10 用户拍板 treeOps v1）：深睡可提 rename/merge 结构操作（宿主执行守不变量），v5.4「深睡不新建/不合并小节」禁令解除；分裂新 ### 仍归蒸馏写侧。
 export const DEEP_SLEEP_PROMPT = `你是深度睡眠归纳子代理（守藏记忆·agent 画像成长引擎，audit-protocol §5）。任务：像人睡前回想当天经历一样，回顾给定「当天记忆痕迹」——**反思三通道：认识自己（提炼习得原则写入 AGENT.md）+ 认识用户（更新用户画像 USER.md）+ 沉淀通用任务路径（[路径] 行写入 AGENT.md，对标 AWM）**，仅认识自己或认识用户其一即反思不完整。原则=多条经验反复提纯凝成的跨任务泛化指引（巩固记忆；主动遗忘=提纯下放，不是删除）；路径=可复用任务类型的步骤序列（具体值必须变量化）。
 判定规则：
-- **原则判据**：同主题 ≥3 条痕迹，或单主题当日反复命中 → 提炼 1 条原则；支撑不足的一律不提炼（路径判据见下，二者区分勿混）。
-- 原则=一句方向指引（对齐 R1 粒度锚：目标形态/步骤轮廓/关键注意点），不搬细节条文。
-- **路径判据**：同一任务类型在窗口内出现 ≥2 次（痕迹/运行统计可见重复模式）→ 归纳 1 条路径；候选区若含「成功次数 ≥2 且跨会话 ≥2」的任务候选 = 已达转正门槛（memory-core-model §4），直接归纳为 [路径]；**只归纳成功走通的任务**，失败任务只进原则教训（AWM：只从成功学）。
+${CONSOLIDATE_JUDGE}
 - 路径行格式：\`[路径] <任务类型 ≤10 字> · <步骤概要 ≤40 字，用 ①②③ 串联> → notes/flows.md §小节\`；**具体值必须变量化**（如 <项目名>/<端口>/<文件名>——不抽象=过拟合单例）。
 - 材料若含「窗口内任务运行统计」：先做成败对比（ExpeL 式）——异常集中出现的环节才是真因所在；对比结论仍受跨工作区红线约束，不得把单项目细节写成原则/路径。
 - 源指针只能指向给定痕迹中真实出现过的 notes/<file>.md §小节（1-2 个小节）；行格式严格为（AGENT.md 索引行格式，概况段即原则一句或路径概要）：\`[原则] <主题 · 一句泛化> → notes/<file>.md §小节A/§小节B\`（主题 ≤12 字、概况 ≤30 字、禁日期戳）或 \`[路径]\`（格式见上，概要 ≤40 字）
-- **跨工作区红线**：记忆库是全局单库，痕迹可能来自多个工作区，而原则会常驻注入到**所有**工作区会话。含项目专名/具体路径/版本号/一次性事实的经验一律不提炼（skipped 注明「项目专属」）；只在单一项目语境成立的结论同样不提炼——宁缺毋滥，误注入比漏提炼危害大。
 - pending 内容尚未入册 notes 的，不得作为源指针（仅作背景理解）；找不到 notes 锚点就不提炼（宁缺毋滥）。
 - 与既有原则/路径冲突时用 replace（match=既有行原文，须逐字来自给定「现行原则/路径」清单）；否则 add。
 - **v17.3/v18 树由模型自动维护（2026-09-10/09-11 拍板）**：**你可以**在确有语义收益时提出 \`treeOps\` 结构操作——\`rename\`（改标题并改写指针）/ \`merge\`（并入叶子小节）/ **\`split\`（把一个叶子 \`##\` 按边界锚拆成 ≤6 个 \`###\`）**；宿主执行并守不变量（归档可回滚/锚存在/指针集内重写/无孤儿）。**split 判据（spec §8.1 分裂律）**：该 \`##\` 正文 > R=1000 字且能划出 ≥2 个**语义正交**子面 → 才拆（否则并入即可，宁并勿滥裂）；\`parts[].start\` 必须**逐字**取自材料「待拆候选节正文」的对应行、且在节内唯一；子节名 ≤12 字。**增量生长（并入/新建 \`###\`）由蒸馏写侧负责，存量整形归你**；宁缺毋滥，拿不准不出 treeOps。源指针仍指向真实存在的 §小节（含子节路径如 §父节/子节 若材料中已存在）。
 - **split 的 JSON 形状**：\`{"action":"split","file":"lessons.md","title":"<目标叶子 ## 名>","parts":[{"title":"<子节名 ≤12 字>","start":"<该子节首行原文，逐字取自「待拆候选节正文」>"},…（2–6 个）]}\`；rename=\`{"action":"rename","file","oldTitle","newTitle"}\`、merge=\`{"action":"merge","file","keepTitle","dropTitle"}\`。
 - **v19 forgetOps（认知对照 P0「主动遗忘」）**：材料「遗忘候选」列出 90 天零命中的冷节——**你可以**对其中若干条给出 \`forgetOps\`：\`{"action":"archive","file":"lessons.md","section":"<小节名>"}\`（该节**正文**移入归档区、原位留 stub，指针仍有效、可一键恢复）或 \`{"action":"keep","file":"lessons.md","section":"<小节名>","reason":"≤60 字"}\`（保留并给理由）。**只允许 archive/keep，任何删除类动作一律被宿主丢弃**。判据：**确不再需要**（一次性进度 / 已被取代 / 纯历史）→ archive；**仍可能用到**（安全红线 / 契约事实 / 偶发但关键）→ keep 并给理由。**宁 keep 勿 archive，拿不准不动**。
 - **v19 crossTopic（认知对照 P2「REM 相」，仅在开启时生效）**：原则通道之外，可另提 \`crossTopic\`——**跨主题**联想出的上位原则：\`{"action":"add","text":"[原则] … → notes/x.md §A/§B"}\`。**硬门：text 的源指针必须覆盖 ≥2 个不同 § 小节**（同一主题内的归纳已由 principles 覆盖），不足即被宿主丢弃。没有真联想就留空，别硬凑。
-- **v19 跨日二次激活**：材料「近 7 日再现」给出被**再次命中**的已有条目——同一条目在多个日窗重现 = 该主题稳固，可经 pointerOps 扩容概况或提纯为更高层原则；只在单日出现的不要当稳固信号。
 - 独立完成：不 spawn 子代理、不使用任何工具，只依据给定材料。
 输出：只输出一行 JSON（不要 reasoning、不要其他文本）：
 {"principles":[{"action":"add","text":"[原则] 排障先看根因 · 先验证成本低再修改成本高 → notes/lessons.md §A/§B"},{"action":"add","text":"[路径] DSH 插件升级 · ①提交推送 ②cp 覆盖 lib ③sc restart ④四端点 200 → notes/flows.md §升级"},{"action":"replace","match":"[原则] 既有原则原文行","text":"[原则] ... → notes/tools.md §C"}],"profileOps":[{"target":"USER.md","action":"add","section":"沟通偏好","text":"- ... ← 源: notes/lessons.md §A"}],"pointerOps":[{"target":"MEMORY.md","action":"update","match":"[lesson] 网络坑 · 旧概况短语 → notes/lessons.md §网络坑","line":"[lesson] 网络坑 · 新概况短语 → notes/lessons.md §网络坑"}],"treeOps":[{"action":"rename","file":"lessons.md","oldTitle":"旧名","newTitle":"新名"}],"forgetOps":[{"action":"keep","file":"lessons.md","section":"旧节","reason":"安全红线"}],"crossTopic":[],"skipped":[{"title":"...","reason":"≤30字"}]}
@@ -306,7 +302,8 @@ export const DEEP_SLEEP_PROMPT = `你是深度睡眠归纳子代理（守藏记�
 - 扩容：小节正文显著增补 / 概况过时 / 主题出现新要点 → update 只刷新概况短语（保 标签/主题/指针 指向；概况 ≤30 字名词短语）。
 - 重构：小节改名/合并导致指针 § 失效或漂移 → update 指针 §（概况如需一并刷新）。
 - 去重：现行清单中同 标签+主题 出现两行 → 保留信息更全/命中更高者，update 被留行合并概况（绝不双写）。
-- match 一律逐字取自「现行画像 / 现行知识索引」清单；无锚不 update，拿不准不动。`
+- match 一律逐字取自「现行画像 / 现行知识索引」清单；无锚不 update，拿不准不动。
+${JUDGEMENT_HINT}`
 
 // ── 宿主注入样板判别（**单一实现**：候选区 isNoiseIntent + 打扰度采样 activationStep 共用；2026-09-11 ACT-024）──
 // 背景：DSH 会把宿主注入块作为 `user/message` 事件下发——运行态快照（Current runtime context）、后台 job/子代理回执
@@ -384,6 +381,14 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
   const kRoot = knowledgeRoot()
   const watermarkFile = join(kRoot, 'audit', 'distill-watermark.jsonl')
   const auditFile = join(kRoot, 'audit', 'distill-audit.jsonl')
+  // 判据台账（ADR-122 v2）：每次决策一行——判据取值 + 决策 + 结果 + 依据，供 scripts/criteria-audit.mjs 对账
+  const ledgerFile = join(kRoot, LEDGER_FILE)
+  const ledger = (o: Record<string, unknown>): void => {
+    try {
+      mkdirSync(dirname(ledgerFile), { recursive: true })
+      appendFileSync(ledgerFile, JSON.stringify({ at: new Date().toISOString(), criteriaVersion: CRITERIA_VERSION, ...o }) + '\n', 'utf8')
+    } catch { /* 台账失败静默（不影响主流程） */ }
+  }
   const pendDir = join(kRoot, 'pending')
   // ═══ 路线② 成长环数据源：轻 episode（同类判定/转正数据源，不存全文）+ 低置信任务候选区（跨窗口记忆）═══
   const episodeFile = join(kRoot, 'audit', 'episodes.jsonl')
@@ -1027,6 +1032,16 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
   }
   const releaseClaim = (sid: string): void => { try { unlinkSync(claimFileOf(sid)) } catch { /* 无 claim/删除失败均无害 */ } }
 
+  const bankGitScript = join(memoryLibRoot(), 'scripts', 'bank-git.mjs')
+  /** v2（ADR-122）：库 git 版本化快照（写后触发；失败静默——版本化是增强不是主流程依赖） */
+  const bankSnapshot = async (label: string): Promise<void> => {
+    if (config.bankGit === false) return
+    try {
+      if (!existsSync(bankGitScript)) return
+      await runNode(config.nodeBin, bankGitScript, ['--message', `memory: ${label} @ ${new Date().toISOString().slice(0, 19)}`], { env: { MEMORY_ROOT: memoryLibRoot() }, timeout: 20000 })
+    } catch { /* 静默 */ }
+  }
+
   const distillAgent = async (agent: any): Promise<void> => {
     const sid = agent.id as string
     if (distilling.has(sid)) return // 并发守卫（本 fiber 内）：蒸馏在途（最长 10min）内再触发直接跳过
@@ -1036,6 +1051,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     // 处理：本轮推迟（不推水位、不消费），重新武装 idle 定时器；子代理完成时父会话会收到 followup 事件再触发。
     if (hasActiveSubagents(sid)) {
       audit({ sid, kind: 'distill-skip', reason: 'active-subagent', fclass: 'busy-subagent' })
+      ledger({ domain: 'ingest', sid: sid.replace(/^session-/, '').slice(0, 8), decision: { route: 'skip', reason: 'busy-subagent' }, result: { added: 0, rejected: 0, failed: 0 } })
       log(`distill: ${sidShort(sid)} 有活跃子代理在跑（等待返回），推迟蒸馏（水位保留）`)
       armIdleTimer(agent)
       return
@@ -1059,6 +1075,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       // A3：统一 claim（idle 与扫尾同一判定）——在途即让位（本 fiber 结束/早退时释放）。
       if (!tryClaim(sid, lastSeq, maxSeq)) {
         audit({ sid, kind: 'distill-skip', reason: 'claim-held', fclass: 'claim-held' })
+        ledger({ domain: 'ingest', sid: sid.replace(/^session-/, '').slice(0, 8), decision: { route: 'skip', reason: 'claim-held' }, result: { added: 0, rejected: 0, failed: 0 } })
         log(`distill: ${sidShort(sid)} claim 在途（其他实例接管中），本轮让位`)
         return
       }
@@ -1073,6 +1090,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         // 跳过也留审计痕（观测盲区修复 2026-09-09：此前门槛/预筛跳过只进日志，审计里只见真实 run，
         // 「蒸馏为什么没跑」无法从数据区分——是没触发还是被挡）
         audit({ sid, kind: 'distill-skip', reason: 'below-min-chars', fclass: 'below-min', chars: totalChars })
+        ledger({ domain: 'ingest', sid: sid.replace(/^session-/, '').slice(0, 8), decision: { route: 'skip', reason: 'below-min-chars', chars: totalChars }, result: { added: 0, rejected: 0, failed: 0 } })
         log(`distill: ${sidShort(sid)} 增量 ${totalChars} 字符 < 门槛，水位推进 ${lastSeq}→${maxSeq}（不蒸馏）`)
         return
       }
@@ -1086,6 +1104,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         if (!hasSig && candFiles.length === 0) {
           writeWatermark(sid, maxSeq, agent)
           audit({ sid, kind: 'distill-skip', reason: 'prescan-no-signal', fclass: 'prescan-no-signal', chars: totalChars })
+          ledger({ domain: 'ingest', sid: sid.replace(/^session-/, '').slice(0, 8), decision: { route: 'skip', reason: 'prescan-no-signal', chars: totalChars }, result: { added: 0, rejected: 0, failed: 0 } })
           log(`distill: ${sidShort(sid)} 预筛跳过（增量 ${totalChars} 字符无信号词 & pending 无候选），水位推进 ${lastSeq}→${maxSeq}`)
           return
         }
@@ -1179,6 +1198,16 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
             : 'ok'
           // v18：审计行与 raw-stub 均带分段标记（chunk/chunkStart/chunkEnd/totalChunks）；stub watermark=该段推进区间（同步用该段 endSeq）
           audit({ sid, kind: 'distill-run', route, stop, fclass, llm: llmLabel, targetLib: disp.targetLib, added: disp.added, rejected: disp.rejected, failed: disp.failed, chunk: k + 1, chunkStart: chunk.startSeq, chunkEnd: chunk.endSeq, totalChunks: chunks.length })
+          // 判据台账（摄取域）：模型判据（可选 judgement）+ 宿主 L0 代理评估 + 决策与结果
+          ledger({
+            domain: 'ingest', sid: sid.slice(0, 8), chunk: k + 1,
+            judgement: (out && out.judgement) || null,
+            l0After: evaluateL0({ text: String(chunk.text || '').slice(0, 400), traces: 1 }),
+            decision: { route, fclass, handledByHost: true },
+            result: { added: disp.added, rejected: disp.rejected, failed: disp.failed, targetLib: disp.targetLib },
+            enqueued: { appends: (out?.appends || []).length, newIndex: (out?.newIndex || []).length, profiles: (out?.profiles || []).length, projectCards: (out?.projectCards || []).length, skipped: (out?.skipped || []).length },
+          })
+          if (disp.added > 0 || (out?.newIndex || []).length > 0) void bankSnapshot('distill') // v2：写后库快照（best-effort，不阻塞）
           recordStub({ sid, watermark: [wmNow, chunk.endSeq], chars: chunk.text.length, route, stop, fclass, llm: llmLabel, disp: { added: disp.added, rejected: disp.rejected, failed: disp.failed, targetLib: disp.targetLib }, outShape: out ? { appends: (out.appends || []).length, newIndex: (out.newIndex || []).length, profiles: (out.profiles || []).length, projectCards: (out.projectCards || []).length, skipped: (out.skipped || []).length } : null, chunk: k + 1, chunkStart: chunk.startSeq, chunkEnd: chunk.endSeq, totalChunks: chunks.length })
           if (stop === 'completed' && out && disp.failed === 0) {
             if (disp.added > 0) anyAdded = true
@@ -2387,6 +2416,23 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
           : { archived: 0, kept: 0, skipped: 0 }
         log(`deep sleep: stop=${stop} 原则 +${app.added}/替换 ${app.replaced}/跳过 ${app.skipped}（${app.gate}）画像 +${profileAdded} 指针更新 ${ptrRes.updated}/跳过 ${ptrRes.skipped}（${ptrRes.gate}）树 ops ${treeRes.applied}/跳过 ${treeRes.skipped}/归档 ${treeRes.archived} forget 归档 ${forgetRes.archived}/保留 ${forgetRes.kept}/跳过 ${forgetRes.skipped}`)
         audit({ kind: 'deep-sleep', stop, added: app.added, replaced: app.replaced, skipped: app.skipped, profiles: profileAdded, pointers: ptrRes.updated, ptrSkipped: ptrRes.skipped, tree: treeRes.applied, treeSkipped: treeRes.skipped, forgetArchived: forgetRes.archived, forgetKept: forgetRes.kept, forgetSkipped: forgetRes.skipped, gate: app.gate })
+        // 判据台账（巩固域）：模型判据（可选 judgement）+ 宿主侧**升格/降格裁决**（criteria.ts 单一实现）+ 六通道结果
+        ledger({
+          domain: 'consolidate', step: 'deep-sleep', stop,
+          judgement: (out && out.judgement) || null,
+          hostGates: {
+            // 升格裁决（原则：支撑条数；路径：同型次数+跨会话+只从成功）
+            promote: {
+              principles: (out?.principles || []).length ? promoteVerdict('principle', { traces: Number((out?.judgement && (out.judgement as any).evidence) || 0) || undefined }).ok : null,
+              premiseGate: promoteVerdict('principle', { traces: 99, dependsOnPremise: !!(out?.judgement && (out.judgement as any).dependsOnPremise), premiseWritten: !!(out?.judgement && (out.judgement as any).premiseWritten) }),
+            },
+            // 降格/遗忘裁决逐条（三守卫 + 画像节保护 + 单轮上限）
+            demote: (out?.forgetOps || []).slice(0, 8).map((o: any) => ({ section: `${String(o?.file || '')} §${String(o?.section || '')}`, verdict: demoteVerdict({ file: String(o?.file || ''), status: String(o?.status || 'cold') }).reason })),
+          },
+          result: { principlesAdded: app.added, principlesReplaced: app.replaced, principlesSkipped: app.skipped, profilesAdded: profileAdded, pointersUpdated: ptrRes.updated, treeApplied: treeRes.applied, treeArchived: treeRes.archived, forgetArchived: forgetRes.archived, forgetKept: forgetRes.kept, forgetSkipped: forgetRes.skipped },
+          enqueued: { principles: (out?.principles || []).length, profileOps: (out?.profileOps || []).length, pointerOps: (out?.pointerOps || []).length, treeOps: (out?.treeOps || []).length, forgetOps: (out?.forgetOps || []).length, crossTopic: (out?.crossTopic || []).length, skipped: (out?.skipped || []).length },
+        })
+        if (stop === 'completed') void bankSnapshot('deep-sleep') // v2：巩固后库快照（best-effort）
         if (stop === 'completed') {
           // 路线② 晨起摘要 delta：深睡消化后的行级 diff（新增/替换 [原则]/[路径]/画像行 ≤3）→ suite/knowledge/delta.md
           // 语义：delta 是「最近变化的新闻」，AGENT.md/USER.md 是档案全本；delta 永非事实源，过期即弃（下轮深睡覆盖）。
@@ -2703,6 +2749,8 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     apiKeyEnv: String(config.embedApiKeyEnv || ''),
     // v7 召回降权系数（UI 可调：recallColdFactorPercent，% → /100；缺省 35% → 0.35）
     coldFactor: (Number(config.recallColdFactorPercent) > 0 ? Number(config.recallColdFactorPercent) : 35) / 100,
+    // v2（ADR-122）：融合策略（缺省 RRF；scheduler 配置 recallFusion=weighted 可回滚）
+    fusionKind: config.recallFusion === 'weighted' ? 'weighted' : 'rrf',
   })
 
   // 路线④ 打扰度观察（v6 向量政策 2026-09-10：打分改 recallRanked 融合召回——dense 主、lexical 稳；

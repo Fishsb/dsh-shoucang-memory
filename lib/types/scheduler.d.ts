@@ -62,6 +62,8 @@ export interface Config {
     embedBaseUrl: string;
     embedModel: string;
     embedApiKeyEnv: string;
+    recallFusion: string;
+    bankGit: boolean;
     activityWarmDays: number;
     activityColdDays: number;
     activityArchiveDays: number;

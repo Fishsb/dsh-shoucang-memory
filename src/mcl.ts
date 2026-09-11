@@ -191,14 +191,14 @@ export function registerMcl(
       }
       const text = taskText.get(sid) || ''
       if (!text) return decision
-      if (!ready.has(sid)) { ready.add(sid); hooks.audit({ kind: 'mcl-ready', sid: sid.slice(0, 8), step }) }
+      if (!ready.has(sid)) { ready.add(sid); hooks.audit({ kind: 'mcl-ready', sid: sid.replace(/^session-/, '').slice(0, 8), step }) }
 
       let st = state.get(sid)
       if (!st) { st = { nudges: 0, topics: [], channel: '', sim: 0 }; state.set(sid, st) }
 
       // 注入只发生在**任务首步**：中途步（如热重载跨轮）不插材料，只记一次 skip（防在任务半途打断）
       if (!st.channel && step !== 1) {
-        if (!st.lateLogged) { st.lateLogged = true; hooks.audit({ kind: 'mcl-skip', sid: sid.slice(0, 8), step, reason: 'late-step' }) }
+        if (!st.lateLogged) { st.lateLogged = true; hooks.audit({ kind: 'mcl-skip', sid: sid.replace(/^session-/, '').slice(0, 8), step, reason: 'late-step' }) }
         return decision
       }
 
@@ -218,7 +218,7 @@ export function registerMcl(
         counters.lastSim = sim
         if (fast) {
           counters.fast++
-          hooks.audit({ kind: 'mcl-step', sid: sid.slice(0, 8), step, channel: 'fast', sim: Number(sim.toFixed(3)), hit: r.rows[0]?.line?.slice(0, 100) || '', injected: 0 })
+          hooks.audit({ kind: 'mcl-step', sid: sid.replace(/^session-/, '').slice(0, 8), step, channel: 'fast', sim: Number(sim.toFixed(3)), hit: r.rows[0]?.line?.slice(0, 100) || '', injected: 0 })
           return decision
         }
         counters.slow++
@@ -228,7 +228,7 @@ export function registerMcl(
         await loadMsgFactory()
         const idx = messages.lastIndexOf(fresh)
         const entered = idx >= 0 ? messages.slice(0, idx + 1).concat([mkMsg(m.text)], messages.slice(idx + 1)) : messages.concat([mkMsg(m.text)])
-        hooks.audit({ kind: 'mcl-step', sid: sid.slice(0, 8), step, channel: 'slow', sim: Number(sim.toFixed(3)), hit: r.rows[0]?.line?.slice(0, 100) || '', topics: m.topics, injected: m.text.length, nudge: 0 })
+        hooks.audit({ kind: 'mcl-step', sid: sid.replace(/^session-/, '').slice(0, 8), step, channel: 'slow', sim: Number(sim.toFixed(3)), hit: r.rows[0]?.line?.slice(0, 100) || '', topics: m.topics, injected: m.text.length, nudge: 0 })
         hooks.log(`mcl: ${sid.slice(0, 8)} 慢通道 → 首步注入 ${m.text.length} 字符 / ${m.topics.length} 主题（sim=${sim.toFixed(3)}）`)
         return { ...decision, messages: entered }
       }
@@ -247,11 +247,11 @@ export function registerMcl(
         counters.nudged++
         await loadMsgFactory()
         const nudge = `【认知环·再引导 ${st.nudges}/${cfg.maxNudges}】上一步未引用本任务相关的经验（${st.topics.slice(0, 3).join(' / ')}）。请用一句话补上：任务类型与目标 + 你要引用的一条 \`[路径]\`/\`[原则]\`（指针见上一步材料），然后继续。`
-        hooks.audit({ kind: 'mcl-step', sid: sid.slice(0, 8), step, channel: 'slow', sim: Number(st.sim.toFixed(3)), compliant: false, nudge: 1, topics: st.topics })
+        hooks.audit({ kind: 'mcl-step', sid: sid.replace(/^session-/, '').slice(0, 8), step, channel: 'slow', sim: Number(st.sim.toFixed(3)), compliant: false, nudge: 1, topics: st.topics })
         hooks.log(`mcl: ${sid.slice(0, 8)} 慢通道 → 再引导 ${st.nudges}/${cfg.maxNudges}`)
         return { ...decision, messages: messages.concat([mkMsg(nudge)]) }
       }
-      if (!compliant) hooks.audit({ kind: 'mcl-step', sid: sid.slice(0, 8), step, channel: 'slow', sim: Number(st.sim.toFixed(3)), compliant: false, nudge: 0, nudges: st.nudges, topics: st.topics })
+      if (!compliant) hooks.audit({ kind: 'mcl-step', sid: sid.replace(/^session-/, '').slice(0, 8), step, channel: 'slow', sim: Number(st.sim.toFixed(3)), compliant: false, nudge: 0, nudges: st.nudges, topics: st.topics })
       return decision
     } catch (e) {
       try { hooks.audit({ kind: 'mcl-error', err: String((e as Error)?.message || e).slice(0, 160) }) } catch { /* 静默 */ }

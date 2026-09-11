@@ -5,7 +5,7 @@
  *   根目录：GET /roots · GET /get_root · POST /set_root · POST /root/bootstrap（建**单库骨架**）
  *   配置：  GET /config · POST /save · POST /toggle · POST /set（白名单键）
  *   记忆：  GET /memory/overview · GET /memory/sections · POST /memory/section-edit · POST /memory/edit · POST /memory/remove · POST /memory/approve
- *   展示：  GET /suite（suiteAssemblyMatrix 经 schedulerShare 桥接）· GET /cognition/report（深睡回执/活性/归档）· GET /mcl/status（认知环快照+审计）
+ *   展示：  GET /suite · GET /cognition/report（深睡回执/活性/归档）· GET /mcl/status（认知环）· GET /criteria（判据注册表+台账）
  *   深睡：  GET /deepsleep · POST /deepsleep/trigger · GET+POST /deepsleep/config（单 handler 按 method 分发）
  *   蒸馏：  POST /distill/run · GET+POST /distill/config（节流组持久通道，同深睡：单 handler 按 method 分发）
  *   向量/模型：GET /vector/status2 · POST /vector/cache/clear · GET+POST /embed/config · POST /embed/test · GET /llm/models
@@ -1092,6 +1092,31 @@ export function applyPanel(ctx: Context, config: Config): void {
     } catch (e) { sendJson(res, 500, { error: String(e) }) }
   })
 
+  // ADR-122 v2：判据注册表视图（判据投影参数 + 台账规模；只读；权威数据源=criterion.json 的生成投影）
+  route('/criteria', (_req, res) => {
+    try {
+      let reg: any = null
+      try { reg = JSON.parse(readFileSync(join(memoryLibRoot(), 'engine', 'criteria-gate.json'), 'utf8')) } catch { /* 投影未部署 */ }
+      let ledgerRows = 0
+      let lastAt = 0
+      try {
+        const lines = readFileSync(join(knowledgeRoot(), 'audit', 'judgement-ledger.jsonl'), 'utf8').split(/\r?\n/).filter(Boolean)
+        ledgerRows = lines.length
+        const last = lines[lines.length - 1]
+        if (last) lastAt = Date.parse((JSON.parse(last) as { at?: string }).at || '') || 0
+      } catch { /* 无台账 */ }
+      sendJson(res, 200, {
+        active: !!reg,
+        version: reg?.version || null,
+        caps: reg?.caps || null,
+        health: { R: reg?.R ?? null, K: reg?.K ?? null, notesWarn: reg?.notesWarn ?? null },
+        surface: reg?.surface || null,
+        ledger: { rows: ledgerRows, lastAt },
+        docs: 'skill/engine/criteria.md（生成的人读判据表） · skill/engine/criteria.json（唯一事实源）',
+      })
+    } catch (e) { sendJson(res, 500, { error: String(e) }) }
+  })
+
   route('/cognition/report', (_req, res) => {
     try {
       const root = memoryLibRoot()
@@ -1383,7 +1408,7 @@ export function applyPanel(ctx: Context, config: Config): void {
   }
 
   ctx.effect(() => {
-    ctx.logger?.info?.('[shoucang] host RPC ready: roots(roots|get_root|set_root|bootstrap)/config(save|toggle|set)/memory(overview|sections|section-edit|edit|remove|approve)/suite/mcl-status/cognition-report/deepsleep(status|trigger|config)/distill(run|config)/vector(status2|cache-clear)/embed(config|test)/llm-models/inject(preview|stats)')
+    ctx.logger?.info?.('[shoucang] host RPC ready: roots(roots|get_root|set_root|bootstrap)/config(save|toggle|set)/memory(overview|sections|section-edit|edit|remove|approve)/suite/mcl-status/criteria/cognition-report/deepsleep(status|trigger|config)/distill(run|config)/vector(status2|cache-clear)/embed(config|test)/llm-models/inject(preview|stats)')
     // 注册 systemPrompt 注入块（每轮渲染，指针缓存 30s）
     const sp = (ctx as unknown as { systemPrompt?: { context?(opts: unknown): () => void } }).systemPrompt
     if (sp && typeof sp.context === 'function') {

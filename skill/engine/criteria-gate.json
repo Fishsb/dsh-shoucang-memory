@@ -1,0 +1,114 @@
+{
+  "version": "v2.0.0",
+  "caps": {
+    "MEMORY.md": 5000,
+    "USER.md": 3000,
+    "AGENT.md": 3000
+  },
+  "envOverride": {
+    "MEMORY.md": "SHOUCANG_CAP_MEMORY",
+    "USER.md": "SHOUCANG_CAP_USER",
+    "AGENT.md": "SHOUCANG_CAP_AGENT"
+  },
+  "notesWarn": 8000,
+  "exit": {
+    "capacity": 1,
+    "pointer": 2,
+    "format": 4
+  },
+  "R": 1000,
+  "K": 6,
+  "granularity": {
+    "R": 1000,
+    "K": 6
+  },
+  "dedup": {
+    "threshold": 0.66,
+    "minTokens": 2
+  },
+  "format": {
+    "topicMax": 12,
+    "summaryMax": 30,
+    "pathSummaryMax": 40,
+    "banDate": true,
+    "requirePointer": true,
+    "requireMiddleDot": true,
+    "forbidArrowInPath": true
+  },
+  "demote": {
+    "coldDays": 90,
+    "guards": [
+      "leaf",
+      "cold-or-retired",
+      "not-stub"
+    ],
+    "profileFilesForbidden": true,
+    "maxPerRun": 3,
+    "allowDelete": false
+  },
+  "surface": {
+    "injection": {
+      "budgetChars": 3000,
+      "order": 88,
+      "relevance": true,
+      "freshSlots": 2,
+      "levelCaps": {
+        "low": 2,
+        "medium": 4,
+        "high": 8,
+        "smart": 10
+      }
+    },
+    "recall": {
+      "topK": 3,
+      "topKMax": 5,
+      "scope": "all",
+      "coldFactorPercent": 35
+    },
+    "fusion": {
+      "kind": "rrf",
+      "k": 60,
+      "fallback": "weighted",
+      "weights": {
+        "dense": 0.7,
+        "lexical": 0.3
+      },
+      "dedupBySection": true
+    },
+    "threshold": {
+      "metric": "abs-cosine",
+      "tOn": 0.65,
+      "tOff": 0.6,
+      "note": "ACT-024 校准：绝对余弦；归一化融合分只能排序不可做阈值"
+    },
+    "rerank": {
+      "enabled": false,
+      "gate": {
+        "indexRows": 200,
+        "followRateDropRuns": 2
+      },
+      "note": "触发门未达前不引入 reranker（避免堆叠）"
+    },
+    "mcl": {
+      "familiarThreshold": 0.65,
+      "maxNudges": 1,
+      "budgetChars": 600,
+      "topK": 3
+    }
+  },
+  "health": {
+    "R": 1000,
+    "K": 6,
+    "notesWarn": 8000,
+    "checks": [
+      "capacity",
+      "duplicates",
+      "tags",
+      "pointers",
+      "section-existence",
+      "index-ledger-coverage",
+      "inject-token-account",
+      "placement-audit"
+    ]
+  }
+}

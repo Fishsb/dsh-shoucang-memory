@@ -1,0 +1,104 @@
+{
+  "version": "v2.0.0",
+  "kind": "criteria-registry",
+  "note": "守藏记忆核心 v2 唯一判据数据源（ADR-122）。所有投影由 scripts/gen-criteria.mjs 生成，禁止手写；scripts/check-criteria.mjs 机检一致（纳入 npm test）。judgeText 段与 v1 现值逐字等价（M1 零行为切换）。",
+  "l0": {
+    "reuse": { "values": ["cross-task", "cross-project", "session-only"], "text": "可复用性：跨任务 / 跨项目 / 仅本会话" },
+    "generality": { "values": ["direction", "contract-fact", "detail"], "text": "泛化度：方向指引（粗）/ 契约事实 / 细节条文" },
+    "stability": { "values": ["once", "same-day-repeat", "cross-day"], "text": "稳定性：单次 / 当日重现 / 跨日或多会话重现" },
+    "conflict": { "values": ["none", "coexist", "supersede"], "text": "冲突性：无 / 与既有并存 / 取代既有" }
+  },
+  "ingest": {
+    "domain": "ingest",
+    "label": "摄取域（会话 → 库）",
+    "judgeText": [
+      "第一层归属路由（对每条候选按序判定）：",
+      "- R1 泛化方向指引？这条知识的作用=下次做类似任务给大概方向？→ route=memory（粗粒度是特性，不要把细节条文塞进记忆库）",
+      "- R2 官方规范/平台规则/工具用法等**跨项目有用**的细粒度条文 → route=memory（归 notes/tools 或 notes/lessons，教程式浓缩）",
+      "- R3 某项目专属事实（项目结构/该项目用户拍板的决策/项目契约踩坑，只在单一项目语境有用）→ route=project（宿主直写该项目工作区 docs/devref/shoucang/）",
+      "- R4 其余（一次性进度/可搜索公开知识/无实质/<relevant-memories>注入缓存/重复已有归属）→ route=discard",
+      "- 同一条既像 R1/R2 又像 R3：跨项目可复用→memory；只在单一项目成立→project。既不跨项目也不属于当前会话项目→丢弃。",
+      "- 拿不准 → route=memory 但 appends 留空记 skipped（宁缺毋滥）。",
+      "route=memory 时续走四问（**降级为归属子判据组**，不再是全局判据抬头）：Q0 已有归属？Q1 下周用得上？Q2 归谁（notes 记忆 / USER 用户画像 / AGENT 自我画像）？Q3 能合并？",
+      "Q2 画像判定：**用户的稳定偏好/背景/禁忌**（非一次性需求）→ profiles target=USER.md；**agent 自身的稳定做法/能力边界/常犯错误教训**（可跨任务复用的自我认知）→ profiles target=AGENT.md；一般知识→appends。",
+      "规则/纪律/程序类：**不入库**（SKILL 与 skill 协议文档是随插件发布的只读文档，无写入通道；v2 删除原「规则→SOUL.md」死支）。"
+    ],
+    "criteria": [
+      { "id": "ingest.route.r1", "kind": "soft", "params": { "route": "memory" }, "text": "R1 泛化方向指引 → memory" },
+      { "id": "ingest.route.r2", "kind": "soft", "params": { "route": "memory" }, "text": "R2 跨项目细粒度条文 → memory(notes/tools|lessons)" },
+      { "id": "ingest.route.r3", "kind": "soft", "params": { "route": "project", "target": "<workspace>/docs/devref/shoucang/" }, "text": "R3 项目专属事实 → project（直写工作区）" },
+      { "id": "ingest.route.r4", "kind": "soft", "params": { "route": "discard" }, "text": "R4 其余 → discard" },
+      { "id": "ingest.route.q0", "kind": "soft", "params": {}, "text": "Q0 已有归属 → 不存" },
+      { "id": "ingest.route.q1", "kind": "soft", "params": {}, "text": "Q1 下周用不上 → 不存" },
+      { "id": "ingest.route.q2", "kind": "soft", "params": { "targets": ["notes", "USER.md", "AGENT.md"] }, "text": "Q2 归谁（用户/agent/环境）" },
+      { "id": "ingest.route.q3", "kind": "soft", "params": {}, "text": "Q3 能合并 → replace 否则 add" },
+      { "id": "ingest.route.rules-not-stored", "kind": "soft", "params": { "reason": "rules-not-stored" }, "text": "规则类不入库（SOUL 死支已删）" },
+      { "id": "ingest.placement.notes-kind", "kind": "hard", "params": { "notes": ["env", "tools", "flows", "lessons", "release", "user", "agent"] }, "text": "落点须在 notes 白名单内" },
+      { "id": "ingest.placement.main-index", "kind": "hard", "params": { "indexTargets": ["MEMORY.md", "USER.md", "AGENT.md"] }, "text": "主索引写入仅三主档" },
+      { "id": "ingest.granularity.split-law", "kind": "hard", "params": { "R": 1000, "K": 6 }, "text": "子树正文 > R 或同级条目 > K → 裂 ###（§8.1 分裂律）" },
+      { "id": "ingest.dedup.exact", "kind": "hard", "params": { "enabled": true }, "text": "同 标签+主题 精确重复 → 拒收" },
+      { "id": "ingest.dedup.bigram", "kind": "hard", "params": { "threshold": 0.66, "minTokens": 2 }, "text": "主题 bigram 重叠 ≥ 阈值 → 近似重复拒收" },
+      { "id": "ingest.format.index-line", "kind": "hard", "params": { "topicMax": 12, "summaryMax": 30, "pathSummaryMax": 40, "banDate": true, "requirePointer": true, "requireMiddleDot": true, "forbidArrowInPath": true }, "text": "索引行四要素格式（spec §8）" }
+    ]
+  },
+  "consolidate": {
+    "domain": "consolidate",
+    "label": "巩固域（库 → 库）",
+    "judgeText": [
+      "- **原则判据**：同主题 ≥3 条痕迹，或单主题当日反复命中 → 提炼 1 条原则；支撑不足的一律不提炼（路径判据见下，二者区分勿混）。",
+      "- 原则=一句方向指引（泛化度=方向指引，目标形态/步骤轮廓/关键注意点），不搬细节条文。",
+      "- **路径判据**：同一任务类型在窗口内出现 ≥2 次（痕迹/运行统计可见重复模式）→ 归纳 1 条路径；候选区若含「成功次数 ≥2 且跨会话 ≥2」的任务候选 = 已达转正门槛（memory-core-model §4），直接归纳为 [路径]；**只归纳成功走通的任务**，失败任务只进原则教训（AWM：只从成功学）。",
+      "- **跨工作区红线**：记忆库是全局单库，痕迹可能来自多个工作区，而原则会常驻注入到**所有**工作区会话。含项目专名/具体路径/版本号/一次性事实的经验一律不提炼（skipped 注明「项目专属」）；只在单一项目语境成立的结论同样不提炼——宁缺毋滥，误注入比漏提炼危害大。",
+      "- **前提识别（premise awareness，v2 新增判据）**：提炼出的原则/路径若依赖某个**未写出的隐含前提**（特定工具链/特定环境/特定阶段），必须在概况或小节正文里写出该前提；写不出就降级为 notes 事实，不升格。",
+      "- **v19 跨日二次激活**：材料「近 7 日再现」给出被**再次命中**的已有条目——同一条目在多个日窗重现 = 该主题稳固，可经 pointerOps 扩容概况或提纯为更高层原则；只在单日出现的不要当稳固信号。"
+    ],
+    "criteria": [
+      { "id": "consolidate.support.principle", "kind": "soft", "params": { "minTraces": 3 }, "text": "原则：同主题 ≥3 条痕迹（或当日反复命中）" },
+      { "id": "consolidate.support.path", "kind": "soft", "params": { "minOccur": 2, "crossSessionMin": 2, "successOnly": true }, "text": "路径：同型 ≥2 次且只从成功任务归纳" },
+      { "id": "consolidate.promote.premise", "kind": "soft", "params": { "requirePremiseWhenDependent": true }, "text": "涉及隐含前提 → 必须写出，否则降级 notes" },
+      { "id": "consolidate.cross-workspace-redline", "kind": "soft", "params": { "forbidProjectNames": true }, "text": "跨工作区红线：项目专名/路径/版本号不提炼" },
+      { "id": "consolidate.reshape.split-law", "kind": "hard", "params": { "R": 1000, "K": 6, "partsMax": 6, "minParts": 2 }, "text": "treeOps split：正文 > R 且 ≥2 语义正交子面" },
+      { "id": "consolidate.demote.archive", "kind": "hard", "params": { "coldDays": 90, "guards": ["leaf", "cold-or-retired", "not-stub"], "profileFilesForbidden": true, "maxPerRun": 3, "allowDelete": false }, "text": "遗忘：cold 且 ≥90 天 + 三守卫；禁直删；画像节禁归档" },
+      { "id": "consolidate.cross.crossTopic", "kind": "hard", "params": { "minSections": 2 }, "text": "REM 相：crossTopic 源指针须覆盖 ≥2 个不同 §" },
+      { "id": "consolidate.replay.cross-day", "kind": "soft", "params": { "windowDays": 7 }, "text": "跨日二次激活：近 7 日再现 → 可扩容/提纯" },
+      { "id": "consolidate.pointer.update-only", "kind": "hard", "params": { "allow": ["update"], "forbid": ["add", "delete"] }, "text": "pointerOps 只允许原地 update（禁增删索引行）" }
+    ]
+  },
+  "gate": {
+    "caps": { "MEMORY.md": 5000, "USER.md": 3000, "AGENT.md": 3000 },
+    "notesWarn": 8000,
+    "budgetFormula": { "lineChars": 100, "fixed": 56, "pointer": 44 },
+    "exit": { "capacity": 1, "pointer": 2, "format": 4 },
+    "envOverride": { "MEMORY.md": "SHOUCANG_CAP_MEMORY", "USER.md": "SHOUCANG_CAP_USER", "AGENT.md": "SHOUCANG_CAP_AGENT" }
+  },
+  "health": {
+    "R": 1000,
+    "K": 6,
+    "notesWarn": 8000,
+    "checks": ["capacity", "duplicates", "tags", "pointers", "section-existence", "index-ledger-coverage", "inject-token-account", "placement-audit"]
+  },
+  "surface": {
+    "injection": { "budgetChars": 3000, "order": 88, "relevance": true, "freshSlots": 2, "levelCaps": { "low": 2, "medium": 4, "high": 8, "smart": 10 } },
+    "recall": { "topK": 3, "topKMax": 5, "scope": "all", "coldFactorPercent": 35 },
+    "fusion": { "kind": "rrf", "k": 60, "fallback": "weighted", "weights": { "dense": 0.7, "lexical": 0.3 }, "dedupBySection": true },
+    "threshold": { "metric": "abs-cosine", "tOn": 0.65, "tOff": 0.6, "note": "ACT-024 校准：绝对余弦；归一化融合分只能排序不可做阈值" },
+    "rerank": { "enabled": false, "gate": { "indexRows": 200, "followRateDropRuns": 2 }, "note": "触发门未达前不引入 reranker（避免堆叠）" },
+    "mcl": { "familiarThreshold": 0.65, "maxNudges": 1, "budgetChars": 600, "topK": 3 }
+  },
+  "judgement": {
+    "fields": {
+      "ingest": ["reuse", "generality", "stability", "conflict", "dup"],
+      "consolidate": ["evidence", "stability", "conflict", "cost"]
+    },
+    "hint": "judgement：可选对象，把本次判据取值写进输出（reuse/generality/stability/conflict/dup 或 evidence/stability/conflict/cost；取值见 criteria 注册表），宿主据此写 judgement-ledger 供对账。",
+    "ledger": "audit/judgement-ledger.jsonl"
+  },
+  "antiScope": [
+    "实体图/图数据库（用 INDEX 元数据表「关联主题」列弱关联替代）",
+    "无条件 reranker",
+    "深睡二次 LLM 复核档",
+    "记忆库对外 MCP 暴露",
+    "多租户 / RBAC",
+    "动态运行态入库"
+  ]
+}

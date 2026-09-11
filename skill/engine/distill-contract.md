@@ -1,19 +1,23 @@
-# 蒸馏裁决契约（distill-contract v6 · 单库化 + 分段水位 + 结构操作）
+# 蒸馏裁决契约（distill-contract v7 · 判据注册表化 + 双域分离 + 观测量）
 
-> **权威实现 = `src/distill.ts` 的 `DEFAULT_DISTILL_PROMPT`（蒸馏）与 `DEEP_SLEEP_PROMPT`（深睡）**。
-> 本档是给人读的契约说明书；与代码冲突时**以代码为准**，并请回改本档（v6 即 2026-09-11 按现码逐条对齐的产物）。
+> **权威实现 = `src/distill.ts` 的 `DEFAULT_DISTILL_PROMPT`（摄取域）与 `DEEP_SLEEP_PROMPT`（巩固域）**。
+> **判据唯一事实源 = `engine/criteria.json`** → 人读投影 `engine/criteria.md`（生成）→ 机检门 `node scripts/check-criteria.mjs`。
+> 本档只保留「**字段语义 + 调用时序 + 宿主不变量**」；**判据正文不再在此复述**（避免第 N 份拷贝）。
+> 与代码冲突时**以代码为准**，并请回改本档。
 >
 > 沿革（只留结论，历史见 `docs/history/ADR-0005` 等）：
 > - v1–v3：双库粒度二分（记忆库 vs pmg 项目卡库）+ board=generic|project。
 > - **v4（2026-09-08 单库化）**：pmg 整体移除 ⇒ **只有一个记忆库**；跨项目有用的细粒度条文也进 notes；项目专属事实直写
 >   项目工作区 `docs/devref/shoucang/`；新增 `profiles` 双画像通道（USER/AGENT）。
 > - **v5（2026-09-10）**：`appends` 条目可选 `rootCause`/`avoidWhen`（教训带 WHY 与不适用边界）。
-> - **v5.1**：`profiles.target` 统一为 `USER.md`/`AGENT.md`（宿主另做归一化，容忍裸名/大小写漂移）。
-> - **v6（2026-09-11 契约对齐）**：① 删除 `board` / `migrationHint` / `devref-card` 等 pmg 时代残留声明（现码零处理）；
->   ② 路由编号按现码重排（**R1/R2 = memory，R3 = project，R4 = discard**）；③ 补「分段水位」与「落盘失败不推水位」语义；
->   ④ 白名单按现码（notes 7 类，appends 提示 5 类 + profiles 2 类）；⑤ 补深睡契约（结构操作/遗忘/REM 相）。
+> - **v5.1**：`profiles.target` 统一为 `USER.md`/`AGENT.md`（宿主另做归一化）。
+> - **v6（2026-09-11 契约对齐）**：删 pmg 时代残留声明；路由编号按现码重排；补分段水位/落盘失败不推水位/深睡通道表。
+> - **v7（2026-09-11 ADR-122 记忆核心 v2）**：① 判据段（R1–R4 + 四问 + Q2 画像判定）改为**生成投影** `INGEST_JUDGE`
+>   （源=criteria.json）；② **四问降级为归属子判据组**；③ **删除「规则→SOUL.md」死支**（宿主无该写入通道）；
+>   ④ 输出新增**可选 `judgement`**（L0 四维 + dup / evidence + cost）→ 宿主写 `judgement-ledger.jsonl` 供对账；
+>   ⑤ **双域分离**：摄取域（会话→库）与巩固域（库→库）判据互不借词，接口=升格链状态机（spec §8）。
 
-## 1. 顶层归属路由（蒸馏子代理第一步，逐条判定）
+## 1. 顶层归属路由（蒸馏子代理第一步，逐条判定；**判据正文见 `engine/criteria.md`**）
 
 ```
 R1 泛化方向指引？  这条知识 = 下次做类似任务时给 agent 大概方向（步骤轮廓/关键注意点/目标形态）
@@ -40,7 +44,8 @@ R4 其余            一次性进度 / 可搜索公开知识 / 无实质 / <rele
   "newIndex": [{"target":"MEMORY.md","line":"[tag] 主题 · 概况短语/短语/短语 → notes/x.md §小节"}],
   "profiles": [{"target":"USER.md|AGENT.md","section":"≤12字小节名","text":"≤80字一句话"}],
   "projectCards": [{"cardType":"how-to|reference|decision","title":"≤20字","text":"≤200字","source":"≤30字"}],
-  "skipped":  [{"title":"...","reason":"≤30字"}]
+  "skipped":  [{"title":"...","reason":"≤30字"}],
+  "judgement": {"reuse":"cross-task|cross-project|session-only","generality":"direction|contract-fact|detail","stability":"once|same-day-repeat|cross-day","conflict":"none|coexist|supersede","dup":"exact|approx|none","topic":"≤12字主题（对账用）"}
 }
 ```
 
@@ -95,6 +100,16 @@ R4 其余            一次性进度 / 可搜索公开知识 / 无实质 / <rele
 | `forgetOps` | `{action:archive\|keep, file, section, reason?}` | **禁直删**；三守卫（叶子节 / activity 为 cold / 非 stub）；画像节（user/agent）硬保护；单轮上限 3 |
 | `crossTopic` | `{action:add, text}` | **硬门**：源指针须覆盖 **≥2 个不同 §**；`enableRemPass` 开启才生效 |
 
-## 5. 委派禁令（不变）
+## 6. 判据注册表与 judgement 台账（v7 新增）
+
+- **唯一事实源**：`skill/engine/criteria.json`（L0 内核 / L1 摄取域 / L1 巩固域 / L2 代价 / 硬门与观测参数 / anti-scope）。
+- **投影**（禁手写）：`src/criteria.generated.ts`（两个 prompt 的判据段 + judgement 提示 + 常量）· `skill/engine/criteria.md`（人读表）· `skill/engine/criteria-gate.json`（`memory_write_gate.mjs` / `memory_health_check.mjs` 读它）。
+- **机检门**：`node scripts/check-criteria.mjs`（注册表自洽 + 投影最新 + 投影接线），纳入 `npm test`。改判据一律「改注册表 → `npm run gen:criteria` → 过门」。
+- **台账**：每次决策一行写入 `~/.dsh/suite/knowledge/audit/judgement-ledger.jsonl`：
+  `{at, criteriaVersion, domain:'ingest'|'consolidate', judgement?, l0After?|hostGates?, decision, result, enqueued}`。
+- **对账**：`node scripts/criteria-audit.mjs [--days 7] [--json]` → 判据-结果一致率 / 两域冲突率 / 保守度 / 召回-判据样本量（字段缺失时返回 `n/a`，不编造）。
+- **确定性裁决单一实现**：`src/criteria.ts` 的 `evaluateL0` / `promoteVerdict`（含 premise 硬门）/ `demoteVerdict`（三守卫 + 画像节保护 + 单轮上限）——两域共调，禁止在 prompt 或调用方再写一份。
+
+## 7. 委派禁令（不变）
 
 蒸馏/深睡子代理**独立完成，绝不 spawn/委派任何子代理**，深睡侧亦不使用任何工具；查重凭给定材料与自身知识。

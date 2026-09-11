@@ -24,26 +24,22 @@
 
 ## 1. 总则
 
-### 1.1 四问路由（先决判断，跨文件；Q0 为归属门，Q0=是即终止写入）
+### 1.1 判据分层（v2/ADR-122：**判据不是散文，是注册表**）
 
-> **领域路由层（v4 单库化，2026-09-08 用户拍板：pmg 项目卡库已随治理插件整体移除，守藏只有一个记忆库）**：进入四问前先过 R1/R2/R3/R4 判定——
-> **R1 泛化方向指引**（作用=下次做类似任务给 agent 大概方向：步骤轮廓/关键注意点/目标形态；人脑类比，粒度宁粗勿细，用户画像/协作纪律/环境事实属此类）→ 走四问入记忆库；
-> **R2 跨项目有用的细粒度条文**（官方规范/平台规则/工具用法资料）→ **入记忆库**（notes/tools 或 notes/lessons，教程式浓缩——原 pmg generic 板块随治理插件移除，承接归库）；
-> **R3 项目专属事实**（项目结构/该项目用户拍板的决策/项目契约踩坑，只在单一项目语境有用）→ **不入全局库**，route=project 由蒸馏器直写项目工作区 `<workspace>/docs/devref/shoucang/`（workspace 由会话转录反解；**反解失败≠丢弃（2026-09-09 补缺：曾整批 6 连拒丢数据）**——瞬时失败宿主重试 3 次，仍失败则项目卡幂等降级落 `pending/<date>-project-defer-*.md` 待认领，下轮蒸馏随候选重新裁决；workspace 恢复即直写 devref、确认泛化则入 notes——跨工作区红线不变：降级=暂存待认领，不落全局库）；
-> **R4 一次性/可搜索/无实质** → 不存。
-> **同一条既像 R1/R2 又像 R3：按归属取舍**——跨项目可复用→memory；只在单一项目成立→project。
-> 蒸馏子代理按 `engine/distill-contract.md` v4 自动执行此路由（输出 JSON `route` 字段）。
+> **唯一事实源 = `engine/criteria.json`**；人读投影 = **`engine/criteria.md`**（生成，禁手写）；机检门 = `node scripts/check-criteria.mjs`（纳入 `npm test`）。
+> 本节的职责从"复述判据"改为"**说明判据分几层、谁强制**"。改判据一律：改注册表 → 重跑 `scripts/gen-criteria.mjs` → 过机检门。
 
-| 问 | 判断 | 去向 |
-|----|------|------|
-| R0（领域路由，v4 单库） | R1 泛用？R2 跨项目细粒度？R3 项目专属？R4 一次性？ | memory→四问 / project→直写项目工作区 / discard→不存 |
-| Q0 已有归属吗？ | 已被 skill 指令 / 项目治理文档（AGENTS.md、docs/map、项目规则）承载？是 → **不存**（指明承载路径并核对存在）；否 → Q1 | — |
-| Q1 下周还用得上吗？ | 否 → **不存** | — |
-| Q2 关于规则还是数据？ | 规则 / 纪律 / 程序 → SOUL.md；数据 → Q2b | 按列 |
-| Q2b 数据关于谁/什么？ | **用户 → USER.md；agent 自身 → AGENT.md；环境 / 流程 → MEMORY.md** | 按列 |
-| Q3 能合并到已有条目吗？ | 能 → replace；否 → add | — |
+| 层 | 判据 | 谁强制 | 取值域（枚举，不打分） |
+|---|---|---|---|
+| **L0 共用内核**（两域同口径） | 可复用性 / 泛化度 / 稳定性 / 冲突性 | 模型输出 + 宿主 `src/criteria.ts#evaluateL0` 代理标注（入台账） | 跨任务·跨项目·仅本会话 / 方向指引·契约事实·细节条文 / 单次·当日·跨日 / 无·并存·取代 |
+| **L1 摄取域**（会话 → 库，`domain=ingest`） | **归属**（含原 R1–R4 与四问，**降级为归属子判据组**）· 落点 · 粒度（§8.1 R/K 律）· 去重（精确 / bigram≥0.66）· 格式（§8 四要素） | 归属=模型自觉（soft）；落点/粒度/去重/格式=**宿主硬门** | memory·project·discard / 7 类 notes+节 / 并入·裂 ### / 通过·拒收 / 合规·违规 |
+| **L1 巩固域**（库 → 库，`domain=consolidate`） | 支撑度（原则 ≥3 痕迹 / 路径 ≥2 次且跨会话且只从成功）· 升格 · 整形（treeOps）· 降格/遗忘（cold+≥90d+三守卫）· 跨主题（≥2 §）· **前提识别（premise）** | 支撑度=模型自觉（soft）；整形/降格/跨主题=**宿主硬门**（不变量 + 归档可回滚） | 达标·不足 / 升格·保持 / split·merge·rename·no-op / archive·keep / ≥2§·不足 / 依赖前提·自洽 |
+| **L2 代价权重**（共用） | 误注入代价 > 漏写代价 | 纪律（非机检）：默认保守；**拒绝必给理由**（`skipped.reason`） | — |
 
-> 与 SKILL.md「四问流程」同源：Q0/Q1/Q2（用户还是环境）/Q3；规则 vs 数据分支并入 Q2 归位规则层。条目格式见 §8。
+- **R1–R4 归属路由**（v4 单库化沿用）：R1 泛化方向指引→memory；R2 跨项目细粒度条文→memory（notes/tools｜lessons）；R3 项目专属事实→project（直写 `<workspace>/docs/devref/shoucang/`，workspace 反解失败→`pending/*-project-defer-*` 待认领，**不丢弃**）；R4 一次性/可搜索/无实质→discard。
+- **四问（Q0 已有归属 / Q1 下周用得上 / Q2 归谁 / Q3 能合并）**：作为 `ingest.route.q*` 子判据组存在，**不再是全局判据抬头**；Q2 归谁 = 用户→`USER.md`、agent 自身→`AGENT.md`、环境/流程→`MEMORY.md`。
+- **规则/纪律/程序类：不入库** —— SKILL 与 `skill/*.md` 协议文档是**随插件发布的只读文档，没有写入通道**（v2 删除原「规则→SOUL.md」死支：宿主白名单只有三主档 + 7 类 notes）。
+- 条目格式见 §8；判据参数（容量/警戒/R/K/bigram 阈值/rerank 触发门等）见 `engine/criteria.md` 的「硬门与观测参数」表。
 
 ### 1.2 红牌通则（一律不可存）
 
@@ -308,9 +304,20 @@
 **落地（2026-09-11）**：本律已落 P0/P1/P2 —— 蒸馏写侧可写「父/子」路径并带分裂判据（P0）· `memory_health_check` 报超 R 节（P1）· treeOps 有 `split`（叶子 `##` → ≤6 个 `###`，P2）；`###`→`####` **未开**，卡在下方 ①。详见 `docs/split-law-landing-plan.md`。
 **待拍板**：① `####` 解禁（仅当 `###` 自身 > R 时按律需重审 §2.7）· ② USER 红线 3000 与「画像全量注入」不同源 · ③ 行预算 100→120（仅影响一跳直达便利性，不影响树）。
 
-### 生命周期（知识提升通道）
+### 生命周期（知识提升通道 · v2 显式状态机）
 
-某一主题积累到足够体量（单子文档 >80% 容量，**或同一主题近 5 次审计中 `audit/access.log` 检索命中 / 审计条目 ≥3 次**——判据机械化，凭日志核验）→ 评估提升为独立 skill → 提升后主索引条目退化为纯指针（指向对应 skill），正文不再常驻本库；原 notes 小节保留或迁移由提升决策确定。
+> **v2（ADR-122）**：升格链从"一句话"改为**显式状态机**；每条边的准入判据 id 见 `engine/criteria.md`（生成投影）。
+
+```
+会话正文 ──蒸馏(L1·摄取: ingest.route.* / placement / granularity / dedup / format)──▶ pending 候选 / notes 详情
+notes 详情 ──深睡(L1·巩固: consolidate.support.* 稳定性≥跨日 ∧ 支撑≥N ∧ premise 硬门)──▶ [原则]/[路径]（AGENT.md）
+任一状态 ──活性 cold ∧ ≥90d ∧ 三守卫(叶子节/非画像节/非stub)──▶ notes/archive（原位 stub，指针有效，可回滚）
+[原则]/[路径] ──新经验修正──▶ replace（原地迭代，不新增层）
+```
+
+- **库级提升信号**（原判据保留）：单一子文档 >80% 容量，或同一主题近 5 次审计中 `audit/access.log` 命中 ≥3 次 → 评估提升为独立 skill（提升后主索引条目退化为纯指针）。
+- **条目级升格判据**（v2 新增，与上式对账）：`consolidate.support.principle` / `consolidate.support.path` / `consolidate.promote.premise`（宿主侧由 `src/criteria.ts#promoteVerdict` 做确定性前置）。
+- **判据留痕**：每次决策写 `~/.dsh/suite/knowledge/audit/judgement-ledger.jsonl`（域/判据/取值/决策/结果）；对账器 `node scripts/criteria-audit.mjs` 出「判据-结果一致率 · 两域冲突率 · 保守度」。
 
 ### 价值捕捉（candidate_grep + access.log，2026-09-01 v9）
 

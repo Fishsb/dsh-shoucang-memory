@@ -5,6 +5,8 @@ export interface EmbedCfg {
     model: string;
     apiKeyEnv: string;
     coldFactor?: number;
+    /** v2（ADR-122）：融合策略——'rrf'（缺省，排名融合 k=60）| 'weighted'（旧 min-max 加权，回滚用） */
+    fusionKind?: 'rrf' | 'weighted';
 }
 export declare const vecStats: {
     queries: number;

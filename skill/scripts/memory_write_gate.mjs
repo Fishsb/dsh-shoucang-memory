@@ -43,7 +43,19 @@ const CAP_ENV = {
   'AGENT.md': Number(process.env.SHOUCANG_CAP_AGENT) || 3000,
 };
 const LIMITS = { 'MEMORY.md': 5000, 'USER.md': 3000, 'AGENT.md': 3000, ...CAP_ENV };
-const NOTES_WARN = 8000;
+let NOTES_WARN = 8000;
+
+// v2（ADR-122）：硬门参数可从判据投影读取（唯一事实源 = engine/criteria.json → engine/criteria-gate.json）。
+// 优先级：env（面板容量门 SHOUCANG_CAP_*）> criteria-gate.json 投影 > 本文件内建缺省。
+try {
+  const proj = JSON.parse(fs.readFileSync(join(skillDir, 'engine', 'criteria-gate.json'), 'utf8'));
+  for (const [k, v] of Object.entries(proj.caps || {})) {
+    const envName = proj.envOverride?.[k];
+    if (envName && process.env[envName]) continue; // env 优先
+    if (typeof v === 'number') LIMITS[k] = v;
+  }
+  if (typeof proj.notesWarn === 'number' && proj.notesWarn > 0) NOTES_WARN = proj.notesWarn;
+} catch { /* 投影未部署 = 用内建缺省（不报错） */ }
 
 const tmpText = fs.readFileSync(tmp, 'utf8');
 const chars = tmpText.replace(/\s+/g, '').length;
