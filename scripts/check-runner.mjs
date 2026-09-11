@@ -19,6 +19,7 @@ const CHECKS = [
   'check-field-usage.mjs',
   'test-layering.mjs',
   'check-deploy-sync.mjs',
+  'check-changelog.mjs',
 ]
 const rows = []
 for (const f of CHECKS) {
