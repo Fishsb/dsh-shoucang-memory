@@ -593,5 +593,43 @@ try {
   fs.rmSync(tm, { recursive: true, force: true });
 } catch (e) { fail++; console.log('❌ 体检-画像行类（异常: ' + failMsg(e) + '）'); }
 
+// 31) 转录命名版本兼容（F-1 断链回归，2026-09-11）：DSH 自 2026-09-10 13:49 起转录改名
+//     `session.jsonl.zstd` → `session.v3.jsonl.zstd`（带版本段），而定位白名单只认旧名 ⇒ 定位恒 null
+//     ⇒ workspace 反解全量失效（项目卡永久滞留 pending-defer + 每轮扫尾空转）。
+//     断言**两条路径**都版本无关：① locateTranscript（probe 出口）② enumerateSessions（归档发现）。
+//     此前夹具全造旧名 ⇒ 测试结构性看不见此漂移（本用例即为该盲区的机械化封堵）。
+try {
+  const tv = makeContainer();
+  cleanContainer(tv);
+  const sessRoot = path.join(tv, 'sessions');
+  const mk = (sid, name) => {
+    const d = path.join(sessRoot, '--X--', 'session-' + sid);
+    fs.mkdirSync(d, { recursive: true });
+    fs.writeFileSync(path.join(d, name), '{"type":"session.header"}\n');
+    fs.utimesSync(path.join(d, name), new Date(Date.now() - 3600e3), new Date(Date.now() - 3600e3));
+  };
+  mk('v3fixtureold', 'session.jsonl.zstd'); // 旧命名（09-10 13:49 前）
+  mk('v3fixturenew', 'session.v3.jsonl.zstd'); // 新命名（现行）
+  const envV = { ...process.env, ARCHIVE_SESSIONS: sessRoot, ARCHIVE_LOG: path.join(tv, 'audit', 'archive-progress.jsonl'), ARCHIVE_PENDING: path.join(tv, 'audit', 'archive-pending'), ARCHIVE_MECH_NOOP_LINES: '0', MEMORY_ROOT: tv };
+  const probe = (sid) => {
+    try { return { code: 0, out: execFileSync('node', [path.join(tv, 'scripts', 'locate-transcript-probe.mjs'), sid], { encoding: 'utf8', env: envV }).trim() }; }
+    catch (e) { return { code: e.status, out: String(e.stdout || '').trim() }; }
+  };
+  const pOld = probe('v3fixtureold');
+  const pNew = probe('v3fixturenew');
+  const okLoc = pOld.code === 0 && /session\.jsonl\.zstd$/.test(pOld.out)
+    && pNew.code === 0 && /session\.v3\.jsonl\.zstd$/.test(pNew.out);
+  const libUrl = 'file:///' + path.join(tv, 'scripts', 'archive-lib.mjs').replace(/\\/g, '/');
+  const enumOut = execFileSync('node', ['-e',
+    `(async()=>{const m=await import(${JSON.stringify(libUrl)});const r=await m.enumerateSessions(Date.now()+1e9,[]);console.log(r.map(x=>x.sessionId).sort().join(','))})()`,
+  ], { encoding: 'utf8', env: envV }).trim();
+  const okEnum = enumOut === 'v3fixturenew,v3fixtureold';
+  const ok = okLoc && okEnum;
+  if (ok) pass++; else fail++;
+  console.log(`${ok ? '✅' : '❌'} 转录命名版本兼容（定位+枚举均含 session.v3.jsonl.zstd）` +
+    (ok ? '' : ` [诊断: old=${pOld.code}:${JSON.stringify(pOld.out)} new=${pNew.code}:${JSON.stringify(pNew.out)} enum=${JSON.stringify(enumOut)}]`));
+  fs.rmSync(tv, { recursive: true, force: true });
+} catch (e) { fail++; console.log('❌ 转录命名版本兼容（异常: ' + failMsg(e) + '）'); }
+
 console.log(`\n结果: ${pass} PASS / ${fail} FAIL`);
 process.exit(fail ? 1 : 0);

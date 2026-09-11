@@ -33,6 +33,25 @@ const exists = async (p) => { try { await stat(p); return true; } catch { return
 // 文件指纹（mtime/size 一次取）：mtime=活跃保护判据，size=数据驱动重武装判据
 export async function statFile(p) { try { const s = await stat(p); return { mtime: s.mtimeMs, size: s.size }; } catch { return null; } }
 
+// ---- 转录文件名识别（版本无关 · 单一实现）----
+// 2026-09-11 修复（F-1 断链）：DSH 自 2026-09-10 13:49 起转录改名 `session.jsonl.zstd`
+//   → `session.v3.jsonl.zstd`，而旧白名单 ['session.jsonl.zstd','session.jsonl'] 对**带版本段**的命名恒不命中
+//   （`session.v3.jsonl.zstd` 不含子串 `session.jsonl`）⇒ locateTranscript 恒 null ⇒ workspace 反解全量失效
+//   （项目卡永久滞留 pending-defer + 每轮扫尾空转）。改为「列目录 + 版本无关正则」，未来 v4/v5 命名无需再改
+//   （拒绝再埋同族硬编码：本判据为定位/枚举/检索三处共用）。
+export const TRANSCRIPT_NAME_RE = /^session(?:\.v\d+)?\.jsonl(?:\.zstd)?$/;
+
+/** 在候选目录中挑出转录文件（.zstd 优先 → 版本号高者优先）；无则 null */
+export async function pickTranscriptIn(dir) {
+  let names = [];
+  try { names = await readdir(dir); } catch { return null; }
+  const cands = names.filter((n) => TRANSCRIPT_NAME_RE.test(n));
+  if (!cands.length) return null;
+  const rank = (n) => [n.includes('.zstd') ? 1 : 0, Number((n.match(/\.v(\d+)\.jsonl/) || [])[1] || 0)];
+  cands.sort((a, b) => { const [za, va] = rank(a); const [zb, vb] = rank(b); return (zb - za) || (vb - va) || a.localeCompare(b); });
+  return join(dir, cands[0]);
+}
+
 // ---- 转录定位：直接文件路径 或 按 sessionId 走会话树（zstd 优先，明文 .jsonl 兜底）----
 export async function locateTranscript(target) {
   if (isAbsolute(target) || /[\\/]/.test(target)) return (await exists(target)) ? target : null;
@@ -47,10 +66,8 @@ export async function locateTranscript(target) {
   };
   await walk(root);
   for (const d of dirs) {
-    for (const name of ['session.jsonl.zstd', 'session.jsonl']) {
-      const cand = join(d, name);
-      if (await exists(cand)) return cand;
-    }
+    const cand = await pickTranscriptIn(d); // 版本无关（原枚举旧名 ⇒ v3 会话定位恒 null）
+    if (cand) return cand;
   }
   return null;
 }
@@ -187,8 +204,9 @@ export async function enumerateSessions(cutoffMs, marks) {
       if (!e.isDirectory()) continue;
       const full = join(d, e.name);
       let idx = null, fname = null;
-      for (const name of ['session.jsonl.zstd', 'session.jsonl']) {
-        try { idx = await stat(join(full, name)); fname = name; break; } catch { /* 试下一个 */ }
+      const picked = await pickTranscriptIn(full); // 版本无关（原枚举旧名 ⇒ v3 会话被整体漏枚举）
+      if (picked) {
+        try { idx = await stat(picked); fname = basename(picked); } catch { idx = null; fname = null; }
       }
       if (idx) {
         const sid = e.name.replace(/^session-/, '');

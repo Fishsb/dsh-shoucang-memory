@@ -2,7 +2,8 @@
 // candidate_grep.mjs — 价值候选召回（只读，绝不写记忆库）v2
 // v2（E9 修复，2026-09-06）：双源扫描——
 //   源1 明文会话 ~/.dsh/memory/conversations/*.jsonl（历史，2026-08-26 止）
-//   源2 zstd 转录 ~/.dsh/sessions/--workspace--/<sid>/session.jsonl.zstd（现行落盘格式；archive-lib.decodeTranscript 解码，
+//   源2 zstd 转录 ~/.dsh/sessions/--workspace--/<sid>/session[.vN].jsonl.zstd（现行落盘格式；文件名由
+//       archive-lib.pickTranscriptIn 版本无关识别，archive-lib.decodeTranscript 解码，
 //       extractUtterance 提对话正文，结构化状态行降噪）——修复「收尾召回对近期会话空转」断链
 // 信号词与 archive-lib.recallSignals / engine/signals.mjs 同源（强：记住/踩坑/纠正…；中：失败换路/原因…）。
 // 输出 时间|来源:行|置信|片段。纯召回不写库；判定入册由 R0+四问（§7）+ 审计负责。
@@ -44,7 +45,7 @@ for (const f of files) {
   }
 }
 
-// ---- 源2：zstd 转录 sessions/--workspace--/<sid>/session.jsonl.zstd（现行格式）----
+// ---- 源2：zstd 转录 sessions/--workspace--/<sid>/session[.vN].jsonl.zstd（现行格式 · 文件名版本无关识别）----
 if (!noSessions && hits < max) {
   let workspaces = [];
   try { workspaces = (await readdir(sessArg, { withFileTypes: true })).filter((d) => d.isDirectory()); } catch { workspaces = []; }
@@ -55,7 +56,8 @@ if (!noSessions && hits < max) {
     try { sids = (await readdir(wsDir, { withFileTypes: true })).filter((d) => d.isDirectory()); } catch { continue; }
     for (const sid of sids) {
       if (hits >= max) break;
-      const tfile = join(wsDir, sid.name, 'session.jsonl.zstd');
+      const tfile = await lib.pickTranscriptIn(join(wsDir, sid.name)); // 版本无关（原硬编码 session.jsonl.zstd ⇒ v3 会话漏扫）
+      if (!tfile) continue;
       const st = await stat(tfile).catch(() => null);
       if (!st || st.size === 0) continue;
       let text = '';

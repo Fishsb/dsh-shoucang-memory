@@ -22,7 +22,7 @@
 - **重启再触发 = 数据驱动**：会话重启/继续 → 转录追加新行 → `total(新) > lastRow` 使 done 自动失效 → 下次检测点从 lastRow+1 增量恢复检测；**与 Timer 是否清理无关**
 
 ### 2. 增量检测（行号标记）
-- **基准**：会话转录 = `~/.dsh/sessions/**/<sessionId>/session.jsonl.zstd`，解压后按行计数（每行一条事件，append-only，行数单调增）
+- **基准**：会话转录 = `~/.dsh/sessions/**/<sessionId>/session[.vN].jsonl.zstd`，解压后按行计数（每行一条事件，append-only，行数单调增）。**文件名版本无关识别**（`archive-lib.TRANSCRIPT_NAME_RE` / `pickTranscriptIn`）——DSH 2026-09-10 13:49 起由 `session.jsonl.zstd` 改为 `session.v3.jsonl.zstd`，枚举旧名会导致定位/枚举全量失效（F-1 断链，2026-09-11 修复）
 - **标记**：`archive-progress.jsonl` 记录该会话已处理到的行号 `lastRow`（新会话从 0 起）；行结构含 `{sessionId, lastRow, total, done, lastActiveAt, at}`
 - **增量范围**：触发时 `start = lastRow + 1`，分析 `(start, total]` 新增行；避免全文档检测（解压成本固定，分析成本随增量）
 - **容错**：损坏/解压失败 → mark 到最后一个可解析行，跳过异常区
