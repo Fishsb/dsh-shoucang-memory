@@ -1167,6 +1167,18 @@ export function applyPanel(ctx: Context, config: Config): void {
     } catch (e) { sendJson(res, 500, { error: String(e) }) }
   })
 
+  // v2.1 M3（ADR-130）：账本对账只读端点 —— 复用 scripts/memory-reconcile.mjs（单一实现，不复制逻辑）
+  route('/reconcile', (_req, res) => {
+    try {
+      const script = join(memoryLibRoot(), 'scripts', 'memory-reconcile.mjs')
+      if (!existsSync(script)) return sendJson(res, 200, { active: false, error: 'memory-reconcile.mjs 未部署（跑 npm run build 后同步 skill/scripts）' })
+      const tmp = join(knowledgeRoot(), 'audit', '.reconcile-tmp.json')
+      execFileSync('node', [script, '--json', '--out', tmp], { stdio: 'ignore', timeout: 30000, windowsHide: true })
+      const out = JSON.parse(readFileSync(tmp, 'utf8'))
+      sendJson(res, 200, { active: true, ...out })
+    } catch (e) { sendJson(res, 200, { active: false, error: String(e).slice(0, 200) }) }
+  })
+
   // U2（B9）：配置视图「最近改动」——库 git reflog（最近 5 条）+ 配置文件 mtime（只读文件，零 spawn）
   route('/config/recent', (_req, res) => {
     try {
@@ -1192,7 +1204,10 @@ export function applyPanel(ctx: Context, config: Config): void {
       let ledgerRows = 0
       let lastAt = 0
       try {
-        const lines = readFileSync(join(knowledgeRoot(), 'audit', 'judgement-ledger.jsonl'), 'utf8').split(/\r?\n/).filter(Boolean)
+        // v2.1 M2：统一台账 audit/ledger.jsonl 优先（decision.* + write.*），旧 judgement-ledger.jsonl 兼容
+        const unified = join(knowledgeRoot(), 'audit', 'ledger.jsonl')
+        const legacy = join(knowledgeRoot(), 'audit', 'judgement-ledger.jsonl')
+        const lines = readFileSync(existsSync(unified) ? unified : legacy, 'utf8').split(/\r?\n/).filter(Boolean)
         ledgerRows = lines.length
         const last = lines[lines.length - 1]
         if (last) lastAt = Date.parse((JSON.parse(last) as { at?: string }).at || '') || 0

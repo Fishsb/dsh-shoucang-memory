@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // criteria-audit.mjs — 判据对账器（ADR-122 v2 · P3）
 //
-// 读 `audit/judgement-ledger.jsonl`（宿主每次决策写一行）+ `audit/access-real.jsonl`/`activity.jsonl`，
+// 读统一台账 `audit/ledger.jsonl`（v2.1 M2：type=decision.* / write.*；旧 judgement-ledger.jsonl 兼容）
+//   + `audit/access-real.jsonl`/`activity.jsonl`，
 // 输出四项判据健康指标（**判据本身可被验证**）：
 //   ① 判据-结果一致率：判"跨任务/跨项目"的条目，其指针在 N 天内是否被真实读命中（access-real）
 //   ② 两域冲突率：同一主题被摄取域判 notes、又被巩固域判 [原则]/[路径] 的占比（口径：主题词交集）
@@ -24,7 +25,9 @@ const readJsonl = (p) => {
   if (!existsSync(p)) return []
   return readFileSync(p, 'utf8').split(/\r?\n/).filter(Boolean).map((l) => { try { return JSON.parse(l) } catch { return null } }).filter(Boolean)
 }
-const ledger = readJsonl(join(stateRoot, 'audit', 'judgement-ledger.jsonl')).filter((r) => Date.parse(r.at || '') >= since)
+// v2.1 M2：统一台账 audit/ledger.jsonl（type=decision.*）优先；旧 judgement-ledger.jsonl 兼容一版
+const ledgerPath = [join(stateRoot, 'audit', 'ledger.jsonl'), join(stateRoot, 'audit', 'judgement-ledger.jsonl')].find((p) => existsSync(p)) || join(stateRoot, 'audit', 'ledger.jsonl')
+const ledger = readJsonl(ledgerPath).filter((r) => Date.parse(r.at || '') >= since && (!r.type || String(r.type).startsWith('decision')))
 const accessReal = readJsonl(join(bank, 'audit', 'access-real.jsonl')).filter((r) => Date.parse(r.t || '') >= since)
 const activity = readJsonl(join(bank, 'audit', 'activity.jsonl'))
 

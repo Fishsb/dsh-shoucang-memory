@@ -81,6 +81,7 @@ export interface DistillConfig {
     scoreWeights?: string;
     shadowScore?: boolean;
     maturationEnforce?: boolean;
+    perItemGate?: boolean;
     activityWarmDays?: number;
     activityColdDays?: number;
     activityArchiveDays?: number;

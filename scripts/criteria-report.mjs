@@ -56,7 +56,9 @@ try { indexRows = readFileSync(join(bank, 'MEMORY.md'), 'utf8').split(/\r?\n/).f
 const gateRows = Number(gate?.surface?.rerank?.gate?.indexRows || 200)
 
 // 模型判据覆盖率（台账里带 judgement 的行占比）
-const ledgerPath = join(homedir(), '.dsh', 'suite', 'knowledge', 'audit', 'judgement-ledger.jsonl')
+// v2.1 M2：统一台账优先（audit/ledger.jsonl），旧 judgement-ledger.jsonl 兼容
+const ledgerDir = join(homedir(), '.dsh', 'suite', 'knowledge', 'audit')
+const ledgerPath = [join(ledgerDir, 'ledger.jsonl'), join(ledgerDir, 'judgement-ledger.jsonl')].find((p) => existsSync(p)) || join(ledgerDir, 'ledger.jsonl')
 let ledgerRows = 0
 let withJudgement = 0
 try {
@@ -79,7 +81,7 @@ const md = [
   `| 判据-结果一致率 | ${pct(audit?.metrics?.judgementResultConsistency)} | 判"跨任务/跨项目"的条目是否被真实读命中 |`,
   `| 两域冲突率 | ${pct(audit?.metrics?.domainConflictRate)} | 同主题既进 notes 又升 principle/path |`,
   `| 保守度 | ${pct(audit?.metrics?.conservatism)} | 摄取域「跳过+拒收」占比 |`,
-  `| 台账样本 | ${ledgerRows} 行（带 judgement ${withJudgement} 行 / 覆盖率 ${ledgerRows ? (withJudgement / ledgerRows * 100).toFixed(0) + '%' : 'n/a'}） | judgement-ledger.jsonl |`,
+  `| 台账样本 | ${ledgerRows} 行（带 judgement ${withJudgement} 行 / 覆盖率 ${ledgerRows ? (withJudgement / ledgerRows * 100).toFixed(0) + '%' : 'n/a'}） | audit/ledger.jsonl（v2.1 统一台账；含 decision.* 与 write.*） |`,
   '',
   '## 2. 注入预算（与体检同口径：画像行全量 + 索引行按档位 cap）',
   '',

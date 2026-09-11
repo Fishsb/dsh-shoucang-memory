@@ -106,6 +106,7 @@ export interface Config {
   scoreWeights: string // 打分公式：'legacy'（缺省，现行 relevance+activity）| 'v2'（α_rel/α_imp/α_rec）
   shadowScore: boolean // 影子打分：并行计算新公式并写 audit/score-shadow.jsonl（不改排序）
   maturationEnforce: boolean // 成熟度强制：true 时升格须 A≥gate（缺省 false=只记录）
+  perItemGate: boolean // v2.1 M2：逐条裁决（缺省 true；false=回到整轮全拒）
   bankGit: boolean // 记忆库本地 git 版本化（写后快照；缺省开，失败静默）
   // ═══ v7 记忆活性/遗忘/加深校准阈值（2026-09-10：可 UI 设置，缺省单一实现=本 schema 默认，UI 通道 /set → scheduler.json）═══
   activityWarmDays: number // active→warm 无命中天数（缺省 14）
@@ -190,6 +191,7 @@ export const Config: any = z.object({
   scoreWeights: z.string().default('legacy').description("召回打分公式：'legacy'=现行 relevance+activity（缺省）| 'v2'=α_rel·relevance+α_imp·importance+α_rec·recency（切换需影子期证据）"),
   shadowScore: z.boolean().default(true).description('影子打分：并行计算 v2 公式并写 audit/score-shadow.jsonl（不改变排序，用于 M4 影子期）'),
   maturationEnforce: z.boolean().default(false).description('成熟度强制：true 时 [原则]/[路径] 升格须满足 A≥maturation.gate（缺省 false=只记录不强制）'),
+  perItemGate: z.boolean().default(true).description('逐条裁决：写门逐条校验（单条不合格不再拖垮整轮；并集超限则尾部贪心回退）。false=回到整轮全拒'),
   // ═══ ACT-029 认知环（MCL）：熟悉度分流 + 慢通道薄材料 + 有界再引导（方案见 .internal/arch/shoucang-SC-S05）═══
   mclEnabled: z.boolean().default(true).description('认知环（MCL）开关：慢通道在任务首步注入「薄契约 + top-k 指针」并按需再引导一次；快通道零额外往返。缺省开，置 false 一键回滚'),
   mclFamiliarThreshold: z.number().min(0).max(1).default(0.65).description('熟悉度阈值（用户文本↔命中索引行的**绝对余弦**，ACT-024 校准：0.65 → 触发率 ~2% 且阈上样本全为真命中）'),
@@ -569,6 +571,7 @@ export function applyScheduler(ctx: Context, config: Config): void {
       scoreWeights: config.scoreWeights,
       shadowScore: config.shadowScore,
       maturationEnforce: config.maturationEnforce,
+      perItemGate: config.perItemGate,
       // v7 活性/遗忘/加深校准阈值（scheduler.Config 同键名直传，运行时生效）
       activityWarmDays: config.activityWarmDays,
       activityColdDays: config.activityColdDays,

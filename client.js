@@ -1895,6 +1895,23 @@
           cw.appendChild(mk('rerank 门', gate.ready ? '已达' : '未达', '索引行 ' + String(gate.indexRows || 0) + ' / ' + String(gate.threshold || 200)));
           cw.appendChild(mk('库版本', String(bg.commits || 0) + ' 提交', bg.lastAt ? ('最近 ' + fmtTime(bg.lastAt)) : '本地 git（可 diff/revert）'));
         }).catch(function () { cw.textContent = ''; cw.appendChild(mk('判据源', '读取失败', '/criteria')); });
+        group2('账本对账与产出健康（v2.1 M3）');
+        var rw = el('div', 'sc-mem-stats');
+        rw.appendChild(mk('对账', '…', '读取中'));
+        view.appendChild(rw);
+        api('/reconcile').then(function (r) {
+          rw.textContent = '';
+          if (!r || !r.active) { rw.appendChild(mk('对账', '未就绪', (r && r.error) || 'memory-reconcile.mjs 未部署')); return; }
+          var cl = r.closure || {};
+          var h = r.health || {};
+          var ly = (r.layers || {}).counts || {};
+          var P = ly.P || { index: 0, profile: 0 }, R = ly.R || { index: 0, profile: 0 }, E = ly.E || { index: 0, profile: 0 };
+          rw.appendChild(mk('账本闭合', cl.ok === null ? '样本不足' : cl.ok ? '✅ 差异 0' : '⚠ 有差异', '台账 ' + ((r.window || {}).ledgerRows || 0) + ' 行 · 写事件 ' + (h.writeEvents || 0) + ' 次'));
+          rw.appendChild(mk('上次有效深睡', h.lastSuccessfulWrite ? fmtTime(h.lastSuccessfulWrite) : '（无）', '连续空转 ' + (h.idleStreak || 0) + ' 轮 · 深睡轮次 ' + (h.deepSleepRounds || 0)));
+          rw.appendChild(mk('写入被拒率', h.rejectRate === null || h.rejectRate === undefined ? 'n/a' : (h.rejectRate * 100).toFixed(0) + '%', '拒 ' + (h.rejectedWrites || 0) + ' / 写事件 ' + (h.writeEvents || 0) + ' · 尝试 ' + (h.attemptedTotal || 0) + ' 条'));
+          rw.appendChild(mk('三层占比', 'P ' + (P.index + P.profile) + ' · R ' + R.index + ' · E ' + (E.index + E.profile), 'P=恒常（索引+P 层画像行 ≤' + ((r.layers || {}).profileCap || 3) + '/档）· R=任务门控 · E=相关性门控'));
+        }).catch(function () { rw.textContent = ''; rw.appendChild(mk('对账', '读取失败', '/reconcile')); });
+
         group2('认知环（MCL · 快/慢双通道）');
         var mw = el('div', 'sc-mem-stats');
         mw.appendChild(mk('状态', '…', '读取中'));

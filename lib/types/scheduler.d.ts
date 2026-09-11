@@ -69,6 +69,7 @@ export interface Config {
     scoreWeights: string;
     shadowScore: boolean;
     maturationEnforce: boolean;
+    perItemGate: boolean;
     bankGit: boolean;
     activityWarmDays: number;
     activityColdDays: number;
