@@ -53,7 +53,10 @@ function walkFiles(dir) {
       const st = statSync(p)
       if (st.isDirectory()) rec(p)
       else {
-        const sha1 = createHash('sha1').update(readFileSync(p)).digest('hex')
+        // 归一化换行后求 sha1：仓内是 CRLF，npm 发布/安装时被规范化为 LF。
+        // 若按原始字节比，仅换行符不同也会被判「内容不同 ⇒ 未部署」——实测 client.js
+        // （仓 219263B CRLF / 已安装 216129B LF）就是这种假红，会在刚部署完误报"未部署"。
+        const sha1 = createHash('sha1').update(readFileSync(p, 'utf8').replace(/\r/g, '')).digest('hex')
         map.set(relative(dir, p).split(sep).join('/'), { size: st.size, sha1 })
       }
     }
