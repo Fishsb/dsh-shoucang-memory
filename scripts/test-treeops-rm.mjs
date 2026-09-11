@@ -318,4 +318,7 @@ const fails = P.filter((x) => x.startsWith('FAIL')).length + xpassN
 console.log(`\n${P.length - fails - xfailN} PASS / ${xfailN} XFAIL（已知缺陷未修，非通过） / ${fails} FAIL`)
 if (xfailN) console.log(`⚠ 有 ${xfailN} 条 XFAIL——缺陷仍在，本件**不是**全绿，G-22 未消解`)
 for (const d of roots) rmSync(d, { recursive: true, force: true })
-process.exit(fails ? 1 : 0)
+// 退出码契约（ADR-132）：0=pass · 3=skip(依赖缺失) · 4=xfail(预期失败：不计入 fail，禁止渲染为 pass) · 其他=fail
+// xfailN>0 时退 4：让未修缺陷在 npm test 总入口显示成「xfail」而不是「✅ pass」（假显示）
+// XPASS 已计入 fails ⇒ 退 1：行为变了必须重审，绝不能悄悄绿（这是双向锁的另一半）
+process.exit(fails ? 1 : xfailN ? 4 : 0)
