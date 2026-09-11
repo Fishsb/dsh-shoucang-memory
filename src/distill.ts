@@ -446,6 +446,26 @@ export const planDegradedBaseline = (maxSeq: number, prevSeq: number): { degrade
   return maxSeq >= p ? { degrade: true, reason: 'same-seq-space' } : { degrade: false, reason: 'seq-space-regressed' }
 }
 
+/**
+ * G-4a（2026-09-12）：**跳过分支（below-min / prescan-no-signal）的水位推进判据**——抽成纯函数并导出。
+ * 背景（实测，审计 800 行）：段 dispatch 失败后水位保留，但下一轮若命中跳过分支，旧码直接
+ *   `writeWatermark(sid, maxSeq)` ⇒ 一步跨过未消化段 ⇒ 该段**永不重扫**（50 段中 35 段如此，真重扫仅 4 段）
+ *   ⇒ `dispatch-failed-forced` 恒为 0 的真因是「重试从未累积到第 2 次」，而非计数没持久化。
+ * 语义：
+ *   · 无未消化段 ⇒ 照旧推 maxSeq（`skip-normal`，保持跳过分支原有行为，不引入死循环）；
+ *   · 有未消化段 ⇒ **不推**（保留基线，把窗口留给下一轮再看一次），连续扣满 SKIP_HOLD_MAX 轮仍无进展
+ *     ⇒ 放弃并推 maxSeq（`skip-abandoned-after-hold`，显式记账）——**没有这条就会死循环**：
+ *     某会话内容长期低于门槛时，每轮都会重扫同一窗口。
+ */
+export const SKIP_HOLD_MAX = 3
+export const planSkipWatermark = (
+  hasUndigested: boolean, holdRounds: number, maxSeq: number,
+): { write: boolean; seq: number; reason: string; holdRounds: number } => {
+  if (!hasUndigested) return { write: true, seq: maxSeq, reason: 'skip-normal', holdRounds: 0 }
+  if (holdRounds + 1 >= SKIP_HOLD_MAX) return { write: true, seq: maxSeq, reason: 'skip-abandoned-after-hold', holdRounds: 0 }
+  return { write: false, seq: 0, reason: 'skip-held-for-undigested', holdRounds: holdRounds + 1 }
+}
+
 export interface DiscardWatermarkDeps {
   writeWatermark(sid: string, lastSeq: number, agent: any): void
   audit(o: Record<string, unknown>): void
@@ -1265,6 +1285,23 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
   const MAX_DISPATCH_RETRY = 3
   const dispatchFailStreak = new Map<string, number>() // `${sid}#${endSeq}` → 连续失败次数（内存态，重启清零=最多再试 MAX 次）
 
+  // ── A4（2026-09-12 G-4a）：**跳过分支不得越过「未消化段」推进水位** ──
+  // 背景（2026-09-12 实测，审计 800 行）：段 dispatch 失败后水位确实保留（本段不写），
+  //   但下一轮若命中 below-min / prescan-no-signal，旧码直接 `writeWatermark(sid, maxSeq)`
+  //   ⇒ 水位一步跨过未消化段 ⇒ **该段永不重扫**：50 个失败段里 35 个是这样被越过的
+  //   （真重扫只有 4 个）⇒ 这就是 `dispatch-failed-forced` 恒为 0 的真因：重试从未累积到第 2 次。
+  // 处置：存在未消化段时**不推水位**（保留基线），把窗口留给下一轮再看一次；
+  //   防死循环：连续 SKIP_HOLD_MAX 轮仍无进展 ⇒ 放弃并推 maxSeq，落审计显式记账。
+  const skipHoldStreak = new Map<string, number>() // sid → 因未消化段而「扣住不推」的连续轮数
+  // 本会话是否还有未消化段（= dispatchFailStreak 里还有它自己的失败段记账）
+  const hasPendingUndigested = (sid: string): boolean => {
+    const p = `${sid}#`
+    for (const k of dispatchFailStreak.keys()) if (k.startsWith(p)) return true
+    return false
+  }
+  // 判据本身是**模块级纯函数** `planSkipWatermark`（见 planDiscardWrite 附近），与 G-20 同规格，
+  // 便于脱离宿主直接驱动；这里只持有状态（内存态，重载清零 ⇒ 最多再扣 SKIP_HOLD_MAX 轮）。
+
   // ── A3（2026-09-11 审查修复）：跨实例 claim 锁**统一判定** ──
   // 背景：claim 原只在 sweepBacklog 一侧读判，idle 路径（armIdleTimer → distillAgent）完全不查 ⇒
   //   重叠 fiber 的 idle 定时器可与扫尾同时蒸同一会话（注释宣称的「跨实例防双蒸」不成立）。
@@ -1391,12 +1428,15 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       try { candFiles = readdirSync(pendDir).filter((f) => /^\d{4}-\d{2}-\d{2}-.*\.md$/.test(f) && !f.includes('-project-defer-')).sort() } catch { candFiles = [] }
       // 门槛（below-min 语义保持现状）：整窗文本总字符 < minTurnChars（chunks 空=无增量/全无文本事件）→ 跳过并推进水位
       if (!chunks.length || totalChars < (config.minTurnChars ?? 200)) {
-        writeWatermark(sid, maxSeq, agent)
+        // G-4a：有未消化段时**不得**把水位推到 maxSeq（否则该段永不重扫），改为扣住不推（最多 SKIP_HOLD_MAX 轮）
+        const skipPlan = planSkipWatermark(hasPendingUndigested(sid), skipHoldStreak.get(sid) || 0, maxSeq)
+        skipHoldStreak.set(sid, skipPlan.holdRounds)
+        if (skipPlan.write) writeWatermark(sid, skipPlan.seq, agent)
         // 跳过也留审计痕（观测盲区修复 2026-09-09：此前门槛/预筛跳过只进日志，审计里只见真实 run，
         // 「蒸馏为什么没跑」无法从数据区分——是没触发还是被挡）
-        audit({ sid, kind: 'distill-skip', reason: 'below-min-chars', fclass: 'below-min', chars: totalChars })
-        ledger({ domain: 'ingest', sid: sid.replace(/^session-/, '').slice(0, 8), decision: { route: 'skip', reason: 'below-min-chars', chars: totalChars }, result: { added: 0, rejected: 0, failed: 0 } })
-        log(`distill: ${sidShort(sid)} 增量 ${totalChars} 字符 < 门槛，水位推进 ${lastSeq}→${maxSeq}（不蒸馏）`)
+        audit({ sid, kind: 'distill-skip', reason: 'below-min-chars', fclass: 'below-min', chars: totalChars, skipPlan: skipPlan.reason, heldForUndigested: !skipPlan.write, starved: skipPlan.holdRounds, watermarkTo: skipPlan.write ? skipPlan.seq : lastSeq })
+        ledger({ domain: 'ingest', sid: sid.replace(/^session-/, '').slice(0, 8), decision: { route: 'skip', reason: 'below-min-chars', chars: totalChars, heldForUndigested: !skipPlan.write }, result: { added: 0, rejected: 0, failed: 0 } })
+        log(`distill: ${sidShort(sid)} 增量 ${totalChars} 字符 < 门槛${skipPlan.write ? `，水位推进 ${lastSeq}→${skipPlan.seq}（${skipPlan.reason}）` : `，因存在未消化段**扣住水位** ${lastSeq}（第 ${skipPlan.holdRounds}/${SKIP_HOLD_MAX} 轮，${skipPlan.reason}）`}`)
         return
       }
       if (config.distillPrescan !== false) {
@@ -1407,10 +1447,13 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         const bigDelta = totalChars >= prescanMin
         const hasSig = bigDelta || hasDistillSignals(chunks[0].text)
         if (!hasSig && candFiles.length === 0) {
-          writeWatermark(sid, maxSeq, agent)
-          audit({ sid, kind: 'distill-skip', reason: 'prescan-no-signal', fclass: 'prescan-no-signal', chars: totalChars })
-          ledger({ domain: 'ingest', sid: sid.replace(/^session-/, '').slice(0, 8), decision: { route: 'skip', reason: 'prescan-no-signal', chars: totalChars }, result: { added: 0, rejected: 0, failed: 0 } })
-          log(`distill: ${sidShort(sid)} 预筛跳过（增量 ${totalChars} 字符无信号词 & pending 无候选），水位推进 ${lastSeq}→${maxSeq}`)
+          // G-4a：同上——有未消化段时不得推到 maxSeq
+          const skipPlan = planSkipWatermark(hasPendingUndigested(sid), skipHoldStreak.get(sid) || 0, maxSeq)
+          skipHoldStreak.set(sid, skipPlan.holdRounds)
+          if (skipPlan.write) writeWatermark(sid, skipPlan.seq, agent)
+          audit({ sid, kind: 'distill-skip', reason: 'prescan-no-signal', fclass: 'prescan-no-signal', chars: totalChars, skipPlan: skipPlan.reason, heldForUndigested: !skipPlan.write, starved: skipPlan.holdRounds, watermarkTo: skipPlan.write ? skipPlan.seq : lastSeq })
+          ledger({ domain: 'ingest', sid: sid.replace(/^session-/, '').slice(0, 8), decision: { route: 'skip', reason: 'prescan-no-signal', chars: totalChars, heldForUndigested: !skipPlan.write }, result: { added: 0, rejected: 0, failed: 0 } })
+          log(`distill: ${sidShort(sid)} 预筛跳过（增量 ${totalChars} 字符无信号词 & pending 无候选）${skipPlan.write ? `，水位推进 ${lastSeq}→${skipPlan.seq}（${skipPlan.reason}）` : `，因存在未消化段**扣住水位** ${lastSeq}（第 ${skipPlan.holdRounds}/${SKIP_HOLD_MAX} 轮，${skipPlan.reason}）`}`)
           return
         }
         log(`distill: ${sidShort(sid)} 预筛通过（信号词=${hasSig}${bigDelta ? `，大段 ${totalChars}≥${prescanMin} 强制蒸馏` : ''}，pending 候选=${candFiles.length}），进入分段蒸馏`)
@@ -1530,6 +1573,9 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
             if (route !== 'discard') await ensureFlowCandidate(sid, intent)
             // v18 核心：段成功立即推水位到该段 endSeq（断点续传——失败/截断不再丢尾；整窗处理完自然到达 maxSeq）
             writeWatermark(sid, chunk.endSeq, agent)
+            // G-4a：本段已消化 ⇒ 清掉它的失败记账与「扣住」计数（否则 hasPendingUndigested 永久为真 ⇒ 跳过分支被无谓扣住）
+            dispatchFailStreak.delete(`${sid}#${chunk.endSeq}`)
+            skipHoldStreak.delete(sid)
             log(`distill: ${sidShort(sid)} 段${k + 1}/${segLimit} completed，水位推进 ${wmNow}→${chunk.endSeq}${chunk.endSeq < maxSeq ? `（整窗尚余 ${chunks.length - k - 1} 段，下轮续传）` : '（整窗蒸馏完成，水位=maxSeq）'}`)
             wmNow = chunk.endSeq
             // 段间紧凑清单续上下文：本段裁决一行（供同轮后段查重/合并，勿重复入册；超 MANIFEST_CAP 丢最早行）
@@ -1542,6 +1588,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
             const tries = (dispatchFailStreak.get(streakKey) || 0) + 1
             if (tries >= MAX_DISPATCH_RETRY) {
               dispatchFailStreak.delete(streakKey)
+              skipHoldStreak.delete(sid) // 本段已放弃 ⇒ 不再因它扣住跳过分支
               writeWatermark(sid, chunk.endSeq, agent)
               wmNow = chunk.endSeq
               manifest = manifestPush(manifest, manifestLineFor(chunk.endSeq, route, out), MANIFEST_CAP)
