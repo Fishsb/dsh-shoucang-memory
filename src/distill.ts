@@ -404,21 +404,30 @@ export const commitPrinciples = (tmpPath: string, targetPath: string): { ok: boo
 //   :664 注释预言的死循环就会真实发生。故另加熔断闸（连续 N 轮不可用 ⇒ 本轮跳过，不再整窗重蒸烧 LLM）。
 export const DISCARD_SNAPSHOT_CB_N = 3
 
-/** 写方决策表（单测直接驱动）：① maxSeq<=0 ⇒ 不写（禁写 0）；② maxSeq < prevSeq ⇒ 不写（禁写回退值）；③ 否则写。 */
+/**
+ * 写方决策表（单测直接驱动）：① maxSeq<=0 ⇒ 不写（禁写 0）；② maxSeq < prevSeq ⇒ 不写（禁写回退值）；③ 否则写。
+ * `snapshotUnavailable` 是**熔断计数的唯一推进条件**（G-20 二修，cody 2026-09-12 指出）：
+ *   只有「快照真的拿不到」才算一轮；「快照正常但序号空间重排」**不计**（它不烧 LLM，也不是故障，
+ *   且读方已按语义 B 判为「保持全量」——若让它推进计数，连续 3 轮零写入就会撞上熔断被跳过，
+ *   与语义 B「要重蒸」直接冲突 ⇒ 会话变「永久不蒸」）。
+ */
 export const planDiscardWrite = (
   maxSeq: number,
   prevSeq: number,
   consecutiveUnavailable: number,
-): { write: boolean; circuitBroken: boolean; reason: string } => {
+): { write: boolean; circuitBroken: boolean; snapshotUnavailable: boolean; reason: string } => {
   const streak = Number(consecutiveUnavailable) > 0 ? Math.floor(Number(consecutiveUnavailable)) : 0
   if (!(maxSeq > 0)) {
     const n = streak + 1
     const broken = n >= DISCARD_SNAPSHOT_CB_N
-    return { write: false, circuitBroken: broken, reason: broken ? 'snapshot-unavailable-circuit-break' : 'snapshot-unavailable-noop' }
+    return {
+      write: false, circuitBroken: broken, snapshotUnavailable: true,
+      reason: broken ? 'snapshot-unavailable-circuit-break' : 'snapshot-unavailable-noop',
+    }
   }
   const p = Number(prevSeq) > 0 ? Number(prevSeq) : 0
-  if (p > 0 && maxSeq < p) return { write: false, circuitBroken: false, reason: 'seq-space-regressed-noop' }
-  return { write: true, circuitBroken: false, reason: '' }
+  if (p > 0 && maxSeq < p) return { write: false, circuitBroken: false, snapshotUnavailable: false, reason: 'seq-space-regressed-noop' }
+  return { write: true, circuitBroken: false, snapshotUnavailable: false, reason: '' }
 }
 
 /**
@@ -465,7 +474,9 @@ export const runDiscardWatermark = (
   const plan = planDiscardWrite(maxSeq, wm?.lastSeq ?? 0, consecutiveUnavailable)
   const prev = Number(consecutiveUnavailable) > 0 ? Math.floor(Number(consecutiveUnavailable)) : 0
   if (!plan.write) {
-    const streak = prev + 1
+    // G-20 二修：只有「快照真的不可用」才推进熔断计数；seq 空间重排不推进（并顺带复位），
+    // 否则连续 3 轮「快照正常但空间重排」会被熔断跳过，与读方语义 B「保持全量」直接冲突。
+    const streak = plan.snapshotUnavailable ? prev + 1 : 0
     try {
       deps.audit({
         sid,

@@ -176,10 +176,17 @@ export declare const commitPrinciples: (tmpPath: string, targetPath: string) => 
     err?: string;
 };
 export declare const DISCARD_SNAPSHOT_CB_N = 3;
-/** 写方决策表（单测直接驱动）：① maxSeq<=0 ⇒ 不写（禁写 0）；② maxSeq < prevSeq ⇒ 不写（禁写回退值）；③ 否则写。 */
+/**
+ * 写方决策表（单测直接驱动）：① maxSeq<=0 ⇒ 不写（禁写 0）；② maxSeq < prevSeq ⇒ 不写（禁写回退值）；③ 否则写。
+ * `snapshotUnavailable` 是**熔断计数的唯一推进条件**（G-20 二修，cody 2026-09-12 指出）：
+ *   只有「快照真的拿不到」才算一轮；「快照正常但序号空间重排」**不计**（它不烧 LLM，也不是故障，
+ *   且读方已按语义 B 判为「保持全量」——若让它推进计数，连续 3 轮零写入就会撞上熔断被跳过，
+ *   与语义 B「要重蒸」直接冲突 ⇒ 会话变「永久不蒸」）。
+ */
 export declare const planDiscardWrite: (maxSeq: number, prevSeq: number, consecutiveUnavailable: number) => {
     write: boolean;
     circuitBroken: boolean;
+    snapshotUnavailable: boolean;
     reason: string;
 };
 /**

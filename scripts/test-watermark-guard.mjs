@@ -170,6 +170,26 @@ ok('⑪-f 双证齐全 ⇒ degraded=false 且 lastSeq=prevSeq', b !== null && b.
 // ⑪-g 无水位 ⇒ null
 ok('⑪-g 无水位行 ⇒ null', resolveWatermarkBaseline('s', undefined, {}, mkBaselineDeps(114654)) === null)
 
+// ═══ ⑮ 熔断计数只由「快照不可用」推进（G-20 二修；cody 2026-09-12 指出的键名错配）═══
+// 背景：推进条件一度是「没写水位」，把「快照正常但序号空间重排（seq-space-regressed-noop）」也算进去
+//   ⇒ 连续 3 轮空间重排且零写入的会话会撞熔断被跳过，与读方语义 B「空间重排 ⇒ 保持全量」直接冲突
+//   （语义 B 说要重蒸，熔断却跳过 ⇒ 会话变「永久不蒸」）。故此处锁死：只有快照不可用才计数。
+ok('⑮-a 快照不可用 ⇒ snapshotUnavailable=true（推进计数）', planDiscardWrite(0, 114654, 0).snapshotUnavailable === true)
+const pReg2 = planDiscardWrite(511, 101539, 2)
+ok('⑮-b 空间重排 ⇒ snapshotUnavailable=false（**不**推进计数）',
+  pReg2.snapshotUnavailable === false && pReg2.circuitBroken === false && pReg2.write === false)
+audits = []
+const before15 = wmLines().length
+let r15
+for (let i = 0; i < 3; i++) r15 = runDiscardWatermark('session-llll', 'format-migrated 0→3', shrunkAgent, { lastSeq: 101539 }, i, mkDeps())
+ok('⑮-c 连续 3 轮「空间重排」⇒ **不熔断**（语义 B 保真，stread 恒 0）',
+  r15.circuitBroken === false && r15.streak === 0, `streak=${r15.streak} circuitBroken=${r15.circuitBroken}`)
+ok('⑮-c 且始终未落回退水位', wmLines().length === before15 && wmLines().filter((l) => l.lastSeq === 511).length === 0)
+let r16
+for (let i = 0; i < 3; i++) r16 = runDiscardWatermark('session-mmmm', 'unverifiable-legacy', brokenAgent, { lastSeq: 114654 }, i, mkDeps())
+ok('⑮-d 对照组：连续 3 轮「快照不可用」⇒ 第 3 轮必须熔断', r16.circuitBroken === true && r16.streak === 3,
+  `streak=${r16.streak} circuitBroken=${r16.circuitBroken}`)
+
 console.log(P.join('\n'))
 const fails = P.filter((x) => x.startsWith('FAIL')).length
 console.log(`\n${P.length - fails} PASS / ${fails} FAIL  (writes=${writes.length}, wmLines=${wmLines().length}, discardCalls=${discardCalls.length})`)
