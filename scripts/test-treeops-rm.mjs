@@ -231,10 +231,13 @@ const hooks = () => ({ audit: () => {}, log: () => {} })
 {
   // M6-a keep=drop 同一小节（两个不同标题命中同一 section）
   const rootA = mk()
+  const beforeA = readNote(rootA)
   const rA = await applyTreeOps(rootA, [{ action: 'merge', file: 'lessons.md', keepTitle: '甲', dropTitle: '甲独有' }], hooks())
   ok('M6-a keep=drop 同一小节 ⇒ skipped',
     rA.applied === 0 && rA.skipped === 1 && recs(rootA).some((x) => x.reason === 'keep=drop 同一小节'),
     `applied=${rA.applied} skipped=${rA.skipped} reasons=${JSON.stringify(recs(rootA).map((x) => x.reason))}`)
+  // archi 2026-09-12：此用例 notes 文件是存在的，字节完全可比 ⇒ 不必归为"不可比"
+  ok('M6-a 文件字节不变', readNote(rootA) === beforeA)
   // M6-b drop 未找到
   const rootB = mk()
   const beforeB = readNote(rootB)
@@ -259,6 +262,8 @@ const hooks = () => ({ audit: () => {}, log: () => {} })
   ok('M6-d notes 文件缺失 ⇒ skipped 且 reason 精确',
     rD.applied === 0 && rD.skipped === 1 && recs(rootD).some((x) => x.reason === 'notes 文件缺失/不可读'),
     `reasons=${JSON.stringify(recs(rootD).map((x) => x.reason))}`)
+  // 本用例没有 notes 文件可比对，对应断言是「跳过不得顺手把文件创建出来」
+  ok('M6-d notes 文件仍不存在（跳过不得顺手创建）', !existsSync(noteOf(rootD)))
 }
 
 console.log(P.join('\n'))
