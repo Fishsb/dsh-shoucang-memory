@@ -262,11 +262,35 @@ RangeError: Maximum call stack size exceeded
 
 ---
 
+### 5.5 A2 的真相：不是"不肯改"，是抽象不够（实测取证）
+
+抽查三处旧代码，DOM 形态**各不相同**：
+
+| 处 | 结构 | 为何原 `UI.item` 表达不了 |
+|---|---|---|
+| `makeToggle` | info 内还有 `metaBadges`；开关**直接挂 item、无包装** | 只能放 name/desc，且控件强制包进 `.setting-item-control` |
+| `lItem` | **三个平级子节点**：info + badge + slider | 只支持 info + control 两个 |
+| `pctItem` | 控件是复合结构（input + span） | 需复合控件容器 |
+
+⇒ **逐个硬塞进 `UI.item` 必然改变 DOM**，与"保持 DOM 结构不变"直接冲突。我此前的谨慎是对的，但正确做法是**扩展抽象**而非放弃：
+
+```js
+UI.item(name, desc, control, {
+  extra: [node],        // 追加进 setting-item-info（作用域徽标等）
+  wrapControl: false,   // 不包装，兼容既有未包装写法
+  children: [node],     // row 的平级追加，支持多子节点
+})
+```
+
+**收益**：组件层现在能无损表达全部既有形态 ⇒ 后续每一处替换都是**等价替换**。本次已转 `makeToggle`（被 7 个参数项复用的工厂）+ 插件集合成员列表。手工 `setting-item` 变量声明 **20 → 16**。
+
+---
+
 ## 六、剩余项（下一轮）
 
 | # | 项 | 状态 |
 |---|---|---|
-| 1 | **A2 旧视图组件化** | **部分落地**：新视图全面使用组件层（26 处调用）；旧视图已转换插件集合成员列表 1 处作模板（手工 `setting-item` 20 → 19）。剩余 19 处**未做批量替换**——虽为同一机械范式，但控件需保留 `.setting-item-control` 包装，盲目 codemod 会改变 DOM 结构，与"DOM 结构不变"要求冲突。建议配合目视验收逐处推进 |
+| 1 | **A2 旧视图组件化** | **已打通阻塞，部分转换**：抽查发现既有 DOM **三种形态互不相同**（见下），`UI.item` 抽象过窄 ⇒ 已**扩展组件层**（`extra` / `wrapControl` / `children` 三个开关），现在能无损表达全部形态。已转换：插件集合成员列表、`makeToggle` 工厂（**被 7 个参数项复用**）。手工 `setting-item` 变量声明 **20 → 16**。剩余 16 处为等价替换，可安全推进 |
 | ~~2~~ | ~~C1 进度覆盖旧调用~~ | ✅ **已落地**：`api()` 慢请求（>1.5s）自动显示「执行中…」，覆盖全部旧调用点；用 `setStatusText` 不写日志，结束即清 |
 | ~~3~~ | ~~D6 无障碍~~ | ✅ **已落地**：模态框 `role=dialog` + `aria-modal` + `aria-label`；导航项 `role=button` + `tabindex=0` + `aria-label` + 键盘 Enter/Space；视图区 `role=region` + 动态 `aria-label` |
 | ~~4~~ | ~~A6 视图路由/深链~~ | ✅ **已落地（只读深链）**：记住最后视图（localStorage）+ 支持 `#sc=<视图名>` 深链**读取**。**不写 URL**——写 hash 可能干扰宿主路由，故采用保守方案 |
