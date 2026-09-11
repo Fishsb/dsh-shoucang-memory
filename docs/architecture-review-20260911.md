@@ -109,5 +109,28 @@ TRIGGER.idleMs        → 0 处
 
 **这类护栏的价值已被证明**：F8 落地当天就抓出一次"库内跑旧逻辑"的漂移——此前只能靠人记得 `Copy-Item`。
 
+## 6. B 档已落地（2026-09-11）——**F1 闭环：注册表成为真源**
+
+**接线清单（注册表 → 代码真源）**：
+
+| 注册表字段 | 接到哪里 | 实测（端点） |
+|---|---|---|
+| `trigger.idleMs` / `probeAfterMs` / `probeWindowMs` | `scheduler` zod 缺省 | `/deepsleep` → `idleMs=10800000·probeAfterMs=10800000`；`/deepsleep/config` → `ProbeWindowMs=60000` ✓ |
+| `trigger.newTracesMin` | `distill` 深睡痕迹门槛（`traces.length < min` ⇒ no-traces） | 与旧语义等价（缺省 1）✓ |
+| `trigger.manual` | `panel` `POST /deepsleep/trigger` 守卫（false ⇒ 403） | 实测 **409 already-running**（未误伤手动触发）✓ |
+| `score.mode` | `scheduler.scoreWeights` 缺省 | `/config` → `scoreWeights=v2` ✓ |
+| `maturation.enforce` | `scheduler.maturationEnforce` 缺省 | `false` ✓ |
+| `surface.injection.carriers.profile` | `scheduler.injectProfileRows` 缺省 | `3` ✓ |
+| `surface.injection.levelCaps` | `panel` 档位行数上限（原硬编码 `{low:2,…}`） | `/criteria` → `levelCaps` ✓ |
+| `surface.fusion.k` | `vec` RRF `k`（原硬编码 60） | `k=60` ✓ |
+| `surface.fusion.kind` / `surface.recall.coldFactorPercent` / `surface.threshold.tOn` / `surface.mcl.*` | `scheduler` 各 zod 缺省 | `/mcl/status` → `阈值=0.65·topK=3·budget=600·nudges=1` ✓ |
+| `l0.*.values` | `criteria.ts` 的 L0 字面量（`l0Pick()` 按名取值，**注册表删值即抛错**） | `typecheck`/`test-layering` 全绿 ✓ |
+| `GATE.caps/notesWarn` · `HEALTH.R/K/notesWarn` | 写门 / 体检脚本读**投影** `criteria-gate.json` | 体检 R/K 由投影提供 ✓ |
+
+**仍为 doc（有意保留，非缺口）**：`SURFACE.rerank`（声明闸门，尚无代码）· `CARRIERS.renderers`（仅机检门消费——元操作）· `GATE.exit`（退出码在脚本内建）。
+
+**机检自纠两次（防"判据说谎"）**：① 字面 token 检索被别名/cast 骗过 ⇒ 改**文件级**判据；② 消费者集合最初把 `gen-*`/`check-*` 算进去，导致 29 项全判 runtime（**判据自我满足**）⇒ 排除元操作，并明确 `runtime⇒必须被消费`（硬红灯）与 `doc⇒疑似消费仅告警`（因 `process.exit` 会撞 `GATE.exit` 这类假阳性）。现：**PASS（32 项）**。
+
+
 
 _建立 2026-09-11 · 依据：精确检索（注册表字段消费计数 / 路由计数 / 水位条件行号 / 退出码判读 / 部署面 sha / ADR 列表）+ 架构档与八份方案档通读。本报告只记录发现与建议，**除 F4 文档修正外未改任何代码**。_

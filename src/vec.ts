@@ -14,6 +14,8 @@ import { readFileSync, existsSync, mkdirSync, appendFileSync, writeFileSync, unl
 import { join, dirname } from 'node:path'
 import { knowledgeRoot, recallIndex, sectionKeyOf, dedupeBySection, type RecallRow } from './targets.js'
 import { importanceOf, layeredScore } from './criteria.js'
+// B 档（审查 F1-A）：RRF 的 k 读判据注册表（原为硬编码 60）
+import { SURFACE } from './criteria.generated.js'
 
 export interface EmbedCfg {
   enabled: boolean
@@ -263,7 +265,7 @@ export async function recallRanked(
     //   RRF 只看排名、对离群分稳健（来源：criteria.json surface.fusion；文档见 skill/engine/criteria.md）。
     //   回滚：cfg.fusionKind='weighted'（或 scheduler 配置 recallFusion=weighted）即回到旧口径。
     const fusionKind = cfg.fusionKind || 'rrf'
-    const kRrf = 60
+    const kRrf = Number(SURFACE.fusion.k ?? 60) // B 档：读注册表（surface.fusion.k）
     const keyOf = (d: { row: RecallRow }): string => `${d.row.file}#${d.row.line}`
     const denseRank = new Map<string, number>()
     dense.forEach((d, i) => denseRank.set(keyOf(d), i + 1))

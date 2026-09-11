@@ -116,7 +116,14 @@ try {
       const maxSec = segs.reduce((mx, x) => Math.max(mx, x.replace(/\s/g, '').length), 0);
       // v21（§8.1 分裂律）：超 R(1000) 的节 —— ## 按**子树**（含 ### 子节）判「该裂」；### 按**自身**判读取代价。
       // 只提示不 exit（R 是内容律不是硬门，与 NOTES_WARN 同策略；结构决策归模型，见 memory-core-model §2.7.2）。
-      const R = 1000;
+      // v2.2 B 档（审查 F1-A）：R/K/notesWarn 优先读**判据投影** `engine/criteria-gate.json`（单一真源），缺投影时回落内建缺省
+let R = 1000, K_CAP = 6, NOTES_WARN_EFF = NOTES_WARN;
+try {
+  const proj = JSON.parse(await readFile(join(skillDir, 'engine', 'criteria-gate.json'), 'utf8'));
+  if (typeof proj.R === 'number' && proj.R > 0) R = proj.R;
+  if (typeof proj.K === 'number' && proj.K > 0) K_CAP = proj.K;
+  if (typeof proj.notesWarn === 'number' && proj.notesWarn > 0) NOTES_WARN_EFF = proj.notesWarn;
+} catch { /* 投影未部署 → 内建缺省 */ }
       const own = (blk) => blk.split('\n').slice(1).join('\n').replace(/\s/g, '').length;
       const title = (blk) => (blk.split('\n')[0] || '').trim().replace(/^#+\s*/, '').replace(/（[^）]*）$/, '').trim();
       const over = [];

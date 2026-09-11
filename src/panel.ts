@@ -27,7 +27,7 @@ import { tmpdir } from 'node:os'
 import { zstdDecompressSync } from 'node:zlib'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { homedir } from 'node:os'
-import { CARRIERS } from './criteria.generated.js'
+import { CARRIERS, SURFACE, TRIGGER } from './criteria.generated.js'
 import { dshHome, knowledgeRoot, memoryLibRoot, recallIndex } from './targets.js'
 import { vecStats, clearVecCache } from './vec.js'
 import { deepSleepShare } from './deepsleep-share.js'
@@ -299,7 +299,7 @@ export function applyPanel(ctx: Context, config: Config): void {
     }
     const readIdx = (name: string): string[] => readCarrier(name)
     const profileCap = Number(sched.injectProfileRows ?? 3) || 0 // v2.2：P 层画像行每档上限（缺省 3；0=回滚）
-    const rowCaps: Record<string, number> = { low: 2, medium: 4, high: 8, smart: 10 }
+    const rowCaps: Record<string, number> = { ...SURFACE.injection.levelCaps } // B 档：档位行数上限读注册表（surface.injection.levelCaps）
     const userLines = personaMode === 'off' || personaMode === 'me' ? [] : readCarrier('USER.md', { profile: true, maxProfile: profileCap })
     const agentLines = personaMode === 'off' || personaMode === 'you' ? [] : readCarrier('AGENT.md', { profile: true, maxProfile: profileCap })
     // 知识索引行选行（ACT-027）：相关性 top-k（复用 recallIndex，单一实现）∪ 新鲜度保证槽（末尾 N 条）
@@ -1453,6 +1453,7 @@ export function applyPanel(ctx: Context, config: Config): void {
   // POST /deepsleep/trigger：手动触发一次深度睡眠归纳（T2「立即归纳一次」）
   route('/deepsleep/trigger', async (_req, res) => {
     try {
+      if ((TRIGGER as { manual?: boolean }).manual === false) return sendJson(res, 403, { ok: false, error: 'manual-trigger-disabled-by-registry' }) // B 档：读注册表 criteria.trigger.manual
       if (!deepSleepShare.api) return sendJson(res, 400, { ok: false, error: 'distill-not-ready' })
       const r = await deepSleepShare.api.runDeepSleepNow()
       sendJson(res, r.ok ? 200 : 409, r)

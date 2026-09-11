@@ -10,7 +10,7 @@
  *   promoteVerdict('principle'|'path', s)  → 升格裁决（含 premise 硬门）
  *   demoteVerdict(s)                       → 降格/遗忘裁决（三守卫 + 画像节保护 + 单轮上限）
  */
-import { CRITERIA_ROWS, CRITERIA_VERSION, SURFACE, MATURATION, SCORE } from './criteria.generated.js'
+import { CRITERIA_ROWS, CRITERIA_VERSION, SURFACE, MATURATION, SCORE, L0 } from './criteria.generated.js'
 
 export { CRITERIA_VERSION }
 
@@ -51,6 +51,18 @@ export interface L0Input {
   supersedes?: boolean
 }
 
+/** L0 取值域（B 档 · 审查 F1-A）：**枚举字面量取自注册表** `criteria.l0.*.values`，并在此做一致性校验——
+ *  注册表若删/改某取值，这里立刻抛错（fail-fast），而不是静默漂移成"声明一套、实现一套"。 */
+const l0Pick = (dim: 'reuse' | 'generality' | 'stability' | 'conflict', want: string): string => {
+  const vals = (L0[dim] as { values: readonly string[] }).values
+  if (!vals.includes(want)) throw new Error(`criteria.l0.${dim} 取值域缺少 '${want}'（注册表与实现不一致，请先补齐注册表）`)
+  return want
+}
+const REUSE = { task: l0Pick('reuse', 'cross-task'), project: l0Pick('reuse', 'cross-project'), session: l0Pick('reuse', 'session-only') } as const
+const GEN = { direction: l0Pick('generality', 'direction'), contract: l0Pick('generality', 'contract-fact'), detail: l0Pick('generality', 'detail') } as const
+const STAB = { once: l0Pick('stability', 'once'), sameDay: l0Pick('stability', 'same-day-repeat'), crossDay: l0Pick('stability', 'cross-day') } as const
+const CONF = { none: l0Pick('conflict', 'none'), coexist: l0Pick('conflict', 'coexist'), supersede: l0Pick('conflict', 'supersede') } as const
+
 /** L0 共用内核：四维枚举（两域同口径；**不打分**，避免魔法数） */
 export function evaluateL0(input: L0Input): L0Verdict {
   const text = String(input.text || '')
@@ -59,22 +71,22 @@ export function evaluateL0(input: L0Input): L0Verdict {
   const sessions = Math.max(0, Number(input.sessions) || 0)
   const basis: string[] = []
 
-  // reuse：项目专名 → 仅本会话（守跨工作区红线）；跨会话 → 跨项目；否则跨任务
-  let reuse: L0Reuse = 'cross-task'
-  if (PROJECT_SPECIFIC.test(text)) { reuse = 'session-only'; basis.push('l0.reuse.project-specific') }
-  else if (sessions >= 2) { reuse = 'cross-project'; basis.push('l0.reuse.cross-session') }
+  // reuse：项目专名 → 仅本会话（守跨工作区红线）；跨会话 → 跨项目；否则跨任务（字面量取自注册表 REUSE）
+  let reuse: L0Reuse = REUSE.task as L0Reuse
+  if (PROJECT_SPECIFIC.test(text)) { reuse = REUSE.session as L0Reuse; basis.push('l0.reuse.project-specific') }
+  else if (sessions >= 2) { reuse = REUSE.project as L0Reuse; basis.push('l0.reuse.cross-session') }
 
   // generality：显式标注 → 方向指引；含具体数值/路径 → 细节条文；否则契约事实
-  let generality: L0Generality = 'contract-fact'
-  if (/\[(原则|路径)\]/.test(text)) { generality = 'direction'; basis.push('l0.generality.direction') }
-  else if (/[0-9]{2,}|[A-Za-z]:[\\/]/.test(text)) { generality = 'detail'; basis.push('l0.generality.detail') }
+  let generality: L0Generality = GEN.contract as L0Generality
+  if (/\[(原则|路径)\]/.test(text)) { generality = GEN.direction as L0Generality; basis.push('l0.generality.direction') }
+  else if (/[0-9]{2,}|[A-Za-z]:[\\/]/.test(text)) { generality = GEN.detail as L0Generality; basis.push('l0.generality.detail') }
 
   // stability：跨日命中日数 ≥2 → 跨日；线索 ≥2 → 当日重现；否则单次
-  let stability: L0Stability = 'once'
-  if (days30 >= 2) { stability = 'cross-day'; basis.push('l0.stability.cross-day') }
-  else if (traces >= 2) { stability = 'same-day-repeat'; basis.push('l0.stability.same-day') }
+  let stability: L0Stability = STAB.once as L0Stability
+  if (days30 >= 2) { stability = STAB.crossDay as L0Stability; basis.push('l0.stability.cross-day') }
+  else if (traces >= 2) { stability = STAB.sameDay as L0Stability; basis.push('l0.stability.same-day') }
 
-  const conflict: L0Conflict = input.supersedes ? 'supersede' : 'none'
+  const conflict: L0Conflict = input.supersedes ? (CONF.supersede as L0Conflict) : (CONF.none as L0Conflict)
   if (input.supersedes) basis.push('l0.conflict.supersede')
 
   return { reuse, generality, stability, conflict, basis }

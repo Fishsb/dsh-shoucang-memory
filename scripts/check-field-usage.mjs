@@ -28,8 +28,24 @@ const files = readdirSync(srcDir).filter((f) => f.endsWith('.ts') && f !== 'crit
 const info = files.map((f) => {
   const text = readFileSync(join(srcDir, f), 'utf8')
   const consts = new Set([...text.matchAll(/import\s*\{([^}]*)\}\s*from\s*'\.\/criteria\.generated\.js'/g)].flatMap((m) => m[1].split(',').map((s) => s.trim().split(/\s+as\s+/)[0].trim())).filter(Boolean))
-  return { f, text, consts }
+  return { f: `src/${f}`, text, consts }
 })
+// **脚本面消费者**（B 档）：只认**把字段当参数用**的脚本，且**排除元操作**——
+//   `gen-criteria.mjs`（把注册表投影成 generated/gate，是"搬运"不是"消费"）与 `check-*.mjs`（把注册表当数据校验）
+//   若算作消费，会让每个字段永远"被消费"⇒ 判据自我满足（实测踩过：suggest 一度把 29 项全判 runtime）。
+const isMeta = (f) => /^(gen-|check-)/.test(f)
+const PROJ_CONSTS = ['GATE', 'HEALTH', 'SURFACE', 'CARRIERS', 'SCORE', 'MATURATION', 'TRIGGER', 'L0']
+for (const [dir, label] of [[join(root, 'skill', 'scripts'), 'skill/scripts/'], [join(root, 'scripts'), 'scripts/']]) {
+  let names = []
+  try { names = readdirSync(dir).filter((f) => f.endsWith('.mjs')) } catch { /* 目录缺失 */ }
+  for (const f of names) {
+    if (isMeta(f)) continue
+    let text = ''
+    try { text = readFileSync(join(dir, f), 'utf8') } catch { continue }
+    if (!text.includes('criteria-gate.json') && !text.includes('criteria.json')) continue
+    info.push({ f: label + f, text, consts: new Set(PROJ_CONSTS) })
+  }
+}
 // 判据收紧为「**属性访问形态**」：字段名前面必须有点或方括号（`.field` / `['field']`）——
 //   否则 `enforce`/`step` 这类**参数名/局部变量**会与字段同名而误判为已消费（实测踩过）。
 const consumed = (constName, field) => info.some((x) => x.consts.has(constName) && new RegExp(`[.[]\\s*['"]?${field}\\b`).test(x.text))
@@ -39,13 +55,18 @@ const allConsts = ['L0', 'GATE', 'HEALTH', 'SURFACE', 'CARRIERS', 'SCORE', 'MATU
 const constLevel = allConsts.map((c) => ({ constName: c, imported: info.some((x) => x.consts.has(c)) }))
 
 let fail = 0
+const warnings = []
 const rows = []
 for (const [path, role] of Object.entries(roles)) {
   const [constName, field] = path.split('.')
   const is = consumed(constName, field)
-  const ok = role === 'runtime' ? is : !is
-  if (!ok) fail++
-  rows.push({ path, role, consumed: is, ok, why: ok ? '' : role === 'runtime' ? '声明 runtime 但 src 无消费（改了不生效）' : '声明 doc 但 src 有消费（标记已过期，应改为 runtime）' })
+  // 方向一（**硬红灯**）：声明 runtime 却无人消费 ⇒ "改了不生效"，这是危险方向，必须失败。
+  // 方向二（**仅告警**）：声明 doc 却疑似被消费 —— token 级分析有假阳性（`process.exit` 撞 `GATE.exit`、`proj.K` 撞局部变量），
+  //   故只提示"标记可能过期"，不失败（避免门禁自己说谎而逼人写假声明）。
+  const ok = role === 'runtime' ? is : true
+  if (role === 'runtime' && !is) fail++
+  if (role === 'doc' && is) warnings.push(path)
+  rows.push({ path, role, consumed: is, ok, why: role === 'runtime' && !is ? '声明 runtime 但无人消费（改了不生效）' : role === 'doc' && is ? '疑似被消费（标记可能过期；token 级分析，人工确认）' : '' })
 }
 // 常量级：被导出却无人 import ⇒ 整块没接（硬红灯）
 const orphanConsts = constLevel.filter((c) => !c.imported && !['CRITERIA_VERSION'].includes(c.constName))

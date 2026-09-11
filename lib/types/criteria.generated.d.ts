@@ -239,9 +239,11 @@ export declare const MATURATION: {
 };
 export declare const TRIGGER: {
     readonly idleMs: 10800000;
+    readonly probeAfterMs: 10800000;
+    readonly probeWindowMs: 60000;
     readonly newTracesMin: 1;
     readonly manual: true;
-    readonly note: "触发数据化（v2.1 §2.4）：idleMs=全部根会话停滞阈值（缺省 3h）；newTracesMin=窗口内最少新痕迹数；manual=面板「立即归纳一次」开关。改这里即改行为，不必改码。";
+    readonly note: "触发数据化（v2.1 §2.4 · B 档接线后为 runtime）：idleMs=全部根会话停滞阈值（缺省 3h）；probeAfterMs/probeWindowMs=卡住探测；newTracesMin=窗口内最少新痕迹数；manual=面板「立即归纳一次」。**改这里即改行为**（scheduler zod 缺省直接读本块）。";
 };
 export declare const CRITERIA_ROWS: readonly [{
     readonly id: "ingest.route.r1";
