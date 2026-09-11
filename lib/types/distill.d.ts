@@ -77,6 +77,10 @@ export interface DistillConfig {
     embedApiKeyEnv?: string;
     recallFusion?: string;
     bankGit?: boolean;
+    injectProfileRows?: number;
+    scoreWeights?: string;
+    shadowScore?: boolean;
+    maturationEnforce?: boolean;
     activityWarmDays?: number;
     activityColdDays?: number;
     activityArchiveDays?: number;

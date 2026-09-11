@@ -80,6 +80,17 @@ export declare const SURFACE_PARAMS: {
             readonly high: 8;
             readonly smart: 10;
         };
+        readonly carriers: {
+            readonly profile: 3;
+            readonly note: "P 层画像行每档注入上限（0=关闭 → 回滚到「画像行不注入」的旧行为）";
+        };
+    };
+    readonly score: {
+        readonly mode: "legacy";
+        readonly alphaRel: 1;
+        readonly alphaImp: 0.35;
+        readonly alphaRec: 0.1;
+        readonly note: "v2.2 统一打分：score = α_rel·relevance(RRF) + α_imp·importance + α_rec·recency；mode=legacy 时用现行 relevance+activity（切换需影子期证据）";
     };
     readonly recall: {
         readonly topK: 3;

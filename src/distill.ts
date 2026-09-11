@@ -197,6 +197,11 @@ export interface DistillConfig {
   // ═══ v2（ADR-122）检索/运维面 ═══
   recallFusion?: string // 融合策略：'rrf'（缺省，排名融合 k=60）| 'weighted'（旧 min-max 加权，回滚用）
   bankGit?: boolean // 记忆库本地 git 版本化（写后快照；缺省开，失败静默）
+  // v2.2（ADR-130）层模型开关
+  injectProfileRows?: number // P 层画像行每档注入上限（缺省 3；0=关闭）
+  scoreWeights?: string // 打分公式 'legacy'（缺省）| 'v2'
+  shadowScore?: boolean // 影子打分（写 audit/score-shadow.jsonl，不改排序）
+  maturationEnforce?: boolean // 成熟度强制（缺省 false=只记录）
   // v7 校准阈值（缺省 14/44/90/5/35，UI 可调）
   activityWarmDays?: number // active→warm 无命中天数（缺省 14）
   activityColdDays?: number // warm→cold 无命中天数（缺省 44）
@@ -1478,44 +1483,54 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
   }
 
   // 习得原则/任务路径落盘（v17：[原则]/[路径] 并入 AGENT.md）：宿主拼装新全文 → write_gate 校验（容量/指针/行格式）→ 原子替换（冲突=原地 replace）
-  const applyPrinciples = async (memRoot: string, out: any): Promise<{ added: number; replaced: number; skipped: number; gate: string }> => {
+  const applyPrinciples = async (memRoot: string, out: any): Promise<{ attempted: number; added: number; replaced: number; skipped: number; gate: string; rejectedLines: string[] }> => {
     const principlesPath = join(memRoot, 'AGENT.md')
     const gateScript = join(memoryLibRoot(), 'scripts', 'memory_write_gate.mjs')
-    if (!existsSync(gateScript)) return { added: 0, replaced: 0, skipped: 0, gate: 'write_gate 未就位' }
+    if (!existsSync(gateScript)) return { attempted: 0, added: 0, replaced: 0, skipped: 0, gate: 'write_gate 未就位', rejectedLines: [] }
     let content = ''
     try { content = readFileSync(principlesPath, 'utf8') } catch {
       content = PROFILE_HEADER['AGENT.md'] + '\n'
     }
     const lines = content.split(/\r?\n/)
     let added = 0, replaced = 0, skipped = 0
+    // v2.1 M0（ADR-130）：**attempted** = 模型提交的条目数（与 added 区分——gate 拒收时 added 会归零但 attempted 保留）；
+    //   rejectedLines = 被门禁拒收时的候选行原文（进审计，便于下次直接定位「指针悬空 / 行格式」）
+    let attempted = 0
+    const accepted: string[] = []
+    const rejectedLines: string[] = []
     for (const p of ((out && Array.isArray(out.principles)) ? out.principles : [])) {
+      attempted++
       const text = String((p && p.text) || '').trim()
-      if (!/^\[(原则|路径)\].+→\s*notes\/[A-Za-z0-9_-]+\.md/.test(text)) { skipped++; continue } // 行格式宿主预检（v17：[路径] 同行门禁；gate 亦校验 [tag] 索引行）
+      if (!/^\[(原则|路径)\].+→\s*notes\/[A-Za-z0-9_-]+\.md/.test(text)) { skipped++; rejectedLines.push(`[format] ${text}`); continue } // 行格式宿主预检（v17：[路径] 同行门禁；gate 亦校验 [tag] 索引行）
       if (p && p.action === 'replace') {
         const match = String(p.match || '').trim()
         const idx = lines.findIndex((l) => l.trim() === match)
-        if (idx < 0) { skipped++; continue }
+        if (idx < 0) { skipped++; rejectedLines.push(`[no-match] ${text}`); continue }
         lines[idx] = text
+        accepted.push(text)
         replaced++
       } else {
-        if (lines.some((l) => l.trim().toLowerCase() === text.toLowerCase())) { skipped++; continue } // 去重
+        if (lines.some((l) => l.trim().toLowerCase() === text.toLowerCase())) { skipped++; rejectedLines.push(`[dup] ${text}`); continue } // 去重
         lines.push(text)
+        accepted.push(text)
         added++
       }
     }
-    if (!added && !replaced) return { added, replaced, skipped, gate: 'no-op' }
+    if (!added && !replaced) return { attempted, added, replaced, skipped, gate: 'no-op', rejectedLines }
     const tmpPath = principlesPath + '.tmp'
     try {
       writeFileSync(tmpPath, lines.join('\n').replace(/\n{3,}/g, '\n\n').replace(/\s+$/, '\n'), 'utf8')
       const g = await runNode(config.nodeBin, gateScript, ['AGENT.md', tmpPath], { env: { MEMORY_ROOT: memRoot, ...capEnv() }, timeout: 20000 })
-      if (g.status === 0) { renameSync(tmpPath, principlesPath); return { added, replaced, skipped, gate: 'pass' } }
+      if (g.status === 0) { renameSync(tmpPath, principlesPath); return { attempted, added, replaced, skipped, gate: 'pass', rejectedLines } }
       try { unlinkSync(tmpPath) } catch { /* */ }
       const reason = g.status === 1 ? '超限=原则间合并（本轮跳过）' : g.status === 2 ? '指针悬空/未注册' : g.status === 4 ? '行格式违规' : `gate exit=${g.status}`
       log(`deep sleep: write_gate 拒收（${reason}）: ${textOf(g).slice(0, 120)}`)
-      return { added, replaced, skipped, gate: reason }
+      // v2.1 M0：门禁拒收 ⇒ **本轮 0 落地**（added/replaced 归零，不再让账本显示"加了 4 条"），
+      //   attempted 保留模型提交数，accepted 行标记为 [gate:<reason>] 原文入审计
+      return { attempted, added: 0, replaced: 0, skipped: attempted, gate: reason, rejectedLines: [...rejectedLines, ...accepted.map((t) => `[gate:${reason}] ${t}`)] }
     } catch (e) {
       try { unlinkSync(tmpPath) } catch { /* */ }
-      return { added, replaced, skipped, gate: '落盘异常: ' + String((e as Error).message).slice(0, 80) }
+      return { attempted, added: 0, replaced: 0, skipped: attempted, gate: '落盘异常: ' + String((e as Error).message).slice(0, 80), rejectedLines: [...rejectedLines, ...accepted.map((t) => `[io] ${t}`)] }
     }
   }
 
@@ -2402,7 +2417,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         }
         const app = (stop === 'completed' && out)
           ? await applyPrinciples(resolved.root, out)
-          : { added: 0, replaced: 0, skipped: 0, gate: `stop=${stop}` }
+          : { attempted: 0, added: 0, replaced: 0, skipped: 0, gate: `stop=${stop}`, rejectedLines: [] as string[] }
         // 双画像巩固：profileOps（add/replace，须 notes 源指针；格式/容量/去重门禁同蒸馏）
         let profileAdded = 0
         if (stop === 'completed' && out && Array.isArray(out.profileOps)) {
@@ -2426,7 +2441,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
           ? await applyForgetOps(resolved.root, out.forgetOps, { audit, log })
           : { archived: 0, kept: 0, skipped: 0 }
         log(`deep sleep: stop=${stop} 原则 +${app.added}/替换 ${app.replaced}/跳过 ${app.skipped}（${app.gate}）画像 +${profileAdded} 指针更新 ${ptrRes.updated}/跳过 ${ptrRes.skipped}（${ptrRes.gate}）树 ops ${treeRes.applied}/跳过 ${treeRes.skipped}/归档 ${treeRes.archived} forget 归档 ${forgetRes.archived}/保留 ${forgetRes.kept}/跳过 ${forgetRes.skipped}`)
-        audit({ kind: 'deep-sleep', stop, added: app.added, replaced: app.replaced, skipped: app.skipped, profiles: profileAdded, pointers: ptrRes.updated, ptrSkipped: ptrRes.skipped, tree: treeRes.applied, treeSkipped: treeRes.skipped, forgetArchived: forgetRes.archived, forgetKept: forgetRes.kept, forgetSkipped: forgetRes.skipped, gate: app.gate })
+        audit({ kind: 'deep-sleep', stop, attempted: app.attempted, added: app.added, replaced: app.replaced, skipped: app.skipped, rejected: (app.rejectedLines || []).length, rejectedLines: (app.rejectedLines || []).slice(0, 5), profiles: profileAdded, pointers: ptrRes.updated, ptrSkipped: ptrRes.skipped, tree: treeRes.applied, treeSkipped: treeRes.skipped, forgetArchived: forgetRes.archived, forgetKept: forgetRes.kept, forgetSkipped: forgetRes.skipped, gate: app.gate })
         // 判据台账（巩固域）：模型判据（可选 judgement）+ 宿主侧**升格/降格裁决**（criteria.ts 单一实现）+ 六通道结果
         ledger({
           domain: 'consolidate', step: 'deep-sleep', stop,

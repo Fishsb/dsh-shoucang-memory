@@ -1,10 +1,10 @@
-export declare const CRITERIA_VERSION = "v2.0.0";
+export declare const CRITERIA_VERSION = "v2.2.0";
 /** 摄取域判据段（拼进 DEFAULT_DISTILL_PROMPT） */
 export declare const INGEST_JUDGE: string;
 /** 巩固域判据段（拼进 DEEP_SLEEP_PROMPT） */
 export declare const CONSOLIDATE_JUDGE: string;
-export declare const JUDGEMENT_HINT = "judgement\uFF1A\u53EF\u9009\u5BF9\u8C61\uFF0C\u628A\u672C\u6B21\u5224\u636E\u53D6\u503C\u5199\u8FDB\u8F93\u51FA\uFF08reuse/generality/stability/conflict/dup \u6216 evidence/stability/conflict/cost\uFF1B\u53D6\u503C\u89C1 criteria \u6CE8\u518C\u8868\uFF09\uFF0C\u5BBF\u4E3B\u636E\u6B64\u5199 judgement-ledger \u4F9B\u5BF9\u8D26\u3002";
-export declare const LEDGER_FILE = "audit/judgement-ledger.jsonl";
+export declare const JUDGEMENT_HINT = "judgement\uFF1A\u53EF\u9009\u5BF9\u8C61\uFF0C\u628A\u672C\u6B21\u5224\u636E\u53D6\u503C\u5199\u8FDB\u8F93\u51FA\uFF08reuse/generality/stability/conflict/dup \u6216 evidence/stability/conflict/cost\uFF1B\u53D6\u503C\u89C1 criteria \u6CE8\u518C\u8868\uFF09\uFF0C\u5BBF\u4E3B\u636E\u6B64\u5199\u7EDF\u4E00\u53F0\u8D26 audit/ledger.jsonl\uFF08type=decision.*\uFF09\u4F9B\u5BF9\u8D26\u3002";
+export declare const LEDGER_FILE = "audit/ledger.jsonl";
 export declare const L0: {
     readonly reuse: {
         readonly values: readonly ["cross-task", "cross-project", "session-only"];
@@ -64,6 +64,17 @@ export declare const SURFACE: {
             readonly high: 8;
             readonly smart: 10;
         };
+        readonly carriers: {
+            readonly profile: 3;
+            readonly note: "P 层画像行每档注入上限（0=关闭 → 回滚到「画像行不注入」的旧行为）";
+        };
+    };
+    readonly score: {
+        readonly mode: "legacy";
+        readonly alphaRel: 1;
+        readonly alphaImp: 0.35;
+        readonly alphaRec: 0.1;
+        readonly note: "v2.2 统一打分：score = α_rel·relevance(RRF) + α_imp·importance + α_rec·recency；mode=legacy 时用现行 relevance+activity（切换需影子期证据）";
     };
     readonly recall: {
         readonly topK: 3;
@@ -101,6 +112,136 @@ export declare const SURFACE: {
         readonly budgetChars: 600;
         readonly topK: 3;
     };
+};
+export declare const CARRIERS: {
+    readonly note: "载体契约（v2.2 · ADR-130）：每个标签声明 layer（生效层）+ form（存在形式）+ inject（可注入性）。P 层 always（恒常、不参与相关性竞争）；R/E 层 gated（按任务型/相关性调用）；notes/audit 为 none。读取面必须实现每种 injectable 载体的渲染器（机检 scripts/check-carriers.mjs）。";
+    readonly tags: {
+        readonly 身份: {
+            readonly layer: "P";
+            readonly form: "index";
+            readonly inject: "always";
+        };
+        readonly 使命: {
+            readonly layer: "P";
+            readonly form: "index";
+            readonly inject: "always";
+        };
+        readonly 边界: {
+            readonly layer: "P";
+            readonly form: "profile";
+            readonly inject: "always";
+        };
+        readonly 性格: {
+            readonly layer: "P";
+            readonly form: "profile";
+            readonly inject: "always";
+            readonly new: true;
+        };
+        readonly 认知: {
+            readonly layer: "P";
+            readonly form: "profile";
+            readonly inject: "always";
+            readonly new: true;
+        };
+        readonly 演化: {
+            readonly layer: "P";
+            readonly form: "index";
+            readonly inject: "always";
+        };
+        readonly 偏好: {
+            readonly layer: "P";
+            readonly form: "index";
+            readonly inject: "always";
+        };
+        readonly 习惯: {
+            readonly layer: "P";
+            readonly form: "index";
+            readonly inject: "always";
+        };
+        readonly 原则: {
+            readonly layer: "P";
+            readonly form: "index";
+            readonly inject: "always";
+            readonly note: "仅跨环境稳定者；带情境前提者交深睡按 A≥gate 决定是否升 P";
+        };
+        readonly 经验: {
+            readonly layer: "E";
+            readonly form: "index";
+            readonly inject: "gated";
+            readonly note: "v2.2 D7 修正：情境经验属经验层，不再当 always-on";
+        };
+        readonly 教训: {
+            readonly layer: "E";
+            readonly form: "index";
+            readonly inject: "gated";
+            readonly note: "体检脚本 AGENT 侧既有标签（agent 教训≈lesson），一并登记";
+        };
+        readonly 路径: {
+            readonly layer: "R";
+            readonly form: "index";
+            readonly inject: "gated";
+            readonly note: "任务型门控（复用 ACT-029 MCL 快通道熟悉度分流）";
+        };
+        readonly env: {
+            readonly layer: "E";
+            readonly form: "index";
+            readonly inject: "gated";
+        };
+        readonly tool: {
+            readonly layer: "E";
+            readonly form: "index";
+            readonly inject: "gated";
+        };
+        readonly flow: {
+            readonly layer: "E";
+            readonly form: "index";
+            readonly inject: "gated";
+        };
+        readonly lesson: {
+            readonly layer: "E";
+            readonly form: "index";
+            readonly inject: "gated";
+        };
+        readonly 环境: {
+            readonly layer: "P";
+            readonly form: "index";
+            readonly inject: "always";
+            readonly note: "USER 侧：用户环境构成";
+        };
+        readonly 硬件: {
+            readonly layer: "P";
+            readonly form: "index";
+            readonly inject: "always";
+        };
+    };
+    readonly renderers: {
+        readonly "always:index": "src/panel.ts#readCarrier（索引行 always 全量按档位 cap）";
+        readonly "always:profile": "src/panel.ts#readCarrier（画像行 `- … ← 源:` ≤ injection.carriers.profile 条/档；P 层 profile 标签由注册表驱动）";
+        readonly "gated:index": "src/targets.ts#recallIndex + src/vec.ts#recallRanked（相关性/任务型门控）";
+        readonly "none:notes": "src/panel.ts#/memory/sections（按需读取，不注入）";
+        readonly "none:audit": "scripts/criteria-audit.mjs（只读审计，不注入）";
+    };
+};
+export declare const SCORE: {
+    readonly mode: "legacy";
+    readonly alphaRel: 1;
+    readonly alphaImp: 0.35;
+    readonly alphaRec: 0.1;
+    readonly note: "v2.2 统一打分：score = α_rel·relevance(RRF) + α_imp·importance + α_rec·recency；mode=legacy 时用现行 relevance+activity（切换需影子期证据）";
+};
+export declare const MATURATION: {
+    readonly A0: 0.3;
+    readonly step: 0.2;
+    readonly gate: 0.5;
+    readonly enforce: false;
+    readonly note: "成熟度（v2.2 E6）：A(0)=A0；每次跨日再现 +step（上限 1.0）；只有 A≥gate 才允许升格为 [原则]/[路径]；A<gate 不注入但参与打分（implicit priming）。enforce=false 时只记录不强制（M4 影子期）。";
+    readonly ledger: "audit/maturation.jsonl";
+};
+export declare const TRIGGER: {
+    readonly idleMs: 10800000;
+    readonly newTracesMin: 1;
+    readonly manual: true;
+    readonly note: "触发数据化（v2.1 §2.4）：idleMs=全部根会话停滞阈值（缺省 3h）；newTracesMin=窗口内最少新痕迹数；manual=面板「立即归纳一次」开关。改这里即改行为，不必改码。";
 };
 export declare const CRITERIA_ROWS: readonly [{
     readonly id: "ingest.route.r1";

@@ -40,6 +40,11 @@ const buildTs = () => {
     lines.push(`export const ${name} = ${JSON.stringify(val, null, 2)} as const`)
     lines.push('')
   }
+  // v2.2（ADR-130）：载体契约 / 打分 / 成熟度 / 触发参数
+  for (const [name, val] of [['CARRIERS', reg.carriers], ['SCORE', reg.surface.score], ['MATURATION', reg.maturation], ['TRIGGER', reg.trigger]]) {
+    lines.push(`export const ${name} = ${JSON.stringify(val, null, 2)} as const`)
+    lines.push('')
+  }
   lines.push(`export const CRITERIA_ROWS = ${JSON.stringify([...reg.ingest.criteria, ...reg.consolidate.criteria].map((c) => ({ id: c.id, domain: c.id.split('.')[0], kind: c.kind, text: c.text, params: c.params })), null, 2)} as const`)
   lines.push('')
   return lines.join('\n')
@@ -68,6 +73,23 @@ const buildMd = () => {
     for (const c of dom.criteria) o.push(`| \`${c.id}\` | ${c.kind} | ${c.text} | \`${JSON.stringify(c.params)}\` |`)
     o.push('')
   }
+  o.push('## 载体契约（v2.2 · layer / form / inject）')
+  o.push('')
+  o.push('| 标签 | 层 | 形式 | 可注入性 |')
+  o.push('|---|---|---|---|')
+  for (const [tag, c] of Object.entries(reg.carriers.tags)) o.push(`| \`${tag}\`${c.new ? '（新增）' : ''} | ${c.layer} | ${c.form} | ${c.inject} |`)
+  o.push('')
+  o.push('| 渲染器 | 实现 |')
+  o.push('|---|---|')
+  for (const [k, v] of Object.entries(reg.carriers.renderers)) o.push(`| ${k} | ${v} |`)
+  o.push('')
+  o.push('## 生效权重与成熟度（v2.2）')
+  o.push('')
+  o.push(`- 打分：mode=${reg.surface.score.mode} · α_rel=${reg.surface.score.alphaRel} / α_imp=${reg.surface.score.alphaImp} / α_rec=${reg.surface.score.alphaRec}`)
+  o.push(`- 成熟度：A0=${reg.maturation.A0} · step=${reg.maturation.step} · gate=${reg.maturation.gate} · enforce=${reg.maturation.enforce}（台账 ${reg.maturation.ledger}）`)
+  o.push(`- 触发：idleMs=${reg.trigger.idleMs} · 新痕迹≥${reg.trigger.newTracesMin} · 手动=${reg.trigger.manual}`)
+  o.push(`- P 层画像行上限：${reg.surface.injection.carriers?.profile ?? 0} 条/档（0=关闭）`)
+  o.push('')
   o.push('## 硬门与观测参数')
   o.push('')
   o.push('| 面 | 参数 |')
@@ -103,6 +125,11 @@ const buildGate = () => JSON.stringify({
   dedup: reg.ingest.criteria.find((c) => c.id === 'ingest.dedup.bigram').params,
   format: reg.ingest.criteria.find((c) => c.id === 'ingest.format.index-line').params,
   demote: reg.consolidate.criteria.find((c) => c.id === 'consolidate.demote.archive').params,
+  carriers: reg.carriers,
+  score: reg.surface.score,
+  maturation: reg.maturation,
+  trigger: reg.trigger,
+  ledger: reg.judgement.ledger,
   surface: reg.surface,
   health: reg.health,
 }, null, 2) + '\n'

@@ -1,5 +1,5 @@
 {
-  "version": "v2.0.0",
+  "version": "v2.2.0",
   "kind": "criteria-registry",
   "note": "守藏记忆核心 v2 唯一判据数据源（ADR-122）。所有投影由 scripts/gen-criteria.mjs 生成，禁止手写；scripts/check-criteria.mjs 机检一致（纳入 npm test）。judgeText 段与 v1 现值逐字等价（M1 零行为切换）。",
   "l0": {
@@ -77,21 +77,67 @@
     "notesWarn": 8000,
     "checks": ["capacity", "duplicates", "tags", "pointers", "section-existence", "index-ledger-coverage", "inject-token-account", "placement-audit"]
   },
+  "carriers": {
+    "note": "载体契约（v2.2 · ADR-130）：每个标签声明 layer（生效层）+ form（存在形式）+ inject（可注入性）。P 层 always（恒常、不参与相关性竞争）；R/E 层 gated（按任务型/相关性调用）；notes/audit 为 none。读取面必须实现每种 injectable 载体的渲染器（机检 scripts/check-carriers.mjs）。",
+    "tags": {
+      "身份": { "layer": "P", "form": "index", "inject": "always" },
+      "使命": { "layer": "P", "form": "index", "inject": "always" },
+      "边界": { "layer": "P", "form": "profile", "inject": "always" },
+      "性格": { "layer": "P", "form": "profile", "inject": "always", "new": true },
+      "认知": { "layer": "P", "form": "profile", "inject": "always", "new": true },
+      "演化": { "layer": "P", "form": "index", "inject": "always" },
+      "偏好": { "layer": "P", "form": "index", "inject": "always" },
+      "习惯": { "layer": "P", "form": "index", "inject": "always" },
+      "原则": { "layer": "P", "form": "index", "inject": "always", "note": "仅跨环境稳定者；带情境前提者交深睡按 A≥gate 决定是否升 P" },
+      "经验": { "layer": "E", "form": "index", "inject": "gated", "note": "v2.2 D7 修正：情境经验属经验层，不再当 always-on" },
+      "教训": { "layer": "E", "form": "index", "inject": "gated", "note": "体检脚本 AGENT 侧既有标签（agent 教训≈lesson），一并登记" },
+      "路径": { "layer": "R", "form": "index", "inject": "gated", "note": "任务型门控（复用 ACT-029 MCL 快通道熟悉度分流）" },
+      "env": { "layer": "E", "form": "index", "inject": "gated" },
+      "tool": { "layer": "E", "form": "index", "inject": "gated" },
+      "flow": { "layer": "E", "form": "index", "inject": "gated" },
+      "lesson": { "layer": "E", "form": "index", "inject": "gated" },
+      "环境": { "layer": "P", "form": "index", "inject": "always", "note": "USER 侧：用户环境构成" },
+      "硬件": { "layer": "P", "form": "index", "inject": "always" }
+    },
+    "renderers": {
+      "always:index": "src/panel.ts#readCarrier（索引行 always 全量按档位 cap）",
+      "always:profile": "src/panel.ts#readCarrier（画像行 `- … ← 源:` ≤ injection.carriers.profile 条/档；P 层 profile 标签由注册表驱动）",
+      "gated:index": "src/targets.ts#recallIndex + src/vec.ts#recallRanked（相关性/任务型门控）",
+      "none:notes": "src/panel.ts#/memory/sections（按需读取，不注入）",
+      "none:audit": "scripts/criteria-audit.mjs（只读审计，不注入）"
+    }
+  },
   "surface": {
-    "injection": { "budgetChars": 3000, "order": 88, "relevance": true, "freshSlots": 2, "levelCaps": { "low": 2, "medium": 4, "high": 8, "smart": 10 } },
+    "injection": { "budgetChars": 3000, "order": 88, "relevance": true, "freshSlots": 2, "levelCaps": { "low": 2, "medium": 4, "high": 8, "smart": 10 }, "carriers": { "profile": 3, "note": "P 层画像行每档注入上限（0=关闭 → 回滚到「画像行不注入」的旧行为）" } },
+    "score": { "mode": "legacy", "alphaRel": 1.0, "alphaImp": 0.35, "alphaRec": 0.1, "note": "v2.2 统一打分：score = α_rel·relevance(RRF) + α_imp·importance + α_rec·recency；mode=legacy 时用现行 relevance+activity（切换需影子期证据）" },
     "recall": { "topK": 3, "topKMax": 5, "scope": "all", "coldFactorPercent": 35 },
     "fusion": { "kind": "rrf", "k": 60, "fallback": "weighted", "weights": { "dense": 0.7, "lexical": 0.3 }, "dedupBySection": true },
     "threshold": { "metric": "abs-cosine", "tOn": 0.65, "tOff": 0.6, "note": "ACT-024 校准：绝对余弦；归一化融合分只能排序不可做阈值" },
     "rerank": { "enabled": false, "gate": { "indexRows": 200, "followRateDropRuns": 2 }, "note": "触发门未达前不引入 reranker（避免堆叠）" },
     "mcl": { "familiarThreshold": 0.65, "maxNudges": 1, "budgetChars": 600, "topK": 3 }
   },
+  "maturation": {
+    "A0": 0.3,
+    "step": 0.2,
+    "gate": 0.5,
+    "enforce": false,
+    "note": "成熟度（v2.2 E6）：A(0)=A0；每次跨日再现 +step（上限 1.0）；只有 A≥gate 才允许升格为 [原则]/[路径]；A<gate 不注入但参与打分（implicit priming）。enforce=false 时只记录不强制（M4 影子期）。",
+    "ledger": "audit/maturation.jsonl"
+  },
+  "trigger": {
+    "idleMs": 10800000,
+    "newTracesMin": 1,
+    "manual": true,
+    "note": "触发数据化（v2.1 §2.4）：idleMs=全部根会话停滞阈值（缺省 3h）；newTracesMin=窗口内最少新痕迹数；manual=面板「立即归纳一次」开关。改这里即改行为，不必改码。"
+  },
   "judgement": {
     "fields": {
       "ingest": ["reuse", "generality", "stability", "conflict", "dup"],
       "consolidate": ["evidence", "stability", "conflict", "cost"]
     },
-    "hint": "judgement：可选对象，把本次判据取值写进输出（reuse/generality/stability/conflict/dup 或 evidence/stability/conflict/cost；取值见 criteria 注册表），宿主据此写 judgement-ledger 供对账。",
-    "ledger": "audit/judgement-ledger.jsonl"
+    "hint": "judgement：可选对象，把本次判据取值写进输出（reuse/generality/stability/conflict/dup 或 evidence/stability/conflict/cost；取值见 criteria 注册表），宿主据此写统一台账 audit/ledger.jsonl（type=decision.*）供对账。",
+    "ledger": "audit/ledger.jsonl",
+    "legacyLedger": "audit/judgement-ledger.jsonl"
   },
   "antiScope": [
     "实体图/图数据库（用 INDEX 元数据表「关联主题」列弱关联替代）",

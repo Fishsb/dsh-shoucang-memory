@@ -65,6 +65,10 @@ export interface Config {
     recallFusion: string;
     injectRelevance: boolean;
     injectFreshSlots: number;
+    injectProfileRows: number;
+    scoreWeights: string;
+    shadowScore: boolean;
+    maturationEnforce: boolean;
     bankGit: boolean;
     activityWarmDays: number;
     activityColdDays: number;

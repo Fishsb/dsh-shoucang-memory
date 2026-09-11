@@ -27,6 +27,7 @@ import { tmpdir } from 'node:os'
 import { zstdDecompressSync } from 'node:zlib'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { homedir } from 'node:os'
+import { CARRIERS } from './criteria.generated.js'
 import { dshHome, knowledgeRoot, memoryLibRoot, recallIndex } from './targets.js'
 import { vecStats, clearVecCache } from './vec.js'
 import { deepSleepShare } from './deepsleep-share.js'
@@ -272,14 +273,35 @@ export function applyPanel(ctx: Context, config: Config): void {
     // 指针式注入：agent 画像（含 [原则] 习得原则与 [路径] 任务路径）+ 用户画像 + 知识索引一行一条（[tag] 主题 · 概况 → notes/x.md §小节），Agent 按需 get_file 拉详情
     // 2026-09-10 用户拍板：注入侧**不裁切**（任务执行时 agent 总看到完整双画像+记忆指针——裁切会漏记忆影响执行）；
     // 记忆库规模由容量门（写门 SHOUCANG_CAP_*，蒸馏扩增时强制）控制
-    const readIdx = (name: string): string[] => {
+    // v2.2 M0（ADR-130 载体契约）：按 **载体** 渲染 ——
+    //   always:index（P 层索引行）全量；always:profile（P 层画像行 `- … ← 源:`）≤ injectProfileRows 条/档（0=关闭=回滚）；
+    //   gated:index（E/R 层）由 recallIndex/recallRanked 按相关性/任务型选择（此处仅提供候选池）。
+    //   标签→层映射**来自注册表**（CARRIERS），代码里不硬编码（单一事实源原则）。
+    const alwaysProfileTags = new Set(
+      Object.entries(((CARRIERS as { tags?: Record<string, { inject?: string; form?: string }> }).tags) || {})
+        .filter(([, c]) => c.inject === 'always' && c.form === 'profile')
+        .map(([t]) => t),
+    )
+    const readCarrier = (name: string, opts: { profile?: boolean; maxProfile?: number } = {}): string[] => {
       try {
-        return readFileSync(join(memRoot, name), 'utf8').split(/\r?\n/).map((l) => l.trim()).filter((l) => /^\[.+\]/.test(l))
+        const all = readFileSync(join(memRoot, name), 'utf8').split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+        const idx = all.filter((l) => /^\[.+\]/.test(l))
+        if (!opts.profile || !(opts.maxProfile && opts.maxProfile > 0)) return idx
+        const prof = all.filter((l) => {
+          if (!/^-\s/.test(l) || !/←\s*源:/.test(l)) return false
+          const m = l.match(/^-\s*\[([^\]]+)\]/)
+          if (!m) return true // 历史无标签行：回落启发式（`- … ← 源:` 即画像行）
+          if (alwaysProfileTags.size === 0) return true
+          return alwaysProfileTags.has(m[1]) // 注册表驱动：仅 P 层 profile 标签进入 always 面
+        })
+        return idx.concat(prof.slice(-opts.maxProfile)) // 写侧 append 在节尾 ⇒ 取最近 N 条
       } catch { return [] }
     }
+    const readIdx = (name: string): string[] => readCarrier(name)
+    const profileCap = Number(sched.injectProfileRows ?? 3) || 0 // v2.2：P 层画像行每档上限（缺省 3；0=回滚）
     const rowCaps: Record<string, number> = { low: 2, medium: 4, high: 8, smart: 10 }
-    const userLines = personaMode === 'off' || personaMode === 'me' ? [] : readIdx('USER.md')
-    const agentLines = personaMode === 'off' || personaMode === 'you' ? [] : readIdx('AGENT.md')
+    const userLines = personaMode === 'off' || personaMode === 'me' ? [] : readCarrier('USER.md', { profile: true, maxProfile: profileCap })
+    const agentLines = personaMode === 'off' || personaMode === 'you' ? [] : readCarrier('AGENT.md', { profile: true, maxProfile: profileCap })
     // 知识索引行选行（ACT-027）：相关性 top-k（复用 recallIndex，单一实现）∪ 新鲜度保证槽（末尾 N 条）
     const cap = rowCaps[level] ?? 10
     const allMem = readIdx('MEMORY.md')
@@ -341,12 +363,12 @@ export function applyPanel(ctx: Context, config: Config): void {
     if (!userLines.length && !agentLines.length && !memLines.length) { injectCache.text = ''; return '' }
     const lines: string[] = [`[守藏·热记忆] 记忆库指针（${memRoot}；详情按指针 get_file 拉对应 notes §小节）：`]
     if (agentLines.length) {
-      lines.push('agent 画像（AGENT.md；含 [原则] 习得原则与 [路径] 任务路径——跨任务方向指引/脚本骨架，①③步优先读）：')
-      for (const l of agentLines) lines.push(`- ${l}`)
+      lines.push('agent 画像（AGENT.md；含 [原则]/[路径] 与成长画像行 `← 源:`——①③步优先读）：')
+      for (const l of agentLines) lines.push(/^-\s/.test(l) ? l : `- ${l}`)
     }
     if (userLines.length) {
       lines.push('用户画像（USER.md）：')
-      for (const l of userLines) lines.push(`- ${l}`)
+      for (const l of userLines) lines.push(/^-\s/.test(l) ? l : `- ${l}`)
     }
     if (memLines.length) {
       lines.push(`知识索引（MEMORY.md，热取前 ${memLines.length} 条）：`)
@@ -555,6 +577,11 @@ export function applyPanel(ctx: Context, config: Config): void {
       mclBudgetChars: typeof sched.mclBudgetChars === 'number' ? sched.mclBudgetChars : 600,
       mclTopK: typeof sched.mclTopK === 'number' ? sched.mclTopK : 3,
       mclAudit: sched.mclAudit !== false,
+      // v2.2（ADR-130）：层模型开关
+      injectProfileRows: typeof sched.injectProfileRows === 'number' ? sched.injectProfileRows : 3,
+      scoreWeights: String(sched.scoreWeights ?? 'legacy'),
+      shadowScore: sched.shadowScore !== false,
+      maturationEnforce: sched.maturationEnforce === true,
     }
     // P2：无 root 也能调注入（全局 scheduler.json）——root 仅管理 boards 显示与旧 YAML；返回 global 供 UI 渲染
     if (!file) return sendJson(res, 200, { text: null, parsed: null, error: 'no-active-root', global: globalCfg })
@@ -587,7 +614,7 @@ export function applyPanel(ctx: Context, config: Config): void {
   route('/toggle', async (req, res) => {
     const body = await readBody(req)
     const key = typeof body.key === 'string' ? body.key : ''
-    const allowed = ['boards.memory', 'injection.hot_memory', 'injectRelevance', 'bankGit', 'mclEnabled', 'mclAudit'] // U3：布尔类键补齐（含 v2 bankGit 与 MCL 开关）
+    const allowed = ['boards.memory', 'injection.hot_memory', 'injectRelevance', 'bankGit', 'mclEnabled', 'mclAudit', 'shadowScore', 'maturationEnforce'] // U3+v2.2：布尔类键
     if (!allowed.includes(key)) return sendJson(res, 400, { error: `key 不允许：${key}` })
     // U3 修正（实测缺陷）：scheduler.json 类布尔键必须走 **suite 持久通道**——
     // 此前只有 hot_memory 走全局，其余键落到 root YAML 的 flipBool ⇒ 找不到 `shoucang.<key>` 行 → 500。
@@ -597,6 +624,8 @@ export function applyPanel(ctx: Context, config: Config): void {
       bankGit: 'bankGit',
       mclEnabled: 'mclEnabled',
       mclAudit: 'mclAudit',
+      shadowScore: 'shadowScore',
+      maturationEnforce: 'maturationEnforce',
     }
     if (SUITE_BOOL[key]) {
       const prop = SUITE_BOOL[key]
@@ -652,6 +681,8 @@ export function applyPanel(ctx: Context, config: Config): void {
       'mclBudgetChars': [],
       'mclTopK': [],
       'recallFusion': ['rrf', 'weighted'],
+      'injectProfileRows': [],
+      'scoreWeights': ['legacy', 'v2'],
     }
     // 数值范围校验（2026-09-10 收敛：仅注入组 + embedding.dimension；archive/lifecycle/merge 死键已随白名单移除）
     const RANGE: Record<string, [number, number]> = {
@@ -675,6 +706,7 @@ export function applyPanel(ctx: Context, config: Config): void {
       'mclMaxNudges': [0, 3],
       'mclBudgetChars': [120, 4000],
       'mclTopK': [1, 5],
+      'injectProfileRows': [0, 6],
     }
     if (!(key in allowed)) return sendJson(res, 400, { error: `key 不允许：${key}` })
     if (!value) return sendJson(res, 400, { error: 'value required' })
