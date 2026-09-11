@@ -175,6 +175,18 @@ export declare const deepSleepLanded: (stop: unknown, out: unknown, app: {
     added: number;
     gate: string;
 }, other?: DeepSleepOtherChannels) => boolean;
+export type DeepSleepFailPolicy = 'retry' | 'graded';
+export declare const DEFAULT_FAIL_POLICY: DeepSleepFailPolicy;
+export declare const DEFAULT_FAIL_MAX_ROUNDS = 3;
+export declare const planDeepSleepVerdict: (landed: boolean, policy: DeepSleepFailPolicy, failStreak: number, maxRounds: number) => {
+    verdict: "done" | "failed";
+    release: boolean;
+    reason: string;
+};
+export declare const liveFailPolicy: () => {
+    policy: DeepSleepFailPolicy;
+    maxRounds: number;
+};
 export declare const deepSleepReplayable: (o: {
     kind?: unknown;
     error?: unknown;

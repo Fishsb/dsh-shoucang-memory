@@ -9,7 +9,7 @@
 //        ③ attempted===0 纯 ops 轮/真·空轮 ⇒ done（防无限重处理）④ stop≠completed / out 假值 ⇒ failed
 //        ⑤ write_gate 未就位（基础设施失败）⇒ failed ⑥ 部分接受 skipped>0 ⇒ done
 // 用法: node scripts/test-deepsleep-verdict.mjs
-import { deepSleepLanded, deepSleepReplayable, commitPrinciples } from '../lib/distill.js'
+import { deepSleepLanded, deepSleepReplayable, commitPrinciples, planDeepSleepVerdict, DEFAULT_FAIL_POLICY, DEFAULT_FAIL_MAX_ROUNDS } from '../lib/distill.js'
 import { mkdtempSync, writeFileSync, existsSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -132,6 +132,50 @@ ok(deepSleepLanded('completed', {}, app({ attempted: 0, added: 0, gate: '落盘�
   '⑤ 纵深防御：失败 gate 优先于其他通道的成功（done=5 也不得判 done）')
 ok(deepSleepLanded('error', null, app({ attempted: 0, added: 0, gate: 'pass' }), { tried: 0, done: 0 }) === false,
   '⑤ stop≠completed ⇒ failed（与通道结果无关，保持原语义）')
+
+// ── G-19 深睡失败策略（planDeepSleepVerdict）────────────────────────────────
+// 背景：landed=false 原硬编码 ⇒ failed ⇒ 水位回滚、同批材料下轮重捞（=策略 B，永不放弃）。
+//   某通道若**永久**失败（画像容量满 / 门禁长期缺席），B 会每 idleMs 重捞一次、永不停（烧 LLM）。
+//   故并存 C=graded：连败达 maxRounds 轮后放行（判 done、推进水位）并告警。两者做成可配项。
+// 反向证伪：把决策表第 2 条（policy=retry 分支）删掉 ⇒ retry+streak=99 会掉进 graded 放行分支 ⇒ ② 翻红；
+//   把第 3 条的 `+1` 去掉 ⇒ streak=2/max=3 需到第 4 轮才放行 ⇒ ④ 翻红（差一轮即越界放行/丢料）。
+console.log('\n── planDeepSleepVerdict 失败策略回归（G-19）──')
+ok(planDeepSleepVerdict(true, 'retry', 0, 3).verdict === 'done' && planDeepSleepVerdict(true, 'retry', 0, 3).release === false,
+  '① landed=true ⇒ done 且 release=false（策略/连败一概不看）')
+ok(planDeepSleepVerdict(true, 'graded', 99, 3).verdict === 'done' && planDeepSleepVerdict(true, 'graded', 99, 3).release === false,
+  '① landed=true 优先于 graded 放行（连败=99 也不得判 release）')
+
+ok(planDeepSleepVerdict(false, 'retry', 0, 3).verdict === 'failed' && planDeepSleepVerdict(false, 'retry', 0, 3).release === false,
+  '② policy=retry 且 landed=false ⇒ failed（B：全重捞，永不放行）')
+ok(planDeepSleepVerdict(false, 'retry', 99, 3).verdict === 'failed' && planDeepSleepVerdict(false, 'retry', 99, 3).release === false,
+  '② policy=retry 且连败 99 轮 ⇒ 仍 failed（永不放行——B 的核心不变量）')
+ok(planDeepSleepVerdict(false, 'retry', 2, 3).verdict === 'failed',
+  '② policy=retry 且刚好达阈值（streak=2/max=3）⇒ 仍 failed（retry 不受 maxRounds 影响）')
+
+ok(planDeepSleepVerdict(false, 'graded', 0, 3).verdict === 'failed' && planDeepSleepVerdict(false, 'graded', 0, 3).release === false,
+  '③ policy=graded/streak=0/max=3 ⇒ failed（首轮失败：重试，不丢料）')
+ok(planDeepSleepVerdict(false, 'graded', 1, 3).verdict === 'failed' && planDeepSleepVerdict(false, 'graded', 1, 3).release === false,
+  '③ policy=graded/streak=1/max=3 ⇒ failed（第 2 轮仍重试）')
+
+ok(planDeepSleepVerdict(false, 'graded', 2, 3).verdict === 'done' && planDeepSleepVerdict(false, 'graded', 2, 3).release === true,
+  '④ policy=graded/streak=2/max=3 ⇒ done 且 release=true（第 3 轮连败达上限 ⇒ 放行+告警）')
+ok(planDeepSleepVerdict(false, 'graded', 5, 3).verdict === 'done' && planDeepSleepVerdict(false, 'graded', 5, 3).release === true,
+  '④ policy=graded/streak=5/max=3（超上限）⇒ done 且 release=true（不得因超界回退成重试）')
+ok(planDeepSleepVerdict(false, 'graded', 0, 1).verdict === 'done' && planDeepSleepVerdict(false, 'graded', 0, 1).release === true,
+  '④ max=1 ⇒ 首轮失败即放行（阈值下界，等价于「不重试」）')
+
+ok(planDeepSleepVerdict(true, 'graded', 0, 3).reason === 'landed' &&
+  planDeepSleepVerdict(false, 'retry', 0, 3).reason === 'policy=retry' &&
+  planDeepSleepVerdict(false, 'graded', 0, 3).reason === 'graded-retry' &&
+  planDeepSleepVerdict(false, 'graded', 2, 3).reason === 'graded-release',
+  '⑤ reason 四分支齐备（审计可读：landed / policy=retry / graded-retry / graded-release）')
+
+ok(DEFAULT_FAIL_POLICY === 'graded' && DEFAULT_FAIL_MAX_ROUNDS === 3,
+  '⑥ 默认值常量合理：DEFAULT_FAIL_POLICY=graded（C 缺省）、DEFAULT_FAIL_MAX_ROUNDS=3')
+ok(typeof planDeepSleepVerdict === 'function' && planDeepSleepVerdict.length === 4,
+  '⑥ planDeepSleepVerdict 已导出且为 4 参纯函数（模块级，闭包外可单测）')
+ok(planDeepSleepVerdict(false, 'graded', 2, 3).verdict === planDeepSleepVerdict(false, 'graded', 2, 3).verdict,
+  '⑥ 纯函数：同参两次调用结果一致（无隐藏状态）')
 
 console.log(`\n结果: ${pass} PASS / ${fail} FAIL`)
 process.exit(fail === 0 ? 0 : 1)

@@ -698,6 +698,9 @@ export function applyPanel(ctx: Context, config: Config): void {
       'scoreWeights': ['legacy', 'v2'],
       'selfCheckRepo': [],       // 仓根路径（字符串）
       'selfCheckIntervalHours': [],
+      // G-19（2026-09-12）：深睡失败策略 —— retry=全重捞永不放弃（B）/ graded=连败 N 轮放行并告警（C，缺省）
+      'deepSleep.failPolicy': ['retry', 'graded'],
+      'deepSleep.failPolicyMaxRounds': [],
     }
     // 数值范围校验（2026-09-10 收敛：仅注入组 + embedding.dimension；archive/lifecycle/merge 死键已随白名单移除）
     const RANGE: Record<string, [number, number]> = {
@@ -723,6 +726,7 @@ export function applyPanel(ctx: Context, config: Config): void {
       'mclTopK': [1, 5],
       'injectProfileRows': [0, 6],
       'selfCheckIntervalHours': [0, 168],
+      'deepSleep.failPolicyMaxRounds': [1, 100], // G-19：连败放行阈值（轮）；0/负数会被 liveFailPolicy 忽略并回落默认值 3
     }
     if (!(key in allowed)) return sendJson(res, 400, { error: `key 不允许：${key}` })
     if (!value) return sendJson(res, 400, { error: 'value required' })
@@ -759,6 +763,9 @@ export function applyPanel(ctx: Context, config: Config): void {
       'embedding.dimension': 'embedDim', // 历史遗留键：此前只登记白名单却无映射（实测 400）→ 补映射
       'selfCheckRepo': 'selfCheckRepo',
       'selfCheckIntervalHours': 'selfCheckIntervalHours',
+      // G-19：深睡失败策略 → scheduler.json（distill.ts 的 liveFailPolicy 实时读这两个键）
+      'deepSleep.failPolicy': 'deepSleepFailPolicy',
+      'deepSleep.failPolicyMaxRounds': 'deepSleepFailMaxRounds',
     }
     const schedKey = SCHED_KEY[key]
     if (!schedKey) return sendJson(res, 400, { error: `key 无全局映射：${key}` })

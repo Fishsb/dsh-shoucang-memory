@@ -63,8 +63,11 @@ function analyse(text) {
   //   只断言「两样都存在」不够：把 if 注释掉后 return 仍然悬在那里，旧版判据照样绿（本件第一次跑就栽在这）。
   // W4 拆成 thenRollback / catchRollback：回滚有两个落点（failed 分支 + 异常 catch），只锁一个 ⇒
   //   另一个还活着，注释掉第一个闸门不翻红（同样是本件第一次跑实测出来的）。
-  const found = { cmOkIf: 0, failReturn: 0, failReturnInIf: 0, commitCall: 0, gateConst: 0, gateConsumer: 0, tern: 0, replayAnd: 0, rollbackAssign: 0, thenRollback: 0, catchRollback: 0 }
-  const isStr = (n, v) => (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) && n.text === v
+  // W2 拆成 policyCall（决策表被调用）/ landedFromJudge（landedNow 由 deepSleepLanded 产出）/
+  //   policyUsesLanded（裁定第一入参就是 landedNow）/ returnPvVerdict（终判直接返回裁定结果）——
+  //   只断言「存在」不够：G-19 把 `return landed ? 'done' : 'failed'` 换成策略决策表后，
+  //   旧版只查三元表达式 ⇒ 结构断言直接归零（本件 2026-09-12 实测：改策略那天 W2 自伤型假红）。
+  const found = { cmOkIf: 0, failReturn: 0, failReturnInIf: 0, commitCall: 0, gateConst: 0, gateConsumer: 0, policyCall: 0, landedFromJudge: 0, policyUsesLanded: 0, returnPvVerdict: 0, replayAnd: 0, rollbackAssign: 0, thenRollback: 0, catchRollback: 0 }
   const isFailReturn = (n) => {
     if (!ts.isReturnStatement(n) || !n.expression || !ts.isObjectLiteralExpression(n.expression)) return false
     const p = n.expression.properties
@@ -108,8 +111,18 @@ function analyse(text) {
       const a = n.expression.expression
       if (ts.isArrayLiteralExpression(a) && a.elements.some((e) => ts.isIdentifier(e) && e.text === 'COMMIT_FAILED_GATE')) found.gateConsumer++
     }
-    // W2: landed ? 'done' : 'failed'
-    if (ts.isConditionalExpression(n) && isStr(n.whenTrue, 'done') && isStr(n.whenFalse, 'failed')) found.tern++
+    // W2（G-19 后形状）：终判 = planDeepSleepVerdict(landedNow, …) 的裁定，且 landedNow 只能来自 deepSleepLanded
+    if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.name.text === 'landedNow'
+      && n.initializer && ts.isCallExpression(n.initializer) && ts.isIdentifier(n.initializer.expression)
+      && n.initializer.expression.text === 'deepSleepLanded') found.landedFromJudge++
+    if (ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'planDeepSleepVerdict') {
+      found.policyCall++
+      const a0 = n.arguments[0]
+      if (a0 && ts.isIdentifier(a0) && a0.text === 'landedNow') found.policyUsesLanded++
+    }
+    if (ts.isReturnStatement(n) && n.expression && ts.isPropertyAccessExpression(n.expression)
+      && ts.isIdentifier(n.expression.expression) && n.expression.expression.text === 'pv'
+      && n.expression.name.text === 'verdict') found.returnPvVerdict++
     // W3: deepSleepReplayable(...) && <单调比较>
     if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
       const usesReplayable = (x) => {
@@ -149,12 +162,17 @@ const RULES = [
     ],
   },
   {
-    id: 'W2', title: '终判映射：landed ⇒ done / 否则 failed（改成恒 done ⇒ 没消化的轮次也被划出窗口）',
-    pred: (f) => f.tern >= 1,
-    detail: (f) => `tern(done/failed)=${f.tern}`,
+    // G-19（2026-09-12）：终判不再是 `landed ? done : failed` 硬编码，而是 **失败策略决策表**的裁定
+    //   （retry=B 全重捞 / graded=C 连败 N 轮放行）。锁点相应改为「终判必须由决策表产出，且决策表必须
+    //   消费 deepSleepLanded 的结果」——绕过任一步（常量化输入 / 直接 return 'done'）都必须翻红。
+    id: 'W2', title: '终判映射：由 planDeepSleepVerdict(landedNow,…) 产出（改成恒 done ⇒ 没消化的轮次也被划出窗口）',
+    pred: (f) => f.policyCall >= 1 && f.landedFromJudge >= 1 && f.policyUsesLanded >= 1 && f.returnPvVerdict >= 1,
+    detail: (f) => `裁定调用=${f.policyCall} landed来自判据=${f.landedFromJudge} 裁定消费landed=${f.policyUsesLanded} return裁定=${f.returnPvVerdict}`,
     breaks: [
-      ["把 return landed ? 'done' : 'failed' 整行注释掉", (s) => s.replace(/return landed \? 'done' : 'failed'/, "// return landed ? 'done' : 'failed'")],
-      ['改成恒 done（没消化的轮次也被划出窗口）', (s) => s.replace(/return landed \? 'done' : 'failed'/, "return 'done'")],
+      ['把 return pv.verdict 整行注释掉（终判悬空）', (s) => s.replace(/return pv\.verdict/, '// return pv.verdict')],
+      ['改成恒 done（没消化的轮次也被划出窗口）', (s) => s.replace(/return pv\.verdict/, "return 'done'")],
+      ['常量化裁定输入：landedNow 换成 true（判据被完全绕过）', (s) => s.replace('planDeepSleepVerdict(landedNow,', 'planDeepSleepVerdict(true,')],
+      ['断开 landedNow 与 deepSleepLanded 的绑定', (s) => s.replace('const landedNow = deepSleepLanded(', 'const landedNow = true // ')],
     ],
   },
   {

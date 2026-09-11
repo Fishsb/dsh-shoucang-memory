@@ -383,6 +383,41 @@ export const deepSleepLanded = (
   return done > 0 || !tried
 }
 
+// ── 深睡失败策略（2026-09-12 G-19：B/C 两种产品取向做成可配项，不再硬编码）──
+// 背景：landed=false 原一律返回 'failed' ⇒ 水位回滚、同批材料下轮重捞（=策略 B，永不放弃，防静默丢料）。
+//   但某通道若**永久**失败（画像容量满、门禁脚本长期缺席…），B 会每 idleMs 重捞一次且永不放弃（持续烧 LLM）。
+//   故并存策略 C：连败达 maxRounds 轮后**放行**（判 done、推进水位）并留痕告警——
+//   取舍是「有告警的丢料」优于「无上限的烧算力」，二者皆可观测。
+//   B='retry'（全重捞、永不放行）；C='graded'（分级，连败 N 轮放行并告警）。缺省 graded/3。
+export type DeepSleepFailPolicy = 'retry' | 'graded'
+export const DEFAULT_FAIL_POLICY: DeepSleepFailPolicy = 'graded'
+export const DEFAULT_FAIL_MAX_ROUNDS = 3
+
+// 纯决策表（模块级导出 ⇒ 单测可直接驱动，防判定与调用点漂移）：先匹配先返回。
+export const planDeepSleepVerdict = (
+  landed: boolean,
+  policy: DeepSleepFailPolicy,
+  failStreak: number,
+  maxRounds: number,
+): { verdict: 'done' | 'failed'; release: boolean; reason: string } => {
+  if (landed) return { verdict: 'done', release: false, reason: 'landed' }
+  if (policy === 'retry') return { verdict: 'failed', release: false, reason: 'policy=retry' }
+  if (failStreak + 1 >= maxRounds) return { verdict: 'done', release: true, reason: 'graded-release' }
+  return { verdict: 'failed', release: false, reason: 'graded-retry' }
+}
+
+// 实时读取（与 liveCaps 同法：每轮读 ~/.dsh/suite/scheduler.json，面板改后即时生效，不必重载插件）。
+// 非法值一律回落默认：策略必须命中 'retry'|'graded' 字面量，maxRounds 必须为正整数。
+export const liveFailPolicy = (): { policy: DeepSleepFailPolicy; maxRounds: number } => {
+  const d: { policy: DeepSleepFailPolicy; maxRounds: number } = { policy: DEFAULT_FAIL_POLICY, maxRounds: DEFAULT_FAIL_MAX_ROUNDS }
+  try {
+    const s = JSON.parse(readFileSync(join(dshHome(), 'suite', 'scheduler.json'), 'utf8')) as Record<string, unknown>
+    if (s.deepSleepFailPolicy === 'retry' || s.deepSleepFailPolicy === 'graded') d.policy = s.deepSleepFailPolicy
+    if (typeof s.deepSleepFailMaxRounds === 'number' && Number.isInteger(s.deepSleepFailMaxRounds) && s.deepSleepFailMaxRounds > 0) d.maxRounds = s.deepSleepFailMaxRounds
+  } catch { /* 配置不可读=用默认值 */ }
+  return d
+}
+
 // ── 深睡水位「可否回放」判据（2026-09-11 抽出为单一实现：重启回放与语义同源，防两份判据漂移）──
 // 背景：重启时 lastDeepSleepAt 从 audit/distill-audit.jsonl 回放重建，旧判据只排
 //   error / stop=error / result ∈ {no-parent, no-traces}（"无事可做"），**漏排"做了但被拒"**
@@ -1672,6 +1707,9 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
   const DEEP_SLEEP_CHECK_MS = 600000 // 巡检间隔 10min（停滞阈值由 deepSleepIdleMs 独立控制）
   let lastActivityAt = Date.now() // 全局兜底水位（无在册会话时使用）
   let lastDeepSleepAt = 0
+  // 连续「未消化」轮数（G-19 策略 C 用）：每轮 failed 累加，任一轮 done 归零。仅内存态——
+  //   重启后从 0 起算（保守：宁可再重试几轮，也不因回放误判立刻放行丢料）。
+  let deepSleepFailStreak = 0
   let deepSleepRunning = false
   /** 会话状态表：sid → SessRec（随 disposed 出表，防内存泄漏） */
   const sessions = new Map<string, SessRec>()
@@ -2886,7 +2924,12 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
           done: profileAdded + ptrRes.updated + treeRes.applied + forgetRes.archived,
         }
         log(`deep sleep: stop=${stop} 原则 +${app.added}/替换 ${app.replaced}/跳过 ${app.skipped}（${app.gate}）画像 +${profileAdded} 指针更新 ${ptrRes.updated}/跳过 ${ptrRes.skipped}（${ptrRes.gate}）树 ops ${treeRes.applied}/跳过 ${treeRes.skipped}/归档 ${treeRes.archived} forget 归档 ${forgetRes.archived}/保留 ${forgetRes.kept}/跳过 ${forgetRes.skipped}`)
-        audit({ kind: 'deep-sleep', stop, attempted: app.attempted, added: app.added, replaced: app.replaced, skipped: app.skipped, rejected: (app.rejectedLines || []).length, rejectedLines: (app.rejectedLines || []).slice(0, 5), profiles: profileAdded, pointers: ptrRes.updated, ptrSkipped: ptrRes.skipped, tree: treeRes.applied, treeSkipped: treeRes.skipped, forgetArchived: forgetRes.archived, forgetKept: forgetRes.kept, forgetSkipped: forgetRes.skipped, gate: app.gate, gateExit: app.gateExit, otherTried: otherChannels.tried, otherDone: otherChannels.done, landed: deepSleepLanded(stop, out, app, otherChannels) })
+        // G-19 失败策略：本轮裁定**只算一次**，审计与下方返回值共用同一结果（防两处口径漂移——
+        //   此前审计记 failed、真实返回 done 的相反 bug 正是两份判据各自演进所致）。
+        const landedNow = deepSleepLanded(stop, out, app, otherChannels)
+        const fp = liveFailPolicy()
+        const pv = planDeepSleepVerdict(landedNow, fp.policy, deepSleepFailStreak, fp.maxRounds)
+        audit({ kind: 'deep-sleep', stop, attempted: app.attempted, added: app.added, replaced: app.replaced, skipped: app.skipped, rejected: (app.rejectedLines || []).length, rejectedLines: (app.rejectedLines || []).slice(0, 5), profiles: profileAdded, pointers: ptrRes.updated, ptrSkipped: ptrRes.skipped, tree: treeRes.applied, treeSkipped: treeRes.skipped, forgetArchived: forgetRes.archived, forgetKept: forgetRes.kept, forgetSkipped: forgetRes.skipped, gate: app.gate, gateExit: app.gateExit, otherTried: otherChannels.tried, otherDone: otherChannels.done, landed: landedNow, failPolicy: fp.policy, failStreak: deepSleepFailStreak, released: pv.release })
         // 判据台账（巩固域）：模型判据（可选 judgement）+ 宿主侧**升格/降格裁决**（criteria.ts 单一实现）+ 六通道结果
         ledger({
           domain: 'consolidate', step: 'deep-sleep', stop,
@@ -2959,8 +3002,16 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         //   **单一实现**：判据抽为模块级纯函数 `deepSleepLanded`（顶部导出），本处与单测共用，防漂移。
         // G-19：必须传 otherChannels —— 此前只传 app，导致审计字段用了全通道判据、
         // 而真实判定仍走旧口径，二者互相矛盾（审计记 failed、代码返回 done ⇒ 水位推进、材料静默丢弃）。
-        const landed = deepSleepLanded(stop, out, app, otherChannels)
-        return landed ? 'done' : 'failed'
+        // 连败计数：streakNow = **含本轮**的连续未消化轮数，须在归零前取值（否则放行日志恒为 1）。
+        const streakNow = deepSleepFailStreak + 1
+        if (pv.verdict === 'done') deepSleepFailStreak = 0
+        else deepSleepFailStreak = deepSleepFailStreak + 1
+        if (pv.release) {
+          // 必须留痕：放行 = 这批材料不再重捞（水位推进），是**有告警的丢料**，不可静默。
+          log(`deep sleep: 连续 ${streakNow} 轮未消化，按 graded 策略放行（水位推进）以避免无限重试；请检查画像/指针/树/遗忘通道是否长期失败`)
+          audit({ kind: 'deep-sleep-release', streak: streakNow, maxRounds: fp.maxRounds, note: '连败达上限，放行并告警' })
+        }
+        return pv.verdict
       } catch (e) {
         clearTimeout(timeout)
         if (useProvider) providerFailCount++

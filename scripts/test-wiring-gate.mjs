@@ -17,8 +17,8 @@
 // └──────────────────────────────────────────────────────────────────────────────┘
 //
 // 为什么需要这一层（2026-09-12 可靠性审查，Cody）：
-//   `test-deepsleep-verdict.mjs` 的 36 条断言**全部锁在纯函数**（deepSleepLanded / deepSleepReplayable /
-//   commitPrinciples）上，而真正决定「丢不丢料」的是这四段**接线**——它们各自改坏一个字符，36 条断言
+//   `test-deepsleep-verdict.mjs` 的 56 条断言**全部锁在纯函数**（deepSleepLanded / deepSleepReplayable / planDeepSleepVerdict /
+//   commitPrinciples）上，而真正决定「丢不丢料」的是这四段**接线**——它们各自改坏一个字符，56 条断言
 //   依旧全绿：
 //     W1 原则落盘失败 ⇒ 是否真的报失败（added 归 0）——改成谎报 ⇒ 痕迹静默永久丢失（G-16）
 //     W2 终判映射：landed ⇒ 'done' / 否则 'failed'——改成恒 'done' ⇒ 没消化的轮次也被划出窗口
@@ -91,19 +91,25 @@ const RULES = [
     ],
   },
   {
+    // G-19（2026-09-12）：终判由硬编码 `landed ⇒ done / !landed ⇒ failed` 换成**失败策略决策表**
+    //   （retry=B 全重捞永不放行 / graded=C 连败 N 轮放行并告警）。锁点随之改为三段接线：
+    //   landedNow 只能来自 deepSleepLanded → 裁定必须消费 landedNow → 终判必须返回裁定结果。
     id: 'W2',
-    title: "深睡终判映射：landed ⇒ 'done'，否则 'failed'",
-    why: "改成恒 'done' 会让「做了但没落地」的轮次也划出窗口，等价于把拒收型丢料升级成永久丢料。",
+    title: "深睡终判映射：由 planDeepSleepVerdict(landedNow,…) 产出（不得绕过策略/判据）",
+    why: "改成恒 'done' 会让「做了但没落地」的轮次也划出窗口，等价于把拒收型丢料升级成永久丢料；"
+      + "把裁定入参常量化则会让 landed 判据彻底失效（同型后果）。",
     asserts: [
-      [/const landed = deepSleepLanded\(/g, 1, '终判输入由 deepSleepLanded 唯一产出（不得有旁路布尔量）'],
-      [/return landed \? 'done' : 'failed'/g, 1, "终判映射存在且唯一：landed ⇒ 'done' / !landed ⇒ 'failed'"],
+      [/const landedNow = deepSleepLanded\(/g, 1, '终判输入由 deepSleepLanded 唯一产出（不得有旁路布尔量）'],
+      [/const pv = planDeepSleepVerdict\(landedNow,/g, 1, '裁定必须消费 landedNow（决策表入参不得常量化）'],
+      // 整行锚定（^\s*…$）：只查子串的话，`return pv.verdict === 'done' ? 'failed' : 'done'` 这类
+      //   **映射反转**的改法仍能命中 ⇒ 闸门假绿（本件 2026-09-12 自测出的漏网，同 W1「只断言存在」的老洞）。
+      [/^\s*return pv\.verdict\s*$/gm, 1, '终判返回决策表裁定（整行，不得包三元/常量化）'],
     ],
     breaks: [
-      ['失败也判 done（静默推进水位）', (s) => s.replace(
-        "return landed ? 'done' : 'failed'", "return landed ? 'done' : 'done'")],
-      ['常量化终判（判据被完全绕过）', (s) => s.replace("return landed ? 'done' : 'failed'", "return 'done'")],
-      ['映射反了', (s) => s.replace("return landed ? 'done' : 'failed'", "return landed ? 'failed' : 'done'")],
-      ['断开 landed 与深睡判据的绑定', (s) => s.replace('const landed = deepSleepLanded(', 'const landed = true // ')],
+      ['失败也判 done（静默推进水位）', (s) => s.replace('return pv.verdict', "return 'done'")],
+      ['常量化终判（判据被完全绕过）', (s) => s.replace('planDeepSleepVerdict(landedNow,', 'planDeepSleepVerdict(true,')],
+      ['映射反了（done/failed 互换）', (s) => s.replace('return pv.verdict', "return pv.verdict === 'done' ? 'failed' : 'done'")],
+      ['断开 landedNow 与深睡判据的绑定', (s) => s.replace('const landedNow = deepSleepLanded(', 'const landedNow = true // ')],
     ],
   },
   {
