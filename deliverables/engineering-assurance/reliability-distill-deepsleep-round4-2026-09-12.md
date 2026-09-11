@@ -1944,6 +1944,47 @@ if (!segOk) break
 
 ---
 
+## 29. ✅ 部署：前三步已完成并验证，仅剩热重载
+
+用户提供了代理端口 `10808`，部署阻塞解除。四步链路中前三步已由主理人完成并**逐项验证**：
+
+| 步 | 动作 | 状态 | 验证方式 |
+|---|---|---|---|
+| 1 | push 52 个提交 | ✅ | 只读 `ls-remote` 复核：远端 HEAD = `a9861e9` = 本地 HEAD，未推送数 **0** |
+| 2 | 重钉 profile 依赖 | ✅ | 复核 `package.json`：`#4ec6dc6` → `#a9861e9`（已备份 `.bak-20260912`） |
+| 3 | `pnpm install` | ✅ | 安装副本 **md5 与开发仓 `lib/distill.js` 逐字节一致**（`34b04d6b…`） |
+| 4 | **宿主热重载** | ⏳ | **仅用户可执行**（宿主侧工具） |
+
+**安装副本修复符号实测**（`~/.dsh/profiles/web/node_modules/dsh-shoucang-memory/lib/distill.js`，267235 B，mtime 2026-09-12 04:53:45）：
+
+| 符号 | 命中 | 对应修复 |
+|---|---|---|
+| `commitPrinciples` | 4 | G-16 落盘失败判定 |
+| `COMMIT_FAILED_GATE` | 3 | G-16 共享常量 |
+| `deepSleepReplayable` | 3 | G-16 重捞开关 |
+| `planSkipWatermark` | 4 | **G-4a 根因修复** |
+| `skip-held-for-undigested` | 1 | G-4a 扣住记账 |
+
+⇒ **G-16 / G-20 / G-4a 三个修复已进入运行时产物**。热重载后即生效。
+
+**⚠️ 仍需用户完成的一步**：执行宿主热重载。历史输出形态为：
+```
+OK: dsh-shoucang-memory 热重载完成（清缓存 N 模块，重建 1 fiber）
+```
+重载后可用 `dev_plugin_status` 复核装配表。
+
+**回滚方式**（若需要）：
+```bash
+cp ~/.dsh/profiles/web/package.json.bak-20260912 ~/.dsh/profiles/web/package.json
+cd ~/.dsh/profiles/web && pnpm install   # 回退到 #4ec6dc6
+```
+
+### 29.1 一处仍未闭环（诚实标注）
+
+`check-deploy-sync.mjs` 只比对 **开发仓 → 记忆库脚本**（`~/.dsh/skills/managing-memory/scripts/`），**不覆盖 profile 安装副本**。⇒ 本轮 G-16"修了却未部署、且无人发现"，正是因为这一跳没有护栏。已立项为下一轮待办（§19.3）。
+
+---
+
 ## ⚠️ 仍待用户拍板（本轮不结的两项）
 
 | # | 事项 | 为何需用户决定 |
