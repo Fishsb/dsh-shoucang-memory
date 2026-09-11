@@ -506,7 +506,18 @@ export const runDiscardWatermark = (
   return { wrote: true, circuitBroken: false, reason: '', streak: 0, maxSeq }
 }
 
-/** 水位基线：`degraded=false` = 双证可信；`degraded=true` = 降级基线（跳到当前 live 边界，非可信但**不回退到 0**）。 */
+/**
+ * 水位基线：`degraded=false` = 双证可信；`degraded=true` = 降级基线（跳到当前 live 边界，非可信但**不回退到 0**）。
+ *
+ * ⚠ `degraded: true` **只在本轮有效，不会被持久化，也永远不会出现在水位文件里**——不要为它加防御代码：
+ *   ① 降级基线是 `resolveWatermarkBaseline` 的**返回值**，仅用于喂给本轮 `baseline ? baseline.lastSeq : 0`；
+ *   ② 落盘路径只有一条：`discardWatermark` → `writeWatermark`，而它由 `planDiscardWrite` 把关——
+ *      `maxSeq >= prevSeq` 才写，且写的是**带双证的 maxSeq**（不是 degraded 标记）；
+ *   ③ 故下一轮 `readWatermarks` 读到的总是可信行，**不存在「把不可信洗成可信」的路径**；
+ *   ④ 这也是为什么**不加** `degradedFrom` 字段：lastSeq / formatVersion / fp 都是当时实测值，
+ *      下轮双证校验会重新验一遍；加字段要在已跑通的水位格式上动刀，收益（元信息可见）不抵风险（解析分叉）。
+ *      （G-20 审查结论，2026-09-12，team-lead 核准）
+ */
 export interface WmBaseline {
   lastSeq: number
   degraded: boolean
@@ -1344,6 +1355,14 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       // 快照只取一次（同一数组喂水位增量计算 + 分段器），避免全量 snapshotEvents 被重复物化。
       const wmEvents: any[] = agent.session.snapshotEvents()
       const baseline = resolveWatermark(sid, agent)
+      // ⚠ `lastSeq = 0`（整窗）在此处承载**两种成因完全不同的情况**，勿再误读成单一缺陷：
+      //   (a) 真·无基线：`resolveWatermark` 返回 null 是因为**水位缺失**（`!wm`）或**水位本身 <= 0**
+      //       —— 没有可用边界，全量是**唯一选择**；
+      //   (b) 语义 B 主动全量：水位存在且双证失效，但 live 边界 `maxSeq < prevSeq`（序号空间已重排/缩小，
+      //       如 prevSeq=101539 / maxSeq=511）——旧 seq 已不可寻址，**全量是故意的、是正确行为，不要"修"**。
+      //       对应 `planDegradedBaseline` 返回 `degrade:false` 的分支（G-20）。
+      //   反之，双证失效但边界未回退（`maxSeq >= prevSeq`）时 `resolveWatermark` 返回的是**降级基线**
+      //   （`{ lastSeq: maxSeq, degraded: true }`），走的是语义 A——此处 lastSeq 不为 0，不整窗。
       const lastSeq = baseline ? baseline.lastSeq : 0
       // G-20 熔断：连续 N 轮拿不到会话快照 ⇒ 本轮跳过（不再整窗重蒸烧 LLM）。
       // 依据：水位注释预言「写 0 → 下次读仍判不可验证 → 每轮全量重蒸，形成死循环」；
@@ -3238,6 +3257,8 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
           // v19：水位走同一双证校验（resolveWatermark）——失效时由 discardWatermark 从当前边界续写并落审计，
           // 扫尾与 idle 通路口径一致（单一实现，勿在此另写判定）；快照取一次供增量比对与后续蒸馏复用。
           const base = resolveWatermark(sid, a)
+          // 同蒸馏主路径：`lastSeq = 0` 有两种成因——(a) 真·无水位 ⇒ 全量是唯一选择；
+          // (b) 语义 B 主动全量（live 边界 maxSeq < prevSeq，序号空间已重排）⇒ **故意全量，不要"修"**。
           const lastSeq = base ? base.lastSeq : 0
           const sweepEvents: any[] = a.session.snapshotEvents()
           let maxSeq = lastSeq
