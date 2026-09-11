@@ -9,6 +9,15 @@
 //     exit 4 = xfail（存在**已知未修**的预期失败；不判失败，但**必须可见**）
 //     其他    = fail
 //
+// ⚠ exit 4 是**已被占用的码位**（2026-09-12 archi 实测）：运行时脚本
+//   `skill/scripts/memory-append.mjs:33`、`memory_write_gate.mjs:178`、`read_section.mjs:22` 都在用 4。
+//   ⇒ 本运行器**绝不能**把 4 一律判 xfail：那样任何已登记件一旦因**真实失败**退 4，
+//     就会被渲染 `⚠ xfail` 且不计入 failed ⇒ **真实失败被静默降级**。
+//     这正是本轮一直在剿的病——**把「坏了」显示成「没那么坏」**。
+//   ⇒ 故 4 采**声明制**：只有登记为 `{ xfail: true }` 的件退 4 才判 xfail；
+//     **未声明件退 4 一律判 fail**。这让「允许某件存在未修缺陷」成为**显式决定**——
+//     谁想加第二条 xfail 必须显式登记，进得了 review，不能靠退出码偷偷混进来。
+//
 // emitter（检测件）侧的义务，与上面一一对应，**别只实现一半**：
 //   · 退 4 的前提是「**有 xfail 且没有任何真实断言失败**」；
 //   · 一旦某条 xfail **意外变成 XPASS**（缺陷被修了、或被绕过），emitter 必须退 **1（fail）**，**不是 4**
@@ -42,7 +51,10 @@ const AS_JSON = process.argv.includes('--json')
 //   等于 G-16 的断言一条都没跑过。故本次把全部行为级测试件登记进本清单，并把 `npm test` 退化为
 //   只跑本运行器：**只有一个入口，就不存在"登记在另一份清单里"的漏网件**。
 //   新增件**必须**登记在此；登记了但文件不存在 ⇒ 判 FAIL（不是静默跳过）。
-// 每项格式：[相对仓根的脚本路径, ...argv]；argv 中的 '__ROOT__' 会替换为仓根绝对路径（供需要根路径的检测件使用）。
+// 每项格式：[相对仓根的脚本路径, ...argv, { 选项 }]。
+//   · argv 中的 '__ROOT__' 会替换为仓根绝对路径（供需要根路径的检测件使用）；
+//   · 末位的**选项对象**可选，目前唯一支持的选项是 `{ xfail: true }`——
+//     声明该件允许用 exit 4 表达「已知未修」；**未声明件退 4 一律判 fail**（理由见件头「exit 4 是已被占用的码位」）。
 const CHECKS = [
   ['scripts/check-criteria.mjs'],
   ['scripts/check-carriers.mjs'],
@@ -57,7 +69,7 @@ const CHECKS = [
   ['scripts/test-atomic-write.mjs'],
   ['scripts/test-wiring-gate.mjs'],
   ['scripts/test-wiring-gate-ast.mjs'],
-  ['scripts/test-treeops-rm.mjs'],
+  ['scripts/test-treeops-rm.mjs', { xfail: true }],
   ['skill/scripts/test.mjs'],
   ['scripts/check-hardcode.mjs', '__ROOT__'],
   ['scripts/check-srcmap.mjs'],
@@ -67,12 +79,16 @@ const CHECKS = [
 ]
 const rows = []
 for (const entry of CHECKS) {
-  const [file, ...args] = entry
-  const argv = args.map((a) => (a === '__ROOT__' ? root : a))
+  const [file, ...rest] = entry
+  // 末位若是**普通对象**即为选项（{ xfail: true }），不参与 argv——否则会被当成参数喂给检测件
+  const last = rest[rest.length - 1]
+  const opts = (last && typeof last === 'object' && !Array.isArray(last)) ? rest.pop() : {}
+  const argv = rest.map((a) => (a === '__ROOT__' ? root : a))
   let code = 0
   try { execFileSync('node', [join(root, file), ...argv], { stdio: 'ignore', timeout: 300000, windowsHide: true }) }
   catch (e) { code = Number(e.status ?? -1) }
-  rows.push({ file, code, verdict: code === 0 ? 'pass' : code === 3 ? 'skip' : code === 4 ? 'xfail' : 'fail' })
+  // 4 **且**已声明 xfail ⇒ xfail；未声明件退 4 ⇒ **fail**（见件头：4 是被运行时脚本占用的码位）
+  rows.push({ file, code, verdict: code === 0 ? 'pass' : code === 3 ? 'skip' : (code === 4 && opts.xfail) ? 'xfail' : 'fail' })
 }
 const failed = rows.filter((r) => r.verdict === 'fail')
 const xfailed = rows.filter((r) => r.verdict === 'xfail')
@@ -97,7 +113,7 @@ else {
 // 反向证伪（硬约束③：自证 4 码位**渲染分支真的接上了**，不是"加了等于没加"的静默洞）
 //   做法（不污染 CHECKS 常驻清单，跑完必须还原）：
 //     ① 建临时件 `scripts/__xfail-probe.mjs`，内容 `process.exit(4)`
-//     ② 在 CHECKS 首行插入 `['scripts/__xfail-probe.mjs'],`
+//     ② 在 CHECKS 首行插入 `['scripts/__xfail-probe.mjs', { xfail: true }],`（**必须带选项**，见下 ⑥）
 //     ③ 跑 `node scripts/check-runner.mjs` ⇒ 必须同时满足：
 //          渲染 `  ⚠ scripts/__xfail-probe.mjs  exit=4 xfail`
 //          摘要出现 `1 xfail`，且出现「⚠ XFAIL 项（…必须可见）」段
@@ -111,4 +127,10 @@ else {
 //        只证 ③ 不证 ⑤ 等于没证：把判读写成一律 `'xfail'` 时 ③ 照样通过，**只有 ⑤ 抓得到**
 //        ——那就是「新加的 4 分支把 else 吞掉了」，与本件要防的假绿完全同型。
 //        （2026-09-12 实测四向：仅 4 ⇒ exit 0；仅 5 ⇒ exit 1；0+4 ⇒ exit 0；4+5 ⇒ exit 1，全中。）
+//     ⑥ **声明制的核心方向，最不可省**（2026-09-12 team-lead 派工）：探针 `process.exit(4)` 但登记项
+//        **不带** `{ xfail: true }` ⇒ 必须渲染 `❌ … exit=4 fail`、**计入 failed**、**runner exit 1**。
+//        它锁的正是「4 是被运行时脚本占用的码位」这个洞：全局版（不看声明）会把任何真实失败退 4
+//        静默降级成 xfail ⇒ **把「坏了」显示成「没那么坏」**。只验 ③ 不验 ⑥，这个洞就是敞开的。
+//        （实测：声明件退 4 ⇒ ⚠/不计 failed/exit 0；**未声明件退 4 ⇒ ❌/计入 failed/exit 1**；
+//          未声明件退 5 ⇒ ❌/计入 failed/exit 1；还原 ⇒ `PASS（19 pass · 1 xfail · 0 skip）` exit 0。）
 process.exit(failed.length ? 1 : 0)
