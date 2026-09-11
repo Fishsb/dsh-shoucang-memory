@@ -1,0 +1,64 @@
+#!/usr/bin/env node
+// test-deepsleep-verdict.mjs — 深睡「已消化」判据（deepSleepLanded）确定性回归。
+//
+// 背景（2026-09-11 睡眠链路专项检索）：runDeepSleep 原判据只按 `stop==='completed' && out`，
+//   从不检查候选是否真正落地 ⇒ 门禁全数拒收的轮次也判 done ⇒ 水位推进 ⇒ 被拒痕迹永久划出窗口
+//   ⇒ **静默丢料**（审计实证 2 轮共丢 4 条候选行）。本单测锁定修复后的判据，防回归。
+//
+// 覆盖：① completed+有产出的正常分支 ② all-rejected/maturation-rejected/尾部总门 全拒 ⇒ failed
+//        ③ attempted===0 纯 ops 轮/真·空轮 ⇒ done（防无限重处理）④ stop≠completed / out 假值 ⇒ failed
+//        ⑤ write_gate 未就位（基础设施失败）⇒ failed ⑥ 部分接受 skipped>0 ⇒ done
+// 用法: node scripts/test-deepsleep-verdict.mjs
+import { deepSleepLanded } from '../lib/distill.js'
+
+let pass = 0, fail = 0
+const ok = (c, msg) => { if (c) { pass++; console.log(`✅ ${msg}`) } else { fail++; console.log(`❌ ${msg}`) } }
+const app = (o) => ({ attempted: 0, added: 0, gate: 'no-op', ...o })
+
+console.log('── deepSleepLanded 判据回归 ──')
+
+// ① 正常：completed + out + 有落地 ⇒ done
+ok(deepSleepLanded('completed', {}, app({ attempted: 3, added: 3, gate: 'pass' })) === true,
+  '① completed + added=3 ⇒ done（正常消化）')
+ok(deepSleepLanded('completed', {}, app({ attempted: 2, added: 1, gate: 'pass' })) === true,
+  '① completed + added=1/skipped=1（部分接受）⇒ done')
+
+// ② 全拒收：attempted>0 && added===0 ⇒ failed（核心修复点）
+ok(deepSleepLanded('completed', {}, app({ attempted: 3, added: 0, gate: 'all-rejected' })) === false,
+  '② all-rejected（attempted=3/added=0）⇒ failed（静默丢料修复点）')
+ok(deepSleepLanded('completed', {}, app({ attempted: 1, added: 0, gate: 'all-rejected' })) === false,
+  '② all-rejected（attempted=1/added=0）⇒ failed')
+ok(deepSleepLanded('completed', {}, app({ attempted: 2, added: 0, gate: 'maturation-rejected' })) === false,
+  '② maturation-rejected ⇒ failed')
+ok(deepSleepLanded('completed', {}, app({ attempted: 4, added: 0, gate: '行格式违规' })) === false,
+  '② 尾部总门失败（gate=行格式违规）⇒ failed')
+
+// ③ attempted===0 纯 ops 轮 / 真·空轮 ⇒ done（防无限重处理）
+ok(deepSleepLanded('completed', {}, app({ attempted: 0, added: 0, gate: 'no-op' })) === true,
+  '③ attempted=0/added=0（纯 profileOps/pointerOps/treeOps/forgetOps 轮或空轮）⇒ done（不回滚）')
+ok(deepSleepLanded('completed', {}, app({ attempted: 0, added: 0, gate: 'pass' })) === true,
+  '③ attempted=0 且 gate=pass ⇒ done')
+
+// ④ 未完成 / 无产出 ⇒ failed
+ok(deepSleepLanded('error', {}, app({ attempted: 1, added: 0, gate: 'x' })) === false,
+  '④ stop=error ⇒ failed')
+ok(deepSleepLanded('aborted', {}, app({ attempted: 1, added: 0, gate: 'x' })) === false,
+  '④ stop=aborted ⇒ failed')
+ok(deepSleepLanded('completed', null, app({ attempted: 1, added: 0, gate: 'x' })) === false,
+  '④ stop=completed 但 out=null（JSON 解析失败）⇒ failed')
+ok(deepSleepLanded('completed', undefined, app({ attempted: 0, added: 0, gate: 'no-op' })) === false,
+  '④ out=undefined ⇒ failed（即使 attempted=0 也不判 done）')
+
+// ⑤ 基础设施失败：write_gate 未就位（attempted 恰为 0，须显式排除）
+ok(deepSleepLanded('completed', {}, app({ attempted: 0, added: 0, gate: 'write_gate 未就位' })) === false,
+  '⑤ write_gate 未就位（attempted=0）⇒ failed（基础设施失败不得计为已消化）')
+ok(deepSleepLanded('completed', {}, app({ attempted: 5, added: 0, gate: 'write_gate 未就位' })) === false,
+  '⑤ write_gate 未就位（attempted=5）⇒ failed')
+
+// ⑥ 回归不变量：done 的必要条件 = stop=completed && out 真值
+ok(deepSleepLanded('completed', {}, app({ attempted: 1, added: 1, gate: 'pass' })) === true &&
+  deepSleepLanded('error', {}, app({ attempted: 1, added: 1, gate: 'pass' })) === false,
+  '⑥ 不变量：added>0 也须 stop=completed 才判 done')
+
+console.log(`\n结果: ${pass} PASS / ${fail} FAIL`)
+process.exit(fail === 0 ? 0 : 1)
