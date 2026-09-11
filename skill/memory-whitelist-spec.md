@@ -346,7 +346,7 @@ notes 详情 ──深睡(L1·巩固: consolidate.support.* 稳定性≥跨日 �
 
 - **库级提升信号**（原判据保留）：单一子文档 >80% 容量，或同一主题近 5 次审计中 `audit/access.log` 命中 ≥3 次 → 评估提升为独立 skill（提升后主索引条目退化为纯指针）。
 - **条目级升格判据**（v2 新增，与上式对账）：`consolidate.support.principle` / `consolidate.support.path` / `consolidate.promote.premise`（宿主侧由 `src/criteria.ts#promoteVerdict` 做确定性前置）。
-- **判据留痕**：每次决策写 `~/.dsh/suite/knowledge/audit/judgement-ledger.jsonl`（域/判据/取值/决策/结果）；对账器 `node scripts/criteria-audit.mjs` 出「判据-结果一致率 · 两域冲突率 · 保守度」。
+- **判据留痕**：每次决策写 `~/.dsh/suite/knowledge/audit/ledger.jsonl`（正名；旧名 `judgement-ledger.jsonl` 仅作只读兼容）（域/判据/取值/决策/结果）；对账器 `node scripts/criteria-audit.mjs` 出「判据-结果一致率 · 两域冲突率 · 保守度」。
 
 ### 价值捕捉（candidate_grep + access.log，2026-09-01 v9）
 

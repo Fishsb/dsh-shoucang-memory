@@ -398,10 +398,11 @@
       /* ---------- 页面：开关 ---------- */
 
       var SWITCH_KEYS = [
-        ['boards.memory', '记忆板块 memory', '记忆板块显示开关（同时是热记忆注入总闸的父开关）'],
-        ['injection.hot_memory', '注入热记忆总闸 hot_memory', '关=不注入 agent/用户画像与知识索引任何指针行；需 boards.memory 开启'],
+        ['injection.hot_memory', '注入热记忆总闸 hot_memory', '关=不注入 agent/用户画像与知识索引任何指针行'],
         // 2026-09-10 审查收敛：archive/lifecycle/merge/scheduler 组开关是 v15 单库化前旧 Python 链路的
         // 遗留控件，其消费端（_meta/*.py）已不随包分发——保留只会误导用户"改了有效"。已移除。
+        // 2026-09-11 同类遗漏：boards.memory 是「只写不读」死开关（parseView 解析进 out.boards 后全仓零读取点，
+        // 注入总闸只读 level/hot_memory/persona），且旧文案宣称其「注入总闸的父开关」= 假依赖。同批移除。
       ];
 
       /* ── U1（ADR-122 UI 优化）：作用域/生效态徽章 + 折叠 —— 全部为**增量**补节点/补类，
@@ -409,7 +410,6 @@
       // 控件元数据：写哪（作用域）+ 何时生效（生效态）。缺省 = 全局注入 / 即时。
       var CTRL_META = {
         'injection.hot_memory': { scope: '全局注入', effect: '即时' },
-        'boards.memory': { scope: '本 root', effect: '即时' },
         'injection.level': { scope: '全局注入', effect: '即时' },
         'injection.persona': { scope: '全局注入', effect: '即时' },
         'injection.cap_agent': { scope: '写门容量', effect: '即时' },
@@ -475,7 +475,7 @@
       function renderViewToggles(view, parsed, global) {
         view.textContent = '';
         view.appendChild(el('div', 'sc-h1', '参数调节'));
-        view.appendChild(el('div', 'sc-desc', '注入参数（全局，写 ~/.dsh/suite/scheduler.json）与运行时通道。改动即时写回（scheduler.json 备份先行）。面板 root 仅管理「配置原文」的 boards 显示项——注入配置已迁全局，不再随 root 切换变化。'));
+        view.appendChild(el('div', 'sc-desc', '注入参数（全局，写 ~/.dsh/suite/scheduler.json）与运行时通道。改动即时写回（scheduler.json 备份先行）。注入配置已迁全局，不再随 root 切换变化（root YAML 仅剩「配置原文」页可直接编辑）。'));
         /* U1：参数检索（前端过滤，零新端点）——匹配 name/desc/键名，隐藏不匹配行并报数 */
         (function () {
           var bar = el('div', 'sc-search-bar');

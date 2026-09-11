@@ -7,11 +7,7 @@
 # ============================================================
 
 shoucang:
-  boards:                       # 记忆板块开关（面板可 toggle）
-    persona: true               # 画像板块
-    memory: true                # 记忆板块
-    wiki: false                 # 旧 vault 导航（deprecated，保留兼容）
-  injection:                    # R1 热记忆注入（每轮提示词，指针式）
+  injection:                    # R1 热记忆注入（每轮提示词，指针式；2026-09-10 起以全局 ~/.dsh/suite/scheduler.json 为准，本段作兼容回退读取）
     hot_memory: true            # 总开关（面板可 toggle）
     level: smart                # off|low|medium|high|smart —— MEMORY 索引热取行数 0/2/4/8/10
     persona: both               # off|me|you|both —— 画像注入范围（v16 生效：me=agent 画像 AGENT.md / you=用户画像 USER.md）
@@ -19,25 +15,6 @@ shoucang:
     agent_max_chars: 0          # AGENT.md（含 [原则] 习得原则）注入上限（字符；0=不裁，默认）
     user_max_chars: 0           # USER.md 注入上限（字符；0=不裁，默认）
     memory_max_chars: 0         # MEMORY.md 注入上限（字符，档位行数后二次裁切；0=不裁，默认）
-  archive:                      # 归档心跳（空闲巩固轮）
-    enabled: true               # 面板可 toggle
-    idle_review_ms: 600000      # 60000–3600000（1–60 分钟）；0=禁用
-    ttl_multiplier: 1           # 0.5–10
-  lifecycle:                    # 结算（归档/降级）
-    enabled: true               # 面板可 toggle
-    interval_hours: 24          # 1–168；0=禁用
-    archive:
-      apply_confirm: true       # 面板可 toggle
-      min_confidence: 60        # 0–100
-      age_days: 7               # 0.1–30
-      mode: age                 # age|fixed
-      # fixed_time: "21:30"     # mode=fixed 时生效（HH:MM；须加引号防 YAML 时间对象）
-  merge:                        # 合并写门阈值
-    enabled: true               # 面板可 toggle
-    fingerprint_threshold: 0.85 # 0.1–1
-    complement_floor: 0.3       # 0.05–0.9
-  idle:                         # 空闲巩固轮的会话源
-    sessions_dir: ""            # 留空=自动探测 $DSH_HOME/sessions（或 env SHOUCANG_SESSIONS_DIR）
   # embedding:                  # 向量检索配置——由面板「本地模型 · 部署并启用」自动写入，勿手工编辑
   #   base_url: http://127.0.0.1:<port>
   #   model: <model-id>

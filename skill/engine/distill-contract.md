@@ -112,7 +112,7 @@ R4 其余            一次性进度 / 可搜索公开知识 / 无实质 / <rele
 - **唯一事实源**：`skill/engine/criteria.json`（L0 内核 / L1 摄取域 / L1 巩固域 / L2 代价 / 硬门与观测参数 / anti-scope）。
 - **投影**（禁手写）：`src/criteria.generated.ts`（两个 prompt 的判据段 + judgement 提示 + 常量）· `skill/engine/criteria.md`（人读表）· `skill/engine/criteria-gate.json`（`memory_write_gate.mjs` / `memory_health_check.mjs` 读它）。
 - **机检门**：`node scripts/check-criteria.mjs`（注册表自洽 + 投影最新 + 投影接线），纳入 `npm test`。改判据一律「改注册表 → `npm run gen:criteria` → 过门」。
-- **台账**：每次决策一行写入 `~/.dsh/suite/knowledge/audit/judgement-ledger.jsonl`：
+- **台账**：每次决策一行写入 `~/.dsh/suite/knowledge/audit/ledger.jsonl`（正名；旧名 `judgement-ledger.jsonl` 为 v2.1 前封存批次，仅作只读兼容，见 `criteria.json#judgement.legacyLedger`）：
   `{at, criteriaVersion, domain:'ingest'|'consolidate', judgement?, l0After?|hostGates?, decision, result, enqueued}`。
 - **对账**：`node scripts/criteria-audit.mjs [--days 7] [--json]` → 判据-结果一致率 / 两域冲突率 / 保守度 / 召回-判据样本量（字段缺失时返回 `n/a`，不编造）。
 - **确定性裁决单一实现**：`src/criteria.ts` 的 `evaluateL0` / `promoteVerdict`（含 premise 硬门）/ `demoteVerdict`（三守卫 + 画像节保护 + 单轮上限）——两域共调，禁止在 prompt 或调用方再写一份。

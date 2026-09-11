@@ -75,7 +75,7 @@ const schBlock = panel.slice(panel.indexOf('const SCHED_KEY'), panel.indexOf('co
 const boolBlock = panel.slice(panel.indexOf('const SUITE_BOOL'), panel.indexOf('if (SUITE_BOOL[key])'))
 const allowedBlock = panel.slice(panel.indexOf('const allowed: Record<string, string[]> = {'), panel.indexOf('// 数值范围校验'))
 const allowedKeys = [...allowedBlock.matchAll(/'([A-Za-z_.]+)':\s*\[/g)].map((m) => m[1])
-const ROOT_ONLY = new Set(['boards.memory']) // boards.* 写 root YAML（设计如此）
+const ROOT_ONLY = new Set() // 当前无 root-only 键（boards.* 已移除）；将来新增写 root YAML 的键在此登记
 const unmapped = allowedKeys.filter((k) => !new RegExp(`'${k}':`).test(schBlock) && !new RegExp(`${k}: '`).test(boolBlock) && !new RegExp(`'${k}':`).test(boolBlock) && !ROOT_ONLY.has(k))
 chk(allowedKeys.length >= 10 && unmapped.length === 0, `⑤/set 白名单 ${allowedKeys.length} 键全部有写通道映射（未映射 ${unmapped.length}${unmapped.length ? ' → ' + unmapped.join(',') : ''}）`)
 // ⑤b **键类型分类**：每个 /set 键必须能归类为「枚举 / 数值(有 RANGE) / 字符串(在 STRING_KEYS)」——
@@ -85,8 +85,11 @@ const rangeKeys = new Set([...panel.slice(panel.indexOf('const RANGE'), panel.in
 const stringKeys = new Set([...(panel.match(/const STRING_KEYS = new Set\(\[([^\]]*)\]\)/) || [])[1]?.matchAll(/'([A-Za-z_.]+)'/g) || []].map((m) => m[1]))
 const unclassified = allowedKeys.filter((k) => !enumKeys.has(k) && !rangeKeys.has(k) && !stringKeys.has(k))
 chk(unclassified.length === 0, `⑤b 每个 /set 键可归类为 枚举/数值/字符串（未归类 ${unclassified.length}${unclassified.length ? ' → ' + unclassified.join(',') : ''}；已归类 枚举 ${enumKeys.size} / 数值 ${rangeKeys.size} / 字符串 ${stringKeys.size}）`)
-const toggleBlock = panel.slice(panel.indexOf("route('/toggle'"), panel.indexOf("route('/set'"))
-const toggleKeys = [...toggleBlock.matchAll(/'([A-Za-z_.]+)'/g)].map((m) => m[1]).filter((k) => !['boards.memory', 'key', 'string', 'injection.hot_memory'].includes(k))
+// ⑤/toggle 布尔键对账（覆盖边界说明）：下面是对**硬编码 6 键列表**做 SUITE_BOOL 映射核对——
+//    它只覆盖「这 6 个键是否已映射」，**不覆盖**「/toggle 白名单新增了键却漏配映射」这类新键缺口
+//    （既有弱点，非本次引入）。原此处另有 toggleBlock / toggleKeys 两变量，经 grep 全仓确认**零引用 = 死代码**
+//    （其 matchAll 亦只是罗列 /toggle 块内的引号标识符，无法用于动态对账），已删除；如需真正动态对账应从
+//    /toggle 白名单提取，但会牵动其它检查，本次不重构。
 const toggleUnmapped = ['injectRelevance', 'bankGit', 'mclEnabled', 'mclAudit', 'shadowScore', 'maturationEnforce'].filter((k) => !new RegExp(`${k}: '`).test(boolBlock) && !new RegExp(`'${k}':`).test(boolBlock))
 chk(toggleUnmapped.length === 0, `⑤/toggle 布尔键全部走 SUITE_BOOL（未映射 ${toggleUnmapped.length}${toggleUnmapped.length ? ' → ' + toggleUnmapped.join(',') : ''}）`)
 

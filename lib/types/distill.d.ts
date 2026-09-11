@@ -141,6 +141,28 @@ export declare const DEEP_SLEEP_PROMPT: string;
 export declare const CANDIDATE_NOISE: RegExp[];
 /** 文本是否宿主注入样板（见上：候选区与采样共用的单一实现） */
 export declare const isNoiseIntent: (s: string) => boolean;
+/**
+ * 深睡本轮是否算「已消化」（决定水位推进 or 回滚）——**单一实现**，供 runDeepSleep 与单测共用。
+ *
+ * 2026-09-11 实修（静默丢料根因）：原判据只按 `stop === 'completed' && out`，从不检查候选是否**真正落地**。
+ * 当代理跑完但门禁把候选行**全数拒收**（attempted>0 && added===0，如 gate=all-rejected /
+ * maturation-rejected / 尾部总门失败）时仍判 done → 调用方推进水位 → 被拒痕迹永久划出窗口 → 静默丢失。
+ * 审计实证 2 轮（08:32:23.997Z attempted=3/added=0、08:48:10.129Z attempted=1/added=0）共丢 4 条候选行。
+ *
+ * 判定口径：
+ *  - `stop !== 'completed' || !out` → 未完成 / 无产出 ⇒ failed（回滚重试，含 stop=error/aborted、JSON 解析失败）。
+ *  - `app.gate === 'write_gate 未就位'` → 门禁脚本缺席（applyPrinciples 早返回，attempted 恰为 0）属
+ *    **基础设施失败**，不得因 attempted===0 误判 done ⇒ failed。
+ *  - `app.added > 0` → 有落地 ⇒ done。
+ *  - `app.attempted === 0` → 代理本就无新原则/路径提案（纯 profileOps/pointerOps/treeOps/forgetOps 轮或真·空轮）
+ *    ⇒ done（回滚会导致同一批痕迹**无限重处理**，必须排除）。
+ *  - `attempted>0 && added===0` → 100% 拒收 = 材料损失 ⇒ failed（水位回滚、同批下轮重试）。
+ */
+export declare const deepSleepLanded: (stop: unknown, out: unknown, app: {
+    attempted: number;
+    added: number;
+    gate: string;
+}) => boolean;
 export declare function registerDistill(ctx: AppContext, config: DistillConfig): {
     getDeepSleepStatus: () => DeepSleepStatus;
     runDeepSleepNow: () => Promise<{

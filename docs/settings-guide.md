@@ -3,7 +3,7 @@
 > 回答「都有哪些设置项、在哪改、改了管什么、改完怎么生效」。
 > 2026-09-10 大收敛：**archive/lifecycle/merge 组与旧向量区已从面板移除**（消费端为 v15 单库化前旧 Python
 > 链路，不随包分发，改了无效）；**注入配置迁全局 scheduler.json**（不再挂 root config——切 root 不影响注入）。
-> 设置键分**两条真通道**（全局 scheduler.json + 面板 root YAML 仅显示项），无第三条死通道。
+> 设置键分**两条真通道**（全局 scheduler.json + 面板 root YAML 兼容回退段〔无控件〕），无第三条死通道。
 
 ## 0. 快速导览：两条真通道
 
@@ -13,11 +13,11 @@
 | **面板·深度睡眠页** | `~/.dsh/suite/scheduler.json` | 深睡 5 键 | 重载插件生效 |
 | **面板·参数调节（蒸馏节流组）** | `~/.dsh/suite/scheduler.json` | 蒸馏 6 键 | 重载插件生效 |
 | **面板·参数调节（向量与模型）** | `~/.dsh/suite/scheduler.json` | 向量开关/provider + 清缓存 | 重载生效（清缓存即时） |
-| **面板·配置原文（root YAML）** | 登记的根目录 `shoucang.config.yaml` | 仅 `boards.memory` 显示开关 | 即时 |
+| **面板·配置原文（root YAML）** | 登记的根目录 `shoucang.config.yaml` | 「配置原文」自由编辑（现仅 `injection:` 兼容回退段，无专用控件） | 保存即时（仅兼容回退生效） |
 | 手写 JSON | `~/.dsh/suite/scheduler.json` | 深睡探测细节等无 UI 键 | 重载生效 |
 
 > ⚠️ **root config 不再是注入配置源**（P1-2 迁全局）。新装用户**不登记 root 也能完整使用**注入/蒸馏/深睡/记忆——
-> root 仅管「记忆板块显示开关」这一显示项（可选）。
+> root YAML 现已**无任何面板控件项**（`boards.*` 死开关 2026-09-11 移除；仅存 `injection:` 兼容回退段）。
 
 ## 1. 全局注入配置（scheduler.json，参数调节页 · 2026-09-10 迁入）
 
@@ -82,17 +82,14 @@
 | verify_enabled | true | shoucang_verify 回归工具开关 |
 | members | [] | suite 外部成员表（结构性配置） |
 
-## 3. 面板 root YAML（shoucang.config.yaml）——仅显示项
+## 3. 面板 root YAML（shoucang.config.yaml）——兼容回退段（无控件）
 
-> 2026-09-10 后注入键已迁 scheduler.json；root YAML 仅剩 `boards.*` 显示开关（记忆板块显示）。
+> 2026-09-10 后注入键已迁 scheduler.json；2026-09-11 A 方案移除 `boards.*` 死开关后，root YAML **已无任何面板控件键**——仅存 `injection:` 段作旧配置**兼容回退读取**（仅在 scheduler.json 缺注入键时回落生效；权威通道是 scheduler.json）。
 
-| 键 | 缺省 | 作用 |
-|---|---|---|
-| boards.memory | true | 记忆板块显示开关（不控注入内容——注入由 scheduler.json hotMemory 控） |
+（无：root YAML 不再挂任何开关 / 标量控件键。）
 
-> 历史遗留：root YAML 里的 `shoucang.injection.*` / `archive.*` / `lifecycle.*` / `merge.*` 段**已退役**
-> （旧 Python 链路消费端不随包分发）。若旧 root config 含这些段，面板注入会**回落读取**（兼容迁移），
-> 但改它们无效——请用 scheduler.json 注入键。可安全删除这些段。
+> 历史遗留：root YAML 里的 `archive.*` / `lifecycle.*` / `merge.*` 段**已退役**（消费端为不随包分发的旧 Python 链路，改了不生效，可安全删除）；
+> `injection.*` 段则为**兼容回退通道**——仅在 `scheduler.json` 缺注入键时回落生效（非权威，权威通道是 `scheduler.json`）。
 
 ## 4. 固定常量（不可调节，列此备查）
 
@@ -103,12 +100,13 @@
 | 容量红线（缺省） | MEMORY≤5000 / USER≤3000 / AGENT≤3000 字符（2026-09-11 起默认；面板「容量门」capAgent/capUser/capMemory 可调，scheduler.json 为准） | write_gate 强制 |
 | 向量缓存 | `~/.dsh/suite/knowledge/.vector-cache.jsonl` | 行向量缓存（非事实源，可清重建） |
 
-## 5. 已移除（2026-09-10 审查清理，防误导）
+## 5. 已移除（审查清理 · 防误导）
 
 - 参数调节：archive/lifecycle/merge 组（归档模式/成熟时长/指纹阈值等）+ 旧「向量检索（召回面）」区
 - API：/idle/status /idle/consolidate /vector/status /vector/build /model/list|pull|progress|import|deploy
 - 60s 空闲巩固轮心跳（consolidateRound 调 _meta/*.py，已不随包分发）
-- 以上消费端均为 v15 单库化前旧 Python 链路；真蒸馏由 distill.ts（turn 结束 idleWakeMs）+ scheduler 驱动
+- 参数调节：`boards.memory`「记忆板块」开关（2026-09-11 A 方案：实为「只写不读」死开关 + 「注入总闸的父开关」假依赖文案；开关项 / `CTRL_META` / `/toggle` 白名单 / 配置段已全量移除）
+- 除 `boards.memory`（**无消费**死键）外，以上消费端均为 v15 单库化前旧 Python 链路；真蒸馏由 distill.ts（turn 结束 idleWakeMs）+ scheduler 驱动
 
 ## 6. 常见调节场景速查
 
@@ -122,7 +120,7 @@
 | 向量换模型/云端 | 向量与模型节：改 embedModel/baseUrl + **点清缓存重建**（model 指纹防混用） |
 | 关闭深睡 | 深度睡眠页 enableDeepSleep 关 |
 | 改画像/记忆条目 | 画像板块行尾「编辑」（走 write_gate）；pending 行批准/忽略 |
-| 新装上手 | 零配置：注入/蒸馏/深睡/记忆全部缺省可用；root 登记可选（只管 boards 显示开关） |
+| 新装上手 | 零配置：注入/蒸馏/深睡/记忆全部缺省可用；root 登记可选（root YAML 现无面板控件项） |
 
 ---
 _2026-09-10 三通道重写：死键移除、注入迁全局、旧链路退役对齐；消费点均经源码核验（panel.ts/scheduler.ts/distill.ts/vec.ts）_

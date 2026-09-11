@@ -389,9 +389,9 @@ export function applyPanel(ctx: Context, config: Config): void {
     writeFileSync(file, text, 'utf8')
   }
 
-  interface ParsedView { boards: Record<string, boolean>; flags: Record<string, boolean | string>; injection_level?: string; max_tokens?: number; caps_agent?: number; caps_user?: number; caps_memory?: number; idle_review_ms?: number; age_days?: number; archive_mode?: string; fixed_time?: string; merge_fpr?: number; merge_floor?: number; sessions_dir?: string; interval_hours?: number; embedding?: Record<string, string | number> }
+  interface ParsedView { flags: Record<string, boolean | string>; injection_level?: string; max_tokens?: number; caps_agent?: number; caps_user?: number; caps_memory?: number; idle_review_ms?: number; age_days?: number; archive_mode?: string; fixed_time?: string; merge_fpr?: number; merge_floor?: number; sessions_dir?: string; interval_hours?: number; embedding?: Record<string, string | number> }
 
-  /** 缩进栈解析：每行归一为带点路径（如 shoucang.boards.persona），栈深即嵌套层级。 */
+  /** 缩进栈解析：每行归一为带点路径（如 shoucang.injection.level），栈深即嵌套层级。 */
   function scanPaths(text: string, visit: (path: string[], indent: number, value: string) => void): void {
     const stack: Array<{ indent: number; key: string }> = []
     for (const raw of text.split(/\r?\n/)) {
@@ -407,13 +407,9 @@ export function applyPanel(ctx: Context, config: Config): void {
   }
 
   const parseView = (text: string): ParsedView => {
-    const out: ParsedView = { boards: {}, flags: {} }
+    const out: ParsedView = { flags: {} }
     scanPaths(text, (path, _indent, value) => {
       if (!value) return
-      if (/^shoucang\.boards\./.test(path.join('.')) && path.length === 3 && (value === 'true' || value === 'false')) {
-        out.boards[path[2]] = value === 'true'
-        return
-      }
       const p = path.join('.')
       if (/^shoucang\.(archive|lifecycle|scheduler)\.enabled$/.test(p) && (value === 'true' || value === 'false')) {
         out.flags[`${p.split('.')[1]}.enabled`] = value === 'true'
@@ -588,7 +584,7 @@ export function applyPanel(ctx: Context, config: Config): void {
       selfCheckAutoRollback: sched.selfCheckAutoRollback === true,
       selfCheckIntervalHours: typeof sched.selfCheckIntervalHours === 'number' ? sched.selfCheckIntervalHours : 6,
     }
-    // P2：无 root 也能调注入（全局 scheduler.json）——root 仅管理 boards 显示与旧 YAML；返回 global 供 UI 渲染
+    // P2：无 root 也能调注入（全局 scheduler.json）——root 仅承载「配置原文」编辑；返回 global 供 UI 渲染
     if (!file) return sendJson(res, 200, { text: null, parsed: null, error: 'no-active-root', global: globalCfg })
     try {
       const text = readFileSync(file, 'utf8')
@@ -619,7 +615,7 @@ export function applyPanel(ctx: Context, config: Config): void {
   route('/toggle', async (req, res) => {
     const body = await readBody(req)
     const key = typeof body.key === 'string' ? body.key : ''
-    const allowed = ['boards.memory', 'injection.hot_memory', 'injectRelevance', 'bankGit', 'mclEnabled', 'mclAudit', 'shadowScore', 'maturationEnforce', 'selfCheck', 'selfCheckAutoRollback'] // U3+v2.2：布尔类键
+    const allowed = ['injection.hot_memory', 'injectRelevance', 'bankGit', 'mclEnabled', 'mclAudit', 'shadowScore', 'maturationEnforce', 'selfCheck', 'selfCheckAutoRollback'] // U3+v2.2：布尔类键（均走 SUITE_BOOL 全局通道）
     if (!allowed.includes(key)) return sendJson(res, 400, { error: `key 不允许：${key}` })
     // U3 修正（实测缺陷）：scheduler.json 类布尔键必须走 **suite 持久通道**——
     // 此前只有 hot_memory 走全局，其余键落到 root YAML 的 flipBool ⇒ 找不到 `shoucang.<key>` 行 → 500。
@@ -642,7 +638,8 @@ export function applyPanel(ctx: Context, config: Config): void {
       ctx.logger?.info?.(`[shoucang] panel toggled ${key}（全局 scheduler.json → ${prop}=${!cur}）`)
       return sendJson(res, 200, { ok: true, key, global: prop, value: !cur })
     }
-    // boards.memory：板块显示开关，保留 root config YAML
+    // 兜底写通道：root config YAML 布尔直写（flipBool）。当前 /toggle 白名单内所有键均已走 SUITE_BOOL，
+    // 此分支为未来新增的 root-only 布尔键预留（与 check-carriers 的「三写通道」模型一致）。
     const file = configFileOf()
     if (!file) return sendJson(res, 400, { error: 'no-active-root' })
     const fileKey = 'shoucang.' + key
