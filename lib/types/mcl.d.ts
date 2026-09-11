@@ -1,7 +1,7 @@
 import { type EmbedCfg } from './vec.js';
 export interface MclConfig {
     enabled: boolean;
-    /** 熟悉度阈值（绝对余弦；0.65 = ACT-024 校准值：触发率 ~2%，阈上样本全部真命中） */
+    /** 熟悉度阈值（绝对余弦；缺省 0.58 = 2026-09-11 按 193 条实测样本重校准，见 criteria.json#surface.mcl） */
     familiarThreshold: number;
     /** 慢通道再引导上限（缺省 1；0 = 只注入不引导） */
     maxNudges: number;

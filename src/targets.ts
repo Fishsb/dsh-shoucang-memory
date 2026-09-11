@@ -11,6 +11,7 @@
 import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
+import { CARRIERS } from './criteria.generated.js'
 
 export function dshHome(): string {
   return process.env.DSH_HOME || join(homedir(), '.dsh')
@@ -245,6 +246,84 @@ export interface RecallRow { file: string; tag: string; line: string; score: num
 
 const TAG_WEIGHT: Record<string, number> = { 路径: 3, 原则: 2 }
 
+// ═══ 载体层准入（ADR-130 载体契约 · **单一实现**）═══
+//   标签 → 层/形式/可注入性 **只认注册表**（skill/engine/criteria.json#carriers.tags → 投影 CARRIERS）。
+//   规则（机检强制，见 skill/memory-whitelist-spec.md）：「P 必 always；R/E 必 gated 或 none」。
+//   代码里禁止再出现任何标签白名单正则（如 /^\[(路径|原则)\]/）——那是同一事实的第二份副本，
+//   会随注册表演进而静默漂移。三处入口（panel 恒定注入面 / recallIndex 词法路 / vec 融合池）共用本组判据。
+export type CarrierInject = 'always' | 'gated' | 'none'
+
+interface CarrierSpec { layer?: string; form?: string; inject?: string }
+
+const carrierTags = (): Record<string, CarrierSpec> => ((CARRIERS as { tags?: Record<string, CarrierSpec> }).tags) || {}
+
+const setCache = new Map<string, Set<string>>()
+/** （存在形式 × 可注入性）→ 标签集合。注册表为编译期常量，故结果可缓存。 */
+function carrierSet(form: string, inject: CarrierInject): Set<string> {
+  const key = `${form}|${inject}`
+  const hit = setCache.get(key)
+  if (hit) return hit
+  const s = new Set<string>()
+  for (const [tag, c] of Object.entries(carrierTags())) if (c.form === form && c.inject === inject) s.add(tag)
+  setCache.set(key, s)
+  return s
+}
+
+/** 索引行（`[tag] … → notes/x.md §y`）在给定注入档下的标签集合 */
+export function indexCarrierSet(inject: CarrierInject): Set<string> { return carrierSet('index', inject) }
+
+/** 画像行（`- [tag] … ← 源:`）在给定注入档下的标签集合 */
+export function profileCarrierSet(inject: CarrierInject): Set<string> { return carrierSet('profile', inject) }
+
+/** 索引行 → 标签（无标签 → null）。层判据与高置信判据共用同一取标签口径。 */
+export function indexRowTag(line: string): string | null {
+  const m = /^\[([^\] ]+)\]/.exec(String(line || '').trim())
+  return m ? m[1] : null
+}
+
+/**
+ * 索引行是否属于给定注入档。**无标签 / 标签未登记 → false**（保守缺省：
+ * 未登记标签不得进恒定面——宁可漏显，不可把 gated 载体塞进恒定预算）。
+ */
+export function indexRowInLayer(line: string, inject: CarrierInject): boolean {
+  const tag = indexRowTag(line)
+  return tag ? indexCarrierSet(inject).has(tag) : false
+}
+
+/**
+ * MCL 快通道「高置信命中」标签集合（注册表 `mclGate: true`）。
+ * 2026-09-11：原为 mcl.ts 内硬编码正则 `/^\[(路径|原则)\]/`（同一事实的第二份副本），
+ *   注册表 `路径` 的 note 本就写着「复用 ACT-029 MCL 快通道熟悉度分流」——故把判据归还注册表。
+ */
+export function highConfCarrierSet(): Set<string> {
+  const hit = setCache.get('mclGate')
+  if (hit) return hit
+  const s = new Set<string>()
+  for (const [tag, c] of Object.entries(carrierTags())) if ((c as { mclGate?: boolean }).mclGate === true) s.add(tag)
+  setCache.set('mclGate', s)
+  return s
+}
+
+/**
+ * 原始索引行扫描（**单一实现**）：只取「有标签 + 有 notes/ 指针」的薄行，不做层过滤、不打分。
+ * 三处入口共用，禁止再写第二份逐行 `^\[tag\]` 扫描（曾有两份副本 ⇒ 过滤口径漂移）。
+ */
+export function scanIndexRows(root: string, files: string[] = ['AGENT.md', 'MEMORY.md', 'USER.md']): RecallRow[] {
+  const rows: RecallRow[] = []
+  for (const file of files) {
+    let raw = ''
+    try { raw = readFileSync(join(root, file), 'utf8') } catch { continue }
+    for (const l of raw.split(/\r?\n/)) {
+      const line = l.trim()
+      const tagM = line.match(/^\[([^\] ]+)\]/)
+      if (!tagM || !/→\s*notes\//.test(line)) continue
+      const ptrM = line.match(/→\s*(notes\/[A-Za-z0-9_-]+\.md)/)
+      rows.push({ file, tag: tagM[1], line, score: 0, pointer: ptrM ? ptrM[1] : '' })
+    }
+  }
+  return rows
+}
+
 /**
  * § 族键（同 § 竞争性抑制的**唯一键口径**，2026-09-11 收敛）：
  *   指针尾第一个 §token（`§A/§B` 以 A 为族键）+ 小节名去行尾日期括号后缀 + 小写。
@@ -275,26 +354,25 @@ export function dedupeBySection<T>(list: T[], k: number, keyOf: (x: T) => string
   return merged.length > k ? merged.slice(0, k) : merged
 }
 
-/** 词法召回：AGENT.md（[原则]/[路径]/画像行）+ MEMORY/USER 索引行，按 token 命中 × 标签权重排序（路径 > 原则 > 其余） */
-export function recallIndex(root: string, query: string, topK = 3, scope: 'agent' | 'all' = 'all'): { rows: RecallRow[]; tokens: string[]; mode: 'lexical' } {
+/**
+ * 词法召回：AGENT.md（[原则]/[路径]/画像行）+ MEMORY/USER 索引行，按 token 命中 × 标签权重排序（路径 > 原则 > 其余）。
+ * `inject` 缺省 = **不限层**（召回是按需通道，P/R/E 皆可命中）；
+ *   传入 'always'/'gated' 则按载体契约限定档位（恒定注入面用 'always'，避免 gated 载体无差别进恒定预算）。
+ */
+export function recallIndex(
+  root: string, query: string, topK = 3, scope: 'agent' | 'all' = 'all', inject?: CarrierInject,
+): { rows: RecallRow[]; tokens: string[]; mode: 'lexical' } {
   const tokens = extractRecallTokens(query)
   const rows: RecallRow[] = []
   if (!tokens.length) return { rows, tokens, mode: 'lexical' as const }
   const files = scope === 'all' ? ['AGENT.md', 'MEMORY.md', 'USER.md'] : ['AGENT.md']
-  for (const file of files) {
-    let raw = ''
-    try { raw = readFileSync(join(root, file), 'utf8') } catch { continue }
-    for (const l of raw.split(/\r?\n/)) {
-      const line = l.trim()
-      const tagM = line.match(/^\[([^\] ]+)\]/)
-      if (!tagM || !/→\s*notes\//.test(line)) continue
-      let score = 0
-      for (const tk of tokens) if (line.includes(tk)) score++
-      if (!score) continue
-      score *= (TAG_WEIGHT[tagM[1]] || 1)
-      const ptrM = line.match(/→\s*(notes\/[A-Za-z0-9_-]+\.md)/)
-      rows.push({ file, tag: tagM[1], line, score, pointer: ptrM ? ptrM[1] : '' })
-    }
+  const allow = inject ? indexCarrierSet(inject) : null
+  for (const r of scanIndexRows(root, files)) {
+    if (allow && !allow.has(r.tag)) continue
+    let score = 0
+    for (const tk of tokens) if (r.line.includes(tk)) score++
+    if (!score) continue
+    rows.push({ ...r, score: score * (TAG_WEIGHT[r.tag] || 1) })
   }
   rows.sort((a, b) => (b.score - a.score) || a.file.localeCompare(b.file))
   // v8（认知对照 P2「竞争性抑制」）：键与去重算法已收敛到 `sectionKeyOf` / `dedupeBySection`（**单一实现**，

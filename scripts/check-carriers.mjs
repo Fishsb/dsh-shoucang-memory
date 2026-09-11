@@ -16,6 +16,8 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 let fail = 0
 const chk = (c, m) => { console.log(`${c ? '✅' : '❌'} ${m}`); if (!c) fail++ }
 const read = (p) => { try { return readFileSync(join(root, p), 'utf8') } catch { return '' } }
+/** 剥注释（块注释 + 整行 // ）：对源码做正则断言时必须区分「代码」与「散文」，否则注释里的旧写法会误报 */
+const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n')
 
 const reg = JSON.parse(read('skill/engine/criteria.json'))
 const tags = reg.carriers?.tags || {}
@@ -60,7 +62,10 @@ const generated = read('src/criteria.generated.ts')
 chk(/export const CARRIERS = /.test(generated), '④生成投影含 CARRIERS 常量')
 const panel = read('src/panel.ts')
 chk(/readCarrier\s*=/.test(panel), '④panel.ts 实现 readCarrier（按载体渲染）')
-chk(/CARRIERS/.test(panel), '④panel.ts 消费 CARRIERS 注册表（而非硬编码标签）')
+// 2026-09-11：原断言 `/CARRIERS/.test(panel)` 是**假绿**——panel.ts 的注释里出现 CARRIERS 四个字母即通过，
+//   与「是否真的消费注册表」无关。真正消费注册表的是层判据的单一实现 targets.ts，故改为断言它。
+const targetsSrc = read('src/targets.ts')
+chk(/import \{ CARRIERS \} from '\.\/criteria\.generated\.js'/.test(targetsSrc), '④targets.ts 消费 CARRIERS 注册表（层判据由注册表驱动）')
 const gateJson = (() => { try { return JSON.parse(read('skill/engine/criteria-gate.json')) } catch { return null } })()
 chk(!!gateJson?.carriers && !!gateJson?.maturation, '④脚本面参数含 carriers / maturation 投影')
 
@@ -92,6 +97,27 @@ chk(unclassified.length === 0, `⑤b 每个 /set 键可归类为 枚举/数值/�
 //    /toggle 白名单提取，但会牵动其它检查，本次不重构。
 const toggleUnmapped = ['injectRelevance', 'bankGit', 'mclEnabled', 'mclAudit', 'shadowScore', 'maturationEnforce'].filter((k) => !new RegExp(`${k}: '`).test(boolBlock) && !new RegExp(`'${k}':`).test(boolBlock))
 chk(toggleUnmapped.length === 0, `⑤/toggle 布尔键全部走 SUITE_BOOL（未映射 ${toggleUnmapped.length}${toggleUnmapped.length ? ' → ' + toggleUnmapped.join(',') : ''}）`)
+
+// ⑥ **层执行**（2026-09-11 缺陷1 的机检补位——原①~⑤全是「声明侧」校验，对「只声明未执行」零覆盖）
+//    缺陷原貌：契约全绿（P⇒always、R/E⇒gated 都在），但恒定注入面 `readCarrier` 的 index 分支只用
+//    `/^\[.+\]/` 通配选取 ⇒ 76.1%（51/67）gated 行无差别进恒定预算。声明对了、执行没做，机检却全 PASS。
+//    本道把「执行侧」钉死：恒定面必须走共享层判据，且判据唯一实现在 targets.ts、由注册表驱动。
+const srcFiles = ['panel', 'targets', 'vec', 'mcl'].map((f) => read(`src/${f}.ts`)).join('\n')
+chk(/indexRowInLayer\(l, 'always'\)/.test(panel), "⑥恒定注入面按层准入：panel 调 indexRowInLayer(l,'always')")
+chk(/export function indexRowInLayer/.test(targetsSrc) && /indexCarrierSet/.test(targetsSrc), '⑥层判据单一实现在 targets.ts（indexRowInLayer / indexCarrierSet）')
+const vecCode = stripComments(read('src/vec.ts'))
+// 强断言：vec 侧不得再出现「逐行扫 `^\[tag\]` + 自己 push 成 RecallRow」的第二份副本
+//   （行扫描特征 = `const rows/pool: RecallRow[]` 后紧跟 `match(/^\[`）——2026-09-11 前正是这个副本在漂移。
+chk(/scanIndexRows/.test(vecCode) && !/tagM/.test(vecCode) && !/pool\.push\(\{/.test(vecCode), '⑥vec 融合池复用 scanIndexRows（无第二份逐行扫描副本：无 tagM / 无 pool.push）')
+// 硬编码标签白名单 = 同一事实的第二份副本，会随注册表演进而静默漂移（mcl.ts 曾硬编码 /^\[(路径|原则)\]/）。
+// 注意：只扫**代码**，先剥注释——否则「注释里引用旧写法」会被误报（本检查第一版就踩了这个坑，
+//   与 ④ 的假绿同源：对源码做正则断言必须区分「代码」与「散文」）。
+const codeOnly = ['panel', 'targets', 'vec', 'mcl'].map((f) => stripComments(read(`src/${f}.ts`))).join('\n')
+const hardTag = codeOnly.match(/\/\^\\\[\(?[^\]\n]*?(路径|原则|经验|教训|环境|身份|偏好|习惯)/)
+chk(!hardTag, `⑥src 代码无标签硬编码白名单正则（层判据一律走注册表）${hardTag ? ' → ' + hardTag[0] : ''}`)
+// 反面：层判据必须真的被 panel 用到（防「加了函数没人调用」的空转修复）
+const mclSrc = read('src/mcl.ts')
+chk(/highConfCarrierSet|indexRowTag/.test(mclSrc), '⑥MCL 高置信判据走注册表（highConfCarrierSet）')
 
 console.log(fail ? `\nFAIL（${fail} 项）` : '\nPASS（载体契约机检门全过）')
 process.exit(fail ? 1 : 0)

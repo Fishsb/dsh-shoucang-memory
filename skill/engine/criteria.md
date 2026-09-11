@@ -97,7 +97,7 @@
 | 融合 | rrf（k=60）· 回退=weighted（dense 0.7/lex 0.3） · 同 § 抑制=true |
 | 阈值 | abs-cosine · T_on=0.65 / T_off=0.6 |
 | rerank | enabled=false · 触发门：索引行>200 或跟读率连续 2 次下降 |
-| MCL | 熟悉度阈值=0.65 · maxNudges=1 · 材料预算=600 · 指针=3 |
+| MCL | 熟悉度阈值=0.58 · maxNudges=1 · 材料预算=600 · 指针=3 |
 | judgement | ingest=[reuse,generality,stability,conflict,dup] · consolidate=[evidence,stability,conflict,cost] · 台账=audit/ledger.jsonl |
 
 ## 明确不做（anti-scope）

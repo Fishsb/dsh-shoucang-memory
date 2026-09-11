@@ -13,17 +13,19 @@
  *   D7 预算有界：材料 ≤ `budgetChars`（缺省 600 字符）；只作用于慢通道首步；不进 systemPrompt 常驻面。
  *   零硬编码路径（一律 targets 派生）、零抛出（异常只审计，绝不打断 agent 循环）、审计落 knowledgeRoot()/audit。
  *
- * 熟悉度判据口径 = ACT-024 校准的**绝对余弦**（用户文本 ↔ 命中索引行；干净样本 p95≈0.627 / p99≈0.657，缺省阈值 0.65）。
+ * 熟悉度判据口径 = ACT-024 校准的**绝对余弦**（用户文本 ↔ 命中索引行）。
+ *   阈值缺省 **0.58**（2026-09-11 重校准：旧值 0.65 在 193 条实测样本上 max=0.634 ⇒ 结构性零命中；
+ *   详见 criteria.json#surface.mcl.note）。高置信标签来自注册表 `mclGate`（**非本模块硬编码**）。
  * 判据只在 turn 首步计算一次（后续步复用通道与主题，避免每步重复嵌入）。
  */
 import { appendFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { knowledgeRoot, memoryLibRoot, type RecallRow } from './targets.js'
+import { knowledgeRoot, memoryLibRoot, highConfCarrierSet, indexRowTag, type RecallRow } from './targets.js'
 import { recallRanked, semanticSim, type EmbedCfg } from './vec.js'
 
 export interface MclConfig {
   enabled: boolean
-  /** 熟悉度阈值（绝对余弦；0.65 = ACT-024 校准值：触发率 ~2%，阈上样本全部真命中） */
+  /** 熟悉度阈值（绝对余弦；缺省 0.58 = 2026-09-11 按 193 条实测样本重校准，见 criteria.json#surface.mcl） */
   familiarThreshold: number
   /** 慢通道再引导上限（缺省 1；0 = 只注入不引导） */
   maxNudges: number
@@ -62,6 +64,8 @@ export interface MclStatus {
 interface SessMcl {
   nudges: number
   topics: string[]
+  /** 每行材料的「引用信号词元」集合（见 rowSignals；judge 的容错匹配用，2026-09-11 缺陷3） */
+  signals: string[][]
   channel: 'fast' | 'slow' | ''
   sim: number
   lateLogged?: boolean
@@ -97,6 +101,30 @@ const topicOf = (line: string): string => {
   return (m ? m[1] : '').trim()
 }
 
+/**
+ * 引用信号词元（缺陷3 修复，2026-09-11）：把「一行材料」拆成可被**转述**仍命中的词元。
+ *   ASCII 整词 + 中文二字滑窗（长串拆窗以容忍省略/换序，如「MCP 工具接入」→「工具/具接/接入」）。
+ *   旧 judge 只认「主题词前 6 字逐字复现」，模型一旦转述即判未引用（159/159 全 false，5 次再引导零生效）。
+ */
+const signalTokens = (s: string): string[] => {
+  const t = String(s || '').toLowerCase()
+  const out: string[] = []
+  for (const m of t.matchAll(/[a-z0-9][a-z0-9._#+-]{1,}/g)) out.push(m[0])
+  for (const m of t.matchAll(/[\u4e00-\u9fa5]{2,}/g)) {
+    const run = m[0]
+    if (run.length <= 4) { out.push(run); continue }
+    for (let i = 0; i + 2 <= run.length; i++) out.push(run.slice(i, i + 2))
+  }
+  return out
+}
+
+/** 一行材料的信号词元 = 主题词 ∪ §小节名 ∪ 指针文件名（三条独立线索，任一足够命中即可判定已引用） */
+const rowSignals = (r: RecallRow): string[] => {
+  const sec = (String(r.line || '').match(/§([^/→]+)/) || [])[1] || ''
+  const base = String(r.pointer || r.line || '').replace(/^notes\//, '').replace(/\.md$/, '')
+  return [...new Set([...signalTokens(topicOf(r.line)), ...signalTokens(sec), ...signalTokens(base.replace(/^\[[^\]]+\]\s*/, ''))])]
+}
+
 /** 薄契约（只在慢通道出现，不进常驻注入面） */
 const THIN_CONTRACT = [
   '【认知环·慢通道】这是你**不熟悉**的任务（记忆库无高置信命中）。本步先做三件事，再动手：',
@@ -128,10 +156,11 @@ export function registerMcl(
   const ready = new Set<string>()
   void loadMsgFactory()
 
-  const material = (rows: RecallRow[], budget: number): { text: string; topics: string[] } => {
+  const material = (rows: RecallRow[], budget: number): { text: string; topics: string[]; signals: string[][] } => {
     let budgetLeft = Math.max(120, budget - THIN_CONTRACT.length)
     const picked: string[] = []
     const topics: string[] = []
+    const signals: string[][] = []
     for (const r of rows) {
       const ln = `- [${r.file}] ${r.line}`.slice(0, 200)
       if (ln.length > budgetLeft) break
@@ -139,14 +168,33 @@ export function registerMcl(
       picked.push(ln)
       const t = topicOf(r.line)
       if (t) topics.push(t)
+      const sg = rowSignals(r)
+      if (sg.length) signals.push(sg)
     }
     const text = picked.length ? `${THIN_CONTRACT}\n${picked.join('\n')}\n（材料仅本步有效；引用其主题词即视为已用）` : THIN_CONTRACT
-    return { text, topics }
+    return { text, topics, signals }
   }
 
-  const judge = (text: string, topics: string[]): boolean => {
-    if (!text || !topics.length) return false
-    return topics.some((t) => t.length >= 2 && text.includes(t.slice(0, 6)))
+  /**
+   * 合规判定（缺陷3 修复）：三信号「或」——① 主题词全串 ② 主题词前缀（旧口径，保留）③ 信号词元覆盖率。
+   *   ③ 是修复核心：容忍转述/省字（≥2 个词元且覆盖率 ≥60% 即算引用）。
+   *   保留严格下限的意义：不能把「提了一句相关词」也算合规，故仍要求**足够密度**而非任意单字命中。
+   */
+  const judge = (text: string, topics: string[], signals: string[][] = []): boolean => {
+    if (!text) return false
+    if (!topics.length && !signals.length) return false
+    const low = String(text).toLowerCase()
+    for (const t of topics) {
+      if (!t || t.length < 2) continue
+      if (low.includes(t.toLowerCase())) return true // ① 全串
+      if (low.includes(t.slice(0, 6).toLowerCase())) return true // ② 前缀（旧口径）
+    }
+    for (const sg of signals) { // ③ 词元覆盖率
+      if (!sg.length) continue
+      const hit = sg.filter((s) => low.includes(s)).length
+      if (hit >= 2 && hit / sg.length >= 0.6) return true
+    }
+    return false
   }
 
   const mkMsg = (text: string): AnyMsg => msgFactory!({ content: [{ type: 'text', text }], source: { kind: 'plugin', plugin: 'shoucang-mcl', form: 'recall' } })
@@ -194,7 +242,7 @@ export function registerMcl(
       if (!ready.has(sid)) { ready.add(sid); hooks.audit({ kind: 'mcl-ready', sid: sid.replace(/^session-/, '').slice(0, 8), step }) }
 
       let st = state.get(sid)
-      if (!st) { st = { nudges: 0, topics: [], channel: '', sim: 0 }; state.set(sid, st) }
+      if (!st) { st = { nudges: 0, topics: [], signals: [], channel: '', sim: 0 }; state.set(sid, st) }
 
       // 注入只发生在**任务首步**：中途步（如热重载跨轮）不插材料，只记一次 skip（防在任务半途打断）
       if (!st.channel && step !== 1) {
@@ -209,7 +257,10 @@ export function registerMcl(
         if (r.rows.length && cfg.embed.enabled) {
           try { const c = await semanticSim(text, r.rows[0].line, cfg.embed); if (c !== null) sim = Math.max(0, Math.min(1, c)) } catch { /* 保持 0 */ }
         }
-        const hasHighConf = r.rows.some((x) => /^\[(路径|原则)\]/.test(String(x.line || '').trim()))
+        // 2026-09-11（单一事实源）：原为硬编码正则 /^\[(路径|原则)\]/ —— 与注册表 `路径` note 里
+        //   「复用 ACT-029 MCL 快通道熟悉度分流」是同一事实的两份副本。现改读注册表 `mclGate: true`。
+        const hcSet = highConfCarrierSet()
+        const hasHighConf = r.rows.some((x) => { const t = indexRowTag(String(x.line || '')); return !!t && hcSet.has(t) })
         const fast = sim >= cfg.familiarThreshold && hasHighConf
         st.channel = fast ? 'fast' : 'slow'
         st.sim = sim
@@ -224,6 +275,7 @@ export function registerMcl(
         counters.slow++
         const m = material(r.rows, cfg.budgetChars)
         st.topics = m.topics
+        st.signals = m.signals
         counters.injected++
         await loadMsgFactory()
         const idx = messages.lastIndexOf(fresh)
@@ -241,7 +293,7 @@ export function registerMcl(
       const prevText = prevAssistant && Array.isArray(prevAssistant.content)
         ? prevAssistant.content.filter((b: any) => b && (b.type === 'text' || b.type === 'reasoning') && typeof b.text === 'string').map((b: any) => b.text).join('')
         : ''
-      const compliant = judge(prevText, st.topics)
+      const compliant = judge(prevText, st.topics, st.signals)
       if (!compliant && st.nudges < cfg.maxNudges && st.topics.length) {
         st.nudges++
         counters.nudged++

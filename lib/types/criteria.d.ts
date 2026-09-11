@@ -123,10 +123,11 @@ export declare const SURFACE_PARAMS: {
         readonly note: "触发门未达前不引入 reranker（避免堆叠）";
     };
     readonly mcl: {
-        readonly familiarThreshold: 0.65;
+        readonly familiarThreshold: 0.58;
         readonly maxNudges: 1;
         readonly budgetChars: 600;
         readonly topK: 3;
+        readonly note: "2026-09-11 阈值重校准（缺陷2）：旧值 0.65 在实测样本上**结构性不可达**——193 条 mcl-step 审计 sim 分布 max=0.634 / mean=0.5658 / p75=0.609 / p90=0.624，≥0.65 命中 **0 行** ⇒ 快通道恒为 0（快/慢分流退化为单一慢通道）。新值 0.58 取实测分位（≥0.58 覆盖 53/193=27.5%），使「熟悉任务」约四分之一的样本可走零材料快通道。回滚：**/set mclFamiliarThreshold 0.65**（全局 scheduler.json，热生效，无需重启）。**另一道门 hasHighConf 未放宽**（仍要求 mclGate 标签），故实际快通道触发率显著低于 27.5%——见缺陷2 遗留项。";
     };
 };
 /** 成熟度（v2.2 E6）：A(0)=A0；每次**跨日再现** +step（上限 1.0）。distinctDays = 出现过的不同日数（−1 次首现）。 */

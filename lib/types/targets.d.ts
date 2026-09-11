@@ -82,6 +82,29 @@ export interface RecallRow {
     score: number;
     pointer: string;
 }
+export type CarrierInject = 'always' | 'gated' | 'none';
+/** 索引行（`[tag] … → notes/x.md §y`）在给定注入档下的标签集合 */
+export declare function indexCarrierSet(inject: CarrierInject): Set<string>;
+/** 画像行（`- [tag] … ← 源:`）在给定注入档下的标签集合 */
+export declare function profileCarrierSet(inject: CarrierInject): Set<string>;
+/** 索引行 → 标签（无标签 → null）。层判据与高置信判据共用同一取标签口径。 */
+export declare function indexRowTag(line: string): string | null;
+/**
+ * 索引行是否属于给定注入档。**无标签 / 标签未登记 → false**（保守缺省：
+ * 未登记标签不得进恒定面——宁可漏显，不可把 gated 载体塞进恒定预算）。
+ */
+export declare function indexRowInLayer(line: string, inject: CarrierInject): boolean;
+/**
+ * MCL 快通道「高置信命中」标签集合（注册表 `mclGate: true`）。
+ * 2026-09-11：原为 mcl.ts 内硬编码正则 `/^\[(路径|原则)\]/`（同一事实的第二份副本），
+ *   注册表 `路径` 的 note 本就写着「复用 ACT-029 MCL 快通道熟悉度分流」——故把判据归还注册表。
+ */
+export declare function highConfCarrierSet(): Set<string>;
+/**
+ * 原始索引行扫描（**单一实现**）：只取「有标签 + 有 notes/ 指针」的薄行，不做层过滤、不打分。
+ * 三处入口共用，禁止再写第二份逐行 `^\[tag\]` 扫描（曾有两份副本 ⇒ 过滤口径漂移）。
+ */
+export declare function scanIndexRows(root: string, files?: string[]): RecallRow[];
 /**
  * § 族键（同 § 竞争性抑制的**唯一键口径**，2026-09-11 收敛）：
  *   指针尾第一个 §token（`§A/§B` 以 A 为族键）+ 小节名去行尾日期括号后缀 + 小写。
@@ -92,8 +115,12 @@ export declare function sectionKeyOf(line: string, pointer?: string): string | n
 /** 同 § 只留首条（= 分数更高/先到者），**不足 k 时按序回填**（无竞争者时抑制无意义）。
  *  单一实现：禁止在调用方另写副本（AGENTS.md「架构单一实现」）。 */
 export declare function dedupeBySection<T>(list: T[], k: number, keyOf: (x: T) => string | null): T[];
-/** 词法召回：AGENT.md（[原则]/[路径]/画像行）+ MEMORY/USER 索引行，按 token 命中 × 标签权重排序（路径 > 原则 > 其余） */
-export declare function recallIndex(root: string, query: string, topK?: number, scope?: 'agent' | 'all'): {
+/**
+ * 词法召回：AGENT.md（[原则]/[路径]/画像行）+ MEMORY/USER 索引行，按 token 命中 × 标签权重排序（路径 > 原则 > 其余）。
+ * `inject` 缺省 = **不限层**（召回是按需通道，P/R/E 皆可命中）；
+ *   传入 'always'/'gated' 则按载体契约限定档位（恒定注入面用 'always'，避免 gated 载体无差别进恒定预算）。
+ */
+export declare function recallIndex(root: string, query: string, topK?: number, scope?: 'agent' | 'all', inject?: CarrierInject): {
     rows: RecallRow[];
     tokens: string[];
     mode: 'lexical';

@@ -28,7 +28,7 @@ import { zstdDecompressSync } from 'node:zlib'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { homedir } from 'node:os'
 import { CARRIERS, SURFACE, TRIGGER } from './criteria.generated.js'
-import { dshHome, knowledgeRoot, memoryLibRoot, recallIndex } from './targets.js'
+import { dshHome, knowledgeRoot, memoryLibRoot, recallIndex, indexRowInLayer, profileCarrierSet } from './targets.js'
 import { vecStats, clearVecCache } from './vec.js'
 import { deepSleepShare } from './deepsleep-share.js'
 import { schedulerShare } from './scheduler-share.js'
@@ -277,15 +277,14 @@ export function applyPanel(ctx: Context, config: Config): void {
     //   always:index（P 层索引行）全量；always:profile（P 层画像行 `- … ← 源:`）≤ injectProfileRows 条/档（0=关闭=回滚）；
     //   gated:index（E/R 层）由 recallIndex/recallRanked 按相关性/任务型选择（此处仅提供候选池）。
     //   标签→层映射**来自注册表**（CARRIERS），代码里不硬编码（单一事实源原则）。
-    const alwaysProfileTags = new Set(
-      Object.entries(((CARRIERS as { tags?: Record<string, { inject?: string; form?: string }> }).tags) || {})
-        .filter(([, c]) => c.inject === 'always' && c.form === 'profile')
-        .map(([t]) => t),
-    )
+    // 2026-09-11（缺陷1 修复）：层准入**不再本地推导**，统一用 targets 的单一实现（注册表驱动）。
+    const alwaysProfileTags = profileCarrierSet('always')
     const readCarrier = (name: string, opts: { profile?: boolean; maxProfile?: number } = {}): string[] => {
       try {
         const all = readFileSync(join(memRoot, name), 'utf8').split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
-        const idx = all.filter((l) => /^\[.+\]/.test(l))
+        // 恒定面只收 `inject=always` 的索引行（P 层）：R/E 层是 gated，须由召回/任务型通道按需取回，
+        // 不得在恒定预算里无差别铺开（契约见 criteria.json#carriers.note；机检 check-carriers ⑥）。
+        const idx = all.filter((l) => indexRowInLayer(l, 'always'))
         if (!opts.profile || !(opts.maxProfile && opts.maxProfile > 0)) return idx
         const prof = all.filter((l) => {
           if (!/^-\s/.test(l) || !/←\s*源:/.test(l)) return false
@@ -343,6 +342,9 @@ export function applyPanel(ctx: Context, config: Config): void {
         Number((() => { try { return readSuiteConfig().injectFreshSlots } catch { return undefined } })()) || 2, cap))
       const picked: string[] = []
       try {
+        // 相关性通道**不限层**：它本身就是契约指定的 gated 渲染器（`gated:index` → recallIndex/recallRanked
+        //   「按任务型/相关性选择」）。故 R/E 行可在此**按需**出现（且受 cap 约束），
+        //   与「位置式基线/新鲜度槽恒定铺开」是两回事——被修掉的正是后者。
         const { rows } = recallIndex(memRoot, q, cap, 'all')
         for (const r of rows) if (r.file === 'MEMORY.md' && !picked.includes(r.line)) picked.push(r.line)
       } catch { /* 召回异常=保持位置式回退 */ }

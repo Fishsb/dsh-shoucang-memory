@@ -162,10 +162,11 @@ export const SURFACE = {
     "note": "触发门未达前不引入 reranker（避免堆叠）"
   },
   "mcl": {
-    "familiarThreshold": 0.65,
+    "familiarThreshold": 0.58,
     "maxNudges": 1,
     "budgetChars": 600,
-    "topK": 3
+    "topK": 3,
+    "note": "2026-09-11 阈值重校准（缺陷2）：旧值 0.65 在实测样本上**结构性不可达**——193 条 mcl-step 审计 sim 分布 max=0.634 / mean=0.5658 / p75=0.609 / p90=0.624，≥0.65 命中 **0 行** ⇒ 快通道恒为 0（快/慢分流退化为单一慢通道）。新值 0.58 取实测分位（≥0.58 覆盖 53/193=27.5%），使「熟悉任务」约四分之一的样本可走零材料快通道。回滚：**/set mclFamiliarThreshold 0.65**（全局 scheduler.json，热生效，无需重启）。**另一道门 hasHighConf 未放宽**（仍要求 mclGate 标签），故实际快通道触发率显著低于 27.5%——见缺陷2 遗留项。"
   }
 } as const
 
@@ -218,7 +219,8 @@ export const CARRIERS = {
       "layer": "P",
       "form": "index",
       "inject": "always",
-      "note": "仅跨环境稳定者；带情境前提者交深睡按 A≥gate 决定是否升 P"
+      "mclGate": true,
+      "note": "仅跨环境稳定者；带情境前提者交深睡按 A≥gate 决定是否升 P。mclGate=true：命中即计 MCL 快通道「高置信」（2026-09-11 自 mcl.ts 硬编码正则归还注册表）"
     },
     "经验": {
       "layer": "E",
@@ -236,7 +238,8 @@ export const CARRIERS = {
       "layer": "R",
       "form": "index",
       "inject": "gated",
-      "note": "任务型门控（复用 ACT-029 MCL 快通道熟悉度分流）"
+      "mclGate": true,
+      "note": "任务型门控（复用 ACT-029 MCL 快通道熟悉度分流）。mclGate=true：命中即计 MCL 快通道「高置信」（2026-09-11 自 mcl.ts 硬编码正则归还注册表）"
     },
     "env": {
       "layer": "E",
