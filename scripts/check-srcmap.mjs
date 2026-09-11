@@ -14,7 +14,14 @@
 //   · lib 有、src 无：陈旧产物，判 INFO（不 FAIL）——可能是生成器产物或已删符号的残留。
 //
 // 用法: node scripts/check-srcmap.mjs [--json] [--root <仓根>]
-// 退出码: 0=PASS  1=FAIL（存在 src 有 lib 无）  3=跳过（lib/ 不存在——诚实跳过）
+// 退出码: 0=PASS  1=FAIL（存在 src 有 lib 无 / 产物缺失 / 作用域为空）  3=跳过（lib/ 不存在——诚实跳过）
+//
+// ⚠ 效力边界（archi 2026-09-12 实测，下一个人动本门前先读）：
+//   · **在 `npm test` 链内本门恒绿**：pretest 会先跑 `build:host`（tsc）重编 lib ⇒ src↔lib 必然一致。
+//     ⇒ 不得据 npm test 的绿判定"部署已到位"。本门价值只在 **standalone 且未先重编** 时。
+//   · 残余（只出 ⚠、不 FAIL）：`lib/types/*.d.ts` 缺失、`export *` 通配再导出不展开（整个导出面隐身）、
+//     default 导出缺失。当前仓库实测三者均为 0，故未升级为 FAIL。
+//   · 只扫 src 顶层 *.ts，子目录静默排除（新增子目录 ⇒ 静默出作用域）。
 import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -85,8 +92,10 @@ for (const f of srcFiles) {
   const jsP = join(LIB, base + '.js')
   const dtsP = join(DTS, base + '.d.ts')
   const s = scanSrc(join(SRC, f))
-  const row = { module: base, srcValues: [...s.values].sort(), srcTypes: [...s.types].sort(), hasStar: s.hasStar, missingJs: [], missingDts: [], staleJs: [], notes: [] }
-  if (!existsSync(jsP)) { row.notes.push('lib 产物缺失（未构建）'); }
+  const row = { module: base, srcValues: [...s.values].sort(), srcTypes: [...s.types].sort(), hasStar: s.hasStar, missingJs: [], missingDts: [], staleJs: [], missingArtifact: false, notes: [] }
+  // ⚠ 产物缺失**计 FAIL**（archi 2026-09-12）：这正是 G-16 的主形态——改了 src 没重编 ⇒ lib 里压根没有这个符号。
+  //   原实现只 push 一条 ⚠ note ⇒ 实测（sandbox A：真实 src + 空 lib）打印「✅ 14 个一致」并 exit 0。
+  if (!existsSync(jsP)) { row.missingArtifact = true; row.notes.push('lib 产物缺失（未构建）⇒ 计 FAIL（修复只落 src 不重编 = 未部署）'); }
   else {
     const j = scanJs(jsP)
     row.missingJs = [...s.values].filter((n) => !j.values.has(n)).sort()
@@ -101,7 +110,13 @@ for (const f of srcFiles) {
   rows.push(row)
 }
 
-const failRows = rows.filter((r) => r.missingJs.length || r.missingDts.length)
+// 自证（archi 2026-09-12）：作用域为空 ⇒ "一致"是空集上的真命题 ⇒ 假绿。0 模块必须判 FAIL。
+if (rows.length === 0) {
+  console.error(`\nFAIL（src/ 下未扫描到任何 .ts 模块（root=${root}）⇒ 本门作用域为空，"一致"结论无意义）`)
+  process.exit(1)
+}
+
+const failRows = rows.filter((r) => r.missingJs.length || r.missingDts.length || r.missingArtifact)
 const staleRows = rows.filter((r) => r.staleJs.length)
 const out = { root, modules: rows.length, failing: failRows.map((r) => r.module), rows }
 
