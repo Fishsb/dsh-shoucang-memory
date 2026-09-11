@@ -34,6 +34,10 @@
 //      只证明现状能过、不证明改坏会红，等于没锁。
 //   ③ **变体非空**：变体改写必须真的改变了源码，否则该变体判 FAIL——防止变体字符串因源码漂移而
 //      静默失效（replace 没命中 = 什么都没改 = 永远绿）。
+//   ④ **基线守卫**（archi 2026-09-12 在 AST 版 `614abbf` 先撞到，本件同型，同批补上）：
+//      基线（真实源码）已红时，「改坏后必须翻红」对**任何**变体都恒真 ⇒ 反向证伪整体空转，
+//      输出里会冒出一排「✅ 改坏后必须翻红」——看起来门禁在工作，其实它什么也没证。
+//      故：基线已红 ⇒ 每个变体判 FAIL 并标注「空转」，且显式断言「基线必须全绿」。
 //
 // 用法: node scripts/test-wiring-gate.mjs
 import { readFileSync, statSync } from 'node:fs'
@@ -165,9 +169,14 @@ for (const rule of RULES) {
   console.log(`  为什么锁它：${rule.why}`)
   const res = evalRule(src, rule)
   for (const r of res) ok(r.pass, `${r.label}（命中 ${r.n}，期望 ${r.exp}）`)
+  // 基线守卫：基线已红 ⇒ 下面的「改坏必须翻红」全部空转（任何变体都恒真），结论不可信
+  const baseGreen = res.every((x) => x.pass)
+  ok(baseGreen, `${rule.id} 基线必须全绿（基线已红 ⇒ 反向证伪空转，下述变体一律判空转 FAIL）`)
   // 反向证伪：把源码按「破坏变体」改写后，本规则**必须**翻红
   console.log(`  ── 反向证伪（改坏必须翻红）──`)
   for (const [name, mutate] of rule.breaks) {
+    // 基线已红时不做变体判读：此时 stillGreen 恒 false ⇒ 会冒出一排假 ✅（archi 同型洞，614abbf）
+    if (!baseGreen) { ok(false, `基线已红，本变体判读无意义（空转）: ${name}`); continue }
     const bad = mutate(src)
     if (bad === src) { ok(false, `变体未生效（锚点字符串已漂移，该变体形同虚设）: ${name}`); continue }
     const badRes = evalRule(bad, rule)
