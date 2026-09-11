@@ -165,6 +165,15 @@ const RULES = [
     breaks: [
       ['.then 内 failed 回滚注释掉', (s) => s.replace(
         "if (r === 'failed') { lastDeepSleepAt = prevDeepSleepAt;", "// if (r === 'failed') { lastDeepSleepAt = prevDeepSleepAt;")],
+      // ⚠ 动这条变体前必须先读（archi 2026-09-12，两条都是实测结论）：
+      //   1) 这个 replace 的锚点是**格式敏感**的：要求 `lastDeepSleepAt = prevDeepSleepAt` 的紧接下一行就是
+      //      `log(`deep sleep err:`。一旦有人重排/加空行 ⇒ 锚点失配 ⇒ 报「变异未命中」⇒ **自伤型假红**：
+      //      本件 exit=1，但结构断言其实全绿，红因是"本件坏了"不是"源码接线坏了"，方向相反。
+      //      ⇒ 在「删除文本版」的验收准绳下，这种红**不计入覆盖**，出现即判准绳不通过。
+      //   2) W4 的 pred 只数赋值句（thenRollback / catchRollback），**不看它是否落在 if / catch 的守卫条件内**。
+      //      实测：把 `if (r === 'failed')` 改成 `if (r === 'never')`（回滚永不发生）⇒ 本件结构断言仍然全绿。
+      //      ⇒ 别把「本件红了」读成「W4 锁住了」。本条目前只锁"回滚语句存在"，没锁"回滚真的会发生"。
+      //      要补的话：把 pred 改成"回滚赋值句的祖先链上存在 if('failed') / .catch"，届时本注释第 2 条即失效。
       ['.catch 内回滚注释掉', (s) => s.replace(/\n(\s*)lastDeepSleepAt = prevDeepSleepAt\n(\s*)log\(`deep sleep err:/, '\n$1// lastDeepSleepAt = prevDeepSleepAt\n$2log(`deep sleep err:')],
       ['回滚改成推进到 now（重试窗口关死）', (s) => s.replace(
         "if (r === 'failed') { lastDeepSleepAt = prevDeepSleepAt;", "if (r === 'failed') { lastDeepSleepAt = now;")],
