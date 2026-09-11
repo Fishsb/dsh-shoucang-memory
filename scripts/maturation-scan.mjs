@@ -34,41 +34,82 @@ const readJsonl = (p) => {
 const dayOf = (t) => { try { return new Date(t).toISOString().slice(0, 10) } catch { return '' } }
 const since = Date.now() - windowDays * 86400000
 
-// 命中记录：access.log（{t,f,s}）+ activity.jsonl（{at,file,section,hits?} 形态兼容）
-const days = new Map() // `file §section` → Set<day>
-const add = (file, section, at) => {
+// 命中记录：**两个源取"跨日天数"的最大值**
+//   ① `access.log`（{t,f,s}）：按本地日聚合成 Set → 天数
+//   ② `activity.jsonl`：真实字段是 `{f,s,days30,firstSeen,lastHit}`（**不是** `at/file/section`！
+//      实测 F13：扫描器原先找 `r.at||r.lastHitAt||r.t` ⇒ 全 undefined ⇒ **整个信号源被静默丢弃**；
+//      且它自带的 `days30` 就是"跨日命中天数"，比我按单时点聚合更准 ⇒ 优先用它）
+const daySets = new Map() // key → Set<day>（来自 access.log）
+const dayCounts = new Map() // key → number（来自 activity.days30 / 首末跨日）
+const keyOf = (file, section) => `${String(file).replace(/^notes\//, 'notes/')} §${String(section).trim()}`
+const addLog = (file, section, at) => {
   if (!file || !section || !at) return
   const t = Date.parse(at)
   if (!t || t < since) return
-  const key = `${String(file).replace(/^notes\//, 'notes/')} §${String(section).trim()}`
-  if (!days.has(key)) days.set(key, new Set())
-  days.get(key).add(dayOf(at))
+  const k = keyOf(file, section)
+  if (!daySets.has(k)) daySets.set(k, new Set())
+  daySets.get(k).add(dayOf(at))
 }
-for (const r of readJsonl(join(bank, 'audit', 'access.log'))) add(r.f, r.s, r.t)
+const bump = (file, section, n) => {
+  if (!file || !section || !(n > 0)) return
+  const k = keyOf(file, section)
+  dayCounts.set(k, Math.max(dayCounts.get(k) || 0, n))
+}
+for (const r of readJsonl(join(bank, 'audit', 'access.log'))) addLog(r.f, r.s, r.t)
 for (const r of readJsonl(join(bank, 'audit', 'activity.jsonl'))) {
-  const at = r.at || r.lastHitAt || r.t
-  if (Array.isArray(r.sections)) for (const s of r.sections) add(r.file || `notes/${r.name || ''}`, typeof s === 'string' ? s : s.section, at)
-  else add(r.file, r.section || r.s, at)
+  const file = r.f || r.file
+  const section = r.s || r.section
+  if (typeof r.days30 === 'number' && r.days30 > 0) { bump(file, section, r.days30); continue }
+  if (r.firstSeen && r.lastHit) {
+    const ds = new Set([dayOf(r.firstSeen), dayOf(r.lastHit)].filter(Boolean))
+    bump(file, section, ds.size || 1)
+    continue
+  }
+  const at = r.at || r.lastHitAt || r.t || r.lastHit
+  if (Array.isArray(r.sections)) for (const s of r.sections) addLog(r.file || `notes/${r.name || ''}`, typeof s === 'string' ? s : s.section, at)
+  else addLog(file, section, at)
 }
 
 const A0 = Number(mat.A0 ?? 0.3), step = Number(mat.step ?? 0.2), gate = Number(mat.gate ?? 0.5)
-const rows = [...days.entries()].map(([key, set]) => {
+// 合并两源：天数 = max(activity.days30, access.log 的日集合大小)
+const allKeys = new Set([...daySets.keys(), ...dayCounts.keys()])
+const rows = [...allKeys].map((key) => {
   const [file, section] = key.split(' §')
-  const d = set.size
+  const dLog = daySets.get(key)?.size || 0
+  const dAct = dayCounts.get(key) || 0
+  const d = Math.max(dLog, dAct)
   const A = Math.min(1, A0 + step * Math.max(0, d - 1))
-  return { at: new Date().toISOString(), file, section, days: d, A: Number(A.toFixed(2)), mature: A >= gate }
+  return { at: new Date().toISOString(), file, section, days: d, daysFrom: dAct >= dLog ? 'activity.days30' : 'access.log', A: Number(A.toFixed(2)), mature: A >= gate }
 }).sort((a, b) => b.A - a.A)
 
 const ledger = join(bank, mat.ledger || 'audit/maturation.jsonl')
 try { writeFileSync(ledger, rows.map((r) => JSON.stringify(r)).join('\n') + (rows.length ? '\n' : ''), 'utf8') } catch { /* 静默 */ }
 const mature = rows.filter((r) => r.mature).length
-const out = { window: { days: windowDays, bank, ledger }, params: { A0, step, gate }, sections: rows.length, mature, rows: rows.slice(0, 20) }
+const blockRate = rows.length ? 1 - mature / rows.length : null
+// ── **翻转就绪度**（让"何时可翻 enforce"成为机检条件，而非人工判断）──
+//   条件① 观测窗口 ≥ gate 所需跨度（否则 A 的分母无效，拦阻率不可信）
+//   条件② 拦阻率 ≤ 0.5（否则一翻就冻结升格）
+const needDays = 1 + Math.ceil((gate - A0) / step)
+const observed = new Set([...[...daySets.values()].flatMap((s) => [...s]), ...readJsonl(join(bank, 'audit', 'access.log')).map((r) => dayOf(r.t)).filter(Boolean)])
+const observedDays = observed.size
+const windowOk = observedDays >= needDays
+const blockOk = blockRate !== null && blockRate <= 0.5
+const gateReady = windowOk && blockOk
+const readiness = {
+  gateReady, observedDays, needDays, blockRate,
+  reason: !windowOk ? `观测窗口不足（${observedDays} < ${needDays} 天）⇒ A 分母无效，拦阻率不可作判据`
+    : !blockOk ? `拦阻率 ${(blockRate * 100).toFixed(1)}% > 50% ⇒ 翻 enforce 会冻结升格`
+      : `观测窗口 ${observedDays} 天 ≥ ${needDays} ∧ 拦阻率 ${(blockRate * 100).toFixed(1)}% ≤ 50% ⇒ **可翻 enforce**`,
+}
+const out = { window: { days: windowDays, bank, ledger }, params: { A0, step, gate }, sections: rows.length, mature, readiness, rows: rows.slice(0, 20) }
 const outFile = argOf('--out', '')
 if (OUT_JSON && outFile) { try { mkdirSync(dirname(outFile), { recursive: true }); writeFileSync(outFile, JSON.stringify(out, null, 2), 'utf8') } catch { /* */ } }
 if (AS_JSON) console.log(JSON.stringify(out, null, 2))
 else {
   console.log(`成熟度扫描（窗口 ${windowDays} 天 · 库=${bank}）`)
   console.log(`  参数: A0=${A0} · step=${step} · gate=${gate} · 台账 ${mat.ledger}`)
-  console.log(`  小节 ${rows.length} 个 · 已达 gate(≥${gate}) ${mature} 个`)
+  console.log(`  小节 ${rows.length} 个 · 已达 gate(≥${gate}) ${mature} 个 · 拦阻率 ${blockRate === null ? 'n/a' : (blockRate * 100).toFixed(1) + '%'}`)
+  console.log(`  翻转就绪度：${gateReady ? '✅ 可翻 enforce' : '⛔ 不可翻'} —— ${readiness.reason}`)
+  console.log(`  （信号源：activity.days30 ${dayCounts.size} 个键 · access.log ${daySets.size} 个键；观测窗口 ${observedDays} 天）`)
   for (const r of rows.slice(0, 8)) console.log(`    A=${r.A} · ${r.days} 日 · ${r.file} §${r.section}${r.mature ? ' ✅' : ''}`)
 }
