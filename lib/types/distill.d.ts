@@ -219,7 +219,18 @@ export declare const runDiscardWatermark: (sid: string, reason: string, agent: a
     streak: number;
     maxSeq: number;
 };
-/** 水位基线：`degraded=false` = 双证可信；`degraded=true` = 降级基线（跳到当前 live 边界，非可信但**不回退到 0**）。 */
+/**
+ * 水位基线：`degraded=false` = 双证可信；`degraded=true` = 降级基线（跳到当前 live 边界，非可信但**不回退到 0**）。
+ *
+ * ⚠ `degraded: true` **只在本轮有效，不会被持久化，也永远不会出现在水位文件里**——不要为它加防御代码：
+ *   ① 降级基线是 `resolveWatermarkBaseline` 的**返回值**，仅用于喂给本轮 `baseline ? baseline.lastSeq : 0`；
+ *   ② 落盘路径只有一条：`discardWatermark` → `writeWatermark`，而它由 `planDiscardWrite` 把关——
+ *      `maxSeq >= prevSeq` 才写，且写的是**带双证的 maxSeq**（不是 degraded 标记）；
+ *   ③ 故下一轮 `readWatermarks` 读到的总是可信行，**不存在「把不可信洗成可信」的路径**；
+ *   ④ 这也是为什么**不加** `degradedFrom` 字段：lastSeq / formatVersion / fp 都是当时实测值，
+ *      下轮双证校验会重新验一遍；加字段要在已跑通的水位格式上动刀，收益（元信息可见）不抵风险（解析分叉）。
+ *      （G-20 审查结论，2026-09-12，team-lead 核准）
+ */
 export interface WmBaseline {
     lastSeq: number;
     degraded: boolean;
