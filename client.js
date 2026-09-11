@@ -317,6 +317,12 @@
         '.sc-mem-group-title{font-size:var(--sc-fs-sm);line-height:var(--sc-lh-tight);margin:var(--sc-gap-group) 0 var(--sc-gap-item);',
         'padding-top:var(--sc-sp-3);border-top:1px solid var(--sc-border);}',
         '.sc-mem-group-title:first-child{border-top:none;padding-top:0;margin-top:var(--sc-sp-2);}',
+        /* U2：三级标题（小节标签）+ 最近改动列表 */
+        '.sc-h3{font-size:var(--sc-fs-xs);line-height:var(--sc-lh-tight);font-weight:600;color:var(--sc-muted);margin:var(--sc-gap-item) 0 var(--sc-sp-1);}',
+        '.sc-recent{display:flex;flex-direction:column;gap:var(--sc-sp-1);margin:var(--sc-sp-1) 0;}',
+        '.sc-recent-row{display:flex;gap:var(--sc-gap-row);font-size:var(--sc-fs-xs);line-height:var(--sc-lh-normal);}',
+        '.sc-recent-at{color:var(--sc-faint);flex:none;min-width:calc(var(--sc-sp-6) * 3 + var(--sc-sp-5));}',
+        '.sc-recent-msg{color:var(--sc-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
         '.sc-mem-stats,.sc-mem-grid{gap:var(--sc-gap-item);}',
         '.sc-mem-stat{padding:var(--sc-pad-card);border-radius:var(--sc-r-md);}',
         '.sc-mem-stat-label{font-size:var(--sc-fs-xs);line-height:var(--sc-lh-tight);}',
@@ -455,6 +461,8 @@
         var g = global || {};
         // R1：global 是最终生效值（scheduler ?? 默认），不回 root YAML——显示=实际注入值
         function gVal(key, fallback) { return (g[key] !== undefined && g[key] !== null) ? g[key] : fallback; }
+        /* ── U2（IA 重排）：参数分 4 桶（B6）——按用户心智而非后端模型分桶；桶内子节降级为 sc-h3 ── */
+        view.appendChild(el('div', 'sc-mem-group-title', '① 注入与画像（即时生效）'));
         // 画像 persona 四档滑块：关闭 / 仅注入我 / 仅注入你 / 全注入
         var personaMode = String(gVal('persona', 'both'));
         var PERSONA_TIERS = [['off', '关闭'], ['me', '仅注入我'], ['you', '仅注入你'], ['both', '全注入']];
@@ -534,6 +542,7 @@
           item.appendChild(info); item.appendChild(metaBadges(key)); item.appendChild(wrap);
           return item;
         }
+        view.appendChild(el('div', 'sc-mem-group-title', '② 记忆与容量（写门 + 活性/遗忘）'));
         // 2026-09-10 用户拍板：三上限=记忆库「容量门」（蒸馏/扩增超限拒写），不裁注入——
         // 任务执行时 agent 总看到完整双画像+记忆指针（裁切会漏记忆影响执行）；容量门控制记忆库能长多大
         var actualChars = (g && g.actual) || { agent: 0, user: 0, memory: 0 };
@@ -542,7 +551,7 @@
         view.appendChild(numSetting('MEMORY.md 容量门 cap_memory', '知识索引记忆库容量（字符）：写入超限被拒（当前实际 ' + (actualChars.memory || 0) + ' 字符）。注入按档位行数不受此限', gVal('cap_memory', 5000), 'injection.cap_memory', '字符'));
         // ── v7 活性/遗忘 · 校准阈值（2026-09-10）：条目活性状态机判定天数 + 融合召回降权系数；
         //    经 /set 写入 scheduler.json，深睡巡检/召回运行时生效（缺省 14/44/90/5/35 与 scheduler zod 默认一致）
-        view.appendChild(el('div', 'sc-h1', '活性/遗忘 · 校准阈值（v7）'));
+        view.appendChild(el('div', 'sc-h3', '活性 / 遗忘阈值（v7）'));
         view.appendChild(el('div', 'sc-desc', '记忆条目活性状态机（active→warm→cold）与遗忘/加深候选的判定阈值，以及融合召回对 cold/retired 条目的降权系数。改动经 /set 即时写回 scheduler.json（与注入/蒸馏配置同通道，重载后按新阈值运行）。'));
         view.appendChild(numSetting('活性降级 warm 阈值 activityWarmDays', 'active→warm 无命中天数（缺省 14）', gVal('activityWarmDays', 14), 'activityWarmDays', '天')); // 与 scheduler zod 默认一致
         view.appendChild(numSetting('遗忘冷降 cold 阈值 activityColdDays', 'warm→cold 无命中天数（缺省 44 = warm+30）', gVal('activityColdDays', 44), 'activityColdDays', '天')); // 与 scheduler zod 默认一致
@@ -592,7 +601,8 @@
         // ── U6「向量与模型 · 当前链路」（2026-09-09）：真实 vec.ts+GPU 服务的状态与开关——
         // 旧「向量检索」区驱动已退役 vector_search.py 链路；本节展示/控制新链路（本地 bge-m3 GPU / 云端可配）。
         // 数据源：GET /vector/status2（运行态+provider+缓存）+ GET/POST /embed/config（scheduler.json，重载生效）。
-        view.appendChild(el('div', 'sc-h1', '向量与模型 · 当前链路'));
+        view.appendChild(el('div', 'sc-mem-group-title', '③ 模型与向量（链路 + 蒸馏/深睡模型）'));
+        view.appendChild(el('div', 'sc-h3', '向量与模型 · 当前链路'));
         view.appendChild(el('div', 'sc-desc', '语义召回（vec.ts + bge-m3）运行态与开关。改动写 ~/.dsh/suite/scheduler.json，**需重载插件后生效**。本地 GPU 零 token；换云端在下方填 baseUrl/model。'));
         var vzone = el('div');
         function refreshVecZone() {
@@ -810,7 +820,7 @@
         // ── LLM 模型配置（2026-09-10 用户拍板：蒸馏/深睡模型直接用 Harness 宿主模型体系，各自独立可选）──
         // 数据源 GET /llm/models（宿主 listProviders→listModels）；「继承主会话」= 空键。
         // 仿 AnythingLLM LLMProviderModelPicker：provider→model 两级联动 + 空=继承。
-        view.appendChild(el('div', 'sc-h1', '蒸馏/深睡模型'));
+        view.appendChild(el('div', 'sc-h3', '蒸馏 / 深睡模型'));
         view.appendChild(el('div', 'sc-desc', '蒸馏与深度睡眠各自可选宿主模型（直接用 DeepSeek Harness 模型——先在 Harness 配置好模型，这里下拉选即可）。「继承主会话」= 不指定，跟随当前会话模型。改动写 scheduler.json，需重载生效。'));
         var llmCard = el('div');
         var hostModels = null; // GET /llm/models 缓存 [{provider,id,name}]
@@ -882,7 +892,12 @@
         // 背景：enableDistill/idleWakeMs/minTurnChars/distillPrescan/llmProvider/llmModel 六个键有插件 Config
         // 但不持久（注入插件不进 loader 配置持久化），此前只能手写 ~/.dsh/suite/scheduler.json；
         // 现经 /distill/config 读写同一文件（与深度睡眠同通道），**改动需重载插件后生效**。
-        view.appendChild(el('div', 'sc-h1', '蒸馏节流（运行时通道）'));
+        view.appendChild(el('div', 'sc-mem-group-title', '④ 后台与调度（高级 · 改后需重载）'));
+        view.appendChild(el('div', 'sc-h3', '蒸馏节流（运行时通道）'));
+        /* U2：桶④ 默认折叠（B6 高级后置）——哨兵 + 自调度，后续节点自动收进折叠体 */
+        var tglFoldMark = el('div', 'sc-fold-mark');
+        view.appendChild(tglFoldMark);
+        setTimeout(function () { scheduleFold(view, tglFoldMark, '展开后台与调度（蒸馏节流）', false); }, 0);
         // 说明文本动态化（2026-09-10）：不写死缺省值，拿到 /distill/config 后回填**当前生效值**
         var dDesc = el('div', 'sc-desc', '写入自持配置 ~/.dsh/suite/scheduler.json（深度睡眠同通道）。改动不会立刻作用到在跑的会话——**需重载插件后生效**。当前值读取中…');
         view.appendChild(dDesc);
@@ -1035,6 +1050,25 @@
         saveRow.appendChild(spacer);
         saveRow.appendChild(saveRow._btn = el('button', 'sc-btn', '保存'));
         view.appendChild(saveRow);
+        /* U2（B9）：最近改动 5 条 —— 读库 git reflog + 配置 mtime（按需端点，零新增常驻注入） */
+        view.appendChild(el('div', 'sc-mem-group-title', '最近改动（5 条）'));
+        var recentBox = el('div', 'sc-recent');
+        recentBox.appendChild(el('div', 'sc-recent-row', '读取中…'));
+        view.appendChild(recentBox);
+        api('/config/recent').then(function (r) {
+          recentBox.textContent = '';
+          var cfg = r && r.configMtime ? ('配置文件改动：' + fmtTime(r.configMtime)) : '配置文件尚无记录';
+          recentBox.appendChild(el('div', 'sc-recent-row', cfg));
+          var items = (r && r.recent) || [];
+          if (!items.length) { recentBox.appendChild(el('div', 'sc-recent-row', '记忆库尚无 git 快照（写入一次即出现）')); return; }
+          items.forEach(function (it) {
+            var row = el('div', 'sc-recent-row');
+            row.appendChild(el('span', 'sc-recent-at', it.at ? fmtTime(it.at) : '-'));
+            row.appendChild(el('span', 'sc-recent-msg', it.msg || ''));
+            row.title = it.msg || '';
+            recentBox.appendChild(row);
+          });
+        }).catch(function () { recentBox.textContent = ''; recentBox.appendChild(el('div', 'sc-recent-row', '读取失败（/config/recent）')); });
       }
 
       /* ---------- 页面：画像 / 记忆板块 ---------- */
@@ -1806,7 +1840,7 @@
           renderCognitionReport(view, 'sleep');
           // T1：会话明细
           if (r.sessions && r.sessions.length) {
-            view.appendChild(el('div', 'sc-h2', '会话明细'));
+            view.appendChild(el('div', 'sc-h3', '会话明细'));
             var listWrap = el('div', 'sc-ds-sessions');
             r.sessions.forEach(function (s) {
               var row = el('div', 'sc-ds-session');
@@ -1827,7 +1861,7 @@
             view.appendChild(el('div', 'sc-ds-alert', '⚠ 检测到疑似卡住的会话（无输出增长但会话仍在）：已正常计入停滞并安排睡眠，但建议你确认该任务是否真的卡住——必要时手动重启该会话。'));
           }
           // T2：控制
-          view.appendChild(el('div', 'sc-h2', '控制'));
+          view.appendChild(el('div', 'sc-h3', '控制'));
           var ctl = el('div', 'sc-ds-ctl');
           var triggerBtn = el('button', 'sc-btn', '立即归纳一次');
           triggerBtn.onclick = function () {
@@ -1847,18 +1881,29 @@
           };
           ctl.appendChild(pauseBtn);
           view.appendChild(ctl);
-          // T2：可调阈值
-          view.appendChild(el('div', 'sc-h2', '阈值（改后需重载插件生效）'));
+          // T2：可调阈值（U2：并入折叠体 —— 显式容器接管异步追加的节点，避免落在折叠体之外）
+          view.appendChild(el('div', 'sc-h3', '阈值（改后需重载插件生效）'));
+          var advOpen = false;
+          var advBtn = el('div', 'sc-more-btn', '展开高级阈值（4 项 · 改后需重载） ▾');
+          var advBody = el('div', 'sc-more-body');
+          advBody.style.display = 'none';
+          advBtn.onclick = function () {
+            advOpen = !advOpen;
+            advBody.style.display = advOpen ? '' : 'none';
+            advBtn.textContent = advOpen ? '收起 ▴' : '展开高级阈值（4 项 · 改后需重载） ▾';
+          };
+          view.appendChild(advBtn);
+          view.appendChild(advBody);
           api('/deepsleep/config').then(function (cfg) {
             var run = cfg.running || {};
-            view.appendChild(makeToggle('enableDeepSleep', '启用深度睡眠自动归纳 enableDeepSleep', '全部会话停滞 ≥ 阈值后自动提炼原则层（关闭=暂停）', !!run.enableDeepSleep, function (key, sw) {
+            advBody.appendChild(makeToggle('enableDeepSleep', '启用深度睡眠自动归纳 enableDeepSleep', '全部会话停滞 ≥ 阈值后自动提炼原则层（关闭=暂停）', !!run.enableDeepSleep, function (key, sw) {
               api('/deepsleep/config', { method: 'POST', body: JSON.stringify({ enableDeepSleep: sw.checked }) })
                 .then(function () { status('✓ 已保存（重载生效）'); })
                 .catch(function (e) { fail(e); sw.checked = !sw.checked; });
             }));
-            view.appendChild(dsNumber('停滞阈值 deepSleepIdleMs', '全部会话无活动持续满此毫秒数才触发（默认 3 小时）', Math.round((run.deepSleepIdleMs || 10800000) / 60000), 10, 720, '分钟', function (m) { return m * 60000; }, 'deepSleepIdleMs'));
-            view.appendChild(dsNumber('探测发起延迟 deepSleepProbeAfterMs', 'running 无事件持续此毫秒后发起输出增长探测（默认 3 小时）', Math.round((run.deepSleepProbeAfterMs || 10800000) / 60000), 10, 720, '分钟', function (m) { return m * 60000; }, 'deepSleepProbeAfterMs'));
-            view.appendChild(dsNumber('探测采样间隔 deepSleepProbeWindowMs', '两轮采样之间的间隔（默认 60 秒）', Math.round((run.deepSleepProbeWindowMs || 60000) / 1000), 5, 600, '秒', function (s) { return s * 1000; }, 'deepSleepProbeWindowMs'));
+            advBody.appendChild(dsNumber('停滞阈值 deepSleepIdleMs', '全部会话无活动持续满此毫秒数才触发（默认 3 小时）', Math.round((run.deepSleepIdleMs || 10800000) / 60000), 10, 720, '分钟', function (m) { return m * 60000; }, 'deepSleepIdleMs'));
+            advBody.appendChild(dsNumber('探测发起延迟 deepSleepProbeAfterMs', 'running 无事件持续此毫秒后发起输出增长探测（默认 3 小时）', Math.round((run.deepSleepProbeAfterMs || 10800000) / 60000), 10, 720, '分钟', function (m) { return m * 60000; }, 'deepSleepProbeAfterMs'));
+            advBody.appendChild(dsNumber('探测采样间隔 deepSleepProbeWindowMs', '两轮采样之间的间隔（默认 60 秒）', Math.round((run.deepSleepProbeWindowMs || 60000) / 1000), 5, 600, '秒', function (s) { return s * 1000; }, 'deepSleepProbeWindowMs'));
           }).catch(fail);
         }).catch(function (e) {
           view.appendChild(el('div', 'sc-desc', '加载失败：' + (e && e.message ? e.message : e)));
