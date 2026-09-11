@@ -67,6 +67,12 @@ export interface Config {
     activityArchiveDays: number;
     activityHotHits: number;
     recallColdFactorPercent: number;
+    mclEnabled: boolean;
+    mclFamiliarThreshold: number;
+    mclMaxNudges: number;
+    mclBudgetChars: number;
+    mclTopK: number;
+    mclAudit: boolean;
 }
 export declare const Config: any;
 export declare function applyScheduler(ctx: Context, config: Config): void;

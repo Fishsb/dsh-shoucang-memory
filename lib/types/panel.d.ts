@@ -5,7 +5,7 @@
  *   根目录：GET /roots · GET /get_root · POST /set_root · POST /root/bootstrap（建**单库骨架**）
  *   配置：  GET /config · POST /save · POST /toggle · POST /set（白名单键）
  *   记忆：  GET /memory/overview · GET /memory/sections · POST /memory/section-edit · POST /memory/edit · POST /memory/remove · POST /memory/approve
- *   展示：  GET /suite（suiteAssemblyMatrix 经 schedulerShare 桥接）· GET /cognition/report（深睡回执/活性/归档）
+ *   展示：  GET /suite（suiteAssemblyMatrix 经 schedulerShare 桥接）· GET /cognition/report（深睡回执/活性/归档）· GET /mcl/status（认知环快照+审计）
  *   深睡：  GET /deepsleep · POST /deepsleep/trigger · GET+POST /deepsleep/config（单 handler 按 method 分发）
  *   蒸馏：  POST /distill/run · GET+POST /distill/config（节流组持久通道，同深睡：单 handler 按 method 分发）
  *   向量/模型：GET /vector/status2 · POST /vector/cache/clear · GET+POST /embed/config · POST /embed/test · GET /llm/models

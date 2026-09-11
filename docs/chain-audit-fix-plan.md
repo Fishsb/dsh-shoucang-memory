@@ -111,7 +111,7 @@ node D:/FF/.internal/arch/render/_tools/arch-check.mjs anchors .internal/arch/_a
 
 </details>
 
-## 4. 第四步：主线衔接（ACT-024 → ACT-029）— 🟡 **ACT-024 已落地（去污染 + 重校准）；ACT-029 未开**
+## 4. 第四步：主线衔接（ACT-024 → ACT-029）— ✅ **已完成（两步均落地）**
 
 **ACT-024 结果（2026-09-11，实测）**
 
@@ -125,7 +125,20 @@ node D:/FF/.internal/arch/render/_tools/arch-check.mjs anchors .internal/arch/_a
 | 可复现命令 | `node scripts/activation-calib.mjs --n 300 --since 14d`（结构取样 + 跳过子代理会话 + 编译产物打分） |
 | 后续 | 影子以新口径继续攒样本（`src`/`metric` 字段随行）；`activationPrefetch` 仍缺省关，待样本量足够再评估是否开启该通道 |
 
-**ACT-029（MCL 双通道机制化）未开**：方案见 `.internal/arch/shoucang-SC-S05-MCL-实施方案.md` §3（熟悉度 → 快/慢通道 → `agent/pre-step` → 合规机检 → 有界再引导），落地时守该档 D1（打分不得新写，调 `targets.recallIndex`/`vec.recallRanked`）与 D7（注入不涨预算）；本步 ACT-024 已把「熟悉度判据」换成可标定的绝对口径，正是 ACT-029 的前置条件。
+**ACT-029（MCL 双通道机制化）✅ 已落地（2026-09-11）**：`src/mcl.ts` + `src/mcl-share.ts`，`agent/pre-step` 钩子（签名与官方 `dsh-agent-instructions:1270-1288` 同款，注入=把自造消息 splice 进 `decision.messages`）。
+
+| 项 | 结果 |
+|---|---|
+| 分流 | 熟悉度 = 用户文本↔命中索引行**绝对余弦**（复用 `vec.recallRanked`/`semanticSim`，D1 不新写打分）≥ 0.65 **且**命中 `[路径]`/`[原则]` → 快通道（零材料零往返）；否则慢通道 |
+| 慢通道材料 | `step 1` 注入薄契约 + top-k 薄行，≤ `mclBudgetChars`（缺省 600 字符，实测 321），**不进 systemPrompt 常驻面**（D7） |
+| 再引导 | 后续步 assistant 未引用材料主题词 → 再引导 1 次（`mclMaxNudges`），之后放行（D2 绝不死锁） |
+| 配置 | 6 键：`mclEnabled`（缺省开，false 一键回滚）/`mclFamiliarThreshold`/`mclMaxNudges`/`mclBudgetChars`/`mclTopK`/`mclAudit` |
+| 观测 | `audit/mcl-audit.jsonl`（ready/step/skip/error 四类）+ **`GET /api/shoucang-panel/mcl/status`**（实测 `active:true`、`steps>0`＝钩子被宿主真实调用） |
+| 回归 | **`scripts/test-mcl.mjs` 18 PASS / 0 FAIL**（假 ctx + 合成事件驱动 `lib/mcl.js`），已并入 `npm test` |
+
+**关键实证（写码前先验接口）**：`agent/pre-step` 在 DSH 中真实存在（`dsh-agent-instructions` / `dsh-compaction-basic` / `dsh-goal-round-driver` 均在用）；`UserMessage` 来自 `@deepseek-ai/dsh-llm`（`createUserMessage({content, source:{kind:'plugin',form:'recall'}})`），插件侧**动态 import** 该包（仓内无此包 → 不入静态依赖、不写死本机路径，失败手工构造兜底）。
+
+**仍待办（不在本步范围）**：`injectRelevance` / `injectFreshSlots` 两个旧注入键仍未进 zod/`/config`（转正属 P1 收尾）。
 
 - **ACT-024（影子采样去污染/退役）**：B7 落地后 `recall-eval` 可用 `--since` 固定窗口，**P3 验收判据④（横幅 uptake 不降）首次可测**；建议先定「固定窗口 + 样板判定口径」，再谈影子去留。
 - **ACT-029（MCL 双通道机制化）**：方案在 `.internal/arch/shoucang-SC-S05-MCL-实施方案.md` §3（熟悉度 → 快/慢通道 → `agent/pre-step`），落地时守该档 D1「打分不得新写、调 `targets.recallIndex` / `vec.recallRanked`」与 D7「注入不涨预算（1993 字符硬基线）」。

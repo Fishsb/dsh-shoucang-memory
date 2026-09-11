@@ -5,7 +5,7 @@
  *   根目录：GET /roots · GET /get_root · POST /set_root · POST /root/bootstrap（建**单库骨架**）
  *   配置：  GET /config · POST /save · POST /toggle · POST /set（白名单键）
  *   记忆：  GET /memory/overview · GET /memory/sections · POST /memory/section-edit · POST /memory/edit · POST /memory/remove · POST /memory/approve
- *   展示：  GET /suite（suiteAssemblyMatrix 经 schedulerShare 桥接）· GET /cognition/report（深睡回执/活性/归档）
+ *   展示：  GET /suite（suiteAssemblyMatrix 经 schedulerShare 桥接）· GET /cognition/report（深睡回执/活性/归档）· GET /mcl/status（认知环快照+审计）
  *   深睡：  GET /deepsleep · POST /deepsleep/trigger · GET+POST /deepsleep/config（单 handler 按 method 分发）
  *   蒸馏：  POST /distill/run · GET+POST /distill/config（节流组持久通道，同深睡：单 handler 按 method 分发）
  *   向量/模型：GET /vector/status2 · POST /vector/cache/clear · GET+POST /embed/config · POST /embed/test · GET /llm/models
@@ -31,6 +31,7 @@ import { dshHome, knowledgeRoot, memoryLibRoot, recallIndex } from './targets.js
 import { vecStats, clearVecCache } from './vec.js'
 import { deepSleepShare } from './deepsleep-share.js'
 import { schedulerShare } from './scheduler-share.js'
+import { mclShare } from './mcl-share.js'
 import { fileURLToPath } from 'node:url'
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path'
 
@@ -1075,6 +1076,22 @@ export function applyPanel(ctx: Context, config: Config): void {
   //    ④ 超 R 节清单（§8.1 口径：## 按子树、### 按自身，R=1000）
   //    ⑤ 归档区（forgetOps 产物 notes/archive/）
   //    全部只读派生、无写入；缺文件一律如实空态（不编造）。
+  // ACT-029 认知环（MCL）：运行时快照 + 最近审计行（只读；未装配 → 如实未激活态）
+  route('/mcl/status', (_req, res) => {
+    try {
+      const recent: unknown[] = []
+      try {
+        const f = join(knowledgeRoot(), 'audit', 'mcl-audit.jsonl')
+        if (existsSync(f)) {
+          const lines = readFileSync(f, 'utf8').split(/\r?\n/).filter(Boolean)
+          for (const l of lines.slice(-10)) { try { recent.push(JSON.parse(l)) } catch { /* 坏行跳过 */ } }
+        }
+      } catch { /* 审计不可读=空 */ }
+      if (!mclShare.api) return sendJson(res, 200, { active: false, reason: 'mcl-not-ready', recent })
+      sendJson(res, 200, { active: true, ...mclShare.api.status(), recent })
+    } catch (e) { sendJson(res, 500, { error: String(e) }) }
+  })
+
   route('/cognition/report', (_req, res) => {
     try {
       const root = memoryLibRoot()
@@ -1366,7 +1383,7 @@ export function applyPanel(ctx: Context, config: Config): void {
   }
 
   ctx.effect(() => {
-    ctx.logger?.info?.('[shoucang] host RPC ready: roots(roots|get_root|set_root|bootstrap)/config(save|toggle|set)/memory(overview|sections|section-edit|edit|remove|approve)/suite/cognition-report/deepsleep(status|trigger|config)/distill(run|config)/vector(status2|cache-clear)/embed(config|test)/llm-models/inject(preview|stats)')
+    ctx.logger?.info?.('[shoucang] host RPC ready: roots(roots|get_root|set_root|bootstrap)/config(save|toggle|set)/memory(overview|sections|section-edit|edit|remove|approve)/suite/mcl-status/cognition-report/deepsleep(status|trigger|config)/distill(run|config)/vector(status2|cache-clear)/embed(config|test)/llm-models/inject(preview|stats)')
     // 注册 systemPrompt 注入块（每轮渲染，指针缓存 30s）
     const sp = (ctx as unknown as { systemPrompt?: { context?(opts: unknown): () => void } }).systemPrompt
     if (sp && typeof sp.context === 'function') {

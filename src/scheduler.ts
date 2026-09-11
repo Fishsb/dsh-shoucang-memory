@@ -24,6 +24,8 @@ import { recallRanked } from './vec.js'
 import { registerDistill } from './distill.js'
 import { deepSleepShare } from './deepsleep-share.js'
 import { schedulerShare } from './scheduler-share.js'
+import { mclShare } from './mcl-share.js'
+import { registerMcl } from './mcl.js'
 
 export const name = '@dsh-external/shoucang-scheduler'
 export const inject = ['tools', 'llm', 'subagents', 'agents']
@@ -101,6 +103,13 @@ export interface Config {
   activityArchiveDays: number // cold 且最近命中超过该天数 → 遗忘候选（缺省 90）
   activityHotHits: number // 近 30 天命中 ≥ 此值 → 加深候选 B（缺省 5）
   recallColdFactorPercent: number // 召回时 cold/retired 小节降权系数（%，→ /100；缺省 35）
+  // ═══ ACT-029 认知环（MCL）双通道（2026-09-11）：熟悉度分流 + 慢通道薄材料 + 有界再引导 ═══
+  mclEnabled: boolean // 认知环总开关（缺省开；一键回滚 = false）
+  mclFamiliarThreshold: number // 熟悉度阈值（绝对余弦口径，ACT-024 校准：0.65 → 触发率 ~2%）
+  mclMaxNudges: number // 慢通道再引导上限（缺省 1；0 = 只注入不引导）
+  mclBudgetChars: number // 慢通道材料硬预算（字符，缺省 600）
+  mclTopK: number // 慢通道指针条数（缺省 3）
+  mclAudit: boolean // 审计流开关（knowledgeRoot()/audit/mcl-audit.jsonl）
 }
 
 export const Config: any = z.object({
@@ -160,6 +169,13 @@ export const Config: any = z.object({
   activityArchiveDays: z.number().min(30).max(730).default(90).description('遗忘候选：cold 且最近命中超过该天数 → 候选清单（缺省 90）'),
   activityHotHits: z.number().min(1).max(50).default(5).description('加深候选：近 30 天命中 ≥ 此值 → 加深候选 B（缺省 5）'),
   recallColdFactorPercent: z.number().min(5).max(95).default(35).description('召回降权：cold/retired 小节融合召回降权系数（百分比，→ /100；缺省 35）'),
+  // ═══ ACT-029 认知环（MCL）：熟悉度分流 + 慢通道薄材料 + 有界再引导（方案见 .internal/arch/shoucang-SC-S05）═══
+  mclEnabled: z.boolean().default(true).description('认知环（MCL）开关：慢通道在任务首步注入「薄契约 + top-k 指针」并按需再引导一次；快通道零额外往返。缺省开，置 false 一键回滚'),
+  mclFamiliarThreshold: z.number().min(0).max(1).default(0.65).description('熟悉度阈值（用户文本↔命中索引行的**绝对余弦**，ACT-024 校准：0.65 → 触发率 ~2% 且阈上样本全为真命中）'),
+  mclMaxNudges: z.number().min(0).max(3).default(1).description('慢通道再引导上限（缺省 1：只对「未引用材料」再引导一次，之后放行，绝不死锁）'),
+  mclBudgetChars: z.number().min(120).max(4000).default(600).description('慢通道材料硬预算（字符；薄契约 + top-k 薄行，只作用于慢通道首步）'),
+  mclTopK: z.number().min(1).max(5).default(3).description('慢通道注入的指针条数（缺省 3）'),
+  mclAudit: z.boolean().default(true).description('认知环审计流：knowledgeRoot()/audit/mcl-audit.jsonl（每步一行：通道/熟悉度/注入/再引导/合规）'),
 })
 
 // —— 自持配置文件（契约 v3 落地通道；dshHome 等路径探测统一来自 targets.ts，单一事实源）——
@@ -569,5 +585,28 @@ export function applyScheduler(ctx: Context, config: Config): void {
       }),
       llmModels,
     }
+  }
+
+  // ═══ ACT-029 认知环（MCL）装配：与蒸馏器**解耦**（不依赖 enableDistill）——`agent/pre-step` 按熟悉度分流 ═══
+  // 快通道：高置信命中 [路径]/[原则] → 零材料零往返；慢通道：首步薄材料 + 最多 maxNudges 次再引导。
+  try {
+    const mcl = registerMcl(ctx as any, {
+      enabled: config.mclEnabled !== false,
+      familiarThreshold: Number(config.mclFamiliarThreshold) > 0 ? Number(config.mclFamiliarThreshold) : 0.65,
+      maxNudges: Math.max(0, Number(config.mclMaxNudges) || 0),
+      budgetChars: Math.max(120, Number(config.mclBudgetChars) || 600),
+      topK: Math.min(5, Math.max(1, Number(config.mclTopK) || 3)),
+      audit: config.mclAudit !== false,
+      embed: {
+        enabled: !!config.embedEnabled && !!config.embedBaseUrl && !!config.embedModel,
+        baseUrl: String(config.embedBaseUrl || ''),
+        model: String(config.embedModel || ''),
+        apiKeyEnv: String(config.embedApiKeyEnv || ''),
+        coldFactor: (Number(config.recallColdFactorPercent) > 0 ? Number(config.recallColdFactorPercent) : 35) / 100,
+      },
+    })
+    if (mcl) mclShare.api = { status: () => mcl.status() }
+  } catch (e) {
+    ctx.logger?.warn?.(`[shoucang] MCL 装配失败（认知环跳过）：${String((e as Error)?.message || e).slice(0, 120)}`)
   }
 }
