@@ -76,6 +76,7 @@ const CHECKS = [
   ['scripts/check-memory-write-path.mjs'],
   ['scripts/check-deploy-sync.mjs'],
   ['scripts/check-changelog.mjs'],
+  ['scripts/check-ui-contract.mjs'],
 ]
 const rows = []
 for (const entry of CHECKS) {
