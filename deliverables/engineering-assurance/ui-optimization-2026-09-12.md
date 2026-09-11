@@ -208,14 +208,68 @@ RangeError: Maximum call stack size exceeded
 
 ---
 
-## 五、剩余项（下一轮）
+## 五、样式系统重构（已完成，纯新增零回退）
 
-| # | 项 | 说明 | 优先级 |
-|---|---|---|---|
-| 1 | **A2 旧视图组件化** | 15 个旧 render 函数仍手工拼 DOM（20 处 `setting-item`）。建议按"结构完全一致的先替、有差异的逐个核对"推进，每替一个跑一次门禁 + 目视核对 | 高 |
-| 2 | **C1 进度覆盖旧调用** | 进度条目前仅 `apiCtx` 触发；可让 `api()` 对慢请求（如 >1.5s）自动显示进行中态，覆盖全部 | 中 |
-| 3 | **D6 无障碍** | 控件普遍缺 `aria-label`，键盘可达性未验证（仅状态栏有 ARIA、折叠头有 `tabindex`/`Enter` 处理） | 中 |
-| 4 | **A6 视图路由/深链** | 切视图未同步 URL，无前进/后退、无深链 | 低 |
+> 硬约束：**保持原有功能、DOM 结构、业务逻辑不变**，不引入新依赖。
+> 因此本轮对既有选择器**一条未改**，只做增量补全 —— 这保证了零布局回退风险。
+
+### 5.1 设计令牌补齐
+
+原有 45 个 `--sc-*` 令牌（间距/字号/圆角/宽度已令牌化）基础上补齐：
+
+| 类别 | 新增令牌 |
+|---|---|
+| 阴影 | `--sc-shadow-1/2/3` |
+| 过渡 | `--sc-t-fast/base/slow`、`--sc-ease` |
+| 焦点 | `--sc-ring`、`--sc-ring-offset` |
+| 禁用 | `--sc-disabled-op`、`--sc-readonly-op` |
+| 层级 | `--sc-z-modal/mask/toast` |
+| 字重 | `--sc-fw-normal/medium/semibold/bold` |
+| 字距 | `--sc-ls-tight/wide` |
+| 状态色 | `--sc-ok-bg/warn-bg/err-bg`（语义派生，替代散落的十六进制/rgba） |
+
+**CSS 原状**：369 处 px 硬编码、16 种十六进制、10 处直接 rgba。新令牌供后续渐进替换（替换需逐处目视，不在本轮做）。
+
+### 5.2 视觉层次
+
+- 主次按钮统一：`.sc-btn` 最小高 30px、`inline-flex` 居中；`primary`/`danger` 各有 hover 态
+- 状态徽标改语义类 `.sc-badge-ok/warn/error/info`，**颜色走 `--sc-*-bg` 令牌**，不再行内 `style.color`
+- 分区节奏：`.sc-section` 用 `--sc-gap-group`（"留白即分组"）
+- 标题层级：`.sc-h1/h2` 字号字重令牌化
+
+### 5.3 交互反馈与边界
+
+| 项 | 前 → 后 |
+|---|---|
+| `:focus-visible` | 8（`:focus`）→ **11**（键盘可见、鼠标不显环） |
+| `:active` | **0 → 5**（按压位移反馈） |
+| `:disabled` | **2 → 11**（统一 `opacity` + `cursor:not-allowed`） |
+| 动效 | 统一时长/缓动，且**尊重 `prefers-reduced-motion`** |
+| 加载态 | 新增骨架微光 `sc-shimmer` + 行内 `sc-spinner` |
+| 空态 | 新增 `.sc-empty`（图标 + 标题 + 说明，居中） |
+| 溢出 | 新增 `.sc-ellipsis` / `.sc-clamp-2/3` / `.sc-break` / `.sc-scroll-y` |
+
+### 5.4 响应式
+
+**原有 0 处 `@media`** ⇒ 补 6 处：
+
+| 断点 | 行为 |
+|---|---|
+| ≤900px | 导航收窄至 160px，内容区去内边距 |
+| ≤640px | 导航转**顶部横向条**，模态**全屏**；`setting-item` 改纵向堆叠、kv 单列 |
+| ≥1440px | 阅读宽度放宽至 1100px，导航 232px |
+| `hover:none` | 触摸设备加大点击热区（按钮 36px、导航项 10px padding） |
+
+---
+
+## 六、剩余项（下一轮）
+
+| # | 项 | 状态 |
+|---|---|---|
+| 1 | **A2 旧视图组件化** | **部分落地**：新视图全面使用组件层（26 处调用）；旧视图已转换插件集合成员列表 1 处作模板（手工 `setting-item` 20 → 19）。剩余 19 处**未做批量替换**——虽为同一机械范式，但控件需保留 `.setting-item-control` 包装，盲目 codemod 会改变 DOM 结构，与"DOM 结构不变"要求冲突。建议配合目视验收逐处推进 |
+| ~~2~~ | ~~C1 进度覆盖旧调用~~ | ✅ **已落地**：`api()` 慢请求（>1.5s）自动显示「执行中…」，覆盖全部旧调用点；用 `setStatusText` 不写日志，结束即清 |
+| ~~3~~ | ~~D6 无障碍~~ | ✅ **已落地**：模态框 `role=dialog` + `aria-modal` + `aria-label`；导航项 `role=button` + `tabindex=0` + `aria-label` + 键盘 Enter/Space；视图区 `role=region` + 动态 `aria-label` |
+| ~~4~~ | ~~A6 视图路由/深链~~ | ✅ **已落地（只读深链）**：记住最后视图（localStorage）+ 支持 `#sc=<视图名>` 深链**读取**。**不写 URL**——写 hash 可能干扰宿主路由，故采用保守方案 |
 
 ---
 
