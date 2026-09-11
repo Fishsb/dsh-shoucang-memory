@@ -1283,6 +1283,10 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
   // 语义：stop/JSON 都 OK 但条目级写失败（白名单外目标、磁盘错误、原子写失败…）时**不再前移水位**；
   // 同一段连续失败满 MAX_DISPATCH_RETRY 次后强制推进 + 落审计 dispatch-failed-forced（丢失显式记账）。
   const MAX_DISPATCH_RETRY = 3
+  // ⚠ 记账口径误导（2026-09-12 实测，审计 800 行）：`dispatch-failed-forced` 记的是「同一段连败满 3 次」，
+  //   而**真实丢料发生在「第 1 次失败后被跳过分支越过」**（50 个失败段中 35 段如此，真重扫仅 4 段）
+  //   ⇒ forced 恒为 0，不能读作「没有丢料」。G-4a 修复后，这类丢料改由 distill-skip 审计行的
+  //   `skipPlan=skip-abandoned-after-hold` 与 `heldForUndigested` 记账（见下方 A4 段）。
   const dispatchFailStreak = new Map<string, number>() // `${sid}#${endSeq}` → 连续失败次数（内存态，重启清零=最多再试 MAX 次）
 
   // ── A4（2026-09-12 G-4a）：**跳过分支不得越过「未消化段」推进水位** ──
