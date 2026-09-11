@@ -63,6 +63,8 @@ export interface Config {
     embedModel: string;
     embedApiKeyEnv: string;
     recallFusion: string;
+    injectRelevance: boolean;
+    injectFreshSlots: number;
     bankGit: boolean;
     activityWarmDays: number;
     activityColdDays: number;

@@ -341,6 +341,11 @@
         '.sc-ctrl-meta{gap:var(--sc-sp-1);margin-top:var(--sc-sp-1);}',
         '.sc-chip{font-size:var(--sc-fs-xs);line-height:var(--sc-lh-tight);padding:0 var(--sc-sp-1);border-radius:var(--sc-r-pill);}',
         '.sc-more-btn{margin:var(--sc-gap-item) 0 var(--sc-sp-1);padding:var(--sc-sp-1) var(--sc-sp-3);border-radius:var(--sc-r-sm);font-size:var(--sc-fs-xs);}',
+        /* U3（A10）：自绘控件改语义化元素后的默认样式重置（button 化，键盘可达） */
+        'button.sc-more-btn{background:none;border:0;font:inherit;text-align:left;width:100%;color:inherit;cursor:pointer;}',
+        'button.sc-persona-cell{appearance:none;-webkit-appearance:none;background:none;border:0;border-right:1px solid var(--sc-border);font:inherit;}',
+        'button.sc-persona-cell:last-child{border-right:none;}',
+        'button.sc-persona-cell.active{background:var(--sc-accent);color:#fff;font-weight:600;}',
         '.sc-search-bar{gap:var(--sc-gap-row);margin:var(--sc-sp-2) 0 var(--sc-sp-1);}',
         '.sc-search-count{font-size:var(--sc-fs-xs);}',
         '.sc-input{font-size:var(--sc-fs-sm);min-height:var(--sc-sp-6);border-radius:var(--sc-r-sm);}',
@@ -392,6 +397,17 @@
         'injection.cap_memory': { scope: '写门容量', effect: '即时' },
         recallColdFactorPercent: { scope: '召回融合', effect: '即时' },
         enableDeepSleep: { scope: '调度', effect: '需重载' },
+        // U3（B5 能力对齐）：新增控件的作用域与生效态
+        injectRelevance: { scope: '注入选行', effect: '即时' },
+        injectFreshSlots: { scope: '注入选行', effect: '即时' },
+        recallFusion: { scope: '召回融合', effect: '需重载' },
+        bankGit: { scope: '库版本化', effect: '需重载' },
+        mclEnabled: { scope: '认知环', effect: '需重载' },
+        mclFamiliarThreshold: { scope: '认知环', effect: '需重载' },
+        mclMaxNudges: { scope: '认知环', effect: '需重载' },
+        mclBudgetChars: { scope: '认知环', effect: '需重载' },
+        mclTopK: { scope: '认知环', effect: '需重载' },
+        mclAudit: { scope: '认知环', effect: '需重载' },
       };
       function metaBadges(key) {
         var m = CTRL_META[key] || { scope: '全局注入', effect: '即时' };
@@ -411,12 +427,15 @@
         nodes.forEach(function (x) { body.appendChild(x); });
         host.removeChild(mark);
         var open = !!openDefault;
-        var btn = el('div', 'sc-more-btn', open ? '收起 ▴' : label + ' ▾');
+        var btn = el('button', 'sc-more-btn', open ? '收起 ▴' : label + ' ▾');
+        btn.type = 'button';
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
         body.style.display = open ? '' : 'none';
         btn.onclick = function () {
           open = !open;
           body.style.display = open ? '' : 'none';
           btn.textContent = open ? '收起 ▴' : label + ' ▾';
+          btn.setAttribute('aria-expanded', open ? 'true' : 'false');
         };
         host.appendChild(btn);
         host.appendChild(body);
@@ -472,14 +491,17 @@
         pInfo.appendChild(el('div', 'setting-item-desc', 'v17 已生效：关闭=不注入画像；仅注入我=只注入 agent 画像 AGENT.md（含 [原则] 习得原则与 [路径] 任务路径）；仅注入你=只注入用户画像 USER.md；全注入=双画像（默认）'));
         var slider = el('div', 'sc-persona-slider');
         PERSONA_TIERS.forEach(function (tier, i) {
-          var cell = el('div', 'sc-persona-cell' + (tier[0] === personaMode ? ' active' : ''));
+          var cell = el('button', 'sc-persona-cell' + (tier[0] === personaMode ? ' active' : ''));
+          cell.type = 'button';
+          cell.setAttribute('role', 'radio');
+          cell.setAttribute('aria-checked', tier[0] === personaMode ? 'true' : 'false');
           cell.textContent = tier[1];
           cell.onclick = function () {
             api('/set', { method: 'POST', body: JSON.stringify({ key: 'injection.persona', value: tier[0] }) })
               .then(function () {
                 status('✓ persona 档位 = ' + tier[1]);
-                slider.querySelectorAll('.sc-persona-cell').forEach(function (c) { c.classList.remove('active'); });
-                cell.classList.add('active');
+                slider.querySelectorAll('.sc-persona-cell').forEach(function (c) { c.classList.remove('active'); c.setAttribute('aria-checked', 'false'); });
+                cell.classList.add('active'); cell.setAttribute('aria-checked', 'true');
               })
               .catch(fail);
           };
@@ -506,15 +528,18 @@
         lInfo.appendChild(el('div', 'setting-item-desc', 'off=不注入 / low(2 条) / medium(4 条) / high(8 条) / smart=智能上限(10 条)；当前：' + levelMode + '；改动即时生效（缓存作废）'));
         var lSlider = el('div', 'sc-persona-slider');
         LEVEL_TIERS.forEach(function (tier, i) {
-          var cell = el('div', 'sc-persona-cell' + (tier[0] === levelMode ? ' active' : ''));
+          var cell = el('button', 'sc-persona-cell' + (tier[0] === levelMode ? ' active' : ''));
+          cell.type = 'button';
+          cell.setAttribute('role', 'radio');
+          cell.setAttribute('aria-checked', tier[0] === levelMode ? 'true' : 'false');
           cell.textContent = tier[1];
           cell.title = 'injection.level = ' + tier[0];
           cell.onclick = function () {
             api('/set', { method: 'POST', body: JSON.stringify({ key: 'injection.level', value: tier[0] }) })
               .then(function () {
                 status('✓ injection.level = ' + tier[0]);
-                lSlider.querySelectorAll('.sc-persona-cell').forEach(function (c) { c.classList.remove('active'); });
-                cell.classList.add('active');
+                lSlider.querySelectorAll('.sc-persona-cell').forEach(function (c) { c.classList.remove('active'); c.setAttribute('aria-checked', 'false'); });
+                cell.classList.add('active'); cell.setAttribute('aria-checked', 'true');
               })
               .catch(fail);
           };
@@ -522,18 +547,26 @@
         });
         lItem.appendChild(lInfo); lItem.appendChild(metaBadges('injection.level')); lItem.appendChild(lSlider);
         view.appendChild(lItem);
+        // U3（B5 能力对齐）：注入选行两键 —— panel 早已读取 injectRelevance/injectFreshSlots，此前无控件（UI 调不了）
+        view.appendChild(makeToggle('injectRelevance', '注入相关性重排 injectRelevance', '开=按相关性选行（缺省）；关=回落「基线 + 新鲜度」选行。即时生效（下次注入即用）', gVal('injectRelevance', true) !== false, function (key, sw) {
+          api('/toggle', { method: 'POST', body: JSON.stringify({ key: key }) })
+            .then(function () { status('✓ 已切换 ' + key + '（即时）'); })
+            .catch(function (e) { fail(e); sw.checked = !sw.checked; });
+        }));
+        view.appendChild(numSetting('新鲜度保底槽 injectFreshSlots', '注入时优先保留「最近新增条目」的槽位数（0–6，缺省 2）', gVal('injectFreshSlots', 2), 'injectFreshSlots', '条', 1));
 
         // 注入容量预算（v16）：总预算 + 三板块字符上限（0=不裁）
-        function numSetting(name, desc, val, key, unit) {
+        function numSetting(name, desc, val, key, unit, step) {
           var item = el('div', 'setting-item');
           var info = el('div', 'setting-item-info');
           info.appendChild(el('div', 'setting-item-name', name));
           info.appendChild(el('div', 'setting-item-desc', desc));
+          var isFloat = typeof step === 'number' && step < 1; // U3：小数键（如 MCL 熟悉度阈值）支持
           var wrap = el('div', 'sc-num-wrap'); // U2.5：内联样式 → 类（令牌化，可统一/可回滚）
-          var inp = el('input'); inp.type = 'number'; inp.className = 'sc-input'; inp.min = '0'; inp.step = '100'; inp.value = String(val);
+          var inp = el('input'); inp.type = 'number'; inp.className = 'sc-input'; inp.min = '0'; inp.step = String(step || 100); inp.value = String(val);
           var unitEl = el('span', 'sc-range-label', unit || '');
           inp.onchange = function () {
-            var v = String(Math.max(0, parseInt(inp.value, 10) || 0));
+            var v = String(isFloat ? (Math.max(0, parseFloat(inp.value) || 0)) : Math.max(0, parseInt(inp.value, 10) || 0));
             api('/set', { method: 'POST', body: JSON.stringify({ key: key, value: v }) })
               .then(function () { status('✓ ' + key + ' = ' + v); })
               .catch(fail);
@@ -898,6 +931,56 @@
         var tglFoldMark = el('div', 'sc-fold-mark');
         view.appendChild(tglFoldMark);
         setTimeout(function () { scheduleFold(view, tglFoldMark, '展开后台与调度（蒸馏节流）', false); }, 0);
+        // U3（B5 能力对齐）：召回融合策略（v2 回滚开关）+ 库版本化 + 认知环 6 键 —— 均在桶④折叠体内
+        view.appendChild(el('div', 'sc-h3', '召回与库版本'));
+        var fusRow = el('div', 'setting-item');
+        var fusInfo = el('div', 'setting-item-info');
+        fusInfo.appendChild(el('div', 'setting-item-name', '召回融合策略 recallFusion'));
+        fusInfo.appendChild(el('div', 'setting-item-desc', 'rrf=排名融合（缺省，对离群分稳健）；weighted=旧 min-max 加权（回滚用）。阈值口径与融合解耦——始终用绝对余弦（ACT-024）'));
+        fusInfo.appendChild(metaBadges('recallFusion'));
+        var fusRowCtrl = el('div', 'sc-persona-slider');
+        var FUS_TIERS = [['rrf', 'RRF'], ['weighted', '加权']];
+        var fusMode = String(gVal('recallFusion', 'rrf'));
+        FUS_TIERS.forEach(function (tier) {
+          var cell = el('button', 'sc-persona-cell' + (tier[0] === fusMode ? ' active' : ''));
+          cell.type = 'button';
+          cell.setAttribute('role', 'radio');
+          cell.setAttribute('aria-checked', tier[0] === fusMode ? 'true' : 'false');
+          cell.textContent = tier[1];
+          cell.title = 'recallFusion = ' + tier[0] + '（需重载生效）';
+          cell.onclick = function () {
+            api('/set', { method: 'POST', body: JSON.stringify({ key: 'recallFusion', value: tier[0] }) })
+              .then(function () {
+                status('✓ recallFusion = ' + tier[0] + '（需重载插件生效）');
+                fusRowCtrl.querySelectorAll('.sc-persona-cell').forEach(function (c) { c.classList.remove('active'); c.setAttribute('aria-checked', 'false'); });
+                cell.classList.add('active'); cell.setAttribute('aria-checked', 'true');
+              })
+              .catch(fail);
+          };
+          fusRowCtrl.appendChild(cell);
+        });
+        fusRow.appendChild(fusInfo); fusRow.appendChild(fusRowCtrl);
+        view.appendChild(fusRow);
+        view.appendChild(makeToggle('bankGit', '记忆库 git 版本化 bankGit', '每次成功写入后提交库快照（可 diff/revert；库在 ~/.dsh 下，不入公开树）。缺省开', gVal('bankGit', true) !== false, function (key, sw) {
+          api('/toggle', { method: 'POST', body: JSON.stringify({ key: key }) })
+            .then(function () { status('✓ 已切换 ' + key + '（需重载生效）'); })
+            .catch(function (e) { fail(e); sw.checked = !sw.checked; });
+        }));
+        view.appendChild(el('div', 'sc-h3', '认知环（MCL · 熟悉度分流 + 有界再引导）'));
+        view.appendChild(makeToggle('mclEnabled', '启用认知环 mclEnabled', '慢通道首步注入「薄契约 + top-k 指针」并按需再引导一次；快通道零额外往返。缺省开（false = 一键回滚）', gVal('mclEnabled', true) !== false, function (key, sw) {
+          api('/toggle', { method: 'POST', body: JSON.stringify({ key: key }) })
+            .then(function () { status('✓ 已切换 ' + key + '（需重载生效）'); })
+            .catch(function (e) { fail(e); sw.checked = !sw.checked; });
+        }));
+        view.appendChild(numSetting('熟悉度阈值 mclFamiliarThreshold', '「用户文本 ↔ 命中索引行」的绝对余弦阈值（0–1，缺省 0.65；ACT-024 校准：0.65 → 触发率 ~2% 且阈上全为真命中）', gVal('mclFamiliarThreshold', 0.65), 'mclFamiliarThreshold', '', 0.01));
+        view.appendChild(numSetting('再引导上限 mclMaxNudges', '慢通道最多再引导次数（0–3，缺省 1；绝不死锁）', gVal('mclMaxNudges', 1), 'mclMaxNudges', '次', 1));
+        view.appendChild(numSetting('材料预算 mclBudgetChars', '慢通道材料硬预算（120–4000 字符，缺省 600；只作用于慢通道首步）', gVal('mclBudgetChars', 600), 'mclBudgetChars', '字符', 50));
+        view.appendChild(numSetting('指针条数 mclTopK', '慢通道注入的指针条数（1–5，缺省 3）', gVal('mclTopK', 3), 'mclTopK', '条', 1));
+        view.appendChild(makeToggle('mclAudit', '认知环审计流 mclAudit', '每步一行写 suite/knowledge/audit/mcl-audit.jsonl（通道/熟悉度/注入/再引导/合规）', gVal('mclAudit', true) !== false, function (key, sw) {
+          api('/toggle', { method: 'POST', body: JSON.stringify({ key: key }) })
+            .then(function () { status('✓ 已切换 ' + key + '（需重载生效）'); })
+            .catch(function (e) { fail(e); sw.checked = !sw.checked; });
+        }));
         // 说明文本动态化（2026-09-10）：不写死缺省值，拿到 /distill/config 后回填**当前生效值**
         var dDesc = el('div', 'sc-desc', '写入自持配置 ~/.dsh/suite/scheduler.json（深度睡眠同通道）。改动不会立刻作用到在跑的会话——**需重载插件后生效**。当前值读取中…');
         view.appendChild(dDesc);
@@ -1884,13 +1967,16 @@
           // T2：可调阈值（U2：并入折叠体 —— 显式容器接管异步追加的节点，避免落在折叠体之外）
           view.appendChild(el('div', 'sc-h3', '阈值（改后需重载插件生效）'));
           var advOpen = false;
-          var advBtn = el('div', 'sc-more-btn', '展开高级阈值（4 项 · 改后需重载） ▾');
+          var advBtn = el('button', 'sc-more-btn', '展开高级阈值（4 项 · 改后需重载） ▾');
+          advBtn.type = 'button';
+          advBtn.setAttribute('aria-expanded', 'false');
           var advBody = el('div', 'sc-more-body');
           advBody.style.display = 'none';
           advBtn.onclick = function () {
             advOpen = !advOpen;
             advBody.style.display = advOpen ? '' : 'none';
             advBtn.textContent = advOpen ? '收起 ▴' : '展开高级阈值（4 项 · 改后需重载） ▾';
+            advBtn.setAttribute('aria-expanded', advOpen ? 'true' : 'false');
           };
           view.appendChild(advBtn);
           view.appendChild(advBody);
@@ -1991,6 +2077,7 @@
         refs.view = el('div', 'sc-view');
         main.appendChild(refs.view);
         var bar = el('div', 'sc-statusbar'); bar.id = 'sc-statusbar'; // 类挂样式 + id 供 status() 定位（此前只挂 id，.sc-statusbar 类样式永不命中）
+        bar.setAttribute('role', 'status'); bar.setAttribute('aria-live', 'polite'); // U3（A10）：状态变化被读屏播报
         main.appendChild(bar);
         modal.appendChild(main);
 
