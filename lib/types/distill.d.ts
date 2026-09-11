@@ -202,6 +202,24 @@ export declare const planDegradedBaseline: (maxSeq: number, prevSeq: number) => 
     degrade: boolean;
     reason: string;
 };
+/**
+ * G-4a（2026-09-12）：**跳过分支（below-min / prescan-no-signal）的水位推进判据**——抽成纯函数并导出。
+ * 背景（实测，审计 800 行）：段 dispatch 失败后水位保留，但下一轮若命中跳过分支，旧码直接
+ *   `writeWatermark(sid, maxSeq)` ⇒ 一步跨过未消化段 ⇒ 该段**永不重扫**（50 段中 35 段如此，真重扫仅 4 段）
+ *   ⇒ `dispatch-failed-forced` 恒为 0 的真因是「重试从未累积到第 2 次」，而非计数没持久化。
+ * 语义：
+ *   · 无未消化段 ⇒ 照旧推 maxSeq（`skip-normal`，保持跳过分支原有行为，不引入死循环）；
+ *   · 有未消化段 ⇒ **不推**（保留基线，把窗口留给下一轮再看一次），连续扣满 SKIP_HOLD_MAX 轮仍无进展
+ *     ⇒ 放弃并推 maxSeq（`skip-abandoned-after-hold`，显式记账）——**没有这条就会死循环**：
+ *     某会话内容长期低于门槛时，每轮都会重扫同一窗口。
+ */
+export declare const SKIP_HOLD_MAX = 3;
+export declare const planSkipWatermark: (hasUndigested: boolean, holdRounds: number, maxSeq: number) => {
+    write: boolean;
+    seq: number;
+    reason: string;
+    holdRounds: number;
+};
 export interface DiscardWatermarkDeps {
     writeWatermark(sid: string, lastSeq: number, agent: any): void;
     audit(o: Record<string, unknown>): void;
