@@ -29,9 +29,10 @@
 //   - gate 拒路径：玩具库里 `memory_write_gate.mjs` 恒不存在 ⇒ gate='absent' 分支天然走不到
 //   - `atomicWrite` 落盘失败路径、归档目录不可建路径
 //   - 索引指针改写（MEMORY/USER/AGENT）：本件不建索引文件，故 rewriteOneIndex 恒 return 0
-//   - **L4（####）口径不一致**：rename 侧 scope 过滤成 L2/L3（R3 锁定"不匹配 L4"）；
-//     merge 侧 `matchSection(sections, …)` 用**全 sections**，L4 可被匹配。两侧口径不一致，
-//     本件**不锁 merge 的 L4 行为**，留待口径统一后再锁。
+//   - **L4（####）口径不一致 ⇒ G-22**：rename 侧 scope 过滤成 L2/L3（R3 锁定"不匹配 L4"）；
+//     merge 侧 `matchSection(sections, …)` 用**全 sections**，L4 可被匹配。两侧口径不一致。
+//     本件用 **xfail 双向锁**（M6-e）：未修期间判 XFAIL（不算通过、不用 ✅ 图标），
+//     行为一旦变化判 XPASS 并计入 FAIL ⇒ 既不制造永久红灯，也不把缺陷正当化成绿。
 //
 // 用法: node scripts/test-treeops-rm.mjs
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, rmSync } from 'node:fs'
@@ -73,6 +74,25 @@ const NOTE = `# notes/lessons.md — G-18 玩具
 
 const P = []
 const ok = (name, cond, extra = '') => { P.push(`${cond ? 'PASS' : 'FAIL'}  ${name}${extra ? ' — ' + extra : ''}`); return cond }
+
+// ── xfail（双向锁）：给「已知缺陷、暂不修」的契约断言用 ────────────────────────
+// 为什么不是 skipped：skipped 会把未修的缺陷**正当化成绿**（archi 明确反对，team-lead 背书）。
+// 为什么不是让它红着：永久红灯的下场是所有人学会无视它 ⇒ **等于把假绿换成假红**，同一个病换个位置。
+// 所以两条路都判 FAIL，只有中间那条「缺陷仍在、且我们知道它在」才接受：
+//   · 断言 FAIL ⇒ XFAIL（接受）：缺陷未修，打印 ⚠（**不用 ✅**，否则一眼扫过去像全绿）
+//   · 断言 PASS ⇒ XPASS（**判 FAIL**）：行为变了 ⇒ 缺陷需重审，不许悄悄绿
+// 缺任何一个方向都不成立：只有"FAIL 也接受"等于 skipped；只有"PASS 判 FAIL"等于永久红灯。
+const XF = []
+const xfail = (name, cond, meta) => {
+  if (!cond) {
+    P.push(`⚠ XFAIL（${meta.tag} 未修）  ${name} — ${meta.reason}`)
+    XF.push('xfail')
+    return false
+  }
+  P.push(`❌ XPASS（意外通过：${meta.tag} 行为已变，需重审，不得悄悄绿）  ${name} — ${meta.reason}`)
+  XF.push('xpass')
+  return true
+}
 const roots = []
 
 /** 每个用例一个全新玩具库，避免用例间顺序耦合 */
@@ -266,11 +286,36 @@ const hooks = () => ({ audit: () => {}, log: () => {} })
   ok('M6-d notes 文件仍不存在（跳过不得顺手创建）', !existsSync(noteOf(rootD)))
 }
 
+// ── M6-e merge 侧 L4（####）口径 —— G-22 **xfail 双向锁** ──────────────────
+// 契约口径：merge 应与 rename 同口径（scope 限 L2/L3），L4 不得被匹配 ⇒ skipped 且字节不变。
+// 现状（`src/treeops.ts`）：rename 用 `sections.filter((s) => s.level === 2 || s.level === 3)`；
+//   merge 用 `matchSection(sections, …)`——**全 sections、无 level 过滤** ⇒ L4 会被匹配并落盘。
+// 实证后果（cody-loss 2026-09-12）：`#### 丁` 整节消失、正文被搬进 `### 丙`（跨容器搬运），
+//   `## 戊容器` 剩下**孤儿空容器** ⇒ 不是「口径不一致」的描述性问题，是已落盘的树结构破坏。
+// 用 xfail 而非 skipped/红灯的理由见本文件 `xfail` 定义处；G-22 定级由 team-lead 裁定。
+{
+  const root = mk()
+  const before = readNote(root)
+  const r = await applyTreeOps(root, [{ action: 'merge', file: 'lessons.md', keepTitle: '丙', dropTitle: '丁' }], hooks())
+  const after = readNote(root)
+  xfail('M6-e merge 不得匹配 L4（#### 丁）⇒ 应 skipped 且字节不变',
+    r.applied === 0 && r.skipped === 1 && after === before,
+    { tag: 'G-22', reason: `rename 限 L2/L3 而 merge 用全 sections；实测 applied=${r.applied} skipped=${r.skipped} 字节变化=${after !== before}` })
+  // 非空性：若夹具里根本没有 L4，「不得匹配」就是空断言（随便改实现都 XFAIL，锁不住任何东西）
+  ok('M6-e 非空性：夹具里确实存在 L4 小节「#### 丁」', before.includes('#### 丁'))
+  ok('M6-e 非空性：keep「丙」也确实存在且为 L3（否则"未匹配"可能只是标题打错）', before.includes('### 丙'))
+}
+
 console.log(P.join('\n'))
 console.log('\n未覆盖声明（不假装覆盖）：① gate 拒路径（玩具库无 memory_write_gate.mjs，恒 absent）' +
   '② atomicWrite 落盘失败 / 归档目录不可建 ③ 索引指针改写（本件不建 MEMORY/USER/AGENT，rewriteOneIndex 恒 return 0）' +
-  '④ merge 侧 L4（####）行为不锁——rename scope 过滤为 L2/L3 而 merge 用全 sections，两侧口径不一致，待统一后再锁')
-const fails = P.filter((x) => x.startsWith('FAIL')).length
-console.log(`\n${P.length - fails} PASS / ${fails} FAIL`)
+  '④ ~~merge 侧 L4（####）行为不锁~~ ⇒ 已改为 **xfail 双向锁**（见 M6-e，G-22）：未修期间判 XFAIL（不算通过），' +
+  '一旦行为变化判 XPASS 并计入 FAIL')
+const xfailN = XF.filter((x) => x === 'xfail').length
+const xpassN = XF.filter((x) => x === 'xpass').length
+// XPASS 计入 FAIL：缺陷行为变了却悄悄绿，比红着更危险
+const fails = P.filter((x) => x.startsWith('FAIL')).length + xpassN
+console.log(`\n${P.length - fails - xfailN} PASS / ${xfailN} XFAIL（已知缺陷未修，非通过） / ${fails} FAIL`)
+if (xfailN) console.log(`⚠ 有 ${xfailN} 条 XFAIL——缺陷仍在，本件**不是**全绿，G-22 未消解`)
 for (const d of roots) rmSync(d, { recursive: true, force: true })
 process.exit(fails ? 1 : 0)
