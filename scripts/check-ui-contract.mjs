@@ -92,8 +92,11 @@ else {
 //    ⇒ 表现为"改了源码却没生效"，且无任何门禁报错。本项常驻比对，发现漂移即 FAIL。
 const LIB_CLIENT = join(ROOT, 'lib', 'client.js')
 if (existsSync(LIB_CLIENT)) {
-  const a = readFileSync(LIB_CLIENT, 'utf8')
-  if (a === clientSrc) ok('前端产物已同步（lib/client.js 与 client.js 一致）')
+  // 归一化换行后比对：仓内为 CRLF，npm 发布后会被规范化为 LF，逐字节比对会产生假红。
+  const norm = (s) => s.replace(/\r/g, '')
+  const a = norm(readFileSync(LIB_CLIENT, 'utf8'))
+  const b = norm(clientSrc)
+  if (a === b) ok('前端产物已同步（lib/client.js 与 client.js 一致，换行符已归一化）')
   else bad('前端产物漂移：lib/client.js 与 client.js 不一致 —— 请执行 npm run build:client')
 } else {
   bad('缺少 lib/client.js（前端产物未构建）')
