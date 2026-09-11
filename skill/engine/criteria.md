@@ -31,7 +31,7 @@
 | `ingest.granularity.split-law` | hard | 子树正文 > R 或同级条目 > K → 裂 ###（§8.1 分裂律） | `{"R":1000,"K":6}` |
 | `ingest.dedup.exact` | hard | 同 标签+主题 精确重复 → 拒收 | `{"enabled":true}` |
 | `ingest.dedup.bigram` | hard | 主题 bigram 重叠 ≥ 阈值 → 近似重复拒收 | `{"threshold":0.66,"minTokens":2}` |
-| `ingest.format.index-line` | hard | 索引行四要素格式（spec §8） | `{"topicMax":12,"summaryMax":30,"pathSummaryMax":40,"banDate":true,"requirePointer":true,"requireMiddleDot":true,"forbidArrowInPath":true}` |
+| `ingest.format.index-line` | hard | 索引行四要素格式（spec §8） | `{"topicMax":12,"summaryMax":30,"pathSummaryMax":40,"banDate":true,"requirePointer":true,"requireMiddleDot":true,"forbidArrowInPath":true,"note":"**实测根因（2026-09-11）**：写门曾硬编码 30/40 而 prompt 未携带该约束 ⇒ 深睡产出普遍超标被逐条拦掉（attempted=3 → all-rejected，概况 31/38/36 字）。现：门读投影 + 生成器把约束派生进两个判据段。"}` |
 
 ## L1 · 巩固域（库 → 库）（domain=`consolidate`）
 

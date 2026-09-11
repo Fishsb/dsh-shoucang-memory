@@ -131,6 +131,48 @@ TRIGGER.idleMs        → 0 处
 
 **机检自纠两次（防"判据说谎"）**：① 字面 token 检索被别名/cast 骗过 ⇒ 改**文件级**判据；② 消费者集合最初把 `gen-*`/`check-*` 算进去，导致 29 项全判 runtime（**判据自我满足**）⇒ 排除元操作，并明确 `runtime⇒必须被消费`（硬红灯）与 `doc⇒疑似消费仅告警`（因 `process.exit` 会撞 `GATE.exit` 这类假阳性）。现：**PASS（32 项）**。
 
+## 7. 实测轮（2026-09-11）——**测试抓到 3 个真缺陷 + 1 次未遂事故**
+
+> 方法：干跑预测 → 端点/台账/审计取证 → 下钻复现 → 修 → **端到端证明**。对齐 `[原则] 结果验证重实证`。
+
+### 7.1 台账与自检（健康面，实测通过）
+
+| 项 | 实测 |
+|---|---|
+| 统一台账 | **16 行**，五类事件齐备：`decision.ingest 7 · write.ingest 1 · check.sleep 6 · decision.consolidate 1 · write.consolidate 1` |
+| **睡眠自检三触发全部实战发生过** | `check.sleep` 的 `trigger` 分布 = **`timer 3 · manual 2 · deep-sleep 1`** ⇒ 睡眠期自检在**真实深睡**后确实执行 ✓ |
+| 深睡审计新字段 | 最近一行 `stop=completed attempted=3 added=0 gate=all-rejected`（M2 逐条裁决生效） |
+| 自检裁决 | `/selfcheck` = **ok**（六项全 pass） |
+| 部署镜像 | lib/panel·scheduler·distill·criteria + client + criteria.json/gate.json + health 脚本 **8/8 sha 一致** |
+
+### 7.2 缺陷 1（**最重要 · 已修**）：写门 30 字硬上限与 prompt 错位 ⇒ **深睡长期零产出**
+
+**现场证据**：最近一轮深睡 `attempted=3 · added=0 · gate=all-rejected`，被拒原文是三条**高质量原则**，原因全是 `[gate:行格式违规]`；
+**复现报错**（把原文喂回写门）：`概况超30字(31)/(38)/(36)` → **exit=4 硬拦截**；边界实测 **30 字过门 / 31 字拒收**。
+
+**根因链条（四环三断）**：
+
+| 环 | 修复前 | 修复后 |
+|---|---|---|
+| 注册表 | ✓ 有 `ingest.format.index-line.params {summaryMax:30, pathSummaryMax:40, topicMax:12}` | ✓ 加实测根因 note |
+| 投影 | ✓ `criteria-gate.json.format` 已携带 | ✓ 不变 |
+| 写门 | ✗ **硬编码 `isPath?40:30`，从不读投影** | ✅ 读投影（自足解析，见 7.4） |
+| prompt | ✗ **判据段里"30"出现 0 次 ⇒ 模型不知道有上限** | ✅ 生成器把约束**派生**进两个判据段（摄取域 + 巩固域各一次），并指示"压不进就把细节写 notes，索引只留短概况" |
+
+**端到端证明（注册表即真源）**：仅把**投影**改为 `summaryMax=28`（注册表仍 30）→ **29 字被拒、28 字过门** ⇒ 门确实读投影而非硬编码；还原后 30 过 / 31 拒 ✓。
+
+### 7.3 缺陷 2（已修）：审计行漏 `gateExit`
+`distill.ts` 深睡审计行带 `gate` 却不带 `gateExit`（写入回执 ledger 行有）⇒ 补 `gateExit: app.gateExit`（实测"带 attempted 的行 1/1 缺 gateExit"）。
+
+### 7.4 未遂事故（已修 · **测试的最大价值**）：`proj` 作用域 ⇒ 门 ReferenceError 被伪装成"容量超限"
+写门里我引用上方 `proj`，而它定义在**更窄的块**内 ⇒ 模块加载即 `ReferenceError: proj is not defined`，被调度器读成 **exit=1（容量超限）**。
+**若不测，下一次真实深睡写入会全部假失败且报错方向完全误导**。改为自足解析（由 `import.meta.url` 定位投影 + 内建缺省回落）。
+
+### 7.5 假阳性更正 + 护栏扩展
+- **假阳性**：`/mcl/status` 未暴露 `topK`，我的测试脚本据此误判"`surface.mcl.topK` 未生效"——实查 `scheduler.ts:646 topK: Number(config.mclTopK)` ⇒ **早已生效**。已给端点补 `topK` 字段（提升可观测性），复跑后 7/7 注册表↔运行时一致。
+- **护栏覆盖缺口（已修）**：`check-deploy-sync` 此前只比对 `scripts/` ↔ 库，**漏了 `skill/scripts/`**（技能本体脚本）——本次 `memory_write_gate.mjs` 漏同步正是靠端到端验证才暴露。扩展后立刻抓到 2 件漂移（`skill/scripts/memory_write_gate.mjs` + 自身副本），现 **一致 24 / 未部署 12 / 不一致 0**。
+
+
 
 
 _建立 2026-09-11 · 依据：精确检索（注册表字段消费计数 / 路由计数 / 水位条件行号 / 退出码判读 / 部署面 sha / ADR 列表）+ 架构档与八份方案档通读。本报告只记录发现与建议，**除 F4 文档修正外未改任何代码**。_

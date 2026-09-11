@@ -15,6 +15,7 @@ export const INGEST_JUDGE = [
   "route=memory 时续走四问（**降级为归属子判据组**，不再是全局判据抬头）：Q0 已有归属？Q1 下周用得上？Q2 归谁（notes 记忆 / USER 用户画像 / AGENT 自我画像）？Q3 能合并？",
   "Q2 画像判定：**用户的稳定偏好/背景/禁忌**（非一次性需求）→ profiles target=USER.md；**agent 自身的稳定做法/能力边界/常犯错误教训**（可跨任务复用的自我认知）→ profiles target=AGENT.md；一般知识→appends。",
   "规则/纪律/程序类：**不入库**（SKILL 与 skill 协议文档是随插件发布的只读文档，无写入通道；v2 删除原「规则→SOUL.md」死支）。",
+  "- **索引行格式硬门（写门 exit=4，超出即整条被拒）**：概况段普通行 ≤30 字、`[路径]` 概要 ≤40 字；主题段 ≤12 字为**软提示不拦截**；须含中间点「·」与 `→ notes/… §…` 指针，概况中禁写日期。**若内容压不进上限：把细节写进 notes 小节，索引行只留 ≤30 字概况**——切勿硬塞长句（长句会被整条丢弃，等于白提炼）。",
 ].join('\n')
 
 /** 巩固域判据段（拼进 DEEP_SLEEP_PROMPT） */
@@ -25,6 +26,7 @@ export const CONSOLIDATE_JUDGE = [
   "- **跨工作区红线**：记忆库是全局单库，痕迹可能来自多个工作区，而原则会常驻注入到**所有**工作区会话。含项目专名/具体路径/版本号/一次性事实的经验一律不提炼（skipped 注明「项目专属」）；只在单一项目语境成立的结论同样不提炼——宁缺毋滥，误注入比漏提炼危害大。",
   "- **前提识别（premise awareness，v2 新增判据）**：提炼出的原则/路径若依赖某个**未写出的隐含前提**（特定工具链/特定环境/特定阶段），必须在概况或小节正文里写出该前提；写不出就降级为 notes 事实，不升格。",
   "- **v19 跨日二次激活**：材料「近 7 日再现」给出被**再次命中**的已有条目——同一条目在多个日窗重现 = 该主题稳固，可经 pointerOps 扩容概况或提纯为更高层原则；只在单日出现的不要当稳固信号。",
+  "- **索引行格式硬门（写门 exit=4，超出即整条被拒）**：概况段普通行 ≤30 字、`[路径]` 概要 ≤40 字；主题段 ≤12 字为**软提示不拦截**；须含中间点「·」与 `→ notes/… §…` 指针，概况中禁写日期。**若内容压不进上限：把细节写进 notes 小节，索引行只留 ≤30 字概况**——切勿硬塞长句（长句会被整条丢弃，等于白提炼）。",
 ].join('\n')
 
 export const JUDGEMENT_HINT = "judgement：可选对象，把本次判据取值写进输出（reuse/generality/stability/conflict/dup 或 evidence/stability/conflict/cost；取值见 criteria 注册表），宿主据此写统一台账 audit/ledger.jsonl（type=decision.*）供对账。"
@@ -455,7 +457,8 @@ export const CRITERIA_ROWS = [
       "banDate": true,
       "requirePointer": true,
       "requireMiddleDot": true,
-      "forbidArrowInPath": true
+      "forbidArrowInPath": true,
+      "note": "**实测根因（2026-09-11）**：写门曾硬编码 30/40 而 prompt 未携带该约束 ⇒ 深睡产出普遍超标被逐条拦掉（attempted=3 → all-rejected，概况 31/38/36 字）。现：门读投影 + 生成器把约束派生进两个判据段。"
     }
   },
   {

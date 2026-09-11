@@ -26,11 +26,13 @@ const buildTs = () => {
   lines.push('/** 摄取域判据段（拼进 DEFAULT_DISTILL_PROMPT） */')
   lines.push('export const INGEST_JUDGE = [')
   for (const l of reg.ingest.judgeText) lines.push(`  ${JSON.stringify(l)},`)
+  lines.push(`  ${JSON.stringify(formatConstraintLine())},`) // v2.2 修复：格式硬约束**从注册表派生**并进 prompt（原先模型不知有 30 字上限）
   lines.push("].join('\\n')")
   lines.push('')
   lines.push('/** 巩固域判据段（拼进 DEEP_SLEEP_PROMPT） */')
   lines.push('export const CONSOLIDATE_JUDGE = [')
   for (const l of reg.consolidate.judgeText) lines.push(`  ${JSON.stringify(l)},`)
+  lines.push(`  ${JSON.stringify(formatConstraintLine())},`)
   lines.push("].join('\\n')")
   lines.push('')
   lines.push(`export const JUDGEMENT_HINT = ${JSON.stringify(reg.judgement.hint)}`)
@@ -110,6 +112,14 @@ const buildMd = () => {
   for (const a of reg.antiScope) o.push(`- ${a}`)
   o.push('')
   return o.join('\n')
+}
+
+/** v2.2 修复（实测根因）：索引行格式硬约束**从注册表派生**后注入 prompt。
+ *   背景：2026-09-11 深睡 `attempted=3 → all-rejected`，三条被拒行概况为 31/38/36 字，写门按硬编码 30 字拦截——
+ *   而 prompt 判据段里"30"出现 0 次 ⇒ **模型不知道有上限**。此处让约束进 prompt，门与 prompt 共用同一事实源。 */
+function formatConstraintLine() {
+  const p = reg.ingest.criteria.find((c) => c.id === 'ingest.format.index-line').params
+  return `- **索引行格式硬门（写门 exit=4，超出即整条被拒）**：概况段普通行 ≤${p.summaryMax} 字、\`[路径]\` 概要 ≤${p.pathSummaryMax} 字；主题段 ≤${p.topicMax} 字为**软提示不拦截**；须含中间点「·」与 \`→ notes/… §…\` 指针，概况中禁写日期。**若内容压不进上限：把细节写进 notes 小节，索引行只留 ≤${p.summaryMax} 字概况**——切勿硬塞长句（长句会被整条丢弃，等于白提炼）。`
 }
 
 /** C · 脚本面扁平参数 */

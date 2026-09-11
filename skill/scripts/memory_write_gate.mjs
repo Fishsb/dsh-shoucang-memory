@@ -95,6 +95,20 @@ if (base === 'MEMORY.md' || base === 'USER.md' || base === 'AGENT.md') {
 const formatIssues = [];
 const formatHints = [];
 
+// v2.2 修复（实测根因）：格式上限从**判据投影**读（单一真源）——此前硬编码 30/40，注册表改了门不动；
+//   且 prompt 未携带该约束 ⇒ 模型产出普遍超标被逐条拦掉（2026-09-11 深睡 attempted=3 → all-rejected）。
+// ⚠ 自足解析（不复用上方 `proj`：它定义在更窄的块内 → 实测直接 ReferenceError 被 exit=1 伪装成"容量超限"）。
+const FMT_LIMITS = (() => {
+  const dflt = { summaryMax: 30, pathSummaryMax: 40 };
+  try {
+    const p = join(dirname(fileURLToPath(import.meta.url)), '..', 'engine', 'criteria-gate.json');
+    const f = JSON.parse(fs.readFileSync(p, 'utf8')).format || {};
+    if (f.summaryMax || f.pathSummaryMax) return { summaryMax: Number(f.summaryMax) || 30, pathSummaryMax: Number(f.pathSummaryMax) || 40 };
+  } catch { /* 投影未部署 → 内建缺省 */ }
+  return dflt;
+})();
+const fmtLimits = FMT_LIMITS; // 下方引用
+
 // v13：索引行格式校验（spec §8 概况规则 1-4 硬化；主题约束软提示）
 if (base === 'MEMORY.md' || base === 'USER.md' || base === 'AGENT.md') {
   for (const raw of tmpText.split('\n')) {
@@ -107,7 +121,7 @@ if (base === 'MEMORY.md' || base === 'USER.md' || base === 'AGENT.md') {
     const arrowCount = (line.match(/→/g) || []).length;
     const summary = line.split('·').slice(1).join('·').split('→')[0].replace(/\s+/g, '');
     if (isPath && arrowCount > 1) { formatIssues.push('路径步骤勿用 →（与 → notes/ 指针歧义），请用 ①②③ 串联: ' + short); }
-    else if (summary.length > (isPath ? 40 : 30)) { formatIssues.push((isPath ? '路径概要超40字' : '概况超30字') + '(' + summary.length + '): ' + summary.slice(0, 30) + '…'); }
+    if (summary.length > (isPath ? fmtLimits.pathSummaryMax : fmtLimits.summaryMax)) { formatIssues.push((isPath ? `路径概要超${fmtLimits.pathSummaryMax}字` : `概况超${fmtLimits.summaryMax}字`) + '(' + summary.length + '): ' + summary.slice(0, 30) + '…'); }
     if (/（?20\d{2}-\d{1,2}-\d{1,2}）?/.test(line)) { formatIssues.push('禁带日期戳（维护元信息归 notes/INDEX.md）: ' + short); }
     const topic = line.slice(line.indexOf(']') + 1).split('·')[0].trim();
     if (topic.replace(/\s/g, '').length > 12) formatHints.push('主题超12字（建议精简，不拦截）: ' + short);

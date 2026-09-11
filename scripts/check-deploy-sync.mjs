@@ -23,14 +23,22 @@ if (!existsSync(join(bank, 'scripts'))) {
   console.log(`⏭ 跳过：库内 scripts/ 不存在（bank=${bank}）——诚实跳过（exit 3）`)
   process.exit(3)
 }
-// 仓内 scripts/ 里与库内**同名**的 .mjs 都需要一致（库内专有 archive-* 等不在仓内，天然跳过）
-const repoScripts = readdirSync(join(root, 'scripts')).filter((f) => f.endsWith('.mjs'))
+// 仓内 `scripts/` **与** `skill/scripts/` 里与库内**同名**的 .mjs 都需要一致
+//   （库内专有 archive-* 等不在仓内，天然跳过）。⚠ 覆盖缺口修复（2026-09-11）：
+//   此前只比对 `scripts/`，漏了 `skill/scripts/`（技能本体脚本）——实测 `memory_write_gate.mjs` 就因此漏同步，
+//   导致"门读的仍是硬编码"，端到端验证才暴露。
+const dirs = [join(root, 'scripts'), join(root, 'skill', 'scripts')]
 const rows = []
-for (const f of repoScripts) {
-  const a = join(root, 'scripts', f)
-  const b = join(bank, 'scripts', f)
-  if (!existsSync(b)) { rows.push({ file: f, state: 'bank-missing' }); continue }
-  rows.push({ file: f, state: sha(a) === sha(b) ? 'same' : 'DIFF' })
+for (const dir of dirs) {
+  let names = []
+  try { names = readdirSync(dir).filter((f) => f.endsWith('.mjs')) } catch { continue }
+  for (const f of names) {
+    const a = join(dir, f)
+    const b = join(bank, 'scripts', f)
+    const label = (dir.includes(join('skill', 'scripts')) ? 'skill/scripts/' : 'scripts/') + f
+    if (!existsSync(b)) { rows.push({ file: label, state: 'bank-missing' }); continue }
+    rows.push({ file: label, state: sha(a) === sha(b) ? 'same' : 'DIFF' })
+  }
 }
 const diffs = rows.filter((r) => r.state === 'DIFF')
 const missing = rows.filter((r) => r.state === 'bank-missing')

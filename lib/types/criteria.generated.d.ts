@@ -367,6 +367,7 @@ export declare const CRITERIA_ROWS: readonly [{
         readonly requirePointer: true;
         readonly requireMiddleDot: true;
         readonly forbidArrowInPath: true;
+        readonly note: "**实测根因（2026-09-11）**：写门曾硬编码 30/40 而 prompt 未携带该约束 ⇒ 深睡产出普遍超标被逐条拦掉（attempted=3 → all-rejected，概况 31/38/36 字）。现：门读投影 + 生成器把约束派生进两个判据段。";
     };
 }, {
     readonly id: "consolidate.support.principle";
