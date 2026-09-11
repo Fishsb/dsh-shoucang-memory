@@ -5,6 +5,15 @@
 ## [Unreleased]
 
 ### Changed
+- **🟠 UI 样式系统重构 + 剩余项落地（2026-09-12）：设计令牌 / 交互反馈 / 边界态 / 响应式**
+  **① 设计令牌**：原有 45 个 `--sc-*` 令牌基础上补齐缺失项——阴影三档（`--sc-shadow-1/2/3`）、过渡时长与缓动（`--sc-t-fast/base/slow`、`--sc-ease`）、焦点环（`--sc-ring`）、禁用透明度（`--sc-disabled-op`）、层级（`--sc-z-modal/mask/toast`）、字重四档（`--sc-fw-*`）、字距（`--sc-ls-*`）、以及**状态色语义派生**（`--sc-ok-bg/warn-bg/err-bg`）。原 CSS 有 369 处 px 硬编码、16 种十六进制色、10 处直接 rgba —— 本轮为**纯新增**（不动任何既有选择器，零布局回退风险），新令牌供后续渐进替换。
+  **② 视觉层次**：统一主次按钮（`.sc-btn` 最小高度 30px、`inline-flex` 居中、`primary/danger` 各有 hover 态）、状态徽标改为语义类（`.sc-badge-ok/warn/error/info`，颜色走 `--sc-*-bg` 令牌而非行内 `style.color`）、分区节奏（`.sc-section` 用 `--sc-gap-group` 统一，"留白即分组"）、标题层级（`.sc-h1/h2` 字号字重令牌化）。
+  **③ 交互反馈与边界**：新增 `:focus-visible` 焦点环（键盘可见、鼠标不显环）、`:active` 按压位移（原 0 处）、`:disabled` 统一禁用态（原仅 2 处 → 11 处）、过渡统一并**尊重 `prefers-reduced-motion`**；新增加载态（骨架微光 `sc-shimmer` + 行内 `sc-spinner`）、空态（`.sc-empty` 图标+标题+说明）、溢出处理（`.sc-ellipsis` / `.sc-clamp-2/3` / `.sc-break` / `.sc-scroll-y`）。
+  **④ 响应式**：原 **0 处 `@media`** ⇒ 补 6 处——≤900px 导航收窄、≤640px 导航转顶部横向条且模态全屏（setting-item 改纵向堆叠、kv 单列）、≥1440px 放宽阅读宽度至 1100px、`hover:none` 触摸设备加大点击热区。
+  **⑤ 剩余功能项**：**C1 进度覆盖旧调用**——`api()` 增加慢请求（>1.5s）自动显示「执行中…」（用 `setStatusText` 不写日志、结束即清），覆盖全部旧调用点；**D6 无障碍**——模态框 `role=dialog`+`aria-modal`+`aria-label`、导航项 `role=button`+`tabindex=0`+`aria-label`+键盘 Enter/Space、视图区 `role=region`+动态 `aria-label`；**A6 视图路由**——记住最后视图（localStorage）+ 支持 `#sc=<视图名>` 深链**读取**（不写 URL，避免干扰宿主路由）；**A2 组件层**——新视图全面使用（26 处调用），旧视图已转换插件集合成员列表 1 处作为模板（手工 `setting-item` 20 → 19）。
+  **⚠ A2 未做批量替换的理由**：剩余 19 处虽为同一机械范式，但控件的 `.setting-item-control` 包装方式需逐处确认，盲目 codemod 会改变 DOM 结构 —— 与本次「保持 DOM 结构不变」的要求冲突。列为下一轮，建议配合目视验收逐处推进。
+  **验收**：`npm test` exit 0（20 pass · 1 xfail · 0 skip）；`client.js` 193,173 B。
+
 - **🟠 UI 系统性优化（2026-09-12）：架构分层 / 功能链条闭环 / 可观察性 / 信息密度与设置 —— `client.js` 2331→2978 行**
   **① 架构（A1/A2）**：新增基础设施层——`Bus`（事件总线）、`Store`（单一数据源 + 订阅，替代散落的 `refs = {}` 可变全局袋）、`Cfg`（参数化配置，localStorage 持久化）、`UI`（组件工厂：item/toggle/input/select/button/badge/collapsible/progress/kv），消除 14 个 render 函数里 `setting-item` 三件套的重复实现；视图注册表 `VIEWS` 由元组下标访问（`v[0]…v[3]`）改为具名渲染分派，并新增 `observe`（运行观测）、`settings`（界面设置）两个视图（6→8）。
   **② 功能链条（B1）**：修复 **6 个"后端已实现、界面不可达"的死角端点**——`/embed/test`（嵌入连通性测试，先读 `/embed/config` 取 baseUrl 再测，后端要求 `{baseUrl,apiKey}` 不可发空 body）、`/get_root`、`/inject/stats`、`/root/bootstrap` 接入「运行观测 → 运维操作」；`/memory/edit`、`/memory/remove`（行级原语 `{file,line}`）接入「高级：行级编辑/删除」并附**显式风险提示**——既有设计 R3 明确"索引行只读，直接改会与 notes 详情错位"，常规编辑仍走 `/memory/section-edit`，此处仅为消除死角而暴露并默认折叠。**实测：端点覆盖 34/34 全部可达（原 28/34）。**
