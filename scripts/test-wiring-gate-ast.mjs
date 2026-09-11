@@ -47,6 +47,15 @@ let pass = 0, fail = 0
 const ok = (c, msg, why) => { if (c) { pass++; console.log(`  ✅ ${msg}`) } else { fail++; console.log(`  ❌ ${msg}${why ? '  — ' + why : ''}`) } }
 const count = (s, re) => (s.match(re) || []).length
 
+// ── 红因分桶（与文本版 test-wiring-gate.mjs `f3aec19` 同款，两版保持一致）────────
+// 为什么必须分桶：三类红**方向不同**，混在一个 fail 计数里会把诊断指反——
+//   「结构」  = 源码接线判据真的不成立 ⇒ 该改的是 **src/**；
+//   「变体失效」/「空转」= 本件自校验失败（变体锚点漂移 / 骨架化失效 / 基线已红）⇒ 该修的是 **本件**，
+//     此时源码一个字都没被证伪，exit=1 说的是"本件坏了"，读成"源码接线坏了"就是反的；
+//   「漏网」  = 变体改坏源码、判据却仍绿 ⇒ 该接线根本没锁住，该去**补判据**，与"修本件"方向相反，故单列。
+const BUCKET = { 结构: 0, 变体失效: 0, 空转: 0, 漏网: 0 }
+const bad = (bucket, msg, why) => { fail++; BUCKET[bucket]++; console.log(`  ❌ [${bucket}] ${msg}${why ? '  — ' + why : ''}`) }
+
 // ── ② AST 结构断言：每条规则返回一个「在给定源码文本上是否成立」的谓词 ──────────
 function analyse(text) {
   const sf = ts.createSourceFile('probe.ts', text, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TS)
@@ -188,11 +197,15 @@ console.log(`typescript: ${tsPath}\n`)
 const skel = skeletonOf(raw)
 const blanked = (skel.match(/ /g) || []).length - (raw.match(/ /g) || []).length
 console.log(`① 骨架化自证：注释挖空 ${blanked} 字符（0 ⇒ 骨架化失效，按失败处理）`)
-ok(blanked > 0, `骨架化生效（挖空 ${blanked} 字符）`, '本文件无注释？那骨架与原文同形，无法证明免疫')
+if (blanked > 0) ok(true, `骨架化生效（挖空 ${blanked} 字符）`)
+else bad('空转', `骨架化失效（挖空 ${blanked} 字符）`, '骨架与原文同形 ⇒ 无法证明免疫注释，本件自校验失败')
 
 const f0 = analyse(raw)
 console.log(`\n② 现状判定（AST 结构断言）：`)
-for (const r of RULES) ok(r.pred(f0, skel), `${r.id} ${r.title}`, r.detail(f0, skel))
+for (const r of RULES) {
+  if (r.pred(f0, skel)) ok(true, `${r.id} ${r.title}`)
+  else bad('结构', `${r.id} ${r.title}`, r.detail(f0, skel))
+}
 
 console.log(`\n③ 反向证伪（每条规则的每个破坏变体，闸门都必须翻红）：`)
 // ⚠ 基线守卫（2026-09-12）：若某规则的**基线本身就是红的**，则「破坏后必须翻红」这条判据
@@ -205,17 +218,24 @@ for (const r of RULES) {
   const baseOk = r.pred(f0, skel)
   for (const [desc, fn] of r.breaks) {
     const mutated = fn(raw)
-    if (mutated === raw) { ok(false, `${r.id} 变异未命中（源码已漂移，变体字符串失效）⇒ 按失败处理`, desc); continue }
+    if (mutated === raw) { bad('变体失效', `${r.id} 变异未命中（源码已漂移，变体字符串失效）⇒ 按失败处理`, desc); continue }
     if (!baseOk) {
-      ok(false, `${r.id} 基线已红 ⇒ 「破坏「${desc}」⇒ 翻红」判读无意义（先修基线再谈证伪）`,
+      bad('空转', `${r.id} 基线已红 ⇒ 「破坏「${desc}」⇒ 翻红」判读无意义（先修基线再谈证伪）`,
         '基线红时该判据恒真，本节会空转全绿')
       continue
     }
     const fm = analyse(mutated)
     const stillGreen = r.pred(fm, skeletonOf(mutated))
-    ok(!stillGreen, `${r.id} 破坏「${desc}」⇒ 翻红`, stillGreen ? '破坏后闸门仍然绿 ⇒ 该规则没锁住' : '')
+    if (stillGreen) bad('漏网', `${r.id} 破坏「${desc}」后闸门仍然绿`, '该规则没锁住这条接线 ⇒ 该去补判据，不是改源码')
+    else ok(true, `${r.id} 破坏「${desc}」⇒ 翻红`)
   }
 }
 
-console.log(`\n${fail ? `FAIL（${fail} 项）` : `PASS（${pass} 项）`}`)
+// 自伤 = 变体失效 + 空转（该修**本件**）；漏网单列（该去**补判据/锁接线**）——两者方向相反，不得相加
+const selfHurt = BUCKET.变体失效 + BUCKET.空转
+console.log(`\n${fail ? `FAIL（${fail} 项）` : `PASS（${pass} 项）`}（红因分解：结构 ${BUCKET.结构} · 变体失效 ${BUCKET.变体失效} · 空转 ${BUCKET.空转} · 漏网 ${BUCKET.漏网}）`)
+if (BUCKET.结构 === 0 && selfHurt > 0)
+  console.log('⚠ 本件的红**全部来自自伤/空转**：源码接线判据一个字都没被证伪 ⇒ 该修的是**本件**，不是源码')
+if (BUCKET.漏网 > 0)
+  console.log(`⚠ 有 ${BUCKET.漏网} 条变体改坏源码后本件**没**翻红 ⇒ 该接线根本没锁住：该去**补判据/锁接线**，不是修本件`)
 process.exit(fail ? 1 : 0)
