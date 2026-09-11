@@ -13,7 +13,7 @@
 //   ④ 主档直读：参数命中记忆库 MEMORY.md / USER.md / AGENT.md
 //
 // 用法:
-//   node scripts/recall-eval.mjs [--n 20] [--exclude sid1,sid2] [--sessions <dir>] [--json]
+//   node scripts/recall-eval.mjs [--n 20] [--exclude sid1,sid2] [--sessions <dir>] [--json] [--out <file>]
 //   node scripts/recall-eval.mjs --since 2026-09-01 --n 50      # 固定窗口下界（绝对日期或 12h/3d/2w）
 //   node scripts/recall-eval.mjs --sids <sid8,...>              # 固定样本（按会话白名单，A/B 对比用）
 //   --exclude 用于剔除审计会话（自身会把三项计数顶高，污染基线）
@@ -97,7 +97,14 @@ for (const p of all) withStat.push({ p, mtime: (await stat(p)).mtimeMs });
 withStat.sort((a, b) => b.mtime - a.mtime);
 
 const rows = [];
-const totals = { turns: 0, profileHit: 0, knowledgeHit: 0, recallTool: 0, follow: 0, mainRead: 0, sessions: 0, excluded: 0 };
+const totals = { turns: 0, profileHit: 0, knowledgeHit: 0, recallTool: 0, recallZero: 0, follow: 0, mainRead: 0, sessions: 0, excluded: 0 };
+// v2.2：自查会话自动剔除（本仓=记忆系统本体）
+const EXCLUDE_SELF = argv.includes('--exclude-self');
+// **保守**缺省：只剔"明显是记忆系统本体开发"的会话（自查词出现次数 ≥300）——阈值可调，剔除清单会打印**供人工过目**
+// （宁少剔勿多剔：剔除即丢数据，符合「数据先问」；要精确控制请用 --exclude/--sids）
+const SELF_HITS = Number(argOf('--self-hits', '300')) || 300;
+const SELF_WORDS = ['守藏', '记忆库', 'recall-eval', '深睡', '蒸馏', 'judgement-ledger', 'memory-reconcile', 'carriers', '判据注册表', 'shadow-sim'];
+const selfExcluded = [];
 
 for (const { p, mtime } of withStat) {
   if (rows.length >= N) break;
@@ -107,7 +114,15 @@ for (const { p, mtime } of withStat) {
   if (EXCLUDE.has(sid) || EXCLUDE.has(sid.slice(0, 8))) { totals.excluded++; continue; }
   let txt;
   try { txt = await lib.decodeTranscript(p); } catch { continue; }
-  const r = { sid: sid.slice(0, 8), when: new Date(mtime).toISOString().slice(5, 16).replace('T', ' '), turns: 0, profileHit: 0, knowledgeHit: 0, recallTool: 0, follow: 0, mainRead: 0, targets: {} };
+  // v2.2：`--exclude-self` —— 自动剔除**自查会话**（本仓=记忆系统本体，自查会顶高 ①② 口径）。
+  //   判据：会话文本里自查词命中 ≥ `--self-hits`（缺省 6）⇒ 视为自查，剔除并在结尾列名。
+  if (EXCLUDE_SELF) {
+    let selfHits = 0;
+    for (const w of SELF_WORDS) selfHits += txt.split(w).length - 1; // 按**出现次数**计（词是否出现太粗：单次出现不代表自查会话）
+    if (selfHits >= SELF_HITS) { totals.excluded++; selfExcluded.push(`${sid.slice(0, 8)}(${selfHits})`); continue; }
+  }
+  const r = { sid: sid.slice(0, 8), when: new Date(mtime).toISOString().slice(5, 16).replace('T', ' '), turns: 0, profileHit: 0, knowledgeHit: 0, recallTool: 0, recallZero: 0, follow: 0, mainRead: 0, targets: {} };
+  let lastRecallCall = false;
   for (const line of txt.split('\n')) {
     if (!line.includes('"')) continue;
     let o; try { o = JSON.parse(line); } catch { continue; }
@@ -120,9 +135,15 @@ for (const { p, mtime } of withStat) {
       for (const t of KNOWLEDGE) if (s.includes(t)) r.knowledgeHit++;
       continue;
     }
+    // v2.2：**零命中列** —— 召回调用后若结果文本显示"命中 0 条 / 未命中 / 无命中"，计一次零命中
+    if (lastRecallCall && o.type === 'tool/result') {
+      const body = JSON.stringify(o.data || {});
+      if (/命中\s*0\s*条|未命中|无命中|no-hit|zero-hit/.test(body)) r.recallZero++;
+      lastRecallCall = false;
+    }
     if (o.type !== 'tool/call') continue;
     const name = o.data?.name || '';
-    if (name === 'shoucang_recall') { r.recallTool++; continue; }
+    if (name === 'shoucang_recall') { r.recallTool++; lastRecallCall = true; continue; }
     if (!/^(read|grep|glob|pwsh)$/.test(name)) continue;
     const args = String(o.data?.arguments || '');
     if (!hitBank(args)) continue;
@@ -134,20 +155,34 @@ for (const { p, mtime } of withStat) {
   }
   rows.push(r);
   totals.turns += r.turns; totals.profileHit += r.profileHit; totals.knowledgeHit += r.knowledgeHit;
-  totals.recallTool += r.recallTool; totals.follow += r.follow; totals.mainRead += r.mainRead;
+  totals.recallTool += r.recallTool; totals.recallZero += r.recallZero; totals.follow += r.follow; totals.mainRead += r.mainRead;
   totals.sessions++;
 }
 
-if (AS_JSON) { console.log(JSON.stringify({ window: { n: N, since: SINCE || null, sinceMs: sinceMs || null, sids: [...SIDS] }, totals, rows, probes: { profile: PROFILE, knowledge: KNOWLEDGE } }, null, 2)); process.exit(0); }
+// v2.2：`--out <file>` 让基线成为**一等产物**（可存档、可跨次逐字对比；此前只有 --json 打到 stdout）
+const OUT = argOf('--out', '');
+const payload = { at: new Date().toISOString(), window: { n: N, since: SINCE || null, sinceMs: sinceMs || null, sids: [...SIDS] }, totals, rows, probes: { profile: PROFILE, knowledge: KNOWLEDGE } }
+if (OUT) {
+  try {
+    const { mkdirSync, writeFileSync } = await import('node:fs')
+    const { dirname: dn } = await import('node:path')
+    mkdirSync(dn(OUT), { recursive: true })
+    writeFileSync(OUT, JSON.stringify(payload, null, 2), 'utf8')
+    console.log(`已写出基线 ${OUT}`)
+  } catch (e) { console.error(`基线写出失败: ${e.message}`) }
+}
+if (AS_JSON) { console.log(JSON.stringify(payload, null, 2)); process.exit(0) }
 if (!rows.length) { console.error(`未发现会话（sessionsRoot=${sessionsRoot}）；可用 --sessions 指定。`); process.exit(1); }
 
 const per100 = (v) => totals.turns ? (100 * v / totals.turns).toFixed(1) : '0.0';
 console.log(`记忆库根: ${bank}\n会话根: ${sessionsRoot}\n采样窗口: 最新 ${N} 个${SINCE ? ` · since=${SINCE}` : ''}${SIDS.size ? ` · sids=${[...SIDS].join(',')}` : ''}${!SINCE && !SIDS.size ? '（⚠ 未固定窗口：跨次对比不可复现，请加 --since/--sids）' : ''}\n探针: 画像行 ${PROFILE.length} 词 / 知识索引行 ${KNOWLEDGE.length} 词\n`);
-console.log('会话      时间(UTC)   轮数  画像取用  知识取用  召回工具  跟读  主档读');
-for (const r of rows) console.log(`${r.sid.padEnd(10)}${r.when.padEnd(12)}${String(r.turns).padStart(5)}${String(r.profileHit).padStart(10)}${String(r.knowledgeHit).padStart(10)}${String(r.recallTool).padStart(10)}${String(r.follow).padStart(6)}${String(r.mainRead).padStart(8)}`);
+console.log('会话      时间(UTC)   轮数  画像取用  知识取用  召回工具  零命中  跟读  主档读');
+for (const r of rows) console.log(`${r.sid.padEnd(10)}${r.when.padEnd(12)}${String(r.turns).padStart(5)}${String(r.profileHit).padStart(10)}${String(r.knowledgeHit).padStart(10)}${String(r.recallTool).padStart(10)}${String(r.recallZero).padStart(8)}${String(r.follow).padStart(6)}${String(r.mainRead).padStart(8)}`);
 console.log(`\n=== 合计（${totals.sessions} 会话 / ${totals.turns} 轮${totals.excluded ? `；已排除 ${totals.excluded} 个` : ''}）===`);
 console.log(`  ① 横幅取用: 画像行 ${totals.profileHit} · 知识索引行 ${totals.knowledgeHit}（合计 ${totals.profileHit + totals.knowledgeHit}）`);
 console.log(`  ② shoucang_recall: ${totals.recallTool}`);
+console.log(`  ⑤ 召回零命中: ${totals.recallZero}（占召回调用 ${totals.recallTool ? ((totals.recallZero / totals.recallTool) * 100).toFixed(0) : 0}%；越高=召回了但没命中）`);
+if (EXCLUDE_SELF) console.log(`  自查会话已剔除 ${selfExcluded.length} 个（--exclude-self，自查词≥${SELF_HITS}）：${selfExcluded.slice(0, 12).join(' ')}${selfExcluded.length > 12 ? ' …' : ''}`);
 console.log(`  ③ 指针跟读(notes): ${totals.follow}`);
 console.log(`  ④ 主档直读: ${totals.mainRead}`);
 console.log(`  ⇒ 每 100 轮: 画像 ${per100(totals.profileHit)} · 知识 ${per100(totals.knowledgeHit)} · 召回工具 ${per100(totals.recallTool)} · 跟读 ${per100(totals.follow)} · 主档 ${per100(totals.mainRead)}`);
