@@ -80,6 +80,15 @@
         '--sc-border:var(--dsw-alias-border-l2,#2a2a2a);--sc-accent:var(--dsw-alias-brand-primary,hsl(254deg 80% 68%));--sc-accent-hover:var(--dsw-alias-brand-primary,hsl(254deg 80% 74%));',
         '--sc-ok:var(--dsw-alias-state-success-primary,#3fb950);--sc-warn:var(--dsw-alias-state-warn-primary,#e8a33d);--sc-err:var(--dsw-alias-state-error-primary,#e5534b);',
         '--sc-hover:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06));',
+        /* ── U2.5 排版标尺令牌（ADR-122 UI §9.3）：4px 基准 / 8pt 节奏；字号模数 1.2；圆角三档；
+         *    空格语义层（gap-row/item/group）——「留白即分组」靠它落地。改标尺=只改这里。 ── */
+        '--sc-sp-1:4px;--sc-sp-2:8px;--sc-sp-3:12px;--sc-sp-4:16px;--sc-sp-5:24px;--sc-sp-6:32px;',
+        '--sc-gap-row:8px;--sc-gap-item:12px;--sc-gap-group:24px;',
+        '--sc-pad-card:10px 12px;--sc-pad-section:16px 24px;',
+        '--sc-fs-xs:12px;--sc-fs-sm:13px;--sc-fs-md:14px;--sc-fs-lg:16px;--sc-fs-xl:19px;',
+        '--sc-lh-tight:1.35;--sc-lh-normal:1.55;--sc-lh-loose:1.7;',
+        '--sc-r-sm:6px;--sc-r-md:8px;--sc-r-lg:12px;--sc-r-pill:999px;',
+        '--sc-w-control:280px;--sc-w-read:72ch;--sc-w-sm:180px;--sc-w-lg:300px;--sc-w-xl:320px;',
         'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Inter",sans-serif;}',
 
         '.sc-trigger{box-sizing:border-box;cursor:pointer;width:calc(100% + 4px);height:42px;color:var(--dsw-alias-label-primary,var(--sc-text));',
@@ -298,6 +307,58 @@
         '.sc-ds-session-sub{font-size:11.5px;color:var(--sc-muted);margin-top:2px;}',
         '.sc-ds-alert{margin:10px 0;padding:9px 12px;border-radius:8px;background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.4);color:#f85149;font-size:12.5px;}',
         '.sc-ds-ctl{display:flex;gap:8px;margin:8px 0;flex-wrap:wrap;}',
+        /* ═══ U2.5 排版标尺覆盖层（ADR-122 UI §9.3/§9.4）═══
+         * 判因：既有 CSS 有 335 处裸 px、无间距/字号令牌 → 视觉不一致（组内组间同档、11px 中文正文）。
+         * 策略：**不改既有规则**，用本覆盖层把主类统一到令牌（级联在后 ⇒ 生效）；**删掉本块即回滚**。
+         * 三原语：行（setting-item/ds-session）· 卡片（mem-stat）· 栅格（mem-grid/mem-stats）。 */
+        '.sc-h1{font-size:var(--sc-fs-xl);line-height:var(--sc-lh-tight);margin:0 0 var(--sc-sp-1);}',
+        '.sc-h2{font-size:var(--sc-fs-sm);line-height:var(--sc-lh-tight);margin:var(--sc-gap-item) 0 var(--sc-sp-1);}',
+        '.sc-desc{font-size:var(--sc-fs-xs);line-height:var(--sc-lh-normal);max-width:var(--sc-w-read);margin:0 0 var(--sc-gap-row);}',
+        '.sc-mem-group-title{font-size:var(--sc-fs-sm);line-height:var(--sc-lh-tight);margin:var(--sc-gap-group) 0 var(--sc-gap-item);',
+        'padding-top:var(--sc-sp-3);border-top:1px solid var(--sc-border);}',
+        '.sc-mem-group-title:first-child{border-top:none;padding-top:0;margin-top:var(--sc-sp-2);}',
+        '.sc-mem-stats,.sc-mem-grid{gap:var(--sc-gap-item);}',
+        '.sc-mem-stat{padding:var(--sc-pad-card);border-radius:var(--sc-r-md);}',
+        '.sc-mem-stat-label{font-size:var(--sc-fs-xs);line-height:var(--sc-lh-tight);}',
+        '.sc-mem-stat-value{font-size:var(--sc-fs-lg);line-height:var(--sc-lh-tight);}',
+        '.sc-mem-stat-sub,.sc-mem-sub{font-size:var(--sc-fs-xs);line-height:var(--sc-lh-normal);}',
+        '.sc-mem-empty{font-size:var(--sc-fs-xs);line-height:var(--sc-lh-normal);padding:var(--sc-pad-card);}',
+        '.sc-ds-badges{gap:var(--sc-gap-row);flex-wrap:wrap;}',
+        '.sc-ds-badge{font-size:var(--sc-fs-xs);line-height:var(--sc-lh-normal);border-radius:var(--sc-r-pill);padding:0 var(--sc-sp-2);}',
+        '.setting-item{gap:var(--sc-gap-item);padding:var(--sc-sp-2) 0;min-height:calc(var(--sc-sp-6) + var(--sc-sp-2));}',
+        '.setting-item-name{font-size:var(--sc-fs-sm);line-height:var(--sc-lh-tight);}',
+        '.setting-item-desc{font-size:var(--sc-fs-xs);line-height:var(--sc-lh-normal);max-width:var(--sc-w-read);}',
+        '.sc-persona-slider{max-width:var(--sc-w-control);height:var(--sc-sp-6);border-radius:var(--sc-r-sm);margin:var(--sc-sp-1) 0;}',
+        '.sc-persona-cell{font-size:var(--sc-fs-xs);}',
+        '.sc-range-wrap{gap:var(--sc-sp-1);min-width:var(--sc-w-control);margin:var(--sc-sp-1) 0;}',
+        '.sc-range-wrap input[type=range]{max-width:var(--sc-w-control);}',
+        '.sc-ctrl-meta{gap:var(--sc-sp-1);margin-top:var(--sc-sp-1);}',
+        '.sc-chip{font-size:var(--sc-fs-xs);line-height:var(--sc-lh-tight);padding:0 var(--sc-sp-1);border-radius:var(--sc-r-pill);}',
+        '.sc-more-btn{margin:var(--sc-gap-item) 0 var(--sc-sp-1);padding:var(--sc-sp-1) var(--sc-sp-3);border-radius:var(--sc-r-sm);font-size:var(--sc-fs-xs);}',
+        '.sc-search-bar{gap:var(--sc-gap-row);margin:var(--sc-sp-2) 0 var(--sc-sp-1);}',
+        '.sc-search-count{font-size:var(--sc-fs-xs);}',
+        '.sc-input{font-size:var(--sc-fs-sm);min-height:var(--sc-sp-6);border-radius:var(--sc-r-sm);}',
+        '.sc-btn{font-size:var(--sc-fs-sm);border-radius:var(--sc-r-sm);padding:var(--sc-sp-1) var(--sc-sp-3);}',
+        '.sc-statusbar{font-size:var(--sc-fs-xs);padding:var(--sc-sp-2) var(--sc-sp-5);}',
+        '#sc-yaml{font-size:var(--sc-fs-xs);line-height:var(--sc-lh-normal);}',
+        '.sc-card-body{font-size:var(--sc-fs-xs);line-height:var(--sc-lh-loose);padding:var(--sc-pad-card);}',
+        '.sc-ds-sessions{gap:var(--sc-sp-1);margin:var(--sc-gap-row) 0;}',
+        '.sc-ds-session{gap:var(--sc-gap-row);padding:var(--sc-sp-2) var(--sc-sp-3);border-radius:var(--sc-r-md);}',
+        '.sc-ds-session-sub{font-size:var(--sc-fs-xs);line-height:var(--sc-lh-normal);margin-top:var(--sc-sp-1);}',
+        '.sc-ds-ctl{gap:var(--sc-gap-row);margin:var(--sc-gap-row) 0;}',
+        '.sc-num-wrap{display:flex;align-items:center;gap:var(--sc-sp-1);flex:none;}',
+        '.sc-num-wrap .sc-input{width:calc(var(--sc-sp-6) * 3);}',
+        /* U2.5：通用行/栅格/宽度原语（供 JS 去掉 spacing 类内联样式） */
+        '.sc-row{display:flex;align-items:center;gap:var(--sc-sp-2);flex:none;}',
+        '.sc-col{display:flex;flex-direction:column;gap:var(--sc-sp-2);}',
+        '.sc-w-sm{width:var(--sc-w-sm);}',
+        '.sc-w-lg{width:var(--sc-w-lg);}',
+        '.sc-w-xl{width:var(--sc-w-xl);max-width:var(--sc-w-xl);}',
+        /* 可访问性：统一焦点环（所有交互元素键盘可见）*/
+        '.sc-btn:focus-visible,.sc-input:focus-visible,.sc-more-btn:focus-visible,.sc-persona-cell:focus-visible,',
+        '.sc-note-chip:focus-visible,.sc-trigger:focus-visible{outline:2px solid var(--sc-accent);outline-offset:2px;}',
+        /* 状态双编码（形状+颜色，色弱可辨）：状态点统一尺寸 */
+        '.sc-ds-dot{width:var(--sc-sp-2);height:var(--sc-sp-2);}',
       ].join('');
 
       function status(msg) { var n = document.getElementById('sc-statusbar'); if (n) n.textContent = msg || ''; }
@@ -460,8 +521,8 @@
           var info = el('div', 'setting-item-info');
           info.appendChild(el('div', 'setting-item-name', name));
           info.appendChild(el('div', 'setting-item-desc', desc));
-          var wrap = el('div'); wrap.style.cssText = 'display:flex;align-items:center;gap:6px;flex:none;';
-          var inp = el('input'); inp.type = 'number'; inp.className = 'sc-input'; inp.style.width = '96px'; inp.min = '0'; inp.step = '100'; inp.value = String(val);
+          var wrap = el('div', 'sc-num-wrap'); // U2.5：内联样式 → 类（令牌化，可统一/可回滚）
+          var inp = el('input'); inp.type = 'number'; inp.className = 'sc-input'; inp.min = '0'; inp.step = '100'; inp.value = String(val);
           var unitEl = el('span', 'sc-range-label', unit || '');
           inp.onchange = function () {
             var v = String(Math.max(0, parseInt(inp.value, 10) || 0));
@@ -492,8 +553,8 @@
         var pctInfo = el('div', 'setting-item-info');
         pctInfo.appendChild(el('div', 'setting-item-name', '召回冷条目降权 recallColdFactorPercent'));
         pctInfo.appendChild(el('div', 'setting-item-desc', 'cold/retired 小节在融合召回中的降权系数（百分比 → /100；缺省 35%，后端范围校验 [5,95] 兜底）'));
-        var pctWrap = el('div'); pctWrap.style.cssText = 'display:flex;align-items:center;gap:6px;flex:none;';
-        var pctInp = el('input'); pctInp.type = 'number'; pctInp.className = 'sc-input'; pctInp.style.width = '96px'; pctInp.min = '5'; pctInp.max = '95'; pctInp.step = '5'; pctInp.value = String(gVal('recallColdFactorPercent', 35)); // 与 scheduler zod 默认一致
+        var pctWrap = el('div', 'sc-num-wrap'); // U2.5：内联 → 类
+        var pctInp = el('input'); pctInp.type = 'number'; pctInp.className = 'sc-input'; pctInp.min = '5'; pctInp.max = '95'; pctInp.step = '5'; pctInp.value = String(gVal('recallColdFactorPercent', 35)); // 与 scheduler zod 默认一致
         var pctUnit = el('span', 'sc-range-label', '%');
         pctInp.onchange = function () {
           var raw = parseInt(pctInp.value, 10);
@@ -761,8 +822,8 @@
           info.appendChild(el('div', 'setting-item-name', label));
           info.appendChild(el('div', 'setting-item-desc', desc));
           item.appendChild(info);
-          var wrap = el('div'); wrap.style.cssText = 'display:flex;align-items:center;gap:8px;flex:none;';
-          var sel = el('select', 'sc-input'); sel.style.width = '300px'; sel.title = keyP + '/' + keyM;
+          var wrap = el('div', 'sc-row');
+          var sel = el('select', 'sc-input sc-w-lg'); sel.title = keyP + '/' + keyM;
           var inherit = (llmVal[keyP] || '') === '';
           function rebuild() {
             sel.textContent = '';
@@ -851,11 +912,11 @@
           var info = el('div', 'setting-item-info');
           info.appendChild(el('div', 'setting-item-name', name));
           info.appendChild(el('div', 'setting-item-desc', desc));
-          var wrap = el('div'); wrap.style.cssText = 'display:flex;align-items:center;gap:6px;flex:none;';
-          var inp = el('input'); inp.className = 'sc-input'; inp.value = String(initial);
-          if (kind === 'minutes') { inp.type = 'number'; inp.min = String(min || 1); inp.step = '1'; inp.style.width = '96px'; }
-          else if (kind === 'chars') { inp.type = 'number'; inp.min = '0'; inp.step = '50'; inp.style.width = '96px'; }
-          else { inp.type = 'text'; inp.placeholder = '留空=继承主会话模型'; inp.style.width = '180px'; }
+          var wrap = el('div', 'sc-num-wrap');
+          var inp = el('input', 'sc-input'); inp.value = String(initial);
+          if (kind === 'minutes') { inp.type = 'number'; inp.min = String(min || 1); inp.step = '1'; }
+          else if (kind === 'chars') { inp.type = 'number'; inp.min = '0'; inp.step = '50'; }
+          else { inp.type = 'text'; inp.placeholder = '留空=继承主会话模型'; inp.className = 'sc-input sc-w-sm'; }
           var unitEl = el('span', 'sc-range-label', kind === 'minutes' ? '分钟' : (kind === 'chars' ? '字符' : ''));
           inp.onchange = function () {
             var v;
