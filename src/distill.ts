@@ -25,7 +25,7 @@
  */
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, renameSync, statSync, unlinkSync } from 'node:fs'
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, renameSync, statSync, unlinkSync, copyFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import {
@@ -203,6 +203,11 @@ export interface DistillConfig {
   shadowScore?: boolean // 影子打分（写 audit/score-shadow.jsonl，不改排序）
   maturationEnforce?: boolean // 成熟度强制（缺省 false=只记录）
   perItemGate?: boolean // v2.1 M2：逐条裁决（缺省 true；false=回到整轮全拒）
+  // v2.2：睡眠期自检
+  selfCheck?: boolean // 深睡完成后跑 6 项检测（缺省 true）
+  selfCheckRepo?: string // 仓根（供仓侧检测）
+  selfCheckAutoRollback?: boolean // 白名单窄动作自动执行（缺省 false=只告警）
+  selfCheckIntervalHours?: number // 定时自检周期（小时，缺省 6；0=关闭定时）
   // v7 校准阈值（缺省 14/44/90/5/35，UI 可调）
   activityWarmDays?: number // active→warm 无命中天数（缺省 14）
   activityColdDays?: number // warm→cold 无命中天数（缺省 44）
@@ -1053,7 +1058,35 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
   const releaseClaim = (sid: string): void => { try { unlinkSync(claimFileOf(sid)) } catch { /* 无 claim/删除失败均无害 */ } }
 
   const bankGitScript = join(memoryLibRoot(), 'scripts', 'bank-git.mjs')
-  /** v2（ADR-122）：库 git 版本化快照（写后触发；失败静默——版本化是增强不是主流程依赖） */
+  /** v2.2 睡眠期/定时自检（**单一实现**）：6 项检测 + 白名单窄动作。由两条路径调用——
+   *  ① 深睡完成之后（宿主义务：子代理只归纳）② 计时器周期性（深睡触发严苛，靠它保证"想不起来也会做"）。 */
+  const runSelfCheck = async (trigger: 'deep-sleep' | 'timer' | 'manual'): Promise<{ verdict?: string; adjustments: string[] } | null> => {
+    try {
+      const scScript = join(memoryLibRoot(), 'scripts', 'sleep-selfcheck.mjs')
+      if (!existsSync(scScript)) return null
+      const scOut = join(kRoot, 'audit', 'selfcheck-latest.json')
+      const scArgs = ['--out', scOut, '--trigger', trigger, ...(config.selfCheckRepo ? ['--repo', String(config.selfCheckRepo)] : [])]
+      await runNode(config.nodeBin, scScript, scArgs, { env: { MEMORY_ROOT: memoryLibRoot() }, timeout: 180000 })
+      const sc = JSON.parse(readFileSync(scOut, 'utf8')) as { verdict?: string; summary?: unknown; adjustments?: Array<{ id: string; action?: { key: string; value: string } }> }
+      const adjIds = (sc.adjustments || []).map((a) => a.id)
+      // 台账 check.sleep **由脚本自己写**（三条触发路径同一处留痕）；此处只负责白名单动作与日志
+      log(`selfcheck(${trigger}): 裁决 ${sc.verdict}${adjIds.length ? ' · 建议调整 ' + adjIds.join(',') : ''}`)
+      if (config.selfCheckAutoRollback === true) {
+        const adj = (sc.adjustments || []).find((a) => a.id === 'rollback-scoreWeights' && a.action)
+        if (adj?.action) {
+          const cfgPath = join(dshHome(), 'suite', 'scheduler.json')
+          try { copyFileSync(cfgPath, cfgPath + '.bak-selfcheck') } catch { /* 首次可能不存在 */ }
+          let cur: Record<string, unknown> = {}
+          try { cur = JSON.parse(readFileSync(cfgPath, 'utf8')) } catch { /* */ }
+          writeFileSync(cfgPath, JSON.stringify({ ...cur, [adj.action.key]: adj.action.value }, null, 2), 'utf8')
+          ledger({ type: 'adjust.rollback', domain: 'consolidate', trigger, key: adj.action.key, value: adj.action.value, why: 'selfcheck R-3（shadow-sim.flipReady=false）', needsReload: true })
+          log(`selfcheck(${trigger}): 白名单回滚 ${adj.action.key}=${adj.action.value}（已备份 .bak-selfcheck；需重载生效）`)
+        }
+      }
+      return { verdict: sc.verdict, adjustments: adjIds }
+    } catch (e) { log(`selfcheck(${trigger}) 失败（不影响主流程）：${String((e as Error).message).slice(0, 80)}`); return null }
+  }
+  /** v2 库 git 版本化快照（写后触发；失败静默——版本化是增强不是主流程依赖） */
   const bankSnapshot = async (label: string): Promise<void> => {
     if (config.bankGit === false) return
     try {
@@ -2528,6 +2561,8 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
           enqueued: { principles: (out?.principles || []).length, profileOps: (out?.profileOps || []).length, pointerOps: (out?.pointerOps || []).length, treeOps: (out?.treeOps || []).length, forgetOps: (out?.forgetOps || []).length, crossTopic: (out?.crossTopic || []).length, skipped: (out?.skipped || []).length },
         })
         if (stop === 'completed') void bankSnapshot('deep-sleep') // v2：巩固后库快照（best-effort）
+        // v2.2 睡眠期自检（宿主义务：子代理只归纳，检测挂在其**完成之后**——守 [env] 子代理会话语义）
+        if (config.selfCheck !== false) await runSelfCheck('deep-sleep')
         // v2.1 M2：**写入回执**（write.* 事件）——写入是否落地、被拒原因与原文，与上面的 decision.* 同址同版本
         ledger({
           type: 'write.consolidate', domain: 'consolidate', step: 'deep-sleep-write', channel: 'principles',
@@ -3002,6 +3037,18 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     const iv = setInterval(() => { try { deepSleepCheck() } catch { /* 巡检零抛出 */ } }, DEEP_SLEEP_CHECK_MS)
     return () => clearInterval(iv)
   }, SHORT + ': deep-sleep check')
+
+  // ═══ v2.2 定时自检：独立于深睡（深睡触发严苛：需全部会话停滞 ≥3h）——保证「想不起来也会自动做」═══
+  //   启动 3 分钟后先跑一次；此后每 selfCheckIntervalHours（缺省 6h）；selfCheck=false 或周期=0 时关闭。
+  //   与深睡后的自检共用同一实现（runSelfCheck），台账 type=check.sleep 区分 trigger。
+  ctx.effect(() => {
+    const hours = Number((config as { selfCheckIntervalHours?: number }).selfCheckIntervalHours ?? 6)
+    if (config.selfCheck === false || !(hours > 0)) return
+    const ms = Math.max(30 * 60 * 1000, hours * 3600 * 1000)
+    const t0 = setTimeout(() => { void runSelfCheck('timer') }, 3 * 60 * 1000)
+    const iv = setInterval(() => { void runSelfCheck('timer') }, ms)
+    return () => { clearTimeout(t0); clearInterval(iv) }
+  }, SHORT + ': sleep selfcheck timer')
 
   // ═══ 蒸馏器清理（reload/ctx dispose 零泄漏）：清空遗留 idle 定时器——旧 fiber 定时器在 ctx 失效后触发
   // 正是「cannot get required service subagents in inactive context」报错的根源（2026-09-10 修复）═══

@@ -70,6 +70,10 @@ export interface Config {
     shadowScore: boolean;
     maturationEnforce: boolean;
     perItemGate: boolean;
+    selfCheck: boolean;
+    selfCheckRepo: string;
+    selfCheckAutoRollback: boolean;
+    selfCheckIntervalHours: number;
     bankGit: boolean;
     activityWarmDays: number;
     activityColdDays: number;

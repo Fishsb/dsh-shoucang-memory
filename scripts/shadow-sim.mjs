@@ -10,19 +10,37 @@
 import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { homedir } from 'node:os'
-import { fileURLToPath } from 'node:url'
-import { importanceOf } from '../lib/criteria.js'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), '..')
 const argv = process.argv.slice(2)
 const argOf = (k, d) => { const i = argv.indexOf(k); return i > -1 && argv[i + 1] ? argv[i + 1] : d }
 const bank = argOf('--bank', process.env.MEMORY_ROOT || join(homedir(), '.dsh', 'skills', 'managing-memory'))
+// 产品实现（importanceOf）动态解析：仓内(../lib) → $SHOUCANG_LIB → 库内/lib → profile lib。
+// **依赖缺失 = 诚实跳过（exit 3）**，而不是判失败——库内布局本就没有 lib/（实测踩过：库内跑必 ERR_MODULE_NOT_FOUND）。
+const importanceOf = await (async () => {
+  const cands = [join(repo, 'lib', 'criteria.js'), process.env.SHOUCANG_LIB ? join(process.env.SHOUCANG_LIB, 'criteria.js') : '', join(bank, 'lib', 'criteria.js')].filter(Boolean)
+  for (const p of cands) {
+    if (!existsSync(p)) continue
+    try { const m = await import(pathToFileURL(p).href); if (typeof m.importanceOf === 'function') return m.importanceOf } catch { /* 下一个 */ }
+  }
+  return null
+})()
+if (!importanceOf) {
+  console.error('shadow-sim: 缺少产品实现 lib/criteria.js（库内布局无 lib/）→ 跳过本次影子模拟（exit 3）')
+  process.exit(3)
+}
 const NQ = Number(argOf('--queries', '60')) || 60
 const AS_JSON = argv.includes('--json')
-// α 覆盖（用于调参扫描：模拟不同 surface.score 取值下的排序扰动，据此选定 α 再翻开关）
-const A_REL = Number(argOf('--alpha-rel', '1.0'))
-const A_IMP = Number(argOf('--alpha-imp', '0.35'))
-const A_REC = Number(argOf('--alpha-rec', '0.1'))
+// α 缺省**取注册表**（surface.score；单一事实源），CLI 覆盖仅用于调参扫描
+const regScore = (() => {
+  const cands = [join(repo, 'skill', 'engine', 'criteria.json'), join(repo, 'engine', 'criteria.json'), join(bank, 'engine', 'criteria.json')]
+  for (const p of cands) { try { return JSON.parse(readFileSync(p, 'utf8')).surface?.score } catch { /* next */ } }
+  return null
+})()
+const A_REL = Number(argOf('--alpha-rel', String(regScore?.alphaRel ?? 1.0)))
+const A_IMP = Number(argOf('--alpha-imp', String(regScore?.alphaImp ?? 0.35)))
+const A_REC = Number(argOf('--alpha-rec', String(regScore?.alphaRec ?? 0.1)))
 
 // ── 真实行（索引行 + 画像行，与注入面同源）──
 const FILES = ['MEMORY.md', 'USER.md', 'AGENT.md']

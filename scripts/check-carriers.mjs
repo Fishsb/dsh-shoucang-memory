@@ -78,6 +78,13 @@ const allowedKeys = [...allowedBlock.matchAll(/'([A-Za-z_.]+)':\s*\[/g)].map((m)
 const ROOT_ONLY = new Set(['boards.memory']) // boards.* 写 root YAML（设计如此）
 const unmapped = allowedKeys.filter((k) => !new RegExp(`'${k}':`).test(schBlock) && !new RegExp(`${k}: '`).test(boolBlock) && !new RegExp(`'${k}':`).test(boolBlock) && !ROOT_ONLY.has(k))
 chk(allowedKeys.length >= 10 && unmapped.length === 0, `⑤/set 白名单 ${allowedKeys.length} 键全部有写通道映射（未映射 ${unmapped.length}${unmapped.length ? ' → ' + unmapped.join(',') : ''}）`)
+// ⑤b **键类型分类**：每个 /set 键必须能归类为「枚举 / 数值(有 RANGE) / 字符串(在 STRING_KEYS)」——
+//     否则会在 Number() 化时被吞（实测两次：recallFusion='rrf'→0、selfCheckRepo=<path>→0）
+const enumKeys = new Set([...allowedBlock.matchAll(/'([A-Za-z_.]+)':\s*\[([^\]]*)\]/g)].filter((m) => m[2].trim().length > 0).map((m) => m[1]))
+const rangeKeys = new Set([...panel.slice(panel.indexOf('const RANGE'), panel.indexOf('if (!(key in allowed))')).matchAll(/'([A-Za-z_.]+)':\s*\[/g)].map((m) => m[1]))
+const stringKeys = new Set([...(panel.match(/const STRING_KEYS = new Set\(\[([^\]]*)\]\)/) || [])[1]?.matchAll(/'([A-Za-z_.]+)'/g) || []].map((m) => m[1]))
+const unclassified = allowedKeys.filter((k) => !enumKeys.has(k) && !rangeKeys.has(k) && !stringKeys.has(k))
+chk(unclassified.length === 0, `⑤b 每个 /set 键可归类为 枚举/数值/字符串（未归类 ${unclassified.length}${unclassified.length ? ' → ' + unclassified.join(',') : ''}；已归类 枚举 ${enumKeys.size} / 数值 ${rangeKeys.size} / 字符串 ${stringKeys.size}）`)
 const toggleBlock = panel.slice(panel.indexOf("route('/toggle'"), panel.indexOf("route('/set'"))
 const toggleKeys = [...toggleBlock.matchAll(/'([A-Za-z_.]+)'/g)].map((m) => m[1]).filter((k) => !['boards.memory', 'key', 'string', 'injection.hot_memory'].includes(k))
 const toggleUnmapped = ['injectRelevance', 'bankGit', 'mclEnabled', 'mclAudit', 'shadowScore', 'maturationEnforce'].filter((k) => !new RegExp(`${k}: '`).test(boolBlock) && !new RegExp(`'${k}':`).test(boolBlock))

@@ -582,6 +582,11 @@ export function applyPanel(ctx: Context, config: Config): void {
       scoreWeights: String(sched.scoreWeights ?? 'legacy'),
       shadowScore: sched.shadowScore !== false,
       maturationEnforce: sched.maturationEnforce === true,
+      // v2.2：睡眠期自检
+      selfCheck: sched.selfCheck !== false,
+      selfCheckRepo: String(sched.selfCheckRepo ?? ''),
+      selfCheckAutoRollback: sched.selfCheckAutoRollback === true,
+      selfCheckIntervalHours: typeof sched.selfCheckIntervalHours === 'number' ? sched.selfCheckIntervalHours : 6,
     }
     // P2：无 root 也能调注入（全局 scheduler.json）——root 仅管理 boards 显示与旧 YAML；返回 global 供 UI 渲染
     if (!file) return sendJson(res, 200, { text: null, parsed: null, error: 'no-active-root', global: globalCfg })
@@ -614,7 +619,7 @@ export function applyPanel(ctx: Context, config: Config): void {
   route('/toggle', async (req, res) => {
     const body = await readBody(req)
     const key = typeof body.key === 'string' ? body.key : ''
-    const allowed = ['boards.memory', 'injection.hot_memory', 'injectRelevance', 'bankGit', 'mclEnabled', 'mclAudit', 'shadowScore', 'maturationEnforce'] // U3+v2.2：布尔类键
+    const allowed = ['boards.memory', 'injection.hot_memory', 'injectRelevance', 'bankGit', 'mclEnabled', 'mclAudit', 'shadowScore', 'maturationEnforce', 'selfCheck', 'selfCheckAutoRollback'] // U3+v2.2：布尔类键
     if (!allowed.includes(key)) return sendJson(res, 400, { error: `key 不允许：${key}` })
     // U3 修正（实测缺陷）：scheduler.json 类布尔键必须走 **suite 持久通道**——
     // 此前只有 hot_memory 走全局，其余键落到 root YAML 的 flipBool ⇒ 找不到 `shoucang.<key>` 行 → 500。
@@ -626,6 +631,8 @@ export function applyPanel(ctx: Context, config: Config): void {
       mclAudit: 'mclAudit',
       shadowScore: 'shadowScore',
       maturationEnforce: 'maturationEnforce',
+      selfCheck: 'selfCheck',
+      selfCheckAutoRollback: 'selfCheckAutoRollback',
     }
     if (SUITE_BOOL[key]) {
       const prop = SUITE_BOOL[key]
@@ -683,6 +690,8 @@ export function applyPanel(ctx: Context, config: Config): void {
       'recallFusion': ['rrf', 'weighted'],
       'injectProfileRows': [],
       'scoreWeights': ['legacy', 'v2'],
+      'selfCheckRepo': [],       // 仓根路径（字符串）
+      'selfCheckIntervalHours': [],
     }
     // 数值范围校验（2026-09-10 收敛：仅注入组 + embedding.dimension；archive/lifecycle/merge 死键已随白名单移除）
     const RANGE: Record<string, [number, number]> = {
@@ -707,6 +716,7 @@ export function applyPanel(ctx: Context, config: Config): void {
       'mclBudgetChars': [120, 4000],
       'mclTopK': [1, 5],
       'injectProfileRows': [0, 6],
+      'selfCheckIntervalHours': [0, 168],
     }
     if (!(key in allowed)) return sendJson(res, 400, { error: `key 不允许：${key}` })
     if (!value) return sendJson(res, 400, { error: 'value required' })
@@ -741,12 +751,16 @@ export function applyPanel(ctx: Context, config: Config): void {
       'scoreWeights': 'scoreWeights', // v2.2：打分公式开关（legacy|v2）
       'injectProfileRows': 'injectProfileRows', // v2.2：P 层画像行每档上限（0=回滚）
       'embedding.dimension': 'embedDim', // 历史遗留键：此前只登记白名单却无映射（实测 400）→ 补映射
+      'selfCheckRepo': 'selfCheckRepo',
+      'selfCheckIntervalHours': 'selfCheckIntervalHours',
     }
     const schedKey = SCHED_KEY[key]
     if (!schedKey) return sendJson(res, 400, { error: `key 无全局映射：${key}` })
     // U3 修正（实测缺陷：recallFusion='rrf' 曾被 Number() 写成 0）：**枚举键原样写字符串**，仅数值键 Number 化。
+    // U3/v2.2 修正（实测：字符串键 selfCheckRepo 被 Number() 吞成 0）：**枚举/字符串键原样写**，仅数值键 Number 化。
+    const STRING_KEYS = new Set(['selfCheckRepo'])
     const isEnum = allowed[key].length > 0
-    const merged = { ...readSuiteConfig(), [schedKey]: isEnum ? value : (Number(value) || 0) }
+    const merged = { ...readSuiteConfig(), [schedKey]: (isEnum || STRING_KEYS.has(key)) ? value : (Number(value) || 0) }
     writeSuiteConfig(merged)
     injectCache.at = 0 // 注入缓存作废：改动立即反映到下一轮注入
     ctx.logger?.info?.(`[shoucang] panel set ${key}=${value}（全局 scheduler.json ${schedKey}）`)
@@ -1180,6 +1194,28 @@ export function applyPanel(ctx: Context, config: Config): void {
       const out = JSON.parse(readFileSync(tmp, 'utf8'))
       sendJson(res, 200, { active: true, ...out })
     } catch (e) { sendJson(res, 200, { active: false, error: String(e).slice(0, 200) }) }
+  })
+
+  // v2.2：睡眠期自检视图 —— GET 读最近一次裁决；POST /selfcheck/run 立即跑一次（**手动触发**，解"想不起来"）
+  const runSelfCheckNow = (): Record<string, unknown> => {
+    const script = join(memoryLibRoot(), 'scripts', 'sleep-selfcheck.mjs')
+    if (!existsSync(script)) return { active: false, error: 'sleep-selfcheck.mjs 未部署' }
+    const out = join(knowledgeRoot(), 'audit', 'selfcheck-latest.json')
+    const args = ['--out', out, '--trigger', 'manual']
+    const repo = String(readSuiteConfig().selfCheckRepo || '')
+    if (repo) args.push('--repo', repo)
+    execFileSync('node', [script, ...args], { stdio: 'ignore', timeout: 180000, windowsHide: true })
+    return { active: true, ...(JSON.parse(readFileSync(out, 'utf8')) as Record<string, unknown>) }
+  }
+  route('/selfcheck', (_req, res) => {
+    try {
+      const f = join(knowledgeRoot(), 'audit', 'selfcheck-latest.json')
+      if (!existsSync(f)) return sendJson(res, 200, { active: false, error: '尚未跑过自检（POST /selfcheck/run 立即跑一次）' })
+      sendJson(res, 200, { active: true, ...(JSON.parse(readFileSync(f, 'utf8')) as Record<string, unknown>) })
+    } catch (e) { sendJson(res, 500, { error: String(e) }) }
+  })
+  route('/selfcheck/run', (_req, res) => {
+    try { sendJson(res, 200, runSelfCheckNow()) } catch (e) { sendJson(res, 500, { error: String(e).slice(0, 200) }) }
   })
 
   // U2（B9）：配置视图「最近改动」——库 git reflog（最近 5 条）+ 配置文件 mtime（只读文件，零 spawn）

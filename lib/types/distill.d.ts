@@ -82,6 +82,10 @@ export interface DistillConfig {
     shadowScore?: boolean;
     maturationEnforce?: boolean;
     perItemGate?: boolean;
+    selfCheck?: boolean;
+    selfCheckRepo?: string;
+    selfCheckAutoRollback?: boolean;
+    selfCheckIntervalHours?: number;
     activityWarmDays?: number;
     activityColdDays?: number;
     activityArchiveDays?: number;

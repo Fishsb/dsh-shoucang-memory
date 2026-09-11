@@ -7,7 +7,7 @@
 //   activity.jsonl 的命中记录；二者皆按本地日聚合），A = A0 + step·(days−1)，上限 1.0（参数见 criteria.maturation）。
 // 落盘：`audit/maturation.jsonl`（每次扫描覆盖写；一行一小节）——**只记不算**（enforce 缺省 false）。
 // 用法: node scripts/maturation-scan.mjs [--bank <库根>] [--days 90] [--json]
-import { readFileSync, existsSync, writeFileSync } from 'node:fs'
+import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -19,6 +19,7 @@ const bank = argOf('--bank', process.env.MEMORY_ROOT || join(homedir(), '.dsh', 
 const stateRoot = argOf('--state', join(homedir(), '.dsh', 'suite', 'knowledge'))
 const windowDays = Number(argOf('--days', '90')) || 90
 const AS_JSON = argv.includes('--json')
+const OUT_JSON = AS_JSON // `--out` 需与 `--json` 同时给出（机读产物）；不带 --json 时只打印人读摘要
 
 const mat = (() => {
   const cands = [join(repo, 'skill', 'engine', 'criteria.json'), join(repo, 'engine', 'criteria.json'), join(bank, 'engine', 'criteria.json')]
@@ -62,6 +63,8 @@ const ledger = join(bank, mat.ledger || 'audit/maturation.jsonl')
 try { writeFileSync(ledger, rows.map((r) => JSON.stringify(r)).join('\n') + (rows.length ? '\n' : ''), 'utf8') } catch { /* 静默 */ }
 const mature = rows.filter((r) => r.mature).length
 const out = { window: { days: windowDays, bank, ledger }, params: { A0, step, gate }, sections: rows.length, mature, rows: rows.slice(0, 20) }
+const outFile = argOf('--out', '')
+if (OUT_JSON && outFile) { try { mkdirSync(dirname(outFile), { recursive: true }); writeFileSync(outFile, JSON.stringify(out, null, 2), 'utf8') } catch { /* */ } }
 if (AS_JSON) console.log(JSON.stringify(out, null, 2))
 else {
   console.log(`成熟度扫描（窗口 ${windowDays} 天 · 库=${bank}）`)

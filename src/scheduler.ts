@@ -107,6 +107,11 @@ export interface Config {
   shadowScore: boolean // 影子打分：并行计算新公式并写 audit/score-shadow.jsonl（不改排序）
   maturationEnforce: boolean // 成熟度强制：true 时升格须 A≥gate（缺省 false=只记录）
   perItemGate: boolean // v2.1 M2：逐条裁决（缺省 true；false=回到整轮全拒）
+  // v2.2：睡眠期自检（宿主义务——子代理只归纳；检测挂在其完成之后）
+  selfCheck: boolean // 深睡完成后跑 6 项检测（判据/载体/分层/成熟度/影子/对账）并落台账（缺省 true）
+  selfCheckRepo: string // 仓根（供仓侧三项检测用；空=只跑库侧可独立运行项）
+  selfCheckAutoRollback: boolean // 是否允许自检执行**白名单窄动作**（当前仅 rollback-scoreWeights，依据 R-3）；缺省 false=只告警
+  selfCheckIntervalHours: number // 定时自检周期（小时，缺省 6；0=只靠深睡后触发）
   bankGit: boolean // 记忆库本地 git 版本化（写后快照；缺省开，失败静默）
   // ═══ v7 记忆活性/遗忘/加深校准阈值（2026-09-10：可 UI 设置，缺省单一实现=本 schema 默认，UI 通道 /set → scheduler.json）═══
   activityWarmDays: number // active→warm 无命中天数（缺省 14）
@@ -192,6 +197,10 @@ export const Config: any = z.object({
   shadowScore: z.boolean().default(true).description('影子打分：并行计算 v2 公式并写 audit/score-shadow.jsonl（不改变排序，用于 M4 影子期）'),
   maturationEnforce: z.boolean().default(false).description('成熟度强制：true 时 [原则]/[路径] 升格须满足 A≥maturation.gate（缺省 false=只记录不强制）'),
   perItemGate: z.boolean().default(true).description('逐条裁决：写门逐条校验（单条不合格不再拖垮整轮；并集超限则尾部贪心回退）。false=回到整轮全拒'),
+  selfCheck: z.boolean().default(true).description('睡眠期自检：深睡完成后由宿主跑 6 项检测（判据门/载体门/分层单测/成熟度/影子打分/账本对账）→ 落 audit/selfcheck-latest.json 与台账 check.sleep'),
+  selfCheckRepo: z.string().default('').description('仓根路径（自检中仓侧三项检测需要；留空则只跑库侧可独立运行的三项）'),
+  selfCheckAutoRollback: z.boolean().default(false).description('自检白名单事实调整：允许执行唯一窄动作 rollback-scoreWeights（依据 R-3：shadow-sim.flipReady=false）。缺省 false=只告警不改配置'),
+  selfCheckIntervalHours: z.number().min(0).max(168).default(6).description('定时自检周期（小时，缺省 6；0=关闭定时，只在深睡完成后触发）——保证「想不起来也会自动做」'),
   // ═══ ACT-029 认知环（MCL）：熟悉度分流 + 慢通道薄材料 + 有界再引导（方案见 .internal/arch/shoucang-SC-S05）═══
   mclEnabled: z.boolean().default(true).description('认知环（MCL）开关：慢通道在任务首步注入「薄契约 + top-k 指针」并按需再引导一次；快通道零额外往返。缺省开，置 false 一键回滚'),
   mclFamiliarThreshold: z.number().min(0).max(1).default(0.65).description('熟悉度阈值（用户文本↔命中索引行的**绝对余弦**，ACT-024 校准：0.65 → 触发率 ~2% 且阈上样本全为真命中）'),
@@ -574,6 +583,10 @@ export function applyScheduler(ctx: Context, config: Config): void {
       shadowScore: config.shadowScore,
       maturationEnforce: config.maturationEnforce,
       perItemGate: config.perItemGate,
+      selfCheck: config.selfCheck,
+      selfCheckRepo: config.selfCheckRepo,
+      selfCheckAutoRollback: config.selfCheckAutoRollback,
+      selfCheckIntervalHours: config.selfCheckIntervalHours,
       // v7 活性/遗忘/加深校准阈值（scheduler.Config 同键名直传，运行时生效）
       activityWarmDays: config.activityWarmDays,
       activityColdDays: config.activityColdDays,
