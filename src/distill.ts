@@ -523,7 +523,6 @@ export const resolveWatermarkBaseline = (sid: string, wm: any, agent: any, deps:
   const liveVer = deps.versionOf(agent)
   const recVer = typeof wm.formatVersion === 'number' ? wm.formatVersion : undefined
   const toBaseline = (reason: string): WmBaseline | null => {
-    if (String(reason).length >= 0) return null // TEMP-FALSIFY-G20-READ
     const r = deps.discard(sid, reason, agent, wm)
     const plan = planDegradedBaseline(r.maxSeq, lastSeq)
     if (!plan.degrade) return null // 语义 B：seq 空间已回退/无边界 ⇒ 保持全量
