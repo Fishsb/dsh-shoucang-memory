@@ -2009,6 +2009,62 @@ cd ~/.dsh/profiles/web && pnpm install   # 回退到 #4ec6dc6
 
 ---
 
+## 30. 🔴 G-19 已修（架构层，不再等用户拍板）
+
+按"从架构出发、不偏离主线"处理：G-19 不是产品偏好选择，而是**判据只消费了部分输入**的架构缺陷，故直接修。
+
+### 30.1 根因
+
+```ts
+export const deepSleepLanded = (stop, out, app) => {
+  if (stop !== 'completed' || !out) return false
+  if (['write_gate 未就位', COMMIT_FAILED_GATE].includes(app.gate)) return false
+  return app.added > 0 || app.attempted === 0   // ← app 只来自 applyPrinciples
+}
+```
+
+深睡一轮有**五个写入通道**：principles（原则/路径）、profileOps（画像）、pointerOps（指针）、treeOps（结构）、forgetOps（遗忘）。**只有 principles 的结果进入 `app`**，其余四通道结果从不进判据。
+
+⇒ 当某轮只有后四通道提案且**全数失败**时，`app.attempted === 0` ⇒ 判 `landed: true` ⇒ 水位推进 ⇒ **那批材料永久关在窗外（静默丢料）**。Rex 实测约 **9.5%~14.3%** 轮次。
+
+### 30.2 架构修法
+
+> **判据必须消费完整轮次结果，而非其子集。**（与 G-16 同源——判据只认真实完整产出）
+
+```ts
+export const deepSleepLanded = (
+  stop, out, app,
+  other: DeepSleepOtherChannels = { tried: 0, done: 0 },   // 缺省 ⇒ 旧行为，零回归
+): boolean => {
+  if (stop !== 'completed' || !out) return false
+  if (['write_gate 未就位', COMMIT_FAILED_GATE].includes(app.gate)) return false
+  const done  = (app.added > 0 ? 1 : 0) + (other.done > 0 ? 1 : 0)
+  const tried = app.attempted > 0 || other.tried > 0
+  return done > 0 || !tried
+}
+```
+
+规则推广到全通道：
+- 任一通道**有落地** ⇒ done
+- 五通道**皆无提案**（真·空轮）⇒ done（回滚会导致同一批痕迹**无限重处理**）
+- **有提案而一件都没落地** ⇒ failed（水位回滚、下轮重试，幂等）
+
+**取向**（与本轮所有裁定一致）：**宁可重试（failed，幂等、可观测），不可静默丢料（landed，无声无息）。**
+
+审计行增 `otherTried` / `otherDone` 两字段 ⇒ 判据输入可观测。
+
+### 30.3 验收
+
+- `scripts/test-deepsleep-verdict.mjs` **36 → 42 条**，新增 6 条含三个对照组：
+  - 纯其他通道轮全未落地 ⇒ **failed**（核心）
+  - 五通道皆无提案 ⇒ done（防无限重处理）
+  - 其他通道有落地 ⇒ done（防误伤）
+  - 另含：向后兼容（不传 `other` 与旧行为一致）、失败 gate 优先、stop≠completed
+- `npm test` exit 0（19 pass · 1 xfail · 0 skip）
+- 提交 `9667721`，已推送、已重钉、已安装；**运行时符号验证 `otherTried` / `otherDone` 命中**
+
+---
+
 ## ⚠️ 仍待用户拍板（本轮不结的两项）
 
 | # | 事项 | 为何需用户决定 |
