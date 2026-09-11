@@ -3,8 +3,28 @@
 //
 // 问题：同一批检测件被多个入口调用，但**退出码口径不一**——`sleep-selfcheck` 把 exit 3 当「依赖缺失 ⇒ 跳过」，
 //   而 `npm test` 的 `&&` 链把任何 exit≠0 当失败并中断。同一份检测件在两种入口下判读不同，会让人对"到底过没过"失去信任。
-// 契约（ADR-132）：`0 = pass · 3 = skip（依赖缺失，不算失败） · 其他 = fail`。本运行器**唯一实现**该契约：
-//   · 逐件运行并按其退出码归类；· 打印统一摘要；· 任一 fail ⇒ 自身 exit 1；全 pass/skip ⇒ exit 0。
+// 契约（ADR-132）：退出码语义，**本运行器是唯一实现方**：
+//     exit 0 = pass（全部通过）
+//     exit 3 = skip（诚实跳过：依赖缺失，不算失败）
+//     exit 4 = xfail（存在**已知未修**的预期失败；不判失败，但**必须可见**）
+//     其他    = fail
+//
+// emitter（检测件）侧的义务，与上面一一对应，**别只实现一半**：
+//   · 退 4 的前提是「**有 xfail 且没有任何真实断言失败**」；
+//   · 一旦某条 xfail **意外变成 XPASS**（缺陷被修了、或被绕过），emitter 必须退 **1（fail）**，**不是 4**
+//     —— 这是双向锁的另一半：只锁「FAIL 也接受」等于把未修缺陷正当化成绿（= skipped）；
+//       只锁「PASS 判 FAIL」等于制造永久红灯。两端都锁，4 这个码位才有意义。
+//
+// 渲染三条硬约束（2026-09-12 team-lead 裁定，改动时不要退化掉）：
+//   ① xfail 的字形**不得**与 ✅ 相混淆（用 ⚠，不用 ✓/✔）——人扫终端只看图标，
+//      长得像 PASS 的话这个码位等于白加；
+//   ② xfail 计数为 **0 时也要显示**（写 `0 xfail`，不得省略）——省略后读者分不清
+//      「没有 xfail」与「runner 没统计 xfail」，后者是本件最怕的静默失效；
+//   ③ 本运行器必须**自证能识别 4**（见文件末「反向证伪」说明）：加了码位但渲染分支没接上，
+//      是一个「加了等于没加」的静默洞，与假绿同型。
+//
+// 运行行为：· 逐件运行并按其退出码归类；· 打印统一摘要（xfail 单独成段）；
+//   · 任一 fail ⇒ 自身 exit 1；全 pass/skip/**xfail** ⇒ exit 0（xfail 不判失败）。
 // 用法: node scripts/check-runner.mjs [--json]
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -52,14 +72,38 @@ for (const entry of CHECKS) {
   let code = 0
   try { execFileSync('node', [join(root, file), ...argv], { stdio: 'ignore', timeout: 300000, windowsHide: true }) }
   catch (e) { code = Number(e.status ?? -1) }
-  rows.push({ file, code, verdict: code === 0 ? 'pass' : code === 3 ? 'skip' : 'fail' })
+  rows.push({ file, code, verdict: code === 0 ? 'pass' : code === 3 ? 'skip' : code === 4 ? 'xfail' : 'fail' })
 }
 const failed = rows.filter((r) => r.verdict === 'fail')
-const out = { checks: rows, fail: failed.map((r) => r.file), note: '契约：0=pass · 3=skip(依赖缺失) · 其他=fail（ADR-132）' }
+const xfailed = rows.filter((r) => r.verdict === 'xfail')
+const out = {
+  checks: rows,
+  fail: failed.map((r) => r.file),
+  xfail: xfailed.map((r) => r.file),
+  note: '契约（ADR-132）：0=pass · 3=skip(依赖缺失) · 4=xfail(已知未修，不判失败但必须可见) · 其他=fail',
+}
 if (AS_JSON) console.log(JSON.stringify(out, null, 2))
 else {
-  console.log('检测件统一运行（契约：0=pass · 3=skip · 其他=fail）')
-  for (const r of rows) console.log(`  ${r.verdict === 'pass' ? '✅' : r.verdict === 'skip' ? '⏭' : '❌'} ${r.file.padEnd(36)} exit=${r.code} ${r.verdict}`)
-  console.log(failed.length ? `\nFAIL（${failed.length} 项）：${failed.map((r) => r.file).join(', ')}` : `\nPASS（${rows.filter((r) => r.verdict === 'pass').length} pass · ${rows.filter((r) => r.verdict === 'skip').length} skip）`)
+  // 字形：⚠ 与 ✅ 一眼可辨（硬约束①）；xfail 计数恒显示，含 0（硬约束②）
+  const GLYPH = { pass: '✅', skip: '⏭', xfail: '⚠', fail: '❌' }
+  const nPass = rows.filter((r) => r.verdict === 'pass').length
+  const nSkip = rows.filter((r) => r.verdict === 'skip').length
+  console.log('检测件统一运行（契约：0=pass · 3=skip · 4=xfail · 其他=fail）')
+  for (const r of rows) console.log(`  ${GLYPH[r.verdict]} ${r.file.padEnd(36)} exit=${r.code} ${r.verdict}`)
+  console.log(`\n${failed.length ? 'FAIL' : 'PASS'}（${nPass} pass · ${xfailed.length} xfail · ${nSkip} skip${failed.length ? ` · ${failed.length} fail` : ''}）`)
+  if (xfailed.length) console.log(`⚠ XFAIL 项（已知未修，不判失败但必须可见）：${xfailed.map((r) => r.file).join(', ')}`)
+  if (failed.length) console.log(`FAIL 项：${failed.map((r) => r.file).join(', ')}`)
 }
+// 反向证伪（硬约束③：自证 4 码位**渲染分支真的接上了**，不是"加了等于没加"的静默洞）
+//   做法（不污染 CHECKS 常驻清单，跑完必须还原）：
+//     ① 建临时件 `scripts/__xfail-probe.mjs`，内容 `process.exit(4)`
+//     ② 在 CHECKS 首行插入 `['scripts/__xfail-probe.mjs'],`
+//     ③ 跑 `node scripts/check-runner.mjs` ⇒ 必须同时满足：
+//          渲染 `  ⚠ scripts/__xfail-probe.mjs  exit=4 xfail`
+//          摘要出现 `1 xfail`，且出现「⚠ XFAIL 项（…必须可见）」段
+//          **runner 自身 exit 仍为 0**（xfail 不判失败）
+//     ④ 还原 runner 与 CHECKS、删除探针 ⇒ 与步骤 ① 之前的 **cp 备份件逐字节比对一致**
+//        （**不要**在注释里写死哈希：本件一改哈希就变，写死即过期锚点，正是本轮反复踩的"证据与结论不同源"）
+//   实测（2026-09-12）：③ 得到 `PASS（20 pass · 1 xfail · 0 skip）` + ⚠ 段 + RUNNER_EXIT=0 ✓
+//   若哪天改了渲染分支却没重跑这条，4 就会被悄悄判成 ❌ fail（恒红）或 ✅ pass（假绿）——二者都是本件要防的。
 process.exit(failed.length ? 1 : 0)
