@@ -119,7 +119,7 @@ const RULES = [
     asserts: [
       [/const prevDeepSleepAt = lastDeepSleepAt/g, 1, '本轮开始前先快照基准水位（回滚的落点）'],
       [/if \(r === 'failed'\) \{ lastDeepSleepAt = prevDeepSleepAt;/g, 1, '落点①：.then 内判 failed ⇒ 回滚到基准，而非推进到 now'],
-      [/\}\.catch\(\(e\) => \{\s*\n\s*lastDeepSleepAt = prevDeepSleepAt/g, 1,
+      [/\.catch\(\(e\) => \{[\s\S]{0,60}?lastDeepSleepAt = prevDeepSleepAt/g, 1,
         '落点②：.catch 内同样回滚（异常时也不得推进水位——只锁落点① 的话删掉这里仍是绿的）'],
     ],
     breaks: [
@@ -130,7 +130,7 @@ const RULES = [
       ['基准快照丢失（回滚落点变成 0）', (s) => s.replace(
         'const prevDeepSleepAt = lastDeepSleepAt', 'const prevDeepSleepAt = 0')],
       ['删掉落点②（.catch 内回滚）——只锁一个落点时会假绿', (s) => s.replace(
-        '    }).catch((e) => {\n      lastDeepSleepAt = prevDeepSleepAt', '    }).catch((e) => {')],
+        '      lastDeepSleepAt = prevDeepSleepAt\n      log(`deep sleep err:', '      log(`deep sleep err:')],
     ],
   },
 ]
