@@ -9,7 +9,7 @@
 //        ③ attempted===0 纯 ops 轮/真·空轮 ⇒ done（防无限重处理）④ stop≠completed / out 假值 ⇒ failed
 //        ⑤ write_gate 未就位（基础设施失败）⇒ failed ⑥ 部分接受 skipped>0 ⇒ done
 // 用法: node scripts/test-deepsleep-verdict.mjs
-import { deepSleepLanded } from '../lib/distill.js'
+import { deepSleepLanded, deepSleepReplayable } from '../lib/distill.js'
 
 let pass = 0, fail = 0
 const ok = (c, msg) => { if (c) { pass++; console.log(`✅ ${msg}`) } else { fail++; console.log(`❌ ${msg}`) } }
@@ -60,5 +60,32 @@ ok(deepSleepLanded('completed', {}, app({ attempted: 1, added: 1, gate: 'pass' }
   deepSleepLanded('error', {}, app({ attempted: 1, added: 1, gate: 'pass' })) === false,
   '⑥ 不变量：added>0 也须 stop=completed 才判 done')
 
+// ── 深睡水位「可否回放」判据（deepSleepReplayable）────────────────────────────
+// 背景（2026-09-11 可靠性审查 D2）：重启时 lastDeepSleepAt 从 distill-audit.jsonl 回放重建，
+//   旧判据只排 error / stop=error / result∈{no-parent,no-traces}（"无事可做"），**漏排"做了但被拒"**
+//   （attempted>0 && added=0）⇒ 那类轮次被当有效水位回放 ⇒ 那批痕迹永久关在窗外（重启即丢料）。
+// 反向证伪：把 deepSleepReplayable 的 landed 分支删掉（回落旧实现）⇒ 下方 ④ 由 false 翻成 true。
+console.log('\n── deepSleepReplayable 回放判据回归 ──')
+
+ok(deepSleepReplayable({ kind: 'distill' }) === false, '① 非深睡审计行 ⇒ 不可回放')
+ok(deepSleepReplayable({ kind: 'deep-sleep', error: 'boom' }) === false, '② 带 error ⇒ 不可回放')
+ok(deepSleepReplayable({ kind: 'deep-sleep', stop: 'error' }) === false, '② stop=error ⇒ 不可回放')
+ok(deepSleepReplayable({ kind: 'deep-sleep', stop: 'completed', result: 'no-parent' }) === false,
+  '③ result=no-parent ⇒ 不可回放（旧判据保留）')
+ok(deepSleepReplayable({ kind: 'deep-sleep', stop: 'completed', result: 'no-traces' }) === false,
+  '③ result=no-traces ⇒ 不可回放（旧判据保留）')
+ok(deepSleepReplayable({ kind: 'deep-sleep', stop: 'completed', attempted: 3, added: 0, gate: 'all-rejected', landed: false }) === false,
+  '④ 真库形状 attempted=3/added=0/gate=all-rejected/landed=false ⇒ 不可回放（D2 修复点）')
+ok(deepSleepReplayable({ kind: 'deep-sleep', stop: 'completed', attempted: 1, added: 0, gate: 'all-rejected', landed: false }) === false,
+  '④ attempted=1/added=0/landed=false ⇒ 不可回放')
+ok(deepSleepReplayable({ kind: 'deep-sleep', stop: 'completed', attempted: 3, added: 0, gate: 'all-rejected' }) === true,
+  '⑤ 旧行无 landed ⇒ 回落旧判据 true（**不回捞**：回捞会把丢料换成重复写，等幂等键落地后再议）')
+ok(deepSleepReplayable({ kind: 'deep-sleep', stop: 'completed', attempted: 0, added: 0, landed: true }) === true,
+  '⑥ landed=true（空轮也算已消化）⇒ 可回放')
+ok(deepSleepReplayable({ kind: 'deep-sleep', stop: 'completed', attempted: 3, added: 3, landed: true }) === true,
+  '⑥ landed=true（有落地）⇒ 可回放')
+ok(deepSleepReplayable({}) === false, '⑦ 空对象 ⇒ 不可回放（兜底）')
+
 console.log(`\n结果: ${pass} PASS / ${fail} FAIL`)
 process.exit(fail === 0 ? 0 : 1)
+

@@ -163,6 +163,13 @@ export declare const deepSleepLanded: (stop: unknown, out: unknown, app: {
     added: number;
     gate: string;
 }) => boolean;
+export declare const deepSleepReplayable: (o: {
+    kind?: unknown;
+    error?: unknown;
+    stop?: unknown;
+    result?: unknown;
+    landed?: unknown;
+}) => boolean;
 export declare function registerDistill(ctx: AppContext, config: DistillConfig): {
     getDeepSleepStatus: () => DeepSleepStatus;
     runDeepSleepNow: () => Promise<{

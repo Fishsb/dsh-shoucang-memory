@@ -5,6 +5,8 @@
  * 用法: node scripts/check-hardcode.mjs [项目根=当前目录]
  * 扫描范围: 代码与配置模板 (*.py *.js *.mjs *.yaml *.yml *.json *.toml)
  * 豁免: docs/(设计文档,路径属实测记录)、node_modules、.git、.internal(本机瞬态)、LICENSE、CHANGELOG
+ *       2026-09-11 增补: .workbuddy-ai/ .workbuddy/（.gitignore 已忽略的运行时暂存区,永不入库,不构成开源红线;
+ *       此前面板探针把 root 路径写入该区即被判违规,属假阳性——假阳性会训练人忽视红灯,比漏报更危险）
  * 退出码: 0 干净 / 1 发现硬编码
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -12,7 +14,7 @@ import { join, resolve } from "node:path";
 
 const root = resolve(process.argv[2] || ".");
 const CODE_EXT = /\.(py|js|mjs|cjs|yaml|yml|json|toml)$/;
-const SKIP_DIRS = new Set([".git", "node_modules", "docs", ".index_cache", ".kb", "__pycache__", "_archive_data", ".internal"]);
+const SKIP_DIRS = new Set([".git", "node_modules", "docs", ".index_cache", ".kb", "__pycache__", "_archive_data", ".internal", ".workbuddy-ai", ".workbuddy"]);
 const SKIP_FILES = /^(LICENSE|CHANGELOG\.md)$/i;
 
 // 本机绝对路径特征(Windows 盘符路径 + 用户目录)

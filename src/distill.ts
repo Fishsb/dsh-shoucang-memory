@@ -357,6 +357,24 @@ export const deepSleepLanded = (stop: unknown, out: unknown, app: { attempted: n
   return app.added > 0 || app.attempted === 0
 }
 
+// ── 深睡水位「可否回放」判据（2026-09-11 抽出为单一实现：重启回放与语义同源，防两份判据漂移）──
+// 背景：重启时 lastDeepSleepAt 从 audit/distill-audit.jsonl 回放重建，旧判据只排
+//   error / stop=error / result ∈ {no-parent, no-traces}（"无事可做"），**漏排"做了但被拒"**
+//   （attempted>0 && added=0，如 gate=all-rejected）——这类轮次被当有效水位回放，
+//   那批痕迹就永久关在窗外（重启一次即丢料，实测 09-11 08:32/08:48 两轮共 4 条）。
+// 口径：审计行**自本次起**带 `landed`（由 deepSleepLanded 写入）；旧行无该字段时回落旧判据
+//   （保守兼容——历史 785 行绝大多数无 landed，**不回捞**：回捞会把水位往回推，在幂等键落地前
+//    只会把"丢料"换成"重复写"）。
+export const deepSleepReplayable = (o: {
+  kind?: unknown; error?: unknown; stop?: unknown; result?: unknown; landed?: unknown
+}): boolean => {
+  if (o.kind !== 'deep-sleep') return false
+  if (o.error || o.stop === 'error') return false
+  if (['no-parent', 'no-traces'].includes(String(o.result))) return false
+  if (o.landed !== undefined) return Boolean(o.landed)
+  return true
+}
+
 // ── 预筛信号词（零拷贝优先动态加载记忆仓 engine/signals.mjs；不可达时内嵌兜底副本，与 engine 同源）──
 const PRESCAN_STRONG = ['记住', '以后', '注意', '踩坑', '原来是这样', '应该改成', '别再用', '纠正', '别忘了', '务必']
 const PRESCAN_MID = [/失败.{0,24}(换|改)用/, /(报错|失败).{0,16}(换|改)用/, /改用.{0,12}(工具|方式|方案|命令)/, /原因.{0,12}(是|为|在于)/, /(记|存).{0,6}(到|进)/, /根因/, /对策/, /(要|该)记住/, /下次(要|得|注意)/]
@@ -1410,10 +1428,10 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         // 只回放「确实消化过痕迹」的深睡：error / no-parent / no-traces 都不推进水位——
         // no-traces 说明本轮一条痕迹都没收到（可能只是窗口被上一轮污染），
         // 若把它当水位，会把窗口内早于该时刻的痕迹永久关在窗外（当天再也回想不到）。
-        if (o.kind === 'deep-sleep' && !(o as { error?: string }).error
-          && (o as { stop?: string }).stop !== 'error'
-          && !['no-parent', 'no-traces'].includes(String((o as { result?: string }).result))
-          && t > lastDeepSleepAt) lastDeepSleepAt = t
+        // 2026-09-11：判据收敛到导出的 `deepSleepReplayable`（单一实现，供单测直接驱动编译产物）。
+        // 旧判据只排 no-parent/no-traces（"无事可做"），漏排"做了但被拒"（attempted>0 && added=0）——
+        // 那类轮次被当有效水位回放，那批痕迹就永久关在窗外（重启一次即丢料）。
+        if (deepSleepReplayable(o) && t > lastDeepSleepAt) lastDeepSleepAt = t
       } catch { /* 坏行跳过 */ }
     }
   } catch { /* 无审计文件=新装 */ }
@@ -2572,7 +2590,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
           ? await applyForgetOps(resolved.root, out.forgetOps, { audit, log })
           : { archived: 0, kept: 0, skipped: 0 }
         log(`deep sleep: stop=${stop} 原则 +${app.added}/替换 ${app.replaced}/跳过 ${app.skipped}（${app.gate}）画像 +${profileAdded} 指针更新 ${ptrRes.updated}/跳过 ${ptrRes.skipped}（${ptrRes.gate}）树 ops ${treeRes.applied}/跳过 ${treeRes.skipped}/归档 ${treeRes.archived} forget 归档 ${forgetRes.archived}/保留 ${forgetRes.kept}/跳过 ${forgetRes.skipped}`)
-        audit({ kind: 'deep-sleep', stop, attempted: app.attempted, added: app.added, replaced: app.replaced, skipped: app.skipped, rejected: (app.rejectedLines || []).length, rejectedLines: (app.rejectedLines || []).slice(0, 5), profiles: profileAdded, pointers: ptrRes.updated, ptrSkipped: ptrRes.skipped, tree: treeRes.applied, treeSkipped: treeRes.skipped, forgetArchived: forgetRes.archived, forgetKept: forgetRes.kept, forgetSkipped: forgetRes.skipped, gate: app.gate, gateExit: app.gateExit })
+        audit({ kind: 'deep-sleep', stop, attempted: app.attempted, added: app.added, replaced: app.replaced, skipped: app.skipped, rejected: (app.rejectedLines || []).length, rejectedLines: (app.rejectedLines || []).slice(0, 5), profiles: profileAdded, pointers: ptrRes.updated, ptrSkipped: ptrRes.skipped, tree: treeRes.applied, treeSkipped: treeRes.skipped, forgetArchived: forgetRes.archived, forgetKept: forgetRes.kept, forgetSkipped: forgetRes.skipped, gate: app.gate, gateExit: app.gateExit, landed: deepSleepLanded(stop, out, app) })
         // 判据台账（巩固域）：模型判据（可选 judgement）+ 宿主侧**升格/降格裁决**（criteria.ts 单一实现）+ 六通道结果
         ledger({
           domain: 'consolidate', step: 'deep-sleep', stop,

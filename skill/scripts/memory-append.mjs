@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 // memory-append.mjs — 记忆追加写入（全自动固化层安全阀，ADR-0002 v2）
 // 语义：只 append 不覆盖——定位既有小节，在该小节末插入条目；新条目行（MEMORY/USER/AGENT 索引）可 --new 追加文件尾。
-// 安全网：① 写前备份 audit/backup-<ts>/ ② 小节不存在→exit 2（列出可选，不自动新建散落小节）
+// 安全网：① 写前备份 audit/backup-<ts>/（保留最近 SHOUCANG_BACKUP_KEEP=30 个，0=不裁剪）② 小节不存在→exit 2（列出可选，不自动新建散落小节）
 //        ③ 主文档容量硬限（追加后总量超限→exit 1 不写）④ 目标文件白名单（仅 notes/<7个> + MEMORY/USER/AGENT）
+//        ⑤ 原子写（同目录 tmp + rename，2026-09-11 D3 修复：中断不留半文件）；tmp 落盘/替换失败→exit 5 且原文件未改动
 // 用法: node scripts/memory-append.mjs <MEMORY.md|USER.md|AGENT.md|notes/<file>.md> <小节名> <条目文本>
 //       node scripts/memory-append.mjs <目标> <小节名> --new <索引行>     # 主文档新条目行（文件尾）
-import { readFile, writeFile, copyFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, copyFile, mkdir, rename, unlink, readdir, rm } from 'node:fs/promises';
 import { join, dirname, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -32,9 +33,23 @@ const raw = await readFile(filePath, 'utf8').catch(() => null);
 if (raw === null) { console.error(`文件不存在: ${filePath}`); process.exit(4); }
 
 // 备份（回滚安全网）
+// 2026-09-11 修复：备份目录原为「分钟级、永不清理」，实测累积 98 个目录（= 98 份主文档全量副本）。
+// 改为保留最近 N 个（SHOUCANG_BACKUP_KEEP，缺省 30；置 0 = 不裁剪，保留旧行为）。
 const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
 const bakDir = join(skillDir, 'audit', 'backup-' + ts.replace(/[-T:]/g, '').slice(0, 12));
-try { await mkdir(bakDir, { recursive: true }); await copyFile(filePath, join(bakDir, norm.replace(/\//g, '_'))); } catch { /* 备份失败不阻塞（尽力） */ }
+try {
+  await mkdir(bakDir, { recursive: true });
+  await copyFile(filePath, join(bakDir, norm.replace(/\//g, '_')));
+  const keep = Number(process.env.SHOUCANG_BACKUP_KEEP ?? 30);
+  if (keep > 0) {
+    const auditDir = join(skillDir, 'audit');
+    const all = (await readdir(auditDir).catch(() => [])).filter((d) => /^backup-\d{12}$/.test(d)).sort();
+    // 目录名即时间戳，字典序 == 时间序；只裁最旧的，本次刚写的永远保留
+    for (const old of all.slice(0, Math.max(0, all.length - keep))) {
+      await rm(join(auditDir, old), { recursive: true, force: true }).catch(() => {});
+    }
+  }
+} catch { /* 备份/裁剪失败不阻塞（尽力） */ }
 
 // 小节定位（复用 read_section 锚语义：title===kw || includes 双向）
 const lines = raw.split(/\r?\n/);
@@ -101,7 +116,7 @@ if (isNewIndexLine) {
   // 该节末尾 = 下一个同层或更高层标题 或 文件尾
   let secEnd = lines.length;
   for (let i = lastHead.line + 1; i < lines.length; i++) { const lv = headingAt(lines[i]); if (lv <= lastHead.level) { secEnd = i; break; } }
-  // 剔除末尾空行（插入点在正文最后非空行后）
+  // 剔除末尾空行（见上方说明：扁平小节下 secEnd 已停在正文首行，本行实际不生效）
   while (secEnd > lastHead.line + 1 && !lines[secEnd - 1].trim()) secEnd--;
   // 若缺失层存在（需分裂）：从缺失层 pi 开始逐级建子节标题（内容放最深缺失层）
   let insertPos = secEnd;
@@ -145,6 +160,19 @@ if (isMain) {
   if (chars > limit) { console.error(`exit=1 追加后超容量 ${chars}/${limit}（不写，需合并/下沉）`); process.exit(1); }
 }
 
-await writeFile(filePath, content, 'utf8');
+// 2026-09-11 修复（D3）：原为直接 writeFile 覆盖——进程在「文件被截断后、新内容未落完」之间被打断
+// （宿主重启 / 热重载 / 强制刷新）会留下半截主文档；此时备份虽在，但没有任何自动回滚，
+// 下一次读写就基于损坏的副本继续（备份目录里同时也多一份垃圾）。
+// 改为同目录 tmp 写 + rename 原子替换：同一文件系统内 rename 是原子操作，
+// 观察者要么看到旧全文、要么看到新全文，不存在中间态。tmp 必须与原文件同目录，否则跨卷 rename 退化成拷贝。
+const tmpPath = join(dirname(filePath), `.${norm.replace(/\//g, '_')}.tmp-${process.pid}-${Math.random().toString(36).slice(2, 8)}`);
+try {
+  await writeFile(tmpPath, content, 'utf8');
+  await rename(tmpPath, filePath);
+} catch (e) {
+  await unlink(tmpPath).catch(() => {});                    // 失败时不留 tmp 垃圾；原文件始终未被触碰
+  console.error(`写入失败 exit=5（原文件未改动）: ${e?.message ?? e}`);
+  process.exit(5);
+}
 console.log(`append ${norm} :: ${sectionArg}${isNewIndexLine ? ' [--new]' : ''} — ${entryText.slice(0, 60)}…（备份 ${bakDir}）`);
 process.exit(0);
