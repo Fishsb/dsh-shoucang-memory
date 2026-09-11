@@ -1952,7 +1952,7 @@ if (!segOk) break
 |---|---|---|---|
 | 1 | push 52 个提交 | ✅ | 只读 `ls-remote` 复核：远端 HEAD = `a9861e9` = 本地 HEAD，未推送数 **0** |
 | 2 | 重钉 profile 依赖 | ✅ | 复核 `package.json`：`#4ec6dc6` → `#a9861e9`（已备份 `.bak-20260912`） |
-| 3 | `pnpm install` | ✅ | 安装副本 **md5 与开发仓 `lib/distill.js` 逐字节一致**（`34b04d6b…`） |
+| 3 | `pnpm install` | ✅ **已复核** | 安装副本 **267,235 B / mtime 2026-09-12 04:53:45**，**md5 与开发仓 `lib/distill.js` 逐字节一致**：`34b04d6b834ac4838700963306db9377` |
 | 4 | **宿主热重载** | ⏳ | **仅用户可执行**（宿主侧工具） |
 
 **安装副本修复符号实测**（`~/.dsh/profiles/web/node_modules/dsh-shoucang-memory/lib/distill.js`，267235 B，mtime 2026-09-12 04:53:45）：
@@ -1964,6 +1964,11 @@ if (!segOk) break
 | `deepSleepReplayable` | 3 | G-16 重捞开关 |
 | `planSkipWatermark` | 4 | **G-4a 根因修复** |
 | `skip-held-for-undigested` | 1 | G-4a 扣住记账 |
+| `skip-abandoned-after-hold` | 1 | G-4a 死循环熔断 |
+
+⇒ **md5 逐字节一致 + 六个符号全命中 ⇒ 部署确证**（不是"应该装上了"，是读到的一致）。
+
+**注**：`pnpm install` 输出为 `Already up to date`，看似无事发生——但按本轮纪律**不能信工具的自述**。直接读安装副本才确认它确实已是新码（267,235 B，比部署前的 246,680 B 大）。若只信 `Already up to date`，会误判为"没装上"。
 
 ⇒ **G-16 / G-20 / G-4a 三个修复已进入运行时产物**。热重载后即生效。
 
