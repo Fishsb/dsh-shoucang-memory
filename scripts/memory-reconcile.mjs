@@ -155,6 +155,32 @@ try {
   }
 } catch (e) { notesHealth.scanError = String(e && e.message ? e.message : e).slice(0, 120) } // **不静默**：扫描失败必须可见（实测踩过 ReferenceError 被裸 catch 吞成"0 文件 = 健康"）
 
+// ⑥b **悬空指针体检**（F12 类）：索引/画像行里的 `notes/<f>.md §<名>` 必须能在该文件中解析到标题
+//   解析语义**照抄读取器** `read_section.mjs`：## 或 ### 标题，大小写不敏感 + 双向包含 + 去尾部 (2026…) 后缀
+const dangling = []
+try {
+  const headTitles = new Map() // file -> string[]（小写）
+  for (const f of readdirSync(notesDir).filter((x) => x.endsWith('.md'))) {
+    headTitles.set(f, readFileSync(join(notesDir, f), 'utf8').split(/\r?\n/).map((l) => l.match(/^(#{2,3})\s+(.*)$/)).filter(Boolean).map((m) => m[2].trim().toLowerCase()))
+  }
+  const coreOf = (s) => String(s).replace(/\s*[（(]\s*20\d{2}[^）)]*[）)]\s*$/, '').trim().toLowerCase()
+  const resolve = (file, name) => {
+    const heads = headTitles.get(file)
+    if (!heads) return false
+    const kw = coreOf(name)
+    return heads.some((t) => { const tt = coreOf(t); return tt === kw || tt.includes(kw) || kw.includes(tt) })
+  }
+  const sources = ['MEMORY.md', 'USER.md', 'AGENT.md', 'notes/INDEX.md']
+  for (const src of sources) {
+    let text = ''
+    try { text = readFileSync(join(bank, src), 'utf8') } catch { continue }
+    for (const m of text.matchAll(/notes\/([A-Za-z0-9_-]+)\.md\s*§([^\s/、，,）)]+)/g)) {
+      if (!resolve(`${m[1]}.md`, m[2])) dangling.push({ from: src, ref: `notes/${m[1]}.md §${m[2]}` })
+    }
+  }
+  notesHealth.danglingPointers = dangling
+} catch (e) { notesHealth.danglingError = String(e && e.message ? e.message : e).slice(0, 120) }
+
 const out = {
   window: { bank, stateRoot, ledgerPath, ledgerSince, ledgerRows: ledger.length },
   closure: { ok: closureOk, note: `自举基线（${baseline.at}）：此前历史行无回执，显式豁免；闭合只判定「基线之后」的未解释差异`, baseline, files: closure },
@@ -191,7 +217,11 @@ if (AS_JSON) {
   console.log(`  ④ 成熟度: 小节 ${maturation.sections} 个 · 达 gate(≥${maturation.gate}) ${maturation.mature} 个${maturation.note ? '（' + maturation.note + '）' : ''}`)
   console.log(`  ⑤ 影子打分: ${shadow.rows} 行 / ${shadow.samples} 样本 · corr(importance,relevance)=${shadow.corrImpRel === null ? 'n/a' : shadow.corrImpRel.toFixed(3)} → ${shadow.verdict}`)
   console.log(`  ⑥ 笔记结构体检（**建议，不自动改**——私人数据先问）：${notesHealth.files} 文件 / ${notesHealth.chapters} 章节 / ${notesHealth.sections} 子节`)
-  for (const c of notesHealth.crowded) console.log(`     ⚠ ${c.file} 的「${c.chapter}」下挂 ${c.subSections} 个 ###（疑似层级失真的收纳筐）`)
-  for (const d of notesHealth.duplicateTopics) console.log(`     ⚠ ${d.file}：「${d.topic}」既作 ### 又作 ##（主题重复/错位）`)
-  if (!notesHealth.crowded.length && !notesHealth.duplicateTopics.length) console.log('     ✅ 未发现层级错位或主题重复')
+  // 子节多的章节**只作信息**（同质章节是健康的组织方式；用任意阈值报 ⚠ 会造成报警疲劳）
+  for (const c of notesHealth.crowded) console.log(`     ℹ ${c.file} 的「${c.chapter}」含 ${c.subSections} 个子节（若为同质主题则属正常，仅展示）`)
+  for (const d of notesHealth.duplicateTopics) console.log(`     ⚠ ${d.file}：「${d.topic}」既作 ### 又作 ##（同名主题重复/错位 ⇒ 应合并）`)
+  const dg = notesHealth.danglingPointers || []
+  if (dg.length) for (const x of dg) console.log(`     ❌ **悬空指针**：${x.from} → ${x.ref}（该小节在目标文件里不存在；写门视之为 exit=2 硬错）`)
+  if (!notesHealth.crowded.length && !notesHealth.duplicateTopics.length && !dg.length) console.log('     ✅ 未发现层级错位 / 主题重复 / 悬空指针')
+  if (notesHealth.scanError) console.log(`     ⚠ 结构扫描失败（不静默）：${notesHealth.scanError}`)
 }
