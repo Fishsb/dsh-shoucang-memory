@@ -30,6 +30,7 @@ export interface Config {
     idleWakeMs: number;
     minTurnChars: number;
     distillPrescan: boolean;
+    prescanMinChars: number;
     distillPrompt: string;
     llmProvider: string;
     llmModel: string;
@@ -41,6 +42,7 @@ export interface Config {
     capUser: number;
     capMemory: number;
     enableDeepSleep: boolean;
+    enableRemPass?: boolean;
     deepSleepIdleMs: number;
     deepSleepProbe: boolean;
     deepSleepProbeAfterMs: number;

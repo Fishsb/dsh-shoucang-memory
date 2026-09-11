@@ -29,12 +29,12 @@ import { appendFileSync, mkdirSync, readFileSync, writeFileSync, existsSync, rea
 import { join, dirname } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import {
-  dshHome, knowledgeRoot, memoryLibRoot, memorySkillPresent, resolveTarget, loadWhitelist, gateMemoryAppend, recallIndex,
+  dshHome, knowledgeRoot, memoryLibRoot, resolveTarget, loadWhitelist, gateMemoryAppend,
   type Whitelist, type RouteTarget,
 } from './targets.js'
 import { recallRanked, semanticSim, type EmbedCfg } from './vec.js'
 import { activityAggregate } from './activity.js'
-import { applyTreeOps, type TreeOp } from './treeops.js'
+import { applyTreeOps, applyForgetOps, sectionExists, type TreeOp } from './treeops.js'
 
 // ═══ v18 分段蒸馏常量（2026-09-10 拍板「分段蒸馏 + 每段成功即推水位（可续传）+ 段间紧凑清单续上下文」）═══
 // 开放可校准：CHUNK_CHARS=单段字符预算（切段只在事件边界、不劈事件），MAX_CHUNKS_PER_RUN=单轮触发至多处理段数
@@ -42,7 +42,7 @@ import { applyTreeOps, type TreeOp } from './treeops.js'
 const CHUNK_CHARS = 10000
 const MAX_CHUNKS_PER_RUN = 3
 
-// 蒸馏文本化规则单一实现（buildEventChunks 与 extractDelta 同源，防两处口径漂移）：user/message 的每个 text 内容片
+// 蒸馏文本化规则单一实现（buildEventChunks 唯一入口，防口径漂移）：user/message 的每个 text 内容片
 // ≤2000 前缀、assistant/chunk block-end 的 text ≤3000 前缀；事件无文本片 → 空数组。
 const textPartsOfEvent = (e: any): string[] => {
   const parts: string[] = []
@@ -59,16 +59,16 @@ const textPartsOfEvent = (e: any): string[] => {
 
 // ── v18 纯函数分段器契约 ──
 export interface DistillChunk { startSeq: number; endSeq: number; text: string }
-export interface DistillChunks { chunks: DistillChunk[]; maxSeq: number; truncatedTail: boolean }
+export interface DistillChunks { chunks: DistillChunk[]; maxSeq: number }
 
 /**
  * buildEventChunks — v18 分段器（2026-09-10）：把 seq>lastSeq 的事件增量按「累计字符超 chunkChars 即切段」切成若干段。
- * - 文本化规则与 extractDelta 同源（textPartsOfEvent：user text 片 ≤2000、assistant block-end text ≤3000）；
+ * - 文本化规则 = 模块级 textPartsOfEvent 单一实现（user text 片 ≤2000、assistant block-end text ≤3000）；
  * - 切段只在事件边界，绝不劈事件；单个事件文本超 chunkChars 时允许单事件成段；
  * - 无文本事件并入当前开放段（只推进其 endSeq，不增字符）；窗口开头、首个文本事件之前的无文本事件不占段，
  *   但恒被水位推进覆盖（蒸馏成功推至首段 endSeq / 跳过推至 maxSeq），不丢事件；
  * - 窗口内完全没有 seq>lastSeq 的事件 → chunks=[]、maxSeq=lastSeq；maxSeq=窗口最末事件 seq；
- * - truncatedTail：分段天然不丢尾（每段都会被逐轮处理），故恒为 false——「还有后续段未处理」由调用方按
+ * - 不再返回 truncatedTail（2026-09-11 清理：该字段恒 false 且无消费方）；「还有后续段未处理」由调用方按
  *   chunks.length 与本轮段数上限（MAX_CHUNKS_PER_RUN）判定（水位停在已处理段的 endSeq，下一触发续传）。
  */
 export function buildEventChunks(agent: any, lastSeq: number, chunkChars: number = CHUNK_CHARS, eventsOf?: any[]): DistillChunks {
@@ -97,7 +97,7 @@ export function buildEventChunks(agent: any, lastSeq: number, chunkChars: number
     cur.endSeq = seq
   }
   if (cur) chunks.push({ startSeq: cur.startSeq, endSeq: cur.endSeq, text: cur.parts.join('\n') })
-  return { chunks, maxSeq, truncatedTail: false }
+  return { chunks, maxSeq }
 }
 
 // 段间紧凑清单（v18）：manifest 行构造 / 推入（字符上限超出丢最早行）。行=每段成功后追加，
@@ -108,7 +108,9 @@ const manifestLineFor = (endSeq: number, route: string, out: any): string => {
   // appends 目标小节（归一化后）前 12 字去重，最多 3 个
   for (const a of (out && Array.isArray(out.appends)) ? out.appends : []) {
     if (!a || topics.length >= 3) continue
-    const sec = String(a.section || '').trim().replace(/^[§#]+\s*/, '').replace(/(\/)?\s*[§#]+\s*/g, '$1').slice(0, 12)
+    // v21（§8.1 分裂律）：section 可为树状路径「父/子」——逐段各截 12 字，不整体截断（否则同父下不同子撞键）
+    const sec = String(a.section || '').trim().replace(/^[§#]+\s*/, '').replace(/(\/)?\s*[§#]+\s*/g, '$1')
+      .split('/').map((s) => s.trim().slice(0, 12)).filter(Boolean).join('/')
     if (!sec || seen.has(sec)) continue
     seen.add(sec)
     topics.push(sec)
@@ -162,6 +164,9 @@ export interface DistillConfig {
   sleepModel: string
   // ═══ 深度睡眠归纳（v16：习得原则并入 agent 画像 AGENT.md；2026-09-08 用户拍板：全部会话停滞 ≥3h 自动执行）═══
   enableDeepSleep: boolean
+  // 认知对照 P2「REM 相」（2026-09-11）：深睡同时做**跨主题联想**（crossTopic，产出须覆盖 ≥2 个不同 § 主题）；
+  // 缺省关；亦可用 env `SHOUCANG_REM_PASS=1` 打开（免改 zod schema 即可试跑）
+  enableRemPass?: boolean
   deepSleepIdleMs: number
   // 会话活跃状态机（2026-09-08 重构）：running 状态持续无事件多久 → 发起「输出增长探测」确认真活跃
   deepSleepProbe: boolean
@@ -267,8 +272,8 @@ route=memory 时续走四问：Q0 已有归属？Q1 下周用得上？Q2 归谁�
 Q2 画像判定：**用户的稳定偏好/背景/禁忌**（非一次性需求）→ profiles target=USER.md；**agent 自身的稳定做法/能力边界/常犯错误教训**（可跨任务复用的自我认知）→ profiles target=AGENT.md；一般知识→appends。
 委派禁令：**独立完成，绝不 spawn/委派任何子代理**（查重凭给定正文与你自身知识判断）。
 输出：只输出一行 JSON（不要 reasoning、不要其他文本）：
-{"route":"memory","appends":[{"target":"notes/tools.md","section":"<既有 ## 小节名>","text":"教程式浓缩：目标一句+编号步骤+注意，≤120字"}],"newIndex":[{"target":"MEMORY.md","line":"[tag] 主题 · 概况短语/短语/短语 → notes/x.md §小节"}],"profiles":[{"target":"USER.md|AGENT.md","section":"≤12字小节名","text":"≤80字一句话"}],"projectCards":[{"cardType":"how-to|reference|decision","title":"≤20字","text":"≤200字","source":"≤30字"}],"skipped":[{"title":"...","reason":"≤30字"}]}
-约束：route=memory → 填 appends/newIndex（target 白名单 notes/tools.md notes/flows.md notes/lessons.md notes/env.md notes/release.md；section 必须既有 ## 小节名；**text 教程式三段**「目标：… 1. … 2. … 注意：…」只写方向指引级浓缩——目标形态/步骤轮廓/关键注意点，不搬细节条文，纯事实类可省步骤保留目标行；**newIndex.line 格式权威=记忆库 spec §8**：[tag] 主题 · 概况短语/短语/短语 → notes/<file>.md §小节，定界符 ·=段界 /=短语界 →=指针，主题≤12字名词性禁冒号复合，概况名词短语 / 分隔、≤30字、高判别实词（专名/数值/路径关键词）、禁日期溯源），profiles/projectCards 留空；profiles 仅在 route=memory 时可填（0-2 条，宁缺毋滥，须是稳定画像而非一次性事实）；route=project → 填 projectCards（cardType: how-to=操作步骤/reference=契约事实/decision=架构决策），其余留空；route=discard → 除 skipped 全空；与 route 不匹配的条目宿主拒收。教训/踩坑类（notes/lessons.md 或 [lesson] 语境）可在 appends 条目附可选 rootCause/avoidWhen（各 ≤30 字，v5）——宿主写入时自动追加「- 根因：…」「- 不适用：…」两行，让教训带 WHY 与不适用条件（对标 WikiSkill pattern 双记 + When NOT to Apply），其余条目省略。`
+{"route":"memory","appends":[{"target":"notes/tools.md","section":"<既有 ## 小节名，或「父/子」路径>","text":"教程式浓缩：目标一句+编号步骤+注意，≤120字"}],"newIndex":[{"target":"MEMORY.md","line":"[tag] 主题 · 概况短语/短语/短语 → notes/x.md §小节"}],"profiles":[{"target":"USER.md|AGENT.md","section":"≤12字小节名","text":"≤80字一句话"}],"projectCards":[{"cardType":"how-to|reference|decision","title":"≤20字","text":"≤200字","source":"≤30字"}],"skipped":[{"title":"...","reason":"≤30字"}]}
+约束：route=memory → 填 appends/newIndex（target 白名单 notes/tools.md notes/flows.md notes/lessons.md notes/env.md notes/release.md；section = 既有 ## 小节名，或「父/子」树状路径（子节不存在时宿主自动建 ###，v21）；**裂 ### 判据（spec §8.1 分裂律）**：目标 ## 小节**子树正文 > 1000 字**（R=一次读取单元）**或同级条目 > 6 条**（K，防横向膨胀）→ 裂出子节、用「父/子」路径写入；否则并入父节（宁并勿滥裂，一层必须缩小候选集才有意义）；**text 教程式三段**「目标：… 1. … 2. … 注意：…」只写方向指引级浓缩——目标形态/步骤轮廓/关键注意点，不搬细节条文，纯事实类可省步骤保留目标行；**newIndex.line 格式权威=记忆库 spec §8**：[tag] 主题 · 概况短语/短语/短语 → notes/<file>.md §小节，定界符 ·=段界 /=短语界 →=指针，主题≤12字名词性禁冒号复合，概况名词短语 / 分隔、≤30字、高判别实词（专名/数值/路径关键词）、禁日期溯源），profiles/projectCards 留空；profiles 仅在 route=memory 时可填（0-2 条，宁缺毋滥，须是稳定画像而非一次性事实）；route=project → 填 projectCards（cardType: how-to=操作步骤/reference=契约事实/decision=架构决策），其余留空；route=discard → 除 skipped 全空；与 route 不匹配的条目宿主拒收。教训/踩坑类（notes/lessons.md 或 [lesson] 语境）可在 appends 条目附可选 rootCause/avoidWhen（各 ≤30 字，v5）——宿主写入时自动追加「- 根因：…」「- 不适用：…」两行，让教训带 WHY 与不适用条件（对标 WikiSkill pattern 双记 + When NOT to Apply），其余条目省略。`
 
 // ── 深度睡眠归纳契约（v17：习得原则与通用任务路径 [路径] 并入 agent 画像 AGENT.md；成败信号入材料；睡眠=agent 的反思进化迭代——认识自己也认识用户）──
 // v17.2（2026-09-10 用户拍板 v6）：新增 pointerOps 通道——索引指针自动维护（扩容概况/重构指针 §/去重留优），只允许 update 不增删（新增=蒸馏 newIndex 唯一性硬门）。
@@ -284,10 +289,14 @@ export const DEEP_SLEEP_PROMPT = `你是深度睡眠归纳子代理（守藏记�
 - **跨工作区红线**：记忆库是全局单库，痕迹可能来自多个工作区，而原则会常驻注入到**所有**工作区会话。含项目专名/具体路径/版本号/一次性事实的经验一律不提炼（skipped 注明「项目专属」）；只在单一项目语境成立的结论同样不提炼——宁缺毋滥，误注入比漏提炼危害大。
 - pending 内容尚未入册 notes 的，不得作为源指针（仅作背景理解）；找不到 notes 锚点就不提炼（宁缺毋滥）。
 - 与既有原则/路径冲突时用 replace（match=既有行原文，须逐字来自给定「现行原则/路径」清单）；否则 add。
-- **v17.3 树由模型自动维护（2026-09-10 拍板）**：**你可以**在确有语义收益时提出 \`treeOps\` 结构操作（rename/merge），宿主执行并守不变量（归档可回滚/锚存在/指针集内重写/无孤儿）；分裂新 ### 仍由蒸馏写侧负责；宁缺毋滥，拿不准不出 treeOps。源指针仍指向真实存在的 §小节（含子节路径如 §父节/子节 若材料中已存在）。
+- **v17.3/v18 树由模型自动维护（2026-09-10/09-11 拍板）**：**你可以**在确有语义收益时提出 \`treeOps\` 结构操作——\`rename\`（改标题并改写指针）/ \`merge\`（并入叶子小节）/ **\`split\`（把一个叶子 \`##\` 按边界锚拆成 ≤6 个 \`###\`）**；宿主执行并守不变量（归档可回滚/锚存在/指针集内重写/无孤儿）。**split 判据（spec §8.1 分裂律）**：该 \`##\` 正文 > R=1000 字且能划出 ≥2 个**语义正交**子面 → 才拆（否则并入即可，宁并勿滥裂）；\`parts[].start\` 必须**逐字**取自材料「待拆候选节正文」的对应行、且在节内唯一；子节名 ≤12 字。**增量生长（并入/新建 \`###\`）由蒸馏写侧负责，存量整形归你**；宁缺毋滥，拿不准不出 treeOps。源指针仍指向真实存在的 §小节（含子节路径如 §父节/子节 若材料中已存在）。
+- **split 的 JSON 形状**：\`{"action":"split","file":"lessons.md","title":"<目标叶子 ## 名>","parts":[{"title":"<子节名 ≤12 字>","start":"<该子节首行原文，逐字取自「待拆候选节正文」>"},…（2–6 个）]}\`；rename=\`{"action":"rename","file","oldTitle","newTitle"}\`、merge=\`{"action":"merge","file","keepTitle","dropTitle"}\`。
+- **v19 forgetOps（认知对照 P0「主动遗忘」）**：材料「遗忘候选」列出 90 天零命中的冷节——**你可以**对其中若干条给出 \`forgetOps\`：\`{"action":"archive","file":"lessons.md","section":"<小节名>"}\`（该节**正文**移入归档区、原位留 stub，指针仍有效、可一键恢复）或 \`{"action":"keep","file":"lessons.md","section":"<小节名>","reason":"≤60 字"}\`（保留并给理由）。**只允许 archive/keep，任何删除类动作一律被宿主丢弃**。判据：**确不再需要**（一次性进度 / 已被取代 / 纯历史）→ archive；**仍可能用到**（安全红线 / 契约事实 / 偶发但关键）→ keep 并给理由。**宁 keep 勿 archive，拿不准不动**。
+- **v19 crossTopic（认知对照 P2「REM 相」，仅在开启时生效）**：原则通道之外，可另提 \`crossTopic\`——**跨主题**联想出的上位原则：\`{"action":"add","text":"[原则] … → notes/x.md §A/§B"}\`。**硬门：text 的源指针必须覆盖 ≥2 个不同 § 小节**（同一主题内的归纳已由 principles 覆盖），不足即被宿主丢弃。没有真联想就留空，别硬凑。
+- **v19 跨日二次激活**：材料「近 7 日再现」给出被**再次命中**的已有条目——同一条目在多个日窗重现 = 该主题稳固，可经 pointerOps 扩容概况或提纯为更高层原则；只在单日出现的不要当稳固信号。
 - 独立完成：不 spawn 子代理、不使用任何工具，只依据给定材料。
 输出：只输出一行 JSON（不要 reasoning、不要其他文本）：
-{"principles":[{"action":"add","text":"[原则] 排障先看根因 · 先验证成本低再修改成本高 → notes/lessons.md §A/§B"},{"action":"add","text":"[路径] DSH 插件升级 · ①提交推送 ②cp 覆盖 lib ③sc restart ④四端点 200 → notes/flows.md §升级"},{"action":"replace","match":"[原则] 既有原则原文行","text":"[原则] ... → notes/tools.md §C"}],"profileOps":[{"target":"USER.md","action":"add","section":"沟通偏好","text":"- ... ← 源: notes/lessons.md §A"}],"pointerOps":[{"target":"MEMORY.md","action":"update","match":"[lesson] 网络坑 · 旧概况短语 → notes/lessons.md §网络坑","line":"[lesson] 网络坑 · 新概况短语 → notes/lessons.md §网络坑"}],"treeOps":[{"action":"rename","file":"lessons.md","oldTitle":"旧名","newTitle":"新名"}],"skipped":[{"title":"...","reason":"≤30字"}]}
+{"principles":[{"action":"add","text":"[原则] 排障先看根因 · 先验证成本低再修改成本高 → notes/lessons.md §A/§B"},{"action":"add","text":"[路径] DSH 插件升级 · ①提交推送 ②cp 覆盖 lib ③sc restart ④四端点 200 → notes/flows.md §升级"},{"action":"replace","match":"[原则] 既有原则原文行","text":"[原则] ... → notes/tools.md §C"}],"profileOps":[{"target":"USER.md","action":"add","section":"沟通偏好","text":"- ... ← 源: notes/lessons.md §A"}],"pointerOps":[{"target":"MEMORY.md","action":"update","match":"[lesson] 网络坑 · 旧概况短语 → notes/lessons.md §网络坑","line":"[lesson] 网络坑 · 新概况短语 → notes/lessons.md §网络坑"}],"treeOps":[{"action":"rename","file":"lessons.md","oldTitle":"旧名","newTitle":"新名"}],"forgetOps":[{"action":"keep","file":"lessons.md","section":"旧节","reason":"安全红线"}],"crossTopic":[],"skipped":[{"title":"...","reason":"≤30字"}]}
 无足够素材 → {"principles":[],"profileOps":[],"pointerOps":[],"treeOps":[],"skipped":[]}。
 
 双画像巩固（反思的另一通道=认识用户；与原则同判据、同红线）：
@@ -612,20 +621,8 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     return null
   }
 
-  // v18（2026-09-10）：distillAgent 已改走 buildEventChunks（分段蒸馏），本函数保留供 deep-sleep/其他调用（勿删）；
-  // 文本化规则已收敛到模块级 textPartsOfEvent 单一实现（与 buildEventChunks 同源，防口径漂移）；仍保持 24k 截断兼容旧契约。
-  const extractDelta = (agent: any, lastSeq: number): { maxSeq: number; text: string } => {
-    const events = agent.session.snapshotEvents()
-    let maxSeq = lastSeq
-    const parts: string[] = []
-    for (const e of events) {
-      const seq = (e as any).seq ?? 0
-      if (seq <= lastSeq) continue
-      if (seq > maxSeq) maxSeq = seq
-      for (const p of textPartsOfEvent(e)) parts.push(p)
-    }
-    return { maxSeq, text: parts.join('\n').slice(0, 24000) }
-  }
+  // 2026-09-11 清理：原 extractDelta（24k 截断版）已实证**零调用**（全仓 grep 只剩定义与注释；原注释「勿删」与实况不符），
+  // 故删除。文本化规则的唯一实现 = 模块级 textPartsOfEvent → buildEventChunks（蒸馏/深睡按需复用）。
 
   /** E3 桥：定位会话转录文件绝对路径（零拷贝调记忆仓 locate-transcript-probe；探测「是否还在输出」的硬证据） */
   const locateTranscript = async (sid: string): Promise<string | null> => {
@@ -991,9 +988,41 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     return { written, kept }
   }
 
+  // ── A1（2026-09-11 审查修复）：段落级落盘失败的有界重试 ──
+  // 语义：stop/JSON 都 OK 但条目级写失败（白名单外目标、磁盘错误、原子写失败…）时**不再前移水位**；
+  // 同一段连续失败满 MAX_DISPATCH_RETRY 次后强制推进 + 落审计 dispatch-failed-forced（丢失显式记账）。
+  const MAX_DISPATCH_RETRY = 3
+  const dispatchFailStreak = new Map<string, number>() // `${sid}#${endSeq}` → 连续失败次数（内存态，重启清零=最多再试 MAX 次）
+
+  // ── A3（2026-09-11 审查修复）：跨实例 claim 锁**统一判定** ──
+  // 背景：claim 原只在 sweepBacklog 一侧读判，idle 路径（armIdleTimer → distillAgent）完全不查 ⇒
+  //   重叠 fiber 的 idle 定时器可与扫尾同时蒸同一会话（注释宣称的「跨实例防双蒸」不成立）。
+  // 现语义：claim 的**写**只发生在蒸馏入口（幂等）；扫尾只做只读让位判定；本轮结束/早退即释放。
+  const CLAIM_TTL_MS = 25 * 60000
+  const claimDirOf = (): string => join(kRoot, 'audit', 'claims')
+  const claimFileOf = (sid: string): string => join(claimDirOf(), sid + '.json')
+  /** 在途 claim（TTL 内）→ false（让位）；否则写入并返回 true。异常一律 true（claim 失败不阻塞，与既有语义一致） */
+  const tryClaim = (sid: string, lastSeq: number, maxSeq: number): boolean => {
+    try {
+      let at = 0
+      try { at = Number((JSON.parse(readFileSync(claimFileOf(sid), 'utf8')) as { at?: number }).at || 0) } catch { /* 无 claim */ }
+      if (at && Date.now() - at < CLAIM_TTL_MS) return false
+      mkdirSync(claimDirOf(), { recursive: true })
+      writeFileSync(claimFileOf(sid), JSON.stringify({ at: Date.now(), lastSeq, maxSeq }), 'utf8')
+      return true
+    } catch { return true }
+  }
+  const claimHeld = (sid: string): boolean => {
+    try {
+      const at = Number((JSON.parse(readFileSync(claimFileOf(sid), 'utf8')) as { at?: number }).at || 0)
+      return !!at && Date.now() - at < CLAIM_TTL_MS
+    } catch { return false }
+  }
+  const releaseClaim = (sid: string): void => { try { unlinkSync(claimFileOf(sid)) } catch { /* 无 claim/删除失败均无害 */ } }
+
   const distillAgent = async (agent: any): Promise<void> => {
     const sid = agent.id as string
-    if (distilling.has(sid)) return // 并发守卫：蒸馏在途（最长 10min）内再触发直接跳过（防双写/竞态）
+    if (distilling.has(sid)) return // 并发守卫（本 fiber 内）：蒸馏在途（最长 10min）内再触发直接跳过
     if (agent.status && agent.status !== 'idle') { log(`distill: ${sidShort(sid)} 已恢复活跃（status=${agent.status}），跳过`); return }
     // 子代理守卫（2026-09-10 实态修复）：主会话派子代理执行并等待返回时，主会话 turn/end 已完成、status=idle、
     // 但其子代理仍在 running——此时蒸馏只是把任务"做到一半"的内容切碎入册，且水位推进后不会重蒸。
@@ -1005,7 +1034,12 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       return
     }
     distilling.add(sid)
+    let claimed = false
     try {
+      // A2（2026-09-11 审查修复）：入口先回流 project-defer 卡 —— 它们是「已裁决为项目卡」的降级暂存，
+      // 只因 workspace 当初不可解才留在 pending；绝不能再喂 LLM 重裁决（会按本轮会话 route 一刀切 →
+      // 落错工作区；随后还可能被候选 .processed 吞掉）。flush 内部按卡内「源会话」反解 workspace。
+      try { await flushDeferCards() } catch { /* 回流失败不阻断本轮蒸馏 */ }
       validateProvider()
       // v19（2026-09-10）：水位不再是裸数字——经「格式代 + 锚点事件指纹」双证校验，迁移/序号重排即作废全量重蒸。
       // 快照只取一次（同一数组喂水位增量计算 + 分段器），避免全量 snapshotEvents 被重复物化。
@@ -1015,9 +1049,17 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       // v18 分段蒸馏（2026-09-10）：整窗按 CHUNK_CHARS/事件边界切段后逐段蒸馏——每段成功即推水位到该段 endSeq
       // （断点续传），段间紧凑清单 manifest 续上下文防同轮重复入册；修复旧「整窗一次注入 24k 截断丢尾 / 失败整窗重蒸」。
       const { chunks, maxSeq } = buildEventChunks(agent, lastSeq, CHUNK_CHARS, wmEvents)
+      // A3：统一 claim（idle 与扫尾同一判定）——在途即让位（本 fiber 结束/早退时释放）。
+      if (!tryClaim(sid, lastSeq, maxSeq)) {
+        audit({ sid, kind: 'distill-skip', reason: 'claim-held', fclass: 'claim-held' })
+        log(`distill: ${sidShort(sid)} claim 在途（其他实例接管中），本轮让位`)
+        return
+      }
+      claimed = true
       const totalChars = chunks.reduce((n, c) => n + c.text.length, 0)
       let candFiles: string[] = []
-      try { candFiles = readdirSync(pendDir).filter((f) => /^\d{4}-\d{2}-\d{2}-.*\.md$/.test(f)).sort() } catch { candFiles = [] }
+      // A2：候选池排除 project-defer 卡（它们归 flushDeferCards 直写，不进 LLM 重裁决）
+      try { candFiles = readdirSync(pendDir).filter((f) => /^\d{4}-\d{2}-\d{2}-.*\.md$/.test(f) && !f.includes('-project-defer-')).sort() } catch { candFiles = [] }
       // 门槛（below-min 语义保持现状）：整窗文本总字符 < minTurnChars（chunks 空=无增量/全无文本事件）→ 跳过并推进水位
       if (!chunks.length || totalChars < (config.minTurnChars ?? 200)) {
         writeWatermark(sid, maxSeq, agent)
@@ -1131,7 +1173,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
           // v18：审计行与 raw-stub 均带分段标记（chunk/chunkStart/chunkEnd/totalChunks）；stub watermark=该段推进区间（同步用该段 endSeq）
           audit({ sid, kind: 'distill-run', route, stop, fclass, llm: llmLabel, targetLib: disp.targetLib, added: disp.added, rejected: disp.rejected, failed: disp.failed, chunk: k + 1, chunkStart: chunk.startSeq, chunkEnd: chunk.endSeq, totalChunks: chunks.length })
           recordStub({ sid, watermark: [wmNow, chunk.endSeq], chars: chunk.text.length, route, stop, fclass, llm: llmLabel, disp: { added: disp.added, rejected: disp.rejected, failed: disp.failed, targetLib: disp.targetLib }, outShape: out ? { appends: (out.appends || []).length, newIndex: (out.newIndex || []).length, profiles: (out.profiles || []).length, projectCards: (out.projectCards || []).length, skipped: (out.skipped || []).length } : null, chunk: k + 1, chunkStart: chunk.startSeq, chunkEnd: chunk.endSeq, totalChunks: chunks.length })
-          if (stop === 'completed' && out) {
+          if (stop === 'completed' && out && disp.failed === 0) {
             if (disp.added > 0) anyAdded = true
             // 路线②：蒸馏裁决完成（stop=completed && out，无论入册多少）即留轻 episode——episode=「任务发生+结果」的
             // 同类判定/转正数据源（memory-core-model §3.1）；入册或裁决非 discard 时再建/更新低置信任务候选
@@ -1145,6 +1187,23 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
             // 段间紧凑清单续上下文：本段裁决一行（供同轮后段查重/合并，勿重复入册；超 MANIFEST_CAP 丢最早行）
             manifest = manifestPush(manifest, manifestLineFor(chunk.endSeq, route, out), MANIFEST_CAP)
             segOk = true
+          } else if (stop === 'completed' && out && disp.failed > 0) {
+            // A1（2026-09-11 审查修复）：stop/JSON 都 OK 但**条目级落盘失败** → 本段不算消化，水位不前移。
+            // 防死循环：同一段连续失败满 MAX_DISPATCH_RETRY 次 → 强制推进并落审计（丢失显式记账）。
+            const streakKey = `${sid}#${chunk.endSeq}`
+            const tries = (dispatchFailStreak.get(streakKey) || 0) + 1
+            if (tries >= MAX_DISPATCH_RETRY) {
+              dispatchFailStreak.delete(streakKey)
+              writeWatermark(sid, chunk.endSeq, agent)
+              wmNow = chunk.endSeq
+              manifest = manifestPush(manifest, manifestLineFor(chunk.endSeq, route, out), MANIFEST_CAP)
+              segOk = true
+              audit({ sid, kind: 'distill-run', route, stop, fclass: 'dispatch-failed-forced', llm: llmLabel, targetLib: disp.targetLib, added: disp.added, rejected: disp.rejected, failed: disp.failed, chunk: k + 1, chunkStart: chunk.startSeq, chunkEnd: chunk.endSeq, totalChunks: chunks.length, tries })
+              log(`distill: ${sidShort(sid)} 段${k + 1}/${segLimit} 落盘失败 ${disp.failed} 条、已连续 ${tries} 轮——强制推进水位 → ${chunk.endSeq}（丢失已审计 dispatch-failed-forced）`)
+            } else {
+              dispatchFailStreak.set(streakKey, tries)
+              log(`distill: ${sidShort(sid)} 段${k + 1}/${segLimit} 落盘失败 ${disp.failed} 条（第 ${tries}/${MAX_DISPATCH_RETRY} 次）——水位保留 ${wmNow}，下轮从本段（seq ${chunk.startSeq}）续传`)
+            }
           } else {
             // 水位保留：stop≠completed（error/timeout/aborted）或 stop=completed 但 out=null（JSON 解析失败，
             // 2026-09-09 实锤「Unexpected end of JSON input」）都不算消化——本段不推进，下轮从本段续传
@@ -1172,7 +1231,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       }
     } catch (e) {
       log(`distill agent err ${sidShort(sid)}: ${String((e as Error)?.message || e).slice(0, 120)}`)
-    } finally { distilling.delete(sid) }
+    } finally { distilling.delete(sid); if (claimed) releaseClaim(sid) }
   }
 
   // 子代理输出 → JSON（剥离代码栅栏 + 容错提取首个 {...}；蒸馏/深度睡眠共用）
@@ -1932,6 +1991,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
   // ② 枚举通道：list() 扫 subagent 记录并用 ctx.agents.get(id) 取 live agent 判 status==='running'。
   const childSeen = new Map<string, Map<string, number>>() // parentSid -> childSid -> lastSeen
   let globalChildSeen = 0 // 父归属解析失败时的全局兜底（宁少蒸勿切碎）
+  let globalChildLoggedAt = 0 // 兜底生效日志节流（60s 一次，防每轮刷屏）
   const CHILD_ACTIVE_MS = 180000
   const noteChildActivity = (parentSid: string | null, childSid: string): void => {
     const now = Date.now()
@@ -1957,7 +2017,15 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         }
         if (!m.size) childSeen.delete(sid)
       }
-      if (globalChildSeen && now - globalChildSeen < CHILD_ACTIVE_MS) return true
+      if (globalChildSeen && now - globalChildSeen < CHILD_ACTIVE_MS) {
+        // 2026-09-11 审查：父归属解析失败的子代理事件会**全局**冻结蒸馏/深睡（保守取舍：宁少蒸勿切碎）——
+        // 加节流日志，避免「为什么没蒸」无从判断。
+        if (now - globalChildLoggedAt > 60000) {
+          globalChildLoggedAt = now
+          log(`子代理活动兜底生效：父归属未解，全局冻结蒸馏/深睡中（剩余 ${Math.ceil((CHILD_ACTIVE_MS - (now - globalChildSeen)) / 1000)}s）`)
+        }
+        return true
+      }
     } catch { /* 事件通道异常→继续走枚举通道 */ }
     try {
       for (const a of ctx.agents.list() || []) {
@@ -2095,7 +2163,100 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
           return rows.length ? rows.join('\n') : '（无）'
         } catch { return '（无）' }
       })()
+      // v18（§8.1 分裂律）treeOps.split 材料：超 R(1000 字) 的**叶子 ## 节**正文——parts[].start 必须逐字取自此处。
+      //   有界：取最大的 3 个候选、每个 ≤60 行（分裂是低频手术，材料不铺全量）。
+      const splitCandidates = (() => {
+        try {
+          const nd = join(resolved.root, 'notes')
+          const files = readdirSync(nd).filter((f) => /\.md$/i.test(f) && f.toLowerCase() !== 'index.md').sort()
+          const cands: Array<{ head: string; body: string[]; size: number }> = []
+          for (const f of files) {
+            const ls = readFileSync(join(nd, f), 'utf8').split(/\r?\n/)
+            const heads: number[] = []
+            for (let i = 0; i < ls.length; i++) if (/^#{2,4}[ \t]+/.test(ls[i])) heads.push(i)
+            for (let h = 0; h < heads.length; h++) {
+              const i0 = heads[h]
+              const lvl = (ls[i0].match(/^#+/) || [''])[0].length
+              if (lvl !== 2) continue // v2：split 只作用于 ##
+              const nextLvl = h + 1 < heads.length ? ((ls[heads[h + 1]].match(/^#+/) || [''])[0].length) : 0
+              if (nextLvl > lvl) continue // 非叶子（已含更深标题）→ 不是 split 候选
+              const i1 = h + 1 < heads.length ? heads[h + 1] : ls.length
+              const block = ls.slice(i0, i1)
+              const size = block.join('').replace(/\s/g, '').length
+              if (size > 1000) cands.push({ head: `notes/${f} ## ${ls[i0].replace(/^#+\s*/, '').trim()}（${size} 字）`, body: block.slice(0, 60), size })
+            }
+          }
+          cands.sort((a, b) => b.size - a.size)
+          const top = cands.slice(0, 3)
+          return top.length ? top.map((c) => `${c.head}\n${c.body.join('\n')}`).join('\n\n---\n\n') : '（无）'
+        } catch { return '（无）' }
+      })()
+      // v19（认知对照 P0「主动遗忘」）forgetOps 材料：cold 且 ≥90 天零命中的冷节——来源 audit/activity.jsonl
+      //   （与 activity.ts 同源，不另立口径）；上限 top-10。此前该清单只写 audit/*.md 无人读 ⇒ 遗忘永不发生。
+      const forgetCandidates = (() => {
+        try {
+          const rows: Array<{ f: string; s: string; hits: number; days: number | 'never'; orphan: boolean }> = []
+          // R1（审查项）：画像承载文件**不进候选**——画像行全量注入，其 cold 是机制性的，不是"没人用"
+          const PROFILE = new Set(['user.md', 'agent.md'])
+          // P2（审查项）：索引仍引用的 (file::§) 集合——用于标注**孤儿条目**（索引已删、正文仍在）
+          const refs = new Set<string>()
+          for (const idx of ['MEMORY.md', 'USER.md', 'AGENT.md']) {
+            let raw = ''
+            try { raw = readFileSync(join(resolved.root, idx), 'utf8') } catch { continue }
+            for (const line of raw.split(/\r?\n/)) {
+              const fm = line.match(/→\s*notes\/([A-Za-z0-9_-]+)\.md/)
+              if (!fm) continue
+              for (const m of (line.split('→').pop() || '').matchAll(/§([^/→\s]+)/g)) {
+                refs.add(`${fm[1]}::${String(m[1]).replace(/\s*[（(]\s*20\d{2}[^）)]*[）)]\s*$/, '').trim().toLowerCase()}`)
+              }
+            }
+          }
+          for (const l of readFileSync(join(resolved.root, 'audit', 'activity.jsonl'), 'utf8').split(/\r?\n/)) {
+            if (!l.trim()) continue
+            try {
+              const o = JSON.parse(l) as { f?: string; s?: string; status?: string; hits?: number; lastHit?: number | null }
+              if (String(o.status) !== 'cold') continue
+              const days = o.lastHit ? Math.round((Date.now() - Number(o.lastHit)) / 86400000) : 'never' as const
+              if (days !== 'never' && days <= 90) continue
+              const f = String(o.f || '').replace(/^notes\//, '')
+              const s = String(o.s || '')
+              if (PROFILE.has(f.toLowerCase())) continue
+              // R2（审查项）：剔除**悬空候选**（节不存在）——否则白占材料 top-10 名额（口径与 matchSection 同源）
+              if (!sectionExists(resolved.root, f, s)) continue
+              const orphan = !refs.has(`${f.replace(/\.md$/, '')}::${s.toLowerCase()}`)
+              rows.push({ f, s, hits: Number(o.hits || 0), days, orphan })
+            } catch { /* 坏行跳过 */ }
+          }
+          const v = (d: number | 'never'): number => (d === 'never' ? Number.MAX_SAFE_INTEGER : d)
+          rows.sort((a, b) => v(b.days) - v(a.days))
+          const top = rows.slice(0, 10)
+          return top.length
+            ? top.map((r) => `${r.f} §${r.s}（hits ${r.hits} · 距最后命中 ${r.days === 'never' ? '从未' : r.days + ' 天'}${r.orphan ? ' · **孤儿条目**：索引已不再引用，仅正文留存' : ''}）`).join('\n')
+            : '（无）'
+        } catch { return '（无）' }
+      })()
+      // v19（认知对照 P2「跨日回放」）再现材料：近 7 日**已有条目被再次命中**（来源 access-real.jsonl = 真实读埋点）；
+      //   供深睡判「跨日二次激活」（生物侧 replay / dream-lag）；上限 top-10。
+      const replayRecent = (() => {
+        try {
+          const since = Date.now() - 7 * 86400000
+          const cnt = new Map<string, number>()
+          for (const l of readFileSync(join(resolved.root, 'audit', 'access-real.jsonl'), 'utf8').split(/\r?\n/)) {
+            if (!l.trim()) continue
+            try {
+              const o = JSON.parse(l) as { t?: string; f?: string; s?: string }
+              const ts = Date.parse(String(o.t || ''))
+              if (!ts || ts < since) continue
+              const k = `${String(o.f || '').replace(/^notes\//, '')} §${String(o.s || '')}`
+              cnt.set(k, (cnt.get(k) || 0) + 1)
+            } catch { /* 坏行跳过 */ }
+          }
+          const top = [...cnt.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10)
+          return top.length ? top.map(([k, n]) => `${k}（${n} 次）`).join('\n') : '（无）'
+        } catch { return '（无）' }
+      })()
       validateProvider()
+
       // 本地日键（与 activity.ts dayKey 同口径：文件名 activity-hot-<YYYY-MM-DD>.md）
       const _now = new Date()
       const _p2 = (n: number): string => String(n).padStart(2, '0')
@@ -2105,18 +2266,31 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         try {
           const f = join(resolved.root, 'audit', `activity-hot-${dayKeyLocal}.md`)
           if (!existsSync(f)) return ''
-          const body = readFileSync(f, 'utf8').split('\n').filter((l) => l.startsWith('|')).slice(1, 20).join('\n')
+          const body = readFileSync(f, 'utf8').split('\n').filter((l) => l.startsWith('|')).slice(2, 20).join('\n')
           return body ? `## 活性高频小节（近30天命中≥5；如需扩容概况经 pointerOps.update、如需提炼原则经 principles）\n${body}` : ''
+        } catch { return '' }
+      })()
+      // v8（认知对照 P2「竞争性抑制」）互抑候选材料：同文件 § 名 bigram 重叠 ∈ [0.50, 0.66)（低于唯一门拒收阈值故并存至今）
+      const interCtx = (() => {
+        try {
+          const f = join(resolved.root, 'audit', `activity-interference-${dayKeyLocal}.md`)
+          if (!existsSync(f)) return ''
+          const rows = readFileSync(f, 'utf8').split('\n').filter((l) => l.startsWith('|')).slice(2, 14).join('\n')
+          return rows ? `## 互抑候选（同文件 § 名高度重叠，低于唯一门阈值故并存至今；可经 treeOps.merge 并入或 pointerOps 合并概况）\n${rows}` : ''
         } catch { return '' }
       })()
       const userInput = [
         '## 当天记忆痕迹（作用域=本日，不做全库扫描）',
         traces,
         hotCtx || '（无活性高频小节）',
+        interCtx || '（无互抑候选）',
         `## 现行原则/路径（冲突时 replace，match 逐字取自此清单）\n${currentList}`,
         `## 现行画像（profileOps 的 replace match 逐字取自此处）\n${currentProfiles}`,
         `## 现行知识索引（MEMORY.md；pointerOps 扩容/重构的 match 逐字取自此处）\n${currentMemIndex}`,
         `## 现行树节清单（treeOps 的 file/oldTitle/dropTitle/keepTitle 必须逐字取自此处；每个小节一行 \`notes/文件:标题\`，含 ## 与 ### 全部）\n${currentTreeSections}`,
+        `## 待拆候选节正文（子树正文 > R=1000 字的叶子 ##；仅当确要 split 时看此段——parts[].start 必须**逐字**取自对应节的正文行）\n${splitCandidates}`,
+        `## 遗忘候选（cold 且 ≥90 天零命中的冷节；forgetOps 的 file/section 必须逐字取自此处——只允许 archive/keep，禁止删除）\n${forgetCandidates}`,
+        `## 近 7 日再现（已有条目被再次命中；判「跨日二次激活」用——同一条目在多个日窗重现 = 该主题稳固，可扩容概况/提纯为更高层原则）\n${replayRecent}`,
         '请按规则处理：提炼跨任务泛化原则与双画像/知识索引更新指令，输出 JSON。',
       ].join('\n\n')
       const resolvedLlm = resolveLlm(config.sleepProvider, config.sleepModel)
@@ -2157,6 +2331,28 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         const out = parseAgentJson(result, 'deep sleep')
         if (stop === 'completed' && out) providerFailCount = 0
         else if (useProvider && (stop !== 'completed' || !out)) providerFailCount++
+        // 认知对照 P2「REM 相」：crossTopic（跨主题联想）**合并进 principles 通道**——零新增落盘代码。
+        //   硬门：text 的源指针须覆盖 ≥2 个**不同 § 小节**（同主题归纳已由 principles 覆盖）；
+        //   开关关（config.enableRemPass / env SHOUCANG_REM_PASS=1）时整段丢弃，不污染既有通道。
+        if (out && Array.isArray(out.crossTopic)) {
+          const remOn = !!config.enableRemPass || process.env.SHOUCANG_REM_PASS === '1'
+          const kept: Array<{ action: string; text: string }> = []
+          for (const c of out.crossTopic) {
+            if (!remOn) { log('deep sleep: crossTopic 丢弃（REM 相未开启）'); break }
+            const text = String((c && (c as any).text) || '').trim()
+            const secs = [...text.matchAll(/§([^/→]+)/g)]
+              .map((m) => String(m[1]).replace(/\s*[（(]\s*20\d{2}[^）)]*[）)]\s*$/, '').trim())
+              .filter(Boolean)
+            const uniq = new Set(secs.map((s) => s.toLowerCase()))
+            if (!text || uniq.size < 2) { log(`deep sleep: crossTopic 丢弃（源指针覆盖 ${uniq.size} 个主题 <2）`); continue }
+            kept.push({ action: String((c && (c as any).action) || 'add'), text })
+          }
+          if (kept.length) {
+            if (!Array.isArray(out.principles)) out.principles = []
+            out.principles.push(...kept)
+            log(`deep sleep: REM 相并入 ${kept.length} 条跨主题原则`)
+          }
+        }
         const app = (stop === 'completed' && out)
           ? await applyPrinciples(resolved.root, out)
           : { added: 0, replaced: 0, skipped: 0, gate: `stop=${stop}` }
@@ -2177,8 +2373,13 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         const treeRes = (stop === 'completed' && out && Array.isArray(out.treeOps))
           ? await applyTreeOps(resolved.root, out.treeOps, { audit, log })
           : { applied: 0, skipped: 0, archived: 0 }
-        log(`deep sleep: stop=${stop} 原则 +${app.added}/替换 ${app.replaced}/跳过 ${app.skipped}（${app.gate}）画像 +${profileAdded} 指针更新 ${ptrRes.updated}/跳过 ${ptrRes.skipped}（${ptrRes.gate}）树 ops ${treeRes.applied}/跳过 ${treeRes.skipped}/归档 ${treeRes.archived}`)
-        audit({ kind: 'deep-sleep', stop, added: app.added, replaced: app.replaced, skipped: app.skipped, profiles: profileAdded, pointers: ptrRes.updated, ptrSkipped: ptrRes.skipped, tree: treeRes.applied, treeSkipped: treeRes.skipped, gate: app.gate })
+        // 认知对照 P0「主动遗忘」：forgetOps（模型对 cold 候选取舍 → 归档移正文留 stub / keep 留理由）
+        //   宿主守三条守卫（叶子节 / activity 里为 cold / 非重复 stub）+ 禁止直删，全部在 applyForgetOps 内。
+        const forgetRes = (stop === 'completed' && out && Array.isArray(out.forgetOps))
+          ? await applyForgetOps(resolved.root, out.forgetOps, { audit, log })
+          : { archived: 0, kept: 0, skipped: 0 }
+        log(`deep sleep: stop=${stop} 原则 +${app.added}/替换 ${app.replaced}/跳过 ${app.skipped}（${app.gate}）画像 +${profileAdded} 指针更新 ${ptrRes.updated}/跳过 ${ptrRes.skipped}（${ptrRes.gate}）树 ops ${treeRes.applied}/跳过 ${treeRes.skipped}/归档 ${treeRes.archived} forget 归档 ${forgetRes.archived}/保留 ${forgetRes.kept}/跳过 ${forgetRes.skipped}`)
+        audit({ kind: 'deep-sleep', stop, added: app.added, replaced: app.replaced, skipped: app.skipped, profiles: profileAdded, pointers: ptrRes.updated, ptrSkipped: ptrRes.skipped, tree: treeRes.applied, treeSkipped: treeRes.skipped, forgetArchived: forgetRes.archived, forgetKept: forgetRes.kept, forgetSkipped: forgetRes.skipped, gate: app.gate })
         if (stop === 'completed') {
           // 路线② 晨起摘要 delta：深睡消化后的行级 diff（新增/替换 [原则]/[路径]/画像行 ≤3）→ suite/knowledge/delta.md
           // 语义：delta 是「最近变化的新闻」，AGENT.md/USER.md 是档案全本；delta 永非事实源，过期即弃（下轮深睡覆盖）。
@@ -2535,8 +2736,9 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
   }
 
   // ═══ 积压扫尾（2026-09-10 用户拍板：稳健性修复——旧 ctx 失败/重启/错过空闲窗的会话自动补蒸馏）═══
-  // 候选：仍在 ctx 根内的会话、水位<内存末事件 seq、且已出「10min 宽限期」（避免与 idle 定时器抢跑/打断用户续聊）。
-  // 无 FSM 记录的历史会话（如重启前已结束的）一律视为积压候选直接补。
+  // 候选：**当前 ctx 根内（live）**的会话、水位<内存末事件 seq、且已出「10min 宽限期」（避免与 idle 定时器抢跑/打断用户续聊）。
+  // ⚠ 覆盖边界（2026-09-11 审查修正注释）：root 之外/重启前已结束且**未被重新载入**的会话不在本链覆盖内——
+  //   旧注释「重启前已结束的一律补」与现码不符；真要补需会话重新载入，或另立持久会话清单（本档未实现）。
   const sweepBacklog = async (): Promise<void> => {
     try {
       // 先回流 pending defer 卡（workspace 恢复后直写 devref；周期扫尾也覆盖）
@@ -2565,15 +2767,9 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
           if (maxSeq > lastSeq) {
             // 跨实例 claim 锁（2026-09-10 实锤：重叠 fiber 的 30s 首扫会同时抢同一积压窗口 → 471aca03 被双蒸馏双写）：
             // 在途 claim（25min 内）→ 跳过；过期 claim → 覆盖重试；无增量时顺手清理陈旧 claim。
-            const claimDir = join(kRoot, 'audit', 'claims')
-            const claimFile = join(claimDir, sid + '.json')
-            try {
-              let claim: any = null
-              try { claim = JSON.parse(readFileSync(claimFile, 'utf8')) } catch { /* 无 claim */ }
-              if (claim && Date.now() - (claim.at || 0) < 25 * 60000) { continue } // 在途，其他 fiber 已接管
-              mkdirSync(claimDir, { recursive: true })
-              writeFileSync(claimFile, JSON.stringify({ at: Date.now(), lastSeq, maxSeq }), 'utf8')
-            } catch { /* claim 失败不阻塞 */ }
+            // A3：claim 判定已统一到 distillAgent 入口（幂等写入 / 结束释放）——扫尾只做**只读**让位判定，
+            //     不再自己写 claim（否则与入口刚写入的 claim 互斥，补蒸馏将永不发生）。
+            if (claimHeld(sid)) { continue } // 在途，其他 fiber 已接管
             log(`sweep: ${sidShort(sid)} 水位 ${lastSeq}→${maxSeq} 有未消化增量，补蒸馏`)
             void distillAgent(a).catch(() => { /* distillAgent 内部已兜底 */ })
           } else {

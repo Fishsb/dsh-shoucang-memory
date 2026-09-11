@@ -35,6 +35,19 @@ export interface SuiteMember {
   role: string
 }
 
+/** 单插件仓（2026-09-08 三合一后 suite 无外部成员）：members 缺省 = **自检本插件装配状态**，
+ *  消除 shoucang_suite / panel /suite / assistant_capabilities 三处恒返回「无成员」的空转（2026-09-11 审查修复）。 */
+const SELF_MEMBER: SuiteMember = {
+  id: 'shoucang',
+  package: 'dsh-shoucang-memory',
+  repo: 'Fishsb/dsh-shoucang-memory',
+  role: 'self（单插件仓：默认自检装配状态）',
+}
+
+/** 生效成员表：显式配置优先，缺省回落到自检自身 */
+const memberSpecsOf = (config: Config): SuiteMember[] =>
+  (Array.isArray(config.members) && config.members.length ? config.members : [SELF_MEMBER])
+
 export interface Config {
   members: SuiteMember[]
   verify_enabled: boolean // G30 证据计数（#5，审计 §8 Q3 兼容）
@@ -43,6 +56,7 @@ export interface Config {
   idleWakeMs: number // 唤醒判定：turn 结束后空闲满此毫秒数才蒸馏（缺省 10 分钟）
   minTurnChars: number // 本轮新增正文少于此字符数则跳过蒸馏（水位仍推进）
   distillPrescan: boolean // 预筛：spawn 前扫增量信号词 + pending 候选，皆无则跳过（零 LLM 成本）
+  prescanMinChars: number // 2026-09-11：大段强制蒸馏阈值（增量 ≥ 此值跳过预筛直接蒸馏；缺省 4000）
   distillPrompt: string // 蒸馏子代理 persona 覆盖（缺省内建 v5 契约）
   llmProvider: string // 子代理 provider 缺省（空=继承主会话模型）——distill/sleep 未单独指定时回落
   llmModel: string // 子代理 model 缺省（空=继承主会话模型）
@@ -57,6 +71,7 @@ export interface Config {
   capMemory: number
   // ═══ 深度睡眠归纳（v16：习得原则并入 agent 画像 AGENT.md；2026-09-08 拍板机制，2026-09-09 拍板定位）═══
   enableDeepSleep: boolean // 深度睡眠巡检开关（停滞 ≥deepSleepIdleMs 自动归纳 [原则] 行入 AGENT.md）
+  enableRemPass?: boolean // REM 相（认知对照 P2）：深睡同 pass 内做跨主题联想（crossTopic，须 ≥2 不同 § 主题）；缺省关
   deepSleepIdleMs: number // 停滞判定：无任何根会话活动持续此毫秒数才触发（缺省 3 小时）
   // ═══ 会话活跃状态机（2026-09-08 重构）：区分「正常长任务 / 卡住 / 异常退出」═══
   deepSleepProbe: boolean // 输出增长探测开关（running 无事件超时后，采样 transcript 确认真活跃）
@@ -104,6 +119,7 @@ export const Config: any = z.object({
   idleWakeMs: z.number().min(60000).default(600000).description('唤醒判定：turn 结束后空闲满此毫秒数才蒸馏（缺省 10 分钟）'),
   minTurnChars: z.number().min(0).default(200).description('本轮新增正文少于此字符数跳过蒸馏（水位仍推进）'),
   distillPrescan: z.boolean().default(true).description('预筛：无信号词且无 pending 候选则不唤醒 LLM 子代理'),
+  prescanMinChars: z.number().min(0).default(4000).description('大段强制蒸馏阈值（字符）：增量 ≥ 此值跳过预筛直接蒸馏（2026-09-10 用户拍板；缺省 4000）'),
   distillPrompt: z.string().default('').description('蒸馏子代理 persona 覆盖（缺省内建 v5 契约）'),
   llmProvider: z.string().default('').description('子代理 provider 缺省（空=继承主会话模型）——distill/sleep 未单独指定时回落此键'),
   llmModel: z.string().default('').description('子代理 model 缺省（空=继承主会话模型）——distill/sleep 未单独指定时回落此键'),
@@ -118,6 +134,7 @@ export const Config: any = z.object({
   capUser: z.number().min(100).default(3000).description('USER.md 容量门（字符，写门强制；缺省 3000）'),
   capMemory: z.number().min(100).default(5000).description('MEMORY.md 容量门（字符，写门强制；缺省 5000）'),
   enableDeepSleep: z.boolean().default(true).description('深度睡眠归纳：全部会话停滞 ≥deepSleepIdleMs 自动提炼习得原则写入 agent 画像 AGENT.md（[原则] 行），同 pass 反思双通道维护 USER 画像'),
+  enableRemPass: z.boolean().default(false).description('REM 相（认知对照 P2）：深睡同 pass 内额外做**跨主题联想**（crossTopic 通道，产出须覆盖 ≥2 个不同 § 主题才被宿主接收）；缺省关'),
   deepSleepIdleMs: z.number().min(600000).default(10800000).description('停滞判定阈值（毫秒）：无任何会话活动持续满此时长触发深度睡眠归纳（缺省 3 小时）'),
   deepSleepProbe: z.boolean().default(true).description('输出增长探测：会话 running 但长时间无事件时，采样转录文件两次确认是长任务还是卡住'),
   deepSleepProbeAfterMs: z.number().min(600000).default(10800000).description('running 状态无事件持续此毫秒数后发起探测（缺省 3 小时）'),
@@ -235,7 +252,7 @@ export function applyScheduler(ctx: Context, config: Config): void {
           async execute(args: any) {
             const scope = (args?.scope || 'all') as string
             const filter = (args?.member || '').toString().trim()
-            const matrix = suiteAssemblyMatrix(config.members)
+            const matrix = suiteAssemblyMatrix(memberSpecsOf(config))
             const rows = matrix.members
               .filter((m) => !filter || m.id === filter || m.package.includes(filter))
               .filter((m) => scope === 'all' || (scope === 'injected' && m.injected) || (scope === 'profile' && m.profiles.length > 0))
@@ -460,8 +477,8 @@ export function applyScheduler(ctx: Context, config: Config): void {
             } catch { /* 边界读取失败不致命 */ }
             // ③ 装配与蒸馏状态
             try {
-              const sm = suiteAssemblyMatrix(config.members)
-              parts.push(`suite 装配：${sm.summary || `${config.members.length} 成员`}`)
+              const sm = suiteAssemblyMatrix(memberSpecsOf(config))
+              parts.push(`suite 装配：${sm.summary || `${memberSpecsOf(config).length} 成员`}`)
             } catch { /* 装配信息可选 */ }
             return parts.join('\n\n')
           },
@@ -479,6 +496,7 @@ export function applyScheduler(ctx: Context, config: Config): void {
       idleWakeMs: config.idleWakeMs,
       minTurnChars: config.minTurnChars,
       distillPrescan: config.distillPrescan,
+      prescanMinChars: config.prescanMinChars,
       distillPrompt: config.distillPrompt,
       llmProvider: config.llmProvider,
       llmModel: config.llmModel,
@@ -487,6 +505,7 @@ export function applyScheduler(ctx: Context, config: Config): void {
       sleepProvider: config.sleepProvider,
       sleepModel: config.sleepModel,
       enableDeepSleep: config.enableDeepSleep,
+      enableRemPass: config.enableRemPass,
       deepSleepIdleMs: config.deepSleepIdleMs,
       deepSleepProbe: config.deepSleepProbe,
       deepSleepProbeAfterMs: config.deepSleepProbeAfterMs,
@@ -517,7 +536,7 @@ export function applyScheduler(ctx: Context, config: Config): void {
     // 蒸馏节流组运行时值供 panel /distill/config 展示（缺省值单一实现=本文件 Config，panel 不复制）
     if (distill) deepSleepShare.api = distill
     schedulerShare.api = {
-      suiteScan: () => suiteAssemblyMatrix(config.members),
+      suiteScan: () => suiteAssemblyMatrix(memberSpecsOf(config)),
       distillConfig: () => ({
         enableDistill: config.enableDistill,
         idleWakeMs: config.idleWakeMs,
@@ -535,7 +554,7 @@ export function applyScheduler(ctx: Context, config: Config): void {
   } else {
     // 蒸馏器关闭也要给 panel 提供装配矩阵（/suite 是只读视图，与蒸馏无关）
     schedulerShare.api = {
-      suiteScan: () => suiteAssemblyMatrix(config.members),
+      suiteScan: () => suiteAssemblyMatrix(memberSpecsOf(config)),
       distillConfig: () => ({
         enableDistill: config.enableDistill,
         idleWakeMs: config.idleWakeMs,

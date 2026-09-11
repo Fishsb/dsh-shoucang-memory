@@ -82,10 +82,21 @@ export interface RecallRow {
     score: number;
     pointer: string;
 }
+/**
+ * § 族键（同 § 竞争性抑制的**唯一键口径**，2026-09-11 收敛）：
+ *   指针尾第一个 §token（`§A/§B` 以 A 为族键）+ 小节名去行尾日期括号后缀 + 小写。
+ * 消费方：`recallIndex`（词法路）与 `vec.recallRanked`（融合重排路）——两路必须同键，
+ * 否则同一批索引行在词法/融合两种模式下会去重出不同结果（曾有两份副本 + 归一化不一致）。
+ */
+export declare function sectionKeyOf(line: string, pointer?: string): string | null;
+/** 同 § 只留首条（= 分数更高/先到者），**不足 k 时按序回填**（无竞争者时抑制无意义）。
+ *  单一实现：禁止在调用方另写副本（AGENTS.md「架构单一实现」）。 */
+export declare function dedupeBySection<T>(list: T[], k: number, keyOf: (x: T) => string | null): T[];
 /** 词法召回：AGENT.md（[原则]/[路径]/画像行）+ MEMORY/USER 索引行，按 token 命中 × 标签权重排序（路径 > 原则 > 其余） */
 export declare function recallIndex(root: string, query: string, topK?: number, scope?: 'agent' | 'all'): {
     rows: RecallRow[];
     tokens: string[];
+    mode: 'lexical';
 };
 /**
  * S5 近似召回（零命中兜底）：全文命中（score≥1）为空的降级分析。

@@ -1,17 +1,19 @@
 /**
  * @dsh-external/shoucang-panel — 宿主半区。
  *
- * 职责：为 client 面板（client.js，纯 DOM）提供 /api/shoucang-panel HTTP RPC（按功能组）：
- *   根目录：GET /roots · POST /set_root · GET /get_root · POST /root/bootstrap
+ * 职责：为 client 面板（client.js，纯 DOM）提供 /api/shoucang-panel HTTP RPC（按功能组；**共 28 条 exact 路由**）：
+ *   根目录：GET /roots · GET /get_root · POST /set_root · POST /root/bootstrap（建**单库骨架**）
  *   配置：  GET /config · POST /save · POST /toggle · POST /set（白名单键）
- *   记忆：  GET /memory/overview · GET /memory/sections（双根 root=suite|memory）
- *   集合：  GET /suite（suiteAssemblyMatrix 经 schedulerShare 桥接）
+ *   记忆：  GET /memory/overview · GET /memory/sections · POST /memory/section-edit · POST /memory/edit · POST /memory/remove · POST /memory/approve
+ *   展示：  GET /suite（suiteAssemblyMatrix 经 schedulerShare 桥接）· GET /cognition/report（深睡回执/活性/归档）
  *   深睡：  GET /deepsleep · POST /deepsleep/trigger · GET+POST /deepsleep/config（单 handler 按 method 分发）
- *   蒸馏：  GET+POST /distill/config（节流组持久通道，同深睡：单 handler 按 method 分发）
- *   巩固轮：GET /idle/status · POST /idle/consolidate
- *   向量/模型：GET /vector/status · POST /vector/build · GET /model/list · POST /model/pull|progress|import|deploy
+ *   蒸馏：  POST /distill/run · GET+POST /distill/config（节流组持久通道，同深睡：单 handler 按 method 分发）
+ *   向量/模型：GET /vector/status2 · POST /vector/cache/clear · GET+POST /embed/config · POST /embed/test · GET /llm/models
  *   注入：  GET /inject/preview · GET /inject/stats（R1 热记忆注入 systemPrompt.context）
  *   命令：  /scnote（commands.register，笔记化任务）
+ *
+ * ⚠ 清单纪律（2026-09-11 审查修正）：`/idle/status`、`/idle/consolidate`（60s 空闲巩固轮，2026-09-10 已移除）与
+ *   `/vector/status`、`/vector/build`、`/model/*` **均不存在**——本清单与启动日志必须与实际注册一致，勿挂幽灵端点。
  *
  * 开源红线：零硬编码路径。root 登记表存 state_path（默认 ~/.dsh/storages/
  * shoucang-panel.json，支持 ~ 展开），初始为空——root 由用户在面板里添加。
@@ -20,9 +22,9 @@
 import type { Context } from 'cordis'
 import z from 'schemastery'
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
-import { execFileSync, spawn } from 'node:child_process'
+import { execFile, execFileSync, spawn } from 'node:child_process'
 import { tmpdir } from 'node:os'
-import { gunzipSync, zstdDecompressSync } from 'node:zlib'
+import { zstdDecompressSync } from 'node:zlib'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { homedir } from 'node:os'
 import { dshHome, knowledgeRoot, memoryLibRoot, recallIndex } from './targets.js'
@@ -126,90 +128,84 @@ export function applyPanel(ctx: Context, config: Config): void {
   // ESM 宿主：模块目录用 import.meta.url 解析（__dirname 在 ESM 未定义）
   const moduleDir = dirname(fileURLToPath(import.meta.url))
 
-  /* ---------- 默认项目资料：目录结构 + _index.md 规则模板（切换根目录时自动构建） ---------- */
+  /* ---------- 默认记忆库骨架（2026-09-11 重写：旧 wiki/Obsidian vault 模板退役） ----------
+   * 判因（审查 B1）：旧实现把 pmg 时代的 default-vault-template.tar.gz（_meta/*.py 管线 + validate/ +
+   *   wiki-* + _index.md）解压到新根，而**当前读写链**（memoryRootOf / targets.memoryLibRoot）只认单库化
+   *   布局（MEMORY/USER/AGENT.md + notes/ + audit/ + pending/）⇒ 引导出来的库插件根本读不到。
+   * 现语义：只建「单库骨架 + 随包脚本/引擎/规则档」，幂等（已存在一律不覆盖），零外部资产依赖。
+   */
 
-  interface DefaultProject { structure: Record<string, unknown>; index_templates: Record<string, string>; version?: string | null }
+  /** 单库骨架常量：七类 notes（与 targets.BUILTIN.notes 同源）+ 三索引 + 白名单 */
+  const LIB_NOTES = ['env', 'tools', 'flows', 'lessons', 'release', 'user', 'agent']
+  const LIB_INDEX_FILES: Array<{ file: string; head: string }> = [
+    { file: 'MEMORY.md', head: '# MEMORY.md — 知识索引（守藏记忆库）\n\n> 索引行：`[tag] 主题 · 概况 → notes/x.md §小节`；容量门与白名单见同根 `whitelist.json`。\n' },
+    { file: 'USER.md', head: '# USER.md — 用户画像（守藏记忆库）\n\n> 索引行 + 画像行（`- … ← 源: …`）；画像行全量注入，不参与召回命中统计。\n' },
+    { file: 'AGENT.md', head: '# AGENT.md — 自我画像（守藏记忆库）\n\n> 索引行 + 画像行；含 `[原则]`/`[路径]`/`[边界]`（深睡归纳落点）。\n' },
+  ]
 
-  let defaultProjectCache: DefaultProject | null = null
-  const defaultProjectOf = (): DefaultProject | null => {
-    if (defaultProjectCache) return defaultProjectCache
-    const cands = [join(moduleDir, '../default-project.json'), join(moduleDir, 'default-project.json')]
-    for (const file of cands) {
-      try {
-        defaultProjectCache = JSON.parse(readFileSync(file, 'utf8')) as DefaultProject
-        return defaultProjectCache
-      } catch { /* try next */ }
-    }
-    defaultProjectCache = null
-    return null
+  const writeIfAbsent = (p: string, body: string | Buffer, created: string[]): void => {
+    try {
+      if (existsSync(p)) return
+      mkdirSync(dirname(p), { recursive: true })
+      writeFileSync(p, body)
+      created.push(p)
+    } catch { /* 单文件失败不阻断（报告按实际创建数） */ }
   }
 
-  const TEMPLATE = join(moduleDir, '../default-vault-template.tar.gz')
+  const copyFileIfAbsent = (src: string, dst: string, created: string[]): void => {
+    try {
+      if (!existsSync(src) || existsSync(dst)) return
+      mkdirSync(dirname(dst), { recursive: true })
+      writeFileSync(dst, readFileSync(src))
+      created.push(dst)
+    } catch { /* 源缺失/写入失败=跳过 */ }
+  }
 
-  /** 纯 Node tar.gz 解压（零外部依赖；防御路径穿越；仅处理文件/目录条目，GNU ustar 短路径） */
-  const extractTgz = (buf: Buffer, dest: string): void => {
-    const out = gunzipSync(buf)
-    mkdirSync(dest, { recursive: true })
-    let off = 0
-    while (off + 512 <= out.length) {
-      const block = out.subarray(off, off + 512)
-      const readStr = (s: number, e: number): string => block.subarray(s, e).toString('utf8').replace(/\0[\s\S]*$/, '')
-      const name = readStr(0, 100)
-      if (!name) break
-      const size = parseInt(readStr(124, 136) || '0', 8) || 0
-      const type = String.fromCharCode(block[156])
-      const prefix = readStr(345, 500)
-      const full = (prefix ? `${prefix}/${name}` : name).replace(/^\.\//, '').split('\\').join('/')
-      if (full.includes('../') || full.startsWith('/')) throw new Error(`tar 路径非法：${full}`)
-      const dataStart = off + 512
-      const target = join(dest, full)
-      if (type === '5') mkdirSync(target, { recursive: true })
-      else if (type === '0' || type === '') {
-        mkdirSync(dirname(target), { recursive: true })
-        writeFileSync(target, out.subarray(dataStart, dataStart + size))
+  const copyTreeIfAbsent = (srcDir: string, dstDir: string, created: string[]): void => {
+    try {
+      if (!existsSync(srcDir)) return
+      mkdirSync(dstDir, { recursive: true })
+      for (const e of readdirSync(srcDir, { withFileTypes: true })) {
+        const s = join(srcDir, e.name)
+        const d = join(dstDir, e.name)
+        if (e.isDirectory()) copyTreeIfAbsent(s, d, created)
+        else copyFileIfAbsent(s, d, created)
       }
-      off = dataStart + Math.ceil(size / 512) * 512
-    }
+    } catch { /* 目录不可读=跳过 */ }
   }
 
+  /** 幂等建「单库骨架」：目录 + 三索引 + 七 notes + INDEX 注册表 + whitelist.json + 随包 scripts/engine/规则档 */
   const bootstrapDefaults = (rootPath: string): { createdDirs: string[]; createdIndexes: string[]; skipped: string[]; template: boolean } => {
-    const out = { createdDirs: [], createdIndexes: [], skipped: [], template: false } as { createdDirs: string[]; createdIndexes: string[]; skipped: string[]; template: boolean }
+    const out = { createdDirs: [] as string[], createdIndexes: [] as string[], skipped: [] as string[], template: true }
     mkdirSync(rootPath, { recursive: true })
-    // 空根（全新库）：直接用默认知识库模板解压（含 _meta 管线/配置/wiki 规范/目录结构/18 份 _index.md）
-    const fresh = !existsSync(join(rootPath, 'shoucang.config.yaml')) && !existsSync(join(rootPath, '记忆'))
-    if (fresh && existsSync(TEMPLATE)) {
-      try {
-        extractTgz(readFileSync(TEMPLATE), rootPath)
-        out.template = true
-        return out
-      } catch (e) {
-        ctx.logger?.warn?.(`[shoucang] 模板解压失败，降级 JSON 骨架：${String(e)}`)
-        // fallthrough 到 JSON 骨架
-      }
+    for (const d of ['notes', 'audit', 'audit/archive', 'pending']) {
+      const p = join(rootPath, d)
+      if (existsSync(p)) continue
+      try { mkdirSync(p, { recursive: true }); out.createdDirs.push(d) } catch { out.skipped.push(d) }
     }
-    const dp = defaultProjectOf()
-    if (!dp) return out
-    const rels = Object.keys(dp.index_templates ?? {})
-    const walk = (tree: Record<string, unknown>, prefix: string): void => {
-      for (const name of Object.keys(tree)) {
-        const rel = prefix ? `${prefix}/${name}` : name
-        const dir = join(rootPath, rel)
-        if (!existsSync(dir)) { mkdirSync(dir, { recursive: true }); out.createdDirs.push(rel) }
-        const idx = join(dir, '_index.md')
-        if (!existsSync(idx)) {
-          try {
-            const tpl = dp.index_templates[rel] ?? ''
-            if (tpl) writeFileSync(idx, tpl, 'utf8')
-          } catch { out.skipped.push(rel) }
-          if (existsSync(idx)) out.createdIndexes.push(rel)
-        } else {
-          out.skipped.push(rel)
-        }
-        const child = tree[name] as Record<string, unknown>
-        walk(child, rel)
-      }
+    for (const { file, head } of LIB_INDEX_FILES) {
+      if (existsSync(join(rootPath, file))) { out.skipped.push(file); continue }
+      writeIfAbsent(join(rootPath, file), head, out.createdIndexes)
     }
-    walk(dp.structure ?? {}, '')
+    for (const n of LIB_NOTES) {
+      const rel = `notes/${n}.md`
+      if (existsSync(join(rootPath, rel))) { out.skipped.push(rel); continue }
+      writeIfAbsent(join(rootPath, rel), `# notes/${n}.md — ${n}\n\n## 起始\n- （新库占位小节：写入由 memory-append 追加，或按「父/子」路径自动分裂 ###）\n`, out.createdIndexes)
+    }
+    writeIfAbsent(join(rootPath, 'notes', 'INDEX.md'), '# notes/INDEX.md — 详情子文档注册表\n\n## 元数据表\n\n| 文件 | 状态 | 说明 | 更新 | 范围 |\n|---|---|---|---|---|\n', out.createdIndexes)
+    writeIfAbsent(join(rootPath, 'whitelist.json'), JSON.stringify({
+      version: 1, library: 'shoucang', routes: ['memory'],
+      indexTargets: ['MEMORY.md', 'USER.md', 'AGENT.md'], notes: LIB_NOTES,
+      updatedAt: new Date().toISOString().slice(0, 10),
+    }, null, 2) + '\n', out.createdIndexes)
+    // 随包脚本/引擎/规则档：蒸馏与深睡**直接以 <库根>/scripts/*.mjs 起子进程**，
+    // 骨架不带脚本 = 记忆循环空转（这正是旧 vault 模板的坑），故一并复制（幂等，不覆盖已存在文件）。
+    const skillDir = join(moduleDir, '..', 'skill')
+    copyTreeIfAbsent(join(skillDir, 'scripts'), join(rootPath, 'scripts'), out.createdIndexes)
+    copyTreeIfAbsent(join(skillDir, 'engine'), join(rootPath, 'engine'), out.createdIndexes)
+    for (const f of ['SKILL.md', 'audit-protocol.md', 'human-execution-loop.md', 'memory-whitelist-spec.md', 'task-protocols.md', 'README.md']) {
+      copyFileIfAbsent(join(skillDir, f), join(rootPath, f), out.createdIndexes)
+    }
     return out
   }
 
@@ -286,7 +282,38 @@ export function applyPanel(ctx: Context, config: Config): void {
     // 知识索引行选行（ACT-027）：相关性 top-k（复用 recallIndex，单一实现）∪ 新鲜度保证槽（末尾 N 条）
     const cap = rowCaps[level] ?? 10
     const allMem = readIdx('MEMORY.md')
-    let memLines = allMem.slice(0, cap) // 回退基线 = 位置式前 N 行（保持旧行为）
+    // v8（认知对照 P1「降权贯穿三通道」+「复习-强化」）注入侧的冷热感知 + 命中次权重。
+    //   R6 审查项：**回退分支也要生效**——否则 `injectRelevance=false` 或空 query 时「降权贯穿三通道」实际只剩两通道。
+    let actMap = new Map<string, { cold: boolean; hits30: number }>()
+    try {
+      for (const l of readFileSync(join(memRoot, 'audit', 'activity.jsonl'), 'utf8').split(/\r?\n/)) {
+        if (!l.trim()) continue
+        try {
+          const o = JSON.parse(l) as { f?: string; s?: string; status?: string; hits30?: number; retired?: boolean }
+          const f = String(o.f || '').replace(/^notes\//, '')
+          const s = String(o.s || '').trim().toLowerCase()
+          if (f && s) actMap.set(`${f}::${s}`, { cold: String(o.status) === 'cold' || !!o.retired, hits30: Number(o.hits30 || 0) })
+        } catch { /* 坏行跳过 */ }
+      }
+    } catch { /* 无 activity.jsonl = 不感知（保持旧行为） */ }
+    const rowWeight = (l: string): { cold: boolean; hits30: number } => {
+      const fm = (l.match(/notes\/([A-Za-z0-9_-]+)\.md/) || [])[1] || ''
+      const tail = l.split('→').pop() || ''
+      let cold = false
+      let hits = 0
+      for (const m of tail.matchAll(/§([^/→]+)/g)) {
+        const s = String(m[1]).replace(/\s*[（(]\s*20\d{2}[^）)]*[）)]\s*$/, '').trim().toLowerCase()
+        const e = actMap.get(`${fm}::${s}`) || actMap.get(`${fm}.md::${s}`)
+        if (!e) continue
+        if (e.cold) cold = true
+        hits = Math.max(hits, e.hits30)
+      }
+      return { cold, hits30: hits }
+    }
+    // 回退基线 = 位置式前 N 行，但**冷行稳定后置**（组内原序不变，故仍属"位置式"）
+    let memLines = [...allMem]
+      .sort((a, b) => (rowWeight(a).cold ? 1 : 0) - (rowWeight(b).cold ? 1 : 0))
+      .slice(0, cap)
     const relOn = (() => { try { return readSuiteConfig().injectRelevance !== false } catch { return true } })()
     if (q && relOn && allMem.length) {
       const fresh = Math.max(0, Math.min(
@@ -299,7 +326,15 @@ export function applyPanel(ctx: Context, config: Config): void {
       for (const l of allMem.slice(Math.max(0, allMem.length - fresh))) if (!picked.includes(l)) picked.push(l)
       // 槽位不足时用**位置式基线**补齐：防「短指令（如"继续"）零命中」导致知识行从 cap 缩到 fresh 的信息损失。
       // 三者叠加 = 相关性 ∪ 新鲜度 ∪ 基线覆盖，任一维度都不牺牲。
-      for (const l of allMem) { if (picked.length >= cap) break; if (!picked.includes(l)) picked.push(l) }
+      // v8 补位顺序（actMap/rowWeight 见上方回退分支）：cold 降末段、hits30 高者先占槽——**只改补位顺序**，不改前两档语义
+      const rest = allMem.filter((l) => !picked.includes(l))
+      rest.sort((a, b) => {
+        const A = rowWeight(a)
+        const B = rowWeight(b)
+        if (A.cold !== B.cold) return A.cold ? 1 : -1
+        return B.hits30 - A.hits30
+      })
+      for (const l of rest) { if (picked.length >= cap) break; picked.push(l) }
       if (picked.length) memLines = picked.slice(0, cap)
     }
     if (!userLines.length && !agentLines.length && !memLines.length) { injectCache.text = ''; return '' }
@@ -444,13 +479,13 @@ export function applyPanel(ctx: Context, config: Config): void {
     sendJson(res, 200, { active: s.roots.find((r) => r.id === s.active) ?? null })
   })
 
-  // 按默认项目资料手动构建（body.root 可指定；缺省用当前激活根）——只补缺失目录/索引
+  // 按**单库骨架**手动构建（body.root 可指定；缺省用当前激活根）——幂等，只补缺失目录/索引/脚本
   route('/root/bootstrap', async (req, res) => {
     const body = (await readBody(req).catch(() => ({}))) as { root?: string }
     const target = typeof body.root === 'string' && body.root.trim() ? resolve(body.root.trim()) : activeRootOf()?.path ?? ''
     if (!target) return sendJson(res, 400, { error: 'no root' })
     const boot = bootstrapDefaults(target)
-    sendJson(res, 200, { root: target, ...boot, materialVersion: defaultProjectOf()?.version ?? null })
+    sendJson(res, 200, { root: target, ...boot, skeleton: boot.template })
   })
 
   route('/set_root', async (req, res) => {
@@ -1033,6 +1068,98 @@ export function applyPanel(ctx: Context, config: Config): void {
     } catch (e) { sendJson(res, 500, { error: String(e) }) }
   })
 
+  // ── v9 认知可视化（2026-09-11）：**单端点**服务「睡眠」与「记忆」两视图 ——
+  //    ① 深睡历次回执（audit kind=deep-sleep：产出条数 / 树操作 / forgetOps 归档 / stop 原因）
+  //    ② 下轮材料预估（activity 当日产出的遗忘候选 / 加深候选 / 互抑候选）
+  //    ③ 记忆冷热分布 + 覆盖率（activity.jsonl 跟踪数 ÷ 三主档索引行数）
+  //    ④ 超 R 节清单（§8.1 口径：## 按子树、### 按自身，R=1000）
+  //    ⑤ 归档区（forgetOps 产物 notes/archive/）
+  //    全部只读派生、无写入；缺文件一律如实空态（不编造）。
+  route('/cognition/report', (_req, res) => {
+    try {
+      const root = memoryLibRoot()
+      const auditDir = join(root, 'audit')
+      const d0 = new Date()
+      const p2 = (n: number): string => String(n).padStart(2, '0')
+      const dk = `${d0.getFullYear()}-${p2(d0.getMonth() + 1)}-${p2(d0.getDate())}`
+      const sleeps: Array<Record<string, unknown>> = []
+      try {
+        const f = join(knowledgeRoot(), 'audit', 'distill-audit.jsonl')
+        if (existsSync(f)) {
+          for (const l of readFileSync(f, 'utf8').split('\n')) {
+            if (!l.trim() || !l.includes('deep-sleep')) continue
+            try {
+              const o = JSON.parse(l) as Record<string, unknown>
+              if (o.kind !== 'deep-sleep') continue
+              sleeps.push({
+                at: o.at || o.ts || o.time || null, stop: o.stop || null, gate: o.gate || null,
+                added: Number(o.added || 0), replaced: Number(o.replaced || 0), skipped: Number(o.skipped || 0),
+                profiles: Number(o.profiles || 0), pointers: Number(o.pointers || 0), tree: Number(o.tree || 0),
+                forgetArchived: Number(o.forgetArchived || 0), forgetKept: Number(o.forgetKept || 0),
+              })
+            } catch { /* 坏行跳过 */ }
+          }
+        }
+      } catch { /* 无审计文件 = 空态 */ }
+      const numFrom = (p: string): number => { try { const m = readFileSync(p, 'utf8').match(/共 (\d+) 条/); return m ? Number(m[1]) : 0 } catch { return 0 } }
+      const rowsIn = (p: string): number => { try { return Math.max(0, readFileSync(p, 'utf8').split('\n').filter((x) => x.startsWith('|')).length - 2) } catch { return 0 } }
+      const act: Array<Record<string, unknown>> = []
+      try {
+        for (const l of readFileSync(join(auditDir, 'activity.jsonl'), 'utf8').split('\n')) {
+          if (!l.trim()) continue
+          try { act.push(JSON.parse(l) as Record<string, unknown>) } catch { /* 坏行跳过 */ }
+        }
+      } catch { /* 空态 */ }
+      const byStatus: Record<string, number> = { active: 0, warm: 0, cold: 0, retired: 0 }
+      for (const r of act) {
+        const k = r.retired ? 'retired' : String(r.status || 'cold')
+        if (byStatus[k] !== undefined) byStatus[k]++
+      }
+      let idxRows = 0
+      for (const n of ['MEMORY.md', 'USER.md', 'AGENT.md']) {
+        try { idxRows += readFileSync(join(root, n), 'utf8').split('\n').filter((l) => /^\s*\[/.test(l)).length } catch { /* 缺件跳过 */ }
+      }
+      const R = 1000
+      const overR: Array<{ lvl: number; name: string; chars: number }> = []
+      try {
+        const own = (b: string): number => b.split('\n').slice(1).join('\n').replace(/\s/g, '').length
+        for (const nf of readdirSync(join(root, 'notes'))) {
+          if (!/\.md$/i.test(nf) || /^INDEX/i.test(nf)) continue
+          const raw = readFileSync(join(root, 'notes', nf), 'utf8')
+          const short = nf.replace(/\.md$/, '')
+          const title = (b: string): string => b.split('\n')[0].replace(/^#+\s*/, '').replace(/（[^）]*）\s*$/, '').trim()
+          for (const b of raw.split(/^(?=## )/m).filter((x) => /^## /.test(x))) {
+            const s = own(b)
+            if (s > R) overR.push({ lvl: 2, name: `${short} §${title(b)}`, chars: s })
+          }
+          for (const b of raw.split(/^(?=#{2,3} )/m).filter((x) => /^### /.test(x))) {
+            const s = own(b)
+            if (s > R) overR.push({ lvl: 3, name: `${short} §${title(b)}`, chars: s })
+          }
+        }
+      } catch { /* 空态 */ }
+      let archive: Array<{ file: string; chars: number }> = []
+      try {
+        const ad = join(root, 'notes', 'archive')
+        if (existsSync(ad)) {
+          archive = readdirSync(ad).filter((f) => /\.md$/i.test(f)).map((f) => ({ file: f, chars: readFileSync(join(ad, f), 'utf8').replace(/\s/g, '').length }))
+        }
+      } catch { /* 空态 */ }
+      sendJson(res, 200, {
+        ok: true, day: dk,
+        sleeps: sleeps.slice(-20),
+        materials: {
+          forget: numFrom(join(auditDir, `activity-candidates-${dk}.md`)),
+          hot: numFrom(join(auditDir, `activity-hot-${dk}.md`)),
+          interference: rowsIn(join(auditDir, `activity-interference-${dk}.md`)),
+        },
+        activity: { byStatus, tracked: act.length, idxRows, coverage: idxRows ? Math.round(act.length / idxRows * 100) : 0 },
+        overR: overR.sort((a, b) => b.chars - a.chars),
+        archive,
+      })
+    } catch (e) { sendJson(res, 500, { error: String(e) }) }
+  })
+
   // LLM 模型清单（2026-09-10：直接用 Harness 模型体系——蒸馏/深睡模型下拉数据源，经 scheduler-share 桥）
   route('/llm/models', async (_req, res) => {
     try {
@@ -1239,7 +1366,7 @@ export function applyPanel(ctx: Context, config: Config): void {
   }
 
   ctx.effect(() => {
-    ctx.logger?.info?.('[shoucang] host RPC ready: roots/bootstrap/config/save/toggle/set/memory(overview|sections)/suite/deepsleep(status|trigger|config)/idle(status|consolidate)/vector(status|build)/model(list|pull|progress|import|deploy)/inject(preview|stats)')
+    ctx.logger?.info?.('[shoucang] host RPC ready: roots(roots|get_root|set_root|bootstrap)/config(save|toggle|set)/memory(overview|sections|section-edit|edit|remove|approve)/suite/cognition-report/deepsleep(status|trigger|config)/distill(run|config)/vector(status2|cache-clear)/embed(config|test)/llm-models/inject(preview|stats)')
     // 注册 systemPrompt 注入块（每轮渲染，指针缓存 30s）
     const sp = (ctx as unknown as { systemPrompt?: { context?(opts: unknown): () => void } }).systemPrompt
     if (sp && typeof sp.context === 'function') {
@@ -1407,26 +1534,31 @@ export function applyPanel(ctx: Context, config: Config): void {
     if (file === 'MEMORY.md' || file === 'USER.md' || file === 'AGENT.md') return true
     return NOTE_WRITE_RELS.includes(String(file).replace(/^notes[\\/]/, '').replace(/\.md$/, ''))
   }
-  const gateWrite = (target: string, tmpPath: string): { ok: boolean; reason?: string; out?: string } => {
-    try {
+  /** 写门前置（2026-09-11 修复：原 execFileSync 在慢门禁下阻塞宿主事件循环最长 30s → 改异步 execFile） */
+  const gateWrite = (target: string, tmpPath: string): Promise<{ ok: boolean; reason?: string; out?: string }> =>
+    new Promise((done) => {
       const gate = join(memoryLibRoot(), 'scripts', 'memory_write_gate.mjs')
-      if (!existsSync(gate)) return { ok: false, reason: 'write_gate 未就位' }
-      const r = execFileSync('node', [gate, target, tmpPath], { encoding: 'utf8', timeout: 30000, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, MEMORY_ROOT: memoryLibRoot() } }) as unknown as string
-      return { ok: true, out: String(r) }
-    } catch (e) {
-      const ee = e as { status?: number; stderr?: Buffer | string; message?: string }
-      return { ok: false, reason: `gate exit=${ee.status ?? '?'}`, out: typeof ee.stderr === 'string' ? ee.stderr : ((ee.stderr as Buffer) || Buffer.from('')).toString() || ee.message || '' }
-    }
-  }
+      if (!existsSync(gate)) return done({ ok: false, reason: 'write_gate 未就位' })
+      execFile(
+        'node',
+        [gate, target, tmpPath],
+        { encoding: 'utf8', timeout: 30000, windowsHide: true, env: { ...process.env, MEMORY_ROOT: memoryLibRoot() } },
+        (err, stdout, stderr) => {
+          if (!err) return done({ ok: true, out: String(stdout) })
+          const code = (err as { code?: number | string }).code
+          done({ ok: false, reason: `gate exit=${code ?? '?'}`, out: String(stderr || (err as Error).message || '') })
+        },
+      )
+    })
   const readMemFile = (file: string): { text: string | null; abs: string } => {
     const abs = join(memoryLibRoot(), file)
     try { return { text: readFileSync(abs, 'utf8'), abs } } catch { return { text: null, abs } }
   }
-  const writeMemViaGate = (file: string, nextText: string): { ok: boolean; reason?: string; out?: string } => {
+  const writeMemViaGate = async (file: string, nextText: string): Promise<{ ok: boolean; reason?: string; out?: string }> => {
     const abs = join(memoryLibRoot(), file)
     const tmp = abs + '.ui-tmp'
     try { writeFileSync(tmp, nextText, 'utf8') } catch (e) { return { ok: false, reason: 'tmp write fail: ' + String((e as Error).message).slice(0, 80) } }
-    const g = gateWrite(file, tmp)
+    const g = await gateWrite(file, tmp)
     if (g.ok) { try { renameSync(tmp, abs); return { ok: true, out: g.out || '' } } catch (e) { return { ok: false, reason: 'rename fail: ' + String((e as Error).message).slice(0, 80) } } }
     try { unlinkSync(tmp) } catch { /* 清理失败无害 */ }
     return g
@@ -1458,7 +1590,7 @@ export function applyPanel(ctx: Context, config: Config): void {
       // 折叠连续空行（正文块前后各留一空行即可）
       const folded: string[] = []
       for (const l of out) { if (l.trim() === '' && folded.length && folded[folded.length - 1].trim() === '') continue; folded.push(l) }
-      const r = writeMemViaGate(rel, folded.join('\n'))
+      const r = await writeMemViaGate(rel, folded.join('\n'))
       if (!r.ok) return sendJson(res, 400, { error: r.reason, detail: (r.out || '').slice(0, 300) })
       injectCache.at = 0
       return sendJson(res, 200, { ok: true })
@@ -1480,7 +1612,7 @@ export function applyPanel(ctx: Context, config: Config): void {
       const idx = lines.findIndex((l) => l.trim() === oldLine || l.replace(/\s+/g, '') === normOld)
       if (idx < 0) return sendJson(res, 404, { error: 'line not found (可能已被修改，请刷新)' })
       lines[idx] = newText || oldLine
-      const r = writeMemViaGate(file, lines.join('\n'))
+      const r = await writeMemViaGate(file, lines.join('\n'))
       if (!r.ok) return sendJson(res, 400, { error: r.reason, detail: (r.out || '').slice(0, 300) })
       injectCache.at = 0
       return sendJson(res, 200, { ok: true })
@@ -1499,7 +1631,7 @@ export function applyPanel(ctx: Context, config: Config): void {
       const before = lines.length
       const kept = lines.filter((l) => l.trim() !== oldLine)
       if (kept.length === before) return sendJson(res, 404, { error: 'line not found' })
-      const r = writeMemViaGate(file, kept.join('\n'))
+      const r = await writeMemViaGate(file, kept.join('\n'))
       if (!r.ok) return sendJson(res, 400, { error: r.reason, detail: (r.out || '').slice(0, 300) })
       injectCache.at = 0
       return sendJson(res, 200, { ok: true })

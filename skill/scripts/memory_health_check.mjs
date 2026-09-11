@@ -114,7 +114,22 @@ try {
       // 故文件级警戒线必须与最大小节一起判读，否则「文件超 8000」会被误读成读取代价失控。
       const segs = raw.split(/^(?=#{2,3} )/m).filter((x) => /^#{2,3} /.test(x));
       const maxSec = segs.reduce((mx, x) => Math.max(mx, x.replace(/\s/g, '').length), 0);
-      console.log(`${n}: ${chars} 字符 ${sections} 小节 最大小节 ${maxSec} 字 ${chars > NOTES_WARN ? `⚠️ 超 ${NOTES_WARN} 警戒线（按需拆分，不拦截；判读看最大小节）` : '✅'}`);
+      // v21（§8.1 分裂律）：超 R(1000) 的节 —— ## 按**子树**（含 ### 子节）判「该裂」；### 按**自身**判读取代价。
+      // 只提示不 exit（R 是内容律不是硬门，与 NOTES_WARN 同策略；结构决策归模型，见 memory-core-model §2.7.2）。
+      const R = 1000;
+      const own = (blk) => blk.split('\n').slice(1).join('\n').replace(/\s/g, '').length;
+      const title = (blk) => (blk.split('\n')[0] || '').trim().replace(/^#+\s*/, '').replace(/（[^）]*）$/, '').trim();
+      const over = [];
+      for (const blk of raw.split(/^(?=## )/m).filter((x) => /^## /.test(x))) {
+        const s = own(blk);
+        if (s > R) over.push(`§${title(blk)} ${s}`);
+      }
+      for (const blk of segs.filter((x) => /^### /.test(x))) {
+        const s = own(blk);
+        if (s > R) over.push(`§${title(blk)} ${s}`);
+      }
+      const overNote = over.length ? ` ⚠️ 超 R(${R}) 节 ${over.length} 个: ${over.slice(0, 4).join(' · ')}${over.length > 4 ? ' …' : ''}` : '';
+      console.log(`${n}: ${chars} 字符 ${sections} 小节 最大小节 ${maxSec} 字 ${chars > NOTES_WARN ? `⚠️ 超 ${NOTES_WARN} 警戒线（按需拆分，不拦截；判读看最大小节）` : '✅'}${overNote}`);
     } catch {
       console.log(`[FAIL] notes/${n}: 缺失`);
       exitCode = Math.max(exitCode, 4);

@@ -245,11 +245,41 @@ export interface RecallRow { file: string; tag: string; line: string; score: num
 
 const TAG_WEIGHT: Record<string, number> = { 路径: 3, 原则: 2 }
 
+/**
+ * § 族键（同 § 竞争性抑制的**唯一键口径**，2026-09-11 收敛）：
+ *   指针尾第一个 §token（`§A/§B` 以 A 为族键）+ 小节名去行尾日期括号后缀 + 小写。
+ * 消费方：`recallIndex`（词法路）与 `vec.recallRanked`（融合重排路）——两路必须同键，
+ * 否则同一批索引行在词法/融合两种模式下会去重出不同结果（曾有两份副本 + 归一化不一致）。
+ */
+export function sectionKeyOf(line: string, pointer?: string): string | null {
+  const sec = ((line || '').split('→').pop() || '').match(/§([^/→]+)/)
+  if (!sec) return null
+  return `${(pointer || '').replace(/^notes\//, '')}::${String(sec[1]).replace(/\s*[（(]\s*20\d{2}[^）)]*[）)]\s*$/, '').trim().toLowerCase()}`
+}
+
+/** 同 § 只留首条（= 分数更高/先到者），**不足 k 时按序回填**（无竞争者时抑制无意义）。
+ *  单一实现：禁止在调用方另写副本（AGENTS.md「架构单一实现」）。 */
+export function dedupeBySection<T>(list: T[], k: number, keyOf: (x: T) => string | null): T[] {
+  const seen = new Set<string>()
+  const keep: T[] = []
+  const dropped: T[] = []
+  for (const x of list) {
+    const key = keyOf(x)
+    if (key === null) { keep.push(x); continue }
+    if (seen.has(key)) { dropped.push(x); continue }
+    seen.add(key)
+    keep.push(x)
+  }
+  if (keep.length >= k) return keep
+  const merged = keep.concat(dropped)
+  return merged.length > k ? merged.slice(0, k) : merged
+}
+
 /** 词法召回：AGENT.md（[原则]/[路径]/画像行）+ MEMORY/USER 索引行，按 token 命中 × 标签权重排序（路径 > 原则 > 其余） */
-export function recallIndex(root: string, query: string, topK = 3, scope: 'agent' | 'all' = 'all'): { rows: RecallRow[]; tokens: string[] } {
+export function recallIndex(root: string, query: string, topK = 3, scope: 'agent' | 'all' = 'all'): { rows: RecallRow[]; tokens: string[]; mode: 'lexical' } {
   const tokens = extractRecallTokens(query)
   const rows: RecallRow[] = []
-  if (!tokens.length) return { rows, tokens }
+  if (!tokens.length) return { rows, tokens, mode: 'lexical' as const }
   const files = scope === 'all' ? ['AGENT.md', 'MEMORY.md', 'USER.md'] : ['AGENT.md']
   for (const file of files) {
     let raw = ''
@@ -267,7 +297,11 @@ export function recallIndex(root: string, query: string, topK = 3, scope: 'agent
     }
   }
   rows.sort((a, b) => (b.score - a.score) || a.file.localeCompare(b.file))
-  return { rows: rows.slice(0, topK), tokens }
+  // v8（认知对照 P2「竞争性抑制」）：键与去重算法已收敛到 `sectionKeyOf` / `dedupeBySection`（**单一实现**，
+  //   本函数与 `vec.recallRanked` 共用；2026-09-11 消除 vec 侧副本与「行尾日期括号」归一化不一致）。
+  //   竞争性抑制只在有别的 § 可填时才有意义——故无竞争时回填，绝不把结果减到 topK 以下。
+  const picked = dedupeBySection(rows, topK, (r) => sectionKeyOf(r.line, r.pointer))
+  return { rows: picked.slice(0, topK), tokens, mode: 'lexical' as const }
 }
 
 /**

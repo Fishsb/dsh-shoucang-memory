@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "library": "shoucang",
+  "description": "守藏记忆库白名单（库自治：库根 whitelist.json，插件只读消费 targets.loadWhitelist；缺文件 → 内建缺省，可在 shoucang_targets_probe 看到来源）",
+  "routes": ["memory"],
+  "indexTargets": ["MEMORY.md", "USER.md", "AGENT.md"],
+  "notes": ["env", "tools", "flows", "lessons", "release", "user", "agent"],
+  "updatedAt": "2026-09-11"
+}

@@ -25,6 +25,8 @@ export interface ActivityRow {
   s: string // 小节锚名
   hits: number // access.log 当前留存窗口总命中
   hits30: number // 近 30 天命中（B 加深判据）
+  days30?: number // v8：近 30 天**命中日数**（跨日重现信号）
+  salience?: number // v8：显著性代理 0–3（频次档 + 跨日档）；只活在 audit/材料，不进 notes/索引行
   lastHit: number | null
   firstSeen: number
   status: 'active' | 'warm' | 'cold'
@@ -123,7 +125,7 @@ export async function activityAggregate(
     //    · access-real.jsonl 真实路径（2026-09-10 ACT-023）：由 scripts/harvest-access.mjs 从**会话转录**派生
     //      agent 的真实读（read/grep/glob/pwsh 命中记忆库），补齐「真实读零埋点」的断链。
     //    聚合是「每轮按日志全量重算」，故两源只需形状一致（{t,f,s}）即可，无需改动判定逻辑。
-    const hitsBy = new Map<string, { n: number; n30: number; last: number }>()
+    const hitsBy = new Map<string, { n: number; n30: number; last: number; days: Set<string> }>()
     for (const logName of ['access.log', 'access-real.jsonl']) {
       const logFile = join(auditDir, logName)
       if (!existsSync(logFile)) continue
@@ -139,9 +141,10 @@ export async function activityAggregate(
             const key = `${f}|${s}`
             const at = Date.parse(o.t)
             if (!Number.isFinite(at)) continue
-            const cur = hitsBy.get(key) || { n: 0, n30: 0, last: 0 }
+            const cur = hitsBy.get(key) || { n: 0, n30: 0, last: 0, days: new Set<string>() }
             cur.n++
-            if (at >= now - 30 * DAY) cur.n30++
+            // v8（认知对照 P1「显著性」）：记 30 天内**命中日集合**——跨日重现（≥2 天）= 稳定关注，作显著性代理
+            if (at >= now - 30 * DAY) { cur.n30++; cur.days.add(dayKey(at)) }
             if (at > cur.last) cur.last = at
             hitsBy.set(key, cur)
           } catch { /* 坏行跳过 */ }
@@ -159,6 +162,11 @@ export async function activityAggregate(
         : { key, f: tp.f, s: tp.s, hits: 0, hits30: 0, lastHit: null, firstSeen: now, status: 'active' }
       row.hits = hit ? hit.n : 0
       row.hits30 = hit ? hit.n30 : 0
+      // v8（认知对照 P1「显著性」）：显著性代理 = 命中频次档 + 跨日重现档（0–3）
+      //   ① 频次：hits30 ≥ hotHits → 2；有命中 → 1；零 → 0   ② 跨日：30 天内命中日 ≥2 → +1
+      //   注：「用户拍板/纠正」这一档**未实现**（bank audit 无结构化信号源），不假装做了。
+      row.days30 = hit ? hit.days.size : 0
+      row.salience = (row.hits30 >= hotHits ? 2 : row.hits30 > 0 ? 1 : 0) + ((row.days30 || 0) >= 2 ? 1 : 0)
       if (hit && hit.last) row.lastHit = hit.last
       // C：人工负真值（双向包含防「小节名带日期括号」漂移）
       if (retiredNames.some((r) => r === row.s || r.includes(row.s) || row.s.includes(r))) row.retired = true
@@ -168,7 +176,7 @@ export async function activityAggregate(
     // 4) 状态迁移 + 遗忘候选 + 加深候选
     let active = 0, warm = 0, cold = 0, retired = 0
     const archiveCands: Array<{ key: string; f: string; s: string; hits: number; days: string }> = []
-    const hotCands: Array<{ key: string; f: string; s: string; hits30: number }> = []
+    const hotCands: Array<{ key: string; f: string; s: string; hits30: number; salience: number }> = []
     for (const row of rows.values()) {
       if (row.retired) { row.status = 'cold'; retired++; continue }
       const daysSince = row.lastHit ? (now - row.lastHit) / DAY : Infinity
@@ -183,9 +191,9 @@ export async function activityAggregate(
           archiveCands.push({ key: row.key, f: row.f, s: row.s, hits: row.hits, days: neverHit ? 'never' : `${Math.round(daysSince)}d` })
         }
       }
-      // B 加深候选：非 retired + 近 30 天命中 ≥ 阈值
+      // B 加深候选：非 retired + 近 30 天命中 ≥ 阈值（v8：按 hits30 × 显著性排序，显著性只作排序权重不作门槛）
       if (!row.retired && (row.hits30 || 0) >= hotHits) {
-        hotCands.push({ key: row.key, f: row.f, s: row.s, hits30: row.hits30 })
+        hotCands.push({ key: row.key, f: row.f, s: row.s, hits30: row.hits30, salience: row.salience || 0 })
       }
     }
     saveRows(actFile, rows)
@@ -208,15 +216,43 @@ export async function activityAggregate(
     if (hotCands.length) {
       try {
         const f = join(auditDir, `activity-hot-${dayKey(now)}.md`)
+        // v8 显著性：按 hits30 × (1 + salience) 排序（显著性只作排序权重，不作门槛，守「宁缺毋滥」）
+        hotCands.sort((a, b) => (b.hits30 * (1 + b.salience)) - (a.hits30 * (1 + a.salience)))
         writeFileSync(f, [
-          '# 加深候选（v7 B · ' + dayKey(now) + '）', '',
+          '# 加深候选（v7 B · v8 显著性排序 · ' + dayKey(now) + '）', '',
           '> 近 30 天命中 ≥' + hotHits + ' 的高频小节：深睡归纳时可经 pointerOps 扩容概况 / principles 提炼原则（宿主 gate 把关）；本清单不改内容。', '',
-          '| 小节 | 30天命中 |', '|---|---|',
-          ...hotCands.slice(0, 30).map((c) => `| \`${c.f} §${c.s}\` | ${c.hits30} |`), '',
+          '| 小节 | 30天命中 | 显著性 |', '|---|---|---|',
+          ...hotCands.slice(0, 30).map((c) => `| \`${c.f} §${c.s}\` | ${c.hits30} | ${c.salience} |`), '',
           `共 ${hotCands.length} 条。`,
         ].join('\n') + '\n', 'utf8')
       } catch { /* 清单写失败静默 */ }
     }
+    // v8（认知对照 P2「干扰/竞争性抑制」）互抑候选：同文件小节名 bigram 重叠 ∈ [0.50, 0.66)
+    //   判因：唯一门只管「新增时」拒重；既有两条高度重叠的会长期并存、互相占位。
+    //   本清单供深睡消费（merge 并入 / 概况合并）——**只建议，不改内容**。
+    try {
+      const bg = (s: string): Set<string> => { const t = s.replace(/[（）()\s]/g, ''); const o = new Set<string>(); for (let i = 0; i + 1 < t.length; i++) o.add(t.slice(i, i + 2)); return o }
+      const ov = (a: Set<string>, b: Set<string>): number => { if (!a.size || !b.size) return 0; let n = 0; for (const x of a) if (b.has(x)) n++; return (2 * n) / (a.size + b.size) }
+      const byFileNames = new Map<string, string[]>()
+      for (const row of rows.values()) { if (row.retired) continue; const a = byFileNames.get(row.f) || []; a.push(row.s); byFileNames.set(row.f, a) }
+      const inter: string[] = []
+      for (const [f, names] of byFileNames) {
+        const g = names.map(bg)
+        for (let i = 0; i < names.length && inter.length < 30; i++) {
+          for (let j = i + 1; j < names.length && inter.length < 30; j++) {
+            const v = ov(g[i], g[j])
+            if (v >= 0.5 && v < 0.66) inter.push(`| \`${f} §${names[i]}\` ↔ \`§${names[j]}\` | ${v.toFixed(2)} |`)
+          }
+        }
+      }
+      if (inter.length) {
+        writeFileSync(join(auditDir, `activity-interference-${dayKey(now)}.md`), [
+          '# 互抑候选（v8 · ' + dayKey(now) + '）', '',
+          '> 同文件小节名 bigram 重叠 ∈ [0.50, 0.66)：低于唯一门拒收阈值（0.66）故并存至今，但已高度重叠。深睡可经 `treeOps.merge` 并入或经 `pointerOps.update` 合并概况。**只建议，不改内容。**', '',
+          '| 小节对 | 重叠 |', '|---|---|', ...inter, '', `共 ${inter.length} 对。`,
+        ].join('\n') + '\n', 'utf8')
+      }
+    } catch { /* 互抑清单写失败静默 */ }
   } catch (e) {
     log(`activity: 聚合异常（跳过本轮）: ${String((e as Error)?.message || e).slice(0, 160)}`)
   }

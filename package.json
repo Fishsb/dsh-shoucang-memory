@@ -13,8 +13,6 @@
     },
     "./client": "./lib/client.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
-    "./default-project.json": "./default-project.json",
-    "./default-vault-template.tar.gz": "./default-vault-template.tar.gz",
     "./package.json": "./package.json"
   },
   "files": [
@@ -22,9 +20,7 @@
     "client.js",
     "scripts",
     "skill",
-    "cordis.patch.yml",
-    "default-project.json",
-    "default-vault-template.tar.gz"
+    "cordis.patch.yml"
   ],
   "sideEffects": [
     "./lib/client.js"
@@ -32,9 +28,9 @@
   "scripts": {
     "build:host": "tsc -p tsconfig.local.json",
     "build:client": "node scripts/build-client.mjs",
-    "build:default": "node scripts/gen-default-project.mjs",
-    "build": "npm run build:host && npm run build:client && npm run build:default",
-    "typecheck": "tsc -p tsconfig.local.json --noEmit"
+    "build": "npm run build:host && npm run build:client",
+    "typecheck": "tsc -p tsconfig.local.json --noEmit",
+    "test": "node skill/scripts/test.mjs && node scripts/test-forgetops.mjs && node scripts/test-treeops-split.mjs && node scripts/check-hardcode.mjs ."
   },
   "dsh": {
     "bundle": {

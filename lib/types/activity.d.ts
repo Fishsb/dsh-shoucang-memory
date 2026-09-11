@@ -8,6 +8,8 @@ export interface ActivityRow {
     s: string;
     hits: number;
     hits30: number;
+    days30?: number;
+    salience?: number;
     lastHit: number | null;
     firstSeen: number;
     status: 'active' | 'warm' | 'cold';

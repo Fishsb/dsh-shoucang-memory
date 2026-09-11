@@ -12,7 +12,7 @@
  */
 import { readFileSync, existsSync, mkdirSync, appendFileSync, writeFileSync, unlinkSync } from 'node:fs'
 import { join, dirname } from 'node:path'
-import { knowledgeRoot, recallIndex, type RecallRow } from './targets.js'
+import { knowledgeRoot, recallIndex, sectionKeyOf, dedupeBySection, type RecallRow } from './targets.js'
 
 export interface EmbedCfg {
   enabled: boolean
@@ -41,7 +41,7 @@ export const vecStats = {
 // ── v7 活性降权（2026-09-10）：读 memRoot/audit/activity.jsonl 条目状态；cold/retired 条目在融合召回中按
 //    cfg.coldFactor 降权（缺省 0.35，UI 可调 recallColdFactorPercent → /100）；active/warm 不惩罚
 //    （"久未使用自然靠后"——执行时噪音抑制；向量不可用/文件缺失 = 无惩罚，闭环不中断）──
-interface ActEntry { s: string; status: string }
+interface ActEntry { s: string; status: string; hits?: number }
 const actCache = new Map<string, { at: number; byFile: Map<string, ActEntry[]> }>()
 function loadActivityByFile(root: string): Map<string, ActEntry[]> {
   const cached = actCache.get(root)
@@ -52,11 +52,11 @@ function loadActivityByFile(root: string): Map<string, ActEntry[]> {
     for (const l of raw.split('\n')) {
       if (!l.trim()) continue
       try {
-        const o = JSON.parse(l) as { f?: string; s?: string; status?: string }
+        const o = JSON.parse(l) as { f?: string; s?: string; status?: string; hits?: number }
         if (!o.f || !o.s || !o.status) continue
         const f = o.f.startsWith('notes/') ? o.f.slice(6) : o.f // activity 行 f 形如 'notes/env.md' → 行匹配用 'env.md'
         if (!byFile.has(f)) byFile.set(f, [])
-        byFile.get(f)!.push({ s: o.s, status: o.status })
+        byFile.get(f)!.push({ s: o.s, status: o.status, hits: Number(o.hits || 0) })
       } catch { /* 坏行跳过 */ }
     }
   } catch { /* 无 activity 文件=不降权 */ }
@@ -71,9 +71,15 @@ function activityFactor(byFile: Map<string, ActEntry[]>, row: RecallRow, coldFac
   const tail = (row.line || '').split('→').pop() || ''
   const tokens = tail.split(/\s*[\/§]\s*/).map((t) => t.trim()).filter((t) => t && !t.startsWith('notes/') && !t.includes('.md'))
   let best = 1 // warm=1（中性）；cold/retired（以 cold 存）→ coldFactor（v7 UI 可调，缺省 0.35），取最差命中
+  // v8（认知对照 P1「复习-强化」）：**用过的不与从未用过的同冷**——cold 但曾有命中（hits>0）→ 系数抬到 ≥0.5
+  //   （生物侧一次使用即一次强化，衰减曲线不同；此档只影响排序，不改内容）
+  const coldMild = Math.max(coldFactor, 0.5)
   for (const e of list) {
     if (e.status !== 'cold' && e.status !== 'warm') continue
-    if (tokens.some((t) => t === e.s || t.includes(e.s) || e.s.includes(t))) best = Math.min(best, e.status === 'cold' ? coldFactor : 1)
+    if (tokens.some((t) => t === e.s || t.includes(e.s) || e.s.includes(t))) {
+      const fac = e.status === 'warm' ? 1 : (Number(e.hits || 0) > 0 ? coldMild : coldFactor)
+      best = Math.min(best, fac)
+    }
   }
   return best
 }
@@ -190,8 +196,12 @@ export async function recallRanked(
     noteQuery(mode, Date.now() - t0, query, hitOf(rows))
     return { rows, tokens, mode }
   }
+  // v8（认知对照 P2「竞争性抑制」）：同 § 只留一条（先到者=分数更高者），**不足 k 时按序回填**。
+  //   2026-09-11：键与去重算法**不再是本地副本**——统一用 targets 的单一实现（`sectionKeyOf` / `dedupeBySection`），
+  //   与词法路（recallIndex）同键，消除「两路归一化不一致 → 去重结果分叉」的潜伏缺陷。
+
   const { rows, tokens } = recallIndex(root, query, Math.max(topK, 8), scope) // 打底多取，供融合裁剪
-  if (!cfg.enabled) return finish(rows.slice(0, topK), tokens, 'lexical')
+  if (!cfg.enabled) return finish(dedupeBySection(rows, topK, (r) => sectionKeyOf(r.line, r.pointer)), tokens, 'lexical')
   try {
     loadCache()
     // 词法打底空 → 全量索引行（薄行，数十行级）作为向量检索池；词法非空 → 用词法候选池
@@ -230,9 +240,9 @@ export async function recallRanked(
         }
       }
     }
-    if (!vecRows.length) return finish(rows.slice(0, topK), tokens, 'lexical') // 向量不可用 → 词法
+    if (!vecRows.length) return finish(dedupeBySection(rows, topK, (r) => sectionKeyOf(r.line, r.pointer)), tokens, 'lexical') // 向量不可用 → 词法
     const qv = await embedTexts(cfg, [query.slice(0, 512)])
-    if (!qv || !qv[0] || !qv[0].length) return finish(rows.slice(0, topK), tokens, 'lexical')
+    if (!qv || !qv[0] || !qv[0].length) return finish(dedupeBySection(rows, topK, (r) => sectionKeyOf(r.line, r.pointer)), tokens, 'lexical')
     // v7 活性降权：候选池放大到 topK*3 再融合（冷条目被压出 topK 才有意义——池内降权后重新切 topK）
     const dense = vecRows.map((x) => ({ row: x.row, sim: cosine(qv[0], x.vec) })).sort((a, b) => b.sim - a.sim).slice(0, Math.max(topK * 3, 9))
     const lexMax = Math.max(1, ...dense.map((d) => d.row.score))
@@ -244,8 +254,9 @@ export async function recallRanked(
     const fused = dense
       .map((d) => ({ ...d, fused: (0.7 * (d.sim - denseMin) / span + 0.3 * (d.row.score / lexMax)) * activityFactor(actByFile, d.row, factor) }))
       .sort((a, b) => b.fused - a.fused)
-      .slice(0, topK)
-    const out = fused.map((f) => ({ ...f.row, score: Math.round(f.fused * 100) }))
+    // v8（认知对照 P2「竞争性抑制」）：同 § 只留最高分一条，**不足 topK 按分回填**（先排序故留下者必为族内最高分）
+    const fusedPick = dedupeBySection(fused, topK, (f) => sectionKeyOf(f.row.line, f.row.pointer))
+    const out = fusedPick.slice(0, topK).map((f) => ({ ...f.row, score: Math.round(f.fused * 100) }))
     return finish(out, tokens, 'fusion')
-  } catch { return finish(rows.slice(0, topK), tokens, 'lexical') }
+  } catch { return finish(dedupeBySection(rows, topK, (r) => sectionKeyOf(r.line, r.pointer)), tokens, 'lexical') }
 }

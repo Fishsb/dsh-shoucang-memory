@@ -14,7 +14,11 @@
 //
 // 用法:
 //   node scripts/recall-eval.mjs [--n 20] [--exclude sid1,sid2] [--sessions <dir>] [--json]
+//   node scripts/recall-eval.mjs --since 2026-09-01 --n 50      # 固定窗口下界（绝对日期或 12h/3d/2w）
+//   node scripts/recall-eval.mjs --sids <sid8,...>              # 固定样本（按会话白名单，A/B 对比用）
 //   --exclude 用于剔除审计会话（自身会把三项计数顶高，污染基线）
+//   ⚠ 基线纪律（2026-09-11 审查）：不固定窗口时，每次跑取的都是「**当时**最新的 N 个会话」——
+//     两次跑可差 2–8 倍（实测 260 轮 vs 212 轮）。要对比基线（A/B、P3 验收）必须固定 --since / --sids。
 // 路径全部派生（ARCHIVE_SESSIONS / MEMORY_ROOT / ~/.dsh），脚本内无本机硬编码。
 import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -27,6 +31,20 @@ const argOf = (k, d) => { const i = argv.indexOf(k); return i > -1 && argv[i + 1
 const N = Number(argOf('--n', '20'));
 const EXCLUDE = new Set(argOf('--exclude', '').split(',').map((s) => s.trim()).filter(Boolean));
 const AS_JSON = argv.includes('--json');
+// 采样窗口固定（2026-09-11 审查修复）：--since 下界（绝对日期或 12h/3d/2w）+ --sids 样本白名单。
+const SINCE = argOf('--since', '').trim();
+const SIDS = new Set(argOf('--sids', '').split(',').map((s) => s.trim()).filter(Boolean));
+const sinceMs = (() => {
+  if (!SINCE) return 0;
+  const rel = /^(\d+)([hdw])$/.exec(SINCE);
+  if (rel) {
+    const n = Number(rel[1]);
+    const unit = rel[2] === 'h' ? 3600e3 : rel[2] === 'd' ? 86400e3 : 7 * 86400e3;
+    return Date.now() - n * unit;
+  }
+  const t = Date.parse(SINCE);
+  return Number.isFinite(t) ? t : 0;
+})();
 
 const sessionsRoot = argOf('--sessions', lib.pathConfig().sessionsRoot);
 // 记忆库根（索引所在处）：--bank > MEMORY_ROOT > rootDir（技能副本） > ~/.dsh/skills/managing-memory（生产库）
@@ -84,6 +102,8 @@ const totals = { turns: 0, profileHit: 0, knowledgeHit: 0, recallTool: 0, follow
 for (const { p, mtime } of withStat) {
   if (rows.length >= N) break;
   const sid = lib.normalizeSid(p.split(/[\\/]/).filter((x) => x.startsWith('session-')).pop()?.replace(/^session-/, '') || '');
+  if (sinceMs && mtime < sinceMs) continue; // 窗口下界：早于该时刻的会话不纳入（固定基线）
+  if (SIDS.size && !SIDS.has(sid) && !SIDS.has(sid.slice(0, 8))) continue; // 固定样本白名单
   if (EXCLUDE.has(sid) || EXCLUDE.has(sid.slice(0, 8))) { totals.excluded++; continue; }
   let txt;
   try { txt = await lib.decodeTranscript(p); } catch { continue; }
@@ -118,11 +138,11 @@ for (const { p, mtime } of withStat) {
   totals.sessions++;
 }
 
-if (AS_JSON) { console.log(JSON.stringify({ totals, rows, probes: { profile: PROFILE, knowledge: KNOWLEDGE } }, null, 2)); process.exit(0); }
+if (AS_JSON) { console.log(JSON.stringify({ window: { n: N, since: SINCE || null, sinceMs: sinceMs || null, sids: [...SIDS] }, totals, rows, probes: { profile: PROFILE, knowledge: KNOWLEDGE } }, null, 2)); process.exit(0); }
 if (!rows.length) { console.error(`未发现会话（sessionsRoot=${sessionsRoot}）；可用 --sessions 指定。`); process.exit(1); }
 
 const per100 = (v) => totals.turns ? (100 * v / totals.turns).toFixed(1) : '0.0';
-console.log(`记忆库根: ${bank}\n会话根: ${sessionsRoot}\n探针: 画像行 ${PROFILE.length} 词 / 知识索引行 ${KNOWLEDGE.length} 词\n`);
+console.log(`记忆库根: ${bank}\n会话根: ${sessionsRoot}\n采样窗口: 最新 ${N} 个${SINCE ? ` · since=${SINCE}` : ''}${SIDS.size ? ` · sids=${[...SIDS].join(',')}` : ''}${!SINCE && !SIDS.size ? '（⚠ 未固定窗口：跨次对比不可复现，请加 --since/--sids）' : ''}\n探针: 画像行 ${PROFILE.length} 词 / 知识索引行 ${KNOWLEDGE.length} 词\n`);
 console.log('会话      时间(UTC)   轮数  画像取用  知识取用  召回工具  跟读  主档读');
 for (const r of rows) console.log(`${r.sid.padEnd(10)}${r.when.padEnd(12)}${String(r.turns).padStart(5)}${String(r.profileHit).padStart(10)}${String(r.knowledgeHit).padStart(10)}${String(r.recallTool).padStart(10)}${String(r.follow).padStart(6)}${String(r.mainRead).padStart(8)}`);
 console.log(`\n=== 合计（${totals.sessions} 会话 / ${totals.turns} 轮${totals.excluded ? `；已排除 ${totals.excluded} 个` : ''}）===`);

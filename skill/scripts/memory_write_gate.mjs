@@ -29,6 +29,14 @@ const isNotes = /^notes[\\/]/.test(targetPath) || base.startsWith('notes');
 // v17：AGENT.md 索引行新增 [路径] 通用任务路径（对标 AWM）——概况段上限按标签区分：普通行 ≤30 字、[路径] 概要 ≤40 字；
 //      [路径] 步内禁用 →（与 → notes/ 指针歧义，步骤请用 ①②③ 串联）
 // 2026-09-10：容量门可被 env 覆盖（SHOUCANG_CAP_MEMORY/USER/AGENT）——守藏面板「容量门」可调；未设用默认红线
+// 2026-09-11（v21）：下列常量是「§8.1 分层预算公式（指针嵌套树）」的**派生值，不是独立手感数**——只加注释，不改数。
+//   推导：行预算 100 字符 = 固定段 56（[tag]8+主题12+·3+概况30+→3）+ 指针 44；故
+//     MEMORY.md 5000 = 50 行 × 100；USER.md / AGENT.md 3000 = 30 行 × 100；
+//     NOTES_WARN 8000 = 8 × 读取单元 R(1000)（一个 notes 文件 ≤8 节、每节 ≤R）。
+//   ⚠️ 断链风险：改任一常量前先读 skill/memory-whitelist-spec.md §8.1，并同步数值表 +
+//     memory-whitelist-spec §2/§4/§5 + memory-core-model §2.7 + 投影四处
+//     （本文件 / memory-append.mjs / memory_health_check.mjs / engine/target-registry.json）
+//     + 宿主侧（scheduler.ts 容量门 / panel.ts CAP_GATES / client.js 输入框 / distill.ts liveCaps）。
 const CAP_ENV = {
   'MEMORY.md': Number(process.env.SHOUCANG_CAP_MEMORY) || 5000,
   'USER.md': Number(process.env.SHOUCANG_CAP_USER) || 3000,
