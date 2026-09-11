@@ -1111,6 +1111,12 @@ export function applyPanel(ctx: Context, config: Config): void {
         caps: reg?.caps || null,
         health: { R: reg?.R ?? null, K: reg?.K ?? null, notesWarn: reg?.notesWarn ?? null },
         surface: reg?.surface || null,
+        rerankGate: (() => {
+          let indexRows = 0
+          try { indexRows = readFileSync(join(memoryLibRoot(), 'MEMORY.md'), 'utf8').split(/\r?\n/).filter((l) => /^\[/.test(l.trim())).length } catch { /* 缺库 */ }
+          const threshold = Number(reg?.surface?.rerank?.gate?.indexRows || 200)
+          return { indexRows, threshold, ready: indexRows >= threshold }
+        })(),
         ledger: { rows: ledgerRows, lastAt },
         docs: 'skill/engine/criteria.md（生成的人读判据表） · skill/engine/criteria.json（唯一事实源）',
       })
@@ -1592,6 +1598,17 @@ export function applyPanel(ctx: Context, config: Config): void {
         },
       )
     })
+  /** v2（ADR-122）：面板写入后的库 git 快照（best-effort；不动写门语义，失败静默） */
+  const snapshotBank = (): void => {
+    try {
+      const script = join(memoryLibRoot(), 'scripts', 'bank-git.mjs')
+      if (!existsSync(script)) return
+      execFile('node', [script, '--message', `memory: panel-write @ ${new Date().toISOString().slice(0, 19)}`],
+        { env: { ...process.env, MEMORY_ROOT: memoryLibRoot() }, windowsHide: true, timeout: 20000 },
+        () => { /* 静默 */ })
+    } catch { /* 静默 */ }
+  }
+
   const readMemFile = (file: string): { text: string | null; abs: string } => {
     const abs = join(memoryLibRoot(), file)
     try { return { text: readFileSync(abs, 'utf8'), abs } } catch { return { text: null, abs } }
@@ -1635,6 +1652,7 @@ export function applyPanel(ctx: Context, config: Config): void {
       const r = await writeMemViaGate(rel, folded.join('\n'))
       if (!r.ok) return sendJson(res, 400, { error: r.reason, detail: (r.out || '').slice(0, 300) })
       injectCache.at = 0
+      snapshotBank() // v2：库 git 快照（面板写后；best-effort）
       return sendJson(res, 200, { ok: true })
     } catch (e) { sendJson(res, 500, { error: String(e) }) }
   })
@@ -1657,6 +1675,7 @@ export function applyPanel(ctx: Context, config: Config): void {
       const r = await writeMemViaGate(file, lines.join('\n'))
       if (!r.ok) return sendJson(res, 400, { error: r.reason, detail: (r.out || '').slice(0, 300) })
       injectCache.at = 0
+      snapshotBank() // v2：库 git 快照（面板写后；best-effort）
       return sendJson(res, 200, { ok: true })
     } catch (e) { sendJson(res, 500, { error: String(e) }) }
   })
@@ -1676,6 +1695,7 @@ export function applyPanel(ctx: Context, config: Config): void {
       const r = await writeMemViaGate(file, kept.join('\n'))
       if (!r.ok) return sendJson(res, 400, { error: r.reason, detail: (r.out || '').slice(0, 300) })
       injectCache.at = 0
+      snapshotBank() // v2：库 git 快照（面板写后；best-effort）
       return sendJson(res, 200, { ok: true })
     } catch (e) { sendJson(res, 500, { error: String(e) }) }
   })

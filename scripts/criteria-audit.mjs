@@ -8,7 +8,7 @@
 //   ③ 保守度：摄取域 rejected+skipped 占比（越高越保守）
 //   ④ 召回-判据相关性：判据 basis 命中数与 24h 内 recall 命中的关系（给出样本量，不下因果结论）
 // 用法: node scripts/criteria-audit.mjs [--bank <库根>] [--days 7] [--json]
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync, existsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 
@@ -74,7 +74,11 @@ const out = {
   },
   note: '一致率/冲突率需要 judgement.topic 或主题词（模型可选输出）；缺字段时该指标为 null（样本不足，不编造）。',
 }
-if (AS_JSON) { console.log(JSON.stringify(out, null, 2)) } else {
+if (AS_JSON) {
+  const outFile = argOf('--out', '')
+  const body = JSON.stringify(out, null, 2)
+  if (outFile) { writeFileSync(outFile, body, 'utf8'); console.log(`已写出 ${outFile}`) } else console.log(body)
+} else {
   const pct = (v) => (v === null ? 'n/a（样本不足）' : `${(v * 100).toFixed(1)}%`)
   console.log(`判据对账（窗口 ${days} 天）  库=${bank}`)
   console.log(`  样本: 台账 ${ledger.length} 行（摄取 ${ingestRows.length} / 巩固 ${out.samples.consolidateRows}）· access-real ${accessReal.length} · activity ${activity.length}`)

@@ -487,6 +487,9 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         // **「最近更新」从不剔除** ⇒ 每次同型合并都再追加一行，实测单个候选累积 40 条重复行
         // （文件膨胀 + 「最近更新」语义失真）。现按固定字段序重建，任何字段都不会重复累积；
         // 源会话改为**每会话一行**，使跨会话数可从文件自身复算（不再只依赖计数行）。
+        // v2（ADR-122）：转正资格由宿主判据函数**确定性预判**（单一实现 `criteria.ts#promoteVerdict`）——
+        // 深睡材料据此直接看到"已达转正门槛"的证据，而不是只靠计数行措辞；判定结果同步落判据台账。
+        const promote = promoteVerdict('path', { occurrences: n, sessions: n, success: true })
         const newBody = [
           '# 任务候选（低置信 · 跨窗口记忆）',
           '',
@@ -495,10 +498,18 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
           `- 成功次数：${n}`,
           `- 跨会话：${n}`,
           '- 状态：候选（非源指针；仅供深睡跨窗口同型判断——同类成功 ≥2 且跨会话 ≥2 由深睡归纳为 [路径]）',
+          `- 转正判据：${promote.ok ? 'eligible' : 'not-yet'}（${promote.basis.join(' + ')}${promote.ok ? '' : ` · ${promote.reason}`}）`,
           `- 最近更新：${day}`,
           '',
         ].join('\n')
         writeFileSync(fp, newBody, 'utf8')
+        ledger({
+          domain: 'consolidate', step: 'candidate-promote', sid: sid.replace(/^session-/, '').slice(0, 8),
+          criteriaId: 'consolidate.support.path', basis: promote.basis,
+          judgement: { evidence: n, stability: n >= 2 ? 'cross-day' : 'once', conflict: 'none', cost: 'conservative' },
+          decision: { promote: promote.ok ? 'eligible' : 'hold', reason: promote.reason, clue },
+          result: { occurrences: n, sessions: n, file: matched },
+        })
         return
       }
       let hash = 0
