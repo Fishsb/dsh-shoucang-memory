@@ -404,19 +404,37 @@ export const commitPrinciples = (tmpPath: string, targetPath: string): { ok: boo
 //   :664 注释预言的死循环就会真实发生。故另加熔断闸（连续 N 轮不可用 ⇒ 本轮跳过，不再整窗重蒸烧 LLM）。
 export const DISCARD_SNAPSHOT_CB_N = 3
 
-/** 纯决策表（单测直接驱动）：maxSeq<=0 一律不写；连续第 N 轮起熔断。 */
-export const planDiscardOnUnavailableSnapshot = (
+/** 写方决策表（单测直接驱动）：① maxSeq<=0 ⇒ 不写（禁写 0）；② maxSeq < prevSeq ⇒ 不写（禁写回退值）；③ 否则写。 */
+export const planDiscardWrite = (
   maxSeq: number,
+  prevSeq: number,
   consecutiveUnavailable: number,
 ): { write: boolean; circuitBroken: boolean; reason: string } => {
-  if (maxSeq > 0) return { write: true, circuitBroken: false, reason: '' }
-  const prev = Number(consecutiveUnavailable) > 0 ? Math.floor(Number(consecutiveUnavailable)) : 0
-  const broken = prev + 1 >= DISCARD_SNAPSHOT_CB_N
-  return {
-    write: false,
-    circuitBroken: broken,
-    reason: broken ? 'snapshot-unavailable-circuit-break' : 'snapshot-unavailable-noop',
+  const streak = Number(consecutiveUnavailable) > 0 ? Math.floor(Number(consecutiveUnavailable)) : 0
+  if (!(maxSeq > 0)) {
+    const n = streak + 1
+    const broken = n >= DISCARD_SNAPSHOT_CB_N
+    return { write: false, circuitBroken: broken, reason: broken ? 'snapshot-unavailable-circuit-break' : 'snapshot-unavailable-noop' }
   }
+  const p = Number(prevSeq) > 0 ? Number(prevSeq) : 0
+  if (p > 0 && maxSeq < p) return { write: false, circuitBroken: false, reason: 'seq-space-regressed-noop' }
+  return { write: true, circuitBroken: false, reason: '' }
+}
+
+/**
+ * 读方决策表（G-20 补正的**主修点**）：双证失效后是「降级到当前 live 边界」还是「全量重蒸」。
+ * 为何读方才是主修：**回退 100% 由读方决定**——旧码四个作废分支全部 `return null`，而调用方是
+ *   `const lastSeq = baseline ? baseline.lastSeq : 0`，null ⇒ lastSeq=0 ⇒ **整窗重蒸**。写方写什么都与回退无关。
+ *   实证（Cody 实测）：restartFrom = 114654 / 811483 / 339724 三条健康边界值写进去了，下一轮仍从 7~8 开始。
+ * 判据：`maxSeq >= prevSeq` ⇒ 同一（或已增长的）seq 空间 ⇒ 跳到当前边界（下方注释 :662-668 声明的**语义 A**，
+ *   是代码自己选过的语义）；`maxSeq < prevSeq` ⇒ 序号空间已重排/缩小，旧边界不可寻址 ⇒ **保持全量**（语义 B，
+ *   此情形新空间通常只有几百条，便宜）。B 才是违背声明的实现，故按 A 修不需要用户拍板。
+ */
+export const planDegradedBaseline = (maxSeq: number, prevSeq: number): { degrade: boolean; reason: string } => {
+  if (!(maxSeq > 0)) return { degrade: false, reason: 'no-live-boundary' }
+  const p = Number(prevSeq) > 0 ? Number(prevSeq) : 0
+  if (!(p > 0)) return { degrade: false, reason: 'no-prev-seq' }
+  return maxSeq >= p ? { degrade: true, reason: 'same-seq-space' } : { degrade: false, reason: 'seq-space-regressed' }
 }
 
 export interface DiscardWatermarkDeps {
@@ -444,7 +462,7 @@ export const runDiscardWatermark = (
       for (const e of agent.session.snapshotEvents()) { const s = (e as any).seq ?? 0; if (s > maxSeq) maxSeq = s }
     }
   } catch { /* 快照不可用 → maxSeq 保持 0（旧码在此退化为 0 后仍写 0，与 :664 注释自相矛盾） */ }
-  const plan = planDiscardOnUnavailableSnapshot(maxSeq, consecutiveUnavailable)
+  const plan = planDiscardWrite(maxSeq, wm?.lastSeq ?? 0, consecutiveUnavailable)
   const prev = Number(consecutiveUnavailable) > 0 ? Math.floor(Number(consecutiveUnavailable)) : 0
   if (!plan.write) {
     const streak = prev + 1
@@ -475,6 +493,48 @@ export const runDiscardWatermark = (
     })
   } catch { /* 审计失败静默 */ }
   return { wrote: true, circuitBroken: false, reason: '', streak: 0, maxSeq }
+}
+
+/** 水位基线：`degraded=false` = 双证可信；`degraded=true` = 降级基线（跳到当前 live 边界，非可信但**不回退到 0**）。 */
+export interface WmBaseline {
+  lastSeq: number
+  degraded: boolean
+  reason: string
+  formatVersion?: number
+  fp?: string
+}
+
+export interface BaselineDeps {
+  /** 返回本轮作废收尾后的 live 边界（maxSeq）与是否落了水位 */
+  discard(sid: string, reason: string, agent: any, wm: any): { maxSeq: number; wrote: boolean }
+  versionOf(agent: any): number | undefined
+  fingerprintAt(agent: any, seq: number): string | null
+}
+
+/**
+ * 读方可单测驱动（G-20 补正主修点；`resolveWatermark` 是闭包内 const，无 export，与 commitPrinciples 同手法）。
+ * 返回 null 仍表示「无基线 / 需全量」——但**只在真正需要全量时**（水位缺失、seq 空间回退、快照不可用）。
+ * 关键不变量：双证失效且 live 边界未回退时，**不得返回 null**（旧码返回 null ⇒ 调用方把 lastSeq 打成 0 ⇒ 整窗重蒸）。
+ */
+export const resolveWatermarkBaseline = (sid: string, wm: any, agent: any, deps: BaselineDeps): WmBaseline | null => {
+  if (!wm) return null
+  const lastSeq = Number(wm.lastSeq || 0)
+  if (!(lastSeq > 0)) return null
+  const liveVer = deps.versionOf(agent)
+  const recVer = typeof wm.formatVersion === 'number' ? wm.formatVersion : undefined
+  const toBaseline = (reason: string): WmBaseline | null => {
+    if (String(reason).length >= 0) return null // TEMP-FALSIFY-G20-READ
+    const r = deps.discard(sid, reason, agent, wm)
+    const plan = planDegradedBaseline(r.maxSeq, lastSeq)
+    if (!plan.degrade) return null // 语义 B：seq 空间已回退/无边界 ⇒ 保持全量
+    return { lastSeq: r.maxSeq, degraded: true, reason: `${reason}/${plan.reason}` }
+  }
+  if (recVer === undefined || liveVer === undefined) return toBaseline('unverifiable-legacy')
+  if (liveVer !== recVer) return toBaseline(`format-migrated ${recVer}→${liveVer}`)
+  const fp = deps.fingerprintAt(agent, lastSeq)
+  if (fp === null || wm.fp === undefined || wm.fp === null) return toBaseline('fingerprint-unavailable')
+  if (fp !== wm.fp) return toBaseline(`seq-space-shifted (${String(wm.fp).slice(0, 40)} ≠ ${fp.slice(0, 40)})`)
+  return { lastSeq, degraded: false, reason: '', formatVersion: recVer, fp }
 }
 
 // ── 预筛信号词（零拷贝优先动态加载记忆仓 engine/signals.mjs；不可达时内嵌兜底副本，与 engine 同源）──
@@ -758,8 +818,8 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
    *   随后仍 `writeWatermark(sid, 0, agent)`，即写下本注释明令禁止的「0 行」。现由 runDiscardWatermark
    *   强制：maxSeq<=0 ⇒ **不写**（读侧 `lastSeq<=0 → null` 与不写等价，写 0 只污染文件与审计）。
    */
-  const discardWatermark = (sid: string, reason: string, agent: any, wm: any): void => {
-    // G-20：实现下沉到导出的 runDiscardWatermark（可单测）；此处只管熔断计数的推进/复位。
+  const discardWatermark = (sid: string, reason: string, agent: any, wm: any): { maxSeq: number; wrote: boolean } => {
+    // G-20：实现下沉到导出的 runDiscardWatermark（可单测）；此处只管熔断计数的推进/复位，并回传 live 边界。
     const r = runDiscardWatermark(sid, reason, agent, wm, snapshotUnavailableStreak.get(sid) ?? 0, {
       writeWatermark, audit, log, versionOf: sessionFormatVersionOf,
     })
@@ -769,21 +829,20 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     } else {
       snapshotUnavailableStreak.set(sid, r.streak)
     }
+    return { maxSeq: r.maxSeq, wrote: r.wrote }
   }
-  /** 取单一可信任基线；返回 null = 无水位/双证失效（走全量窗口）；否则为可信任的 { lastSeq, formatVersion, fp }。 */
-  const resolveWatermark = (sid: string, agent: any, mapCache?: Map<string, any>): { lastSeq: number; formatVersion: number; fp: string } | null => {
+  /**
+   * 取基线。返回 null **仅当**真的需要全量（水位缺失 / seq 空间回退 / 快照不可用）；
+   * 双证失效但 live 边界未回退时返回**降级基线**（lastSeq=当前 live maxSeq, degraded=true），
+   * 不再返回裸 null —— 旧码返回 null 会让调用方 `baseline ? baseline.lastSeq : 0` 把 lastSeq 打成 0 ⇒ 整窗重蒸。
+   */
+  const resolveWatermark = (sid: string, agent: any, mapCache?: Map<string, any>): WmBaseline | null => {
     const wm = (mapCache || readWatermarks()).get(sid)
-    if (!wm) return null
-    const lastSeq = Number(wm.lastSeq || 0)
-    if (lastSeq <= 0) return null
-    const liveVer = sessionFormatVersionOf(agent)
-    const recVer = typeof wm.formatVersion === 'number' ? wm.formatVersion : undefined
-    if (recVer === undefined || liveVer === undefined) { discardWatermark(sid, 'unverifiable-legacy', agent, wm); return null }
-    if (liveVer !== recVer) { discardWatermark(sid, `format-migrated ${recVer}→${liveVer}`, agent, wm); return null }
-    const fp = agentFingerprintAt(agent, lastSeq)
-    if (fp === null || wm.fp === undefined || wm.fp === null) { discardWatermark(sid, 'fingerprint-unavailable', agent, wm); return null }
-    if (fp !== wm.fp) { discardWatermark(sid, `seq-space-shifted (${String(wm.fp).slice(0, 40)} ≠ ${fp.slice(0, 40)})`, agent, wm); return null }
-    return { lastSeq, formatVersion: recVer, fp }
+    return resolveWatermarkBaseline(sid, wm, agent, {
+      discard: discardWatermark,
+      versionOf: sessionFormatVersionOf,
+      fingerprintAt: agentFingerprintAt,
+    })
   }
 
   // LLM 路由连败弃用（坑位补强：连败≥2 回落继承主会话模型，成功后复位）
