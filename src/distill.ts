@@ -393,6 +393,90 @@ export const commitPrinciples = (tmpPath: string, targetPath: string): { ok: boo
   }
 }
 
+// ── G-20：水位作废时「快照不可用」分支的处置（2026-09-12）——抽成单一实现并**导出**，供单测直接驱动 ──
+// 背景（实测 09-11 00:54:56，sid session-5f024550）：旧 `discardWatermark` 在
+//   `agent.session.snapshotEvents()` 抛异常时把 maxSeq 退化为 0，随后**照样** `writeWatermark(sid, 0, agent)`。
+//   而下方 :664 的注释白纸黑字写着「为何不是 0：写 0 的行没有可用锚点（seq 0 无事件）→ 下次读仍判
+//   「不可验证」→ **每轮全量重蒸，形成死循环**」——即代码实现了注释明确禁止的那件事，属自相矛盾。
+// 判据：读侧 `resolveWatermark` 是 `if (lastSeq <= 0) return null`，故**写 0 与不写在读侧完全等价**；
+//   写 0 唯一的作用是污染水位文件 + 让审计把「无水位」误读成「从 0 续」。故此处一律不写。
+// ⚠ 今天没进入死循环是**运气**（下一轮快照就恢复了），**不是设计保证**——只要 snapshotEvents 连续不可用，
+//   :664 注释预言的死循环就会真实发生。故另加熔断闸（连续 N 轮不可用 ⇒ 本轮跳过，不再整窗重蒸烧 LLM）。
+export const DISCARD_SNAPSHOT_CB_N = 3
+
+/** 纯决策表（单测直接驱动）：maxSeq<=0 一律不写；连续第 N 轮起熔断。 */
+export const planDiscardOnUnavailableSnapshot = (
+  maxSeq: number,
+  consecutiveUnavailable: number,
+): { write: boolean; circuitBroken: boolean; reason: string } => {
+  if (maxSeq > 0) return { write: true, circuitBroken: false, reason: '' }
+  const prev = Number(consecutiveUnavailable) > 0 ? Math.floor(Number(consecutiveUnavailable)) : 0
+  const broken = prev + 1 >= DISCARD_SNAPSHOT_CB_N
+  return {
+    write: false,
+    circuitBroken: broken,
+    reason: broken ? 'snapshot-unavailable-circuit-break' : 'snapshot-unavailable-noop',
+  }
+}
+
+export interface DiscardWatermarkDeps {
+  writeWatermark(sid: string, lastSeq: number, agent: any): void
+  audit(o: Record<string, unknown>): void
+  log(m: string): void
+  versionOf?(agent: any): number | undefined
+}
+
+/**
+ * 水位作废收尾的可单测驱动（`discardWatermark` 是闭包内 const，无 export，单测到不了；与 commitPrinciples 同手法）。
+ * 返回 `wrote=false` 表示**未写水位**（快照不可用），读侧语义等价于「无水位」——绝不再写 lastSeq=0 的行。
+ */
+export const runDiscardWatermark = (
+  sid: string,
+  reason: string,
+  agent: any,
+  wm: any,
+  consecutiveUnavailable: number,
+  deps: DiscardWatermarkDeps,
+): { wrote: boolean; circuitBroken: boolean; reason: string; streak: number; maxSeq: number } => {
+  let maxSeq = 0
+  try {
+    if (typeof agent?.session?.snapshotEvents === 'function') {
+      for (const e of agent.session.snapshotEvents()) { const s = (e as any).seq ?? 0; if (s > maxSeq) maxSeq = s }
+    }
+  } catch { /* 快照不可用 → maxSeq 保持 0（旧码在此退化为 0 后仍写 0，与 :664 注释自相矛盾） */ }
+  const plan = planDiscardOnUnavailableSnapshot(maxSeq, consecutiveUnavailable)
+  const prev = Number(consecutiveUnavailable) > 0 ? Math.floor(Number(consecutiveUnavailable)) : 0
+  if (!plan.write) {
+    const streak = prev + 1
+    try {
+      deps.audit({
+        sid,
+        kind: plan.circuitBroken ? 'snapshot-unavailable-circuit-break' : 'watermark-invalidated',
+        reason: plan.reason,
+        invalidatedBy: reason,
+        streak,
+        threshold: DISCARD_SNAPSHOT_CB_N,
+        prevSeq: wm?.lastSeq ?? null,
+        prevVersion: wm?.formatVersion ?? null,
+        restartFrom: null, // 未写水位 ⇒ 无续写边界（写 0 会让审计误读成「从 0 续」）
+      })
+    } catch { /* 审计失败静默 */ }
+    try { deps.log(`watermark: 双证失效（${reason}）但快照不可用（连续 ${streak}/${DISCARD_SNAPSHOT_CB_N} 轮）→ 不写水位（${plan.reason}）`) } catch { /* */ }
+    return { wrote: false, circuitBroken: plan.circuitBroken, reason: plan.reason, streak, maxSeq }
+  }
+  deps.writeWatermark(sid, maxSeq, agent)
+  try {
+    deps.audit({
+      sid, kind: 'watermark-invalidated', reason,
+      prevSeq: wm?.lastSeq ?? null,
+      prevVersion: wm?.formatVersion ?? null,
+      version: deps.versionOf ? deps.versionOf(agent) ?? null : null,
+      restartFrom: maxSeq,
+    })
+  } catch { /* 审计失败静默 */ }
+  return { wrote: true, circuitBroken: false, reason: '', streak: 0, maxSeq }
+}
+
 // ── 预筛信号词（零拷贝优先动态加载记忆仓 engine/signals.mjs；不可达时内嵌兜底副本，与 engine 同源）──
 const PRESCAN_STRONG = ['记住', '以后', '注意', '踩坑', '原来是这样', '应该改成', '别再用', '纠正', '别忘了', '务必']
 const PRESCAN_MID = [/失败.{0,24}(换|改)用/, /(报错|失败).{0,16}(换|改)用/, /改用.{0,12}(工具|方式|方案|命令)/, /原因.{0,12}(是|为|在于)/, /(记|存).{0,6}(到|进)/, /根因/, /对策/, /(要|该)记住/, /下次(要|得|注意)/]
@@ -612,6 +696,8 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
   loadEngineSignals()
 
   // 水位（suite 本地，自记忆插件 audit/ 迁入；切换时存量水位行随 pending 一并移交）
+  /** G-20 熔断计数：sid → **连续**「快照不可用（maxSeq<=0）」轮次数；任一成功写入即复位（见 writeWatermark）。 */
+  const snapshotUnavailableStreak = new Map<string, number>()
   const readWatermarks = (): Map<string, any> => {
     const map = new Map<string, any>()
     try {
@@ -633,6 +719,8 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         ...(ver === undefined ? {} : { formatVersion: ver }),
         ...(fp === null ? {} : { fp }),
       }) + '\n', 'utf8')
+      // G-20：任一成功写入 = 本轮快照可用 → 熔断计数复位（单一复位点，覆盖全部写入点）
+      snapshotUnavailableStreak.delete(sessionId)
     } catch { /* 静默 */ }
   }
 
@@ -666,19 +754,21 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
    * 「已消费边界」不可定位——不可定位就无法安全重蒸（可能错位重蒸整会话，也可能错位跳过），
    * 故从当前边界继续；旧版本已消费的部分由旧版本负责，不重复也不再回补。
    * 代价明确且可接受：不可定位的那一段增量不再回补（宁可少蒸一次，不可错位重蒸/错位跳过）。
+   * G-20（2026-09-12）：本注释此前被自身代码违反——`snapshotEvents()` 抛异常时 catch 把 maxSeq 退化为 0，
+   *   随后仍 `writeWatermark(sid, 0, agent)`，即写下本注释明令禁止的「0 行」。现由 runDiscardWatermark
+   *   强制：maxSeq<=0 ⇒ **不写**（读侧 `lastSeq<=0 → null` 与不写等价，写 0 只污染文件与审计）。
    */
   const discardWatermark = (sid: string, reason: string, agent: any, wm: any): void => {
-    let maxSeq = 0
-    try {
-      if (typeof agent?.session?.snapshotEvents === 'function') {
-        for (const e of agent.session.snapshotEvents()) { const s = (e as any).seq ?? 0; if (s > maxSeq) maxSeq = s }
-      }
-    } catch { /* 快照不可用 → 退化为 0（该会话下轮重扫，无害） */ }
-    writeWatermark(sid, maxSeq, agent)
-    try {
-      audit({ sid, kind: 'watermark-invalidated', reason, prevSeq: wm?.lastSeq ?? null, prevVersion: wm?.formatVersion ?? null, version: sessionFormatVersionOf(agent) ?? null, restartFrom: maxSeq })
-    } catch { /* 审计失败静默 */ }
-    log(`watermark: ${sidShort(sid)} 双证失效（${reason}）→ 从当前边界 ${maxSeq} 继续（prevSeq=${wm?.lastSeq ?? '-'} prevVer=${wm?.formatVersion ?? '-'} ver=${sessionFormatVersionOf(agent) ?? '-'}）`)
+    // G-20：实现下沉到导出的 runDiscardWatermark（可单测）；此处只管熔断计数的推进/复位。
+    const r = runDiscardWatermark(sid, reason, agent, wm, snapshotUnavailableStreak.get(sid) ?? 0, {
+      writeWatermark, audit, log, versionOf: sessionFormatVersionOf,
+    })
+    if (r.wrote) {
+      // 成功写入时 writeWatermark 已复位计数；此处保留原日志口径
+      log(`watermark: ${sidShort(sid)} 双证失效（${reason}）→ 从当前边界 ${r.maxSeq} 继续（prevSeq=${wm?.lastSeq ?? '-'} prevVer=${wm?.formatVersion ?? '-'} ver=${sessionFormatVersionOf(agent) ?? '-'}）`)
+    } else {
+      snapshotUnavailableStreak.set(sid, r.streak)
+    }
   }
   /** 取单一可信任基线；返回 null = 无水位/双证失效（走全量窗口）；否则为可信任的 { lastSeq, formatVersion, fp }。 */
   const resolveWatermark = (sid: string, agent: any, mapCache?: Map<string, any>): { lastSeq: number; formatVersion: number; fp: string } | null => {
@@ -1186,6 +1276,16 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
       const wmEvents: any[] = agent.session.snapshotEvents()
       const baseline = resolveWatermark(sid, agent)
       const lastSeq = baseline ? baseline.lastSeq : 0
+      // G-20 熔断：连续 N 轮拿不到会话快照 ⇒ 本轮跳过（不再整窗重蒸烧 LLM）。
+      // 依据：水位注释预言「写 0 → 下次读仍判不可验证 → 每轮全量重蒸，形成死循环」；
+      //       实测 09-11 仅失效 2 轮即自愈，**没触发是运气（下轮快照就恢复），不是设计保证**——故必须有这道闸。
+      const streak = snapshotUnavailableStreak.get(sid) ?? 0
+      if (streak >= DISCARD_SNAPSHOT_CB_N) {
+        audit({ sid, kind: 'distill-skip', reason: 'snapshot-unavailable-circuit-break', fclass: 'snapshot-unavailable', streak, threshold: DISCARD_SNAPSHOT_CB_N })
+        ledger({ domain: 'ingest', sid: sid.replace(/^session-/, '').slice(0, 8), decision: { route: 'skip', reason: 'snapshot-unavailable-circuit-break' }, result: { added: 0, rejected: 0, failed: 0 } })
+        log(`distill: ${sidShort(sid)} 快照连续 ${streak} 轮不可用（阈值 ${DISCARD_SNAPSHOT_CB_N}）→ 本轮跳过（熔断，防整窗重蒸死循环）`)
+        return
+      }
       // v18 分段蒸馏（2026-09-10）：整窗按 CHUNK_CHARS/事件边界切段后逐段蒸馏——每段成功即推水位到该段 endSeq
       // （断点续传），段间紧凑清单 manifest 续上下文防同轮重复入册；修复旧「整窗一次注入 24k 截断丢尾 / 失败整窗重蒸」。
       const { chunks, maxSeq } = buildEventChunks(agent, lastSeq, CHUNK_CHARS, wmEvents)

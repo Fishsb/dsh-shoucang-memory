@@ -175,6 +175,30 @@ export declare const commitPrinciples: (tmpPath: string, targetPath: string) => 
     ok: boolean;
     err?: string;
 };
+export declare const DISCARD_SNAPSHOT_CB_N = 3;
+/** 纯决策表（单测直接驱动）：maxSeq<=0 一律不写；连续第 N 轮起熔断。 */
+export declare const planDiscardOnUnavailableSnapshot: (maxSeq: number, consecutiveUnavailable: number) => {
+    write: boolean;
+    circuitBroken: boolean;
+    reason: string;
+};
+export interface DiscardWatermarkDeps {
+    writeWatermark(sid: string, lastSeq: number, agent: any): void;
+    audit(o: Record<string, unknown>): void;
+    log(m: string): void;
+    versionOf?(agent: any): number | undefined;
+}
+/**
+ * 水位作废收尾的可单测驱动（`discardWatermark` 是闭包内 const，无 export，单测到不了；与 commitPrinciples 同手法）。
+ * 返回 `wrote=false` 表示**未写水位**（快照不可用），读侧语义等价于「无水位」——绝不再写 lastSeq=0 的行。
+ */
+export declare const runDiscardWatermark: (sid: string, reason: string, agent: any, wm: any, consecutiveUnavailable: number, deps: DiscardWatermarkDeps) => {
+    wrote: boolean;
+    circuitBroken: boolean;
+    reason: string;
+    streak: number;
+    maxSeq: number;
+};
 export declare function registerDistill(ctx: AppContext, config: DistillConfig): {
     getDeepSleepStatus: () => DeepSleepStatus;
     runDeepSleepNow: () => Promise<{
