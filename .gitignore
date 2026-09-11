@@ -32,6 +32,7 @@ skill/docs/devref/
 
 # ---- WorkBuddy 本地工作记忆（AI 协作数据，不入公开仓）----
 .workbuddy/
+.workbuddy-ai/
 
 # ---- 视觉工具链本机缓存（@anionex/dsh-vision-toolkit 的 artifacts/tmp；含本机会话图片副本，不入公开仓）----
 .dsh-vision-toolkit/
