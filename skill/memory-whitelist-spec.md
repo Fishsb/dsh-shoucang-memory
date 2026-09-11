@@ -41,6 +41,14 @@
 - **成熟度**：`A = A0 + step·(跨日再现日数 − 1)`（缺省 A0=0.3/step=0.2/gate=0.5），由 `scripts/maturation-scan.mjs` 落 `audit/maturation.jsonl`；**`maturation.enforce=false`（缺省）只记录**，置 true 后 `A≥gate` 才允许升格为 `[原则]`/`[路径]`。
 - **统一打分（E 层，M5 开关）**：`score = α_rel·relevance(RRF) + α_imp·importance + α_rec·recency`（缺省 α_rel=1.00 / α_imp=0.35 / α_rec=0.10，**刻意压低 recency**）；`surface.score.mode=legacy`（缺省）时不启用，切换需影子期证据（`audit/score-shadow.jsonl` 的相关性分析）。
 
+### 1.0.1 写面清单与深睡完成语义（v2.2 审查补记 · 2026-09-11）
+
+> 来源：架构审查报告 `docs/architecture-review-20260911.md` 的 F2/F3/F10 —— 三条**语义此前未写明**，实现无误但文档缺位，补记于此。
+
+- **写面清单（权限递减，全部留痕）**：① **面板**（用户显式操作 `/set|/toggle|/memory/*`）② **睡眠自检白名单窄动作**（仅 `rollback-scoreWeights`，依据 R-3；需显式开启 `selfCheckAutoRollback`；执行前备份 `scheduler.json.bak-selfcheck`，落台账 `adjust.rollback`）③ **手工编辑**（用户直接改文件）。三者写同一份 `~/.dsh/suite/scheduler.json`，**不得新增第四条写面**。
+- **深睡「done」的门槛 = 材料消化完成**（`stop==='completed' && out`），**不含落盘门禁的成败**：gate 全拒（`added=0`）仍算 done、**不回滚水位**（重跑只会再被拒一次并重复消耗 LLM）。落盘成败走**写入回执**（`audit/ledger.jsonl` 的 `type=write.consolidate`，含 `attempted/written/rejectLines/gateExit`），并与 `[flow] 深睡水位护栏` 并存：**护栏管"解析失败/异常 → failed 回滚"，回执管"写没写进去"**。
+- **自检触发范围**：**任何非 `no-traces`/`no-parent` 的深睡结束**都会跑睡眠期自检（含 `stop=error/aborted`——失败时更该看）；此外有定时（缺省 6h）与手动（`POST /selfcheck/run`）两条触发。三条路径共用同一实现并写同一条台账 `type=check.sleep`（`trigger` 字段区分）。
+
 ### 1.1 判据分层（v2/ADR-122：**判据不是散文，是注册表**）
 
 > **唯一事实源 = `engine/criteria.json`**；人读投影 = **`engine/criteria.md`**（生成，禁手写）；机检门 = `node scripts/check-criteria.mjs`（纳入 `npm test`）。

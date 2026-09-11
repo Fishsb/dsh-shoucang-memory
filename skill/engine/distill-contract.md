@@ -21,6 +21,8 @@
 - **回执**：每次写入尝试 → `audit/ledger.jsonl` 一行 `type=write.*`（`attempted/written/verdict/reason/gateExit/rejectedLines`）。
 - **成熟度**：`maturation.enforce=true` 时 `[原则]`/`[路径]` 升格需 `A≥gate`（A 见 `audit/maturation.jsonl`，`scripts/maturation-scan.mjs` 生成）。
 - **打分**：`surface.score.mode=v2` 时 E 层用 `α_rel·relevance + α_imp·importance + α_rec·recency`；`legacy`（缺省）用现行 relevance+activity。影子期数据见 `audit/score-shadow.jsonl`。
+- **深睡完成语义（v2.2 审查补记）**：`done` 的门槛=**材料消化完成**（`stop==='completed' && out`），**不含落盘门禁成败**——gate 全拒仍 done、不回滚水位（重跑只会再被拒并重复耗 LLM）；落盘成败看 `write.consolidate` 回执（`attempted/written/rejectedLines/gateExit`）。
+- **睡眠期自检（v2.2）**：深睡结束（除 `no-traces`/`no-parent` 外的所有 stop）后由**宿主**执行六项检测；另有定时（缺省 6h）与手动（`POST /selfcheck/run`）触发。三路径同实现、同台账（`type=check.sleep`，字段 `trigger`）。白名单窄动作仅 `rollback-scoreWeights` 且需显式开关；改 α/gate/判据与删改库内容**一律只建议**。
 
 ## 1. 顶层归属路由（蒸馏子代理第一步，逐条判定；**判据正文见 `engine/criteria.md`**）
 
