@@ -102,7 +102,31 @@ if (existsSync(LIB_CLIENT)) {
   bad('缺少 lib/client.js（前端产物未构建）')
 }
 
-/* ---------- ⑥ 界面设置项可见 ---------- */
+/* ---------- ⑥ 递归防护（P0 回归护栏） ---------- */
+// 实测踩坑：status() 写日志 → Log.add() 遇 error 回调 status() → 无限递归 → RangeError 栈溢出，
+//   任何 error 级状态都会让面板崩溃。解耦方式：抽出 setStatusText() 只更新 DOM，
+//   status() = setStatusText + Log.add；Log.add 内部只允许调用 setStatusText。
+// 用确定性的区段切分（var Log = … 到 var Prog），避免贪婪正则越界误报
+const logStart = clientSrc.indexOf('var Log = ')
+const logEnd = clientSrc.indexOf('var Prog')
+if (logStart >= 0 && logEnd > logStart) {
+  // 先剥注释（说明文字里可能提到 status()，不能当代码判定），再去 setStatusText(
+  const seg = clientSrc.slice(logStart, logEnd)
+    .replace(/\/\*[\s\S]*?\*\//g, '')   // 块注释
+    .replace(/^\s*\/\/.*$/gm, '')       // 行注释
+  const stripped = seg.replace(/setStatusText\(/g, '')
+  if (/status\(/.test(stripped)) {
+    bad('Log 区段内回调了 status() —— 会导致 status↔Log 无限递归（栈溢出），应改用 setStatusText()')
+  } else {
+    ok('无 status↔Log 递归（Log 区段仅用 setStatusText 更新状态栏）')
+  }
+} else {
+  bad('未能定位 Log 区段，无法校验递归防护')
+}
+if (/function setStatusText\(/.test(clientSrc)) ok('存在 setStatusText() 解耦函数')
+else bad('缺少 setStatusText() —— status 与 Log 无法解耦，递归风险')
+
+/* ---------- ⑦ 界面设置项可见 ---------- */
 const CFG_KEYS = ['density', 'navWidth', 'autoRefresh', 'refreshMs', 'showLogs', 'logLevel', 'overviewMode', 'maxRows']
 const hiddenCfg = CFG_KEYS.filter((k) => clientSrc.indexOf("'" + k + "'") < 0)
 if (hiddenCfg.length === 0) ok('界面设置项全部在 UI 暴露（' + CFG_KEYS.length + ' 项）')
