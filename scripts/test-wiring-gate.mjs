@@ -112,11 +112,15 @@ const RULES = [
   },
   {
     id: 'W4',
-    title: "判 failed ⇒ 水位回滚到本轮基准（下轮可重试）",
-    why: '改成推进到 now ⇒ 本批痕迹被永久关在窗外；这是「失败后会不会重新拉起」的最后一处接线。',
+    title: "判 failed / 异常 ⇒ 水位回滚到本轮基准（下轮可重试）",
+    why: '改成推进到 now ⇒ 本批痕迹被永久关在窗外；这是「失败后会不会重新拉起」的最后一处接线。\n' +
+      '     ⚠ 同一语义在代码里有**两个合法落点**（`.then` 的 failed 分支 与 `.catch` 分支），只锁一个等于没锁\n' +
+      '       （2026-09-12 archi 在 AST 版闸上先撞到这个洞，本件同型：只锁了 .then，删掉 .catch 的回滚仍会全绿）。',
     asserts: [
       [/const prevDeepSleepAt = lastDeepSleepAt/g, 1, '本轮开始前先快照基准水位（回滚的落点）'],
-      [/if \(r === 'failed'\) \{ lastDeepSleepAt = prevDeepSleepAt;/g, 1, "判 failed ⇒ 回滚到基准，而非推进到 now"],
+      [/if \(r === 'failed'\) \{ lastDeepSleepAt = prevDeepSleepAt;/g, 1, '落点①：.then 内判 failed ⇒ 回滚到基准，而非推进到 now'],
+      [/\}\.catch\(\(e\) => \{\s*\n\s*lastDeepSleepAt = prevDeepSleepAt/g, 1,
+        '落点②：.catch 内同样回滚（异常时也不得推进水位——只锁落点① 的话删掉这里仍是绿的）'],
     ],
     breaks: [
       ['不回滚而推进到当前时间（重试窗口被关死）', (s) => s.replace(
@@ -125,6 +129,8 @@ const RULES = [
       ['回滚条件永不成立', (s) => s.replace("if (r === 'failed') {", "if (r === 'never') {")],
       ['基准快照丢失（回滚落点变成 0）', (s) => s.replace(
         'const prevDeepSleepAt = lastDeepSleepAt', 'const prevDeepSleepAt = 0')],
+      ['删掉落点②（.catch 内回滚）——只锁一个落点时会假绿', (s) => s.replace(
+        '    }).catch((e) => {\n      lastDeepSleepAt = prevDeepSleepAt', '    }).catch((e) => {')],
     ],
   },
 ]
