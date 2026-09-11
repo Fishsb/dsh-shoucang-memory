@@ -1063,10 +1063,6 @@
 
         // 注入容量预算（v16）：总预算 + 三板块字符上限（0=不裁）
         function numSetting(name, desc, val, key, unit, step) {
-          var item = el('div', 'setting-item');
-          var info = el('div', 'setting-item-info');
-          info.appendChild(el('div', 'setting-item-name', name));
-          info.appendChild(el('div', 'setting-item-desc', desc));
           var isFloat = typeof step === 'number' && step < 1; // U3：小数键（如 MCL 熟悉度阈值）支持
           var wrap = el('div', 'sc-num-wrap'); // U2.5：内联样式 → 类（令牌化，可统一/可回滚）
           var inp = el('input'); inp.type = 'number'; inp.className = 'sc-input'; inp.min = '0'; inp.step = String(step || 100); inp.value = String(val);
@@ -1078,8 +1074,8 @@
               .catch(fail);
           };
           wrap.appendChild(inp); wrap.appendChild(unitEl);
-          item.appendChild(info); item.appendChild(metaBadges(key)); item.appendChild(wrap);
-          return item;
+          // A2：改用 UI.item（DOM 等价）——children 保持「info + 作用域徽标 + 控件」的原有顺序与结构
+          return UI.item(name, desc, null, { children: [metaBadges(key), wrap] });
         }
         view.appendChild(el('div', 'sc-mem-group-title', '② 记忆与容量（写门 + 活性/遗忘）'));
         // 2026-09-10 用户拍板：三上限=记忆库「容量门」（蒸馏/扩增超限拒写），不裁注入——
