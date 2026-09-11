@@ -119,6 +119,13 @@ const RULES = [
     asserts: [
       [/const prevDeepSleepAt = lastDeepSleepAt/g, 1, '本轮开始前先快照基准水位（回滚的落点）'],
       [/if \(r === 'failed'\) \{ lastDeepSleepAt = prevDeepSleepAt;/g, 1, '落点①：.then 内判 failed ⇒ 回滚到基准，而非推进到 now'],
+      // ⚠ 根因留痕（archi 2026-09-12 要求，不要只绕开不留因）：
+      //   早前写的是 `/\}\.catch\(\(e\) => \{.../`，**恒 0 命中 ⇒ 假红**。原因不是换行/缩进，是
+      //   漏了一个 `)`：源码原文是 `}).catch((e) => {`（`}` 与 `.catch` 之间还有一个 `)`），
+      //   `\}\.catch` 要求 `}` 紧跟 `.`。探针实测：`/\}\.catch/g` hits=0、`/\.catch\(/g` hits=4、
+      //   全文 `lastDeepSleepAt = prevDeepSleepAt` hits=2 —— **前缀命中 0 而主体命中 2，即前缀写错**。
+      //   故此处不锚 `}`，只锚 `.catch((e) => {` 并限窗口 60 字符，抗格式微调。
+      //   ⇒ 纪律：写「唯一性正则」前，先把前缀和主体**分开各打一次命中数**（假红 100% 静默）。
       [/\.catch\(\(e\) => \{[\s\S]{0,60}?lastDeepSleepAt = prevDeepSleepAt/g, 1,
         '落点②：.catch 内同样回滚（异常时也不得推进水位——只锁落点① 的话删掉这里仍是绿的）'],
     ],
