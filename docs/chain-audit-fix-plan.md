@@ -111,7 +111,21 @@ node D:/FF/.internal/arch/render/_tools/arch-check.mjs anchors .internal/arch/_a
 
 </details>
 
-## 4. 第四步：主线衔接（可选，非本次审查范围）
+## 4. 第四步：主线衔接（ACT-024 → ACT-029）— 🟡 **ACT-024 已落地（去污染 + 重校准）；ACT-029 未开**
+
+**ACT-024 结果（2026-09-11，实测）**
+
+| 项 | 数值/结论 |
+|---|---|
+| 旧口径污染率 | 影子日志 909 样本：内容正则判 **49.3%**；结构口径复测 849 条 `user/message` 中 **548 条（64.5%）非用户输入** ⇒ 旧判别系统性低估 |
+| 结构判别真值域 | `data.source.kind`：`user`（真用户）/ `plugin`(snapshot·notice) / `agent-instructions` / `skill-catalog` / `agent-message` / `subagent-settled` |
+| 旧判据量为何不可用 | `sim` 是融合召回**池内 min-max 归一化分**（相对分）：干净样本 p50=0.700 / p90=0.850 ⇒ 阈值 0.62 命中 **88.5%** 真实消息 |
+| 新判据量 | **绝对余弦**（用户文本 ↔ 命中索引行，`semanticSim`）：干净样本 p50=0.546 / p90=0.613 / p95=0.627 / p99=0.657 / max=0.726 |
+| 重校准阈值 | `T_on 0.62→0.65`、`T_off 0.52→0.60` → 触发率 **1.99%**，阈上样本 6/6 **全部真语义命中**（噪声样本 "A"/"做ACT-040" 落在 0.38–0.45） |
+| 可复现命令 | `node scripts/activation-calib.mjs --n 300 --since 14d`（结构取样 + 跳过子代理会话 + 编译产物打分） |
+| 后续 | 影子以新口径继续攒样本（`src`/`metric` 字段随行）；`activationPrefetch` 仍缺省关，待样本量足够再评估是否开启该通道 |
+
+**ACT-029（MCL 双通道机制化）未开**：方案见 `.internal/arch/shoucang-SC-S05-MCL-实施方案.md` §3（熟悉度 → 快/慢通道 → `agent/pre-step` → 合规机检 → 有界再引导），落地时守该档 D1（打分不得新写，调 `targets.recallIndex`/`vec.recallRanked`）与 D7（注入不涨预算）；本步 ACT-024 已把「熟悉度判据」换成可标定的绝对口径，正是 ACT-029 的前置条件。
 
 - **ACT-024（影子采样去污染/退役）**：B7 落地后 `recall-eval` 可用 `--since` 固定窗口，**P3 验收判据④（横幅 uptake 不降）首次可测**；建议先定「固定窗口 + 样板判定口径」，再谈影子去留。
 - **ACT-029（MCL 双通道机制化）**：方案在 `.internal/arch/shoucang-SC-S05-MCL-实施方案.md` §3（熟悉度 → 快/慢通道 → `agent/pre-step`），落地时守该档 D1「打分不得新写、调 `targets.recallIndex` / `vec.recallRanked`」与 D7「注入不涨预算（1993 字符硬基线）」。

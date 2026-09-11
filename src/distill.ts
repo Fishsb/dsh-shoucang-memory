@@ -308,6 +308,23 @@ export const DEEP_SLEEP_PROMPT = `你是深度睡眠归纳子代理（守藏记�
 - 去重：现行清单中同 标签+主题 出现两行 → 保留信息更全/命中更高者，update 被留行合并概况（绝不双写）。
 - match 一律逐字取自「现行画像 / 现行知识索引」清单；无锚不 update，拿不准不动。`
 
+// ── 宿主注入样板判别（**单一实现**：候选区 isNoiseIntent + 打扰度采样 activationStep 共用；2026-09-11 ACT-024）──
+// 背景：DSH 会把宿主注入块作为 `user/message` 事件下发——运行态快照（Current runtime context）、后台 job/子代理回执
+// （Background subagent|job …）、`<system-reminder>` 指令块、子代理消息回执（Agent <uuid> sent a message）。这类文本
+// 既不构成「可复用的任务类型」（候选区），也不代表用户任务意图（打扰度采样：实测 909 样本污染 49.3%）。
+// 首选判别是**结构字段 `data.source.kind`**（采样侧已用）；本内容闸用于无 source 的旧格式/夹具事件与候选区文本兜底。
+export const CANDIDATE_NOISE: RegExp[] = [
+  /^Current runtime context\b/i,
+  /<system-reminder>/i,
+  /^Background (subagent|job)\b/i,
+  /^background (subagent|job)\b/, // 实测真实模板是小写 `background job pwsh-1 (…)`，旧正则漏判
+  /^You are an AI agent\b/i,
+  /^Agent [0-9a-f-]{8,} sent a message\b/i, // 子代理→父会话回执
+  /^#\s*守藏[·\s]/, // 热记忆横幅（若被当作用户输入）
+]
+/** 文本是否宿主注入样板（见上：候选区与采样共用的单一实现） */
+export const isNoiseIntent = (s: string): boolean => CANDIDATE_NOISE.some((re) => re.test(String(s)))
+
 // ── 预筛信号词（零拷贝优先动态加载记忆仓 engine/signals.mjs；不可达时内嵌兜底副本，与 engine 同源）──
 const PRESCAN_STRONG = ['记住', '以后', '注意', '踩坑', '原来是这样', '应该改成', '别再用', '纠正', '别忘了', '务必']
 const PRESCAN_MID = [/失败.{0,24}(换|改)用/, /(报错|失败).{0,16}(换|改)用/, /改用.{0,12}(工具|方式|方案|命令)/, /原因.{0,12}(是|为|在于)/, /(记|存).{0,6}(到|进)/, /根因/, /对策/, /(要|该)记住/, /下次(要|得|注意)/]
@@ -414,17 +431,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     const inter = A.filter((x) => B.includes(x)).length
     return inter / Math.min(A.length, B.length)
   }
-  // 候选噪声闸（2026-09-11 实测）：9 条存量候选中 3 条根本不是用户任务，而是**宿主注入样板**——
-  // 「Current runtime context…」运行态快照、「Background subagent/job …」后台完成通知、
-  // `<system-reminder>` 注入块。这类文本永不构成「可复用的任务类型」，进候选区只会污染深睡的同型判断
-  // （还会把不同会话的样板文本互相"同型合并"，制造假跨会话信号）。只按**行首/标志串**判，避免误杀真实任务。
-  const CANDIDATE_NOISE = [
-    /^Current runtime context\b/i,
-    /<system-reminder>/i,
-    /^Background (subagent|job)\b/i,
-    /^You are an AI agent\b/i,
-  ]
-  const isNoiseIntent = (s: string): boolean => CANDIDATE_NOISE.some((re) => re.test(String(s)))
+  // 候选噪声闸：判别实现已上提为模块级 `isNoiseIntent`（单一实现，候选区 + 打扰度采样共用；2026-09-11 ACT-024）
   const ensureFlowCandidate = async (sid: string, intent: string): Promise<void> => {
     if (!intent || intent.length < 8 || isNoiseIntent(intent)) return
     try {
@@ -2683,8 +2690,8 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
   const actShadowFile = join(kRoot, 'audit', 'activation-shadow.jsonl')
   const actState = new Map<string, { state: 'idle' | 'prefetch'; cooldown: number; prevScore: number }>()
   const actConf = {
-    on: Number(config.activationTOn) || 0.62,
-    off: Number(config.activationTOff) || 0.52,
+    on: Number(config.activationTOn) || 0.65,
+    off: Number(config.activationTOff) || 0.6,
     cooldown: Math.max(0, Number(config.activationCooldownSteps) || 3),
     topK: Math.min(5, Math.max(1, Number(config.activationTopK) || 3)),
   }
@@ -2704,16 +2711,37 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     try {
       if (!event) return
       const d = event.data || {}
+      // ACT-024（2026-09-11 结构性去污染，实测污染率 49.3%）：DSH 把**宿主注入块也作为 `user/message` 事件**下发
+      // （系统提示快照 / 后台 job 与子代理回执 / 指令文件 / skill 目录），旧实现只按内容正则判 → 大量非用户文本
+      // 进入影子样本（"Current runtime context…"、"Background subagent … finished"、"Agent <uuid> sent a message"）。
+      // 判别改用**结构字段 `data.source.kind`**（真值域：user / plugin / agent-instructions / skill-catalog /
+      // agent-message / subagent-settled …）：带源且非 `user` 一律丢弃；无 source 的旧格式/夹具事件走内容闸兜底。
+      const srcKind = String((d.source && d.source.kind) || '')
       const arr = Array.isArray(d.content) ? d.content : []
       let text = ''
       for (const c of arr) if (c && c.type === 'text' && typeof c.text === 'string') text += c.text
       if (event.type !== 'user/message' || !text.trim()) return
+      if (srcKind) { if (srcKind !== 'user') return } else if (isNoiseIntent(text.trim())) return
       const rres = await recallRanked(memoryLibRoot(), text, actConf.topK, 'all', embedCfgOf())
       const { rows, tokens } = rres
       if (!tokens.length && !rows.length) return
-      const sim = !rows.length ? 0
+      // 相对分（旧口径）：融合召回**池内 min-max 归一化**后的分数
+      const relSim = !rows.length ? 0
         : rres.mode === 'fusion' ? Math.min(1, (rows[0].score || 0) / 100)
         : Math.min(1, rows[0].score / (tokens.length || 1))
+      // ACT-024（2026-09-11 重校准）：阈值量改为**绝对余弦**（用户文本 ↔ 命中索引行）。
+      // 判因（实测 200 条干净样本）：相对分是池内归一化量，p50=0.770、p90=1.000 —— 现状阈值 0.62 会命中
+      // 88.5% 的真实用户消息，**结构上不可标定**；绝对余弦则可分辨（真命中 0.62–0.73，噪声 0.38–0.45）。
+      // embed 不可用/失败 → 退化回相对分（与旧行为一致，不误报）。
+      const ecfg = embedCfgOf()
+      let sim = relSim
+      let metric = 'rel-fallback'
+      if (rows.length && ecfg.enabled) {
+        try {
+          const c = await semanticSim(text, rows[0].line, ecfg)
+          if (c !== null) { sim = Math.max(0, Math.min(1, c)); metric = 'abs-cos' }
+        } catch { /* 失败保持回退 */ }
+      }
       let st = actState.get(sid) || { state: 'idle', cooldown: 0, prevScore: 0 }
       const prev = st.state
       let emit = false
@@ -2727,6 +2755,8 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
         mkdirSync(dirname(actShadowFile), { recursive: true })
         appendFileSync(actShadowFile, JSON.stringify({
           at: new Date().toISOString(), kind: 'activation-step', sid: sidShort(sid), rmode: rres.mode, mode: config.activationPrefetch ? 'prefetch-armed' : 'shadow',
+          src: srcKind || 'unknown', // ACT-024：采样源（应为 user；旧格式行无此字段）——供校准与污染复盘
+          metric, rel: Number(relSim.toFixed(3)), // ACT-024：判据量（abs-cos 为现行）；rel 留档旧口径便于对照
           state: st.state, prev, sim: Number(sim.toFixed(3)), tOn: actConf.on, tOff: actConf.off,
           emit, tokens: tokens.length, hit: rows.length ? rows[0].line.slice(0, 120) : '',
           pointers: rows.slice(0, 2).map((r) => r.pointer), excerpt: text.slice(0, 60),
