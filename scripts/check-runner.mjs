@@ -101,6 +101,11 @@ const CHECKS = [
   ['scripts/test-fold-state.mjs'],
   ['scripts/test-ui-derive.mjs'],
   ['scripts/test-css-usage-gate.mjs'],
+  // targets.ts **直接单测**（终极方案 §六 第 2 条：它是"当前第一风险 —— 扇入 7 却零直接单测，
+  //   坏了 7 个模块一起错"，补测试优先级高于切分）。九组断言：路径派生 / 白名单门禁（含路径穿越与
+  //   大小写口径）/ 载体层单一实现（期望值数据驱动自 CARRIERS 注册表，不抄第二份标签名单）/
+  //   同 § 族键与竞争性抑制 / 词法 token 地板 / 装配矩阵**全仓唯一实现** / 临时夹具库真读召回。
+  ['scripts/test-targets.mjs'],
 ]
 const rows = []
 for (const entry of CHECKS) {
