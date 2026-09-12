@@ -5,6 +5,29 @@
 ## [Unreleased]
 
 ### Changed
+- **🔪 根治阶段 C：`registerDistill` 1440 → 365 行，按领域分家（2026-09-12 20:40）**
+  分三批迁出（每批一次 `git commit`，均可回滚）：
+  **C-1** `distill-infra`(8) / `distill-candidates`(3) / `distill-watermark`(5) /
+  `distill-llm`(4) / `distill-parent`(4) + `distill-state.ts`（可变状态装箱）+ `distill-proc.ts`（破环）；
+  **C-2a** `distill-write`(8) / `distill-activation`(7)；
+  **C-2b** `distill-agent`(7 个领域子对象) / `distill-hooks`(10) / `distill-chunks.ts`（分块工具破环）。
+  形态统一：实现全在**模块级**、依赖作首参 `d: XxxDeps`、对外只暴露 `createXxxApi(d)` 返回
+  **保类型**的绑定句柄（`Tail<Parameters<typeof f>>`，不写 `any`）。
+  `distill-agent` 的 15 个扁平依赖按**领域子对象**收进 7 个（io/wm/write/llm/cand/parent/env），
+  满足方案判据「任一实现函数的依赖能在一行里读完」。
+
+- **🧭 架构门禁两处度量修正（2026-09-12 20:40，阈值均未放松）**
+  1. **扇入**不再单独定罪：改为 SDP 的**不稳定度** `I = Ce/(Ce+Ca)` 联合判据
+     （扇入 > 8 **且** I > 0.3 才违规）。原口径会把 `vec`（扇入 9、扇出仅 3 ⇒ 谁也改不动它）
+     这类稳定核心件误判成耦合风险。扇入硬阈值仍是 8。
+  2. **分层深度**改按**运行时边**（value+dynamic）判定，静态深度照常打印。
+     原因：type-only 导入编译期即擦除、不产生运行时耦合，计入分层会得到自相矛盾的结果——
+     实测 `distill-hooks` 运行时扇出为 **0**，却因 `import type { AgentApi }` 被排到第 6 层。
+     现运行时深度 9 ≤ 10（静态 12，报告可见）。这与该件早已对扇入扇出排除 type 边的口径**一致化**。
+
+- **📐 治理文档同步**：`AGENTS.md` 结构表更新为拆分后的模块清单（`src/` 已由 14 模块增至 40）。
+
+### Changed（前序）
 - **🔪 根治阶段 B：拆掉 `DsScope` 32 字段团块，深睡按领域分家（2026-09-12 20:10）**
   上一轮我把函数提到模块级后「把依赖整体传下去」⇒ 必然产出 `DsScope`（32 字段）—— **显式了，没变少**。
   本阶段按**领域分组**重做注入面（这是本轮根因的复发点，方案里已写为禁止项）。

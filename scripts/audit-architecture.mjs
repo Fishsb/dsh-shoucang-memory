@@ -127,6 +127,30 @@ while (q.length) {
 }
 const topoOk = order.length === mods.size
 
+// ── 运行时分层（只算 value + dynamic 边，**排除 type-only**）──
+// 为什么必须与静态分层并存：type 导入编译期即擦除、**不产生运行时耦合**，
+//   把它计入分层会得到自相矛盾的结果——本轮实测 `distill-hooks` 运行时扇出为 **0**（谁都不 import），
+//   却被排到第 6 层（只因它 `import type { AgentApi }`）。这类「零运行时依赖却排在高位」的伪深度
+//   会让深度指标失真，进而逼出**为指标而改架构**的反向激励。
+//   ⇒ 门禁按**运行时深度**判（真正的变更传播链），静态深度照常打印供人工看。
+const indegR = new Map([...mods.keys()].map((k) => [k, 0]))
+for (const e of edges) if (e.kind === 'value' || e.kind === 'dynamic') indegR.set(e.to, indegR.get(e.to) + 1)
+const levelR = new Map()
+const qR = [...mods.keys()].filter((k) => indegR.get(k) === 0)
+for (const k of qR) levelR.set(k, 0)
+let orderR = 0
+while (qR.length) {
+  const n = qR.shift(); orderR++
+  for (const e of adj.get(n)) {
+    if (e.kind === 'type') continue
+    levelR.set(e.to, Math.max(levelR.get(e.to) ?? 0, (levelR.get(n) ?? 0) + 1))
+    indegR.set(e.to, indegR.get(e.to) - 1)
+    if (indegR.get(e.to) === 0) qR.push(e.to)
+  }
+}
+const topoOkR = orderR === mods.size
+const rawMaxR = topoOkR ? Math.max(0, ...levelR.values()) : -1
+
 // ── 扇入扇出 / 接口宽度 / 可变全局 ──
 const fanIn = new Map(), fanOut = new Map()
 for (const k of mods.keys()) { fanIn.set(k, 0); fanOut.set(k, 0) }
@@ -188,7 +212,7 @@ const rows = [...mods.entries()].map(([name, m]) => ({
 })).sort((a, b) => (a.level ?? 99) - (b.level ?? 99) || b.lines - a.lines)
 
 const totalLines = rows.reduce((s, r) => s + r.lines, 0)
-const maxLevel = rawMax
+const maxLevel = rawMaxR // 门禁用**运行时深度**（见上：type 边不计）
 
 // ── 阈值（--gate 用）──  ⚠ 棘轮（ratchet）：**只许收紧，不许放松**
 // 取值依据=当前实测值 + 少量余量，目的不是「评判好坏」而是**锁住现状防恶化**：
@@ -222,7 +246,7 @@ for (const r of rows) {
 }
 if (staticCycles.length) breaches.push(`静态循环依赖 ${staticCycles.length} 处: ` + staticCycles.map(c => c.join('→')).join(' | '))
 if (dynOnlyCycles.length) breaches.push(`动态边隐藏环 ${dynOnlyCycles.length} 处（编译期不可见）: ` + dynOnlyCycles.map(c => c.join('→')).join(' | '))
-if (topoOk && maxLevel > T.depth) breaches.push(`分层深度 ${maxLevel + 1} > ${T.depth}`)
+if (topoOk && maxLevel > T.depth) breaches.push(`运行时分层深度 ${maxLevel + 1} > ${T.depth}（静态 ${rawMax + 1}）`)
 
 const report = {
   dir: REL, files: mods.size, totalLines,
@@ -233,7 +257,7 @@ const report = {
 
 if (AS_JSON) { console.log(JSON.stringify(report, null, 2)) }
 else {
-  console.log(`架构审计 · ${REL}/ · ${mods.size} 模块 · ${totalLines} 行 · 分层深度 ${topoOk ? maxLevel + 1 : 'N/A(有环)'}`)
+  console.log(`架构审计 · ${REL}/ · ${mods.size} 模块 · ${totalLines} 行 · 运行时深度 ${topoOk ? maxLevel + 1 : 'N/A(有环)'} · 静态深度 ${topoOk ? rawMax + 1 : 'N/A'}`)
   console.log('─'.repeat(78))
   console.log('层级  模块                              行数   扇入 扇出  导出  转发  可变全局')
   for (const r of rows) {
