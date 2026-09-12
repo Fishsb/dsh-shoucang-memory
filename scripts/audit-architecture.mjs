@@ -203,7 +203,12 @@ for (const r of rows) {
   if (r.lines > T.lines) breaches.push(`${r.name} 行数 ${r.lines} > ${T.lines}`)
   if (r.exports > T.exports) breaches.push(`${r.name} 导出 ${r.exports} 个 > ${T.exports}`)
   if (r.reexports > T.reexports) breaches.push(`${r.name} 转发 ${r.reexports} 个 > ${T.reexports}（过渡 re-export 应逐步消除）`)
-  if (r.fanIn > T.fanIn) breaches.push(`${r.name} 扇入 ${r.fanIn} > ${T.fanIn}（被太多模块直接依赖）`)
+  // ⚠ 扇入门禁**不适用**于 fan-out=0 的纯事实源（criteria.generated / targets 一类）：
+  //   SDP 说的正是「依赖要指向稳定件」，扇出 0 = 谁也改不动它 = 最稳定 ⇒ 被很多模块依赖是**设计意图**，
+  //   不是耦合风险。真正的风险是**高层模块**（扇出 > 0 且自己会变）被过多模块直接依赖。
+  //   （2026-09-12 阶段 B 实测：深睡拆成 6 个领域模块后 criteria.generated 扇入 8→9 触发本条，
+  //    而它恰恰是全仓唯一的 L0 稳定件 —— 这是门禁的**假阳**，按 SDP 收窄口径而不是放阈值。）
+  if (r.fanOut > 0 && r.fanIn > T.fanIn) breaches.push(`${r.name} 扇入 ${r.fanIn} > ${T.fanIn}（被太多模块直接依赖）`)
 }
 if (staticCycles.length) breaches.push(`静态循环依赖 ${staticCycles.length} 处: ` + staticCycles.map(c => c.join('→')).join(' | '))
 if (dynOnlyCycles.length) breaches.push(`动态边隐藏环 ${dynOnlyCycles.length} 处（编译期不可见）: ` + dynOnlyCycles.map(c => c.join('→')).join(' | '))

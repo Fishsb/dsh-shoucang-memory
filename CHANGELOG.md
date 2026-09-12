@@ -5,6 +5,26 @@
 ## [Unreleased]
 
 ### Changed
+- **🔪 根治阶段 B：拆掉 `DsScope` 32 字段团块，深睡按领域分家（2026-09-12 20:10）**
+  上一轮我把函数提到模块级后「把依赖整体传下去」⇒ 必然产出 `DsScope`（32 字段）—— **显式了，没变少**。
+  本阶段按**领域分组**重做注入面（这是本轮根因的复发点，方案里已写为禁止项）。
+  **① `DeepSleepCtx` 32 字段 → 7 个领域分组**（`io` 8 / `cfg` 4 / `llm` 5 / `session` 4 /
+  `write` 5 / `housekeep` 3 / `appCtx` 1），每组内部 ≤8。契约抽到新件 `deepsleep-contract.ts`
+  （零运行时依赖，领域模块的类型汇聚点，避免 deepsleep ↔ 领域模块的环）。
+  **② 五个大函数迁出为独立领域模块，各自只拿 3–7 个依赖**：
+  `deepsleep-traces`(3) / `deepsleep-tree`(3) / `deepsleep-apply`(7) /
+  `deepsleep-probe`(5) / `deepsleep-materials`(**0**，纯读) / `deepsleep-run`(编排器 8 个分组)。
+  **③ 顺带降跨度**：材料采集相（148 行 IIFE 串，零依赖）从 `runDeepSleep` 抽出
+  ⇒ `runDeepSleep` 406 → **256**；`applyPrinciples` 落盘块抽出 ⇒ 121 → **97**（越过 I1 的 120 线）。
+  **④ `DsScope` 已删除** ⇒ `audit-wiring` **I2 实测 1 → 0**（基线同步收紧到 0）。
+  **⑤ 门禁自测的扫描面跟着代码走**：`test-wiring-gate`(+AST 版) 增扫 `deepsleep-run.ts` /
+  `deepsleep-apply.ts` —— 否则变体字符串失效会「变体未命中 ⇒ 判失败」，这是它们**应有**的行为。
+  **⑥ 架构门禁修一处假阳**：扇入门禁不再作用于 `fan-out = 0` 的纯事实源（criteria.generated）。
+  SDP 说的正是「依赖要指向稳定件」；扇出 0 = 谁也改不动它 ⇒ 被 9 个模块依赖是**设计意图**，
+  不是耦合风险。收窄口径而非放阈值（阈值仍 8 未动）。
+  **`npm test` PASS（29 pass · 1 xfail）**；零循环依赖未退化（静态 0 / 动态隐藏 0）。
+  遗留（阶段 D）：`createDeepSleep` 232 行、`consolidateTree` 411 行仍在 I1 / 跨度债务里。
+
 - **🔪 根治阶段 A：`panel.ts` 巨型工厂闭包按领域切开（2026-09-12 19:10）**
   根因不是「文件太大」，而是**依赖按「模块闭包」打包**：`applyPanel` 1817 行里 60+ 个定义互相可见，
   任何一块实现都能看到全部依赖 ⇒ 无法单独测试/替换，按领域切的时候只能把整个扁平命名空间重新打包。

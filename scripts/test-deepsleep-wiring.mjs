@@ -20,22 +20,35 @@ let pass = 0, fail = 0
 const ok = (c, msg) => { if (c) { pass++; console.log(`  ✅ ${msg}`) } else { fail++; console.log(`  ❌ ${msg}`) } }
 
 // ── 全 mock 的 DeepSleepCtx：任何一项漏注入，被用到的那一刻就会暴露 ──
+// ⚠ 2026-09-12 阶段 B：依赖已改为**领域分组**（io/cfg/llm/session/write/housekeep）。
+//   分组形态本身就是断言的一部分：扁平 32 字段的注入面被拆掉了，此处跟着改。
 const makeCtx = (over = {}) => ({
-  log: () => {}, audit: () => {}, ledger: () => {},
-  kRoot: '', auditFile: '', pendDir: '', candidateDir: '',
-  PROFILE_HEADER: {}, capEnv: () => ({}),
-  llmState: { providerFailCount: 0 },
-  appCtx: {}, config: { deepSleepEnabled: true, deepSleepIdleMs: 1800000, deepSleepProbeAfterMs: 600000 },
-  runNode: async () => ({ status: 0, out: '', err: '' }),
-  textOf: () => '', embedCfgOf: () => ({}), probeScriptPath: '',
-  distillAgent: async () => {},
-  writeDispatch: async () => ({ added: 0, rejected: 0, failed: 0, targetLib: '' }),
-  writeProfileLine: () => ({ st: 'added' }),
-  validateProvider: () => {}, runSelfCheck: async () => null,
-  resolveLlm: () => null, resolveDefaultModel: () => undefined, pickParent: () => null,
-  parseAgentJson: () => ({}), normalizeProfileTarget: () => null,
-  locateTranscript: async () => null, hasActiveSubagents: () => false,
-  ensureDaemonParent: async () => null, bankSnapshot: async () => {},
+  io: {
+    log: () => {}, audit: () => {}, ledger: () => {},
+    kRoot: '', auditFile: '', pendDir: '', candidateDir: '', probeScriptPath: '',
+  },
+  cfg: {
+    config: { deepSleepEnabled: true, deepSleepIdleMs: 1800000, deepSleepProbeAfterMs: 600000 },
+    PROFILE_HEADER: {}, capEnv: () => ({}),
+    llmState: { providerFailCount: 0 },
+  },
+  llm: {
+    runNode: async () => ({ status: 0, out: '', err: '' }),
+    textOf: () => '',
+    resolveLlm: () => null, resolveDefaultModel: () => undefined, validateProvider: () => {},
+  },
+  session: {
+    pickParent: () => null, ensureDaemonParent: async () => null,
+    locateTranscript: async () => null, hasActiveSubagents: () => false,
+  },
+  write: {
+    distillAgent: async () => {},
+    writeDispatch: async () => ({ added: 0, rejected: 0, failed: 0, targetLib: '' }),
+    writeProfileLine: () => ({ st: 'added' }),
+    parseAgentJson: () => ({}), normalizeProfileTarget: () => null,
+  },
+  housekeep: { runSelfCheck: async () => null, bankSnapshot: async () => {}, embedCfgOf: () => ({}) },
+  appCtx: {},
   ...over,
 })
 

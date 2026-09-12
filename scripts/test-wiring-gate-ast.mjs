@@ -26,6 +26,10 @@ const SRC = resolve(argOf('--src', join(root, 'src', 'distill.ts')))
 // `--src2` 可覆盖第二个文件（反向证伪时指向变异副本）；默认取仓内 deepsleep-core.ts。
 const SRC2 = resolve(argOf('--src2', join(root, 'src', 'deepsleep.ts')))
 const SRC3 = resolve(argOf('--src3', join(root, 'src', 'deepsleep-core.ts')))
+// 2026-09-12 阶段 B：runDeepSleep（终判 landedNow / 水位语义）已迁至 deepsleep-run.ts ⇒ 扫描面必须跟上
+const SRC4 = resolve(argOf('--src4', join(root, 'src', 'deepsleep-run.ts')))
+// 原则落盘提交点（commitPrinciples / COMMIT_FAILED_GATE）已随 applyPrinciples 迁至 deepsleep-apply.ts
+const SRC5 = resolve(argOf('--src5', join(root, 'src', 'deepsleep-apply.ts')))
 const tsPath = argOf('--ts', null) || ['node_modules/typescript/lib/typescript.js']
   .map((p) => join(root, p)).find(existsSync)
 if (!tsPath || !existsSync(tsPath)) { console.error(`FATAL: 无法定位 typescript（可用 --ts 指定）`); process.exit(3) }
@@ -33,7 +37,7 @@ const ts = (await import(pathToFileURL(resolve(tsPath)).href)).default
 
 // 拼接两文件后统一解析：ESM 允许 import 声明出现在模块顶层任意位置，拼接不影响解析；
 // 变体注入是**纯内存字符串替换**，对拼接体做 replace 仍能命中任一文件的锚点。
-const raw = [SRC, SRC2, SRC3].map((p) => readFileSync(p, 'utf8')).join('\n')
+const raw = [SRC, SRC2, SRC3, SRC4, SRC5].map((p) => readFileSync(p, 'utf8')).join('\n')
 
 // ── ① 骨架化：注释 → 等长空白（保留偏移与长度）──────────────────────────────
 function skeletonOf(text) {

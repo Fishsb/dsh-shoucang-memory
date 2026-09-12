@@ -82,7 +82,7 @@ if (AS_GATE) {
   //   永久红灯 = 人人学会无视，与假绿同型，必须避免。
   // 棘轮：允许改小，不允许改大。2026-09-12 阶段 A：applyPanel（1817 行）已拆 ⇒ 5 → 4
   const A_BASE = opt('--asmbase', 4)
-  const S_BASE = opt('--scopebase', 1) // 棘轮：当前实测 1（DsScope 32 字段）
+  const S_BASE = opt('--scopebase', 0) // 棘轮：2026-09-12 阶段 B 拆掉 DsScope ⇒ 1 → 0
   const G = (c, m) => console.log(`  ${c ? '✅' : '❌'} ${m}`)
   console.log(`装配层不变量门禁 · ${files.length} 模块`)
   console.log(`  I1 装配函数 ≤ ${ASM_MAX} 行；> ${ASM_MAX} 行的个数 ≤ ${A_BASE}`)

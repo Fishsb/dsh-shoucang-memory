@@ -56,7 +56,7 @@ const SRC = join(root, 'src', 'distill.ts')
 // 变体注入是**纯内存字符串替换**，对拼接体做 replace 仍能命中任一文件中的锚点，反向证伪不受影响。
 // P1 二期（2026-09-12）再扩：深睡**状态机主体**迁至 deepsleep.ts（runDeepSleep / 终判 / 水位回滚都在那里），
 //   故 W2/W3/W4 的锚点也随迁 —— 扫描范围必须跟上，否则「没扫到」会被误报成「接线断裂」。
-const SRC_FILES = [SRC, join(root, 'src', 'deepsleep.ts'), join(root, 'src', 'deepsleep-core.ts')]
+const SRC_FILES = [SRC, join(root, 'src', 'deepsleep.ts'), join(root, 'src', 'deepsleep-core.ts'), join(root, 'src', 'deepsleep-run.ts'), join(root, 'src', 'deepsleep-apply.ts')]
 
 let pass = 0, fail = 0
 const ok = (c, msg) => { if (c) { pass++; console.log(`  ✅ ${msg}`) } else { fail++; console.log(`  ❌ ${msg}`) } }

@@ -1468,15 +1468,20 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
   // 依赖倒置：把蒸馏侧回调（distillAgent / writeDispatch）与共享设施**注入**，
   //   deepsleep.ts 因此**零 import distill** —— 依赖方向保持严格单向、零环不破。
   //   （若让 deepsleep 直接 import distill，就会因为「深睡回调蒸馏」形成循环依赖。）
+  // ⚠ 2026-09-12 阶段 B：依赖**按领域分组**注入（io/cfg/llm/session/write/housekeep，每组 ≤8 字段），
+  //   取代原先 32 字段一把梭的扁平 ctx —— 深睡侧每个实现函数只从自己那组取 3–7 个。
   const ds = createDeepSleep({
-    log, audit, ledger, kRoot, auditFile, pendDir, candidateDir, PROFILE_HEADER, capEnv, llmState,
-    appCtx: ctx, config, runNode, textOf,
-    // 惰性包裹：embedCfgOf 定义在本调用之后（TDZ），箭头函数延迟求值即可，无需搬动其定义位置。
-    embedCfgOf: () => embedCfgOf(),
-    probeScriptPath,
-    distillAgent, writeDispatch, writeProfileLine, validateProvider, runSelfCheck, resolveLlm,
-    resolveDefaultModel, pickParent, parseAgentJson, normalizeProfileTarget, locateTranscript,
-    hasActiveSubagents, ensureDaemonParent, bankSnapshot,
+    io: { log, audit, ledger, kRoot, auditFile, pendDir, candidateDir, probeScriptPath },
+    cfg: { config, PROFILE_HEADER, capEnv, llmState },
+    llm: { runNode, textOf, resolveLlm, resolveDefaultModel, validateProvider },
+    session: { pickParent, ensureDaemonParent, locateTranscript, hasActiveSubagents },
+    write: { distillAgent, writeDispatch, writeProfileLine, parseAgentJson, normalizeProfileTarget },
+    housekeep: {
+      runSelfCheck, bankSnapshot,
+      // 惰性包裹：embedCfgOf 定义在本调用之后（TDZ），箭头函数延迟求值即可，无需搬动其定义位置。
+      embedCfgOf: () => embedCfgOf(),
+    },
+    appCtx: ctx,
   })
   const idleTimers = new Map<string, any>()
   const armIdleTimer = (agent: any): void => {
