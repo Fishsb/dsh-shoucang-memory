@@ -217,7 +217,7 @@ export function registerMcl(
   }
   ctx.on('session/event', (session: any, event: any) => captureFromEvent(session, event))
 
-  ctx.on('agent/pre-step', (payload: any, next: () => Promise<any>) => handlePreStep(payload, next, { cfg, counters, taskText, ready, hooks, state, material, mkMsg, judge }))
+  ctx.on('agent/pre-step', (payload: any, next: () => Promise<any>) => handlePreStep(payload, next, { cfg, counters, taskText, ready, hooks, state, tools: { material, judge, mkMsg } }))
 
   ctx.logger?.info?.(`[shoucang] MCL 认知环已装配（enabled=${cfg.enabled} 阈值=${cfg.familiarThreshold} maxNudges=${cfg.maxNudges} 预算=${cfg.budgetChars} 指针=${cfg.topK}）`)
 
@@ -242,7 +242,11 @@ export function registerMcl(
 }
 
 /** `agent/pre-step` 处理器（自 registerMcl 提出；registerMcl 因此满足 I1 的 120 行上限）。
- *  依赖 8 项，均为装配期构造的会话态/工具；依赖显式传递，不再靠闭包隐式可见。 */
+ *  依赖 **7 项**（收尾前 9 项：把注入面三个纯函数收进 `tools` 一组），均为装配期构造的会话态/工具；
+ *  依赖显式传递，不再靠闭包隐式可见。
+ *  口径：终极方案 §五「任一实现函数的依赖宽度 ≤ 8」+ AGENTS.md「分组后每组 ≤8」。
+ *  为何是收 `material/judge/mkMsg` 而不是会话态：前者全函数仅 5 次引用、后者 15 次——
+ *  收组要动引用面最小的一侧，别为凑指标去翻热路径。 */
 export interface PreStepDeps {
   /** registerMcl 的配置形参（不是 body 里的 const ⇒ 依赖测绘易漏） */
   cfg: MclConfig
@@ -251,9 +255,12 @@ export interface PreStepDeps {
   taskText: Map<string, string>
   ready: Set<string>
   hooks: MclHooks
-  material(rows: RecallRow[], budget: number): { text: string; topics: string[]; signals: string[][] }
-  judge(text: string, topics: string[], signals?: string[][]): boolean
-  mkMsg(text: string): AnyMsg
+  /** 注入面三件：材料装配 / 合规判定 / 消息构造 */
+  tools: {
+    material(rows: RecallRow[], budget: number): { text: string; topics: string[]; signals: string[][] }
+    judge(text: string, topics: string[], signals?: string[][]): boolean
+    mkMsg(text: string): AnyMsg
+  }
 }
 
 export async function handlePreStep(payload: any, next: () => Promise<any>, dep: PreStepDeps): Promise<any> {
@@ -313,13 +320,13 @@ export async function handlePreStep(payload: any, next: () => Promise<any>, dep:
           return decision
         }
         dep.counters.slow++
-        const m = dep.material(r.rows, dep.cfg.budgetChars)
+        const m = dep.tools.material(r.rows, dep.cfg.budgetChars)
         st.topics = m.topics
         st.signals = m.signals
         dep.counters.injected++
         await loadMsgFactory()
         const idx = messages.lastIndexOf(fresh)
-        const entered = idx >= 0 ? messages.slice(0, idx + 1).concat([dep.mkMsg(m.text)], messages.slice(idx + 1)) : messages.concat([dep.mkMsg(m.text)])
+        const entered = idx >= 0 ? messages.slice(0, idx + 1).concat([dep.tools.mkMsg(m.text)], messages.slice(idx + 1)) : messages.concat([dep.tools.mkMsg(m.text)])
         dep.hooks.audit({ kind: 'mcl-step', sid: sid.replace(/^session-/, '').slice(0, 8), step, channel: 'slow', sim: Number(sim.toFixed(3)), hit: r.rows[0]?.line?.slice(0, 100) || '', topics: m.topics, injected: m.text.length, nudge: 0 })
         dep.hooks.log(`mcl: ${sid.slice(0, 8)} 慢通道 → 首步注入 ${m.text.length} 字符 / ${m.topics.length} 主题（sim=${sim.toFixed(3)}）`)
         return { ...decision, messages: entered }
@@ -333,7 +340,7 @@ export async function handlePreStep(payload: any, next: () => Promise<any>, dep:
       const prevText = prevAssistant && Array.isArray(prevAssistant.content)
         ? prevAssistant.content.filter((b: any) => b && (b.type === 'text' || b.type === 'reasoning') && typeof b.text === 'string').map((b: any) => b.text).join('')
         : ''
-      const compliant = dep.judge(prevText, st.topics, st.signals)
+      const compliant = dep.tools.judge(prevText, st.topics, st.signals)
       if (!compliant && st.nudges < dep.cfg.maxNudges && st.topics.length) {
         st.nudges++
         dep.counters.nudged++
@@ -341,7 +348,7 @@ export async function handlePreStep(payload: any, next: () => Promise<any>, dep:
         const nudge = `【认知环·再引导 ${st.nudges}/${dep.cfg.maxNudges}】上一步未引用本任务相关的经验（${st.topics.slice(0, 3).join(' / ')}）。请用一句话补上：任务类型与目标 + 你要引用的一条 \`[路径]\`/\`[原则]\`（指针见上一步材料），然后继续。`
         dep.hooks.audit({ kind: 'mcl-step', sid: sid.replace(/^session-/, '').slice(0, 8), step, channel: 'slow', sim: Number(st.sim.toFixed(3)), compliant: false, nudge: 1, topics: st.topics })
         dep.hooks.log(`mcl: ${sid.slice(0, 8)} 慢通道 → 再引导 ${st.nudges}/${dep.cfg.maxNudges}`)
-        return { ...decision, messages: messages.concat([dep.mkMsg(nudge)]) }
+        return { ...decision, messages: messages.concat([dep.tools.mkMsg(nudge)]) }
       }
       if (!compliant) dep.hooks.audit({ kind: 'mcl-step', sid: sid.replace(/^session-/, '').slice(0, 8), step, channel: 'slow', sim: Number(st.sim.toFixed(3)), compliant: false, nudge: 0, nudges: st.nudges, topics: st.topics })
       return decision

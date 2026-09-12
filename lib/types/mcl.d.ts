@@ -63,7 +63,11 @@ export declare function registerMcl(ctx: {
     status(): MclStatus;
 };
 /** `agent/pre-step` 处理器（自 registerMcl 提出；registerMcl 因此满足 I1 的 120 行上限）。
- *  依赖 8 项，均为装配期构造的会话态/工具；依赖显式传递，不再靠闭包隐式可见。 */
+ *  依赖 **7 项**（收尾前 9 项：把注入面三个纯函数收进 `tools` 一组），均为装配期构造的会话态/工具；
+ *  依赖显式传递，不再靠闭包隐式可见。
+ *  口径：终极方案 §五「任一实现函数的依赖宽度 ≤ 8」+ AGENTS.md「分组后每组 ≤8」。
+ *  为何是收 `material/judge/mkMsg` 而不是会话态：前者全函数仅 5 次引用、后者 15 次——
+ *  收组要动引用面最小的一侧，别为凑指标去翻热路径。 */
 export interface PreStepDeps {
     /** registerMcl 的配置形参（不是 body 里的 const ⇒ 依赖测绘易漏） */
     cfg: MclConfig;
@@ -81,13 +85,16 @@ export interface PreStepDeps {
     taskText: Map<string, string>;
     ready: Set<string>;
     hooks: MclHooks;
-    material(rows: RecallRow[], budget: number): {
-        text: string;
-        topics: string[];
-        signals: string[][];
+    /** 注入面三件：材料装配 / 合规判定 / 消息构造 */
+    tools: {
+        material(rows: RecallRow[], budget: number): {
+            text: string;
+            topics: string[];
+            signals: string[][];
+        };
+        judge(text: string, topics: string[], signals?: string[][]): boolean;
+        mkMsg(text: string): AnyMsg;
     };
-    judge(text: string, topics: string[], signals?: string[][]): boolean;
-    mkMsg(text: string): AnyMsg;
 }
 export declare function handlePreStep(payload: any, next: () => Promise<any>, dep: PreStepDeps): Promise<any>;
 export {};
