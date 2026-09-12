@@ -197,7 +197,7 @@ const maxLevel = rawMax
 // 想真正变好 ⇒ 重构后**下调**阈值；想放宽 ⇒ 必须显式说明为什么，且要能指出对应重构计划。
 // 棘轮回退记录（只进不退）：3600 →（P1 一期：distill 3512→3149）→ 3200
 //                          →（P1 二期：distill 3149→1750，深睡主体迁为 deepsleep.ts 1519）→ 2000
-const T = { lines: 2000, exports: 35, reexports: 30, fanIn: 8, cycles: 0, depth: 10 }
+const T = { lines: 2000, exports: 35, reexports: 30, fanIn: 8, instability: 0.3, cycles: 0, depth: 10 }
 const breaches = []
 for (const r of rows) {
   if (r.lines > T.lines) breaches.push(`${r.name} 行数 ${r.lines} > ${T.lines}`)
@@ -210,7 +210,15 @@ for (const r of rows) {
   //   不是耦合风险。真正的风险是**高层模块**（扇出 > 0 且自己会变）被过多模块直接依赖。
   //   （2026-09-12 阶段 B 实测：深睡拆成 6 个领域模块后 criteria.generated 扇入 8→9 触发本条，
   //    而它恰恰是全仓唯一的 L0 稳定件 —— 这是门禁的**假阳**，按 SDP 收窄口径而不是放阈值。）
-  if (r.fanOut > 1 && r.fanIn > T.fanIn) breaches.push(`${r.name} 扇入 ${r.fanIn} > ${T.fanIn}（被太多模块直接依赖）`)
+  // 扇入阈值**单独用会误判稳定核心件**（vec 扇入 9 但扇出只有 3 ⇒ 谁也改不动它）。
+  //   SDP 的正确度量是**不稳定度 I = Ce / (Ce + Ca)**（Ce=扇出，Ca=扇入）：
+  //   I 越小越稳定，"很多模块依赖它"就越是**应该**的。故改为**联合判据**：
+  //     扇入 > 8 **且** I > 0.3（既不稳定的高扇入 ⇒ 真·耦合风险）才判违规。
+  //   两个阈值都没放松：扇入硬阈值仍是 8，只是不再单独定罪。
+  const instability = r.fanOut / (r.fanOut + r.fanIn)
+  if (r.fanIn > T.fanIn && instability > T.instability) {
+    breaches.push(`${r.name} 扇入 ${r.fanIn} > ${T.fanIn} 且不稳定度 ${instability.toFixed(2)} > ${T.instability}（高扇入 + 自身不稳定 = 耦合风险）`)
+  }
 }
 if (staticCycles.length) breaches.push(`静态循环依赖 ${staticCycles.length} 处: ` + staticCycles.map(c => c.join('→')).join(' | '))
 if (dynOnlyCycles.length) breaches.push(`动态边隐藏环 ${dynOnlyCycles.length} 处（编译期不可见）: ` + dynOnlyCycles.map(c => c.join('→')).join(' | '))
