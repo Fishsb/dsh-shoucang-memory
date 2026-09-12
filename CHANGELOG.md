@@ -5,6 +5,26 @@
 ## [Unreleased]
 
 ### Changed
+- **🔪 根治阶段 A：`panel.ts` 巨型工厂闭包按领域切开（2026-09-12 19:10）**
+  根因不是「文件太大」，而是**依赖按「模块闭包」打包**：`applyPanel` 1817 行里 60+ 个定义互相可见，
+  任何一块实现都能看到全部依赖 ⇒ 无法单独测试/替换，按领域切的时候只能把整个扁平命名空间重新打包。
+  **① 拆分结果**：`panel.ts` 1903 行 → **装配 77 行** + 5 个领域模块
+  `panel-shared`(539 公共基元) / `panel-config`(314) / `panel-memory`(389) /
+  `panel-observe`(365) / `panel-inject`(426)；**34 条路由一条不少**（`test-panel-wiring` 契约在册）。
+  **② 依赖窄传，不是换了个名字的团块**：各领域只拿自己要的 3–7 个
+  （`ConfigDeps` 6 / `MemoryDeps` 3 / `ObserveDeps` 3 / `InjectDeps` 7 / `HotMemoryDeps` 2），
+  日志只给 `PanelLogger`（不含整个 host ctx）；`ctx` 仅 `registerInject` 一个入口持有（`ctx.effect` 需要）。
+  **③ 装配层终于变薄**：`applyPanel` 只剩「构造 → 注册」，看不到任何业务分支。
+  **④ 结构陷阱已规避**：1628 之后的 8 条路由原本包在 `ctx.effect` 回调里（1588–1902），
+  整块搬进 `panel-inject.mountInjectEffect`，未切飞 effect 的 `return disposer`。
+  **⑤ 三处只读 `src/panel.ts` 的源码扫描件同步改为扫 `src/panel*.ts`**
+  （`check-ui-contract` / `check-carriers` / `test-carrier-layers`）—— 否则端点散了会得到「0 个端点」的假结论。
+  **⑥ 门禁同步收紧（只许收紧不许放松）**：`audit-fnspan` 债务基线 4 → **3**；
+  `audit-wiring` I1 基线 5 → **4**；I2 **加严**：除 `const X: *Scope = {…}` 外，新增
+  **接口声明本身**的字段数检查（后缀 `*Scope|*Deps`）—— 只认 `*Scope` 名字的话，把团块改名 `XxxDeps` 就能绕过。
+  反向证伪：注入 13 字段 `FalsifyDeps` ⇒ I2 实测 2/基线 1 **判红** ✅。
+  `npm test` **PASS（29 pass · 1 xfail）**，零循环依赖未退化（静态 0 / 动态隐藏 0）。
+
 - **🏛 新增架构门禁 `scripts/audit-architecture.mjs`（2026-09-12 14:50）**
   起因：全仓对「代码写对没有」有 25 道门禁，对「**结构有没有烂掉**」**一道都没有** —— 零循环依赖这
   条最值钱的性质此前**无人守护**，任何人加一个 `import` 就能引入环且不报错。

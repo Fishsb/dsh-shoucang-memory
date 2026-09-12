@@ -6,8 +6,8 @@
 //      且层与可注入性一致（P ⇒ always；R/E ⇒ gated 或 none）
 //   ② 渲染器全覆盖：**每个用到的 injectable 组合（always:index / always:profile / gated:index）都必须有渲染器声明**
 //   ③ 标签覆盖：体检脚本 INDEX_FILES 里的全部标签都必须出现在 carriers.tags（防新增标签漏登记）
-//   ④ 投影接线：生成投影含 CARRIERS 常量，且 panel.ts 确实按 carrier 渲染（readCarrier）
-import { readFileSync, existsSync } from 'node:fs'
+//   ④ 投影接线：生成投影含 CARRIERS 常量，且 panel 模块确实按 carrier 渲染（readCarrier）
+import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
@@ -60,7 +60,8 @@ chk(Object.keys(tags).length >= healthTags.size, `③载体标签数 ${Object.ke
 // ④ 投影接线
 const generated = read('src/criteria.generated.ts')
 chk(/export const CARRIERS = /.test(generated), '④生成投影含 CARRIERS 常量')
-const panel = read('src/panel.ts')
+// 2026-09-12：readCarrier 已随热记忆迁到 src/panel-shared.ts —— 扫全部 panel 模块，不写死单文件
+const panel = readdirSync(join(root, 'src')).filter((f) => /^panel.*\.ts$/.test(f)).sort().map((f) => read('src/' + f)).join('\n')
 chk(/readCarrier\s*=/.test(panel), '④panel.ts 实现 readCarrier（按载体渲染）')
 // 2026-09-11：原断言 `/CARRIERS/.test(panel)` 是**假绿**——panel.ts 的注释里出现 CARRIERS 四个字母即通过，
 //   与「是否真的消费注册表」无关。真正消费注册表的是层判据的单一实现 targets.ts，故改为断言它。

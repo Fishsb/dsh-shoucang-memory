@@ -1,7 +1,18 @@
 /**
- * @dsh-external/shoucang-panel — 宿主半区。
+ * @dsh-external/shoucang-panel — 宿主半区**装配层**。
  *
- * 职责：为 client 面板（client.js，纯 DOM）提供 /api/shoucang-panel HTTP RPC（按功能组；**共 28 条 exact 路由**）：
+ * ⚠ 本文件只做「构造依赖 → 装配领域模块 → 交给宿主」；**实现一律不在本文件**。
+ *   2026-09-12 架构根治前，这里是 1817 行的 `applyPanel` 巨型工厂闭包：模块的全部实现
+ *   寄生在入口函数的闭包里，依赖按「模块闭包」打包 ⇒ 无法单独测试、无法单独替换。
+ *   现按领域切分为（各自持有自己的依赖，窄传 3–7 个）：
+ *     panel-shared.ts  公共基元（状态库/路由绑定/全局配置/热记忆/YAML 解析/骨架引导）
+ *     panel-config.ts  根目录 + 配置读写（8 端点）
+ *     panel-memory.ts  记忆库只读展示（2 端点）
+ *     panel-observe.ts 观测/判据/深睡-蒸馏配置（14 端点）
+ *     panel-inject.ts  注入挂点 + 向量 + 记忆写回 + /scnote（10 端点）
+ *   拆分依据与验收见 deliverables/architecture-ultimate-plan.md 阶段 A。
+ *
+ * 路由清单（/api/shoucang-panel 前缀下 **共 34 条 exact 路由**，由 scripts/test-panel-wiring.mjs 锁死）：
  *   根目录：GET /roots · GET /get_root · POST /set_root · POST /root/bootstrap（建**单库骨架**）
  *   配置：  GET /config · POST /save · POST /toggle · POST /set（白名单键）
  *   记忆：  GET /memory/overview · GET /memory/sections · POST /memory/section-edit · POST /memory/edit · POST /memory/remove · POST /memory/approve

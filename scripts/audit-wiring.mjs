@@ -53,10 +53,18 @@ for (const f of files) {
       const from = lineOf(n.getStart(sf)), to = lineOf(n.getEnd()), len = to - from + 1
       if (len >= 20) asm.push({ file: f, name, from, to, len })
     }
-    // I2：`const X: SomeScope = { … }` 的字面量键数
+    // I2-a：`const X: SomeScope = { … }` 的字面量键数
     if (ts.isVariableDeclaration(node) && node.type && ts.isTypeReferenceNode(node.type)
       && /Scope$/.test(node.type.typeName.getText(sf)) && node.initializer && ts.isObjectLiteralExpression(node.initializer)) {
       scope.push({ file: f, name: node.name.getText(sf), type: node.type.typeName.getText(sf), keys: node.initializer.properties.length })
+    }
+    // I2-b：**接口声明本身**的字段数（2026-09-12 阶段 A 加严）。
+    //   为什么必须加：只认 `*Scope` 名字的话，把团块改叫 `XxxDeps` 就能绕过门禁 ——
+    //   「改个名就让门禁变绿」与「永久红灯」同型，都是门禁失效。故按**语义后缀**收口。
+    //   ⚠ `Ctx` 后缀暂未纳入：`DeepSleepCtx`（20+ 字段）是阶段 B 的待拆项，
+    //      纳入即 I2=2 > 基线 1 ⇒ 只能放基线（=放松棘轮）。阶段 B 拆完再一起收。
+    if (ts.isInterfaceDeclaration(node) && /(Scope|Deps)$/.test(node.name.text)) {
+      scope.push({ file: f, name: node.name.text, type: node.name.text + '（接口声明）', keys: node.members.length })
     }
     ts.forEachChild(node, walk)
   }
@@ -72,7 +80,8 @@ if (AS_GATE) {
   // ⚠ 默认值必须传**数字**：`opt('--x','0')` 返回字符串 '0'，而 '0' 在 JS 里是 **truthy** ⇒
   //   `'0' || 5` 得到 '0' ⇒ 基线变成 0 ⇒ 今天恒红（首版实测：I1 5/基线 0、I2 1/基线 0 直接 FAIL）。
   //   永久红灯 = 人人学会无视，与假绿同型，必须避免。
-  const A_BASE = opt('--asmbase', 5) // 棘轮：当前实测 5
+  // 棘轮：允许改小，不允许改大。2026-09-12 阶段 A：applyPanel（1817 行）已拆 ⇒ 5 → 4
+  const A_BASE = opt('--asmbase', 4)
   const S_BASE = opt('--scopebase', 1) // 棘轮：当前实测 1（DsScope 32 字段）
   const G = (c, m) => console.log(`  ${c ? '✅' : '❌'} ${m}`)
   console.log(`装配层不变量门禁 · ${files.length} 模块`)

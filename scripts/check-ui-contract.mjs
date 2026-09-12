@@ -15,26 +15,30 @@
  *   ⑤ 界面设置项必须在 UI 中可见（防止"可配但没入口"）
  */
 
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const CLIENT = join(ROOT, 'client.js')
-const PANEL = join(ROOT, 'src', 'panel.ts')
+// ⚠ 2026-09-12：panel.ts 已按领域拆为 panel-shared/config/memory/observe/inject，
+//   端点散在各模块 —— 只扫 panel.ts 会得到「0 个端点」的假结论。这里扫**全部** panel 模块。
+const PANEL_DIR = join(ROOT, 'src')
+const PANEL_FILES = readdirSync(PANEL_DIR).filter((f) => /^panel.*\.ts$/.test(f)).sort()
+const PANEL = join(PANEL_DIR, 'panel.ts')
 
 let pass = 0, fail = 0
 const ok = (m) => { pass++; console.log('  ✅ ' + m) }
 const bad = (m) => { fail++; console.log('  ❌ ' + m) }
 
-console.log('UI 契约机检（client.js ↔ src/panel.ts）')
+console.log(`UI 契约机检（client.js ↔ src/panel*.ts · ${PANEL_FILES.length} 个模块）`)
 
 if (!existsSync(CLIENT)) { bad('找不到 client.js'); summary() }
-if (!existsSync(PANEL)) { bad('找不到 src/panel.ts'); summary() }
+if (!PANEL_FILES.length) { bad('找不到 src/panel*.ts'); summary() }
 
 const clientSrc = readFileSync(CLIENT, 'utf8')
-const panelSrc = readFileSync(PANEL, 'utf8')
+const panelSrc = PANEL_FILES.map((f) => readFileSync(join(PANEL_DIR, f), 'utf8')).join('\n')
 
 /* ---------- ① 语法 ---------- */
 try {
@@ -71,7 +75,7 @@ const ALLOW_NO_ENTRY = {
 
 const endpoints = [...new Set((panelSrc.match(/route\('\/[a-zA-Z0-9\/_-]*'/g) || []).map((s) => s.slice(7, -1)))]
   .sort()
-if (!endpoints.length) bad('未能从 panel.ts 解析出任何端点')
+if (!endpoints.length) bad('未能从 src/panel*.ts 解析出任何端点')
 else {
   const noEntry = endpoints.filter((ep) => {
     if (Object.prototype.hasOwnProperty.call(ALLOW_NO_ENTRY, ep)) return false

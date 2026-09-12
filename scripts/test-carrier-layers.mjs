@@ -33,7 +33,7 @@
 //
 // 用法: node scripts/test-carrier-layers.mjs   （先 `npm run build:host` 产出 lib/；npm test 已含 pretest）
 
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -131,7 +131,9 @@ const allMemReturned = memRows.every((r) => {
 ok(!allMemReturned, `A3 不应「全部 ^\\[.+\\] 行不论 layer 一律返回」—— allMemReturned=${allMemReturned}（=true 即层过滤失效）`)
 
 // A4：静态佐证 —— 修复后的源码确实按层准入，且旧的通配写法已消失
-const src = readFileSync(join(repoRoot, 'src', 'panel.ts'), 'utf8')
+// 2026-09-12：readCarrier 已随热记忆迁到 src/panel-shared.ts —— 扫全部 panel 模块
+const src = readdirSync(join(repoRoot, 'src')).filter((f) => /^panel.*\.ts$/.test(f)).sort()
+  .map((f) => readFileSync(join(repoRoot, 'src', f), 'utf8')).join('\n')
 ok(/indexRowInLayer\(l,\s*'always'\)/.test(src), "A4 源码佐证：readCarrier index 分支按层准入（indexRowInLayer(l,'always')）")
 const naiveIdx = /const idx = all\.filter\(\(l\) => \/\^\\\[\.\+\\\]\/\.test\(l\)\)/.test(src)
 ok(!naiveIdx, 'A4c 旧的「无层过滤通配选取」写法已消失（防修复被回退）')
