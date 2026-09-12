@@ -84,10 +84,11 @@ rows.sort((a, b) => b.len - a.len)
 //        新增任何一个 >400 行的函数 ⇒ **立刻红**。
 //        拆掉一个 ⇒ 实际 < 基线 ⇒ 输出提示**要求按棘轮收紧基线**（只许收紧不许放松）。
 //   两条一起，才既「不制造红灯」又「真能抓住恶化」。
-// 基线 6 = 2026-09-12 16:50 实测（AST 精确口径）：
+// 基线 **5** = 2026-09-12 17:10 实测（AST 精确口径）：
 //   panel:applyPanel 1817 / distill:registerDistill 1435 / deepsleep:createDeepSleep 1434
-//   scheduler:applyScheduler 430 / deepsleep:consolidateTree 410 / deepsleep:runDeepSleep 405
-const DEBT_BASE = Number(argOf('--debt', '0')) || 6 // 棘轮：允许改小，不允许改大
+//   deepsleep:consolidateTree 410 / deepsleep:runDeepSleep 405
+// 棘轮轨迹：6（16:50 定基线）→ **5**（17:10，scheduler:applyScheduler 430 拆为 5 个工具工厂后收紧）
+const DEBT_BASE = Number(argOf('--debt', '0')) || 5 // 棘轮：允许改小，不允许改大
 if (AS_GATE) {
   const hard = rows.filter((r) => r.len > HARD)
   const debt = rows.filter((r) => r.len > SOFT)

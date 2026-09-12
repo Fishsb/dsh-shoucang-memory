@@ -109,6 +109,46 @@
   建议顺序：deepsleep 工厂闭包 → panel 按路由域切（32 个 `route()` 天然分 6 组，`/set` 单端点 350 行
   是最大一块）→ distill 剩余 → scheduler。**panel 零单测，拆前须先建路由契约测试。**
   **⑤ 门禁**：登记进 `check-runner.mjs`（第 27 项），`npm test` PASS（**26 pass · 1 xfail · 0 skip**）。
+- **🔧 函数跨度门禁修三类误报：改用 TS 编译器 API 取精确 span（2026-09-12 17:00）**
+  正则版连栽三处，**每一处都会让门禁误判**：
+  ① 靠「下一个缩进 ≤ 自己的定义」定终点 ⇒ `scheduler:llmModels` 真实 **19 行**被报成 **428 行**
+     （它之后没有同缩进定义了，终点退化到文件尾），**差 22 倍**；
+  ② 改成花括号配对 ⇒ 模板串/字符串里的花括号让计数失准，`registerDistill`(1436 行) **整个消失** ——
+     **假阴性比假阳性危险得多**（门禁会少报债务、还看不出来）；
+  ③ 靠 `=>` 认函数 ⇒ `const llm = (ctx as {...}).llm as { f?: () => unknown }` 里
+     **类型注解的 `=>`** 被当成箭头函数（`llm` 误报 425 行）。
+  ⇒ 改用 `ts.createSourceFile` 遍历 AST 取精确位置（项目本就有 typescript 依赖，规则 5：不造轮子）。
+  **顺带修一个指标缺陷（更重要）**：首版只数列 0 的顶层函数 ⇒ 嵌套的 `consolidateTree`(410) /
+  `runDeepSleep`(405) 被父函数**藏起来**了，且形成**反向激励**——把所有东西塞进一个大闭包指标反而
+  更好看，一旦提取成模块级函数指标立刻变差 ⇒ 等于**用门禁惩罚正确的重构**。现改为统计所有嵌套层级。
+  债务基线按新口径重定为 **6**。新增 `scripts/audit-inner-fns.mjs`（闭包内部跨度测量，拆分选刀用）。
+- **🏛 架构根治 P2 一期：`scheduler.ts:applyScheduler` 430 行拆为 5 个工具工厂（2026-09-12 17:10）**
+  **① 迁移动作**：`applyScheduler`（240–669，430 行，全仓第 4 大函数）拆为模块级函数 ——
+  5 个工具工厂 `suiteTool` / `verifyTool` / `targetsProbeTool` / `recallTool` / `capabilitiesTool`，
+  加 `llmModelsOf` / `distillOptionsOf`（55 行参数映射的唯一映射点）/ `schedulerShareApiOf` / `assembleMcl`；
+  本体收敛为 **25 行**的装配清单。
+  **② 顺带消掉一个真实隐患**：原实现在 `enableDistill` 开/关**两条分支各写了一份完全相同的
+  share 装配对象**（15 行 ×2），改一处漏一处就会让 panel 的 `/suite` 与 `/distill/config` 读数漂移。
+  现合并为 `schedulerShareApiOf()` 单一实现。
+  **③ 搬移方式：脚本切片，不手工重打**。430 行靠一次性脚本按**已核准的行号区间**切片 + 按首行缩进
+  自动 dedent，避免手抄出错；随后由 `typecheck` 兜底。三个坑：
+  · 对象字面量的 `{`/`}` **在边界行上**（`registerDistill(ctx, {` / `schedulerShare.api = {`），
+    只切属性行会漏 ⇒ `return   nodeBin:` 直接语法错；
+  · `defineTool({...})` 块的末行 `}),` 那个逗号是 **`register(x, 'label')` 的参数分隔符**，
+    搬到 `return x` 后成尾随逗号 ⇒ 5 处 TS1005/TS1109，须剥掉；
+  · 切片终点差一行就会整块失配（recall 实际在 476 收尾，不是 475）。
+  **④ 棘轮收紧**：债务基线 **6 → 5**（`applyScheduler` 退出 >400 行债务榜）。
+  **⑤ 补安全网 `scripts/test-scheduler-wiring.mjs`（20 条，已登记第 11 项）**：黑盒验五个工具在册且
+  名字未变 / 开关语义（`verify_enabled=false` 只摘 verify）/ share 面字段 / **蒸馏器关闭时 share 仍装配**
+  （就是 ② 那个隐患的回归锁）/ `llmModels` 无宿主时返回数组而非抛。
+  **⚠ 两个坑**：`lib/scheduler.js` 依赖的 `@deepseek-ai/dsh-scope` **只在宿主运行时提供、开发机没有**
+  ⇒ 直接 import 会 ERR_MODULE_NOT_FOUND，装配面**根本测不了**；改用 ESM 解析钩子把 `@deepseek-ai/dsh-tools`
+  重定向到 data-URL stub（`scripts/test-dsh-tools-hook.mjs`），不污染 node_modules、不新增 stub 文件。
+  另：首轮 F2 变体是**崩溃退出**而非断言失败（`api` 为 undefined 直接抛）⇒ 与门禁同型问题，
+  已改为防御式取值，现在渲染 6 条 ❌ 而不是栈。
+  **⑥ 反向证伪**：改名 `shoucang_suite` ⇒ 18 PASS/2 FAIL **exit 1**；去掉 share 装配 ⇒ 14 PASS/6 FAIL
+  **exit 1**；还原后 20 PASS/0 FAIL **exit 0**，`lib/scheduler.js` sha1 逐字节还原。
+  **⑦ 门禁**：`npm test` PASS（**27 pass · 1 xfail · 0 skip**，28 项）。
 - **🚀 部署记录（2026-09-12 16:40）：架构根治一/二期上线至插件包 —— commit `391fc6b`**
   **① 开发仓**：三个提交 `567cb9e`（深睡层拆出）→ `6b494c4`（接线契约测试）→ `391fc6b`（函数跨度门禁）
   已 push（`3390aa5..391fc6b`，**本次网络通畅**）。

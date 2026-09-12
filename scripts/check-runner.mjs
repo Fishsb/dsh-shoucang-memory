@@ -69,6 +69,9 @@ const CHECKS = [
   //   证明不了「东西还在、还跑得起来」。本件用全 mock ctx 装配 createDeepSleep，
   //   验 9 个句柄齐备 + 状态机真跑 + 实例隔离（状态没被提到模块级）。
   ['scripts/test-deepsleep-wiring.mjs'],
+  // scheduler 装配契约（applyScheduler 拆分后的行为安全网）：5 个工具在册且名字未变 /
+  // 开关语义（verify_enabled）/ share 装配面字段 / 蒸馏器关闭时 share 仍装配。
+  ['scripts/test-scheduler-wiring.mjs'],
   ['scripts/test-watermark-guard.mjs'],
   ['scripts/test-atomic-write.mjs'],
   ['scripts/test-wiring-gate.mjs'],
