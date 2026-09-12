@@ -5,7 +5,23 @@
 ## [Unreleased]
 
 ### Changed
-- **✅ 根治阶段 D 完成 + 兼容转发层退役（2026-09-12 21:40）—— 验收标准全部达成**
+- **✅ 架构根治 A–D 收尾（2026-09-12 21:25）—— 从「仓内绿」推到「运行态绿」**
+  阶段 D 的三条棘轮基线经复核**已全部收紧到位**：`audit-wiring` I1/I2 实测 **0/0 对基线 0/0**、
+  `audit-fnspan` 债务 **实测 0 / 基线 0**（最大函数 350 行）。收尾补上三件真正没做完的事：
+  1. **兑现 I2 扫描面悬空承诺**：`audit-wiring.mjs` 原注「`Ctx` 后缀暂未纳入…阶段 B 拆完再一起收」，
+     阶段 B 已把 `DeepSleepCtx` 拆到 **7 字段**，故收尾把 I2 两条分支统一为后缀 `(Scope|Deps|Ctx)`
+     —— 实测宽面违规 **接口 0 / 字面量 0** ⇒ **纯收紧，不放松任何基线**。
+     （不补这一刀，`XxxCtx` 就是下一个「改名即绕过」的门禁缺口，与假绿同型。）
+  2. **部署副本同步（本轮唯一真阻断）**：安装副本此前停在**重构之前**（`lib/` 33 件旧代单体），
+     `check-installed-sync` 报 99 件漂移，而三道仓内门全绿 ⇒ 修复根本没在运行。
+     按公开树（`git ls-files`，避开 gitignore 的 devref）覆盖差异：**242 文件 sha256 逐件一致、
+     副本零额外文件、漂移归零**；热重载后 fiber active，`shoucang_suite` / `shoucang_targets_probe`
+     返真数据，面板 `/suite` `/criteria` `/mcl/status` `/config/recent` 全 **HTTP 200**，
+     调度器**实跑一轮蒸馏并推进水位 556→669**（走的正是阶段 C 重构的水位/分段代码路径）。
+  3. **文档落点校订**：`AGENTS.md` 模块数 43 → **44**，补 `deepsleep-machine`（阶段 D 迁出的会话状态机），
+     脚本清单补齐三条架构门禁与 7 件测试；阶段 D 原文时间戳 21:40 改为**提交实际时间 21:00**。
+
+- **✅ 根治阶段 D 完成 + 兼容转发层退役（2026-09-12 21:00）—— 验收标准全部达成**
   **D-1** `consolidateTree` 411 → **350 行**（`coreName`/`biContains`/`rewriteRowPointers` 三个纯工具闭包提模块级）；
   **D-2** `registerMcl` 200 → **108 行**（93 行 `agent/pre-step` handler 提到模块级 `handlePreStep`，
   依赖 9 项显式传递；`cfg` 是**形参**不是 body 里的 const，依赖测绘易漏，已补注释）；

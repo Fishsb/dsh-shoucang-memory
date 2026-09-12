@@ -53,17 +53,22 @@ for (const f of files) {
       const from = lineOf(n.getStart(sf)), to = lineOf(n.getEnd()), len = to - from + 1
       if (len >= 20) asm.push({ file: f, name, from, to, len })
     }
-    // I2-a：`const X: SomeScope = { … }` 的字面量键数
+    // I2-a：`const X: SomeDeps = { … }` 的字面量键数
+    //   口径与 I2-b 的**接口声明**分支必须一致（同一个语义后缀集合），否则
+    //   「接口声明受管、同名字面量不受管」又是一个改名即绕过的缝。
     if (ts.isVariableDeclaration(node) && node.type && ts.isTypeReferenceNode(node.type)
-      && /Scope$/.test(node.type.typeName.getText(sf)) && node.initializer && ts.isObjectLiteralExpression(node.initializer)) {
+      && /(Scope|Deps|Ctx)$/.test(node.type.typeName.getText(sf)) && node.initializer && ts.isObjectLiteralExpression(node.initializer)) {
       scope.push({ file: f, name: node.name.getText(sf), type: node.type.typeName.getText(sf), keys: node.initializer.properties.length })
     }
     // I2-b：**接口声明本身**的字段数（2026-09-12 阶段 A 加严）。
     //   为什么必须加：只认 `*Scope` 名字的话，把团块改叫 `XxxDeps` 就能绕过门禁 ——
     //   「改个名就让门禁变绿」与「永久红灯」同型，都是门禁失效。故按**语义后缀**收口。
-    //   ⚠ `Ctx` 后缀暂未纳入：`DeepSleepCtx`（20+ 字段）是阶段 B 的待拆项，
-    //      纳入即 I2=2 > 基线 1 ⇒ 只能放基线（=放松棘轮）。阶段 B 拆完再一起收。
-    if (ts.isInterfaceDeclaration(node) && /(Scope|Deps)$/.test(node.name.text)) {
+    //   ✅ `Ctx` 后缀的**悬空承诺已于阶段 D 收尾兑现**（原注释：`DeepSleepCtx` 20+ 字段是阶段 B
+    //      待拆项，纳入即 I2=2 > 基线 1 ⇒ 只能放松棘轮，故"阶段 B 拆完再一起收"）。
+    //      阶段 B 已把 `DeepSleepCtx` 拆到 **7 字段**；收尾实测宽面 `(Scope|Deps|Ctx)`
+    //      违规 **接口 0 / 字面量 0** ⇒ 纳入**不需放松任何基线**，纯收紧。
+    //      ⚠ 别再退回 `(Scope|Deps)`：那会让 `XxxCtx` 成为新的绕过名。
+    if (ts.isInterfaceDeclaration(node) && /(Scope|Deps|Ctx)$/.test(node.name.text)) {
       scope.push({ file: f, name: node.name.text, type: node.name.text + '（接口声明）', keys: node.members.length })
     }
     ts.forEachChild(node, walk)
