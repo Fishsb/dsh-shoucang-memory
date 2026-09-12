@@ -411,6 +411,35 @@ scheduler.ts:applyScheduler  430 行
 3. `distill.ts` 剩余部分（4 工具 + 水位 + 父子会话）；
 4. `scheduler.ts`（430 行，最小的一块）。
 
-**⚠ 前置条件**：`panel` 目前**零单元测试**（见 P3）。拆它之前应先建路由契约测试
-（登记 32 个路由的存在与响应形状），否则 1817 行的重构没有安全网 ——
-这正是深睡拆分时补 `test-deepsleep-wiring.mjs` 的原因，只是那次补在了后面（不理想）。
+**⚠ 前置条件（已完成）**：`panel` 曾**零单元测试**。2026-09-12 17:35 已补
+`scripts/test-panel-wiring.mjs`（13 条，登记 CHECKS 第 12 项），锁：34 条路由在册且未改名 /
+无未登记新路由 / 无重复注册（宿主会抛 duplicate route ⇒ 插件树整体加载失败）/ 只读端点真能响应
+200 / webServer 缺失时降级不抛。反向证伪两组（改名 `/roots`、改名 `/criteria`）均 3 红 exit 1。
+**这次是先把网建好再动刀**——深睡那次补在后面，不理想。
+
+### 8.4 `panel.ts` 拆分施工图（已测绘，未动刀）
+
+**⚠ 一个必须先知道的结构事实**：1628 之后的路由**不在 `applyPanel` 顶层**，而是包在
+**1588–1902 的 `ctx.effect(() => {...})` 回调里**（315 行，含 systemPrompt 注入块）。
+拆块时必须整块搬，不能只切 `route()` 调用行——否则会把 effect 的 `return disposer` 切飞。
+
+`applyPanel` 直接子定义（AST 精确）分块：
+
+| 块 | 行区间 | 行数 | 内容 |
+|---|---:|---:|---|
+| 保持 | 87–456 | 370 | 守卫 + 状态读写 + `route()` + 引导/boot + `buildHotMemoryText`(240–393) + `parseView` |
+| B1 | 500–781 | 282 | 配置域：`/roots` `/get_root` `/root/bootstrap` `/set_root` `/config` `/save` `/toggle` `/set` |
+| B2 | 793–1161 | 369 | 记忆域 helper（`memoryHomeOf`…`memOverviewOf`）+ `/memory/overview` `/memory/sections` |
+| B3 | 1169–1533 | 365 | 观测/判据/睡眠域：`/suite` `/mcl/status` `/reconcile` `/selfcheck`×2 `/config/recent` `/criteria` `/cognition/report` `/llm/models` + 睡眠配置 helper + `/deepsleep`×3 `/distill`×2 |
+| B4 | 1536–1901 | 366 | `/inject/preview` `/inject/stats` + commands 注册 + **1588 起的 `ctx.effect` 回调**（`/vector/status2` `/embed/config` `/embed/test` `/vector/cache/clear` `/memory/section-edit|edit|remove|approve` + systemPrompt 注入 + disposer） |
+
+搬出 B1–B4 后 `applyPanel` ≈ 370 行；再把 `buildHotMemoryText`(154) 也提到模块级 ⇒ **≈ 215 行**。
+
+**作用域怎么传（保类型、不手写 interface 的做法）**：把共享装配提到模块级工厂，
+用 **`type PanelScope = NonNullable<ReturnType<typeof makePanelScope>>`** 自动推断，
+路由函数签名写 `(P: PanelScope)`。这样 1400 行搬过去**类型不失真**——
+若手写 interface 或图省事写 `Record<string, any>`，搬过去的代码全变 `any`，
+等于把 1400 行的类型保护一次性交出去（这个代价不能省）。
+
+**为什么本次没直接动**：1817 行 × 4 块的搬迁需要在**一次会话内做完并跑完全链验证**，
+留半截状态风险高于收益。安全网已就位，施工图已测绘，下一轮可直接执行。
