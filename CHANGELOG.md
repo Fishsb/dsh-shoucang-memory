@@ -18,7 +18,8 @@
   **② 全量面核对（顺带发现并澄清两处「疑似漂移」）**：`skill/scripts/archive-lib.mjs` 与 `test.mjs` 的 sha1 与包内不同，但 `diff` 显示 `1,252c1,252`（全行不同、行数相同）⇒ 剥离 `\r` 后**内容完全一致**，是 **CRLF/LF 行尾差异，非真漂移**，不需同步（强行复制反而会改行尾）。另 `skill/docs/devref/` 与 `.internal/` 在包内缺失属**预期**——它们是 gitignore 的私有开发参考，本就不发布。
   **③ 记忆库**：本次未改 `skill/`，不涉及。另确认一项**既有认知**：`check-deploy-sync` 的 `bank-missing` 是**预期状态**（实测 96 项 = 65 same + 31 bank-missing，其中 27 项如 `build-client`/`check-*`/`test-*` 本就不入库）⇒ 库内 `~/.dsh/skills/managing-memory/scripts/` **只放运行时脚本**，开发机检件不入库，新增机检件出现 bank-missing 属正常。
   **⏳ 待用户操作**：**热重载插件**（宿主侧，改动需重载后生效）。
-  **⚠ 遗留（未擅自清理，需用户确认）**：`~/.dsh/profiles/web/node_modules/dsh-shoucang-memory_tmp_*` 残留 **13 个**目录（每个 28K，历次 pnpm 失败累积，非本次独有）；项目根 `{...` 为 **0 字节空文件**（09-12 03:12 误建），未入库。
+  **✅ 遗留已清理（2026-09-12 13:05，用户授权）**：`dsh-shoucang-memory_tmp_*` **13 个**残留目录（约 750K，历次 pnpm 失败累积）与项目根 0 字节文件 `{...` 均已**移出**（非直接删除，可恢复）至备份目录 `~/.dsh/_sc-cleanup-backup-20260912/`（2.8M，14 项；`node_modules_tmp/` 13 个 + `repo_root/{...`）。
+  **清理方式（可恢复优先）**：分两批（10 + 3）用 `mv` 移入备份目录，而非 `rm`——同分区移动瞬时完成且**随时可回滚**。清理后验证：`node_modules` 下 tmp 残留 **0 个**；插件包 `main`/`skill/SKILL.md`/`lib/` 30 文件完好，`lib/client.js` 语法 OK；`npm test` 仍 PASS（23 pass · 1 xfail）；仓 `git status` 干净。确认无误后可自行删除该备份目录释放空间。
 - **🟠 UI 重构（2026-09-12 第三轮 Step 4/5）：CSS 死规则清零 · 空态判据统一 · 徽章构造收敛 —— 自有类 165→146，散落判空 27 处 → 单一入口**
   **① CSS 死规则清零（方面 2「移除无效规则」）**：新建 `scripts/audit-css-usage.mjs`（**双态**：`--gate` 门禁 / 默认报告；CSS **从 client.js 原地 eval 抽取**，与 gen-ui-preview 同源）。首版报 19 个死规则 + 9 处"重复冲突"，逐条核实后：
   - **删 19 个零使用规则**：`sc-vec-group/group-h/row/cell/label/progress/status/ctrl`（早期向量区遗留，现走 `sc-mem-grid` + `setting-item`）；`.sc-empty` + `-icon/-title/-desc`（**第二套空态组件**，在用的是 `.sc-mem-empty`）；`.sc-clamp-2/3`（与 `.sc-pointer-summary` 内联声明重复）；`.sc-scroll-y`（与 `.sc-view`/`.sc-logwrap` 的 overflow 重复）；`.sc-section`（与 `group()` 产出的 `.sc-mem-group-title` + 间距重复）；`.sc-spinner`（加载态已由 `.sc-loading::after` 骨架实现）；`.sc-mem-sub.mono`。CSS **39,871 → 37,233 字符**。
