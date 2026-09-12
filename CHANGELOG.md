@@ -149,6 +149,23 @@
   **⑥ 反向证伪**：改名 `shoucang_suite` ⇒ 18 PASS/2 FAIL **exit 1**；去掉 share 装配 ⇒ 14 PASS/6 FAIL
   **exit 1**；还原后 20 PASS/0 FAIL **exit 0**，`lib/scheduler.js` sha1 逐字节还原。
   **⑦ 门禁**：`npm test` PASS（**27 pass · 1 xfail · 0 skip**，28 项）。
+- **🏛 架构根治 P2 二期：`deepsleep.ts:createDeepSleep` 1434 → 239 行（2026-09-12 17:25）**
+  把 6 个大函数提到模块级，依赖经 `DsScope` **显式注入**（此前靠隐式闭包共享 60+ 个名字）：
+  `gatherDeepSleepTraces` / `applyPrinciples` / `applyPointerOps` / `consolidateTree` /
+  `runDeepSleep` / `probeSession`。`createDeepSleep` 只剩状态声明 + `noteEvent` + 巡检 + 快照 + 对外句柄。
+  **① 依赖先算后动**：写脚本用 TS AST 算出每个函数的**自由变量**（= 必须注入的依赖）并标出
+  **被赋值的**（`deepSleepFailStreak` / `deepSleepRunning` / `lastDeepSleepAt`），
+  避免"搬过去才发现写不回去"。
+  **② 标量必须装箱**：`deepSleepFailStreak` 是 `let number` 且 `runDeepSleep` 会**写**它 ——
+  解构出来是**快照**，写不回闭包 ⇒ 改为 `streak: { v: number }` 对象引用。
+  （可复用的判据：**被赋值的自由变量一律走对象引用，不能解构**。）
+  **③ 对外句柄零感知**：`runDeepSleep` / `probeSession` 迁出后需传 S，在 return 处包一层注入，
+  调用方（distill 装配点 / panel）签名不变。
+  **⚠ 脚本两个坑**：向上吸收注释块后**首行不再是签名**（签名被 dedent 进函数体，模块级残留一个
+  没加 S 参数的同名定义，报错形如 "Expected 2 arguments, but got 3"）；以及**留在闭包里的调用点**
+  （`deepSleepCheck` / `runDeepSleepNow`）也要补 S，只改迁出的那段会漏。
+  **④ 棘轮收紧**：债务 **5 → 4**（`createDeepSleep` 退出 >400 行债务榜）。
+  **⑤ 门禁**：`npm test` PASS（27 pass · 1 xfail · 0 skip），既有 18 条深睡契约测试全过。
 - **🚀 部署记录（2026-09-12 16:40）：架构根治一/二期上线至插件包 —— commit `391fc6b`**
   **① 开发仓**：三个提交 `567cb9e`（深睡层拆出）→ `6b494c4`（接线契约测试）→ `391fc6b`（函数跨度门禁）
   已 push（`3390aa5..391fc6b`，**本次网络通畅**）。
