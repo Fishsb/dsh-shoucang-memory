@@ -5,6 +5,15 @@
 ## [Unreleased]
 
 ### Changed
+- **📄 文档偏移修正（2026-09-12 21:45）—— `docs/ARCHITECTURE.md` 两处失效表述**
+  ① **机制已不存在却仍在自述**：文档第 4 行与 §8 第 4 条都写着「代码变更后按指纹过期重生成
+  （指纹 = src/** + 本文）」，而该机制已随治理插件（project-nav）**0.10 换代被移除**
+  （实测 `verify-install.ps1` 输出「架构档指纹机制已移除」）⇒ 改为「人工重生成 + 治理模型登记落点检测」，
+  并明写**文档与代码不一致已无机器兜底，属人工纪律**（这正是"文档写了机制、机制已删"这类静默偏移）。
+  ② **载体错位**：§3 模块表把 M7 深睡记为 `distill.ts` FSM、M8 注入记为 `panel.ts` —— 那是 A–D **之前**
+  的单体形态。已改为真实归属（深睡 FSM = `deepsleep-machine.ts`，阶段 D 迁出；注入 = `panel-shared.ts`
+  的 `buildHotMemoryText` + `mcl.ts` 慢通道），并补「**44 模块按领域分家**」的载体归属口径一段。
+
 - **🧹 废弃遗留清理（2026-09-12 21:40）—— 根治 A–D 的一次性手术脚本出仓**
   根治期间为机械拆分写的 **8 个 `scripts/_tmp-*.mjs`**（`_tmp-rename` / `_tmp-split-distill1` /
   `_tmp-rewrite-distill1` / `_tmp-post1..3` / `_tmp-move-mount` / `_tmp-tidy`）是**用完即弃**的
