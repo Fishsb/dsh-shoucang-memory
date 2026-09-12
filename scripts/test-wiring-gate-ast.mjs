@@ -30,6 +30,8 @@ const SRC3 = resolve(argOf('--src3', join(root, 'src', 'deepsleep-core.ts')))
 const SRC4 = resolve(argOf('--src4', join(root, 'src', 'deepsleep-run.ts')))
 // 原则落盘提交点（commitPrinciples / COMMIT_FAILED_GATE）已随 applyPrinciples 迁至 deepsleep-apply.ts
 const SRC5 = resolve(argOf('--src5', join(root, 'src', 'deepsleep-apply.ts')))
+// 2026-09-12 阶段 D：水位回滚（.then/.catch）随会话状态机迁至 deepsleep-machine.ts
+const SRC6 = resolve(argOf('--src6', join(root, 'src', 'deepsleep-machine.ts')))
 const tsPath = argOf('--ts', null) || ['node_modules/typescript/lib/typescript.js']
   .map((p) => join(root, p)).find(existsSync)
 if (!tsPath || !existsSync(tsPath)) { console.error(`FATAL: 无法定位 typescript（可用 --ts 指定）`); process.exit(3) }
@@ -37,7 +39,7 @@ const ts = (await import(pathToFileURL(resolve(tsPath)).href)).default
 
 // 拼接两文件后统一解析：ESM 允许 import 声明出现在模块顶层任意位置，拼接不影响解析；
 // 变体注入是**纯内存字符串替换**，对拼接体做 replace 仍能命中任一文件的锚点。
-const raw = [SRC, SRC2, SRC3, SRC4, SRC5].map((p) => readFileSync(p, 'utf8')).join('\n')
+const raw = [SRC, SRC2, SRC3, SRC4, SRC5, SRC6].map((p) => readFileSync(p, 'utf8')).join('\n')
 
 // ── ① 骨架化：注释 → 等长空白（保留偏移与长度）──────────────────────────────
 function skeletonOf(text) {
@@ -88,8 +90,10 @@ function analyse(text) {
       && gate && ts.isIdentifier(gate.initializer) && gate.initializer.text === 'COMMIT_FAILED_GATE')
   }
   const isRollback = (n) => ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken
-    && ts.isIdentifier(n.left) && n.left.text === 'lastDeepSleepAt'
+    && isPropNamed(n.left, 'lastDeepSleepAt')
     && ts.isIdentifier(n.right) && n.right.text === 'prevDeepSleepAt'
+  // 阶段 D 后水位字段住在 SleepMachine 箱里 ⇒ 左值是 `m.lastDeepSleepAt`（PropertyAccess），不再是裸标识符
+  const isPropNamed = (n, name) => (ts.isIdentifier(n) && n.text === name) || (ts.isPropertyAccessExpression(n) && n.name.text === name)
   const hasIn = (root, pred) => { let hit = false; const v = (m) => { if (pred(m)) hit = true; ts.forEachChild(m, v) }; v(root); return hit }
   const walk = (n) => {
     // W1-a: if (!cm.ok) { ... } —— 且失败 return 必须在它的 then 块里（否则注释掉 if 也绿）
@@ -144,9 +148,9 @@ function analyse(text) {
       const mono = (x) => ts.isBinaryExpression(x) && (x.operatorToken.kind === ts.SyntaxKind.GreaterThanToken || x.operatorToken.kind === ts.SyntaxKind.GreaterThanEqualsToken)
       if ((usesReplayable(n.left) && mono(n.right)) || (usesReplayable(n.right) && mono(n.left))) found.replayAnd++
     }
-    // W4: lastDeepSleepAt = prevDeepSleepAt
+    // W4: m.lastDeepSleepAt = prevDeepSleepAt
     if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken
-      && ts.isIdentifier(n.left) && n.left.text === 'lastDeepSleepAt'
+      && isPropNamed(n.left, 'lastDeepSleepAt')
       && ts.isIdentifier(n.right) && n.right.text === 'prevDeepSleepAt') found.rollbackAssign++
     ts.forEachChild(n, walk)
   }
@@ -191,8 +195,8 @@ const RULES = [
     pred: (f) => f.replayAnd >= 1,
     detail: (f) => `replayable&&单调=${f.replayAnd}`,
     breaks: [
-      ['把 deepSleepReplayable(o) && t > lastDeepSleepAt 那行注释掉', (s) => s.replace(/if \(deepSleepReplayable\(o\) && t > lastDeepSleepAt\)/, '// if (deepSleepReplayable(o) && t > lastDeepSleepAt)')],
-      ['去掉单调性（只留回放判定 ⇒ 水位可倒退）', (s) => s.replace('if (deepSleepReplayable(o) && t > lastDeepSleepAt)', 'if (deepSleepReplayable(o))')],
+      ['把 deepSleepReplayable(o) && t > m.lastDeepSleepAt 那行注释掉', (s) => s.replace('if (deepSleepReplayable(o) && t > m.lastDeepSleepAt)', '// if (deepSleepReplayable(o) && t > m.lastDeepSleepAt)')],
+      ['去掉单调性（只留回放判定 ⇒ 水位可倒退）', (s) => s.replace('if (deepSleepReplayable(o) && t > m.lastDeepSleepAt)', 'if (deepSleepReplayable(o))')],
     ],
   },
   {
@@ -202,9 +206,9 @@ const RULES = [
     detail: (f) => `then回滚=${f.thenRollback} catch回滚=${f.catchRollback}（合计 ${f.rollbackAssign}）`,
     breaks: [
       ['.then 内 failed 回滚注释掉', (s) => s.replace(
-        "if (r === 'failed') { lastDeepSleepAt = prevDeepSleepAt;", "// if (r === 'failed') { lastDeepSleepAt = prevDeepSleepAt;")],
+        "if (r === 'failed') { m.lastDeepSleepAt = prevDeepSleepAt;", "// if (r === 'failed') { m.lastDeepSleepAt = prevDeepSleepAt;")],
       // ⚠ 动这条变体前必须先读（archi 2026-09-12，两条都是实测结论）：
-      //   1) 这个 replace 的锚点是**格式敏感**的：要求 `lastDeepSleepAt = prevDeepSleepAt` 的紧接下一行就是
+      //   1) 这个 replace 的锚点是**格式敏感**的：要求 `m.lastDeepSleepAt = prevDeepSleepAt` 的紧接下一行就是
       //      `log(`deep sleep err:`。一旦有人重排/加空行 ⇒ 锚点失配 ⇒ 报「变异未命中」⇒ **自伤型假红**：
       //      本件 exit=1，但结构断言其实全绿，红因是"本件坏了"不是"源码接线坏了"，方向相反。
       //      ⇒ 在「删除文本版」的验收准绳下，这种红**不计入覆盖**，出现即判准绳不通过。
@@ -212,9 +216,9 @@ const RULES = [
       //      实测：把 `if (r === 'failed')` 改成 `if (r === 'never')`（回滚永不发生）⇒ 本件结构断言仍然全绿。
       //      ⇒ 别把「本件红了」读成「W4 锁住了」。本条目前只锁"回滚语句存在"，没锁"回滚真的会发生"。
       //      要补的话：把 pred 改成"回滚赋值句的祖先链上存在 if('failed') / .catch"，届时本注释第 2 条即失效。
-      ['.catch 内回滚注释掉', (s) => s.replace(/\n(\s*)lastDeepSleepAt = prevDeepSleepAt\n(\s*)log\(`deep sleep err:/, '\n$1// lastDeepSleepAt = prevDeepSleepAt\n$2log(`deep sleep err:')],
+      ['.catch 内回滚注释掉', (s) => s.replace(/\r?\n(\s*)m.lastDeepSleepAt = prevDeepSleepAt\r?\n(\s*)dep\.io\.log\(`deep sleep err:/, '\n$1// m.lastDeepSleepAt = prevDeepSleepAt\n$2dep.io.log(`deep sleep err:')],
       ['回滚改成推进到 now（重试窗口关死）', (s) => s.replace(
-        "if (r === 'failed') { lastDeepSleepAt = prevDeepSleepAt;", "if (r === 'failed') { lastDeepSleepAt = now;")],
+        "if (r === 'failed') { m.lastDeepSleepAt = prevDeepSleepAt;", "if (r === 'failed') { m.lastDeepSleepAt = now;")],
     ],
   },
 ]

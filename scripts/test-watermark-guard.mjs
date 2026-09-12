@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os'
 import {
   planDiscardWrite, planDegradedBaseline, runDiscardWatermark,
   resolveWatermarkBaseline, DISCARD_SNAPSHOT_CB_N,
-} from '../lib/distill.js'
+} from '../lib/deepsleep-core.js'
 
 const root = mkdtempSync(join(tmpdir(), 'wm-guard-'))
 const wmFile = join(root, 'distill-watermark.jsonl')

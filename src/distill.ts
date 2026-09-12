@@ -48,7 +48,6 @@ import {
   SKIP_HOLD_MAX, planSkipWatermark, runDiscardWatermark, resolveWatermarkBaseline,
   type WmBaseline, type DeepSleepOtherChannels,
 } from './deepsleep-core.js'
-export * from './deepsleep-core.js'
 
 import { CHUNK_CHARS, MAX_CHUNKS_PER_RUN, buildEventChunks, manifestLineFor, manifestPush, textPartsOfEvent } from './distill-chunks.js'
 type AppContext = {
@@ -318,4 +317,4 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
 
   return { getDeepSleepStatus: ds.getDeepSleepStatus, runDeepSleepNow: ds.runDeepSleepNow, getConfig: ds.getConfig, runDistillNow: agent.runDistillNow }
 }
-
+

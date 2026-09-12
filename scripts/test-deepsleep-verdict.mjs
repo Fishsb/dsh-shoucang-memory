@@ -9,7 +9,7 @@
 //        ③ attempted===0 纯 ops 轮/真·空轮 ⇒ done（防无限重处理）④ stop≠completed / out 假值 ⇒ failed
 //        ⑤ write_gate 未就位（基础设施失败）⇒ failed ⑥ 部分接受 skipped>0 ⇒ done
 // 用法: node scripts/test-deepsleep-verdict.mjs
-import { deepSleepLanded, deepSleepReplayable, commitPrinciples, planDeepSleepVerdict, DEFAULT_FAIL_POLICY, DEFAULT_FAIL_MAX_ROUNDS } from '../lib/distill.js'
+import { deepSleepLanded, deepSleepReplayable, commitPrinciples, planDeepSleepVerdict, DEFAULT_FAIL_POLICY, DEFAULT_FAIL_MAX_ROUNDS } from '../lib/deepsleep-core.js'
 import { mkdtempSync, writeFileSync, existsSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'

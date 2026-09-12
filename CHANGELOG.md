@@ -5,6 +5,28 @@
 ## [Unreleased]
 
 ### Changed
+- **✅ 根治阶段 D 完成 + 兼容转发层退役（2026-09-12 21:40）—— 验收标准全部达成**
+  **D-1** `consolidateTree` 411 → **350 行**（`coreName`/`biContains`/`rewriteRowPointers` 三个纯工具闭包提模块级）；
+  **D-2** `registerMcl` 200 → **108 行**（93 行 `agent/pre-step` handler 提到模块级 `handlePreStep`，
+  依赖 9 项显式传递；`cfg` 是**形参**不是 body 里的 const，依赖测绘易漏，已补注释）；
+  **D-3** `createDeepSleep` 232 → **114 行**：会话状态机（noteEvent / 启动回放 / 巡检 / 快照 /
+  手动触发 / 配置）整体迁至新件 `deepsleep-machine.ts`，状态以 `SleepMachine` 箱按引用操作
+  （标量字段必须装箱，否则写不回装配层）；
+  **D-4** `applyForgetOps` 125 → **120 行**（归档开档抽成 `openForgetArchive`）。
+  **退役兼容转发层**：`distill.ts` 的 `export * from './deepsleep-core.js'` 与
+  `export { isNoiseIntent, CANDIDATE_NOISE } from …` 一并删除，三个消费方（deepsleep-share /
+  activation-calib / test-deepsleep-verdict / test-watermark-guard）改指**真实归属模块**。
+  ⇒ `distill` 转发 **24 → 0**（比方案的 ≤8 更彻底：转发本身就不该存在）。
+  **棘轮终态**：`audit-wiring` I1 基线 3 → **0**；`audit-fnspan` 债务基线 → **0**。
+  **验收对照**：装配函数违规 5 → **0** ✅ · 作用域团块 1 → **0** ✅ · 跨度债务 4 → **0** ✅ ·
+  循环依赖 0/0 → **0/0** ✅ · 转发 24 → **0** ✅ · `npm test` 不退化（29 pass · 1 xfail）✅。
+  ⚠ 两处门禁自测的**扫描面与断言形态**跟着代码走：`test-wiring-gate`(+AST) 增扫
+  `deepsleep-machine.ts`；水位字段装箱后左值由裸标识符变为 `m.lastDeepSleepAt`，断言相应改成
+  「属性名匹配」。**顺带修掉一处 CRLF 陷阱**：源码是 CRLF，变异串里字面量 `
+` 锚不住 ⇒
+  变体静默失效被判 FAIL（已改 `?
+`）。
+
 - **🔪 根治阶段 C-2c/2d：装配层收敛到 114 行（`registerDistill` 1440 → 114，2026-09-12 21:20）**
   **C-2c**：`distill-bank`(3 依赖：bank-git / sleep-selfcheck 子进程) + `distill-embed`(1)；
   机械拼接留下的成片空行收缩（AST 定位模板串区间，只压其外的连续空行）。

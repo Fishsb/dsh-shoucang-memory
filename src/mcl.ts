@@ -217,99 +217,7 @@ export function registerMcl(
   }
   ctx.on('session/event', (session: any, event: any) => captureFromEvent(session, event))
 
-  ctx.on('agent/pre-step', async (payload: any, next: () => Promise<any>) => {
-    let decision: any = null
-    try { decision = await next() } catch { return null }
-    try {
-      counters.steps++ // 最前置：steps>0 即证明宿主确实调用了本钩子（存活判据）
-      if (!cfg.enabled || !decision || decision.kind === 'reject') return decision
-      const agent = payload?.agent
-      const sid = String(agent?.id || '')
-      if (!sid) return decision
-      if (agent?.session?.header?.origin === 'subagent') return decision // 子代理不引导
-      const step = Number(payload?.step || 0)
-      const messages: any[] = Array.isArray(decision.messages) ? decision.messages : []
-
-      // 任务文本按会话记忆（主通道=session/event 捕获；此处为兜底：首步 messages 里若带真用户消息则刷新）
-      const fresh = [...messages].reverse().find((m) => m && m.role === 'user' && String(m?.source?.kind || '') === 'user')
-      if (fresh) {
-        const t = (Array.isArray(fresh.content) ? fresh.content : [])
-          .filter((b: any) => b && b.type === 'text' && typeof b.text === 'string').map((b: any) => b.text).join('').trim()
-        if (t.length >= 6 && !taskText.get(sid)) taskText.set(sid, t)
-      }
-      const text = taskText.get(sid) || ''
-      if (!text) return decision
-      if (!ready.has(sid)) { ready.add(sid); hooks.audit({ kind: 'mcl-ready', sid: sid.replace(/^session-/, '').slice(0, 8), step }) }
-
-      let st = state.get(sid)
-      if (!st) { st = { nudges: 0, topics: [], signals: [], channel: '', sim: 0 }; state.set(sid, st) }
-
-      // 注入只发生在**任务首步**：中途步（如热重载跨轮）不插材料，只记一次 skip（防在任务半途打断）
-      if (!st.channel && step !== 1) {
-        if (!st.lateLogged) { st.lateLogged = true; hooks.audit({ kind: 'mcl-skip', sid: sid.replace(/^session-/, '').slice(0, 8), step, reason: 'late-step' }) }
-        return decision
-      }
-
-      // ① turn 首步：熟悉度判一次 → 快/慢分流（慢通道注入薄材料）
-      if (!st.channel) {
-        const r = await recallRanked(memoryLibRoot(), text, cfg.topK, 'all', cfg.embed)
-        let sim = 0
-        if (r.rows.length && cfg.embed.enabled) {
-          try { const c = await semanticSim(text, r.rows[0].line, cfg.embed); if (c !== null) sim = Math.max(0, Math.min(1, c)) } catch { /* 保持 0 */ }
-        }
-        // 2026-09-11（单一事实源）：原为硬编码正则 /^\[(路径|原则)\]/ —— 与注册表 `路径` note 里
-        //   「复用 ACT-029 MCL 快通道熟悉度分流」是同一事实的两份副本。现改读注册表 `mclGate: true`。
-        const hcSet = highConfCarrierSet()
-        const hasHighConf = r.rows.some((x) => { const t = indexRowTag(String(x.line || '')); return !!t && hcSet.has(t) })
-        const fast = sim >= cfg.familiarThreshold && hasHighConf
-        st.channel = fast ? 'fast' : 'slow'
-        st.sim = sim
-        counters.lastAt = Date.now()
-        counters.lastChannel = st.channel
-        counters.lastSim = sim
-        if (fast) {
-          counters.fast++
-          hooks.audit({ kind: 'mcl-step', sid: sid.replace(/^session-/, '').slice(0, 8), step, channel: 'fast', sim: Number(sim.toFixed(3)), hit: r.rows[0]?.line?.slice(0, 100) || '', injected: 0 })
-          return decision
-        }
-        counters.slow++
-        const m = material(r.rows, cfg.budgetChars)
-        st.topics = m.topics
-        st.signals = m.signals
-        counters.injected++
-        await loadMsgFactory()
-        const idx = messages.lastIndexOf(fresh)
-        const entered = idx >= 0 ? messages.slice(0, idx + 1).concat([mkMsg(m.text)], messages.slice(idx + 1)) : messages.concat([mkMsg(m.text)])
-        hooks.audit({ kind: 'mcl-step', sid: sid.replace(/^session-/, '').slice(0, 8), step, channel: 'slow', sim: Number(sim.toFixed(3)), hit: r.rows[0]?.line?.slice(0, 100) || '', topics: m.topics, injected: m.text.length, nudge: 0 })
-        hooks.log(`mcl: ${sid.slice(0, 8)} 慢通道 → 首步注入 ${m.text.length} 字符 / ${m.topics.length} 主题（sim=${sim.toFixed(3)}）`)
-        return { ...decision, messages: entered }
-      }
-
-      // ② 快通道：零材料零往返
-      if (st.channel === 'fast') return decision
-
-      // ③ 慢通道后续步：合规机检（是否引用注入材料的主题词）→ 有界再引导
-      const prevAssistant = [...messages].reverse().find((m) => m && m.role === 'assistant')
-      const prevText = prevAssistant && Array.isArray(prevAssistant.content)
-        ? prevAssistant.content.filter((b: any) => b && (b.type === 'text' || b.type === 'reasoning') && typeof b.text === 'string').map((b: any) => b.text).join('')
-        : ''
-      const compliant = judge(prevText, st.topics, st.signals)
-      if (!compliant && st.nudges < cfg.maxNudges && st.topics.length) {
-        st.nudges++
-        counters.nudged++
-        await loadMsgFactory()
-        const nudge = `【认知环·再引导 ${st.nudges}/${cfg.maxNudges}】上一步未引用本任务相关的经验（${st.topics.slice(0, 3).join(' / ')}）。请用一句话补上：任务类型与目标 + 你要引用的一条 \`[路径]\`/\`[原则]\`（指针见上一步材料），然后继续。`
-        hooks.audit({ kind: 'mcl-step', sid: sid.replace(/^session-/, '').slice(0, 8), step, channel: 'slow', sim: Number(st.sim.toFixed(3)), compliant: false, nudge: 1, topics: st.topics })
-        hooks.log(`mcl: ${sid.slice(0, 8)} 慢通道 → 再引导 ${st.nudges}/${cfg.maxNudges}`)
-        return { ...decision, messages: messages.concat([mkMsg(nudge)]) }
-      }
-      if (!compliant) hooks.audit({ kind: 'mcl-step', sid: sid.replace(/^session-/, '').slice(0, 8), step, channel: 'slow', sim: Number(st.sim.toFixed(3)), compliant: false, nudge: 0, nudges: st.nudges, topics: st.topics })
-      return decision
-    } catch (e) {
-      try { hooks.audit({ kind: 'mcl-error', err: String((e as Error)?.message || e).slice(0, 160) }) } catch { /* 静默 */ }
-      return decision
-    }
-  })
+  ctx.on('agent/pre-step', (payload: any, next: () => Promise<any>) => handlePreStep(payload, next, { cfg, counters, taskText, ready, hooks, state, material, mkMsg, judge }))
 
   ctx.logger?.info?.(`[shoucang] MCL 认知环已装配（enabled=${cfg.enabled} 阈值=${cfg.familiarThreshold} maxNudges=${cfg.maxNudges} 预算=${cfg.budgetChars} 指针=${cfg.topK}）`)
 
@@ -331,4 +239,115 @@ export function registerMcl(
       tasks: taskText.size,
     }),
   }
+}
+
+/** `agent/pre-step` 处理器（自 registerMcl 提出；registerMcl 因此满足 I1 的 120 行上限）。
+ *  依赖 8 项，均为装配期构造的会话态/工具；依赖显式传递，不再靠闭包隐式可见。 */
+export interface PreStepDeps {
+  /** registerMcl 的配置形参（不是 body 里的 const ⇒ 依赖测绘易漏） */
+  cfg: MclConfig
+  counters: { steps: number; fast: number; slow: number; injected: number; nudged: number; lastAt: number; lastChannel: '' | 'fast' | 'slow'; lastSim: number }
+  state: Map<string, SessMcl>
+  taskText: Map<string, string>
+  ready: Set<string>
+  hooks: MclHooks
+  material(rows: RecallRow[], budget: number): { text: string; topics: string[]; signals: string[][] }
+  judge(text: string, topics: string[], signals?: string[][]): boolean
+  mkMsg(text: string): AnyMsg
+}
+
+export async function handlePreStep(payload: any, next: () => Promise<any>, dep: PreStepDeps): Promise<any> {
+
+    let decision: any = null
+    try { decision = await next() } catch { return null }
+    try {
+      dep.counters.steps++ // 最前置：steps>0 即证明宿主确实调用了本钩子（存活判据）
+      if (!dep.cfg.enabled || !decision || decision.kind === 'reject') return decision
+      const agent = payload?.agent
+      const sid = String(agent?.id || '')
+      if (!sid) return decision
+      if (agent?.session?.header?.origin === 'subagent') return decision // 子代理不引导
+      const step = Number(payload?.step || 0)
+      const messages: any[] = Array.isArray(decision.messages) ? decision.messages : []
+
+      // 任务文本按会话记忆（主通道=session/event 捕获；此处为兜底：首步 messages 里若带真用户消息则刷新）
+      const fresh = [...messages].reverse().find((m) => m && m.role === 'user' && String(m?.source?.kind || '') === 'user')
+      if (fresh) {
+        const t = (Array.isArray(fresh.content) ? fresh.content : [])
+          .filter((b: any) => b && b.type === 'text' && typeof b.text === 'string').map((b: any) => b.text).join('').trim()
+        if (t.length >= 6 && !dep.taskText.get(sid)) dep.taskText.set(sid, t)
+      }
+      const text = dep.taskText.get(sid) || ''
+      if (!text) return decision
+      if (!dep.ready.has(sid)) { dep.ready.add(sid); dep.hooks.audit({ kind: 'mcl-ready', sid: sid.replace(/^session-/, '').slice(0, 8), step }) }
+
+      let st = dep.state.get(sid)
+      if (!st) { st = { nudges: 0, topics: [], signals: [], channel: '', sim: 0 }; dep.state.set(sid, st) }
+
+      // 注入只发生在**任务首步**：中途步（如热重载跨轮）不插材料，只记一次 skip（防在任务半途打断）
+      if (!st.channel && step !== 1) {
+        if (!st.lateLogged) { st.lateLogged = true; dep.hooks.audit({ kind: 'mcl-skip', sid: sid.replace(/^session-/, '').slice(0, 8), step, reason: 'late-step' }) }
+        return decision
+      }
+
+      // ① turn 首步：熟悉度判一次 → 快/慢分流（慢通道注入薄材料）
+      if (!st.channel) {
+        const r = await recallRanked(memoryLibRoot(), text, dep.cfg.topK, 'all', dep.cfg.embed)
+        let sim = 0
+        if (r.rows.length && dep.cfg.embed.enabled) {
+          try { const c = await semanticSim(text, r.rows[0].line, dep.cfg.embed); if (c !== null) sim = Math.max(0, Math.min(1, c)) } catch { /* 保持 0 */ }
+        }
+        // 2026-09-11（单一事实源）：原为硬编码正则 /^\[(路径|原则)\]/ —— 与注册表 `路径` note 里
+        //   「复用 ACT-029 MCL 快通道熟悉度分流」是同一事实的两份副本。现改读注册表 `mclGate: true`。
+        const hcSet = highConfCarrierSet()
+        const hasHighConf = r.rows.some((x) => { const t = indexRowTag(String(x.line || '')); return !!t && hcSet.has(t) })
+        const fast = sim >= dep.cfg.familiarThreshold && hasHighConf
+        st.channel = fast ? 'fast' : 'slow'
+        st.sim = sim
+        dep.counters.lastAt = Date.now()
+        dep.counters.lastChannel = st.channel
+        dep.counters.lastSim = sim
+        if (fast) {
+          dep.counters.fast++
+          dep.hooks.audit({ kind: 'mcl-step', sid: sid.replace(/^session-/, '').slice(0, 8), step, channel: 'fast', sim: Number(sim.toFixed(3)), hit: r.rows[0]?.line?.slice(0, 100) || '', injected: 0 })
+          return decision
+        }
+        dep.counters.slow++
+        const m = dep.material(r.rows, dep.cfg.budgetChars)
+        st.topics = m.topics
+        st.signals = m.signals
+        dep.counters.injected++
+        await loadMsgFactory()
+        const idx = messages.lastIndexOf(fresh)
+        const entered = idx >= 0 ? messages.slice(0, idx + 1).concat([dep.mkMsg(m.text)], messages.slice(idx + 1)) : messages.concat([dep.mkMsg(m.text)])
+        dep.hooks.audit({ kind: 'mcl-step', sid: sid.replace(/^session-/, '').slice(0, 8), step, channel: 'slow', sim: Number(sim.toFixed(3)), hit: r.rows[0]?.line?.slice(0, 100) || '', topics: m.topics, injected: m.text.length, nudge: 0 })
+        dep.hooks.log(`mcl: ${sid.slice(0, 8)} 慢通道 → 首步注入 ${m.text.length} 字符 / ${m.topics.length} 主题（sim=${sim.toFixed(3)}）`)
+        return { ...decision, messages: entered }
+      }
+
+      // ② 快通道：零材料零往返
+      if (st.channel === 'fast') return decision
+
+      // ③ 慢通道后续步：合规机检（是否引用注入材料的主题词）→ 有界再引导
+      const prevAssistant = [...messages].reverse().find((m) => m && m.role === 'assistant')
+      const prevText = prevAssistant && Array.isArray(prevAssistant.content)
+        ? prevAssistant.content.filter((b: any) => b && (b.type === 'text' || b.type === 'reasoning') && typeof b.text === 'string').map((b: any) => b.text).join('')
+        : ''
+      const compliant = dep.judge(prevText, st.topics, st.signals)
+      if (!compliant && st.nudges < dep.cfg.maxNudges && st.topics.length) {
+        st.nudges++
+        dep.counters.nudged++
+        await loadMsgFactory()
+        const nudge = `【认知环·再引导 ${st.nudges}/${dep.cfg.maxNudges}】上一步未引用本任务相关的经验（${st.topics.slice(0, 3).join(' / ')}）。请用一句话补上：任务类型与目标 + 你要引用的一条 \`[路径]\`/\`[原则]\`（指针见上一步材料），然后继续。`
+        dep.hooks.audit({ kind: 'mcl-step', sid: sid.replace(/^session-/, '').slice(0, 8), step, channel: 'slow', sim: Number(st.sim.toFixed(3)), compliant: false, nudge: 1, topics: st.topics })
+        dep.hooks.log(`mcl: ${sid.slice(0, 8)} 慢通道 → 再引导 ${st.nudges}/${dep.cfg.maxNudges}`)
+        return { ...decision, messages: messages.concat([dep.mkMsg(nudge)]) }
+      }
+      if (!compliant) dep.hooks.audit({ kind: 'mcl-step', sid: sid.replace(/^session-/, '').slice(0, 8), step, channel: 'slow', sim: Number(st.sim.toFixed(3)), compliant: false, nudge: 0, nudges: st.nudges, topics: st.topics })
+      return decision
+    } catch (e) {
+      try { dep.hooks.audit({ kind: 'mcl-error', err: String((e as Error)?.message || e).slice(0, 160) }) } catch { /* 静默 */ }
+      return decision
+    }
+  
 }

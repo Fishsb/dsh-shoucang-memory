@@ -19,7 +19,7 @@ import { join } from 'node:path'
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import * as lib from '../skill/scripts/archive-lib.mjs'
-import { isNoiseIntent } from '../lib/distill.js'
+import { isNoiseIntent } from '../lib/distill-candidates.js'
 import { recallRanked, semanticSim } from '../lib/vec.js'
 
 const argv = process.argv.slice(2)

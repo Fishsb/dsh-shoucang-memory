@@ -425,6 +425,17 @@ export function sectionExists(memRoot: string, file: string, section: string): b
   return matchSection(parseSections(lines), String(section || '').trim()) !== null
 }
 
+/** 开一个 forgetOps 归档文件（每轮一个 jsonl，作为可回滚证据）；目录不可建时返回 err 由调用方收敛。 */
+function openForgetArchive(root: string): { ok: true; file: string } | { ok: false; err: string } {
+  const p2 = (n: number): string => String(n).padStart(2, '0')
+  try {
+    const dir = join(root, 'audit', 'forgetops')
+    mkdirSync(dir, { recursive: true })
+    const d = new Date()
+    return { ok: true, file: join(dir, `forgetops-${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}.jsonl`) }
+  } catch (e) { return { ok: false, err: String((e as Error)?.message || e) } }
+}
+
 export async function applyForgetOps(
   memRoot: string,
   ops: ForgetOp[],
@@ -437,24 +448,19 @@ export async function applyForgetOps(
   const root = String(memRoot || '')
   if (!root) { res.skipped = list.length; return res }
   const p2 = (n: number): string => String(n).padStart(2, '0')
-  let archFile = ''
-  try {
-    const dir = join(root, 'audit', 'forgetops')
-    mkdirSync(dir, { recursive: true })
-    const d = new Date()
-    archFile = join(dir, `forgetops-${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}.jsonl`)
-  } catch (e) {
+  const arch = openForgetArchive(root)
+  if (!arch.ok) {
     res.skipped = list.length
-    safeAudit(hooks, { kind: 'forgetops', ops: list.length, archived: 0, kept: 0, skipped: list.length, reason: `归档目录不可建: ${String((e as Error)?.message || e).slice(0, 80)}` })
+    safeAudit(hooks, { kind: 'forgetops', ops: list.length, archived: 0, kept: 0, skipped: list.length, reason: `归档目录不可建: ${String(arch.err).slice(0, 80)}` })
     safeLog(hooks, `forgetops: 归档目录不可建，跳过 ${list.length} 个 op（可回滚证据优先）`)
     return res
   }
+  const archFile = arch.file
   const record = (o: Record<string, unknown>): void => {
     try { appendFileSync(archFile, JSON.stringify({ at: new Date().toISOString(), ...o }) + '\n', 'utf8') } catch { /* 静默 */ }
   }
   const act = loadActivityStatus(root)
-  const d0 = new Date()
-  const today = `${d0.getFullYear()}-${p2(d0.getMonth() + 1)}-${p2(d0.getDate())}`
+  const d0 = new Date(); const today = `${d0.getFullYear()}-${p2(d0.getMonth() + 1)}-${p2(d0.getDate())}`
 
   for (const raw of list) {
     try {

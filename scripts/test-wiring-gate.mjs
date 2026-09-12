@@ -56,7 +56,7 @@ const SRC = join(root, 'src', 'distill.ts')
 // 变体注入是**纯内存字符串替换**，对拼接体做 replace 仍能命中任一文件中的锚点，反向证伪不受影响。
 // P1 二期（2026-09-12）再扩：深睡**状态机主体**迁至 deepsleep.ts（runDeepSleep / 终判 / 水位回滚都在那里），
 //   故 W2/W3/W4 的锚点也随迁 —— 扫描范围必须跟上，否则「没扫到」会被误报成「接线断裂」。
-const SRC_FILES = [SRC, join(root, 'src', 'deepsleep.ts'), join(root, 'src', 'deepsleep-core.ts'), join(root, 'src', 'deepsleep-run.ts'), join(root, 'src', 'deepsleep-apply.ts')]
+const SRC_FILES = [SRC, join(root, 'src', 'deepsleep.ts'), join(root, 'src', 'deepsleep-core.ts'), join(root, 'src', 'deepsleep-run.ts'), join(root, 'src', 'deepsleep-apply.ts'), join(root, 'src', 'deepsleep-machine.ts')]
 
 let pass = 0, fail = 0
 const ok = (c, msg) => { if (c) { pass++; console.log(`  ✅ ${msg}`) } else { fail++; console.log(`  ❌ ${msg}`) } }
@@ -127,19 +127,19 @@ const RULES = [
     title: '重启回放水位：只认可回放行，且严格单调递增（不得倒退）',
     why: '去掉单调性 ⇒ 旧审计行把水位拉回过去 ⇒ 整窗重蒸（G-20 实测：13 次回退、≈137 万事件重蒸）。',
     asserts: [
-      [/if \(deepSleepReplayable\(o\) && t > lastDeepSleepAt\) lastDeepSleepAt = t/g, 1,
-        '回放：先过 deepSleepReplayable 过滤，再要求 t > lastDeepSleepAt（单调）'],
-      [/if \(!lastDeepSleepAt\) lastDeepSleepAt = Date\.now\(\)/g, 1,
+      [/if \(deepSleepReplayable\(o\) && t > m.lastDeepSleepAt\) m.lastDeepSleepAt = t/g, 1,
+        '回放：先过 deepSleepReplayable 过滤，再要求 t > m.lastDeepSleepAt（单调）'],
+      [/if \(!m.lastDeepSleepAt\) m.lastDeepSleepAt = Date\.now\(\)/g, 1,
         '兜底：仅在无回放值时用当前时间（无条件覆盖会冲掉刚回放出来的水位）'],
     ],
     breaks: [
       ['去掉单调性（水位可倒退）', (s) => s.replace(
-        'if (deepSleepReplayable(o) && t > lastDeepSleepAt) lastDeepSleepAt = t',
-        'if (deepSleepReplayable(o)) lastDeepSleepAt = t')],
+        'if (deepSleepReplayable(o) && t > m.lastDeepSleepAt) m.lastDeepSleepAt = t',
+        'if (deepSleepReplayable(o)) m.lastDeepSleepAt = t')],
       ['不再过滤可回放行（全拒收轮次也被当成有效水位）', (s) => s.replace(
-        'if (deepSleepReplayable(o) && t > lastDeepSleepAt)', 'if (t > lastDeepSleepAt)')],
+        'if (deepSleepReplayable(o) && t > m.lastDeepSleepAt)', 'if (t > m.lastDeepSleepAt)')],
       ['兜底变成无条件覆盖（回放值被冲掉）', (s) => s.replace(
-        'if (!lastDeepSleepAt) lastDeepSleepAt = Date.now()', 'lastDeepSleepAt = Date.now()')],
+        'if (!m.lastDeepSleepAt) m.lastDeepSleepAt = Date.now()', 'm.lastDeepSleepAt = Date.now()')],
     ],
   },
   {
@@ -149,27 +149,28 @@ const RULES = [
       '     ⚠ 同一语义在代码里有**两个合法落点**（`.then` 的 failed 分支 与 `.catch` 分支），只锁一个等于没锁\n' +
       '       （2026-09-12 archi 在 AST 版闸上先撞到这个洞，本件同型：只锁了 .then，删掉 .catch 的回滚仍会全绿）。',
     asserts: [
-      [/const prevDeepSleepAt = lastDeepSleepAt/g, 1, '本轮开始前先快照基准水位（回滚的落点）'],
-      [/if \(r === 'failed'\) \{ lastDeepSleepAt = prevDeepSleepAt;/g, 1, '落点①：.then 内判 failed ⇒ 回滚到基准，而非推进到 now'],
+      [/const prevDeepSleepAt = m.lastDeepSleepAt/g, 1, '本轮开始前先快照基准水位（回滚的落点）'],
+      [/if \(r === 'failed'\) \{ m.lastDeepSleepAt = prevDeepSleepAt;/g, 1, '落点①：.then 内判 failed ⇒ 回滚到基准，而非推进到 now'],
       // ⚠ 根因留痕（archi 2026-09-12 要求，不要只绕开不留因）：
       //   早前写的是 `/\}\.catch\(\(e\) => \{.../`，**恒 0 命中 ⇒ 假红**。原因不是换行/缩进，是
       //   漏了一个 `)`：源码原文是 `}).catch((e) => {`（`}` 与 `.catch` 之间还有一个 `)`），
       //   `\}\.catch` 要求 `}` 紧跟 `.`。探针实测：`/\}\.catch/g` hits=0、`/\.catch\(/g` hits=4、
-      //   全文 `lastDeepSleepAt = prevDeepSleepAt` hits=2 —— **前缀命中 0 而主体命中 2，即前缀写错**。
+      //   全文 `m.lastDeepSleepAt = prevDeepSleepAt` hits=2 —— **前缀命中 0 而主体命中 2，即前缀写错**。
       //   故此处不锚 `}`，只锚 `.catch((e) => {` 并限窗口 60 字符，抗格式微调。
       //   ⇒ 纪律：写「唯一性正则」前，先把前缀和主体**分开各打一次命中数**（假红 100% 静默）。
-      [/\.catch\(\(e\) => \{[\s\S]{0,60}?lastDeepSleepAt = prevDeepSleepAt/g, 1,
+      [/\.catch\(\(e\) => \{[\s\S]{0,60}?m.lastDeepSleepAt = prevDeepSleepAt/g, 1,
         '落点②：.catch 内同样回滚（异常时也不得推进水位——只锁落点① 的话删掉这里仍是绿的）'],
     ],
     breaks: [
       ['不回滚而推进到当前时间（重试窗口被关死）', (s) => s.replace(
-        "if (r === 'failed') { lastDeepSleepAt = prevDeepSleepAt;",
-        "if (r === 'failed') { lastDeepSleepAt = Date.now();")],
+        "if (r === 'failed') { m.lastDeepSleepAt = prevDeepSleepAt;",
+        "if (r === 'failed') { m.lastDeepSleepAt = Date.now();")],
       ['回滚条件永不成立', (s) => s.replace("if (r === 'failed') {", "if (r === 'never') {")],
       ['基准快照丢失（回滚落点变成 0）', (s) => s.replace(
-        'const prevDeepSleepAt = lastDeepSleepAt', 'const prevDeepSleepAt = 0')],
+        'const prevDeepSleepAt = m.lastDeepSleepAt', 'const prevDeepSleepAt = 0')],
       ['删掉落点②（.catch 内回滚）——只锁一个落点时会假绿', (s) => s.replace(
-        '      lastDeepSleepAt = prevDeepSleepAt\n      log(`deep sleep err:', '      log(`deep sleep err:')],
+        // ⚠ 用 \r?\n：源码是 CRLF，字面量 '\n' 锚不住（本轮实测踩到，变体静默失效 ⇒ 判 FAIL）
+        /    m\.lastDeepSleepAt = prevDeepSleepAt\r?\n    dep\.io\.log\(`deep sleep err:/, '    dep.io.log(`deep sleep err:')],
     ],
   },
 ]

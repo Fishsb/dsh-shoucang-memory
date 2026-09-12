@@ -11,7 +11,7 @@
  * 红线：本文件只 type-only 引用 distill 的 DeepSleepStatus，无运行时循环依赖；
  * 不出现任何硬编码机器路径。
  */
-import type { DeepSleepStatus } from './distill.js';
+import type { DeepSleepStatus } from './deepsleep-core.js';
 /** 深度睡眠运行时 API（由 scheduler.registerDistill 填充） */
 export interface DeepSleepApi {
     /** 状态机快照（供 UI 轮询展示） */

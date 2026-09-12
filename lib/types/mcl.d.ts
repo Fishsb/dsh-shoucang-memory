@@ -1,3 +1,4 @@
+import { type RecallRow } from './targets.js';
 import { type EmbedCfg } from './vec.js';
 export interface MclConfig {
     enabled: boolean;
@@ -34,6 +35,25 @@ export interface MclStatus {
     sessions: number;
     tasks: number;
 }
+interface SessMcl {
+    nudges: number;
+    topics: string[];
+    /** 每行材料的「引用信号词元」集合（见 rowSignals；judge 的容错匹配用，2026-09-11 缺陷3） */
+    signals: string[][];
+    channel: 'fast' | 'slow' | '';
+    sim: number;
+    lateLogged?: boolean;
+}
+/** 消息工厂（DSH 官方 `createUserMessage` 动态加载；宿主/装配副本可解析，仓内无该包故不入静态 import → 手构兜底） */
+type AnyMsg = {
+    id: string;
+    role: 'user';
+    content: Array<{
+        type: 'text';
+        text: string;
+    }>;
+    source: Record<string, unknown>;
+};
 export declare function registerMcl(ctx: {
     on(event: string, handler: (payload: any, arg2?: any) => any): unknown;
     logger?: {
@@ -42,3 +62,32 @@ export declare function registerMcl(ctx: {
 }, cfg: MclConfig, hooksIn?: Partial<MclHooks>): {
     status(): MclStatus;
 };
+/** `agent/pre-step` 处理器（自 registerMcl 提出；registerMcl 因此满足 I1 的 120 行上限）。
+ *  依赖 8 项，均为装配期构造的会话态/工具；依赖显式传递，不再靠闭包隐式可见。 */
+export interface PreStepDeps {
+    /** registerMcl 的配置形参（不是 body 里的 const ⇒ 依赖测绘易漏） */
+    cfg: MclConfig;
+    counters: {
+        steps: number;
+        fast: number;
+        slow: number;
+        injected: number;
+        nudged: number;
+        lastAt: number;
+        lastChannel: '' | 'fast' | 'slow';
+        lastSim: number;
+    };
+    state: Map<string, SessMcl>;
+    taskText: Map<string, string>;
+    ready: Set<string>;
+    hooks: MclHooks;
+    material(rows: RecallRow[], budget: number): {
+        text: string;
+        topics: string[];
+        signals: string[][];
+    };
+    judge(text: string, topics: string[], signals?: string[][]): boolean;
+    mkMsg(text: string): AnyMsg;
+}
+export declare function handlePreStep(payload: any, next: () => Promise<any>, dep: PreStepDeps): Promise<any>;
+export {};

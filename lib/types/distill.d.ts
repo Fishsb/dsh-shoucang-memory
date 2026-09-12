@@ -1,5 +1,4 @@
 import { type DeepSleepStatus } from './deepsleep-core.js';
-export * from './deepsleep-core.js';
 type AppContext = {
     tools: {
         register(tool: unknown): unknown;
@@ -98,3 +97,4 @@ export declare function registerDistill(ctx: AppContext, config: DistillConfig):
         note?: string;
     }>;
 };
+export {};
