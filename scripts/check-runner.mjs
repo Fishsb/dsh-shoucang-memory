@@ -79,6 +79,10 @@ const CHECKS = [
   // 架构门禁（棘轮：只许收紧不许放松）——守「零循环依赖 / 模块规模 / 接口宽度 / 扇入上限」。
   // 与 check-srcmap 分工：srcmap 管 src↔lib 产物漂移，本件管模块依赖图的**结构性质**。
   ['scripts/audit-architecture.mjs', '--gate'],
+  // 函数跨度门禁（棘轮双层）：守「单函数行数」这个**真病灶**——文件行数会随拆分发散，
+  //   单函数跨度不会。① 硬顶 2000 行防新增怪物；② >400 行的函数个数 ≤ 4（棘轮基线，
+  //   新增任何一个立刻红，拆掉一个则提示收紧基线）。避免「阈值取到今天谁也碰不到」的假绿。
+  ['scripts/audit-fnspan.mjs', '--gate'],
   ['scripts/check-srcmap.mjs'],
   ['scripts/check-memory-write-path.mjs'],
   ['scripts/check-deploy-sync.mjs'],
