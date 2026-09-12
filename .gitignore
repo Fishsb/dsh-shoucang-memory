@@ -29,6 +29,9 @@ skill/docs/devref/
 .tmp-*
 *.tmpdir/
 *.tmp
+# 一次性重构/迁移脚本（2026-09-12 清理）：阶段 C 的 8 件 `_tmp-*.mjs` 曾误入公开仓，
+#   而 files 含 scripts ⇒ 被打进发行包。**根部解决**：gitignore 层挡住，新增同类不再可能被 add。
+scripts/_tmp-*
 
 # ---- WorkBuddy 本地工作记忆（AI 协作数据，不入公开仓）----
 .workbuddy/

@@ -5,6 +5,16 @@
 ## [Unreleased]
 
 ### Changed
+- **🧹 废弃遗留清理（2026-09-12 21:40）—— 根治 A–D 的一次性手术脚本出仓**
+  根治期间为机械拆分写的 **8 个 `scripts/_tmp-*.mjs`**（`_tmp-rename` / `_tmp-split-distill1` /
+  `_tmp-rewrite-distill1` / `_tmp-post1..3` / `_tmp-move-mount` / `_tmp-tidy`）是**用完即弃**的
+  一次性脚本（彼此自洽、仅互相引用，自述「每次重新生成后都要跑一次」），却**误入公开仓**——
+  而 `package.json` 的 `files` 含 `scripts` ⇒ **它们被打进了发行包**，用户装到的副本里同样有这 8 件。
+  已 `git rm` 并**根部解决**：`.gitignore` 增 `scripts/_tmp-*`，此后同类脚本不再可能被 add。
+  内容可从 `HEAD` 逐件恢复（清理时 8/8 blob 哈希已核）。
+  保留 `scripts/audit-inner-fns.mjs`——它是 CHANGELOG:244 明确记录的交付工具（闭包内部跨度测量），
+  不属残留；但其**报告态**职责已被棘轮门禁 `audit-fnspan` 覆盖，仅作选刀分析工具留存。
+
 - **✅ 架构根治 A–D 收尾（2026-09-12 21:25）—— 从「仓内绿」推到「运行态绿」**
   阶段 D 的三条棘轮基线经复核**已全部收紧到位**：`audit-wiring` I1/I2 实测 **0/0 对基线 0/0**、
   `audit-fnspan` 债务 **实测 0 / 基线 0**（最大函数 350 行）。收尾补上三件真正没做完的事：
