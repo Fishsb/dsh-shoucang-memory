@@ -61,17 +61,18 @@ const inner = `<!DOCTYPE html>
     <div id="scpanl-modal">
       <nav class="sc-nav">
         <div class="sc-nav-title">守藏 SHOUCANG</div>
+        <div class="sc-nav-group">总览</div>
+        ${navItem('运行总览', false)}
         <div class="sc-nav-group">记忆</div>
-        ${navItem('画像板块', true)}
-        ${navItem('记忆板块', false)}
+        ${navItem('记忆库', true)}
+        ${navItem('画像', false)}
         <div class="sc-nav-group">运行</div>
         ${navItem('插件集合', false)}
         ${navItem('深度睡眠', false)}
         ${navItem('运行观测', false)}
         <div class="sc-nav-group">配置</div>
-        ${navItem('参数调节', false)}
-        ${navItem('界面设置', false)}
-        ${navItem('配置原文', false)}
+        ${navItem('参数', false)}
+        ${navItem('设置', false)}
         <div class="sc-nav-spacer"></div>
         <div class="sc-nav-title">storage = obsidian vault</div>
         <button class="sc-nav-close" type="button" aria-label="关闭面板">✕</button>

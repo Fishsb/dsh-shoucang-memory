@@ -36,17 +36,13 @@ export type ParentApi = ReturnType<typeof createParentApi>
 // 兜底生效日志节流（60s 一次，防每轮刷屏）
 const CHILD_ACTIVE_MS = 180000
 
-
 const isValidParent = (d: ParentDeps, p: any): boolean => !!p && typeof p === 'object' && !!p.options && !!p.ctx
 
-
 const rememberAgent = (d: ParentDeps, a: any): void => { try { if (isValidParent(d, a)) d.st.lastParent = a } catch { /* */ } }
-
 
 // 子代理感知（2026-09-10 实态修复：主会话"派子代理执行、等返回"期间被误判空闲/停滞）：
 // DSH 子代理会话 header.origin='subagent' 且 header.parentSession=父会话 id；子代理在跑 = 父会话仍在干活。
 const isSubagentAgent = (d: ParentDeps, a: any): boolean => { try { return a?.session?.header?.origin === 'subagent' } catch { return false } }
-
 
 // 父会话 id 解析（2026-09-10 三修）：E2E 实证记录对象上 header.parentSession 可能取不到（当时三会话同判 busy=走了全局兜底）
 // → 多字段探测（live session header / record header / options / 直挂字段），全失败才回落全局兜底。
@@ -62,7 +58,6 @@ const parentSidOf = (d: ParentDeps, a: any): string | null => {
   } catch { return null }
 }
 
-
 const noteChildActivity = (d: ParentDeps, parentSid: string | null, childSid: string): void => {
   const now = Date.now()
   if (!parentSid) { d.st.globalChildSeen = now; return }
@@ -71,11 +66,9 @@ const noteChildActivity = (d: ParentDeps, parentSid: string | null, childSid: st
   m.set(childSid, now)
 }
 
-
 const dropChild = (d: ParentDeps, childSid: string): void => {
   for (const [p, m] of d.st.childSeen) { if (m.delete(childSid) && !m.size) d.st.childSeen.delete(p) }
 }
-
 
 /** 该会话是否有运行中的子代理后代（事件通道 + live status 枚举通道） */
 const hasActiveSubagents = (d: ParentDeps, sid: string): boolean => {
@@ -117,13 +110,11 @@ const hasActiveSubagents = (d: ParentDeps, sid: string): boolean => {
   return false
 }
 
-
 const pickParent = (d: ParentDeps, ): any | null => {
   try { for (const r of d.ctx.agents.roots() || []) if (isValidParent(d, r)) return r } catch { /* */ }
   try { for (const a of d.ctx.agents.list() || []) if (isValidParent(d, a)) return a } catch { /* */ }
   return isValidParent(d, d.st.lastParent) ? d.st.lastParent : null
 }
-
 
 /**
  * 守护 parent（最后兜底）：服务重启后若从未有过会话活动，roots/list/lastParent 全空，
@@ -144,7 +135,6 @@ const resolveDefaultModel = (d: ParentDeps, ): { provider: string; model: string
   } catch { /* 解析失败=不给路由 */ }
   return undefined
 }
-
 
 const ensureDaemonParent = async (d: ParentDeps, signal: AbortSignal, agentOptions?: { provider: string; model: string }): Promise<any | null> => {
   if (isValidParent(d, d.st.daemonParent)) return d.st.daemonParent

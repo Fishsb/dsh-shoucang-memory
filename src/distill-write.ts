@@ -54,9 +54,6 @@ export function createWriteApi(dep: WriteDeps) {
 }
 export type WriteApi = ReturnType<typeof createWriteApi>
 
-
-
-
 // 容量门实时读取（2026-09-10：面板调容量门后写门即时生效，不必重载插件）——
 // 优先 scheduler.json 的 capAgent/capUser/capMemory（= 面板同源），回落启动期 config 值。
 const liveCaps = (dep: WriteDeps, ): { agent: number; user: number; memory: number } => {
@@ -70,16 +67,10 @@ const liveCaps = (dep: WriteDeps, ): { agent: number; user: number; memory: numb
   return d
 }
 
-
-
-
 const capEnv = (dep: WriteDeps, ): Record<string, string> => {
   const c2 = liveCaps(dep, )
   return { SHOUCANG_CAP_MEMORY: String(c2.memory), SHOUCANG_CAP_USER: String(c2.user), SHOUCANG_CAP_AGENT: String(c2.agent) }
 }
-
-
-
 
 // ── 写入分发（ADR-0002 核心：动态路由 + 白名单门禁 + 零拷贝写入 + 审计）──
 const memAppend = async (dep: WriteDeps, target: string, kind: 'append' | 'new', payload: string, section: string, t: RouteTarget): Promise<RunResult> => {
@@ -87,9 +78,6 @@ const memAppend = async (dep: WriteDeps, target: string, kind: 'append' | 'new',
   const args = kind === 'append' ? [target, section, payload] : [target, '-', '--new', payload]
   return runNode(dep.config.nodeBin, script, args, { env: { MEMORY_ROOT: t.root, ...capEnv(dep, ) }, timeout: 20000 })
 }
-
-
-
 
 // ── 双画像维护（2026-09-08 用户拍板：蒸馏/睡眠不只补记忆，还更新 USER/AGENT 双画像——助理角色要有自我认知）
 //    v16：AGENT.md 升格为「成长型自我画像」（含 [原则] 习得原则），容量 2,000→3,000 ──
@@ -101,19 +89,13 @@ const normalizeProfileTarget = (dep: WriteDeps, raw: string): 'USER.md' | 'AGENT
   return k === 'user' ? 'USER.md' : k === 'agent' ? 'AGENT.md' : null
 }
 
-
-
 // 容量门同源（补齐 2026-09-10「画像/记忆容量与容量门同源」漏掉的第三处源：此处原为硬编码 3,000）
 const profileCapOf = (dep: WriteDeps, canon: 'USER.md' | 'AGENT.md'): number => (canon === 'USER.md' ? liveCaps(dep, ).user : liveCaps(dep, ).agent)
-
-
 
 const PROFILE_HEADER: Record<string, string> = {
   'USER.md': '# USER.md — 用户画像\n\n> 「人」的画像：用户稳定偏好/背景/禁忌。库中唯一直接关于用户的文件；其余（notes/原则/索引/AGENT.md）皆为 agent 自身资产。写入口=蒸馏 profileUpdates + 深度睡眠 profileOps；每行带源指针。',
   'AGENT.md': '# AGENT.md — Agent 自我画像（助理的成长档案）\n\n> 用户助理角色的自我认知：角色定位/稳定做法/能力边界/常犯错误与教训/[原则] 习得原则（深度睡眠归纳内化，v16）。库中其余一切（notes/索引）都是本 agent 为履行助理职责而积累的自身资产，本文件只回答「我是谁、我学到了什么、我怎样服务好用户」。写入口=蒸馏 profileUpdates + 深度睡眠（原则行 + profileOps）；每行带源指针。',
 }
-
-
 
 /**
  * 画像行写入（宿主直写，tmp+rename 原子）：小节存在→小节尾加行；不存在→文件尾建小节。
@@ -152,9 +134,6 @@ const writeProfileLine = (dep: WriteDeps, root: string, target: string, section:
   } catch { return { st: 'failed' } }
 }
 
-
-
-
 /**
  * 索引行新增 → 同步登记 notes/INDEX.md「条目元数据表」（维护台账）。
  * 判因（2026-09-11 ACT-030）：元数据表是「一行一主题」的维护台账，但 newIndex 通道从不登记
@@ -181,9 +160,6 @@ const registerIndexMeta = (dep: WriteDeps, root: string, targetFile: string, ind
     renameSync(tmp, idxFile)
   } catch { /* 台账登记失败不阻断索引写入 */ }
 }
-
-
-
 
 const writeDispatch = async (dep: WriteDeps, sid: string, out: any, route: string, workspace: string | null): Promise<{ added: number; rejected: number; failed: number; targetLib: string }> => {
   let added = 0, rejected = 0, failed = 0
@@ -348,9 +324,6 @@ const writeDispatch = async (dep: WriteDeps, sid: string, out: any, route: strin
   return { added, rejected, failed, targetLib: 'none' }
 }
 
-
-
-
 // ── pending defer 卡直写（2026-09-10：project-defer 是「已裁决为项目卡」的降级暂存——workspace 恢复后
 //    应直接直写该工作区 devref，不再让 LLM 重裁决（重裁决会按本轮会话 route 一刀切导致项目卡被 skip 丢失）。
 //    flush 成功后移入 .processed（防重复）；workspace 仍不可解则留 pending 等下轮。──
@@ -402,14 +375,10 @@ const flushDeferCards = async (dep: WriteDeps, ): Promise<{ written: number; kep
   return { written, kept }
 }
 
-
-
-
 // ── A1（2026-09-11 审查修复）：段落级落盘失败的有界重试 ──
 // 语义：stop/JSON 都 OK 但条目级写失败（白名单外目标、磁盘错误、原子写失败…）时**不再前移水位**；
 // 同一段连续失败满 MAX_DISPATCH_RETRY 次后强制推进 + 落审计 dispatch-failed-forced（丢失显式记账）。
 const MAX_DISPATCH_RETRY = 3
-
 
 // sid → 因未消化段而「扣住不推」的连续轮数
 // 本会话是否还有未消化段（= dispatchFailStreak 里还有它自己的失败段记账）
@@ -418,8 +387,6 @@ const hasPendingUndigested = (dep: WriteDeps, sid: string): boolean => {
   for (const k of dep.st.dispatchFailStreak.keys()) if (k.startsWith(p)) return true
   return false
 }
-
-
 
 // 判据本身是**模块级纯函数** `planSkipWatermark`（见 planDiscardWrite 附近），与 G-20 同规格，
 // 便于脱离宿主直接驱动；这里只持有状态（内存态，重载清零 ⇒ 最多再扣 SKIP_HOLD_MAX 轮）。
@@ -430,15 +397,9 @@ const hasPendingUndigested = (dep: WriteDeps, sid: string): boolean => {
 // 现语义：claim 的**写**只发生在蒸馏入口（幂等）；扫尾只做只读让位判定；本轮结束/早退即释放。
 const CLAIM_TTL_MS = 25 * 60000
 
-
-
 const claimDirOf = (dep: WriteDeps, ): string => join(dep.kRoot, 'audit', 'claims')
 
-
-
 const claimFileOf = (dep: WriteDeps, sid: string): string => join(claimDirOf(dep, ), sid + '.json')
-
-
 
 /** 在途 claim（TTL 内）→ false（让位）；否则写入并返回 true。异常一律 true（claim 失败不阻塞，与既有语义一致） */
 const tryClaim = (dep: WriteDeps, sid: string, lastSeq: number, maxSeq: number): boolean => {
@@ -452,15 +413,11 @@ const tryClaim = (dep: WriteDeps, sid: string, lastSeq: number, maxSeq: number):
   } catch { return true }
 }
 
-
-
 const claimHeld = (dep: WriteDeps, sid: string): boolean => {
   try {
     const at = Number((JSON.parse(readFileSync(claimFileOf(dep, sid), 'utf8')) as { at?: number }).at || 0)
     return !!at && Date.now() - at < CLAIM_TTL_MS
   } catch { return false }
 }
-
-
 
 const releaseClaim = (dep: WriteDeps, sid: string): void => { try { unlinkSync(claimFileOf(dep, sid)) } catch { /* 无 claim/删除失败均无害 */ } }

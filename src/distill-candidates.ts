@@ -47,12 +47,10 @@ export const CANDIDATE_NOISE: RegExp[] = [
 /** 文本是否宿主注入样板（见上：候选区与采样共用的单一实现） */
 export const isNoiseIntent = (s: string): boolean => CANDIDATE_NOISE.some((re) => re.test(String(s)))
 
-
 const intentOf = (d: CandDeps, deltaText: string): string => {
   const m = String(deltaText || '').match(/^\[user\]\s*([\s\S]{0,120})/m)
   return m ? m[1].trim().replace(/\s+/g, ' ') : ''
 }
-
 
 // 语义指纹：intent → 判别 token 集（CJK 双字滑动 + 英文 ≥4 词），供同型判定（词法地板，零依赖）
 const intentTokens = (d: CandDeps, text: string): string[] => {
@@ -66,7 +64,6 @@ const intentTokens = (d: CandDeps, text: string): string[] => {
   return [...out]
 }
 
-
 // 项目卡标题相似度（2026-09-10）：英文词 ≥2（含 vec 等短词）+ 中文 2-gram；
 // 相似度 = 交集/min(|A|,|B|) ≥0.42 —— 比指针门 Jaccard 宽松，适配「标题短、同事实不同措辞」（实测同类对 0.444~1.0、异主题 ≤0.30）
 // （实测「vec缓存指纹与重建机制」vs「vec 缓存模型指纹与重建」用 intentTokens+Jaccard 仅 0.45 漏判）
@@ -79,14 +76,12 @@ const cardTokens = (d: CandDeps, text: string): string[] => {
   return [...out]
 }
 
-
 const cardSimilar = (d: CandDeps, a: string, b: string): number => {
   const A = cardTokens(d, a), B = cardTokens(d, b)
   if (!A.length || !B.length) return 0
   const inter = A.filter((x) => B.includes(x)).length
   return inter / Math.min(A.length, B.length)
 }
-
 
 // 候选噪声闸：判别实现已上提为模块级 `isNoiseIntent`（单一实现，候选区 + 打扰度采样共用；2026-09-11 ACT-024）
 const ensureFlowCandidate = async (d: CandDeps, sid: string, intent: string): Promise<void> => {

@@ -45,8 +45,6 @@ const validateProvider = (d: LlmDeps, ): void => {
   } catch { /* listProviders 不可用时静默 */ }
 }
 
-
-
 // 2026-09-10：蒸馏/深睡各自独立模型——具体键有值用之，否则回落共用键（仍空=继承主会话）
 const resolveLlm = (d: LlmDeps, sp: string, sm: string): { provider: string; model: string } | null => {
   if (sp && sm) return { provider: sp, model: sm }
@@ -54,16 +52,12 @@ const resolveLlm = (d: LlmDeps, sp: string, sm: string): { provider: string; mod
   return null
 }
 
-
-
 // 2026-09-11 清理：原 extractDelta（24k 截断版）已实证**零调用**（全仓 grep 只剩定义与注释；原注释「勿删」与实况不符），
 // 故删除。文本化规则的唯一实现 = 模块级 textPartsOfEvent → buildEventChunks（蒸馏/深睡按需复用）。
 
 // E3 探针脚本路径：locateTranscript（蒸馏侧）与深睡探测**共用** ⇒ 留在 distill 并注入深睡，
 //   不放进 deepsleep.ts —— 否则蒸馏侧要反向 import 深睡，形成依赖倒置方向错误。
 const probeScriptPath = join(memoryLibRoot(), 'scripts', 'locate-transcript-probe.mjs')
-
-
 
 /** E3 桥：定位会话转录文件绝对路径（零拷贝调记忆仓 locate-transcript-probe；探测「是否还在输出」的硬证据） */
 const locateTranscript = async (d: LlmDeps, sid: string): Promise<string | null> => {
@@ -79,8 +73,6 @@ const locateTranscript = async (d: LlmDeps, sid: string): Promise<string | null>
     return /^session(\.v\d+)?\.jsonl(\.zstd)?$/.test(line.split(/[\\/]/).pop() || '') ? line : null
   } catch { return null }
 }
-
-
 
 const resolveWorkspace = async (d: LlmDeps, sid: string): Promise<string | null> => {
   // 反解带瞬态容错：转录定位可能晚于会话 end 落盘 / 探针单次抖动 → 仅「定位失败」重试 3 次（1.5s 退避）；

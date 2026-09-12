@@ -1,0 +1,16 @@
+// ── 宿主注入样板判别（**单一实现**：候选区 isNoiseIntent + 打扰度采样 activationStep 共用；2026-09-11 ACT-024）──
+// 背景：DSH 会把宿主注入块作为 `user/message` 事件下发——运行态快照（Current runtime context）、后台 job/子代理回执
+// （Background subagent|job …）、`<system-reminder>` 指令块、子代理消息回执（Agent <uuid> sent a message）。这类文本
+// 既不构成「可复用的任务类型」（候选区），也不代表用户任务意图（打扰度采样：实测 909 样本污染 49.3%）。
+// 首选判别是**结构字段 `data.source.kind`**（采样侧已用）；本内容闸用于无 source 的旧格式/夹具事件与候选区文本兜底。
+export const CANDIDATE_NOISE: RegExp[] = [
+  /^Current runtime context\b/i,
+  /<system-reminder>/i,
+  /^Background (subagent|job)\b/i,
+  /^background (subagent|job)\b/, // 实测真实模板是小写 `background job pwsh-1 (…)`，旧正则漏判
+  /^You are an AI agent\b/i,
+  /^Agent [0-9a-f-]{8,} sent a message\b/i, // 子代理→父会话回执
+  /^#\s*守藏[·\s]/, // 热记忆横幅（若被当作用户输入）
+]
+/** 文本是否宿主注入样板（见上：候选区与采样共用的单一实现） */
+export const isNoiseIntent = (s: string): boolean => CANDIDATE_NOISE.some((re) => re.test(String(s)))

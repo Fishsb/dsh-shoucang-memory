@@ -34,7 +34,6 @@ export function createInfraApi(d: InfraDeps) {
 }
 export type InfraApi = ReturnType<typeof createInfraApi>
 
-
 const ledger = (d: InfraDeps, o: Record<string, unknown>): void => {
   try {
     mkdirSync(dirname(d.ledgerFile), { recursive: true })
@@ -43,7 +42,6 @@ const ledger = (d: InfraDeps, o: Record<string, unknown>): void => {
     appendFileSync(d.ledgerFile, JSON.stringify({ at: new Date().toISOString(), criteriaVersion: CRITERIA_VERSION, type, ...o }) + '\n', 'utf8')
   } catch { /* 台账失败静默（不影响主流程） */ }
 }
-
 
 const recordEpisode = (d: InfraDeps, o: Record<string, unknown>): void => {
   try {
@@ -56,16 +54,12 @@ const recordEpisode = (d: InfraDeps, o: Record<string, unknown>): void => {
   } catch { /* 记录失败静默 */ }
 }
 
-
 const log = (d: InfraDeps, msg: string): void => { try { mkdirSync(dirname(d.logFile), { recursive: true }); appendFileSync(d.logFile, '[' + new Date().toISOString() + '] ' + msg + '\n') } catch { /* 静默 */ } }
-
 
 // sid 可读短号：slice(0,8) 恒等于 'session-' 前缀（此前日志全打成 'session-' 无辨识度）——取 uuid 中段
 const sidShort = (d: InfraDeps, sid: string): string => (sid && sid.startsWith('session-') && sid.length > 16 ? sid.slice(8, 16) : String(sid || '').slice(0, 12))
 
-
 const audit = (d: InfraDeps, o: Record<string, unknown>): void => { try { mkdirSync(dirname(d.auditFile), { recursive: true }); appendFileSync(d.auditFile, JSON.stringify({ at: new Date().toISOString(), ...o }) + '\n') } catch { /* 静默 */ } }
-
 
 const recordStub = (d: InfraDeps, o: Record<string, unknown>): void => {
   try {

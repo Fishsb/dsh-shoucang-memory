@@ -43,10 +43,6 @@ export function createAgentApi(dep: AgentDeps) {
 }
 export type AgentApi = ReturnType<typeof createAgentApi>
 
-
-
-
-
 const distillAgent = async (dep: AgentDeps, agent: any): Promise<void> => {
   const sid = agent.id as string
   if (dep.wm.st.distilling.has(sid)) return // 并发守卫（本 fiber 内）：蒸馏在途（最长 10min）内再触发直接跳过
@@ -310,9 +306,6 @@ const distillAgent = async (dep: AgentDeps, agent: any): Promise<void> => {
   } finally { dep.wm.st.distilling.delete(sid); if (claimed) dep.write.write.releaseClaim(sid) }
 }
 
-
-
-
 const armIdleTimer = (dep: AgentDeps, agent: any): void => {
   dep.parent.parent.rememberAgent(agent) // 深睡 parent 兜底缓存
   const sid = agent.id as string
@@ -324,10 +317,6 @@ const armIdleTimer = (dep: AgentDeps, agent: any): void => {
   }, dep.env.config.idleWakeMs)
   dep.wm.st.idleTimers.set(sid, t)
 }
-
-
-
-
 
 // 子代理输出 → JSON（剥离代码栅栏 + 容错提取首个 {...}；蒸馏/深度睡眠共用）
 const parseAgentJson = (dep: AgentDeps, result: any, label: string): any => {
@@ -341,10 +330,6 @@ const parseAgentJson = (dep: AgentDeps, result: any, label: string): any => {
     return null
   }
 }
-
-
-
-
 
 // ── 手动蒸馏触发（2026-09-10：pending 回流闭环——参数调节「立即处理 pending」调此）──
 const runDistillNow = async (dep: AgentDeps, ): Promise<{ ok: boolean; sessions: number; note?: string }> => {

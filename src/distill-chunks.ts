@@ -107,4 +107,4 @@ export const manifestPush = (manifest: string, line: string, cap: number): strin
   while (ls.length - drop > 1 && ls.slice(drop).join('\n').length > cap) drop++
   return ls.slice(drop).join('\n')
 }
-
+

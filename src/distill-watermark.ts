@@ -32,7 +32,6 @@ export function createWmApi(d: WmDeps) {
 }
 export type WmApi = ReturnType<typeof createWmApi>
 
-
 const readWatermarks = (d: WmDeps, ): Map<string, any> => {
   const map = new Map<string, any>()
   try {
@@ -43,7 +42,6 @@ const readWatermarks = (d: WmDeps, ): Map<string, any> => {
   } catch { /* 无水位文件=全新 */ }
   return map
 }
-
 
 const writeWatermark = (d: WmDeps, sessionId: string, lastSeq: number, agent?: any): void => {
   try {
@@ -61,8 +59,6 @@ const writeWatermark = (d: WmDeps, sessionId: string, lastSeq: number, agent?: a
   } catch { /* 静默 */ }
 }
 
-
-
 // ═══ 水位双证校验（2026-09-10 v19：抗会话格式代际迁移的 seq 重排）═══
 // 背景（alpha V0→V3 迁移实锤）：DSH 会话格式升级时 seq 被**密集重排**并插入 system/message 行，
 // 同一个数字不再指向同一个事件；守藏水位是自持的 sessionId→lastSeq 数字，迁移后：
@@ -76,7 +72,6 @@ const sessionFormatVersionOf = (d: WmDeps, agent: any): number | undefined => {
   try { const v = agent?.session?.header?.version; return typeof v === 'number' ? v : undefined } catch { return undefined }
 }
 
-
 /** 锚点事件指纹：记录时刻 lastSeq 处事件的 type|time|data 长度（seq 重排后此三元组随之改变）。 */
 const agentFingerprintAt = (d: WmDeps, agent: any, seq: number): string | null => {
   try {
@@ -88,7 +83,6 @@ const agentFingerprintAt = (d: WmDeps, agent: any, seq: number): string | null =
     return `${e.type || '?'}|${e.time ?? -1}|${dl}`
   } catch { return null }
 }
-
 
 /**
  * 未验证水位行的一次性收尾（作废留痕）：**跳到当前 live maxSeq 并写双证**，而不是写 0。
@@ -114,7 +108,6 @@ const discardWatermark = (d: WmDeps, sid: string, reason: string, agent: any, wm
   }
   return { maxSeq: r.maxSeq, wrote: r.wrote }
 }
-
 
 /**
  * 取基线。返回 null **仅当**真的需要全量（水位缺失 / seq 空间回退 / 快照不可用）；

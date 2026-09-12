@@ -32,9 +32,6 @@ export function createActApi(dep: ActDeps) {
 }
 export type ActApi = ReturnType<typeof createActApi>
 
-
-
-
 // 路线④ 打扰度观察（v6 向量政策 2026-09-10：打分改 recallRanked 融合召回——dense 主、lexical 稳；
 // sim 口径随 mode：fusion 的 score=0..100（已 min-max 归一）→ /100；lexical=命中数/tokens。阈值随影子样本再校准）
 const activationStep = async (dep: ActDeps, sid: string, event: any): Promise<void> => {
