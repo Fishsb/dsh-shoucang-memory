@@ -77,6 +77,9 @@ const CHECKS = [
   ['scripts/check-deploy-sync.mjs'],
   ['scripts/check-changelog.mjs'],
   ['scripts/check-ui-contract.mjs'],
+  ['scripts/test-fold-state.mjs'],
+  ['scripts/test-ui-derive.mjs'],
+  ['scripts/test-css-usage-gate.mjs'],
 ]
 const rows = []
 for (const entry of CHECKS) {
