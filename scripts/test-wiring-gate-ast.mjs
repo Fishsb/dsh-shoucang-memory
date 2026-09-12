@@ -21,12 +21,19 @@ const argv = process.argv.slice(2)
 const argOf = (k, d) => { const i = argv.indexOf(k); return i > -1 && argv[i + 1] ? argv[i + 1] : d }
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const SRC = resolve(argOf('--src', join(root, 'src', 'distill.ts')))
+// 2026-09-12（架构根治 P1）：深睡判据层抽出为 deepsleep-core.ts 后，W1 的常量定义与消费方迁出 distill.ts。
+// 守护语义（producer 与 consumer 共享同一常量）**未变**，变的是扫描范围 —— 只扫 distill.ts 会命中 0。
+// `--src2` 可覆盖第二个文件（反向证伪时指向变异副本）；默认取仓内 deepsleep-core.ts。
+const SRC2 = resolve(argOf('--src2', join(root, 'src', 'deepsleep.ts')))
+const SRC3 = resolve(argOf('--src3', join(root, 'src', 'deepsleep-core.ts')))
 const tsPath = argOf('--ts', null) || ['node_modules/typescript/lib/typescript.js']
   .map((p) => join(root, p)).find(existsSync)
 if (!tsPath || !existsSync(tsPath)) { console.error(`FATAL: 无法定位 typescript（可用 --ts 指定）`); process.exit(3) }
 const ts = (await import(pathToFileURL(resolve(tsPath)).href)).default
 
-const raw = readFileSync(SRC, 'utf8')
+// 拼接两文件后统一解析：ESM 允许 import 声明出现在模块顶层任意位置，拼接不影响解析；
+// 变体注入是**纯内存字符串替换**，对拼接体做 replace 仍能命中任一文件的锚点。
+const raw = [SRC, SRC2, SRC3].map((p) => readFileSync(p, 'utf8')).join('\n')
 
 // ── ① 骨架化：注释 → 等长空白（保留偏移与长度）──────────────────────────────
 function skeletonOf(text) {

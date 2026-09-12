@@ -5,6 +5,87 @@
 ## [Unreleased]
 
 ### Changed
+- **🏛 新增架构门禁 `scripts/audit-architecture.mjs`（2026-09-12 14:50）**
+  起因：全仓对「代码写对没有」有 25 道门禁，对「**结构有没有烂掉**」**一道都没有** —— 零循环依赖这
+  条最值钱的性质此前**无人守护**，任何人加一个 `import` 就能引入环且不报错。
+  **① 新增审计件**：静态分析模块依赖图，输出拓扑分层 / 静态环 / 动态边隐藏环 / 扇入扇出 / 接口宽度 /
+  顶层可变全局；三态 `--gate`（CI）/ 默认报告 / `--json`，`--dir` 支持绝对路径（供 tmp 副本反向证伪）。
+  与既有件分工：`test-layering.mjs` 测记忆成熟度分层（**不是**代码架构）、`check-srcmap.mjs` 管
+  src↔lib 产物漂移，本件管依赖图结构性质。
+  **② 阈值是棘轮（只许收紧不许放松）**：行数 3600 / 导出 35 / 扇入 8 / **环 0（严格）** / 深度 10，
+  均取「当前实测 + 余量」⇒ **当前全部通过、不制造红灯**。刻意避免永久红灯 —— 人人学会无视的红灯
+  等于把假绿换成假红（G-22 教训）。
+  **③ 反向证伪三组全过**：干净副本 exit 0；注入 `zz-a↔zz-b` 环 ⇒ exit 1 且准确定位；`distill.ts`
+  撑到 3712 行 ⇒ exit 1。变异在 `os.tmpdir()` 副本做，不把 src 改成缺陷态。
+  **④ 登记进 `check-runner.mjs` CHECKS**（第 26 项，规则 6：未登记=没写）。`npm test` PASS
+  （24 pass · 1 xfail · 0 skip），xfail 仍是既有 `test-treeops-rm.mjs`。
+  **⑤ 体检结论**（详见 `deliverables/architecture-review-2026-09-12.md`）：src/ 14 模块 9187 行、
+  深度 7、**静态环 0 + 动态隐藏环 0**、无跨模块共享可变状态（4 处可变全局经逐一核对全良性）、
+  事实源单一 —— 骨架合格。但 `distill.ts` 3512 行（38.2%）且变更 81 次（第二名 1.65 倍），
+  深睡标识符 **172 处贯穿 163–3510 行**⇒ 一个模块装了两个变化原因，列 🔴 P1，建议分期拆分。
+- **🏛 架构根治 P1 一期：深睡判据层抽为 `src/deepsleep-core.ts`（2026-09-12 15:00）**
+  **病根**：不是"文件大"，而是 **`registerDistill` 是单个 2835 行的函数**（677–3512 行），
+  五个工具 + 深睡状态机 + 水位逻辑 + 父子会话追踪全塞在这个闭包里，靠闭包共享可变状态；
+  深睡标识符 **172 处贯穿 163–3510 行**（交织而非分段）⇒ 任何深睡改动都要穿针引线。
+  **① 迁出三块**（原 219–269 / 290–318 / 337–633，共 377 行）到新 `src/deepsleep-core.ts`：
+  会话活跃状态机 FSM 类型（SessState / DeepSleepStatus / SessRec）、`DEEP_SLEEP_PROMPT`、
+  `COMMIT_FAILED_GATE` `deepSleepLanded` `planDeepSleepVerdict` `liveFailPolicy`
+  `deepSleepReplayable` `commitPrinciples` `planDiscardWrite` `planDegradedBaseline`
+  `planSkipWatermark` `runDiscardWatermark` `resolveWatermarkBaseline` 及配套类型。
+  **刻意不迁** 320–335 的 `CANDIDATE_NOISE` / `isNoiseIntent` —— 属**蒸馏侧**，误迁会让深睡层
+  反向依赖蒸馏概念，制造新的错向依赖。
+  **② 成果（实测）**：`distill.ts` 3512 → **3149 行**；自身导出 **30 → 8**（−73%）；
+  静态/动态循环依赖仍为 **0/0**；`npm test` 24 pass · 1 xfail · 0 skip（无回退）。
+  **③ 零 API 破坏**：distill.ts 用 `export * from './deepsleep-core.js'` 过渡兼容，
+  两个行为测试件 import 不断链（09-12 已栽过「重命名后测试件断链」）。
+  **④ 连带必须同步项（同型坑第二次）**：两个接线闸硬编码只扫 `src/distill.ts`，
+  而 W1 守的「producer 与 consumer 共享同一常量」中**常量定义与 consumer 已迁走** ⇒ 命中 0 ⇒
+  误报「已脱钩」。修法**不是放宽判据**，而是把扫描范围扩到两个文件（二者经 import 仍共享同一常量，
+  语义未变）。修改后：文本版 32 PASS/0 FAIL，AST 版 18 项 PASS、13 个破坏变体**全部翻红**。
+  **⑤ 门禁按棘轮收紧**：行数 3600 → **3200**；新增「转发数」指标（阈值 30，当前 distill 转发 24）
+  —— 只数自身导出会让接口宽度从 30 假降到 8，转发也是对外承诺。三组反向证伪全过。
+  **⑥ P1 二期规格已测绘**：`runDeepSleep`（415 行）在闭包内可见的 **89 个变量中只引用 22 个**，
+  且其中**仅 2 个是可变状态**（deepSleepFailStreak / providerFailCount）⇒ ctx 设计很轻，
+  拆分从"勇气问题"变成"22 行字段清单"。**二期等部署链路恢复再动**。
+- **🏛 架构根治 P1 二期：深睡状态机迁为 `src/deepsleep.ts`（2026-09-12 15:20）**
+  接一期，把 `registerDistill` 里剩下的深睡**状态机主体**迁出：块A（1344–2141，状态/traces/三通道/
+  consolidateTree）+ 块B（2259–2879，runDeepSleep/探测/对外 API），共 1419 行。
+  **① 依赖倒置打破循环依赖（关键设计）**：深睡**会回调蒸馏**（distillAgent / writeDispatch），
+  若让 deepsleep 直接 import distill 就形成 distill↔deepsleep 环，会破坏本项目最值钱的「零环」性质。
+  ⇒ 24 项外部依赖全部经 `DeepSleepCtx` **注入**，deepsleep.ts **零 import distill**。
+  实测依赖方向：distill(L4) → deepsleep(L3) → deepsleep-core(L2) → criteria.generated(L1)，**零环保持**。
+  **② 零逻辑改动迁出**：`createDeepSleep(ctx)` 用工厂闭包 + 解构（`appCtx: ctx` 重命名回 ctx），
+  使 1419 行代码**缩进不变、裸名不变**地整体迁移，把变更风险压到最低。
+  **③ 共享可变状态改为引用传递**：`providerFailCount` 由蒸馏与深睡**双方读写**（11 处），
+  改为 `llmState` 对象引用传入；传值快照会让两侧计数脱钩。
+  `probeScriptPath` 为两侧共用 ⇒ 留在 distill 并注入深睡（放深睡侧会导致蒸馏反向依赖）。
+  **④ 成果（实测）**：`distill.ts` **3512 → 1750 行**；新增 `deepsleep.ts` 1519 行；
+  静态/动态循环依赖仍 **0/0**；`npm test` 24 pass · 1 xfail · 0 skip。
+  **⑤ 接线闸第三次扩范围**（同型坑第三次）：W2/W3/W4 锚点随迁至 deepsleep.ts，
+  扫描列表扩为 distill + deepsleep + deepsleep-core。修改后两闸恢复（文本版 32 PASS、AST 版 18 项、
+  13 个破坏变体全部翻红）。
+  **⑥ 审计工具修一处自身误报**：`deepsleep.ts` 头注释写了「不要 import './distill.js'」，
+  未剥注释时被当成真 import ⇒ **凭空报出循环依赖**。已加 `stripComments`（只剥行首注释与块注释）。
+  剥离后仍能在 tmp 副本上检出注入的真环（3 处）⇒ 不是靠"不检测"绕过。
+  **⑦ 门禁按棘轮收紧**：行数 3200 → **2000**（distill 1750 / deepsleep 1519）。
+  **⑧ 剩余（P1 三期）**：deepsleep.ts 内部仍是工厂闭包，待逐函数提到模块级（显式传 ctx）。
+- **🖥 面板 IA 重排 + 新增「运行总览」首屏（2026-09-12 14:40）**
+  **① 新增「运行总览」并设为默认视图**：此前默认落在「配置原文」，一进来就是一坨 YAML；「画像板块」首屏也只有两张容量数字 + 长列表，**看不到系统级状态**。新首屏 = 状态徽章行（认知环 / 判据台账 / 库版本 / 向量 / 深睡）+ KPI 四卡（记忆容量 / 蒸馏 / 深睡 / 向量档）+ 快捷操作（立即蒸馏 / 立即深睡 / 运行自检，此前埋在折叠区）+ 最近动态（晨起摘要 delta + 本月深睡产出）+ 系统状态。**数据全部来自现有端点，零新增后端接口**。
+  **② 一级导航收敛**：「配置原文」从一级导航降级，并入「设置 → 高级」Tab（YAML 高危低频，不该占一级导航）；「界面设置」并入「设置 → 界面偏好」。导航项改名：画像板块→画像、记忆板块→记忆库、参数调节→参数。
+  **③ 图标去重**：此前 `ICONS` 只有 5 个 key 供 8 个视图用 ⇒ `toggles` 被 4 项共用、`file` 被 2 项共用，**导航无法扫读**。新增 `overview` / `suite` / `deepsleep` / `observe` / `settings` 五个独立图标，一项一图标。
+  **④ 兼容处理**：新增 `isKnownView()`，深链 `#sc=<视图>` 与 `Cfg.lastView` 均需过校验 —— 旧版存过的 `'file'` 已不在 VIEWS 中，不过滤会渲染成**空白页**。
+  **⑤ 新增 `buildTabs()` 视图级 Tab 容器**：切换只改 `.sc-hidden`、不重建 DOM ⇒ 折叠态（Fold）、输入焦点、已加载数据全部保留。
+  **⚠ 两个踩坑**：① `test-css-usage-gate` 报 `.sc-tabpanes` 挂类无样式 —— 该门禁要求"挂了类必须有样式或进白名单"，补 `min-width:0` 后通过；② **CSS 数组最后一行必须有尾随逗号** —— 新增的 `@media` 闭合行 `'}'` 漏了逗号，导致 `audit-css-usage.mjs` 反向证伪把变异代码拼进数组后产出 `SyntaxError`，B/C 三节全红（A 节真实源码仍绿，易误判为"门禁坏了"）。补尾随逗号即恢复。
+  **门禁**：`npm test` PASS（23 pass · 1 xfail · 0 skip）。`lib/client.js` 已同步。**尚未部署到插件包**（UI 改动需重启 DSH 生效，热重载不换 `client.js`）。
+- **🖥 面板 Tab 化第二步：参数页 4 桶 → 4 Tab · 记忆板块 12 分区 → 5 Tab（2026-09-12 15:00）**
+  **① 参数页**：`renderViewToggles`（≈620 行，全项目最重的一页）的 4 个平铺桶改为 4 个 Tab，一次只面对一桶。`makeToggle` / `numSetting` 两个工厂（被 20 处复用）**内部不动**，只换外层容器。
+  **② 记忆板块**：`renderMemoryExpanded`（≈290 行、12 分区平铺）改为 5 个 Tab —— 索引 / 候选 / 笔记 / 归档 / 运行态，默认落在「索引」（原首屏是徽章行 + 蒸馏运行，信息过载）。**「守藏知识区」按语义并入「索引」Tab**，故分区在代码里不连续（被 pending / notes 隔开），脚本用「多段区间 → 同一 pane」映射实现。
+  **⚠ 三个必须记住的坑**：
+  ① **批量替换脚本必须同时判上下界**。首版只判下界（`i >= b4`），把 `renderViewToggles` 之后**所有函数**的 `view.appendChild` 都改成了 `pane4.appendChild`（94 行越界）—— `pane4` 是参数页局部变量，在其他函数里是**未定义变量** ⇒ 运行时 ReferenceError，而 **`node --check` 查不出来**（未定义变量只在运行时报）。**教训：语法检查通过 ≠ 正确，批量替换后必须验证"改动是否只落在目标区间内"。**
+  ② **共用工厂函数会绕过区间替换**。记忆板块 `var group = function (t) { view.appendChild(...) }` 是**所有分区共用的标题工厂**，写死 `view` ⇒ 分区标题会全部跑到 Tab 容器外面。改为可重指向的 `_gp` 并在每个区间起点赋值。
+  ③ `node --check` 不认 `.tmp` 后缀；临时脚本里写本机绝对路径会被 `check-hardcode` 红线抓到（本次实测被抓，删除临时脚本即恢复）。
+  **门禁**：与本次改动相关的检查件全绿（check-ui-contract / test-css-usage-gate / test-fold-state / test-ui-derive / check-hardcode / check-deploy-sync）。
+  ⚠ **`test-wiring-gate` 与 `test-wiring-gate-ast` 两项 FAIL，与本次 UI 改动无关**：并行的架构重构把 `deepSleepLanded` 拆到新建的 `src/deepsleep-core.ts`，而 W1 闸仍锁在 `src/distill.ts`（复跑 3 次均红，非瞬时读数）。需由重构方同步闸的锚点——与 G-19 落地时踩过的坑同型。
 - **🚀 部署记录（2026-09-12 12:40）：UI 重构第二/三轮上线至插件包 —— commit `9f6c920`**
   **① 开发仓**：`9f6c920`（10 files, +1945/-454）已 push 到 `Fishsb/dsh-shoucang-memory`（`1c5b09f..9f6c920`，本次网络通畅）。
   **② 插件包**：`~/.dsh/profiles/web/package.json` 依赖重钉为 `#9f6c920ed7b14ff5fd8871127e72ee3273934561`；**`pnpm install` 失败**——

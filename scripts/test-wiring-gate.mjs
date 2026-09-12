@@ -47,6 +47,16 @@ import { createHash } from 'node:crypto'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const SRC = join(root, 'src', 'distill.ts')
+// 2026-09-12（架构根治 P1）：深睡判据层已抽出为 `src/deepsleep-core.ts`。
+// W1 守的语义是「producer 与 consumer 共享同一常量，不得静默脱钩」——
+//   producer（applyPrinciples 失败分支）**仍在 distill.ts** 闭包内；
+//   常量定义 `COMMIT_FAILED_GATE` 与 consumer（deepSleepLanded）**已迁至 deepsleep-core.ts**。
+//   二者经 import **仍共享同一个常量**，语义没有变化 ⇒ 变的只是**扫描范围**：
+//   只扫 distill.ts 会命中 0，把「没扫到」误报成「已脱钩」（这正是本仓反复栽的「没观测到≠不存在」）。
+// 变体注入是**纯内存字符串替换**，对拼接体做 replace 仍能命中任一文件中的锚点，反向证伪不受影响。
+// P1 二期（2026-09-12）再扩：深睡**状态机主体**迁至 deepsleep.ts（runDeepSleep / 终判 / 水位回滚都在那里），
+//   故 W2/W3/W4 的锚点也随迁 —— 扫描范围必须跟上，否则「没扫到」会被误报成「接线断裂」。
+const SRC_FILES = [SRC, join(root, 'src', 'deepsleep.ts'), join(root, 'src', 'deepsleep-core.ts')]
 
 let pass = 0, fail = 0
 const ok = (c, msg) => { if (c) { pass++; console.log(`  ✅ ${msg}`) } else { fail++; console.log(`  ❌ ${msg}`) } }
@@ -172,12 +182,17 @@ const evalRule = (src, rule) => rule.asserts.map(([re, exp, label]) => {
 console.log('── 接线层门禁（W1–W4）· ⚠ 文本级（非 AST，已知洞见文件头）──')
 let src
 try {
-  const buf = readFileSync(SRC)
-  src = buf.toString('utf8')
-  const st = statSync(SRC)
-  console.log(`源码戳: src/distill.ts bytes=${st.size} mtime=${st.mtime.toISOString()} md5=${createHash('md5').update(buf).digest('hex')}`)
+  const parts = []
+  for (const p of SRC_FILES) {
+    const buf = readFileSync(p)
+    parts.push(buf.toString('utf8'))
+    const st = statSync(p)
+    const rel = p.slice(root.length + 1).replace(/\\/g, '/')
+    console.log(`源码戳: ${rel} bytes=${st.size} mtime=${st.mtime.toISOString()} md5=${createHash('md5').update(buf).digest('hex')}`)
+  }
+  src = parts.join('\n')
 } catch (e) {
-  console.log(`  ❌ 读不到源码 ${SRC}: ${String(e?.message ?? e)}`)
+  console.log(`  ❌ 读不到源码 ${SRC_FILES.join(' , ')}: ${String(e?.message ?? e)}`)
   console.log(`\n结果: 0 PASS / 1 FAIL`)
   process.exit(1)
 }

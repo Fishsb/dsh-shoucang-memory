@@ -72,6 +72,9 @@ const CHECKS = [
   ['scripts/test-treeops-rm.mjs', { xfail: true }],
   ['skill/scripts/test.mjs'],
   ['scripts/check-hardcode.mjs', '__ROOT__'],
+  // 架构门禁（棘轮：只许收紧不许放松）——守「零循环依赖 / 模块规模 / 接口宽度 / 扇入上限」。
+  // 与 check-srcmap 分工：srcmap 管 src↔lib 产物漂移，本件管模块依赖图的**结构性质**。
+  ['scripts/audit-architecture.mjs', '--gate'],
   ['scripts/check-srcmap.mjs'],
   ['scripts/check-memory-write-path.mjs'],
   ['scripts/check-deploy-sync.mjs'],
