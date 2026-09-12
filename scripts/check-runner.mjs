@@ -72,6 +72,9 @@ const CHECKS = [
   // scheduler 装配契约（applyScheduler 拆分后的行为安全网）：5 个工具在册且名字未变 /
   // 开关语义（verify_enabled）/ share 装配面字段 / 蒸馏器关闭时 share 仍装配。
   ['scripts/test-scheduler-wiring.mjs'],
+  // 面板路由契约（拆 applyPanel 前的**安全网**，先建网再动刀）：34 条路由在册且未改名 /
+  // 无未登记新路由 / 无重复注册 / 只读端点真能响应 200 / webServer 缺失时降级不抛。
+  ['scripts/test-panel-wiring.mjs'],
   ['scripts/test-watermark-guard.mjs'],
   ['scripts/test-atomic-write.mjs'],
   ['scripts/test-wiring-gate.mjs'],
