@@ -89,6 +89,10 @@ const CHECKS = [
   //   单函数跨度不会。① 硬顶 2000 行防新增怪物；② >400 行的函数个数 ≤ 4（棘轮基线，
   //   新增任何一个立刻红，拆掉一个则提示收紧基线）。避免「阈值取到今天谁也碰不到」的假绿。
   ['scripts/audit-fnspan.mjs', '--gate'],
+  // 装配层不变量门禁（棘轮双层）：守根治方案的两条硬约束 ——
+  //   I1 装配函数（apply*/register*/create* 且导出）≤120 行；I2 作用域对象 ≤12 字段。
+  //   只搬家不按领域切，就会把「隐式闭包」换成「显式团块」（DsScope 32 字段就是这么来的）。
+  ['scripts/audit-wiring.mjs', '--gate'],
   ['scripts/check-srcmap.mjs'],
   ['scripts/check-memory-write-path.mjs'],
   ['scripts/check-deploy-sync.mjs'],
