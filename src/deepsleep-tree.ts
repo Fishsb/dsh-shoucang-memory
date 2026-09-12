@@ -51,12 +51,6 @@ export async function consolidateTree(d: TreeDeps, memRoot: string): Promise<{ i
   // 索引指针行：`[标签] …` 起始（标签内无空白，与全文件既有口径一致）
   const idxRowRe = /^\[[^\]\s]+\]/
   // 小节标题核心名：去掉行尾「（20xx-…）」日期括号后缀（memory_write_gate.mjs 禁日期戳同口径）
-  const coreName = (t: string): string => String(t || '').trim().replace(/\s*[（(]\s*20\d{2}[-/]\d{1,2}[-/]\d{1,2}[^）)]*[）)]\s*$/, '').trim()
-  // 双向包含：title===kw || title.includes(kw) || kw.includes(title)（与 memory_write_gate.mjs 同口径，按核心名比较）
-  const biContains = (a: string, b: string): boolean => {
-    const x = coreName(a); const y = coreName(b)
-    return !!x && !!y && (x === y || x.includes(y) || y.includes(x))
-  }
   // 行文本 → 指针引用清单（`→ notes/<file>.md §kw/§kw…`；支持一行多文件/多小节）
   type SecRef = { file: string; kw: string }
   const refsOf = (line: string): SecRef[] => {
@@ -337,61 +331,6 @@ export async function consolidateTree(d: TreeDeps, memRoot: string): Promise<{ i
       // 单行改写：把 notes/<nf>（nf 已含 .md 扩展名）后紧跟的 § 目标 token 中匹配 old 的整段换成 new。
       // 段边界=下一个 notes/ 引用或 →（小节 token 列表必在 → 之前）；改写只替换 token 文本、保留其余原样；
       // 若整段为纯「§A/§B」语法（无杂散文本）才做重复 § 折叠归一，避免把 ` → ` 等连字符吞进 token。
-      const rewriteRowPointers = (raw: string, nf: string, finals: Array<{ old: string; next: string }>): string | null => {
-        const token = `notes/${nf}`
-        if (!raw.includes(token)) return null
-        let out = ''
-        let cursor = 0
-        let pos = raw.indexOf(token)
-        let changed = false
-        while (pos >= 0) {
-          out += raw.slice(cursor, pos + token.length)
-          let end = raw.length
-          const nx = raw.indexOf('notes/', pos + token.length)
-          const nxArrow = raw.indexOf('→', pos + token.length)
-          if (nx >= 0 && nx < end) end = nx
-          if (nxArrow >= 0 && nxArrow < end) end = nxArrow // 段内不得越过 →（token 列表必在其前）
-          let seg = raw.slice(pos + token.length, end)
-          const firstSeg = seg
-          let segChanged = false
-          seg = seg.replace(/(§[^§/]*)/g, (whole) => {
-            const kw = coreName(whole.replace(/^§+/, '').trim())
-            if (!kw) return whole
-            for (const fm of finals) {
-              if (biContains(kw, fm.old)) { changed = true; segChanged = true; return `§${fm.next}` }
-            }
-            return whole
-          })
-          if (segChanged) {
-            // 纯「§A/§B」（可带空白）才整段归一：去空 token、同目标重复折叠、统一 ` §A/§B` 风格；
-            // 保留原段首/段尾空白（防 `…§X → …` 边界丢空格）；含杂散文本（如 →/notes/）则只做 token 替换不改其余
-            const gm = /^\s*((?:§[^§/→]*)(?:\s*\/\s*(?:§[^§/→]*))*)\s*$/.exec(seg)
-            if (gm) {
-              const seen = new Set<string>()
-              const norm: string[] = []
-              const tokRe = /§([^§/]+)/g
-              let tm: RegExpExecArray | null
-              while ((tm = tokRe.exec(gm[1]))) {
-                const core = coreName(tm[1].trim())
-                if (!core || seen.has(core)) continue
-                seen.add(core)
-                norm.push(`§${core}`)
-              }
-              if (norm.length) {
-                const lead = /^\s/.test(firstSeg) ? ' ' : ''
-                const trail = /\s$/.test(firstSeg) ? ' ' : ''
-                seg = lead + norm.join('/') + trail
-              }
-            }
-          }
-          out += seg
-          cursor = end
-          if (end >= raw.length) break
-          pos = raw.indexOf(token, end)
-        }
-        out += raw.slice(cursor)
-        return changed ? out : null
-      }
       for (const f of IDX_FILES) {
         try {
           const p = join(memRoot, f)
@@ -426,3 +365,69 @@ export async function consolidateTree(d: TreeDeps, memRoot: string): Promise<{ i
   log(`consolidate: 索引精确去重 ${idxExact} / 语义折叠 ${idxSem} / 小节合并 ${secMerged} / 行内去重 ${lineDedup} / 归档 ${archived}`)
   return { idxExact, idxSem, secMerged, lineDedup, archived }
 }
+
+/** 核心名：去掉标题尾部「（20xx-…）」日期括号（与 memory_write_gate.mjs 同口径）。 */
+export const coreName = (t: string): string => String(t || '').trim().replace(/\s*[（(]\s*20\d{2}[-/]\d{1,2}[-/]\d{1,2}[^）)]*[）)]\s*$/, '').trim()
+// 双向包含：title===kw || title.includes(kw) || kw.includes(title)（与 memory_write_gate.mjs 同口径，按核心名比较）
+export const biContains = (a: string, b: string): boolean => {
+  const x = coreName(a); const y = coreName(b)
+  return !!x && !!y && (x === y || x.includes(y) || y.includes(x))
+}
+
+/** 单行索引指针改写（原为 consolidateTree 内闭包，提到模块级以降单函数跨度）。 */
+export const rewriteRowPointers = (raw: string, nf: string, finals: Array<{ old: string; next: string }>): string | null => {
+  const token = `notes/${nf}`
+  if (!raw.includes(token)) return null
+  let out = ''
+  let cursor = 0
+  let pos = raw.indexOf(token)
+  let changed = false
+  while (pos >= 0) {
+    out += raw.slice(cursor, pos + token.length)
+    let end = raw.length
+    const nx = raw.indexOf('notes/', pos + token.length)
+    const nxArrow = raw.indexOf('→', pos + token.length)
+    if (nx >= 0 && nx < end) end = nx
+    if (nxArrow >= 0 && nxArrow < end) end = nxArrow // 段内不得越过 →（token 列表必在其前）
+    let seg = raw.slice(pos + token.length, end)
+    const firstSeg = seg
+    let segChanged = false
+    seg = seg.replace(/(§[^§/]*)/g, (whole) => {
+      const kw = coreName(whole.replace(/^§+/, '').trim())
+      if (!kw) return whole
+      for (const fm of finals) {
+        if (biContains(kw, fm.old)) { changed = true; segChanged = true; return `§${fm.next}` }
+      }
+      return whole
+    })
+    if (segChanged) {
+      // 纯「§A/§B」（可带空白）才整段归一：去空 token、同目标重复折叠、统一 ` §A/§B` 风格；
+      // 保留原段首/段尾空白（防 `…§X → …` 边界丢空格）；含杂散文本（如 →/notes/）则只做 token 替换不改其余
+      const gm = /^\s*((?:§[^§/→]*)(?:\s*\/\s*(?:§[^§/→]*))*)\s*$/.exec(seg)
+      if (gm) {
+        const seen = new Set<string>()
+        const norm: string[] = []
+        const tokRe = /§([^§/]+)/g
+        let tm: RegExpExecArray | null
+        while ((tm = tokRe.exec(gm[1]))) {
+          const core = coreName(tm[1].trim())
+          if (!core || seen.has(core)) continue
+          seen.add(core)
+          norm.push(`§${core}`)
+        }
+        if (norm.length) {
+          const lead = /^\s/.test(firstSeg) ? ' ' : ''
+          const trail = /\s$/.test(firstSeg) ? ' ' : ''
+          seg = lead + norm.join('/') + trail
+        }
+      }
+    }
+    out += seg
+    cursor = end
+    if (end >= raw.length) break
+    pos = raw.indexOf(token, end)
+  }
+  out += raw.slice(cursor)
+  return changed ? out : null
+}
+

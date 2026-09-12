@@ -12,3 +12,11 @@ export declare function consolidateTree(d: TreeDeps, memRoot: string): Promise<{
     lineDedup: number;
     archived: number;
 }>;
+/** 核心名：去掉标题尾部「（20xx-…）」日期括号（与 memory_write_gate.mjs 同口径）。 */
+export declare const coreName: (t: string) => string;
+export declare const biContains: (a: string, b: string) => boolean;
+/** 单行索引指针改写（原为 consolidateTree 内闭包，提到模块级以降单函数跨度）。 */
+export declare const rewriteRowPointers: (raw: string, nf: string, finals: Array<{
+    old: string;
+    next: string;
+}>) => string | null;
