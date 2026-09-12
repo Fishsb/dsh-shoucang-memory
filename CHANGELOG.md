@@ -5,6 +5,15 @@
 ## [Unreleased]
 
 ### Changed
+- **🟠 UI 统一设计系统收敛（2026-09-12）：5 层补丁 → 单一分层系统 + 修掉移动端无法关闭面板**
+  **① 收敛重复定义**：原 CSS 由 5 层历史补丁叠加（基础 → U2.5 → U2.5b → UI 重构 → 样式系统优化），同一语义被反复覆盖——`.sc-h1` 三处、`.sc-btn` 四处、`.sc-h2` 三处，实际表现取决于级联顺序而不是设计意图。现重写为**单向依赖的六层结构**：① 令牌 Token（颜色/间距/圆角/字阶/阴影/动效）② 基础 Base（重置/滚动条/焦点环/排版基类）③ 布局 Layout（mask·modal·nav·main·view·statusbar）④ 原件 Control（按钮/输入/下拉/开关/徽标/折叠/进度/日志）⑤ 业务 Block（记忆卡/指针/索引/深睡/向量/根目录/画像）⑥ 适配 Adapt（密度/响应式/触摸/减弱动效）。**断点外重复选择器块 0 处**（自检脚本实测），改标尺即改一处。
+  **② 配色统一**：业务层**裸 hex 归零**——16 种散落十六进制（`#4a9eff`/`#f85149`/`#999`/`#3fa76a`/`#c98a1e`/`#e05561` 等）与 10 处直接 rgba 收敛为语义令牌；新增 `--sc-info` 补上"探测/可疑"状态长期借用 `#4a9eff` 的缺口；柔和底/描边由 `color-mix` 从主色派生（`--sc-*-bg` / `--sc-accent-bd`），不再各写一份 rgba 常量。仅剩的 hex 全部位于令牌定义处（`--dsw-alias-*` 的兜底值与"强调色上的白字"）。
+  **③ 补三个真实视觉缺陷**：**`<select>` 此前零样式**——深色主题下是系统白底控件，与面板割裂，现统一控件外观并加自绘箭头；**`UI.toggle` 与其它三处开关形态不一致**——它返回 `label` 包裹 `input`，而胶囊样式写在 `label` 上、内侧原生勾选框未被隐藏 ⇒ 胶囊上叠一个系统方框，现统一为 `input.checkbox-container` 单一实现；**`.sc-kv` 键值栅格从未生效**——行包裹层挡住了 grid，`display:contents` 后 k/v 才真正两列对齐。
+  **④ 交互流程与排版**：新增 `UI.pageHead()` 统一「标题+描述+分隔线」页头，替换 10 处裸拼 `sc-h1`/`sc-desc`（此前每处留白各写各的）；切视图自动回到顶部（此前长视图切页后停在上一页滚动位置）；导航宽度改**写 CSS 变量**而非内联 `width`——内联会压过媒体查询，把宽屏设的宽度带进移动端。
+  **⑤ 响应式**：断点由 3 处扩到 6 处（≥1440 / ≤1180 / ≤900 / ≤720 / ≤480 / `hover:none`），模态由固定 `min(880px,94vw)` 放宽为 `min(1040px,100%)`+遮罩留白；**≤720px 修掉一个真实阻断**：模态 `100vw×100vh` 全屏后遮罩被完全盖住 ⇒ 点遮罩关闭失效、移动端无 Esc 键 ⇒ **面板打不开也关不掉**，现于导航条右侧加 sticky 关闭按钮（仅窄屏显示）。
+  **⑥ 新增 `scripts/gen-ui-preview.mjs`**（生成器，**未**登记进 CHECKS）：CSS 从 `client.js` 原地求值抽取而非复制粘贴 ⇒ 预览与线上同源，产物 `deliverables/ui-preview.html` 含 7 档设备宽度 + 深浅色切换，可作设计系统回归台。
+  **验收**：`node --check client.js` 通过；`npm run typecheck` 零错误；`npm run build:client` 已同步 `lib/client.js`（225,666 B，与源字节一致）；**`npm test` PASS（20 pass · 1 xfail · 0 skip）**，其中 `check-hardcode` / `check-ui-contract` / `check-srcmap` / `check-deploy-sync` / `check-changelog` 全绿；xfail 仍为既有的 `test-treeops-rm.mjs`。
+  **⚠ 一条证据订正（勿引为既有失败）**：本轮首次跑 `npm run check:all` 时 `test-wiring-gate.mjs` 曾报 `31 PASS / 1 FAIL（漏网 1）`，**但随后连跑 3 次均为 `32 PASS / 0 FAIL`（exit 0）**，最终 `npm test` 亦为 PASS。该门禁只读取 `src/distill.ts`，与本次 UI 改动（仅 `client.js`）无交集；同时间 `scripts/test-wiring-gate.mjs`、`test-wiring-gate-ast.mjs` 正被并发编辑（`git status` 可见其为已修改态），首次读数属**并发改写中的瞬时读数**，不作既有失败登记。
 - **🟠 UI 样式系统重构 + 剩余项落地（2026-09-12）：设计令牌 / 交互反馈 / 边界态 / 响应式**
   **① 设计令牌**：原有 45 个 `--sc-*` 令牌基础上补齐缺失项——阴影三档（`--sc-shadow-1/2/3`）、过渡时长与缓动（`--sc-t-fast/base/slow`、`--sc-ease`）、焦点环（`--sc-ring`）、禁用透明度（`--sc-disabled-op`）、层级（`--sc-z-modal/mask/toast`）、字重四档（`--sc-fw-*`）、字距（`--sc-ls-*`）、以及**状态色语义派生**（`--sc-ok-bg/warn-bg/err-bg`）。原 CSS 有 369 处 px 硬编码、16 种十六进制色、10 处直接 rgba —— 本轮为**纯新增**（不动任何既有选择器，零布局回退风险），新令牌供后续渐进替换。
   **② 视觉层次**：统一主次按钮（`.sc-btn` 最小高度 30px、`inline-flex` 居中、`primary/danger` 各有 hover 态）、状态徽标改为语义类（`.sc-badge-ok/warn/error/info`，颜色走 `--sc-*-bg` 令牌而非行内 `style.color`）、分区节奏（`.sc-section` 用 `--sc-gap-group` 统一，"留白即分组"）、标题层级（`.sc-h1/h2` 字号字重令牌化）。
