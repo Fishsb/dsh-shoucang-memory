@@ -109,6 +109,25 @@
   建议顺序：deepsleep 工厂闭包 → panel 按路由域切（32 个 `route()` 天然分 6 组，`/set` 单端点 350 行
   是最大一块）→ distill 剩余 → scheduler。**panel 零单测，拆前须先建路由契约测试。**
   **⑤ 门禁**：登记进 `check-runner.mjs`（第 27 项），`npm test` PASS（**26 pass · 1 xfail · 0 skip**）。
+- **🚀 部署记录（2026-09-12 16:40）：架构根治一/二期上线至插件包 —— commit `391fc6b`**
+  **① 开发仓**：三个提交 `567cb9e`（深睡层拆出）→ `6b494c4`（接线契约测试）→ `391fc6b`（函数跨度门禁）
+  已 push（`3390aa5..391fc6b`，**本次网络通畅**）。
+  **② 插件包**：`~/.dsh/profiles/web/package.json` 依赖重钉为 `#391fc6b984e94c6084482ef8a7df1984a1c6dc81`；
+  同步方式沿用**只覆盖差异文件**（不跑 `pnpm install`：上次实测会触发宿主批量删除保护并留下 `_tmp_*`）。
+  全量比对 `lib/`（17 js + 17 map + 17 d.ts）后确认 **9 个需同步**：3 改（`distill.js` / `.map` / `distill.d.ts`）
+  + **6 新增**（`deepsleep.js` / `deepsleep-core.js` 及各自 map 与 d.ts）。
+  **备份先行**（个人目录纪律）：被覆盖的 3 个旧文件 + profile `package.json` 已备份至
+  `~/.dsh/_sc-backup-20260912-arch/`，可回滚。
+  **③ 验证（四层）**：sha1 逐字节一致（`deepsleep.js=456d833b`、`distill.js=bb39f104`）；
+  包内 17 个 `lib/*.js` 全部 `node --check` 通过；**真跑 `import()`** ⇒ `deepsleep.js` 导出 `createDeepSleep`、
+  `deepsleep-core.js` 16 个导出、`distill.js` 仍完整转发 `deepSleepLanded` / `planDeepSleepVerdict` 等
+  深睡符号（**兼容链未断**，两个行为测试件的 import 不会断）；`check-deploy-sync` PASS
+  （100 件检查：一致 65 · 库内缺失 35 属预期 · **不一致 0**）。
+  **④ 三个面**：`skill/` 本次未改动 ⇒ 记忆库面（③）无需同步；`lib/client.js` 未改动 ⇒ **无需重启 DSH**。
+  **⏳ 待用户操作**：**热重载插件**（宿主侧工具，改动需重载后生效）。
+  **⚠ 踩坑：`node --check /c/Users/...` 在 Git Bash 下报 "Cannot find module"** —— node 是 Windows 程序，
+  收 `/c/...` 这种 POSIX 路径解析不了。批量校验必须 `node --check "$(cygpath -w "$f")"`，
+  否则会把**路径错误**误读成**语法错误**（与前面 `node /tmp/x.mjs` 同型，本日第三次踩到）。
 - **🖥 面板 IA 重排 + 新增「运行总览」首屏（2026-09-12 14:40）**
   **① 新增「运行总览」并设为默认视图**：此前默认落在「配置原文」，一进来就是一坨 YAML；「画像板块」首屏也只有两张容量数字 + 长列表，**看不到系统级状态**。新首屏 = 状态徽章行（认知环 / 判据台账 / 库版本 / 向量 / 深睡）+ KPI 四卡（记忆容量 / 蒸馏 / 深睡 / 向量档）+ 快捷操作（立即蒸馏 / 立即深睡 / 运行自检，此前埋在折叠区）+ 最近动态（晨起摘要 delta + 本月深睡产出）+ 系统状态。**数据全部来自现有端点，零新增后端接口**。
   **② 一级导航收敛**：「配置原文」从一级导航降级，并入「设置 → 高级」Tab（YAML 高危低频，不该占一级导航）；「界面设置」并入「设置 → 界面偏好」。导航项改名：画像板块→画像、记忆板块→记忆库、参数调节→参数。
