@@ -5,6 +5,18 @@
 ## [Unreleased]
 
 ### Changed
+- **🔪 根治阶段 C-2c/2d：装配层收敛到 114 行（`registerDistill` 1440 → 114，2026-09-12 21:20）**
+  **C-2c**：`distill-bank`(3 依赖：bank-git / sleep-selfcheck 子进程) + `distill-embed`(1)；
+  机械拼接留下的成片空行收缩（AST 定位模板串区间，只压其外的连续空行）。
+  **C-2d**：3 个 `ctx.on` + 6 个 `ctx.effect` 注册块整块移入 `distill-hooks.mountDistillEvents`；
+  11 个路径常量下沉到 `distill-paths.createDistillPaths()`。
+  ⇒ `registerDistill` 现在**只有**「构造 9 个领域句柄 → 调 mount → 返回句柄」，
+  **满足 I1 的三条判据**（看不到业务分支、依赖一行读完、可单独替换）。
+  `HooksDeps` 的 13 个扁平依赖按领域收进 5 组（io/dom/state/sleep/env）；
+  字段名从 `agent/st/ds` 改为 `distill/state/sleep` —— 迁入的注册块里有
+  `const agent = ctx.agents.get(sid)` 等**局部同名变量**，整体改名会把局部名改坏。
+  **棘轮收紧**：`audit-wiring` I1 基线 4 → **3**；`audit-fnspan` 债务基线 2 → **1**。
+
 - **🔪 根治阶段 C：`registerDistill` 1440 → 365 行，按领域分家（2026-09-12 20:40）**
   分三批迁出（每批一次 `git commit`，均可回滚）：
   **C-1** `distill-infra`(8) / `distill-candidates`(3) / `distill-watermark`(5) /

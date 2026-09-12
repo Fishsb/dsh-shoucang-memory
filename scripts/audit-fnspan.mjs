@@ -91,7 +91,8 @@ rows.sort((a, b) => b.len - a.len)
 //   createDeepSleep 1434 → 239）
 // 棘轮：允许改小，不允许改大。2026-09-12 阶段 A：applyPanel（1817 行）已按领域拆掉 ⇒ 4 → 3
 // 棘轮：允许改小，不允许改大。阶段 A（applyPanel 拆）4→3；阶段 B（材料相抽出）3→2
-const DEBT_BASE = Number(argOf('--debt', '0')) || 2
+// 棘轮：阶段 C 拆掉 registerDistill ⇒ 2 → 1（仅剩 consolidateTree 411）
+const DEBT_BASE = Number(argOf('--debt', '0')) || 1
 if (AS_GATE) {
   const hard = rows.filter((r) => r.len > HARD)
   const debt = rows.filter((r) => r.len > SOFT)

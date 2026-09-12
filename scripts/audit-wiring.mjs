@@ -81,7 +81,8 @@ if (AS_GATE) {
   //   `'0' || 5` 得到 '0' ⇒ 基线变成 0 ⇒ 今天恒红（首版实测：I1 5/基线 0、I2 1/基线 0 直接 FAIL）。
   //   永久红灯 = 人人学会无视，与假绿同型，必须避免。
   // 棘轮：允许改小，不允许改大。2026-09-12 阶段 A：applyPanel（1817 行）已拆 ⇒ 5 → 4
-  const A_BASE = opt('--asmbase', 4)
+  // 棘轮：2026-09-12 阶段 C 把 registerDistill 拆到 114 行 ⇒ 4 → 3
+  const A_BASE = opt('--asmbase', 3)
   const S_BASE = opt('--scopebase', 0) // 棘轮：2026-09-12 阶段 B 拆掉 DsScope ⇒ 1 → 0
   const G = (c, m) => console.log(`  ${c ? '✅' : '❌'} ${m}`)
   console.log(`装配层不变量门禁 · ${files.length} 模块`)

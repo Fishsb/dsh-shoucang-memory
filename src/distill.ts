@@ -142,6 +142,7 @@ import { INGEST_JUDGE, CONSOLIDATE_JUDGE, JUDGEMENT_HINT, LEDGER_FILE, CRITERIA_
 import { evaluateL0, promoteVerdict, demoteVerdict, maturationVerdict } from './criteria.js'
 import { MATURATION, TRIGGER } from './criteria.generated.js'
 import { newDistillState } from './distill-state.js'
+import { createDistillPaths } from './distill-paths.js'
 import { createInfraApi } from './distill-infra.js'
 import { createCandApi } from './distill-candidates.js'
 import { createWmApi } from './distill-watermark.js'
@@ -198,7 +199,7 @@ import type { RunResult } from './distill-proc.js'
 import { createWriteApi } from './distill-write.js'
 import { createActApi } from './distill-activation.js'
 import { createAgentApi } from './distill-agent.js'
-import { createHooksApi } from './distill-hooks.js'
+import { createHooksApi, mountDistillEvents } from './distill-hooks.js'
 import { createBankApi } from './distill-bank.js'
 import { createEmbedApi } from './distill-embed.js'
 
@@ -216,31 +217,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
   runDistillNow: () => Promise<{ ok: boolean; sessions: number; note?: string }>
 } {
 
-  const SHORT = 'shoucang-scheduler'
-
-  const logFile = join(dshHome(), 'super-injector', SHORT + '.log')
-
-  const kRoot = knowledgeRoot()
-
-  const watermarkFile = join(kRoot, 'audit', 'distill-watermark.jsonl')
-
-  const auditFile = join(kRoot, 'audit', 'distill-audit.jsonl')
-
-  // 判据台账（ADR-122 v2）：每次决策一行——判据取值 + 决策 + 结果 + 依据，供 scripts/criteria-audit.mjs 对账
-  const ledgerFile = join(kRoot, LEDGER_FILE)
-
-  const pendDir = join(kRoot, 'pending')
-
-  // ═══ 路线② 成长环数据源：轻 episode（同类判定/转正数据源，不存全文）+ 低置信任务候选区（跨窗口记忆）═══
-  const episodeFile = join(kRoot, 'audit', 'episodes.jsonl')
-
-  const candidateDir = join(pendDir, 'flow-candidates')
-
-  const EPISODE_CAP = 256
-
-  // ═══ WikiSkill 借鉴 · raw 裁决存根（raw-stub/）：每轮蒸馏裁决的不可变元数据留档（不含正文/文本内容，隐私安全），
-  // 供 route 分流抽验（audit-protocol §8 第 5 问）与契约升级的离线重放评测（对标 WikiSkill raw/ 只存证据不存解读）。写入后不覆写。
-  const stubDir = join(kRoot, 'audit', 'raw-stub')
+  const { SHORT, logFile, kRoot, watermarkFile, auditFile, ledgerFile, pendDir, episodeFile, candidateDir, EPISODE_CAP, stubDir } = createDistillPaths()
 
   // ── 领域模块装配（阶段 C）：依赖**按领域窄传**，实现在 distill-*.ts ──
   const st = newDistillState()
@@ -314,38 +291,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     appCtx: ctx,
   })
 
-  ctx.on('session/event', (session: any, event: any) => {
-    try {
-      if (!event || event.type !== 'turn/end') return
-      const reason = event.data && event.data.reason
-      if (reason && reason.kind && reason.kind !== 'completed') return
-      const sid = session && session.id
-      if (!sid) return
-      const agent = ctx.agents.get(sid)
-      if (!agent) return
-      const origin = agent.session && agent.session.header && agent.session.header.origin
-      if (origin === 'subagent') { // 子代理 turn/end = 父会话仍在干活（2026-09-10）：记子代活动+刷新父会话，不武装蒸馏
-        const p = parent.parentSidOf(agent)
-        parent.noteChildActivity(p, sid)
-        if (p) ds.noteEvent(p, false)
-        return
-      }
-      ds.noteEvent(sid, true) // 状态机：turn 完成 → ENDED（停滞计时起点）
-      agent.armIdleTimer(agent)
-    } catch { /* 事件回调零抛出 */ }
-  })
-
-  ctx.on('agent/disposed', ({ agent }: any) => {
-    try { const t = st.idleTimers.get(agent.id); if (t) { clearTimeout(t); st.idleTimers.delete(agent.id) } } catch { /* */ }
-    try { parent.dropChild(agent.id) } catch { /* */ } // 子代理出表：清其活动标记（防僵尸阻止蒸馏）
-    try { ds.sessions.delete(agent.id) } catch { /* */ }
-  })
-
-  ctx.on('session/disposed', (session: any) => {
-    try { const sid = session && session.id; const t = st.idleTimers.get(sid); if (t) { clearTimeout(t); st.idleTimers.delete(sid) } } catch { /* */ }
-    try { parent.dropChild(session && session.id) } catch { /* */ }
-    try { ds.sessions.delete(session && session.id) } catch { /* */ }
-  })
+  // ── 事件钩子 + 工具注册（3 个 ctx.on + 6 个 ctx.effect）整块在 distill-hooks.mountDistillEvents ──
 
   // ═══ 路线④ 打扰度观察（shadow-first MVP）：打分/滞回/冷却/落影子日志，默认不做上下文注入 ═══
   // 设计（v5.2 §5 + §9④）：先攒 activation-shadow.jsonl 真实样本校准阈值（T_on/T_off 初值 0.62/0.52），
@@ -362,80 +308,13 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
   }
 
   const act = createActApi({
+
     actShadowFile, actConf, actState, infra, st, config,
     embedCfgOf: () => embed.embedCfgOf(), // 同上，惰性求值避 TDZ
   })
 
-  const hooks = createHooksApi({ infra, write, parent, wm, agent, st, ds, kRoot, ctx, config })
-
-  // 状态机活跃信号：**任意**根会话事件 → RUNNING（长任务持续产生 chunk/tool 事件即持续刷新水位）
-  ctx.on('session/event', (session: any, event: any) => {
-    try {
-      const sid = session && session.id
-      if (!sid) return
-      const a = ctx.agents.get(sid)
-      if (!a) return
-      const origin = a.session && a.session.header && a.session.header.origin
-      if (origin === 'subagent') { // 子代理任意事件 = 父会话任务仍在推进（2026-09-10）：记子代活动+刷新父会话活动
-        const p = parent.parentSidOf(a)
-        parent.noteChildActivity(p, sid)
-        if (p) ds.noteEvent(p, false)
-        return
-      }
-      ds.noteEvent(sid, false)
-      parent.rememberAgent(a) // 深睡 parent 兜底缓存（任意根会话事件都刷新）
-      if (config.activationShadow !== false || config.activationPrefetch) void act.activationStep(sid, event) // 路线④：影子默认开；prefetch 置位后决策通路照走（影子行 mode 区分），实际注入仍待影子校准（后续档）
-    } catch { /* 状态迁移零抛出 */ }
-  })
-
-  ctx.effect(() => {
-    const t = setTimeout(() => {
-      try {
-        const roots = ctx.agents.roots()
-        infra.log(`distill 启动（守藏蒸馏器 · idleWake ${Math.round(config.idleWakeMs / 60000)}min · adopt roots=${roots.length} · 数据区 ${kRoot}）`)
-        llm.validateProvider()
-      } catch (e) { infra.log(`adopt err: ${String((e as Error)?.message || e).slice(0, 120)}`) }
-    }, 2000)
-    return () => clearTimeout(t)
-  }, SHORT + ': distill adopt')
-
-  // 深度睡眠巡检定时器（10min 一查；effect 清理，reload 零泄漏）
-  ctx.effect(() => {
-    const probeOk = existsSync(llm.probeScriptPath)
-    infra.log(`deep sleep 巡检启动（enable=${config.enableDeepSleep} · 停滞阈值 ${Math.round((Number(config.deepSleepIdleMs) || 10800000) / 60000)}min · 探测 ${config.deepSleepProbe ? '开' : '关'}${config.deepSleepProbe ? `（无事件 ${Math.round((Number(config.deepSleepProbeAfterMs) || 10800000) / 60000)}min 后发起，探针${probeOk ? '就位' : '缺失→无法确认即正常睡'}）` : ''}）`)
-    const iv = setInterval(() => { try { ds.deepSleepCheck() } catch { /* 巡检零抛出 */ } }, ds.DEEP_SLEEP_CHECK_MS)
-    return () => clearInterval(iv)
-  }, SHORT + ': deep-sleep check')
-
-  // ═══ v2.2 定时自检：独立于深睡（深睡触发严苛：需全部会话停滞 ≥3h）——保证「想不起来也会自动做」═══
-  //   启动 3 分钟后先跑一次；此后每 selfCheckIntervalHours（缺省 6h）；selfCheck=false 或周期=0 时关闭。
-  //   与深睡后的自检共用同一实现（runSelfCheck），台账 type=check.sleep 区分 trigger。
-  ctx.effect(() => {
-    const hours = Number((config as { selfCheckIntervalHours?: number }).selfCheckIntervalHours ?? 6)
-    if (config.selfCheck === false || !(hours > 0)) return
-    const ms = Math.max(30 * 60 * 1000, hours * 3600 * 1000)
-    const t0 = setTimeout(() => { void bank.runSelfCheck('timer') }, 3 * 60 * 1000)
-    const iv = setInterval(() => { void bank.runSelfCheck('timer') }, ms)
-    return () => { clearTimeout(t0); clearInterval(iv) }
-  }, SHORT + ': sleep selfcheck timer')
-
-  // ═══ 蒸馏器清理（reload/ctx dispose 零泄漏）：清空遗留 idle 定时器——旧 fiber 定时器在 ctx 失效后触发
-  // 正是「cannot get required service subagents in inactive context」报错的根源（2026-09-10 修复）═══
-  ctx.effect(() => {
-    return () => {
-      try { for (const [, t] of st.idleTimers) clearTimeout(t) } catch { /* */ }
-      try { st.idleTimers.clear() } catch { /* */ }
-      try { st.distilling.clear() } catch { /* */ }
-    }
-  }, SHORT + ': distill cleanup')
-
-  // 积压扫尾定时器：启动 30s 首扫（覆盖重载/重启前错过窗口、仍在内存的会话）+ 每 10min 周期扫
-  ctx.effect(() => {
-    const run = (): void => { try { void hooks.sweepBacklog() } catch { /* 扫尾零抛出 */ } }
-    const t0 = setTimeout(run, 30000)
-    const iv = setInterval(run, ds.DEEP_SLEEP_CHECK_MS)
-    return () => { clearTimeout(t0); clearInterval(iv) }
-  }, SHORT + ': distill sweep')
+  const hooks = createHooksApi({ io: { infra, kRoot, SHORT }, dom: { write, parent, wm, distill: agent, act, llm, bank }, state: st, sleep: ds, env: { ctx, config } })
+  mountDistillEvents(ctx, { io: { infra, kRoot, SHORT }, dom: { write, parent, wm, distill: agent, act, llm, bank }, state: st, sleep: ds, env: { ctx, config } })
 
   return { getDeepSleepStatus: ds.getDeepSleepStatus, runDeepSleepNow: ds.runDeepSleepNow, getConfig: ds.getConfig, runDistillNow: agent.runDistillNow }
 }
