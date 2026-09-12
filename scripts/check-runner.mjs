@@ -65,6 +65,10 @@ const CHECKS = [
   ['scripts/test-treeops-split.mjs'],
   ['scripts/test-mcl.mjs'],
   ['scripts/test-deepsleep-verdict.mjs'],
+  // 深睡层接线契约（P1 一/二期拆分后的行为安全网）：typecheck 只证明类型对，
+  //   证明不了「东西还在、还跑得起来」。本件用全 mock ctx 装配 createDeepSleep，
+  //   验 9 个句柄齐备 + 状态机真跑 + 实例隔离（状态没被提到模块级）。
+  ['scripts/test-deepsleep-wiring.mjs'],
   ['scripts/test-watermark-guard.mjs'],
   ['scripts/test-atomic-write.mjs'],
   ['scripts/test-wiring-gate.mjs'],
