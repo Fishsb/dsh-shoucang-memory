@@ -97,7 +97,10 @@ const FREEZE = {
   'src/mcl.ts': 627,
   // UI1/U0（2026-09-15）：**前端首次纳入棘轮**。`body.js` 是 UI 侧唯一大模块（5477 行、210 函数、
   //   顶层 125 声明），此前**零门禁**。本条目 = 拆分的**起点基线**，此后只许降（UI1 目标 < 800）。
-  'src-client/body.js': 5476,
+  // UI1/U1（2026-09-15）：抽出 CSS（933 行）到 styles.js ⇒ **棘轮下调** 5476 → 4527
+  'src-client/body.js': 4528,
+  // UI1/U1（2026-09-15）：新模块（自 body.js 抽出的样式表）。目标：U2 完成后本件亦应被拆/下探
+  'src-client/styles.js': 945,
 }
 
 const PRINT = process.argv.includes('--print')
