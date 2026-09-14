@@ -15,25 +15,29 @@
 import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
-/** 参与"前端源码口径"的模块（手动列出，避免把生成物/临时产物拼进来） */
-const MODULES = ['styles.js', 'dom.js', 'state.js', 'ui-kit.js', 'body.js']
-
-/** 返回 `src-client/` 下业务模块的**拼接文本**；缺席的文件自动跳过。 */
+/**
+ * 返回 `src-client/` 下业务模块的**拼接文本**。
+ *
+ * ⚠ **必须"扫描目录"而非手写清单**：首版用手写 `MODULES = [...]`，结果新增 `derive.js` 时
+ *   忘了同步 ⇒ `test-ui-derive` 立刻失配（"锚点缺失"）。**手写清单就是下一个会漂移的副本** ——
+ *   本件存在的意义正是"此后搬迁不再打断门禁"，故清单也必须自适应。
+ *
+ * 排除：生成物（`*.generated.js`）、临时/隐藏产物（以 `.` 开头）。
+ */
 export function clientSource(root) {
   const dir = join(root, 'src-client')
-  const parts = []
-  for (const f of MODULES) {
-    const p = join(dir, f)
-    if (existsSync(p)) parts.push(readFileSync(p, 'utf8'))
-  }
-  // 兜底：若上面清单全部缺席（例如刚重构改了名），退化为"读取全部非生成物 .js"
-  if (!parts.length) {
-    for (const f of readdirSync(dir).filter((f) => f.endsWith('.js') && !f.includes('.generated.') && !f.startsWith('.'))) {
-      parts.push(readFileSync(join(dir, f), 'utf8'))
-    }
-  }
-  return parts.join('\n')
+  if (!existsSync(dir)) return ''
+  const files = readdirSync(dir)
+    .filter((f) => f.endsWith('.js') && !f.includes('.generated.') && !f.startsWith('.'))
+    .sort()
+  return files.map((f) => readFileSync(join(dir, f), 'utf8')).join('\n')
 }
 
-/** 已抽出的独立模块清单（供门禁在报错信息里提示"符号可能已搬家"） */
-export const CLIENT_MODULES = MODULES
+/** 参与"前端源码口径"的模块清单（**实时扫描**，供门禁在报错信息里提示） */
+export function clientModules(root) {
+  const dir = join(root, 'src-client')
+  if (!existsSync(dir)) return []
+  return readdirSync(dir)
+    .filter((f) => f.endsWith('.js') && !f.includes('.generated.') && !f.startsWith('.'))
+    .sort()
+}
