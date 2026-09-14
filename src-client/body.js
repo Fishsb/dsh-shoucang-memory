@@ -13,6 +13,7 @@
  * 非 Obsidian 存储面。
  */
 import { CSS } from './styles.js'
+import { Bus, Log, Prog, Store } from './state.js'
 import { ICONS, el, svg } from './dom.js'
 
 (function () {
@@ -112,89 +113,6 @@ import { ICONS, el, svg } from './dom.js'
        * 约定：ES5（与全文一致），不引入框架，不改动既有函数调用签名。
        */
 
-      /* ---- 1. Bus：事件总线（解耦 UI 与副作用） ---- */
-      var Bus = (function () {
-        var m = {};
-        return {
-          on: function (k, fn) {
-            (m[k] = m[k] || []).push(fn);
-            return function () { m[k] = (m[k] || []).filter(function (f) { return f !== fn; }); };
-          },
-          emit: function (k, p) {
-            (m[k] || []).slice().forEach(function (f) { try { f(p); } catch (e) { /* 监听者异常不得影响主干 */ } });
-          }
-        };
-      })();
-
-      /* ---- 2. Store：单一数据源 + 订阅（替代散落的 refs 状态） ---- */
-      var Store = (function () {
-        var s = { view: 'file', logs: [], progress: {}, metrics: {}, errors: [] };
-        var subs = [];
-        return {
-          get: function (k) { return k === undefined ? s : s[k]; },
-          set: function (k, v) {
-            var old = s[k];
-            if (old === v) return v;
-            s[k] = v;
-            subs.forEach(function (f) { try { f(k, v, old); } catch (e) { } });
-            Bus.emit('store:' + k, v);
-            return v;
-          },
-          patch: function (k, o) {
-            var base = (typeof s[k] === 'object' && s[k]) ? s[k] : {};
-            var next = Object.assign({}, base, o || {});
-            return Store.set(k, next);
-          },
-          sub: function (fn) { subs.push(fn); return function () { subs = subs.filter(function (f) { return f !== fn; }); }; }
-        };
-      })();
-
-      /* ---- 3. Log：分级日志（可追溯，替代"后一条覆盖前一条"的状态栏） ---- */
-      var Log = (function () {
-        var MAX = 500;
-        function add(level, msg, ctx) {
-          var e = { t: Date.now(), level: level || 'info', msg: String(msg), ctx: ctx || null };
-          var a = (Store.get('logs') || []).concat([e]);
-          if (a.length > MAX) a = a.slice(a.length - MAX);
-          Store.set('logs', a);
-          Bus.emit('log', e);
-          // ⚠ 不得回调 status()：status → Log.add → status 会无限递归（实测栈溢出）。
-          //   只更新状态栏文本（不写日志），由 status()/fail() 统一负责写日志。
-          if (level === 'error') setStatusText(msg, 'error');
-          return e;
-        }
-        return {
-          add: add,
-          info: function (m, c) { return add('info', m, c); },
-          warn: function (m, c) { return add('warn', m, c); },
-          error: function (m, c) { return add('error', m, c); },
-          clear: function () { Store.set('logs', []); Bus.emit('log', null); }
-        };
-      })();
-
-      /* ---- 4. Prog：执行进度（C1） ---- */
-      var Prog = {
-        start: function (id, label) {
-          Store.patch('progress', Object.assign({}, Store.get('progress'), make(id, { id: id, label: label || '', pct: 0, note: '进行中', on: true })));
-          Bus.emit('progress', Store.get('progress'));
-        },
-        set: function (id, pct, note) {
-          var cur = (Store.get('progress') || {})[id]; if (!cur) return;
-          Store.patch('progress', Object.assign({}, Store.get('progress'), make(id, Object.assign({}, cur, { pct: Math.max(0, Math.min(100, pct || 0)), note: note || cur.note }))));
-          Bus.emit('progress', Store.get('progress'));
-        },
-        done: function (id, ok, msg) {
-          var cur = (Store.get('progress') || {})[id]; if (!cur) return;
-          var p = Object.assign({}, Store.get('progress'));
-          p[id] = Object.assign({}, cur, { on: false, pct: 100, note: msg || (ok ? '完成' : '失败'), ok: ok !== false });
-          Store.set('progress', p); Bus.emit('progress', p);
-          var self = this;
-          setTimeout(function () {
-            var q = Object.assign({}, Store.get('progress')); delete q[id];
-            Store.set('progress', q); Bus.emit('progress', q);
-          }, ok === false ? 6000 : 1800);
-        }
-      };
       function make(k, v) { var o = {}; o[k] = v; return o; }
 
       /* ---- 5. Cfg：UI 参数化配置（自由度，localStorage 持久化） ---- */

@@ -6795,6 +6795,119 @@
     "}"
   ].join("");
 
+  // src-client/state.js
+  var Bus = /* @__PURE__ */ (function() {
+    var m3 = {};
+    return {
+      on: function(k2, fn) {
+        (m3[k2] = m3[k2] || []).push(fn);
+        return function() {
+          m3[k2] = (m3[k2] || []).filter(function(f3) {
+            return f3 !== fn;
+          });
+        };
+      },
+      emit: function(k2, p4) {
+        (m3[k2] || []).slice().forEach(function(f3) {
+          try {
+            f3(p4);
+          } catch (e8) {
+          }
+        });
+      }
+    };
+  })();
+  var Store = /* @__PURE__ */ (function() {
+    var s4 = { view: "file", logs: [], progress: {}, metrics: {}, errors: [] };
+    var subs = [];
+    return {
+      get: function(k2) {
+        return k2 === void 0 ? s4 : s4[k2];
+      },
+      set: function(k2, v2) {
+        var old = s4[k2];
+        if (old === v2) return v2;
+        s4[k2] = v2;
+        subs.forEach(function(f3) {
+          try {
+            f3(k2, v2, old);
+          } catch (e8) {
+          }
+        });
+        Bus.emit("store:" + k2, v2);
+        return v2;
+      },
+      patch: function(k2, o9) {
+        var base = typeof s4[k2] === "object" && s4[k2] ? s4[k2] : {};
+        var next = Object.assign({}, base, o9 || {});
+        return Store.set(k2, next);
+      },
+      sub: function(fn) {
+        subs.push(fn);
+        return function() {
+          subs = subs.filter(function(f3) {
+            return f3 !== fn;
+          });
+        };
+      }
+    };
+  })();
+  var Log = /* @__PURE__ */ (function() {
+    var MAX = 500;
+    function add(level, msg, ctx) {
+      var e8 = { t: Date.now(), level: level || "info", msg: String(msg), ctx: ctx || null };
+      var a4 = (Store.get("logs") || []).concat([e8]);
+      if (a4.length > MAX) a4 = a4.slice(a4.length - MAX);
+      Store.set("logs", a4);
+      Bus.emit("log", e8);
+      if (level === "error") setStatusText(msg, "error");
+      return e8;
+    }
+    return {
+      add,
+      info: function(m3, c5) {
+        return add("info", m3, c5);
+      },
+      warn: function(m3, c5) {
+        return add("warn", m3, c5);
+      },
+      error: function(m3, c5) {
+        return add("error", m3, c5);
+      },
+      clear: function() {
+        Store.set("logs", []);
+        Bus.emit("log", null);
+      }
+    };
+  })();
+  var Prog = {
+    start: function(id3, label) {
+      Store.patch("progress", Object.assign({}, Store.get("progress"), make(id3, { id: id3, label: label || "", pct: 0, note: "\u8FDB\u884C\u4E2D", on: true })));
+      Bus.emit("progress", Store.get("progress"));
+    },
+    set: function(id3, pct, note) {
+      var cur = (Store.get("progress") || {})[id3];
+      if (!cur) return;
+      Store.patch("progress", Object.assign({}, Store.get("progress"), make(id3, Object.assign({}, cur, { pct: Math.max(0, Math.min(100, pct || 0)), note: note || cur.note }))));
+      Bus.emit("progress", Store.get("progress"));
+    },
+    done: function(id3, ok, msg) {
+      var cur = (Store.get("progress") || {})[id3];
+      if (!cur) return;
+      var p4 = Object.assign({}, Store.get("progress"));
+      p4[id3] = Object.assign({}, cur, { on: false, pct: 100, note: msg || (ok ? "\u5B8C\u6210" : "\u5931\u8D25"), ok: ok !== false });
+      Store.set("progress", p4);
+      Bus.emit("progress", p4);
+      var self = this;
+      setTimeout(function() {
+        var q = Object.assign({}, Store.get("progress"));
+        delete q[id3];
+        Store.set("progress", q);
+        Bus.emit("progress", q);
+      }, ok === false ? 6e3 : 1800);
+    }
+  };
+
   // src-client/dom.js
   function el(tag, cls, text) {
     var n6 = document.createElement(tag);
@@ -6885,13 +6998,13 @@
           var busyShown = false;
           var busyTimer = setTimeout(function() {
             busyShown = true;
-            setStatusText("\u6267\u884C\u4E2D\u2026 " + path, "info");
+            setStatusText2("\u6267\u884C\u4E2D\u2026 " + path, "info");
           }, 1500);
           function endBusy() {
             clearTimeout(busyTimer);
             if (busyShown) {
               busyShown = false;
-              setStatusText("", "info");
+              setStatusText2("", "info");
             }
           }
           return fetch(BASE + path, Object.assign({ headers: { "content-type": "application/json" } }, o9)).then(function(r7) {
@@ -6917,118 +7030,7 @@
           });
         }
         var SC_ICON = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAD90lEQVR4Aeybv65NQRTGL52CB6CRkNAIlUKpoPEIGkoFL6D1ACRaCs+gIFErFBQSJBQKHoBE666v2Mnsndmz98yeNd+cc76bWXfP/7XW9ztz/mafPNIfVQEBoMp/dCQAAkBWgOxeJ0AAyAqQ3esECABZAbJ7nQABICtAdn+YJ4AseuheAEI1CHUBIIgeuhSAUA1CXQAIoocuBSBUg1DvEcB/0yE0a2aVcC3qWYtbT+4RQGsNqP4EgCq/fpAhyy8AhwSAnmuXAeg1gIxFAA4QwDvLGe/P58yGR2Vu3lz/aLE15uah/6uNU0urE3DWskTCsJtW76VcskAQE+ya1ZuXFgBeWVa/zHovHy3A5ifCGwAeWXctsV0pOBHfWwbrCWDp0XTHEj1BMvg219FywXr/mTUpngDwaJom8c06BtFfW51V4HuI43ckiFPWh9ctu/gWLwB46plGft86Lpv1Vs5ZQI/NpqXJ65YXgGkyaL/Ev07ticWFU2GXumVpNw8AsUc/jvtSLOzx2OvCH++gPAB4x9xy/9PezloA2IVH/6DzjaHS6toCQKtcavh5X2OTnD0EIEcth7kC4CBqzpYCkKOWw9zaAPAx3iHM/d2yBADe589ZjS+y5vYu7d9Kb8nvpv1LAGxyqMVjBfYTwDjHrlsCQMZTAgCfbOfstkM+2HPOX6y/dggxH2HfJn8lAFIO36YGC8c89iwMpf6y2gDqR7jnOwoAGbAACABZAbJ7nQABICtAdq8TsD8AyJnsqHudADK42gAeOOTzMGPPnfs9ogRA6vvx5xlirZ361CamfIZjNX6PMHejEu4fq48m5zZKAOT60PyEAgKQEKfFkAC0UDnhowRA+F14rJ5wt2ootueWvlVOE5OWfCeWLg+VAFjeVTNWKyAAq6XymSgAG3XdulwAtiq4cb0AjAW8NW76t1oAwKdH/0zqeHhTZ5v1u7QAsD6a/mb+9Q7JAwDeN0/jdr/XauqwoP0isuZMpK9qlweAWIC41+pqbKCTPtw+e48RixeA2Cn4ZAn2+HqAmL5YbNNyftrh0fYCgFhjd6CjHwnDUGcaYoDFYkDsP2MDtfs8AeAO9FS8SJ5pqdiWYk+tzRrzBIBA8FT0AZUdsc8WJ2K2S5viDQBZXLd/dZOyDR0KYrzisG9yyxYAhgCQIGxo93JFTDBKPC0BDAki2ZQN84brI6uk5odjF23utCzdXzCd37TNAJCb4LOMBT8ic7u+v2AXAEQ03Z8uASCzFAABICtAdq8TIABkBcjuezwB4ft61HMlwprQctc3nZ8BoGlcB+NMAMioBUAAyAqQ3esECABZAbJ7nQABICtAdq8TIABkBcjudQIWAHgPHwMAAP//8UoJFgAAAAZJREFUAwBhOrPBP4+UEwAAAABJRU5ErkJggg==";
-        var Bus = /* @__PURE__ */ (function() {
-          var m3 = {};
-          return {
-            on: function(k2, fn) {
-              (m3[k2] = m3[k2] || []).push(fn);
-              return function() {
-                m3[k2] = (m3[k2] || []).filter(function(f3) {
-                  return f3 !== fn;
-                });
-              };
-            },
-            emit: function(k2, p4) {
-              (m3[k2] || []).slice().forEach(function(f3) {
-                try {
-                  f3(p4);
-                } catch (e8) {
-                }
-              });
-            }
-          };
-        })();
-        var Store = /* @__PURE__ */ (function() {
-          var s4 = { view: "file", logs: [], progress: {}, metrics: {}, errors: [] };
-          var subs = [];
-          return {
-            get: function(k2) {
-              return k2 === void 0 ? s4 : s4[k2];
-            },
-            set: function(k2, v2) {
-              var old = s4[k2];
-              if (old === v2) return v2;
-              s4[k2] = v2;
-              subs.forEach(function(f3) {
-                try {
-                  f3(k2, v2, old);
-                } catch (e8) {
-                }
-              });
-              Bus.emit("store:" + k2, v2);
-              return v2;
-            },
-            patch: function(k2, o9) {
-              var base = typeof s4[k2] === "object" && s4[k2] ? s4[k2] : {};
-              var next = Object.assign({}, base, o9 || {});
-              return Store.set(k2, next);
-            },
-            sub: function(fn) {
-              subs.push(fn);
-              return function() {
-                subs = subs.filter(function(f3) {
-                  return f3 !== fn;
-                });
-              };
-            }
-          };
-        })();
-        var Log = /* @__PURE__ */ (function() {
-          var MAX = 500;
-          function add(level, msg, ctx) {
-            var e8 = { t: Date.now(), level: level || "info", msg: String(msg), ctx: ctx || null };
-            var a4 = (Store.get("logs") || []).concat([e8]);
-            if (a4.length > MAX) a4 = a4.slice(a4.length - MAX);
-            Store.set("logs", a4);
-            Bus.emit("log", e8);
-            if (level === "error") setStatusText(msg, "error");
-            return e8;
-          }
-          return {
-            add,
-            info: function(m3, c5) {
-              return add("info", m3, c5);
-            },
-            warn: function(m3, c5) {
-              return add("warn", m3, c5);
-            },
-            error: function(m3, c5) {
-              return add("error", m3, c5);
-            },
-            clear: function() {
-              Store.set("logs", []);
-              Bus.emit("log", null);
-            }
-          };
-        })();
-        var Prog = {
-          start: function(id3, label) {
-            Store.patch("progress", Object.assign({}, Store.get("progress"), make(id3, { id: id3, label: label || "", pct: 0, note: "\u8FDB\u884C\u4E2D", on: true })));
-            Bus.emit("progress", Store.get("progress"));
-          },
-          set: function(id3, pct, note) {
-            var cur = (Store.get("progress") || {})[id3];
-            if (!cur) return;
-            Store.patch("progress", Object.assign({}, Store.get("progress"), make(id3, Object.assign({}, cur, { pct: Math.max(0, Math.min(100, pct || 0)), note: note || cur.note }))));
-            Bus.emit("progress", Store.get("progress"));
-          },
-          done: function(id3, ok, msg) {
-            var cur = (Store.get("progress") || {})[id3];
-            if (!cur) return;
-            var p4 = Object.assign({}, Store.get("progress"));
-            p4[id3] = Object.assign({}, cur, { on: false, pct: 100, note: msg || (ok ? "\u5B8C\u6210" : "\u5931\u8D25"), ok: ok !== false });
-            Store.set("progress", p4);
-            Bus.emit("progress", p4);
-            var self = this;
-            setTimeout(function() {
-              var q = Object.assign({}, Store.get("progress"));
-              delete q[id3];
-              Store.set("progress", q);
-              Bus.emit("progress", q);
-            }, ok === false ? 6e3 : 1800);
-          }
-        };
-        function make(k2, v2) {
+        function make2(k2, v2) {
           var o9 = {};
           o9[k2] = v2;
           return o9;
@@ -7766,7 +7768,7 @@
             return w2;
           }
         };
-        function setStatusText(msg, level) {
+        function setStatusText2(msg, level) {
           var n6 = document.getElementById("sc-statusbar");
           if (!n6) return;
           n6.textContent = (msg || "") + "";
@@ -7774,7 +7776,7 @@
         }
         function status(msg, level) {
           var lv = level || "info";
-          setStatusText(msg, lv);
+          setStatusText2(msg, lv);
           if (msg) Log.add(lv, msg);
         }
         function fail(e8, ctx) {
