@@ -145,26 +145,42 @@ if (existsSync(LIB_CLIENT)) {
   bad('缺少 lib/client.js（前端产物未构建）')
 }
 
-/* ---------- ⑥ 递归防护（P0 回归护栏） ---------- */
+/* ---------- ⑥ 递归防护（P0 回归护栏 · UI1/U1 2026-09-15 改为**更强断言**） ---------- */
 // 实测踩坑：status() 写日志 → Log.add() 遇 error 回调 status() → 无限递归 → RangeError 栈溢出，
 //   任何 error 级状态都会让面板崩溃。解耦方式：抽出 setStatusText() 只更新 DOM，
-//   status() = setStatusText + Log.add；Log.add 内部只允许调用 setStatusText。
-// 用确定性的区段切分（var Log = … 到 var Prog），避免贪婪正则越界误报
-const logStart = clientSrc.indexOf('var Log = ')
-const logEnd = clientSrc.indexOf('var Prog')
-if (logStart >= 0 && logEnd > logStart) {
-  // 先剥注释（说明文字里可能提到 status()，不能当代码判定），再去 setStatusText(
-  const seg = clientSrc.slice(logStart, logEnd)
-    .replace(/\/\*[\s\S]*?\*\//g, '')   // 块注释
-    .replace(/^\s*\/\/.*$/gm, '')       // 行注释
-  const stripped = seg.replace(/setStatusText\(/g, '')
-  if (/status\(/.test(stripped)) {
-    bad('Log 区段内回调了 status() —— 会导致 status↔Log 无限递归（栈溢出），应改用 setStatusText()')
+//   status() = setStatusText + Log.add；Log.add 内部**只允许**碰 setStatusText。
+//
+// ⚠ **为什么改断言**：U1 把 `Log` 抽到 `src-client/state.js` ⇒ 闭包被打破 ⇒ 原实现（直接引用
+//   `setStatusText`）会变成 ESM 里的**自由变量**（产物中实测被 esbuild 改名为 `setStatusText2`，
+//   说明它真的跨模块了 ⇒ 运行到 error 分支即 ReferenceError，属**潜伏 bug**）。
+//   现改为**显式注入**，故断言也改为**正面锁定**（比旧的"区段内没提到 status(" 更直接）：
+//     ① `state.js` 的 Log 块内不得出现 `status(`（防递归）；
+//     ② `body.js` 里 `setLogStatusSink(...)` 的实参**必须是 `setStatusText`**（不得是 `status`）。
+{
+  const CLIENT_SRC = join(ROOT, 'src-client', 'state.js')
+  const BODY_SRC = join(ROOT, 'src-client', 'body.js')
+  if (!existsSync(CLIENT_SRC) || !existsSync(BODY_SRC)) {
+    bad('未能定位 src-client/{state,body}.js，无法校验递归防护')
   } else {
-    ok('无 status↔Log 递归（Log 区段仅用 setStatusText 更新状态栏）')
+    const st = readFileSync(CLIENT_SRC, 'utf8')
+    const bd = readFileSync(BODY_SRC, 'utf8')
+    const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+    // ① Log 块内不得出现裸 status(
+    const ls = st.indexOf('export const Log = ')
+    const le = st.indexOf('export const Prog') > ls ? st.indexOf('export const Prog') : st.length
+    const seg = strip(st.slice(ls < 0 ? 0 : ls, le))
+    const segNoSink = seg.replace(/statusSink\(/g, '')
+    if (/[^A-Za-z_]status\(/.test(segNoSink)) {
+      bad('state.js 的 Log 区段内回调了 status() —— 会导致 status↔Log 无限递归（栈溢出），应改用注入的 statusSink')
+    } else {
+      ok('无 status↔Log 递归（Log 区段仅经注入的 statusSink 更新状态栏）')
+    }
+    // ② 注入的实参必须是 setStatusText
+    const m = bd.match(/setLogStatusSink\s*\(\s*([A-Za-z_$][\w$]*)\s*\)/)
+    if (!m) bad('body.js 未注入状态栏写入器（setLogStatusSink(...) 缺失）⇒ Log 的 error 分支将静默失效')
+    else if (m[1] !== 'setStatusText') bad(`注入的是 \`${m[1]}\` —— 必须是 \`setStatusText\`（注入 status 会造成无限递归）`)
+    else ok('注入的状态栏写入器 = setStatusText（非 status ⇒ 递归护栏成立）')
   }
-} else {
-  bad('未能定位 Log 区段，无法校验递归防护')
 }
 if (/function setStatusText\(/.test(clientSrc)) ok('存在 setStatusText() 解耦函数')
 else bad('缺少 setStatusText() —— status 与 Log 无法解耦，递归风险')

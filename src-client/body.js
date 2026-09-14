@@ -13,7 +13,7 @@
  * 非 Obsidian 存储面。
  */
 import { CSS } from './styles.js'
-import { Bus, Log, Prog, Store } from './state.js'
+import { Bus, Log, Prog, Store, setLogStatusSink } from './state.js'
 import { ICONS, el, svg } from './dom.js'
 
 (function () {
@@ -723,6 +723,9 @@ import { ICONS, el, svg } from './dom.js'
         n.textContent = (msg || '') + '';
         n.className = 'sc-statusbar sc-status-' + (level || 'info');
       }
+  // UI1/U1：`Log` 已抽到 state.js，闭包被打破 ⇒ **显式注入**状态栏写入器。
+  //   ⚠ 注入 `setStatusText` 而**非** `status` —— 后者会造成 status↔Log 无限递归（见 state.js 判因）。
+  setLogStatusSink(setStatusText);
       function status(msg, level) {
         var lv = level || 'info';
         setStatusText(msg, lv);

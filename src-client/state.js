@@ -46,6 +46,25 @@ export const Store = (function () {
 })();
 
 /* ---- 3. Log：分级日志（可追溯，替代"后一条覆盖前一条"的状态栏） ---- */
+/**
+ * **状态栏写入器（注入）** —— `Log.add` 需要更新状态栏文本，但**绝不能**回调 `status()`：
+ *   `status() = setStatusText + Log.add` ⇒ 若 `Log.add` 再调 `status()` 即**无限递归**
+ *   （实测踩坑：RangeError 栈溢出，任何 error 级状态都会让面板崩溃）。
+ * 原实现靠**闭包**直接引用 `setStatusText`；UI1/U1 把它抽成独立模块后，闭包被打破
+ * ⇒ 改为**显式注入**（`body.js` 注入 `setStatusText`，**不得**注入 `status`）。
+ * 该不变量由 `check-ui-contract` ⑥ 机检。
+ */
+/**
+ * 状态栏写入器**闭包封装**（不用顶层 `let`：模块级可变全局受 `check-module-growth` 棘轮约束，
+ *   且闭包对外只暴露 set/get ⇒ 外部无法直接改写，封装更严）。
+ */
+const statusSinkBox = (function () {
+  var fn = null;
+  return { set: function (f) { fn = f; }, get: function () { return fn; } };
+})();
+/** 注入状态栏写入器（只应传 `setStatusText`） */
+export const setLogStatusSink = statusSinkBox.set;
+
 export const Log = (function () {
   var MAX = 500;
   function add(level, msg, ctx) {
@@ -56,7 +75,7 @@ export const Log = (function () {
     Bus.emit('log', e);
     // ⚠ 不得回调 status()：status → Log.add → status 会无限递归（实测栈溢出）。
     //   只更新状态栏文本（不写日志），由 status()/fail() 统一负责写日志。
-    if (level === 'error') setStatusText(msg, 'error');
+    if (level === 'error') { var _s = statusSinkBox.get(); if (_s) _s(msg, 'error'); }
     return e;
   }
   return {
