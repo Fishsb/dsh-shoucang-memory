@@ -4,6 +4,9 @@
 > 而 **UI 侧自 S1–S4 重排后未再做架构级整理**。本方案一次性给出对齐决策。
 >
 > **配套验收**：`UI1-panel-architecture-acceptance.md`（**先出验收，再施工**）。
+>
+> 🔴 **本方案已经过对抗验证并修正**（见 `UI1-adversarial-review.md`）：原版有 **4 处实质错误**，
+> 其中一处**与现行门禁直接冲突**。**下方已是修正版**；修正点标注 `【对抗修正】`。
 
 ---
 
@@ -17,7 +20,7 @@
 | **组件库覆盖** | `wa-tab-group` 8 · `wa-tab` 7 · `wa-button` 7 · `wa-progress-bar` 5 · `wa-switch` 5 · `wa-select` 3 · `wa-icon` 1 |
 | **封装层** | `UI.button` 23 · `UI.select` 7 · `UI.tabs` 6（**已是单一入口**） |
 | **原生残留** | `createElement('select')` 1 · `createElement('input')` 2（极少） |
-| **规模** | **`body.js` = 5117 行**（单体）；`vendor.js` / `entry.js` 小 |
+| **规模** | **`body.js` = 5477 行**（node 精确解析；PowerShell 曾统计为 5117，**偏差 360 行**）· **函数定义 210 个** · **顶层共享符号 98 个** · **`render*` 31 个** · 全部包在**一个 IIFE**（L15–L5477） |
 
 ### 1.2 后端现状（供对齐）
 
@@ -40,34 +43,56 @@
 
 **为什么先做这个**：没有门，任何拆分都会**再长回去**（后端就是因为有棘轮，才被迫按接缝拆）。
 
-- **U0-a** `check-module-growth` 的扫描面**扩到 `src-client/`**（同一份冻结棘轮机制，**先冻结当前值**，
-  拆完再按棘轮下调 —— 与后端 `panel-shared` 847→765 同一套流程）。
-- **U0-b** 新增 **`check-ui-components.mjs`**：断言「组件库使用」与「`vendor.js` 的 import」**双向一致** ——
-  *import 了不用* 与 *用了没 import* 都要红（`vendor.js` 头注已声明该约定，但**无机检**）。
+- **U0-a**【对抗修正】`check-module-growth` **不是"扩面"就能用** —— 它**硬编码** `const SRC = join(root,'src')`
+  且扫描面是 **`src/**/*.ts`**（`src-client/` 是 **`.js`**）⇒ **必须改门**（支持多根 + `.js`）。
+  **先冻结当前值**，拆完再按棘轮下调（与后端 `panel-shared` 847→765 同一套流程）。
+- **U0-b**【对抗修正】组件门**降级为"字面量对账"**：`UI.button` 是 `body.js` 内 `var UI={}` 的方法，
+  `wa-*` **运行时生成** ⇒ **静态扫不到**。故该门**只能**对账「`vendor.js` import ↔ `wa-*` 字面量」，
+  **并在门内注明局限**（不得声称"覆盖全部组件使用"）。
+- **U0-c**【对抗新增】`src-client/` 目前**连语法/规模基线都没有** ⇒ 补一条**解析可读性**断言（防止引入语法错误后静默）。
 
 ### D2 · **按领域接缝拆 `body.js`**（不是按行数硬切）
 
-**接缝已在（等于现有板块）**，故拆法是**逐一搬移、零逻辑改动**：
+**⚠ 对抗修正：原方案说"零逻辑改动 / 纯搬移"—— 那是不成立的。**
+实测 `body.js` **整体包在一个 IIFE 里**，**顶层有 98 个共享符号**（`api`/`Store`/`Log`/`Cfg`/`Fold`/`Derive`/
+`el`/`status`/`Bus`/`make` …）⇒ **任何 pane 搬出去都要访问它们** ⇒ **必须先把闭包打破**。
+
+**故 U2 的前置多了一步（原方案缺失）**：
+
+1. **`ui-kit.js`**：`UI.*`（纯渲染元件、无状态）—— 可**干净抽出** ✓
+2. **`ctx.js`**（**对抗新增**）：把上述 98 个符号收进**一个显式上下文对象**，pane 以**参数**接收 ——
+   这是**唯一能打破 IIFE 闭包而不造全局**的办法。
+
+**然后**才是按接缝搬。接缝**不是 7 个 pane，而是 31 个 `render*`**（`renderViewOverview`/`renderMemoryExpanded`/
+`renderMclKnobs`/`renderViewObserve`/`renderSuite`/`renderDeepSleep` …），逐个落到 7 个目标模块：
 
 | 新模块 | 内容 | 对应后端域 |
 |---|---|---|
-| `panes/memory.js` | 索引/候选/笔记/归档/统计（5 子 tab） | 记忆库 |
+| `panes/memory.js` | 索引/候选/笔记/归档/统计 | 记忆库 |
 | `panes/rings.js` | 内容环 | `rings` / 各 `*-ring` |
 | `panes/records.js` | 记录与图 | `record-store` / `assertion-graph` |
 | `panes/observe.js` | 观测 4 子 tab | `event-envelope` / `audit-source` |
 | `panes/assembly.js` | 装配 | `suiteAssemblyMatrix` |
 | `panes/mcl.js` | 认知环旋钮 | `mcl` |
 | `panes/settings.js` | 设置 4 tab | `panel-config` |
-| `ui-kit.js` | `UI.*` 封装（button/select/tabs/switch/progress/field） | —— |
 
 **约束**：搬移**不改行为** ⇒ 靠 `ui-geo-regress`（真机几何 **100 PASS**）作回归证据，
 **而非靠"看起来没变"**。
 
-### D3 · **组件库最后一公里**（不新增板块，只补覆盖）
+### D3 · ~~组件库最后一公里~~ → **改为：核对既有判因**（【对抗修正】原方向与门禁冲突）
 
-- `UI.select` 有 **7** 处而 `wa-select` 仅 **3** 处 ⇒ 查差异，能走组件库的一律走。
-- S3 曾因 **`wa-select` 依赖 `wa-icon`** 而回滚；**现已 import `wa-icon`** ⇒ **该约束已解除**，可推进。
-- 但**不做**"为组件库而组件库"：`wa-icon` 仅 1 处 ⇒ 若某处只需箭头，**保留原生反而更简**（记录判因）。
+🔴 **原方案 U3 是错的**：它说「`wa-icon` 已 import ⇒ `wa-select` 约束解除，可推进」。
+**实测**：`ui-geo-regress` 有两条断言 ——
+
+```
+· 零 wa-select 残留（二度回滚彻底；判因见源码注释）
+· 下拉为原生实现（其箭头由原生控件绘制；WA select 的箭头未渲染已被像素级证据否决）
+```
+
+⇒ **`wa-select` 是"已用像素级证据判定不用"的设计决策，且有门禁守着**。**照原方案做会直接把门打红。**
+
+**改为**：① 核对判因**是否仍有效**（若上游 `wa-icon` 已能正确绘制箭头，再议）；
+② 把该判因**从注释提升为可机检的说明**（现状只以断言形式存在于 `ui-geo-regress` 内）。
 
 ### D4 · **新后端能力上观测面板**（可选，视需要）
 
