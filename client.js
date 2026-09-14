@@ -6919,6 +6919,124 @@
       }, ok === false ? 6e3 : 1800);
     }
   };
+  var Cfg = /* @__PURE__ */ (function() {
+    var KEY = "shoucang.ui.cfg.v1";
+    var DEF = {
+      density: "comfortable",
+      // comfortable | compact
+      navWidth: 216,
+      // 左导航宽度 px（v9 对齐：方案 --nav-w 216）
+      autoRefresh: true,
+      // 打开面板/写操作后自动刷新
+      refreshMs: 6e4,
+      // 轮询间隔（0=关闭）
+      showLogs: false,
+      // 状态栏上方是否显示日志面板（v9 对齐：默认折叠，Ctrl/⌘+Shift+L 唤出）
+      logLevel: "info",
+      // info | warn | error
+      overviewMode: true,
+      // 概览—详情分层（列表默认折叠详情）
+      maxRows: 50,
+      // 长列表默认折叠阈值
+      startView: "overview",
+      // 启动时视图（深链 > 上次视图 > 此项）
+      navGroups: true,
+      // 导航分组显示（v9 设置页该行：按语义显示分组标题）
+      footBar: true,
+      // 页脚健康条（v9 设置页该行：常驻显示记忆库状态与库路径）
+      skin: "v9"
+      // 皮肤：v9（方案调色板）| host（跟随宿主主题令牌）
+    };
+    var cache = null;
+    function load() {
+      if (cache) return cache;
+      cache = Object.assign({}, DEF);
+      try {
+        var raw = localStorage.getItem(KEY);
+        if (raw) {
+          var o9 = JSON.parse(raw);
+          if (o9 && typeof o9 === "object") cache = Object.assign(cache, o9);
+        }
+      } catch (e8) {
+      }
+      return cache;
+    }
+    return {
+      get: function(k2, d3) {
+        var c5 = load();
+        return k2 === void 0 ? c5 : c5[k2] !== void 0 ? c5[k2] : d3;
+      },
+      set: function(k2, v2) {
+        var c5 = load();
+        c5[k2] = v2;
+        cache = c5;
+        try {
+          localStorage.setItem(KEY, JSON.stringify(c5));
+        } catch (e8) {
+        }
+        Bus.emit("cfg:" + k2, v2);
+        return v2;
+      },
+      reset: function() {
+        cache = Object.assign({}, DEF);
+        try {
+          localStorage.removeItem(KEY);
+        } catch (e8) {
+        }
+        Bus.emit("cfg", cache);
+        return cache;
+      },
+      defs: function() {
+        return Object.assign({}, DEF);
+      }
+    };
+  })();
+  var Fold = /* @__PURE__ */ (function() {
+    var m3 = {};
+    var hasOwn = Object.prototype.hasOwnProperty;
+    function norm(k2) {
+      return String(k2 === void 0 || k2 === null ? "" : k2);
+    }
+    return {
+      /* 读：未登记 ⇒ 用调用方给的默认值（默认值不入库，各处可各自定义缺省） */
+      get: function(key, dflt) {
+        var s4 = norm(key);
+        return hasOwn.call(m3, s4) ? m3[s4] : !!dflt;
+      },
+      /* 写：同值不广播（避免 paint↔set 回环） */
+      set: function(key, v2) {
+        var s4 = norm(key), next = !!v2;
+        if (hasOwn.call(m3, s4) && m3[s4] === next) return next;
+        m3[s4] = next;
+        Bus.emit("fold", { key: s4, open: next });
+        return next;
+      },
+      toggle: function(key, dflt) {
+        return Fold.set(key, !Fold.get(key, dflt));
+      },
+      /* 清空：按前缀或全清。切视图 / 换数据源时调用，防止旧 key 的状态残留到新数据上。 */
+      clear: function(prefix) {
+        var p4 = prefix === void 0 || prefix === null ? null : String(prefix);
+        var hit = Object.keys(m3).filter(function(s4) {
+          return p4 === null || s4.indexOf(p4) === 0;
+        });
+        hit.forEach(function(s4) {
+          delete m3[s4];
+        });
+        if (hit.length) Bus.emit("fold:clear", { prefix: p4, keys: hit });
+        return hit.length;
+      },
+      keys: function() {
+        return Object.keys(m3);
+      },
+      size: function() {
+        return Object.keys(m3).length;
+      },
+      _raw: function() {
+        return m3;
+      }
+    };
+  })();
 
   // src-client/dom.js
   function el(tag, cls, text) {
@@ -7047,124 +7165,6 @@
           o9[k2] = v2;
           return o9;
         }
-        var Cfg = /* @__PURE__ */ (function() {
-          var KEY = "shoucang.ui.cfg.v1";
-          var DEF = {
-            density: "comfortable",
-            // comfortable | compact
-            navWidth: 216,
-            // 左导航宽度 px（v9 对齐：方案 --nav-w 216）
-            autoRefresh: true,
-            // 打开面板/写操作后自动刷新
-            refreshMs: 6e4,
-            // 轮询间隔（0=关闭）
-            showLogs: false,
-            // 状态栏上方是否显示日志面板（v9 对齐：默认折叠，Ctrl/⌘+Shift+L 唤出）
-            logLevel: "info",
-            // info | warn | error
-            overviewMode: true,
-            // 概览—详情分层（列表默认折叠详情）
-            maxRows: 50,
-            // 长列表默认折叠阈值
-            startView: "overview",
-            // 启动时视图（深链 > 上次视图 > 此项）
-            navGroups: true,
-            // 导航分组显示（v9 设置页该行：按语义显示分组标题）
-            footBar: true,
-            // 页脚健康条（v9 设置页该行：常驻显示记忆库状态与库路径）
-            skin: "v9"
-            // 皮肤：v9（方案调色板）| host（跟随宿主主题令牌）
-          };
-          var cache = null;
-          function load() {
-            if (cache) return cache;
-            cache = Object.assign({}, DEF);
-            try {
-              var raw = localStorage.getItem(KEY);
-              if (raw) {
-                var o9 = JSON.parse(raw);
-                if (o9 && typeof o9 === "object") cache = Object.assign(cache, o9);
-              }
-            } catch (e8) {
-            }
-            return cache;
-          }
-          return {
-            get: function(k2, d3) {
-              var c5 = load();
-              return k2 === void 0 ? c5 : c5[k2] !== void 0 ? c5[k2] : d3;
-            },
-            set: function(k2, v2) {
-              var c5 = load();
-              c5[k2] = v2;
-              cache = c5;
-              try {
-                localStorage.setItem(KEY, JSON.stringify(c5));
-              } catch (e8) {
-              }
-              Bus.emit("cfg:" + k2, v2);
-              return v2;
-            },
-            reset: function() {
-              cache = Object.assign({}, DEF);
-              try {
-                localStorage.removeItem(KEY);
-              } catch (e8) {
-              }
-              Bus.emit("cfg", cache);
-              return cache;
-            },
-            defs: function() {
-              return Object.assign({}, DEF);
-            }
-          };
-        })();
-        var Fold = /* @__PURE__ */ (function() {
-          var m3 = {};
-          var hasOwn = Object.prototype.hasOwnProperty;
-          function norm(k2) {
-            return String(k2 === void 0 || k2 === null ? "" : k2);
-          }
-          return {
-            /* 读：未登记 ⇒ 用调用方给的默认值（默认值不入库，各处可各自定义缺省） */
-            get: function(key, dflt) {
-              var s4 = norm(key);
-              return hasOwn.call(m3, s4) ? m3[s4] : !!dflt;
-            },
-            /* 写：同值不广播（避免 paint↔set 回环） */
-            set: function(key, v2) {
-              var s4 = norm(key), next = !!v2;
-              if (hasOwn.call(m3, s4) && m3[s4] === next) return next;
-              m3[s4] = next;
-              Bus.emit("fold", { key: s4, open: next });
-              return next;
-            },
-            toggle: function(key, dflt) {
-              return Fold.set(key, !Fold.get(key, dflt));
-            },
-            /* 清空：按前缀或全清。切视图 / 换数据源时调用，防止旧 key 的状态残留到新数据上。 */
-            clear: function(prefix) {
-              var p4 = prefix === void 0 || prefix === null ? null : String(prefix);
-              var hit = Object.keys(m3).filter(function(s4) {
-                return p4 === null || s4.indexOf(p4) === 0;
-              });
-              hit.forEach(function(s4) {
-                delete m3[s4];
-              });
-              if (hit.length) Bus.emit("fold:clear", { prefix: p4, keys: hit });
-              return hit.length;
-            },
-            keys: function() {
-              return Object.keys(m3);
-            },
-            size: function() {
-              return Object.keys(m3).length;
-            },
-            _raw: function() {
-              return m3;
-            }
-          };
-        })();
         var Derive = /* @__PURE__ */ (function() {
           var VEC_DOWN = { off: "stalled", unreachable: "stalled" };
           var VEC_LABEL = {
