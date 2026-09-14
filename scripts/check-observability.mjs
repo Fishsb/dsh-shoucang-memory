@@ -1,0 +1,320 @@
+#!/usr/bin/env node
+/**
+ * check-observability.mjs — **观测流注册表 + 棘轮**（G0 DS4「单一事件源」的前置仪表 · 2026-09-13）
+ *
+ * 为什么需要它：方案档 DS4 要求「**一个** `events.jsonl`，现有 8 个 jsonl 降为**投影**」。
+ *   但"现有几个"从来没数过——而**没有数字的目标等于没有目标**（本项目已有三次实证：
+ *   快通道恒 0 无人知晓 · 惰性桥 6 条边没数过就拆不动 · 合规率没有分母就无从放行）。
+ *   本件把运行时**观测流**登记成注册表，并**只许减不许增**：
+ *     · 出现**未登记**的 `.jsonl` 字面量 ⇒ FAIL（新增观测流必须显式登记并说明为何不能并入）；
+ *     · 登记项在源码里查不到 ⇒ 提示清理（陈旧登记同样是漂移）；
+ *     · 流数 < 基线 ⇒ PASS 并**提示收紧基线**（合并后必须把基线降下来）。
+ *
+ * 口径（**显式分类，不用启发式**）：
+ *   · 计入 = **运行时写出的 append-only 观测流**（审计/影子/水位/台账/存根）；
+ *   · 豁免 = `session.jsonl`（宿主转录）· `records.jsonl`（Record **事实源**）·
+ *            `.vector-cache.jsonl`（**可重建缓存**）· `judgement-ledger.jsonl`（**legacy 只读别名**）。
+ *   ⇒ 豁免表本身也要在这里**写明理由**，不许默默略过。
+ *
+ * 用法：node scripts/check-observability.mjs [--selftest | --shape]
+ *   --shape  读**真实数据**给逐流形态表（DS4 合并的前置；报告态 exit 0）
+ * 退出码：0 = pass（≤ 基线）· 1 = fail（出现未登记流）· selftest 下 0/1 表扫描器自证
+ */
+import { readFileSync, readdirSync, existsSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
+const SRC = join(repoRoot, 'src')
+const SCRIPTS = join(repoRoot, 'scripts')
+
+/**
+ * **观测流注册表**（运行时写出、供审计/影子/水位/台账消费）。
+ * 2026-09-13 实测 12 条；DS4 目标 = **1**（单一事件源，其余降为投影）。
+ * 新增一条必须在此登记并写明理由——登记不是许可，是让它**可见**。
+ */
+/** 每项：`[流名, 家族, 说明, 域]`。
+ *  **家族**决定"能不能并入单一事件源"；**域**决定"能不能并进**这个**台账"（2026-09-13 补）：
+ *   · `suite` = suite 知识区（`<DSH_HOME>/suite/knowledge/audit/`）——**ledger 在此，可并**；
+ *   · `bank`  = 记忆库（`<bank>/audit/` 或 `<bank>/.records/`）——**数据属库**，与运行时台账**分域**
+ *     （仓内既有约定）⇒ **跨域并入是语义错误**，不是"还没做"。
+ */
+const STREAMS = [
+  // ── 事件流 · **suite 域** —— DS4「单一事件源」的目标**只对这一族成立**
+  // 2026-09-13 **DS4 合并第六刀**：蒸馏审计并入 `ledger.jsonl`（type=audit.*）⇒ 本流退役为 legacy 只读。
+  // 2026-09-13 **第七刀（判定：不并）**：`distill-watermark` 的**读侧语义**是 `map.set(sessionId, o)`
+  //   ⇒ **按 key 取最后一条**（键控状态），与"读侧把行当**事件**"（计数/聚合/取最近）**不同族**；
+  //   且它在**热路径**（每 10min × roots 全量读，D7 已记为性能隐患）⇒ 并入会放大那次读。
+  //   ⇒ 归 **keyed**（键控日志），**不并入事件台账**——这是读语义的分别，不是为了凑目标数。
+  ['distill-watermark.jsonl', 'keyed', '蒸馏水位（**键控**：读侧 `map.set(sessionId,o)` 取每键最后一条；热路径全量读）', 'suite'],
+  ['ledger.jsonl', 'event', '统一台账（judgement + write 回执 + 各域并入流；**DS4 主干**）', 'suite'],
+  // ── 事件流 · **bank 域**（数据属库）—— 与 suite 台账分域，**不并入**
+  ['access-real.jsonl', 'event', '真实访问流水（由**库内脚本** harvest-access 增采；活性/遗忘/回想强度的真实信号源）', 'bank'],
+  ['ring-events.jsonl', 'event', '环事件流（9 种 op · 重放可重建状态；落 `<bank>/.records/`）', 'bank'],
+  // ── 状态表 / 投影（整体重写或按 key upsert）——**不是事件流，不能并入 append-only 台账**：
+  //    追加进共享文件会破坏其"每 key 仅最后一条有效 / 每次扫描即快照"的语义；
+  //    DS4 的「其余降为**投影**」对它们**已然成立**（本就是派生快照、可重建）。
+  ['activity.jsonl', 'state', '活性状态表（`activity.ts` **原子替换**整表；非 append）', 'bank'],
+  ['archive-progress.jsonl', 'state', '归档进度（`archive-lib.upsertMark` **按 sessionId upsert**）', 'bank'],
+  ['maturation.jsonl', 'state', '成熟度快照（`maturation-scan` **每次扫描覆盖写**）', 'bank'],
+]
+
+/** **豁免**（不是观测流；豁免必须写明理由，不许默默略过） */
+const EXEMPT = new Map([
+  ['session.jsonl', '宿主会话转录（DSH 的资产，不是本插件观测面）'],
+  ['records.jsonl', 'Record **事实源**（P4 存储解耦），不是观测流'],
+  ['.vector-cache.jsonl', '**可重建缓存**（行向量；事实源是行文本本身，删了会自动重嵌）'],
+  ['judgement-ledger.jsonl', '**legacy 只读别名**（v2.1 前封存批次，仅读兼容；新写入一律走 ledger.jsonl）'],
+  ['score-shadow.jsonl', '**legacy 只读**（影子打分已并入 ledger.jsonl 的 type=score.shadow；本文件仅存历史批次）'],
+  ['activation-shadow.jsonl', '**legacy 只读**（打扰度影子已并入 ledger.jsonl 的 type=activation.shadow；本文件仅存历史批次）'],
+  ['stub.jsonl', '**legacy 只读**（裁决存根已并入 ledger.jsonl 的 type=stub；本文件仅存历史批次）'],
+  ['episodes.jsonl', '**legacy 只读**（轻 episode 已并入 ledger.jsonl 的 type=episode；本文件仅存历史批次）'],
+  ['mcl-audit.jsonl', '**legacy 只读**（认知环审计已并入 ledger.jsonl 的 type=mcl.*；本文件仅存历史批次）'],
+  ['distill-audit.jsonl', '**legacy 只读**（蒸馏审计已并入 ledger.jsonl 的 type=audit.*；读侧一律走 audit-source 双源读，**单读台账会丢水位历史**）'],
+])
+
+/** 棘轮基线（**只许收紧**，**只对事件流计数**）：
+ * 13（原含状态表）→ 12（score-shadow 并入）→ 11（activation-shadow 并入）→ **8**
+ * 2026-09-13 **口径修正**：`activity` / `archive-progress` / `maturation` 三条**不是 append-only 事件流**
+ *   （分别原子替换 / 按 key upsert / 每次扫描覆盖写）⇒ 归**状态表/投影**，不参与"合并为单一事件源"。
+ *   依据：三条各自的写入器源码（`activity.ts` 原子替换 · `archive-lib.upsertMark` · `maturation-scan` 覆盖写）。
+ * 2026-09-13 **第三刀**：`stub` 并入 ledger ⇒ 事件流 **8 → 7**。
+ * 2026-09-13 **第四刀**：`episodes` 并入 ledger（保留期改由按 type 裁剪承担）⇒ 事件流 **7 → 6**。
+ * 2026-09-13 **第五刀**：`mcl-audit` 并入 ledger（type=mcl.*；两个读取者改双源读）⇒ 事件流 **6 → 5**。
+ * 2026-09-13 **补域口径**：`access-real`/`ring-events` 在**记忆库**（bank）而 ledger 在 **suite 知识区** ⇒
+ *   **跨域并入是语义错误**（数据属库，与运行时台账分域）⇒ 棘轮只数 **suite 域事件流** = **3**（目标 1）。
+ * 2026-09-13 **第六刀**：`distill-audit` 并入 ledger（type=audit.*；6 个读侧改**双源读**）⇒ suite 域事件流 **3 → 2**。
+ * 2026-09-13 **第七刀（判定：不并）**：`distill-watermark` 读侧是 `map.set(sessionId,o)` ⇒ **键控语义**（取每键最后一条），
+ *   与"事件流"（读侧逐条）**不同族**；且热路径全量读（D7）。⇒ 归 **keyed** 族，**不并入**。
+ *   ⇒ **suite 域事件流 = 1（= ledger）· DS4 目标达成**。 */
+const BASELINE = 1
+
+/**
+ * 从源码里抽出**引号内的 `.jsonl` 字面量**（**先剥注释**）。
+ * ⚠ 只认**引号包裹的字面量**——不按"名字像 jsonl"做推导：本会话已实证
+ *   「按名字推导 = 第二份事实源」，与真实用法一漂移就静默漏计/误计。
+ * ⚠ **必须剥注释**（仓内先例：`check-carriers` 的「先剥注释再匹配」）：否则文档里提到的
+ *   `events.jsonl`（DS4 的**目标名**，写在注释里）会被当成"未登记的观测流"⇒ 门禁对文档开火。
+ */
+function stripComments(s) {
+  return s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1')
+}
+function streamsIn(src) {
+  const out = new Set()
+  for (const m of stripComments(src).matchAll(/['"`]([A-Za-z0-9._-]+\.jsonl)['"`]/g)) out.add(m[1])
+  return out
+}
+
+if (process.argv.includes('--selftest')) {
+  const cases = [
+    ["const f = join(k, 'audit', 'mcl-audit.jsonl')", ['mcl-audit.jsonl']],
+    ["readFileSync('ledger.jsonl')", ['ledger.jsonl']],
+    ['const a = "ring-events.jsonl"\nconst b = `score-shadow.jsonl`', ['ring-events.jsonl', 'score-shadow.jsonl']],
+    ["// 注释里提到 'events.jsonl' 但它是文档，不是代码", []],
+    ["/* 块注释里的 'mcl-audit.jsonl' 同样不算 */", []],
+    ["const s = 'session.jsonl'", ['session.jsonl']],
+  ]
+  let bad = 0
+  for (const [src, want] of cases) {
+    const got = [...streamsIn(src)].sort()
+    const okCase = JSON.stringify(got) === JSON.stringify([...want].sort())
+    if (!okCase) bad++
+    console.log(`${okCase ? '✅' : '❌'} 抽 ${JSON.stringify(want)} → 得 ${JSON.stringify(got)}`)
+  }
+  console.log(bad ? `\nFAIL（${bad} 例）` : '\nPASS（观测流扫描器自证可用）')
+  process.exit(bad ? 1 : 0)
+}
+
+// ── `--shape`：**形态审计**（DS4 合并的前置）────────────────────────────────────
+// 为什么：DS4 要把 13 条流并成 1 条，但合并**前提是形态一致**——否则并进去之后无法区分记录。
+// 实测（2026-09-13）：判别字段三种写法（`ledger.type` / `mcl.distill.activation.kind` / `score-shadow.mode`），
+//   会话键 `sid` vs `sessionId`，watermark 连判别字段都没有 ⇒ **不是机械可并**。
+// 本模式读**真实数据**（不是源码字面量）给出逐流形态表 + 「可并入 / 需改造」计数。
+// **报告态（exit 0）**：这是待办清单，不是当前红灯；改造逐条做、门禁随棘轮收紧。
+if (process.argv.includes('--shape')) {
+  const HOME = process.env.DSH_HOME || join(homedir(), '.dsh')
+  const AUD = join(HOME, 'suite', 'knowledge', 'audit')
+  let mergeable = 0, needWork = 0, noData = 0, stateRows = 0
+  console.log(`观测流**形态审计**（真实数据） · ${AUD}`)
+  console.log('  流名                          家族   行数  解析失败  时间字段  判别字段  会话键')
+  for (const [name, kind] of STREAMS) {
+    const p = join(AUD, name)
+    if (!existsSync(p)) { noData++; console.log(`  ${name.padEnd(28)} ${kind.padEnd(5)} ——    条件写入；本机暂无数据（无法核对形态）`); continue }
+    const lines = readFileSync(p, 'utf8').split(/\r?\n/).filter((l) => l.trim())
+    let bad = 0
+    const keySets = []
+    for (const l of lines) { try { keySets.push(Object.keys(JSON.parse(l))) } catch { bad++ } }
+    const has = (k) => keySets.filter((ks) => ks.includes(k)).length
+    const time = has('at') === keySets.length && keySets.length > 0 ? `at(${has('at')})` : `⚠ ${has('at')}/${keySets.length}`
+    const disc = has('type') > 0 ? `type(${has('type')})` : has('kind') > 0 ? `kind(${has('kind')})` : has('mode') > 0 ? `mode(${has('mode')})` : '⚠ 无'
+    const sess = has('sid') > 0 ? `sid(${has('sid')})` : has('sessionId') > 0 ? `sessionId(${has('sessionId')})` : '—'
+    // 形态判据只对**事件流**成立（状态表整体重写、按 key upsert，"能不能并入 append-only 台账"对它不适用）
+    if (kind === 'state') { stateRows++; console.log(`  ${name.padEnd(28)} ${kind.padEnd(5)} ${String(lines.length).padStart(5)}  ${String(bad).padStart(7)}  ${time.padEnd(9)} ${disc.padEnd(9)} ${sess}  · 状态表（不参与合并目标）`); continue }
+    const ok = bad === 0 && !time.startsWith('⚠') && !disc.startsWith('⚠')
+    if (ok) mergeable++; else needWork++
+    console.log(`  ${name.padEnd(28)} ${kind.padEnd(5)} ${String(lines.length).padStart(5)}  ${String(bad).padStart(7)}  ${time.padEnd(9)} ${disc.padEnd(9)} ${sess}  ${ok ? '✅ 可并入' : '⚠ 需改造'}`)
+  }
+  console.log(`\n汇总：**事件流** 可并入 ${mergeable} · 需改造 ${needWork} · 状态表 ${stateRows} · 无数据 ${noData}（共 ${STREAMS.length}）`)
+  console.log('改造口径（逐条做、做完把 `check-observability` 基线收紧一格）：')
+  console.log('  · 判别字段统一为 `type`（现为 kind/mode/无）· 时间统一 `at` · 会话键统一 `sid`')
+  console.log('  · 形态一致后，合并 = 追加到同一文件 + 读侧按 `type` 过滤（消费方逐条切）')
+  console.log('  · ⚠ 本表读的是**历史数据**：代码侧修复（信封/判别字段）只对**之后**的写入生效 —— 故"需改造"计数会随新数据自然下降，不是没修。')
+  process.exit(0)
+}
+
+const files = [
+  ...(existsSync(SRC) ? readdirSync(SRC).filter((f) => f.endsWith('.ts')).map((f) => join(SRC, f)) : []),
+  ...(existsSync(SCRIPTS) ? readdirSync(SCRIPTS).filter((f) => f.endsWith('.mjs')).map((f) => join(SCRIPTS, f)) : []),
+]
+const seen = new Map() // 流名 → 引用它的文件数（全部）
+const seenInSrc = new Map() // 仅 src/**（**运行时**写出的流）
+for (const p of files) {
+  const isSrc = p.startsWith(SRC)
+  for (const s of streamsIn(readFileSync(p, 'utf8'))) {
+    seen.set(s, (seen.get(s) ?? 0) + 1)
+    if (isSrc) seenInSrc.set(s, (seenInSrc.get(s) ?? 0) + 1)
+  }
+}
+
+const registered = new Set(STREAMS.map(([n]) => n))
+// **棘轮只数 `event` 且 `suite` 域**（2026-09-13 补域口径）：bank 域与 suite 台账**分域**，跨域并入是语义错误；
+//   状态表是投影，不参与该目标。三族各自打印，便于人核（也防"数字好看"）。
+const eventStreams = STREAMS.filter(([, k, , d]) => k === 'event' && d === 'suite')
+const keyedLogs = STREAMS.filter(([, k]) => k === 'keyed')
+const bankEvents = STREAMS.filter(([, k, , d]) => k === 'event' && d === 'bank')
+const stateTables = STREAMS.filter(([, k]) => k === 'state')
+let bad = 0
+console.log('观测流注册表 · 目标：**suite 域「事件流」→ 1**（事件＝读侧逐条语义；键控/库域/状态表各自成族）')
+for (const [name, kind, why, domain] of STREAMS) {
+  const refs = seen.get(name) ?? 0
+  const stale = refs === 0
+  const tag = kind === 'event' ? (domain === 'suite' ? '事件·suite' : '事件·bank ') : kind === 'keyed' ? '键控·suite' : '状态表  '
+  if (stale) console.log(`  ⚠ [${tag}] ${name.padEnd(28)} 注册但源码中查不到（陈旧登记，应清理或改名）· ${why}`)
+  else console.log(`  · [${tag}] ${name.padEnd(28)} 引用 ${refs} 处 · ${why}`)
+}
+
+// **口径分档（2026-09-13 实证修正）**：观测流的定义是「**运行时（src）写出**的 append-only 流」。
+//   `scripts/` 里的 `.jsonl` 字面量多为**消费者**或**测试夹具**（实测：本门首版把测试夹具 `wm.jsonl`
+//   判成"未登记观测流" —— 门禁没错，但口径过宽）。故：
+//     · src 出现未登记流 ⇒ **FAIL**（运行时新增观测面，必须登记）；
+//     · scripts 出现未登记流 ⇒ 只报 ⚠（消费/夹具，不判红）。
+const unlisted = [...seenInSrc.keys()].filter((n) => !registered.has(n) && !EXEMPT.has(n)).sort()
+const unlistedScripts = [...seen.keys()].filter((n) => !registered.has(n) && !EXEMPT.has(n) && !seenInSrc.has(n)).sort()
+const exempted = [...seen.keys()].filter((n) => EXEMPT.has(n)).sort()
+for (const n of unlisted) { bad++; console.log(`  ❌ 未登记的观测流（src 运行时写出）：${n}（新增观测流须在 STREAMS 登记并说明为何不能并入单一事件源）`) }
+for (const n of unlistedScripts) console.log(`  · ⚠ scripts 引用了未登记名：${n}（消费/夹具；非运行时流，不判红——若确为运行时写出，请移入 src 并登记）`)
+for (const n of exempted) console.log(`  · 豁免 ${n.padEnd(24)} —— ${EXEMPT.get(n)}`)
+
+// **legacy 流引用清单棘轮**（2026-09-13 立）：
+//   动机（**实证**）：DS4 第六刀改落点后，`test-event-envelope` 仍读 legacy `distill-audit.jsonl`
+//   ⇒ **ENOENT 崩了才暴露**。"改了落点、忘了消费方"这一整类问题当时只能靠崩来发现。
+//   本段：把**谁还在引用已并入的 legacy 文件**列出来，并要求引用集合 ⊆ **显式白名单**（新增引用即 FAIL）。
+//   白名单须写明理由（多为"双源读的那一处实现"与"写入侧的历史路径常量"）。
+const LEGACY_REF_ALLOW = new Map([
+  // 自身：注册表必须写出流名 ⇒ 恒允
+  ['score-shadow.jsonl', ['scripts/check-observability.mjs', 'scripts/memory-reconcile.mjs', 'src/panel-arch.ts' /* 面板仅展示该 legacy 流是否存在，不读内容 */, 'scripts/ui-geo-regress.mjs' /* 夹具模拟端点返回的 legacy 清单，不读文件 */]], // memory-reconcile：双源读（历史不丢）
+  ['activation-shadow.jsonl', ['scripts/check-observability.mjs', 'src/panel-arch.ts' /* 面板仅展示该 legacy 流是否存在，不读内容 */, 'scripts/ui-geo-regress.mjs' /* 夹具模拟端点返回的 legacy 清单，不读文件 */]], // 仅注册表；已无其它读取者
+  ['stub.jsonl', ['scripts/check-observability.mjs', 'scripts/test-event-envelope.mjs', 'src/panel-arch.ts' /* 面板仅展示该 legacy 流是否存在，不读内容 */, 'scripts/ui-geo-regress.mjs' /* 夹具模拟端点返回的 legacy 清单，不读文件 */]], // 测试夹具路径
+  ['episodes.jsonl', ['scripts/check-observability.mjs', 'scripts/test-event-envelope.mjs', 'src/panel-arch.ts' /* 面板仅展示该 legacy 流是否存在，不读内容 */, 'scripts/ui-geo-regress.mjs' /* 夹具模拟端点返回的 legacy 清单，不读文件 */, 'scripts/migrate-episodes.mjs' /* P5（2026-09-14）**一次性迁移器**：把孤儿情景数据迁成 episode 记录；**只读**该 legacy 流、不写它，迁完即失效（原文件保留留档） */]], // 测试夹具路径
+  ['mcl-audit.jsonl', [
+    'scripts/check-observability.mjs',
+    'scripts/mcl-calibrate.mjs', // 双源读（标定）
+    'scripts/mcl-compliance.mjs', // 双源读（合规率）
+    'scripts/recall-diagnose.mjs', // S4-6′（2026-09-14）双源读（零命中归因；与 mcl-calibrate 同口径：legacy ∪ 台账）
+    'scripts/test-mcl.mjs', // 场景 N：断言默认钩子**不再**写 legacy
+    'src/panel-observe.ts', // mclAuditRecent：双源读
+  , 'src/panel-arch.ts' /* 面板仅展示该 legacy 流是否存在，不读内容 */, 'scripts/ui-geo-regress.mjs' /* 夹具模拟端点返回的 legacy 清单，不读文件 */]],
+  ['distill-audit.jsonl', [
+    'scripts/check-observability.mjs',
+    'scripts/memory-reconcile.mjs', // 双源读
+    'scripts/test-event-envelope.mjs', // 夹具路径常量
+    'src/distill-paths.ts', // **写入侧的 legacy 路径常量**（读侧以它为锚推导台账路径）
+    'src/panel-memory.ts', // 双源读（蒸馏统计/成长/周 diff）
+    'src/panel-observe.ts', // 双源读（深睡明细）
+  , 'src/panel-arch.ts' /* 面板仅展示该 legacy 流是否存在，不读内容 */, 'scripts/ui-geo-regress.mjs' /* 夹具模拟端点返回的 legacy 清单，不读文件 */]],
+  ['judgement-ledger.jsonl', [
+    'scripts/check-observability.mjs',
+    'scripts/criteria-audit.mjs', // v2.1 前的兼容读
+    'scripts/criteria-report.mjs', // 同上
+    'scripts/memory-reconcile.mjs', // 同上
+    'src/panel-observe.ts', // 同上（台账优先、legacy 兜底）
+  , 'src/panel-arch.ts' /* 面板仅展示该 legacy 流是否存在，不读内容 */, 'scripts/ui-geo-regress.mjs' /* 夹具模拟端点返回的 legacy 清单，不读文件 */]],
+])
+{
+  const refsOf = new Map()
+  for (const p of files) {
+    const text = stripComments(readFileSync(p, 'utf8'))
+    for (const name of LEGACY_REF_ALLOW.keys()) if (text.includes(name)) {
+      const arr = refsOf.get(name) || []
+      arr.push(p.split(/[\\/]/).slice(-2).join('/'))
+      refsOf.set(name, arr)
+    }
+  }
+  console.log('legacy 流引用清单（棘轮：新增引用即 FAIL）')
+  for (const [name, allow] of LEGACY_REF_ALLOW) {
+    const refs = (refsOf.get(name) || []).sort()
+    const extra = refs.filter((r) => !allow.includes(r))
+    if (extra.length) { bad++; console.log(`  ❌ ${name} 出现**未登记引用**：${extra.join(' · ')}（若确为双源读/写入侧常量，请加入 LEGACY_REF_ALLOW 并写明理由）`) }
+    else if (refs.length) console.log(`  · ${name} ← ${refs.join(' · ')}`)
+    else console.log(`  · ${name} ← （无引用）`)
+    // 过期白名单项（引用了但已不再出现）也提示，防白名单腐化
+    const stale = allow.filter((a) => !refs.includes(a))
+    if (stale.length) console.log(`    ⚠ 白名单过期项（已无引用）：${stale.join(' · ')}`)
+  }
+}
+
+//   曾在 **6 处 / 5 个模块**出现（distill-infra ×4 · mcl · deepsleep-tree · treeops ×2 · vec）——
+//   而它的展开顺序允许调用方用 `at: undefined` 覆盖注入值，`JSON.stringify` 又**静默丢弃** undefined 键
+//   ⇒ 行里没有 `at`（实测 `distill-audit` 930 行里 1 行如此）。现全部收敛到 `src/event-envelope.ts`；
+//   本断言把「源码中不再出现原始写法」钉住（**复现即 FAIL**）。
+{
+  const raw = files.filter((p) => /JSON\.stringify\(\{\s*at: new Date\(\)\.toISOString\(\),\s*\.\.\./.test(stripComments(readFileSync(p, 'utf8'))))
+  if (raw.length) { bad++; console.log(`  ❌ 原始信封写法复现于 ${raw.length} 个文件：${raw.map((p) => p.split(/[\\/]/).pop()).join(', ')}（应统一走 src/event-envelope.ts 的 envelopeEvent）`) }
+  else console.log('  ✅ 统一事件信封为**单一实现**（源码中无原始 `{ at, ...o }` 写法）')
+}
+
+// 2026-09-14（P7 · 治 D2）：**审计行必须显式标明阶段**。
+//   动机（实证）：`mcl-step` 的 4 个审计站点里，注入阶段带 `injected`、而**合规阶段的 3 处不带任何体量字段**。
+//   下游分析用 `Number(r.injected) > 0` 判断"是否注入"时，`undefined` 被**静默强转为 0** ⇒
+//   实测把 25 条「材料确实在场、只是本步在审合规」的行误读成「零注入」，进而推出
+//   「约一半 turn 首步零材料」这个**完全错误的结论**（真实参与率 130/158 = 82.3%）。
+//   ⇒ 字段缺失不得再被读成零：每条 mcl-step 必须自带 `phase`（inject|compliance）。
+{
+  const src = stripComments(readFileSync(new URL('../src/mcl.ts', import.meta.url), 'utf8'))
+  const parts = src.split("kind: 'mcl-step'").slice(1)
+  const noPhase = parts.filter((chunk) => !/phase:/.test(chunk.slice(0, 300)))
+  if (noPhase.length) { bad++; console.log(`  ❌ mcl-step 审计行缺 phase（${noPhase.length}/${parts.length} 处）——字段缺失会被下游读成「零」，实测已致一次错误结论`) }
+  else console.log(`  ✅ mcl-step 审计行全部带 phase（${parts.length} 处：inject|compliance —— 阶段显式，杜绝「字段缺失 = 零」的误读）`)
+}
+
+// 2026-09-14（P7 · 治 D8/C2）：**「没跑」不得报成「通过」**。
+//   动机（实证）：`sleep-selfcheck` 的裁决原为 `failed.length ? 'warn' : (adjustments.length ? 'adjust' : 'ok')`
+//   —— **完全忽略 `skipped`**。而库侧三项需 `--repo`、不传时**恒跳过**，`shadow` 在库内布局下恒 exit 3 跳过
+//   ⇒ 实测「跑了 2 项且都过」与「六项全绿」都报 `ok`（`ledger.jsonl` 里 107 行 `check.sleep` 全 `ok`）。
+//   该缺陷早在 `deliverables/engineering-assurance/inject-recall-chain-2026-09-11.md` 第 9 项被记为
+//   「verdict:\"ok\" 与缺陷并存 ⇒ 该 verdict 未反映链路健康」，记录后长期未修。
+//   ⇒ 本断言钉住：裁决表达式**必须显式引用 `skipped`**（引入 `partial`），且必须输出 `coverage`。
+{
+  const sc = stripComments(readFileSync(new URL('../scripts/sleep-selfcheck.mjs', import.meta.url), 'utf8'))
+  const verdictLine = (sc.match(/const verdict = [^\n]*/) || [''])[0]
+  const hasSkipped = /skipped\.length/.test(verdictLine)
+  const hasPartial = /'partial'/.test(verdictLine)
+  const hasCoverage = /coverage:\s*\{/.test(sc)
+  if (!hasSkipped || !hasPartial || !hasCoverage) {
+    bad++
+    console.log(`  ❌ sleep-selfcheck 裁决未反映「未跑」：skipped=${hasSkipped} partial=${hasPartial} coverage=${hasCoverage} ⇒ 「没跑」会被读成「通过」（已记录三周未修的已知缺陷）`)
+  } else {
+    console.log('  ✅ sleep-selfcheck 裁决**区分「未跑」**（`partial` = 有跳过且无失败）+ 输出 `coverage`（verdict=ok 只在 ran===total 时可信）')
+  }
+}
+
+// 棘轮只对**事件流**计数（状态表是投影，不参与"合并为单一事件源"的目标）；两个数都打印，便于人核。
+const cur = eventStreams.length
+if (cur > BASELINE) { bad++; console.log(`\n❌ 事件流 ${cur} > 基线 ${BASELINE}（新增事件流须说明为何不能并入 ledger）`) }
+else if (cur < BASELINE) console.log(`\n⚠ suite 域事件流 ${cur} < 基线 ${BASELINE} —— **请把基线收紧到 ${cur}**（合并后必须降基线）`)
+else if (cur === 1) console.log(`\n✅ **suite 域事件流 ${cur} = 1（DS4 目标达成：单一事件源）** · 键控日志 ${keyedLogs.length}（读侧键控语义，不并入）· 库域事件流 ${bankEvents.length}（分域自持）· 状态表/投影 ${stateTables.length}`)
+else console.log(`\n✅ suite 域事件流 ${cur}（= 基线；目标 1）· 键控日志 ${keyedLogs.length} · 库域事件流 ${bankEvents.length} · 状态表/投影 ${stateTables.length}`)
+
+if (bad) { console.log(`\nFAIL（${bad} 项）`); process.exit(1) }
+console.log('PASS（观测流已登记 · 未新增未登记流）')

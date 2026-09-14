@@ -1,0 +1,320 @@
+#!/usr/bin/env node
+// audit-architecture.mjs — 源码架构审计（依赖方向 / 循环依赖 / 接口宽度 / 扇入扇出 / 可变全局）
+//
+// ⚠ **口径（必须声明，否则与其他审计件打架——实测曾因 61 vs 60 争论半天而实为口径差异）**：
+//   **含生成物**——本件扫描 `src/` 下全部 `.ts`（**包含** `criteria.generated.ts`）。
+//   对照：`audit-fnspan.mjs` **排除** `*.generated.*` ⇒ 两者模块数会差 1（那是口径，不是漂移）。
+//   本声明由 `scripts/check-arch-sync.mjs` 的 ⑤ 断言守。
+//
+// 与既有件的分工（**不要重复造轮子**）：
+//   · test-layering.mjs 测的是「记忆成熟度分层」，与代码架构无关；
+//   · check-srcmap.mjs 查 src↔lib 的**导出符号漂移**，查的是构建产物一致性，不是依赖方向；
+//   · 本件是唯一做**模块依赖图结构分析**的工具：环、分层深度、扇入扇出、接口宽度、可变全局。
+//
+// 判据来源：稳定依赖原则（SDP，依赖应指向更稳定的方向）+ 稳定抽象原则（SAP）。
+//   本件只报**客观可测的结构事实**，不下"好坏"的价值判断——阈值在 --gate 下才生效，且阈值可调。
+//
+// 用法: node scripts/audit-architecture.mjs [--json] [--gate] [--dir <相对仓根目录，默认 src>]
+//   --gate 退出码：0 = 未超阈值；1 = 超阈值（CI 用）。默认（无 --gate）= 报告态，恒 exit 0。
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { join, dirname, extname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+const AS_JSON = process.argv.includes('--json')
+const AS_GATE = process.argv.includes('--gate')
+const dirArg = process.argv.indexOf('--dir')
+const REL = dirArg >= 0 ? process.argv[dirArg + 1] : 'src'
+// 支持绝对 --dir：反向证伪时对 tmp 里的**变异副本**跑，避免把 src 临时改成缺陷态（本仓已栽过）。
+const DIR = /^[A-Za-z]:[\\/]|^[\\/]/.test(REL) ? REL : join(root, REL)
+
+function listFiles(dir) {
+  const out = []
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, e.name)
+    if (e.isDirectory()) out.push(...listFiles(p))
+    else if (['.ts', '.mjs', '.js'].includes(extname(e.name)) && !e.name.endsWith('.d.ts')) out.push(p)
+  }
+  return out
+}
+
+const files = listFiles(DIR)
+const mods = new Map() // name -> { file, src, lines, bytes }
+
+// ⚠ 解析前**必须先剥注释**（本仓第三次踩到「注释被正则护栏当成代码」：
+//   check-ui-contract 递归防护、AST 闸骨架化都栽过）。
+//   实测误报：deepsleep.ts 的头注释里写了「不要 import './distill.js'」，
+//   未剥注释时这句**注释**被当成真 import ⇒ 凭空报出 distill↔deepsleep 循环依赖。
+//   只剥「行首注释」与块注释，用等长空格替换以保留偏移；**不动**行内的 `//`（避免误伤 URL、正则字面量）。
+const stripComments = (s) => s
+  .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+  .replace(/^[ \t]*\/\/[^\n]*/gm, (m) => m.replace(/[^\n]/g, ' '))
+
+for (const f of files) {
+  const src = readFileSync(f, 'utf8')
+  const name = f.slice(DIR.length + 1).replace(/\.(ts|mjs|js)$/, '').replace(/\\/g, '/')
+  mods.set(name, { file: f, src, code: stripComments(src), lines: src.split('\n').length, bytes: Buffer.byteLength(src) })
+}
+
+function resolveImport(from, spec) {
+  if (!spec.startsWith('.')) return null
+  const base = from.slice(0, from.lastIndexOf('/') + 1) + spec
+  const seg = []
+  for (const part of base.split('/')) {
+    if (part === '.' || part === '') continue
+    if (part === '..') seg.pop()
+    else seg.push(part)
+  }
+  return seg.join('/')
+}
+
+const edges = [] // { from, to, kind }  kind: value | type | dynamic
+
+for (const [name, m] of mods) {
+  const re = /import\s+(type\s+)?(?:[\s\S]*?\sfrom\s+)?['"](\.[^'"]+)['"]|import\s*\(\s*['"](\.[^'"]+)['"]\s*\)/g
+  let mt
+  while ((mt = re.exec(m.code))) {
+    const spec = mt[2] || mt[3]
+    if (!spec) continue
+    const to = resolveImport(name, spec.replace(/\.(ts|mjs|js)$/, ''))
+    if (!to || !mods.has(to) || to === name) continue
+    const isDyn = !!mt[3]
+    const isType = !!mt[1] || /\bimport\s+type\b/.test(mt[0])
+    edges.push({ from: name, to, kind: isDyn ? 'dynamic' : (isType ? 'type' : 'value') })
+  }
+}
+
+// ── 环检测（简单环DFS；区分「静态环」与「含动态边的环」）──
+const adj = new Map([...mods.keys()].map(k => [k, []]))
+for (const e of edges) adj.get(e.from).push(e)
+
+function findCycles(edgeKinds) {
+  const cycles = []
+  const seen = new Set()
+  const stack = []
+  const onStack = new Set()
+  const dfs = (n) => {
+    stack.push(n); onStack.add(n)
+    for (const e of adj.get(n)) {
+      if (!edgeKinds.includes(e.kind)) continue
+      if (onStack.has(e.to)) {
+        const idx = stack.indexOf(e.to)
+        const cyc = stack.slice(idx)
+        const key = [...cyc].sort().join('>')
+        if (!seen.has(key)) { seen.add(key); cycles.push(cyc.concat(e.to)) }
+      } else if (!seen.has(n + '>' + e.to)) dfs(e.to)
+    }
+    stack.pop(); onStack.delete(n)
+  }
+  for (const k of mods.keys()) dfs(k)
+  return cycles
+}
+
+const staticCycles = findCycles(['value', 'type'])
+const allCycles = findCycles(['value', 'type', 'dynamic'])
+const dynOnlyCycles = allCycles.filter(c => !staticCycles.some(s => s.join('>') === c.join('>')))
+
+// ── 拓扑分层（只看 value+type 静态边）──
+const indeg = new Map([...mods.keys()].map(k => [k, 0]))
+for (const e of edges) if (e.kind !== 'dynamic') indeg.set(e.to, indeg.get(e.to) + 1)
+const level = new Map()
+const q = [...mods.keys()].filter(k => indeg.get(k) === 0)
+for (const k of q) level.set(k, 0)
+const order = []
+while (q.length) {
+  const n = q.shift(); order.push(n)
+  for (const e of adj.get(n)) {
+    if (e.kind === 'dynamic') continue
+    level.set(e.to, Math.max(level.get(e.to) ?? 0, (level.get(n) ?? 0) + 1))
+    indeg.set(e.to, indeg.get(e.to) - 1)
+    if (indeg.get(e.to) === 0) q.push(e.to)
+  }
+}
+const topoOk = order.length === mods.size
+
+// ── 运行时分层（只算 value + dynamic 边，**排除 type-only**）──
+// 为什么必须与静态分层并存：type 导入编译期即擦除、**不产生运行时耦合**，
+//   把它计入分层会得到自相矛盾的结果——本轮实测 `distill-hooks` 运行时扇出为 **0**（谁都不 import），
+//   却被排到第 6 层（只因它 `import type { AgentApi }`）。这类「零运行时依赖却排在高位」的伪深度
+//   会让深度指标失真，进而逼出**为指标而改架构**的反向激励。
+//   ⇒ 门禁按**运行时深度**判（真正的变更传播链），静态深度照常打印供人工看。
+const indegR = new Map([...mods.keys()].map((k) => [k, 0]))
+for (const e of edges) if (e.kind === 'value' || e.kind === 'dynamic') indegR.set(e.to, indegR.get(e.to) + 1)
+const levelR = new Map()
+const qR = [...mods.keys()].filter((k) => indegR.get(k) === 0)
+for (const k of qR) levelR.set(k, 0)
+let orderR = 0
+while (qR.length) {
+  const n = qR.shift(); orderR++
+  for (const e of adj.get(n)) {
+    if (e.kind === 'type') continue
+    levelR.set(e.to, Math.max(levelR.get(e.to) ?? 0, (levelR.get(n) ?? 0) + 1))
+    indegR.set(e.to, indegR.get(e.to) - 1)
+    if (indegR.get(e.to) === 0) qR.push(e.to)
+  }
+}
+const topoOkR = orderR === mods.size
+const rawMaxR = topoOkR ? Math.max(0, ...levelR.values()) : -1
+
+// ── 扇入扇出 / 接口宽度 / 可变全局 ──
+const fanIn = new Map(), fanOut = new Map()
+for (const k of mods.keys()) { fanIn.set(k, 0); fanOut.set(k, 0) }
+for (const e of edges) {
+  if (e.kind === 'type') continue // type-only 不产生运行时耦合，扇入扇出按值边计
+  fanOut.set(e.from, fanOut.get(e.from) + 1)
+  fanIn.set(e.to, fanIn.get(e.to) + 1)
+}
+
+const exportsOf = (m) => {
+  const src = m.code
+  const names = new Set()
+  const re = /^export\s+(?:declare\s+)?(?:async\s+)?(?:function|const|let|var|class|interface|type|enum)\s+([A-Za-z0-9_$]+)/gm
+  let mt; while ((mt = re.exec(src))) names.add(mt[1])
+  const reBrace = /^export\s*\{([^}]*)\}/gm
+  while ((mt = reBrace.exec(src))) for (const p of mt[1].split(',')) { const n = p.trim().split(/\s+as\s+/).pop().trim(); if (n) names.add(n) }
+  if (/^export\s+default\b/m.test(src)) names.add('default')
+  return [...names]
+}
+
+// 「转发」= re-export（`export * from` / `export { A, B } from`）。
+// 为什么要单独计：2026-09-12 深睡判据层迁出后，distill.ts 用 `export * from './deepsleep-core.js'`
+//   保持 API 兼容 —— 它自身只剩 8 个导出，却对外**转发**了 24 个。只数自身导出会让「接口宽度」
+//   这个指标失真（看起来从 30 降到 8，实际对外面还是 32）。
+//   ⇒ 转发也是对外承诺，必须计入，且应逐步消除（每消一个转发，就是少一个跨模块的隐式耦合）。
+const reexportOf = (m, name) => {
+  let n = 0
+  const reStar = /^export\s+\*\s*from\s*['"](\.[^'"]+)['"]/gm
+  let mt
+  while ((mt = reStar.exec(m.code))) {
+    const to = resolveImport(name, mt[1].replace(/\.(ts|mjs|js)$/, ''))
+    const t = mods.get(to)
+    n += t ? exportsOf(t).length : 0
+  }
+  const reBrace = /^export\s*\{([^}]*)\}\s*from/gm
+  while ((mt = reBrace.exec(m.code))) n += mt[1].split(',').filter((x) => x.trim()).length
+  return n
+}
+
+const mutableOf = (m) => {
+  const out = []
+  const re = /^(?:export\s+)?let\s+([A-Za-z0-9_$]+)/gm
+  let mt; while ((mt = re.exec(m.code))) out.push({ name: mt[1], kind: 'let' })
+  const re2 = /^(?:export\s+)?const\s+([A-Za-z0-9_$]+)\s*(?::[^=]+)?=\s*new\s+(Map|Set)\s*\(/gm
+  while ((mt = re2.exec(m.code))) out.push({ name: mt[1], kind: mt[2] })
+  return out
+}
+
+// 拓扑层级是「入度=0 者为 0」，即 index 在最上层；**倒过来**显示才符合直觉：L0 = 最底层（无人依赖的叶）。
+const rawMax = topoOk ? Math.max(0, ...level.values()) : -1
+
+const rows = [...mods.entries()].map(([name, m]) => ({
+  name, lines: m.lines, bytes: m.bytes,
+  level: topoOk ? rawMax - (level.get(name) ?? 0) : null,
+  fanIn: fanIn.get(name), fanOut: fanOut.get(name),
+  exports: exportsOf(m).length,
+  reexports: reexportOf(m, name),
+  mutable: mutableOf(m).length,
+})).sort((a, b) => (a.level ?? 99) - (b.level ?? 99) || b.lines - a.lines)
+
+const totalLines = rows.reduce((s, r) => s + r.lines, 0)
+const maxLevel = rawMaxR // 门禁用**运行时深度**（见上：type 边不计）
+
+// ── 阈值（--gate 用）──  ⚠ 棘轮（ratchet）：**只许收紧，不许放松**
+// 取值依据=当前实测值 + 少量余量，目的不是「评判好坏」而是**锁住现状防恶化**：
+// 今天 distill 3512 行 / targets 33 导出 / 最高扇入 6 / 零环 / 深度 7，全部在阈值内 ⇒ 不制造永久红灯。
+// 永久红灯的代价所有人都懂：人人学会无视它，等于把假绿换成假红（本仓 G-22 的教训）。
+// 想真正变好 ⇒ 重构后**下调**阈值；想放宽 ⇒ 必须显式说明为什么，且要能指出对应重构计划。
+// 棘轮回退记录（只进不退）：3600 →（P1 一期：distill 3512→3149）→ 3200
+//                          →（P1 二期：distill 3149→1750，深睡主体迁为 deepsleep.ts 1519）→ 2000
+const T = { lines: 2000, exports: 35, reexports: 30, fanIn: 8, instability: 0.3, cycles: 0, depth: 10 }
+const breaches = []
+for (const r of rows) {
+  if (r.lines > T.lines) breaches.push(`${r.name} 行数 ${r.lines} > ${T.lines}`)
+  if (r.exports > T.exports) breaches.push(`${r.name} 导出 ${r.exports} 个 > ${T.exports}`)
+  if (r.reexports > T.reexports) breaches.push(`${r.name} 转发 ${r.reexports} 个 > ${T.reexports}（过渡 re-export 应逐步消除）`)
+  // ⚠ 扇入门禁**不适用**于依赖极少的稳定源（fan-out ≤ 1，本项目是 criteria.generated 与 targets）：
+  //   targets 只依赖 criteria.generated 一个更稳定的件 ⇒ 它俩一起构成依赖图的**底部两层**，
+  //   谁也改不动它们 ⇒ 被 9–10 个模块依赖是分层设计的必然结果，不是耦合风险。
+  //   SDP 说的正是「依赖要指向稳定件」，扇出 0 = 谁也改不动它 = 最稳定 ⇒ 被很多模块依赖是**设计意图**，
+  //   不是耦合风险。真正的风险是**高层模块**（扇出 > 0 且自己会变）被过多模块直接依赖。
+  //   （2026-09-12 阶段 B 实测：深睡拆成 6 个领域模块后 criteria.generated 扇入 8→9 触发本条，
+  //    而它恰恰是全仓唯一的 L0 稳定件 —— 这是门禁的**假阳**，按 SDP 收窄口径而不是放阈值。）
+  // 扇入阈值**单独用会误判稳定核心件**（vec 扇入 9 但扇出只有 3 ⇒ 谁也改不动它）。
+  //   SDP 的正确度量是**不稳定度 I = Ce / (Ce + Ca)**（Ce=扇出，Ca=扇入）：
+  //   I 越小越稳定，"很多模块依赖它"就越是**应该**的。故改为**联合判据**：
+  //     扇入 > 8 **且** I > 0.3（既不稳定的高扇入 ⇒ 真·耦合风险）才判违规。
+  //   两个阈值都没放松：扇入硬阈值仍是 8，只是不再单独定罪。
+  const instability = r.fanOut / (r.fanOut + r.fanIn)
+  if (r.fanIn > T.fanIn && instability > T.instability) {
+    breaches.push(`${r.name} 扇入 ${r.fanIn} > ${T.fanIn} 且不稳定度 ${instability.toFixed(2)} > ${T.instability}（高扇入 + 自身不稳定 = 耦合风险）`)
+  }
+}
+// ── 接线门（2026-09-14 · P0a）──
+// 为什么需要它：本仓 7 件架构机检**全是负面约束**（无环 / 无桥 / 行数 / 依赖宽度 / 符号漂移），
+//   没有一道问「这个模块有没有人在用」。实测后果：supply-assembly 与 record-address 功能完整、
+//   结构合法、单测全绿，但 **src/ 内零消费者**（唯一消费者是离线 CLI 与单测）—— 而本件**早已算出扇入**，
+//   只是只打印不判定。本门把「扇入 0」从一行读数变成断言。
+// **两件均已结清（2026-09-14）**：`supply-assembly` 接线（P0a）；`record-address` 判定为死件并**删除**
+//   （它服务的 `storeMode='record'` 档被 schema 明确拒收）⇒ 注册表 `wiring.pending` **现为零豁免**，
+//   即本门的**最紧状态**（棘轮只许收紧）。
+// 判据来源 = 注册表 `criteria.json#wiring`（唯一事实源）；豁免与申报都写在那里，**不在本脚本里另立名单**。
+// ⚠ 只在默认 `src` 目录下判：`--dir <tmp>` 是给「变异副本反向证伪」用的，那边的模块名与申报表不对应。
+if (REL === 'src') {
+  let WIRING = { entryOk: [], typeOnlyOk: [], pending: [] }
+  try {
+    const gen = await import(new URL('../lib/criteria.generated.js', import.meta.url).href)
+    if (gen.WIRING) WIRING = gen.WIRING
+  } catch (e) {
+    breaches.push(`接线门无法读注册表投影（lib/criteria.generated.js）：${String(e).slice(0, 120)} ⇒ 先 npm run build:host`)
+  }
+  const decl = new Map((WIRING.pending ?? []).map((p) => [p.name, p]))
+  const exempt = new Set([...(WIRING.entryOk ?? []), ...(WIRING.typeOnlyOk ?? [])])
+  const zeroFanIn = rows.filter((r) => r.fanIn === 0 && !r.name.includes('/'))
+  for (const r of zeroFanIn) {
+    if (exempt.has(r.name) || decl.has(r.name)) continue
+    breaches.push(`接线：${r.name} 扇入 0（src/ 内无运行时消费者）且未申报 —— 接线，或在 criteria.json#wiring.pending 显式申报（带 until）`)
+  }
+  // 棘轮：已接线却仍申报 ⇒ 申报表不得永不清空
+  for (const [name, p] of decl) {
+    const row = rows.find((r) => r.name === name)
+    if (!row) { breaches.push(`接线：wiring.pending 申报了不存在的模块 ${name}（与 src 漂移）`); continue }
+    if (row.fanIn > 0) breaches.push(`接线：${name} 已接线（扇入 ${row.fanIn}）却仍申报 pending ⇒ 从 wiring.pending 删除（棘轮）`)
+    if (!p.until) breaches.push(`接线：${name} 申报缺 until（无到期条件 = 永久豁免）`)
+  }
+}
+
+if (staticCycles.length) breaches.push(`静态循环依赖 ${staticCycles.length} 处: ` + staticCycles.map(c => c.join('→')).join(' | '))
+if (dynOnlyCycles.length) breaches.push(`动态边隐藏环 ${dynOnlyCycles.length} 处（编译期不可见）: ` + dynOnlyCycles.map(c => c.join('→')).join(' | '))
+if (topoOk && maxLevel > T.depth) breaches.push(`运行时分层深度 ${maxLevel + 1} > ${T.depth}（静态 ${rawMax + 1}）`)
+
+const report = {
+  dir: REL, files: mods.size, totalLines,
+  topoOk, depth: topoOk ? maxLevel + 1 : null,
+  staticCycles, dynOnlyCycles,
+  rows, thresholds: T, breaches,
+}
+
+if (AS_JSON) { console.log(JSON.stringify(report, null, 2)) }
+else {
+  console.log(`架构审计 · ${REL}/ · ${mods.size} 模块 · ${totalLines} 行 · 运行时深度 ${topoOk ? maxLevel + 1 : 'N/A(有环)'} · 静态深度 ${topoOk ? rawMax + 1 : 'N/A'}`)
+  console.log('─'.repeat(78))
+  console.log('层级  模块                              行数   扇入 扇出  导出  转发  可变全局')
+  for (const r of rows) {
+    const lv = topoOk ? `L${r.level}` : ' ??'
+    console.log(`${lv.padEnd(5)} ${r.name.padEnd(32)} ${String(r.lines).padStart(6)} ${String(r.fanIn).padStart(5)} ${String(r.fanOut).padStart(4)} ${String(r.exports).padStart(5)} ${String(r.reexports).padStart(5)} ${String(r.mutable).padStart(7)}`)
+  }
+  console.log('─'.repeat(78))
+  console.log(`静态循环依赖: ${staticCycles.length}` + (staticCycles.length ? ' :: ' + staticCycles.map(c => c.join('→')).join(' | ') : ''))
+  console.log(`动态边隐藏环: ${dynOnlyCycles.length}` + (dynOnlyCycles.length ? ' :: ' + dynOnlyCycles.map(c => c.join('→')).join(' | ') : ''))
+  console.log(`扇入最高: ${rows.slice().sort((a, b) => b.fanIn - a.fanIn).slice(0, 3).map(r => `${r.name}(${r.fanIn})`).join(', ')}`)
+  console.log(`规模最大: ${rows.slice().sort((a, b) => b.lines - a.lines).slice(0, 3).map(r => `${r.name}(${r.lines})`).join(', ')}`)
+  if (AS_GATE) {
+    if (breaches.length) { console.log(`\n❌ 超阈值 ${breaches.length} 项：`); for (const b of breaches) console.log('   · ' + b) }
+    else console.log('\n✅ 全部在阈值内')
+  } else if (breaches.length) {
+    console.log(`\n⚠ gate 模式下会报 ${breaches.length} 项：`); for (const b of breaches) console.log('   · ' + b)
+  }
+}
+
+if (AS_GATE) process.exit(breaches.length ? 1 : 0)
+process.exit(0)

@@ -1,0 +1,218 @@
+{
+  "toggles": [
+    {
+      "pane": "cap",
+      "name": "分级策略连败上限 deepSleep.failPolicyMaxRounds",
+      "kind": "none"
+    },
+    {
+      "pane": "cap",
+      "name": "活性降级 warm 阈值 activityWarmDays",
+      "kind": "number"
+    },
+    {
+      "pane": "cap",
+      "name": "加深候选命中数 activityHotHits",
+      "kind": "number"
+    },
+    {
+      "pane": "cap",
+      "name": "深睡未消化策略 deepSleep.failPolicy",
+      "kind": "select"
+    },
+    {
+      "pane": "cap",
+      "name": "遗忘候选 archive 阈值 activityArchiveDays",
+      "kind": "number"
+    },
+    {
+      "pane": "cap",
+      "name": "遗忘冷降 cold 阈值 activityColdDays",
+      "kind": "number"
+    },
+    {
+      "pane": "cap",
+      "name": "召回冷条目降权 recallColdFactorPercent",
+      "kind": "number"
+    },
+    {
+      "pane": "cap",
+      "name": "AGENT.md 容量门 cap_agent",
+      "kind": "number"
+    },
+    {
+      "pane": "cap",
+      "name": "MEMORY.md 容量门 cap_memory",
+      "kind": "number"
+    },
+    {
+      "pane": "cap",
+      "name": "USER.md 容量门 cap_user",
+      "kind": "number"
+    },
+    {
+      "pane": "inject",
+      "name": "画像 persona 注入档位 injection.persona",
+      "kind": "slider"
+    },
+    {
+      "pane": "inject",
+      "name": "热记忆注入强度 injection.level",
+      "kind": "slider"
+    },
+    {
+      "pane": "inject",
+      "name": "新鲜度保底槽 injectFreshSlots",
+      "kind": "number"
+    },
+    {
+      "pane": "inject",
+      "name": "注入热记忆总闸 hot_memory",
+      "kind": "checkbox"
+    },
+    {
+      "pane": "inject",
+      "name": "注入相关性重排 injectRelevance",
+      "kind": "checkbox"
+    },
+    {
+      "pane": "model",
+      "name": "服务地址（OpenAI 兼容 /v1 根）",
+      "kind": "select"
+    },
+    {
+      "pane": "model",
+      "name": "深睡归纳模型",
+      "kind": "select"
+    },
+    {
+      "pane": "model",
+      "name": "向量缓存",
+      "kind": "none"
+    },
+    {
+      "pane": "model",
+      "name": "语义检索来源",
+      "kind": "button"
+    },
+    {
+      "pane": "model",
+      "name": "语义召回开关 embedEnabled",
+      "kind": "checkbox"
+    },
+    {
+      "pane": "model",
+      "name": "蒸馏模型",
+      "kind": "select"
+    },
+    {
+      "pane": "sched",
+      "name": "本轮最少字符 minTurnChars",
+      "kind": "number"
+    },
+    {
+      "pane": "sched",
+      "name": "材料预算 mclBudgetChars",
+      "kind": "number"
+    },
+    {
+      "pane": "sched",
+      "name": "记忆库 git 版本化 bankGit",
+      "kind": "checkbox"
+    },
+    {
+      "pane": "sched",
+      "name": "空闲唤醒 idleWakeMs",
+      "kind": "number"
+    },
+    {
+      "pane": "sched",
+      "name": "立即处理 pending 候选",
+      "kind": "button"
+    },
+    {
+      "pane": "sched",
+      "name": "零成本预筛 distillPrescan",
+      "kind": "checkbox"
+    },
+    {
+      "pane": "sched",
+      "name": "启用认知环 mclEnabled",
+      "kind": "checkbox"
+    },
+    {
+      "pane": "sched",
+      "name": "认知环审计流 mclAudit",
+      "kind": "checkbox"
+    },
+    {
+      "pane": "sched",
+      "name": "守藏蒸馏器 enableDistill",
+      "kind": "checkbox"
+    },
+    {
+      "pane": "sched",
+      "name": "熟悉度阈值 mclFamiliarThreshold",
+      "kind": "number"
+    },
+    {
+      "pane": "sched",
+      "name": "再引导上限 mclMaxNudges",
+      "kind": "number"
+    },
+    {
+      "pane": "sched",
+      "name": "召回融合策略 recallFusion",
+      "kind": "slider"
+    },
+    {
+      "pane": "sched",
+      "name": "指针条数 mclTopK",
+      "kind": "number"
+    }
+  ],
+  "memory": [
+    {
+      "pane": "archive",
+      "name": "归档区 notes/archive/",
+      "kind": "mem-group-title"
+    },
+    {
+      "pane": "growth",
+      "name": "本月成长 · 2026-09",
+      "kind": "mem-group-title"
+    },
+    {
+      "pane": "growth",
+      "name": "深睡归纳",
+      "kind": "mem-stat-label"
+    },
+    {
+      "pane": "growth",
+      "name": "蒸馏",
+      "kind": "mem-stat-label"
+    },
+    {
+      "pane": "growth",
+      "name": "AGENT 画像",
+      "kind": "mem-stat-label"
+    },
+    {
+      "pane": "index",
+      "name": "知识索引 MEMORY.md · 86 条",
+      "kind": "mem-group-title"
+    },
+    {
+      "pane": "notes",
+      "name": "notes 详情小节",
+      "kind": "mem-group-title"
+    },
+    {
+      "pane": "pending",
+      "name": "pending 候选队列 · 9 条",
+      "kind": "mem-group-title"
+    }
+  ],
+  "note": "面板视图契约基线（真机渲染快照）",
+  "at": "2026-09-13T18:31:46.528Z"
+}

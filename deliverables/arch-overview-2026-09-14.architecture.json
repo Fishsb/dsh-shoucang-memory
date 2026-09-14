@@ -1,0 +1,286 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "守藏 · 当前项目架构",
+    "output": "arch-overview-2026-09-14.html",
+    "quality_profile": "showcase",
+    "legend": {
+      "entries": {
+        "frontend": { "label": "前端" },
+        "backend": { "label": "后端" },
+        "database": { "label": "存储" },
+        "security": { "label": "安全" },
+        "external": { "label": "外部" }
+      }
+    },
+    "repository": {
+      "url": "https://github.com/Fishsb/dsh-shoucang-memory",
+      "revision": "4ea0d60760108c90e638c792bb2ac2a28e4fe0c0"
+    },
+    "viewBox": [1420, 700],
+    "views": [
+      {
+        "id": "learn",
+        "label": "学习闭环：会话 → 落库",
+        "focus": ["session", "scheduler", "distill", "gate", "memory"],
+        "note": "会话空闲触发蒸馏，LLM 子代理裁决，过白名单门禁才写回记忆库。"
+      },
+      {
+        "id": "reflect",
+        "label": "反思与召回：写回 → 再注入",
+        "focus": ["deepSleep", "memory", "supply", "session"],
+        "note": "深睡归纳画像写回，下一轮会话由注入装配按指针取回。"
+      },
+      {
+        "id": "ui",
+        "label": "面板链路：插槽 → RPC → 记忆库",
+        "focus": ["panelWeb", "panelRpc", "memory"],
+        "note": "侧栏／设置中心插槽进入前端，经契约化 RPC 读写记忆库与运行参数。"
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "session",
+      "type": "external",
+      "label": "会话与宿主",
+      "sublabel": "DSH session · systemPrompt",
+      "pos": [40, 330],
+      "size": [160, 68],
+      "sources": [{ "path": "src/index.ts", "line": 21, "label": "inject 依赖面" }]
+    },
+    {
+      "id": "scheduler",
+      "type": "backend",
+      "label": "scheduler 装配",
+      "sublabel": "空闲 10 分钟触发 · 5 个工具",
+      "tag": "事件驱动",
+      "pos": [270, 330],
+      "size": [160, 68],
+      "sources": [{ "path": "src/scheduler.ts" }]
+    },
+    {
+      "id": "distill",
+      "type": "backend",
+      "label": "蒸馏管线",
+      "sublabel": "信号预筛 → 分段 → 裁决",
+      "pos": [500, 330],
+      "size": [160, 68],
+      "sources": [
+        { "path": "src/distill.ts" },
+        { "path": "src/distill-llm.ts" }
+      ]
+    },
+    {
+      "id": "gate",
+      "type": "security",
+      "label": "白名单门禁",
+      "sublabel": "targets 单库路由",
+      "pos": [730, 330],
+      "size": [160, 68],
+      "sources": [{ "path": "src/targets.ts" }]
+    },
+    {
+      "id": "memory",
+      "type": "database",
+      "label": "记忆库 _memory",
+      "sublabel": "AGENT · USER · MEMORY + notes",
+      "pos": [960, 330],
+      "size": [160, 68],
+      "sources": [
+        { "path": "README.md", "line": 22, "end_line": 29, "label": "索引层与详情层" }
+      ]
+    },
+    {
+      "id": "llm",
+      "type": "external",
+      "label": "LLM 子代理",
+      "sublabel": "蒸馏裁决 · 深睡归纳",
+      "tag": "模型路由",
+      "pos": [500, 110],
+      "size": [160, 68],
+      "sources": [{ "path": "src/distill-llm.ts" }]
+    },
+    {
+      "id": "vec",
+      "type": "database",
+      "label": "向量档 + RRF",
+      "sublabel": "本地 bge-m3 语义候选",
+      "pos": [730, 110],
+      "size": [160, 68],
+      "sources": [{ "path": "src/vec.ts" }]
+    },
+    {
+      "id": "supply",
+      "type": "backend",
+      "label": "注入装配",
+      "sublabel": "索引热注入 · 指针召回",
+      "pos": [960, 110],
+      "size": [160, 68],
+      "sources": [
+        { "path": "src/supply-assembly.ts" },
+        { "path": "src/supply-ledger.ts" }
+      ]
+    },
+    {
+      "id": "panelWeb",
+      "type": "frontend",
+      "label": "设置面板前端",
+      "sublabel": "client.js · 侧栏／设置插槽",
+      "pos": [40, 550],
+      "size": [160, 68],
+      "sources": [
+        { "path": "src-client/entry.js" },
+        { "path": "client.js" }
+      ]
+    },
+    {
+      "id": "panelRpc",
+      "type": "backend",
+      "label": "panel 装配 · RPC",
+      "sublabel": "37 条路由 · 契约集中于一处",
+      "pos": [270, 550],
+      "size": [160, 68],
+      "sources": [
+        { "path": "src/panel-contract.ts" },
+        { "path": "src/panel-shared.ts", "line": 148, "label": "webServer.register" }
+      ]
+    },
+    {
+      "id": "deepSleep",
+      "type": "backend",
+      "label": "深睡归纳",
+      "sublabel": "五态状态机 · 停滞 3 小时",
+      "tag": "反思",
+      "pos": [1180, 550],
+      "size": [160, 68],
+      "sources": [
+        { "path": "src/deepsleep.ts" },
+        { "path": "src/deepsleep-machine.ts" }
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "session-to-scheduler",
+      "from": "session",
+      "to": "scheduler",
+      "label": "空闲触发",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "scheduler-to-distill",
+      "from": "scheduler",
+      "to": "distill",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "distill-to-gate",
+      "from": "distill",
+      "to": "gate",
+      "label": "候选条目",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "gate-to-memory",
+      "from": "gate",
+      "to": "memory",
+      "label": "过闸写入",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "distill-to-llm",
+      "from": "distill",
+      "to": "llm",
+      "label": "子代理裁决",
+      "variant": "dashed",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "memory-to-supply",
+      "from": "memory",
+      "to": "supply",
+      "label": "按指针取档",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "vec-to-supply",
+      "from": "vec",
+      "to": "supply",
+      "label": "语义候选",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "supply-to-session",
+      "from": "supply",
+      "to": "session",
+      "label": "注入提示词",
+      "variant": "dashed",
+      "fromSide": "top",
+      "toSide": "top",
+      "via": [[1040, 50], [120, 50]]
+    },
+    {
+      "id": "panelweb-to-panelrpc",
+      "from": "panelWeb",
+      "to": "panelRpc",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "panelrpc-to-memory",
+      "from": "panelRpc",
+      "to": "memory",
+      "label": "HTTP RPC · 浏览与编辑",
+      "fromSide": "right",
+      "toSide": "bottom",
+      "via": [[1040, 584]]
+    },
+    {
+      "id": "deepsleep-to-memory",
+      "from": "deepSleep",
+      "to": "memory",
+      "label": "写回 [原则] / [路径]",
+      "fromSide": "top",
+      "toSide": "right",
+      "via": [[1260, 364]]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "运行形态",
+      "items": [
+        "单一 DSH 插件：panel + scheduler + 内嵌记忆技能",
+        "入口先建 composition root，再显式装配两侧句柄",
+        "lib/ 随仓提交，宿主热重载即生效；版本钉点三处一致"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "学习闭环",
+      "items": [
+        "蒸馏：空闲触发 → 信号预筛 → 子代理裁决 → 过闸写回",
+        "深睡：全会话停滞后归纳 [原则] / [路径] 写入 AGENT.md",
+        "召回：索引热注入 + 指针拉档 + 向量档 RRF 融合"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "边界与验收",
+      "items": [
+        "_memory/ 私人区 gitignore，公开树零本机路径红线",
+        "项目事实直写 <workspace>/docs/devref/shoucang/",
+        "typecheck / build / check-runner / ui-geo-regress 四项过闸"
+      ]
+    }
+  ]
+}

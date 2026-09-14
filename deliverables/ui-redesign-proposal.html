@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>守藏面板 · UI 优化方案（交互原型）</title>
+<style>
+/* ═══════════ 令牌层 ═══════════ */
+:root{
+  --bg:#f4f5f7; --panel:#ffffff; --panel2:#fafbfc; --border:#e3e6ea; --border2:#eef0f3;
+  --text:#1f2328; --muted:#656d76; --faint:#8c959f;
+  --brand:#7c5cff; --brand-soft:#f0ecff; --brand-line:#ddd4ff;
+  --ok:#1a7f37; --ok-soft:#e8f5ec; --warn:#9a6700; --warn-soft:#fdf3e0;
+  --err:#cf222e; --err-soft:#fdecec; --info:#0969da; --info-soft:#e8f0fd;
+  --hover:#f2f3f5;
+  --r-s:6px; --r-m:10px; --r-l:14px;
+  --sh-1:0 1px 2px rgba(31,35,40,.06);
+  --sh-2:0 4px 14px rgba(31,35,40,.08);
+  --sh-3:0 12px 40px rgba(31,35,40,.16);
+  --nav-w:216px;
+  --t:.18s cubic-bezier(.4,0,.2,1);
+}
+html[data-theme="dark"]{
+  --bg:#131315; --panel:#1b1b1e; --panel2:#171719; --border:#2c2c31; --border2:#242428;
+  --text:#e8e8ea; --muted:#9a9aa2; --faint:#6e6e76;
+  --brand:#a78bfa; --brand-soft:#251f3a; --brand-line:#3a2f5c;
+  --ok:#3fb950; --ok-soft:#12241a; --warn:#d29922; --warn-soft:#2a2110;
+  --err:#f85149; --err-soft:#2d1517; --info:#58a6ff; --info-soft:#0f2035;
+  --hover:#242428;
+  --sh-1:0 1px 2px rgba(0,0,0,.4);
+  --sh-2:0 4px 14px rgba(0,0,0,.45);
+  --sh-3:0 12px 40px rgba(0,0,0,.6);
+}
+*{box-sizing:border-box;}
+html,body{height:100%;}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font:13px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","Inter","PingFang SC","Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+::-webkit-scrollbar{width:9px;height:9px;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:6px;}
+::-webkit-scrollbar-thumb:hover{background:var(--faint);}
+::-webkit-scrollbar-track{background:transparent;}
+svg{display:block;}
+
+/* ═══════════ 预览外壳 ═══════════ */
+.shell{display:flex;flex-direction:column;height:100vh;}
+.topbar{
+  display:flex;align-items:center;gap:12px;padding:10px 16px;flex:none;
+  background:var(--panel);border-bottom:1px solid var(--border);
+}
+.brand{display:flex;align-items:center;gap:9px;font-weight:650;font-size:13.5px;letter-spacing:.2px;}
+.brand .dot{width:22px;height:22px;border-radius:7px;background:linear-gradient(135deg,var(--brand),#4c8dff);
+  display:grid;place-items:center;color:#fff;flex:none;}
+.brand .dot svg{width:13px;height:13px;}
+.seg{display:flex;gap:2px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:2px;}
+.seg button{
+  font:inherit;font-size:12px;border:0;background:transparent;color:var(--muted);
+  padding:4px 12px;border-radius:6px;cursor:pointer;transition:var(--t);
+}
+.seg button:hover{color:var(--text);}
+.seg button.on{background:var(--panel);color:var(--text);font-weight:600;box-shadow:var(--sh-1);}
+.spacer{flex:1;}
+.topbar .note{font-size:11.5px;color:var(--faint);}
+.iconbtn{
+  width:30px;height:30px;border:1px solid var(--border);background:var(--panel);color:var(--muted);
+  border-radius:8px;cursor:pointer;display:grid;place-items:center;transition:var(--t);
+}
+.iconbtn:hover{background:var(--hover);color:var(--text);}
+.iconbtn svg{width:15px;height:15px;}
+
+.stage{flex:1;display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto;}
+.frame{
+  width:100%;max-width:1180px;height:min(720px,100%);background:var(--panel);
+  border:1px solid var(--border);border-radius:var(--r-l);box-shadow:var(--sh-3);
+  overflow:hidden;display:flex;
+}
+
+/* ═══════════ 新版：导航 ═══════════ */
+.nav{
+  width:var(--nav-w);flex:none;background:var(--panel2);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;padding:14px 10px 10px;gap:2px;
+}
+.nav-title{
+  font-size:10.5px;font-weight:700;letter-spacing:.9px;color:var(--faint);
+  padding:10px 10px 6px;text-transform:uppercase;
+}
+.nav-title:first-child{padding-top:0;}
+.nav-item{
+  display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--r-s);
+  color:var(--muted);cursor:pointer;font-size:13px;position:relative;
+  transition:var(--t);user-select:none;
+}
+.nav-item svg{width:16px;height:16px;flex:none;opacity:.85;}
+.nav-item:hover{background:var(--hover);color:var(--text);}
+.nav-item.on{background:var(--brand-soft);color:var(--brand);font-weight:600;}
+.nav-item.on svg{opacity:1;}
+.nav-item .badge{
+  margin-left:auto;font-size:10.5px;font-weight:700;background:var(--err);color:#fff;
+  border-radius:9px;padding:1px 6px;line-height:1.5;
+}
+.nav-foot{margin-top:auto;padding:10px;border-top:1px solid var(--border);}
+.nav-foot .health{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--muted);}
+.nav-foot .health b{color:var(--text);font-size:12px;}
+
+/* ═══════════ 新版：内容区 ═══════════ */
+.main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.pagehead{
+  flex:none;padding:18px 24px 14px;border-bottom:1px solid var(--border2);
+  display:flex;align-items:flex-start;gap:14px;
+}
+.pagehead h1{margin:0;font-size:17px;font-weight:650;letter-spacing:.2px;}
+.pagehead p{margin:3px 0 0;font-size:12.5px;color:var(--muted);max-width:640px;line-height:1.55;}
+.pagehead .acts{margin-left:auto;display:flex;gap:8px;flex:none;}
+.view{flex:1;overflow:auto;padding:18px 24px 26px;}
+
+.btn{
+  font:inherit;font-size:12.5px;padding:6px 13px;border-radius:var(--r-s);cursor:pointer;
+  border:1px solid var(--border);background:var(--panel);color:var(--text);transition:var(--t);
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap;
+}
+.btn:hover{background:var(--hover);border-color:var(--faint);}
+.btn svg{width:14px;height:14px;}
+.btn.primary{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600;}
+.btn.primary:hover{filter:brightness(1.08);}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--muted);}
+.btn.ghost:hover{background:var(--hover);color:var(--text);}
+
+/* 状态卡 */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
+.kpi{
+  background:var(--panel);border:1px solid var(--border);border-radius:var(--r-m);
+  padding:13px 14px;transition:var(--t);
+}
+.kpi:hover{border-color:var(--brand-line);box-shadow:var(--sh-2);transform:translateY(-1px);}
+.kpi .k-top{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--muted);}
+.kpi .k-top svg{width:13px;height:13px;opacity:.7;}
+.kpi .k-val{font-size:22px;font-weight:680;letter-spacing:-.3px;margin:5px 0 1px;
+  font-variant-numeric:tabular-nums;line-height:1.15;}
+.kpi .k-sub{font-size:11px;color:var(--faint);}
+.kpi .k-bar{height:5px;border-radius:3px;background:var(--border2);overflow:hidden;margin-top:9px;}
+.kpi .k-bar i{display:block;height:100%;border-radius:3px;background:var(--brand);}
+.kpi.ok .k-bar i{background:var(--ok);} .kpi.warn .k-bar i{background:var(--warn);}
+.kpi.err .k-bar i{background:var(--err);}
+
+.dot{width:7px;height:7px;border-radius:50%;flex:none;background:var(--faint);}
+.dot.ok{background:var(--ok);} .dot.warn{background:var(--warn);}
+.dot.err{background:var(--err);} .dot.info{background:var(--info);}
+.dot.live{animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 currentColor;}50%{opacity:.65;box-shadow:0 0 0 3px transparent;}}
+
+.card{
+  background:var(--panel);border:1px solid var(--border);border-radius:var(--r-m);
+  overflow:hidden;margin-bottom:14px;
+}
+.card > .hd{
+  padding:11px 14px;border-bottom:1px solid var(--border2);display:flex;align-items:center;gap:8px;
+  font-size:12.5px;font-weight:620;
+}
+.card > .hd .sub{font-weight:400;color:var(--faint);font-size:11.5px;}
+.card > .hd .right{margin-left:auto;display:flex;align-items:center;gap:8px;font-weight:400;}
+.card > .bd{padding:13px 14px;}
+.card.plain > .bd{padding:0;}
+
+/* 分段 / Tab */
+.tabs{display:flex;gap:2px;background:var(--bg);border:1px solid var(--border);
+  border-radius:8px;padding:2px;margin-bottom:14px;width:fit-content;}
+.tabs button{
+  font:inherit;font-size:12.5px;border:0;background:transparent;color:var(--muted);
+  padding:5px 14px;border-radius:6px;cursor:pointer;transition:var(--t);
+}
+.tabs button:hover{color:var(--text);}
+.tabs button.on{background:var(--panel);color:var(--text);font-weight:600;box-shadow:var(--sh-1);}
+.tabs .cnt{font-size:10.5px;color:var(--faint);margin-left:5px;font-weight:400;}
+
+/* 列表行 */
+.row{
+  display:flex;align-items:center;gap:11px;padding:10px 14px;
+  border-bottom:1px solid var(--border2);transition:var(--t);
+}
+.row:last-child{border-bottom:0;}
+.row:hover{background:var(--panel2);}
+.row .title{font-size:13px;font-weight:520;}
+.row .desc{font-size:11.5px;color:var(--faint);margin-top:1px;}
+.row .right{margin-left:auto;display:flex;align-items:center;gap:9px;font-size:11.5px;color:var(--muted);}
+.pill{
+  display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:2px 8px;border-radius:20px;
+  background:var(--hover);color:var(--muted);font-weight:500;white-space:nowrap;
+}
+.pill.ok{background:var(--ok-soft);color:var(--ok);}
+.pill.warn{background:var(--warn-soft);color:var(--warn);}
+.pill.err{background:var(--err-soft);color:var(--err);}
+.pill.info{background:var(--info-soft);color:var(--info);}
+.pill.brand{background:var(--brand-soft);color:var(--brand);}
+
+/* 开关 */
+.sw{
+  width:34px;height:19px;border-radius:20px;background:var(--border);position:relative;
+  cursor:pointer;transition:var(--t);flex:none;border:0;padding:0;
+}
+.sw::after{
+  content:"";position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;
+  background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:var(--t);
+}
+.sw.on{background:var(--brand);}
+.sw.on::after{transform:translateX(15px);}
+
+/* 容量条 */
+.cap{display:flex;flex-direction:column;gap:11px;}
+.cap-item .cap-top{display:flex;align-items:baseline;gap:8px;font-size:12.5px;margin-bottom:5px;}
+.cap-item .cap-top b{font-weight:600;}
+.cap-item .cap-top .n{margin-left:auto;color:var(--muted);font-size:11.5px;
+  font-variant-numeric:tabular-nums;}
+.cap-track{height:7px;border-radius:4px;background:var(--border2);overflow:hidden;}
+.cap-track i{display:block;height:100%;border-radius:4px;transition:width .5s;}
+.cap-track i.ok{background:var(--ok);}
+.cap-track i.warn{background:var(--warn);}
+.cap-track i.err{background:var(--err);}
+
+/* 时间线 */
+.tl{position:relative;padding-left:20px;}
+.tl::before{content:"";position:absolute;left:5px;top:6px;bottom:6px;width:1px;background:var(--border);}
+.tl-item{position:relative;padding:0 0 15px;}
+.tl-item:last-child{padding-bottom:0;}
+.tl-item::before{
+  content:"";position:absolute;left:-18px;top:5px;width:9px;height:9px;border-radius:50%;
+  background:var(--panel);border:2px solid var(--brand);
+}
+.tl-item.ok::before{border-color:var(--ok);}
+.tl-item.warn::before{border-color:var(--warn);}
+.tl-t{font-size:12.5px;font-weight:520;}
+.tl-d{font-size:11.5px;color:var(--faint);margin-top:2px;}
+.tl-time{font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums;}
+
+/* 状态机 */
+.sm{display:flex;align-items:center;gap:0;margin:4px 0 18px;}
+.sm-node{
+  display:flex;flex-direction:column;align-items:center;gap:6px;flex:none;width:96px;
+}
+.sm-circle{
+  width:34px;height:34px;border-radius:50%;border:2px solid var(--border);
+  display:grid;place-items:center;background:var(--panel);transition:var(--t);
+}
+.sm-circle svg{width:16px;height:16px;color:var(--faint);}
+.sm-node.on .sm-circle{border-color:var(--brand);background:var(--brand-soft);}
+.sm-node.on .sm-circle svg{color:var(--brand);}
+.sm-node.done .sm-circle{border-color:var(--ok);background:var(--ok-soft);}
+.sm-node.done .sm-circle svg{color:var(--ok);}
+.sm-node .sm-label{font-size:11.5px;color:var(--muted);}
+.sm-node.on .sm-label{color:var(--text);font-weight:600;}
+.sm-seg{flex:1;height:2px;background:var(--border);margin-bottom:22px;}
+.sm-seg.done{background:var(--ok);}
+
+/* 设置行 */
+.setrow{
+  display:flex;align-items:center;gap:14px;padding:12px 14px;border-bottom:1px solid var(--border2);
+}
+.setrow:last-child{border-bottom:0;}
+.setrow .t{font-size:13px;font-weight:520;}
+.setrow .d{font-size:11.5px;color:var(--faint);margin-top:2px;max-width:520px;line-height:1.5;}
+.setrow .c{margin-left:auto;flex:none;}
+select,input[type=text]{
+  font:inherit;font-size:12.5px;padding:5px 9px;border:1px solid var(--border);
+  border-radius:var(--r-s);background:var(--panel);color:var(--text);min-width:130px;
+}
+select:focus,input:focus{outline:2px solid var(--brand-soft);border-color:var(--brand);}
+
+/* 网格：插件卡 */
+.grid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:12px;}
+.pcard{
+  border:1px solid var(--border);border-radius:var(--r-m);padding:13px;transition:var(--t);
+  background:var(--panel);
+}
+.pcard:hover{border-color:var(--brand-line);box-shadow:var(--sh-2);transform:translateY(-1px);}
+.pcard .ph{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.pcard .ph .ic{width:26px;height:26px;border-radius:7px;background:var(--brand-soft);
+  color:var(--brand);display:grid;place-items:center;flex:none;}
+.pcard .ph .ic svg{width:14px;height:14px;}
+.pcard .ph b{font-size:13px;font-weight:600;}
+.pcard .pmeta{font-size:11.5px;color:var(--faint);display:flex;gap:10px;margin-top:9px;
+  font-variant-numeric:tabular-nums;}
+
+/* 日志 */
+.log{
+  font-family:ui-monospace,SFMono-Regular,"SF Mono",Consolas,monospace;font-size:11.5px;
+  line-height:1.75;background:var(--panel2);border:1px solid var(--border);
+  border-radius:var(--r-s);padding:10px 12px;max-height:168px;overflow:auto;
+}
+.log div{white-space:pre;color:var(--muted);}
+.log .lv-info{color:var(--info);} .log .lv-ok{color:var(--ok);} .log .lv-warn{color:var(--warn);}
+
+/* 提示条 */
+.alert{
+  display:flex;gap:9px;align-items:flex-start;padding:10px 13px;border-radius:var(--r-s);
+  font-size:12px;line-height:1.55;margin-bottom:14px;
+}
+.alert svg{width:15px;height:15px;flex:none;margin-top:1px;}
+.alert.warn{background:var(--warn-soft);color:var(--warn);border:1px solid color-mix(in srgb,var(--warn) 22%,transparent);}
+.alert.info{background:var(--info-soft);color:var(--info);border:1px solid color-mix(in srgb,var(--info) 22%,transparent);}
+
+.pane{display:none;} .pane.on{display:block;}
+.page{display:none;} .page.on{display:flex;flex-direction:column;flex:1;min-height:0;}
+
+/* ═══════════ 旧版还原（对比用） ═══════════ */
+.old .nav{background:var(--panel2);}
+.old .nav-item{border-radius:0;font-size:12.5px;padding:7px 10px;}
+.old .nav-item.on{background:var(--hover);color:var(--text);font-weight:500;}
+.old .pagehead{padding:14px 20px 12px;}
+.old .pagehead h1{font-size:15px;}
+.old .view{padding:14px 20px 20px;}
+.old .fold{
+  border:1px solid var(--border);border-radius:4px;margin-bottom:7px;background:var(--panel);
+}
+.old .fold-hd{padding:7px 11px;font-size:12.5px;color:var(--muted);display:flex;gap:7px;align-items:center;}
+.old .fold-bd{padding:9px 11px;border-top:1px solid var(--border2);font-size:12px;color:var(--muted);}
+.old .fold.closed .fold-bd{display:none;}
+.old .flat{border:1px solid var(--border);padding:9px 11px;margin-bottom:7px;font-size:12px;color:var(--muted);background:var(--panel);}
+.old .capnum{font-size:19px;font-weight:600;color:var(--text);}
+.old .muted-t{color:var(--faint);font-size:11px;}
+
+/* 对比说明 */
+.legend{
+  display:flex;gap:16px;flex-wrap:wrap;padding:9px 16px;background:var(--panel);
+  border-top:1px solid var(--border);font-size:11.5px;color:var(--muted);flex:none;
+}
+.legend b{color:var(--text);font-weight:600;}
+.legend .li{display:flex;align-items:center;gap:6px;}
+@media (max-width:900px){
+  .kpis{grid-template-columns:repeat(2,1fr);}
+  .frame{height:auto;min-height:640px;}
+}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="topbar">
+    <div class="brand">
+      <span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-8l-2-3H4a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1z"/></svg></span>
+      守藏面板 · UI 优化方案
+    </div>
+    <div class="seg" id="abSeg">
+      <button data-ab="new" class="on">优化后</button>
+      <button data-ab="old">现状（改造前）</button>
+    </div>
+    <div class="spacer"></div>
+    <span class="note" id="noteText">交互原型 · 数据为示意值，非线上实时数据</span>
+    <button class="iconbtn" id="themeBtn" title="切换主题">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    </button>
+  </div>
+
+  <div class="stage">
+    <!-- ══════════════ 优化后 ══════════════ -->
+    <div class="frame" id="newFrame">
+      <aside class="nav">
+        <div class="nav-title">总览</div>
+        <div class="nav-item on" data-page="overview">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+          <span>运行总览</span>
+        </div>
+
+        <div class="nav-title">记忆</div>
+        <div class="nav-item" data-page="memory">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>
+          <span>记忆库</span>
+          <span class="badge" style="display:none">3</span>
+        </div>
+        <div class="nav-item" data-page="persona">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 12 0v1"/></svg>
+          <span>画像</span>
+        </div>
+
+        <div class="nav-title">运行</div>
+        <div class="nav-item" data-page="suite">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><path d="M17 13v8M13 17h8"/></svg>
+          <span>插件集合</span>
+        </div>
+        <div class="nav-item" data-page="sleep">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+          <span>深度睡眠</span>
+        </div>
+        <div class="nav-item" data-page="observe">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
+          <span>运行观测</span>
+        </div>
+
+        <div class="nav-title">配置</div>
+        <div class="nav-item" data-page="settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span>设置</span>
+        </div>
+
+        <div class="nav-foot">
+          <div class="health">
+            <span class="dot ok live" style="color:var(--ok)"></span>
+            <span>记忆库 <b>正常</b></span>
+          </div>
+          <div class="health" style="margin-top:5px;color:var(--faint);font-size:11px;">
+            vault · D:\FF\shoucang
+          </div>
+        </div>
+      </aside>
+
+      <div class="main">
+        <!-- 总览 -->
+        <section class="page on" data-page="overview">
+          <div class="pagehead">
+            <div>
+              <h1>运行总览</h1>
+              <p>一屏看清记忆库水位、蒸馏进度、睡眠状态与向量档健康度；异常项自动置顶。</p>
+            </div>
+            <div class="acts">
+              <button class="btn ghost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>刷新</button>
+              <button class="btn primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/></svg>立即蒸馏</button>
+            </div>
+          </div>
+          <div class="view">
+            <div class="kpis">
+              <div class="kpi warn">
+                <div class="k-top"><span class="dot warn" style="color:var(--warn)"></span>记忆库容量</div>
+                <div class="k-val">68%</div>
+                <div class="k-sub">12,480 / 20,000 字符</div>
+                <div class="k-bar"><i style="width:62%"></i></div>
+              </div>
+              <div class="kpi ok">
+                <div class="k-top"><span class="dot ok" style="color:var(--ok)"></span>蒸馏水位</div>
+                <div class="k-val">36</div>
+                <div class="k-sub">待处理事件 · 上次 2 分钟前</div>
+                <div class="k-bar"><i style="width:96%"></i></div>
+              </div>
+              <div class="kpi">
+                <div class="k-top"><span class="dot info" style="color:var(--info)"></span>深度睡眠</div>
+                <div class="k-val">浅睡</div>
+                <div class="k-sub">距深睡整理还有 4 小时</div>
+                <div class="k-bar"><i style="width:45%"></i></div>
+              </div>
+              <div class="kpi ok">
+                <div class="k-top"><span class="dot ok" style="color:var(--ok)"></span>向量档</div>
+                <div class="k-val">3,204</div>
+                <div class="k-sub">行 · 已启用 · RRF k=60</div>
+                <div class="k-bar"><i style="width:100%"></i></div>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1.35fr 1fr;gap:14px;">
+              <div class="card">
+                <div class="hd">最近动态<span class="sub">最近 24 小时</span>
+                  <div class="right"><span class="pill">蒸馏 12 次</span><span class="pill">整理 3 次</span></div>
+                </div>
+                <div class="bd">
+                  <div class="tl">
+                    <div class="tl-item ok">
+                      <div class="tl-t">蒸馏完成 · 12 条事件入库</div>
+                      <div class="tl-d">写入 MEMORY.md 2 条、notes/ 3 条；悬空指针 0</div>
+                      <div class="tl-time">2 分钟前</div>
+                    </div>
+                    <div class="tl-item ok">
+                      <div class="tl-t">画像升格 · USER.md +1 条</div>
+                      <div class="tl-d">「偏好：先给结论」由 pending 升格为正式画像</div>
+                      <div class="tl-time">26 分钟前</div>
+                    </div>
+                    <div class="tl-item warn">
+                      <div class="tl-t">容量预警 · USER.md 达 78%</div>
+                      <div class="tl-d">建议在下一次深睡中执行画像压缩</div>
+                      <div class="tl-time">1 小时前</div>
+                    </div>
+                    <div class="tl-item">
+                      <div class="tl-t">深度睡眠整理 · 合并 2 个重复小节</div>
+                      <div class="tl-d">结构操作：merge ×2，无删除（禁直删策略）</div>
+                      <div class="tl-time">6 小时前</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div class="card">
+                  <div class="hd">系统状态</div>
+                  <div class="bd plain">
+                    <div class="row"><div><div class="title">当前根目录</div><div class="desc">vault · 已激活</div></div>
+                      <div class="right"><span class="pill ok">已激活</span></div></div>
+                    <div class="row"><div><div class="title">MCL 认知环</div><div class="desc">熟悉度 0.72 · 慢通道</div></div>
+                      <div class="right"><span class="pill brand">慢通道</span></div></div>
+                    <div class="row"><div><div class="title">注入统计</div><div class="desc">本次会话注入 14 条</div></div>
+                      <div class="right"><span class="pill">14</span></div></div>
+                    <div class="row"><div><div class="title">嵌入服务</div><div class="desc">baseUrl 已配置 · 可达</div></div>
+                      <div class="right"><span class="pill ok">可达</span></div></div>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="hd">快捷操作</div>
+                  <div class="bd" style="display:flex;flex-wrap:wrap;gap:8px;">
+                    <button class="btn">运行自检</button>
+                    <button class="btn">测试嵌入连通</button>
+                    <button class="btn">根目录引导</button>
+                    <button class="btn">成熟度扫描</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 记忆库 -->
+        <section class="page" data-page="memory">
+          <div class="pagehead">
+            <div>
+              <h1>记忆库</h1>
+              <p>MEMORY.md 索引、候选区与笔记详情。画像（USER.md / AGENT.md）已拆到独立页面。</p>
+            </div>
+            <div class="acts"><button class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>搜索索引</button></div>
+          </div>
+          <div class="view">
+            <div class="card">
+              <div class="hd">容量占用<span class="sub">写入由 write_gate 强制红线</span></div>
+              <div class="bd">
+                <div class="cap">
+                  <div class="cap-item">
+                    <div class="cap-top"><b>MEMORY.md</b><span class="pill">索引</span><span class="n">12,480 / 20,000 · 86 条</span></div>
+                    <div class="cap-track"><i class="warn" style="width:62%"></i></div>
+                  </div>
+                  <div class="cap-item">
+                    <div class="cap-top"><b>notes/</b><span class="pill info">笔记</span><span class="n">148 个文件 · 6.2 MB</span></div>
+                    <div class="cap-track"><i class="ok" style="width:34%"></i></div>
+                  </div>
+                  <div class="cap-item">
+                    <div class="cap-top"><b>pending</b><span class="pill warn">候选</span><span class="n">9 条待裁决</span></div>
+                    <div class="cap-track"><i class="ok" style="width:18%"></i></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tabs" data-tabs="mem">
+              <button class="on" data-pane="idx">知识索引 <span class="cnt">86</span></button>
+              <button data-pane="pending">候选区 <span class="cnt">9</span></button>
+              <button data-pane="notes">笔记 <span class="cnt">148</span></button>
+            </div>
+
+            <div class="pane on" data-pane-of="idx">
+              <div class="card plain">
+                <div class="row"><div><div class="title">部署链路</div><div class="desc">push → 重钉 sha → pnpm install → 热重载</div></div>
+                  <div class="right"><span class="pill brand">架构</span><span>12 条</span></div></div>
+                <div class="row"><div><div class="title">证据纪律</div><div class="desc">结论与证据戳必须同源同一次读取</div></div>
+                  <div class="right"><span class="pill brand">约定</span><span>7 条</span></div></div>
+                <div class="row"><div><div class="title">深度睡眠状态机</div><div class="desc">清醒 / 浅睡 / 深睡 · 水位驱动</div></div>
+                  <div class="right"><span class="pill info">运行</span><span>15 条</span></div></div>
+                <div class="row"><div><div class="title">判据内核 L0</div><div class="desc">升格 / 降格 / 成熟度裁决单一实现</div></div>
+                  <div class="right"><span class="pill info">判据</span><span>23 条</span></div></div>
+                <div class="row"><div><div class="title">门禁现状</div><div class="desc">check:all 只跑 CHECKS，不等于全绿</div></div>
+                  <div class="right"><span class="pill warn">风险</span><span>4 条</span></div></div>
+              </div>
+            </div>
+            <div class="pane" data-pane-of="pending">
+              <div class="alert info">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg>
+                <div>候选条目由 L0 判据裁决后可<strong>升格</strong>进入索引，或<strong>降格</strong>回笔记。批量操作在下一次深度睡眠中统一执行。</div>
+              </div>
+              <div class="card plain">
+                <div class="row"><div><div class="title">「偏好：先给结论，再给论据」</div><div class="desc">成熟度 0.81 · 命中 5 次</div></div>
+                  <div class="right"><button class="btn" style="padding:4px 10px">升格</button><button class="btn ghost" style="padding:4px 10px">降格</button></div></div>
+                <div class="row"><div><div class="title">「部署最后一跳是用户热重载」</div><div class="desc">成熟度 0.66 · 命中 3 次</div></div>
+                  <div class="right"><button class="btn" style="padding:4px 10px">升格</button><button class="btn ghost" style="padding:4px 10px">降格</button></div></div>
+                <div class="row"><div><div class="title">「零硬编码本机路径是开源红线」</div><div class="desc">成熟度 0.42 · 命中 2 次</div></div>
+                  <div class="right"><button class="btn" style="padding:4px 10px">升格</button><button class="btn ghost" style="padding:4px 10px">降格</button></div></div>
+              </div>
+            </div>
+            <div class="pane" data-pane-of="notes">
+              <div class="card plain">
+                <div class="row"><div><div class="title">2026-09-12.md</div><div class="desc">18 个小节 · 3.1 KB</div></div><div class="right"><span class="pill">日志</span></div></div>
+                <div class="row"><div><div class="title">部署链路排障.md</div><div class="desc">6 个小节 · 1.4 KB</div></div><div class="right"><span class="pill">排障</span></div></div>
+                <div class="row"><div><div class="title">G-16 未部署复盘.md</div><div class="desc">9 个小节 · 2.2 KB</div></div><div class="right"><span class="pill warn">待整理</span></div></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 画像 -->
+        <section class="page" data-page="persona">
+          <div class="pagehead">
+            <div>
+              <h1>画像</h1>
+              <p>USER.md（用户画像）与 AGENT.md（Agent 画像）的唯一展示位。</p>
+            </div>
+          </div>
+          <div class="view">
+            <div class="kpis" style="grid-template-columns:repeat(2,1fr)">
+              <div class="kpi warn">
+                <div class="k-top">USER 容量</div>
+                <div class="k-val">78%</div>
+                <div class="k-sub">3,120 / 6,000 字符 · 24 条画像</div>
+                <div class="k-bar"><i style="width:78%"></i></div>
+              </div>
+              <div class="kpi ok">
+                <div class="k-top">AGENT 容量</div>
+                <div class="k-val">48%</div>
+                <div class="k-sub">2,860 / 6,000 字符 · 19 条画像</div>
+                <div class="k-bar"><i style="width:48%"></i></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="hd">USER.md<span class="sub">24 条</span>
+                <div class="right"><button class="btn" style="padding:4px 10px">压缩</button></div>
+              </div>
+              <div class="bd plain">
+                <div class="row"><span class="pill brand">偏好</span><div><div class="title">先给结论，再给论据</div><div class="desc">命中 5 次 · 稳定</div></div><div class="right">0.81</div></div>
+                <div class="row"><span class="pill brand">偏好</span><div><div class="title">不接受无证据的量化结论</div><div class="desc">命中 4 次 · 稳定</div></div><div class="right">0.76</div></div>
+                <div class="row"><span class="pill">环境</span><div><div class="title">Windows 11 · bash · D:\FF\shoucang</div><div class="desc">命中 9 次</div></div><div class="right">0.70</div></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="hd">AGENT.md<span class="sub">19 条</span></div>
+              <div class="bd plain">
+                <div class="row"><span class="pill info">纪律</span><div><div class="title">结论与证据戳同源同一次读取</div><div class="desc">命中 3 次</div></div><div class="right">0.68</div></div>
+                <div class="row"><span class="pill info">纪律</span><div><div class="title">否定结论前先列全语法变体</div><div class="desc">命中 2 次</div></div><div class="right">0.61</div></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 插件集合 -->
+        <section class="page" data-page="suite">
+          <div class="pagehead">
+            <div><h1>插件集合</h1><p>suite 装配矩阵由 targets.ts 单一实现；此处展示已装配目标库与可用工具。</p></div>
+            <div class="acts"><button class="btn">重新装配</button></div>
+          </div>
+          <div class="view">
+            <div class="grid2">
+              <div class="pcard">
+                <div class="ph"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-8l-2-3H4a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1z"/></svg></span><b>managing-memory</b></div>
+                <div style="font-size:11.5px;color:var(--muted)">记忆技能本体 · 目标库</div>
+                <div class="pmeta"><span>5 工具</span><span>已装配</span></div>
+              </div>
+              <div class="pcard">
+                <div class="ph"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 6 6 1-4.5 4.3L17.5 20 12 17l-5.5 3 1-6.7L3 9l6-1z"/></svg></span><b>shoucang-core</b></div>
+                <div style="font-size:11.5px;color:var(--muted)">守藏核心 · 蒸馏器</div>
+                <div class="pmeta"><span>3 工具</span><span>已装配</span></div>
+              </div>
+              <div class="pcard">
+                <div class="ph"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><b>scheduler</b></div>
+                <div style="font-size:11.5px;color:var(--muted)">调度 · 定时蒸馏</div>
+                <div class="pmeta"><span>2 工具</span><span>已装配</span></div>
+              </div>
+              <div class="pcard" style="border-style:dashed;opacity:.72">
+                <div class="ph"><span class="ic" style="background:var(--hover);color:var(--faint)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span><b>添加目标库</b></div>
+                <div style="font-size:11.5px;color:var(--faint)">需在白名单内登记</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 深度睡眠 -->
+        <section class="page" data-page="sleep">
+          <div class="pagehead">
+            <div><h1>深度睡眠</h1><p>按水位驱动的结构整理：合并、拆分、重命名与主动遗忘（归档，禁直删）。</p></div>
+            <div class="acts"><button class="btn primary">立即进入深睡</button></div>
+          </div>
+          <div class="view">
+            <div class="card">
+              <div class="hd">状态机</div>
+              <div class="bd">
+                <div class="sm">
+                  <div class="sm-node done">
+                    <div class="sm-circle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div>
+                    <div class="sm-label">清醒</div>
+                  </div>
+                  <div class="sm-seg done"></div>
+                  <div class="sm-node on">
+                    <div class="sm-circle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></div>
+                    <div class="sm-label">浅睡 · 当前</div>
+                  </div>
+                  <div class="sm-seg"></div>
+                  <div class="sm-node">
+                    <div class="sm-circle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M5 8l7-5 7 5M5 16l7 5 7-5"/></svg></div>
+                    <div class="sm-label">深睡整理</div>
+                  </div>
+                </div>
+                <div class="cap">
+                  <div class="cap-item">
+                    <div class="cap-top"><b>睡眠水位</b><span class="n">1,240 / 3,000 seq</span></div>
+                    <div class="cap-track"><i class="ok" style="width:41%"></i></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="hd">待执行结构操作<span class="sub">7 项</span>
+                <div class="right"><button class="btn" style="padding:4px 10px">全部执行</button></div>
+              </div>
+              <div class="bd plain">
+                <div class="row"><span class="pill info">merge</span><div><div class="title">合并「部署排障」与「G-16 复盘」</div><div class="desc">相似度 0.88</div></div><div class="right"><button class="btn" style="padding:4px 10px">执行</button></div></div>
+                <div class="row"><span class="pill info">split</span><div><div class="title">拆分「门禁现状」为 3 小节</div><div class="desc">超长 2.1 KB</div></div><div class="right"><button class="btn" style="padding:4px 10px">执行</button></div></div>
+                <div class="row"><span class="pill warn">archive</span><div><div class="title">归档 4 条超 90 天未命中条目</div><div class="desc">仅归档，不删除</div></div><div class="right"><button class="btn" style="padding:4px 10px">执行</button></div></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 运行观测 -->
+        <section class="page" data-page="observe">
+          <div class="pagehead">
+            <div><h1>运行观测</h1><p>进度、日志、错误定位与关键指标。错误带端点与参数，可直接定位。</p></div>
+            <div class="acts"><button class="btn ghost">清空日志</button><button class="btn">导出</button></div>
+          </div>
+          <div class="view">
+            <div class="kpis" style="grid-template-columns:repeat(4,1fr)">
+              <div class="kpi"><div class="k-top">请求总数</div><div class="k-val">1,284</div><div class="k-sub">本次会话</div></div>
+              <div class="kpi ok"><div class="k-top">成功率</div><div class="k-val">99.2%</div><div class="k-sub">失败 10 次</div></div>
+              <div class="kpi warn"><div class="k-top">平均耗时</div><div class="k-val">86<span style="font-size:14px">ms</span></div><div class="k-sub">P95 320 ms</div></div>
+              <div class="kpi err"><div class="k-top">错误</div><div class="k-val">10</div><div class="k-sub">最近 30 分钟</div></div>
+            </div>
+
+            <div class="tabs" data-tabs="obs">
+              <button class="on" data-pane="log">调用日志</button>
+              <button data-pane="err">错误定位 <span class="cnt">10</span></button>
+              <button data-pane="ops">运维操作</button>
+            </div>
+
+            <div class="pane on" data-pane-of="log">
+              <div class="log">
+                <div><span class="lv-ok">✓</span> GET  /memory/overview          42ms  200</div>
+                <div><span class="lv-info">·</span> GET  /suite                    18ms  200</div>
+                <div><span class="lv-info">·</span> GET  /mcl/status               11ms  200</div>
+                <div><span class="lv-warn">!</span> POST /embed/test              1,204ms  timeout</div>
+                <div><span class="lv-ok">✓</span> GET  /vector/status2            9ms  200</div>
+                <div><span class="lv-ok">✓</span> POST /distill                 312ms  200</div>
+                <div><span class="lv-info">·</span> GET  /inject/stats             14ms  200</div>
+              </div>
+            </div>
+            <div class="pane" data-pane-of="err">
+              <div class="card plain">
+                <div class="row"><span class="pill err">timeout</span><div><div class="title">POST /embed/test</div><div class="desc">14:02:11 · {"baseUrl":"http://127.0.0.1:11434"}</div></div>
+                  <div class="right"><button class="btn ghost" style="padding:4px 10px">展开堆栈</button></div></div>
+                <div class="row"><span class="pill err">no-active-root</span><div><div class="title">GET /config</div><div class="desc">13:58:40 · 未激活根目录</div></div>
+                  <div class="right"><button class="btn ghost" style="padding:4px 10px">展开堆栈</button></div></div>
+              </div>
+            </div>
+            <div class="pane" data-pane-of="ops">
+              <div class="card plain">
+                <div class="row"><div><div class="title">嵌入服务连通性</div><div class="desc">POST /embed/test —— 验证 embedding 配置是否可用</div></div>
+                  <div class="right"><button class="btn" style="padding:4px 10px">测试连接</button></div></div>
+                <div class="row"><div><div class="title">根目录引导</div><div class="desc">POST /root/bootstrap —— 初始化/修复记忆根目录结构</div></div>
+                  <div class="right"><button class="btn" style="padding:4px 10px">执行引导</button></div></div>
+                <div class="row"><div><div class="title">运行自检</div><div class="desc">校验三层部署面是否一致</div></div>
+                  <div class="right"><button class="btn" style="padding:4px 10px">执行</button></div></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 设置 -->
+        <section class="page" data-page="settings">
+          <div class="pagehead">
+            <div><h1>设置</h1><p>功能参数与界面偏好分离；高级项默认收起，避免误改。</p></div>
+          </div>
+          <div class="view">
+            <div class="tabs" data-tabs="set">
+              <button class="on" data-pane="func">功能参数</button>
+              <button data-pane="ui">界面偏好</button>
+              <button data-pane="adv">高级</button>
+            </div>
+
+            <div class="pane on" data-pane-of="func">
+              <div class="card plain">
+                <div class="setrow"><div><div class="t">自动蒸馏</div><div class="d">按水位自动触发事件蒸馏，无需手动执行</div></div>
+                  <div class="c"><button class="sw on" data-sw></button></div></div>
+                <div class="setrow"><div><div class="t">深度睡眠</div><div class="d">启用结构整理与主动遗忘（归档，禁直删）</div></div>
+                  <div class="c"><button class="sw on" data-sw></button></div></div>
+                <div class="setrow"><div><div class="t">向量检索</div><div class="d">读侧向量档 + RRF 融合，k=60</div></div>
+                  <div class="c"><button class="sw on" data-sw></button></div></div>
+                <div class="setrow"><div><div class="t">MCL 认知环</div><div class="d">按熟悉度分流快/慢通道</div></div>
+                  <div class="c"><button class="sw" data-sw></button></div></div>
+                <div class="setrow"><div><div class="t">Embedding 服务</div><div class="d">兼容 OpenAI / Ollama 协议</div></div>
+                  <div class="c"><select><option>Ollama（本地）</option><option>OpenAI 兼容</option></select></div></div>
+                <div class="setrow"><div><div class="t">Embedding 模型</div><div class="d">baseUrl 已配置 · 可达</div></div>
+                  <div class="c"><input type="text" value="bge-m3"></div></div>
+              </div>
+            </div>
+
+            <div class="pane" data-pane-of="ui">
+              <div class="card plain">
+                <div class="setrow"><div><div class="t">显示日志面板</div><div class="d">主区底部常驻日志，Ctrl/⌘+Shift+L 切换</div></div>
+                  <div class="c"><button class="sw on" data-sw></button></div></div>
+                <div class="setrow"><div><div class="t">自动刷新</div><div class="d">面板打开时按间隔重取数据，保留折叠态</div></div>
+                  <div class="c"><button class="sw on" data-sw></button></div></div>
+                <div class="setrow"><div><div class="t">刷新间隔</div><div class="d">0 表示关闭轮询</div></div>
+                  <div class="c"><select><option>30 秒</option><option selected>60 秒</option><option>5 分钟</option><option>关闭</option></select></div></div>
+                <div class="setrow"><div><div class="t">显示密度</div><div class="d">紧凑模式压缩行高，适合小屏</div></div>
+                  <div class="c"><select><option selected>舒适</option><option>紧凑</option></select></div></div>
+                <div class="setrow"><div><div class="t">导航宽度</div><div class="d">140 – 320 px，响应式断点自动接管</div></div>
+                  <div class="c"><input type="text" value="216"></div></div>
+              </div>
+            </div>
+
+            <div class="pane" data-pane-of="adv">
+              <div class="alert warn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+                <div>直接编辑配置原文会绕过所有校验。保存后原文件自动备份为 <code>.bak-*</code>，请谨慎操作。</div>
+              </div>
+              <div class="card">
+                <div class="hd">配置原文<span class="sub">shoucang.config.yaml</span>
+                  <div class="right"><button class="btn" style="padding:4px 10px">重新加载</button><button class="btn primary" style="padding:4px 10px">保存</button></div>
+                </div>
+                <div class="bd" style="padding:0">
+                  <div style="font-family:ui-monospace,Consolas,monospace;font-size:11.5px;line-height:1.7;padding:12px 14px;color:var(--muted);background:var(--panel2);max-height:210px;overflow:auto;white-space:pre">roots:
+  - path: D:/FF/shoucang
+    active: true
+distill:
+  auto: true
+  watermark: 3000
+deepsleep:
+  enabled: true
+  archiveOnly: true
+vector:
+  enabled: true
+  rrfK: 60</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- ══════════════ 现状还原 ══════════════ -->
+    <div class="frame old" id="oldFrame" style="display:none">
+      <aside class="nav">
+        <div class="nav-title" style="text-transform:none;font-size:11px">守藏 SHOUCANG</div>
+        <div class="nav-title">记忆</div>
+        <div class="nav-item on">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 12 0v1"/></svg><span>画像板块</span></div>
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg><span>记忆板块</span></div>
+        <div class="nav-title">运行</div>
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5"/></svg><span>插件集合</span></div>
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M2 14h4M10 8h4M18 16h4"/></svg><span>深度睡眠</span></div>
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M2 14h4M10 8h4M18 16h4"/></svg><span>运行观测</span></div>
+        <div class="nav-title">配置</div>
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M2 14h4M10 8h4M18 16h4"/></svg><span>参数调节</span></div>
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M2 14h4M10 8h4M18 16h4"/></svg><span>界面设置</span></div>
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5"/></svg><span>配置原文</span></div>
+        <div class="nav-foot" style="font-size:11px;color:var(--faint)">storage = obsidian vault</div>
+      </aside>
+      <div class="main">
+        <div class="pagehead">
+          <div><h1>画像板块</h1>
+            <p>USER.md（用户画像）· AGENT.md（Agent 画像）——画像容量与指针行的唯一展示位（记忆板块不重复）。指针行 → 点击直达 notes/ 详情小节。</p></div>
+        </div>
+        <div class="view">
+          <div class="flat" style="display:flex;gap:26px">
+            <div><div class="muted-t">USER 容量</div><div class="capnum">3,120 / 6,000</div><div class="muted-t">24 条画像</div></div>
+            <div><div class="muted-t">AGENT 容量</div><div class="capnum">2,860 / 6,000</div><div class="muted-t">19 条画像</div></div>
+          </div>
+          <div class="muted-t" style="margin:12px 0 6px">USER.md · 24</div>
+          <div class="fold closed"><div class="fold-hd">▸ 2026-09-10 偏好 先给结论</div></div>
+          <div class="fold closed"><div class="fold-hd">▸ 2026-09-10 偏好 不接受无证据量化</div></div>
+          <div class="fold closed"><div class="fold-hd">▸ 2026-09-08 环境 Windows 11</div></div>
+          <div class="fold closed"><div class="fold-hd">▸ 2026-09-08 环境 bash</div></div>
+          <div class="fold closed"><div class="fold-hd">▸ 2026-09-07 纪律 证据同源</div></div>
+          <div class="muted-t" style="margin:12px 0 6px">AGENT.md · 19</div>
+          <div class="fold closed"><div class="fold-hd">▸ 2026-09-12 纪律 列全语法变体</div></div>
+          <div class="fold closed"><div class="fold-hd">▸ 2026-09-11 动词精度</div></div>
+          <div class="muted-t" style="margin-top:14px">— 无状态色、无趋势、无异常提示；容量只有静态数字 —</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend" id="legend">
+    <div class="li"><b>IA 收敛</b> 8 视图 → 6 项（总览 / 记忆 / 画像 / 插件集合 / 深度睡眠 / 运行观测+设置）</div>
+    <div class="li"><b>新增首屏总览</b> 一屏看清水位、进度、睡眠、向量档</div>
+    <div class="li"><b>图标去重</b> 4 项同图标 → 各自独立</div>
+    <div class="li"><b>层级扁平</b> 折叠套折叠 → Tab / 分段控件</div>
+    <div class="li"><b>状态可视化</b> 容量条 + 状态点 + 状态机</div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var root = document.documentElement;
+
+  /* 主题 */
+  document.getElementById('themeBtn').onclick = function(){
+    root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+  };
+
+  /* A/B */
+  var note = document.getElementById('noteText');
+  document.querySelectorAll('#abSeg button').forEach(function(b){
+    b.onclick = function(){
+      document.querySelectorAll('#abSeg button').forEach(function(x){ x.classList.remove('on'); });
+      b.classList.add('on');
+      var isNew = b.dataset.ab === 'new';
+      document.getElementById('newFrame').style.display = isNew ? 'flex' : 'none';
+      document.getElementById('oldFrame').style.display  = isNew ? 'none'  : 'flex';
+      document.getElementById('legend').style.display    = isNew ? 'flex'  : 'none';
+      note.textContent = isNew
+        ? '交互原型 · 数据为示意值，非线上实时数据'
+        : '现状还原：首屏即长列表 · 4 项复用同一图标 · 无状态色';
+    };
+  });
+
+  /* 新版：视图切换 */
+  var frame = document.getElementById('newFrame');
+  frame.querySelectorAll('.nav-item').forEach(function(it){
+    it.onclick = function(){
+      frame.querySelectorAll('.nav-item').forEach(function(x){ x.classList.remove('on'); });
+      it.classList.add('on');
+      var p = it.dataset.page;
+      frame.querySelectorAll('.page').forEach(function(s){
+        s.classList.toggle('on', s.dataset.page === p);
+      });
+      var v = frame.querySelector('.page[data-page="'+p+'"] .view');
+      if (v) v.scrollTop = 0;
+    };
+  });
+
+  /* Tab / 分段：作用域限定在所在 tabs 容器之后的同级 pane 组（按 data-pane-of 全 frame 查找即可，key 唯一） */
+  frame.querySelectorAll('.tabs').forEach(function(tabs){
+    tabs.querySelectorAll('button').forEach(function(b){
+      b.onclick = function(){
+        tabs.querySelectorAll('button').forEach(function(x){ x.classList.remove('on'); });
+        b.classList.add('on');
+        var k = b.dataset.pane;
+        frame.querySelectorAll('.pane').forEach(function(p){
+          p.classList.toggle('on', p.dataset.paneOf === k);
+        });
+      };
+    });
+  });
+
+  /* 开关 */
+  frame.addEventListener('click', function(e){
+    var sw = e.target.closest ? e.target.closest('.sw') : null;
+    if (sw) sw.classList.toggle('on');
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,101 @@
+{
+  "name": "dsh-shoucang-memory",
+  "version": "0.3.1",
+  "description": "DSH 长期记忆插件：记忆库 + 会话蒸馏自动沉淀 + 设置面板，越用越懂你。守藏（Shoucang）单插件，panel + scheduler + 内嵌记忆技能。",
+  "private": true,
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "client.js",
+    "scripts",
+    "skill",
+    "cordis.patch.yml"
+  ],
+  "sideEffects": [
+    "./lib/client.js"
+  ],
+  "scripts": {
+    "build:host": "tsc -p tsconfig.local.json",
+    "build:client": "node scripts/build-client.mjs",
+    "build": "npm run build:host && npm run build:client",
+    "typecheck": "tsc -p tsconfig.local.json --noEmit",
+    "pretest": "npm run build:host",
+    "test": "node scripts/check-runner.mjs",
+    "test:layers": "node scripts/test-carrier-layers.mjs",
+    "gen:criteria": "node scripts/gen-criteria.mjs",
+    "check:criteria": "node scripts/check-criteria.mjs",
+    "check:carriers": "node scripts/check-carriers.mjs",
+    "check:fields": "node scripts/check-field-usage.mjs",
+    "check:deploy": "node scripts/check-deploy-sync.mjs",
+    "check:srcmap": "node scripts/check-srcmap.mjs",
+    "check:installed": "node scripts/check-installed-sync.mjs",
+    "check:installed:strict": "node scripts/check-installed-sync.mjs --strict",
+    "deploy:installed": "node scripts/deploy-installed.mjs",
+    "check:all": "node scripts/check-runner.mjs",
+    "sim:shadow": "node scripts/shadow-sim.mjs",
+    "scan:maturation": "node scripts/maturation-scan.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime"
+      ],
+      "platform": "web"
+    }
+  },
+  "license": "Apache-2.0",
+  "peerDependencies": {
+    "@deepseek-ai/dsh-llm": ">=0.0.1-rc <2",
+    "@deepseek-ai/dsh-tools": ">=0.0.1-rc <2",
+    "cordis": ">=4.0.0-rc <5",
+    "schemastery": "^3.18.0"
+  },
+  "devDependencies": {
+    "@awesome.me/webawesome": "^3.12.0",
+    "@deepseek-ai/cordis": "^4.0.2",
+    "@deepseek-ai/dsh-tools": "0.0.1-rc.1",
+    "@types/node": "^24.13.3",
+    "cordis": "^4.0.0-rc",
+    "esbuild": "^0.28.2",
+    "schemastery": "^3.18.0",
+    "typescript": "^5.9.0"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "deepseek",
+    "memory",
+    "memory-management",
+    "long-term-memory",
+    "session-distillation",
+    "context",
+    "agent",
+    "llm",
+    "ai-assistant",
+    "npm",
+    "plugin"
+  ],
+  "homepage": "https://github.com/Fishsb/dsh-shoucang-memory#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Fishsb/dsh-shoucang-memory.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Fishsb/dsh-shoucang-memory/issues"
+  }
+}

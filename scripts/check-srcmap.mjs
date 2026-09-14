@@ -1,0 +1,154 @@
+#!/usr/bin/env node
+// check-srcmap.mjs — src↔lib 导出符号漂移机检（审查 G-16 类护栏）
+//
+// 背景：`check-deploy-sync.mjs` 比对的是**仓内脚本/判据面**与库内同名件，FACES 覆盖
+//   `scripts/` 与 `skill/{scripts,engine,docs}/`——**不覆盖 src↔lib**。而 `npm run build:host`
+//   （tsc）是唯一把 src 变成运行时产物 lib 的动作，全靠人记得跑。
+//   实测事故（G-16）：`commitPrinciples` 加在 src、lib 未重编 ⇒ 断言测的是旧产物，
+//   门全绿但修复根本没进运行时。本门把"src 有、lib 无"变成红灯。
+//
+// 判定口径（**动词精确性**：不照抄日志/注释文案，只看编译产物实际导出了什么）：
+//   · 值导出（const/function/class/enum）：src 有 ⇒ lib/<同名>.js 必须有，否则 FAIL。
+//   · 类型导出（type/interface）：编译期擦除，lib/*.js 里**本来就没有**；
+//     只要求出现在 lib/types/<同名>.d.ts，否则 FAIL。
+//   · lib 有、src 无：陈旧产物，判 INFO（不 FAIL）——可能是生成器产物或已删符号的残留。
+//
+// 用法: node scripts/check-srcmap.mjs [--json] [--root <仓根>]
+// 退出码: 0=PASS  1=FAIL（存在 src 有 lib 无 / 产物缺失 / 作用域为空）  3=跳过（lib/ 不存在——诚实跳过）
+//
+// ⚠ 效力边界（archi 2026-09-12 实测，下一个人动本门前先读）：
+//   · **在 `npm test` 链内本门恒绿**：pretest 会先跑 `build:host`（tsc）重编 lib ⇒ src↔lib 必然一致。
+//     ⇒ 不得据 npm test 的绿判定"部署已到位"。本门价值只在 **standalone 且未先重编** 时。
+//   · 残余（只出 ⚠、不 FAIL）：`lib/types/*.d.ts` 缺失、`export *` 通配再导出不展开（整个导出面隐身）、
+//     default 导出缺失。当前仓库实测三者均为 0，故未升级为 FAIL。
+//   · 只扫 src 顶层 *.ts，子目录静默排除（新增子目录 ⇒ 静默出作用域）。
+import { readFileSync, existsSync, readdirSync } from 'node:fs'
+import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const rootDefault = join(dirname(fileURLToPath(import.meta.url)), '..')
+const argv = process.argv.slice(2)
+const argOf = (k, d) => { const i = argv.indexOf(k); return i > -1 && argv[i + 1] ? argv[i + 1] : d }
+const root = argOf('--root', rootDefault)
+const AS_JSON = argv.includes('--json')
+
+const SRC = join(root, 'src')
+const LIB = join(root, 'lib')
+const DTS = join(LIB, 'types')
+
+if (!existsSync(LIB)) { console.log(`⏭ 跳过：lib/ 不存在（root=${root}）——诚实跳过（exit 3）`); process.exit(3) }
+if (!existsSync(SRC)) { console.log(`⏭ 跳过：src/ 不存在（root=${root}）——诚实跳过（exit 3）`); process.exit(3) }
+
+const VAL = /(?:const|let|var|function|function\*|class|enum)/
+/** 值导出：`export const X` / `export async function X` / `export declare const X` */
+const RE_VAL = new RegExp(`export\\s+(?:declare\\s+)?(?:async\\s+)?${VAL.source}\\s+([A-Za-z_$][\\w$]*)`, 'g')
+/** 类型导出：`export type X` / `export interface X` */
+const RE_TYPE = /export\s+(?:declare\s+)?(?:type|interface)\s+([A-Za-z_$][\w$]*)/g
+/** 具名导出块：`export { A, B as C }`（可跨行；含 `from` 的再导出也算模块导出面） */
+const RE_BLOCK = /export\s*\{([^}]*)\}/g
+const RE_DEFAULT = /export\s+default\b/
+const RE_STAR = /export\s*\*\s*from/
+
+const collect = (txt, re) => {
+  const out = new Set()
+  for (const m of txt.matchAll(re)) if (m[1]) out.add(m[1])
+  return out
+}
+/** 解析 `export { A, B as C, default as D }` → 取对外名（as 之后） */
+const blockNames = (txt) => {
+  const out = new Set()
+  for (const m of txt.matchAll(RE_BLOCK)) {
+    for (const raw of m[1].split(',')) {
+      const p = raw.trim().split(/\s+as\s+/)
+      const name = (p[1] || p[0] || '').trim()
+      if (name && name !== 'default' && /^[A-Za-z_$][\w$]*$/.test(name)) out.add(name)
+    }
+  }
+  return out
+}
+
+const scanSrc = (p) => {
+  const t = readFileSync(p, 'utf8')
+  return {
+    values: new Set([...collect(t, RE_VAL), ...blockNames(t)]),
+    types: collect(t, RE_TYPE),
+    hasDefault: RE_DEFAULT.test(t),
+    hasStar: RE_STAR.test(t),
+  }
+}
+const scanJs = (p) => {
+  const t = readFileSync(p, 'utf8')
+  return { values: new Set([...collect(t, RE_VAL), ...blockNames(t)]), hasDefault: RE_DEFAULT.test(t), hasStar: RE_STAR.test(t) }
+}
+const scanDts = (p) => {
+  const t = readFileSync(p, 'utf8')
+  return new Set([...collect(t, RE_VAL), ...collect(t, RE_TYPE), ...blockNames(t)])
+}
+
+const srcFiles = readdirSync(SRC).filter((f) => f.endsWith('.ts')).sort()
+const rows = []
+for (const f of srcFiles) {
+  const base = f.replace(/\.ts$/, '')
+  const jsP = join(LIB, base + '.js')
+  const dtsP = join(DTS, base + '.d.ts')
+  const s = scanSrc(join(SRC, f))
+  const row = { module: base, srcValues: [...s.values].sort(), srcTypes: [...s.types].sort(), hasStar: s.hasStar, missingJs: [], missingDts: [], staleJs: [], missingArtifact: false, notes: [] }
+  // ⚠ 产物缺失**计 FAIL**（archi 2026-09-12）：这正是 G-16 的主形态——改了 src 没重编 ⇒ lib 里压根没有这个符号。
+  //   原实现只 push 一条 ⚠ note ⇒ 实测（sandbox A：真实 src + 空 lib）打印「✅ 14 个一致」并 exit 0。
+  if (!existsSync(jsP)) { row.missingArtifact = true; row.notes.push('lib 产物缺失（未构建）⇒ 计 FAIL（修复只落 src 不重编 = 未部署）'); }
+  else {
+    const j = scanJs(jsP)
+    row.missingJs = [...s.values].filter((n) => !j.values.has(n)).sort()
+    row.staleJs = [...j.values].filter((n) => !s.values.has(n)).sort()
+    if (s.hasDefault && !j.hasDefault) row.notes.push('default 导出未出现在 lib')
+  }
+  if (!existsSync(dtsP)) row.notes.push('lib/types/*.d.ts 缺失')
+  else {
+    const d = scanDts(dtsP)
+    row.missingDts = [...s.values, ...s.types].filter((n) => !d.has(n)).sort()
+  }
+  rows.push(row)
+}
+
+// ── ② 反向核对：**孤儿模块**（lib 顶层 .js 无对应 src/*.ts）──
+// 为什么补（2026-09-13 实测缺口的直接后果）：`tsc` **不删已删源文件的产物**。退役 `src/mcl-share.ts` 后，
+//   `lib/mcl-share.{js,map}` 与 `lib/types/mcl-share.d.ts` 成孤儿，而**本门当时全绿**（只做 src→lib 单向），
+//   孤儿产物随即被部署进安装副本 —— 死代码随包发布，且没有任何门看得见。
+// 例外白名单：由**别的构建链**产出的模块（`client` ← `src-client/` 经 `npm run build:client`）。
+// 判 FAIL 而非 INFO：孤儿模块一定可删，且它与"陈旧符号"不同——后者可能是生成器产物，前者不可能。
+const GEN_ONLY = new Set(['client'])
+const libTopJs = readdirSync(LIB).filter((f) => f.endsWith('.js'))
+const srcBases = new Set(srcFiles.map((f) => f.replace(/\.ts$/, '')))
+const orphans = libTopJs.map((f) => f.replace(/\.js$/, '')).filter((b) => !srcBases.has(b) && !GEN_ONLY.has(b)).sort()
+
+// 自证（archi 2026-09-12）：作用域为空 ⇒ "一致"是空集上的真命题 ⇒ 假绿。0 模块必须判 FAIL。
+if (rows.length === 0) {
+  console.error(`\nFAIL（src/ 下未扫描到任何 .ts 模块（root=${root}）⇒ 本门作用域为空，"一致"结论无意义）`)
+  process.exit(1)
+}
+
+const failRows = rows.filter((r) => r.missingJs.length || r.missingDts.length || r.missingArtifact)
+const staleRows = rows.filter((r) => r.staleJs.length)
+const out = { root, modules: rows.length, failing: failRows.map((r) => r.module), orphans, rows }
+
+if (AS_JSON) console.log(JSON.stringify(out, null, 2))
+else {
+  console.log(`src↔lib 导出符号漂移（src/*.ts → lib/*.js + lib/types/*.d.ts）：检查 ${rows.length} 个模块`)
+  for (const r of rows) {
+    const bad = r.missingJs.length || r.missingDts.length
+    console.log(`\n  ${bad ? '❌' : '✅'} ${r.module}.ts  值导出 ${r.srcValues.length} · 类型导出 ${r.srcTypes.length}`)
+    if (r.missingJs.length) console.log(`     ❌ src 有、lib/*.js 无（**修复未进运行时**）：${r.missingJs.join(', ')}`)
+    if (r.missingDts.length) console.log(`     ❌ src 有、lib/types/*.d.ts 无：${r.missingDts.join(', ')}`)
+    if (r.staleJs.length) console.log(`     ⚠ lib 有、src 无（陈旧产物，INFO）：${r.staleJs.join(', ')}`)
+    for (const n of r.notes) console.log(`     ⚠ ${n}`)
+    if (r.hasStar) console.log(`     ⚠ 含 export *（通配再导出，本门不展开解析）`)
+  }
+  for (const o of orphans) console.log(`\n  ❌ 孤儿模块 lib/${o}.js —— src/${o}.ts 不存在（tsc 不删产物；已删源文件须手工清 lib/${o}.js + .js.map + types/${o}.d.ts）`)
+  console.log(`\n  汇总：❌ 漂移 ${failRows.length} 个模块 · ⚠ 陈旧产物 ${staleRows.length} 个 · ❌ 孤儿模块 ${orphans.length} 个 · ✅ ${rows.length - failRows.length} 个一致`)
+}
+if (failRows.length || orphans.length) {
+  const why = [failRows.length ? `${failRows.length} 个模块存在 src 有 lib 无 ⇒ 需 npm run build:host 重编` : '', orphans.length ? `${orphans.length} 个孤儿模块 ⇒ 需手工清（tsc 不删产物；修复只落 src 不重编 = 未部署，源已删产物留存 = 死代码随包发布）` : ''].filter(Boolean).join('；')
+  console.error(`\nFAIL（${why}）`)
+  process.exit(1)
+}
+console.log('\nPASS（src↔lib 导出符号一致）')

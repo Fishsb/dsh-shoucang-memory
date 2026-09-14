@@ -1,0 +1,33 @@
+{
+  "configVersion": 1,
+  "comment": "目标库注册表（ADR-0005 决策 6）。root 可用 <dshHome>/<skillName>/<projectRoot> 占位；白名单相对各库根目录。pending 为候选暂存（ADD-only，非权威）。2026-09-09 白名单重构审查：project 卡库节已删——v15 单库化拍板「真库只有一个」，route=project 由蒸馏器直写 <workspace>/docs/devref/shoucang/（不经本注册表，旧 cards/how-to|reference|decision 三卡册结构随 pmg 移除而废弃）。",
+  "targets": {
+    "memory": {
+      "root": "<dshHome>/skills/managing-memory",
+      "whitelist": {
+        "main": [
+          "MEMORY.md",
+          "USER.md",
+          "AGENT.md"
+        ],
+        "notes": [
+          "notes/env.md",
+          "notes/tools.md",
+          "notes/flows.md",
+          "notes/lessons.md",
+          "notes/release.md",
+          "notes/user.md",
+          "notes/agent.md",
+          "notes/INDEX.md"
+        ]
+      },
+      "capacity": {
+        "MEMORY.md": 5000,
+        "USER.md": 3000,
+        "AGENT.md": 3000
+      },
+      "pendingDir": "pending",
+      "comment": "；v16 习得原则并入 agent 画像（PRINCIPLES.md 退役，AGENT.md 容量扩至 3,000，[原则] 行唯一写入口=深度睡眠归纳 pass）；v17 新增 [路径] 行（通用任务路径，对标 AWM，同门禁同写入口）；2026-09-11 容量默认调整（画像 3,000 · 记忆 5,000）——静态值仅为旧源兼容，权威=scheduler.json 容量门 capAgent/capUser/capMemory"
+    }
+  }
+}

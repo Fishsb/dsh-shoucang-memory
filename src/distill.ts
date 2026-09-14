@@ -1,0 +1,343 @@
+/**
+ * distill.ts — ADR-0002 阶段 2：蒸馏器（自记忆插件 index.ts 迁入，写入分发重接 targets.ts）。
+ *
+ * 事件链（ADR-0004 模式）：ctx.on('session/event') turn/end(completed) 且 root agent → per-agent idle 定时器
+ *   → 到点且 agent idle → 内存增量（snapshotEvents 水位后）→ 预筛（信号词 + pending 候选；皆无则跳过不唤醒）
+ *   → spawn 蒸馏子代理（maxDepth=1，10min 超时 race）→ 结构化 JSON（route=memory|project|discard）
+ *   → targets.ts 动态路由 + 白名单门禁（不符合不存）→ 零拷贝写入（memory-append；R3 项目事实直写 workspace devref）
+ *   → 水位推进（suite/knowledge/audit/distill-watermark.jsonl）→ 蒸馏审计（distill-audit.jsonl，UI 统计卡数据源）。
+ *   v18 分段蒸馏（2026-09-10）：增量先由 buildEventChunks 按 CHUNK_CHARS/事件边界切段（不劈事件），distillAgent
+ *   逐段 spawn——每段成功即推水位到该段 endSeq（断点续传，失败只停本段下轮续、不整窗重蒸）、段间紧凑清单 manifest
+ *   续上下文防同轮重复入册、单轮至多 MAX_CHUNKS_PER_RUN 段；修复旧「整窗一次注入 24k 截断丢尾 / 失败整窗重蒸」。
+ *
+ * 深度睡眠归纳（v16：习得原则并入 agent 画像 AGENT.md；2026-09-08 拍板机制、2026-09-09 拍板定位=agent 的反思进化迭代）：独立巡检定时器（10min）检测「全部会话停滞 ≥3h」→ 触发一次。
+ *   判据=**会话活跃状态机**（见 SessRec 注释）：任意事件→RUNNING，turn/end→ENDED；RUNNING 无事件 ≥probeAfterMs
+ *   → PROBING（采样 transcript 两次比对 mtime/size）→ 增长=长任务（刷新水位不睡，唯一拦睡条件）/ 不增长+会话在
+ *   =STALLED（不阻塞，发审计告警）/ 不增长+会话没了=EXIT / 探针不可用或异常=无法确认。后三者一律按停滞处理→正常睡。
+ *   作用域=痕迹窗口（起点=上次深度睡眠水位，纯水位语义 2026-09-09：无痕迹滑窗不睡、消化后推进、失败回滚，
+ *   不再叠加「本日 0 点」下限——0 点切会日切丢痕；按 mtime/时间戳判定，规避 pending 文件名 UTC 口径跨日偏差）：
+ *   窗口内 pending + 窗口内写入的 notes + 窗口内 access 命中 → 归纳子代理 → 原则 JSON → write_gate 校验
+ *   → `[原则]` 索引行原子写入 AGENT.md（冲突=原地 replace；反思双通道：认识自己+认识用户，同 pass 维护 USER 画像）。
+ *
+ * 坑位防御（devref/pitfalls 全清单）：禁 spawnSync（全异步 runAsync）；定时器随 disposed 事件清理；
+ * reload 后旧 ctx 失效→错误 catch+水位保留重试；maxDepth=1+persona 委派禁令+toolFilter；
+ * 路由归一化未知回退 memory（宁滥勿丢）；LLM 路由连败≥2 弃用指定 provider 回落继承（本迁入版补强）。
+ */
+import { spawn } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, renameSync, statSync, unlinkSync, copyFileSync } from 'node:fs'
+import { join, dirname } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import { createDeepSleep } from './deepsleep.js'
+import {
+  dshHome, knowledgeRoot, memoryLibRoot, resolveTarget, loadWhitelist, gateMemoryAppend,
+  type Whitelist, type RouteTarget,
+} from './targets.js'
+import { recallRanked, semanticSim, type EmbedCfg } from './vec.js'
+import { activityAggregate } from './activity.js'
+// 2026-09-13：删掉一条**死导入**（`applyTreeOps, applyForgetOps, sectionExists, type TreeOp` 四个符号全未使用）
+// —— 它同时是"这模块曾经调用 treeops、后来路径迁走"的化石；留着会让人以为 distill 也做结构操作。
+// 深睡判据层：2026-09-12 自本文件抽出为 ./deepsleep-core.ts（架构根治 P1）。
+// 下方 `export *` 是**过渡兼容**——两个行为测试件仍从 lib/distill.js 取这些符号，
+// 直接断链会让它们模块解析即失败（本仓 09-12 已栽过一次「重命名后测试件断链」）。
+// 待消费方全部改指 deepsleep-core 后，可删掉该行并改为精确具名导入。
+import {
+  type SessState, type DeepSleepStatus, type SessRec,
+  DEEP_SLEEP_PROMPT, COMMIT_FAILED_GATE, deepSleepLanded,
+  planDeepSleepVerdict, liveFailPolicy, deepSleepReplayable, commitPrinciples,
+  DISCARD_SNAPSHOT_CB_N, planDiscardWrite, planDegradedBaseline,
+  SKIP_HOLD_MAX, planSkipWatermark, runDiscardWatermark, resolveWatermarkBaseline,
+  type WmBaseline, type DeepSleepOtherChannels,
+} from './deepsleep-core.js'
+
+import { CHUNK_CHARS, MAX_CHUNKS_PER_RUN, buildEventChunks, manifestLineFor, manifestPush, textPartsOfEvent } from './distill-chunks.js'
+type AppContext = {
+  tools: { register(tool: unknown): unknown }
+  llm: any
+  subagents: { start(name: string, request: any): Promise<any> }
+  agents: { get(id: string): any; list(): any[]; roots(): any[]; create(options: any): Promise<any> }
+  logger?: { info?(msg: string): void }
+  on(event: string, handler: (arg: any, arg2?: any) => void): unknown
+  effect(fn: () => any, key?: string): unknown
+}
+
+export interface DistillConfig {
+  nodeBin: string
+  idleWakeMs: number
+  minTurnChars: number
+  distillPrescan: boolean
+  prescanMinChars?: number // 大段强制蒸馏阈值（缺省 4000：增量≥此值跳过预筛直接蒸馏，2026-09-10 用户拍板：信息密集无关键词会话不再整段丢弃）
+  distillPrompt: string
+  llmProvider: string
+  llmModel: string
+  // 2026-09-10：蒸馏/深睡各自独立模型（空=回落 llmProvider/llmModel → 继承主会话）
+  distillProvider: string
+  distillModel: string
+  sleepProvider: string
+  sleepModel: string
+  // S3-1（2026-09-14）：蒸馏触发开关。`false` ⇒ 只关蒸馏的**触发入口**（`armIdleTimer` 自动触发 +
+  //   `runDistillNow` 手动触发），**保留 `distillAgent`** 供深睡作回调 ⇒ 维护链与生产链**独立启停**。
+  //   缺省（undefined）视为开启，行为与改动前一致。
+  enableDistill?: boolean
+  // ═══ 深度睡眠归纳（v16：习得原则并入 agent 画像 AGENT.md；2026-09-08 用户拍板：全部会话停滞 ≥3h 自动执行）═══
+  enableDeepSleep: boolean
+  // 认知对照 P2「REM 相」（2026-09-11）：深睡同时做**跨主题联想**（crossTopic，产出须覆盖 ≥2 个不同 § 主题）；
+  // 缺省关；亦可用 env `SHOUCANG_REM_PASS=1` 打开（免改 zod schema 即可试跑）
+  enableRemPass?: boolean
+  deepSleepIdleMs: number
+  // 会话活跃状态机（2026-09-08 重构）：running 状态持续无事件多久 → 发起「输出增长探测」确认真活跃
+  deepSleepProbe: boolean
+  deepSleepProbeAfterMs: number
+  deepSleepProbeWindowMs: number
+  // 探测可靠性加固（2026-09-08）：多轮采样 + 多信号交叉 + 卡住二次确认 + 失败重试 + 总时长兜底
+  deepSleepProbeSamples: number
+  deepSleepProbeConfirm: number
+  deepSleepDaemonParent: boolean // 无会话兜底：自建守护 parent（默认关，宿主新建空 agent 路径未验证）
+  deepSleepProbeRetries: number
+  deepSleepProbeMaxMs: number
+  // ═══ 路线④ 打扰度观察（shadow-first MVP 2026-09-09：默认只打影子日志不注入；active 注入待影子校准后拍板开启）═══
+  activationShadow?: boolean // 观察打分+落 activation-shadow.jsonl（缺省开）
+  activationPrefetch?: boolean // active 注入开关（缺省关；注入接线=v5.2 §5 后续档）
+  activationTOn?: number // 滞回上阈（缺省 0.62；sim = top1 score / token 数，初值待影子校准）
+  activationTOff?: number // 滞回下阈（缺省 0.52）
+  activationCooldownSteps?: number // 触发后冷却步数（缺省 3）
+  activationTopK?: number // 召回条数（缺省 3）
+  // ═══ v6 向量政策（2026-09-10 用户拍板：项目各环节凡向量可提质处皆用之，质量优先；效率问题遇到再解）═══
+  // 2026-09-10：记忆库容量门（写门 env 源）
+  capAgent?: number
+  capUser?: number
+  capMemory?: number
+  embedEnabled?: boolean // 嵌入开关（scheduler embedEnabled；本地 bge-m3 零 token）
+  embedBaseUrl?: string // OpenAI 兼容 embeddings 基址
+  embedModel?: string // embedding 模型名
+  embedApiKeyEnv?: string // key 环境变量名（本地免 key）
+  // ═══ v2（ADR-122）检索/运维面 ═══
+  recallFusion?: string // 融合策略：'rrf'（缺省，排名融合 k=60）| 'weighted'（旧 min-max 加权，回滚用）
+  bankGit?: boolean // 记忆库本地 git 版本化（写后快照；缺省开，失败静默）
+  // v2.2（ADR-130）层模型开关
+  injectProfileRows?: number // P 层画像行每档注入上限（缺省 3；0=关闭）
+  scoreWeights?: string // 打分公式 'legacy'（缺省）| 'v2'
+  shadowScore?: boolean // 影子打分（写 audit/score-shadow.jsonl，不改排序）
+  maturationEnforce?: boolean // 成熟度强制（缺省 false=只记录）
+  perItemGate?: boolean // v2.1 M2：逐条裁决（缺省 true；false=回到整轮全拒）
+  // v2.2：睡眠期自检
+  selfCheck?: boolean // 深睡完成后跑 6 项检测（缺省 true）
+  selfCheckRepo?: string // 仓根（供仓侧检测）
+  selfCheckAutoRollback?: boolean // 白名单窄动作自动执行（缺省 false=只告警）
+  selfCheckIntervalHours?: number // 定时自检周期（小时，缺省 6；0=关闭定时）
+  storeMode?: string // P4 存储解耦：'md'（缺省，现状）| 'dual'（md 写入后镜像进 Record 影子库 + 逐字节对账）
+  // v7 校准阈值（缺省 14/44/90/5/35，UI 可调）
+  activityWarmDays?: number // active→warm 无命中天数（缺省 14）
+  activityColdDays?: number // warm→cold 无命中天数（缺省 44）
+  activityArchiveDays?: number // cold 且最近命中超过该天数 → 遗忘候选（缺省 90）
+  activityHotHits?: number // 近 30 天命中 ≥ 此值 → 加深候选 B（缺省 5）
+  recallColdFactorPercent?: number // 召回降权系数（百分比 → /100；缺省 35）
+}
+
+// （会话活跃状态机 FSM 文档与 SessState / DeepSleepStatus / SessRec 已迁至 ./deepsleep-core.ts）
+
+// ── 蒸馏裁决契约 v7（ADR-122 记忆核心 v2：判据段由 skill/engine/criteria.json 生成，禁手写）──
+// v4 变更：取消「记忆库 vs 项目卡库」粒度二分——跨项目有用的细粒度条文也进 notes；项目专属事实直写项目工作区 devref；
+//          新增 profiles 双画像通道（用户画像 USER + Agent 自我画像 AGENT，Q2「归谁」的落地写入通道）。
+// v5 变更：appends 条目可选 rootCause/avoidWhen——教训/踩坑类浓缩附 WHY 根因与「不适用」场景。
+// v7 变更（v2 架构）：① 判据段（R1-R4 + 四问 + Q2 画像判定）改为**生成投影** INGEST_JUDGE（源=criteria.json）；
+//          ② 四问**降级为归属子判据组**（不再是全局判据抬头）；③ **删除「规则→SOUL.md」死支**（宿主无该写入通道）；
+//          ④ 输出可带可选 `judgement`（L0 四维 + dup）→ 宿主写 judgement-ledger 供对账。
+import { INGEST_JUDGE, CONSOLIDATE_JUDGE, JUDGEMENT_HINT, LEDGER_FILE, CRITERIA_VERSION } from './criteria.generated.js'
+import { evaluateL0, promoteVerdict, demoteVerdict, maturationVerdict } from './criteria.js'
+import { MATURATION, TRIGGER } from './criteria.generated.js'
+import { newDistillState } from './distill-state.js'
+import { createDistillPaths } from './distill-paths.js'
+import { createInfraApi } from './distill-infra.js'
+import { createCandApi } from './distill-candidates.js'
+import { createWmApi } from './distill-watermark.js'
+import { createLlmApi } from './distill-llm.js'
+import { createParentApi } from './distill-parent.js'
+export const DEFAULT_DISTILL_PROMPT = `你是知识整理蒸馏子代理（守藏契约 v5）。任务：从给定会话增量正文中，判定每条可复用知识的归属（第一层路由），再输出结构化入册指令（由宿主执行写入，你无需也不能直接写文件/跑命令）。
+判定锚（v4 单库）：只有一个记忆库——notes 存「下次做类似任务时给 agent 的方向」与跨项目有用的事实；项目专属事实不属于全局库，直写项目工作区。
+${INGEST_JUDGE}
+委派禁令：**独立完成，绝不 spawn/委派任何子代理**（查重凭给定正文与你自身知识判断）。
+输出：只输出一行 JSON（不要 reasoning、不要其他文本）：
+{"route":"memory","appends":[{"target":"notes/tools.md","section":"<既有 ## 小节名，或「父/子」路径>","text":"教程式浓缩：目标一句+编号步骤+注意，≤120字"}],"newIndex":[{"target":"MEMORY.md","line":"[tag] 主题 · 概况短语/短语/短语 → notes/x.md §小节"}],"profiles":[{"target":"USER.md|AGENT.md","section":"≤12字小节名","text":"≤80字一句话"}],"projectCards":[{"cardType":"how-to|reference|decision","title":"≤20字","text":"≤200字","source":"≤30字"}],"decisions":[{"text":"拍了什么板","predicted":"当时预测会怎样","rationale":"为什么这么拍","alternatives":"被否的方案","cues":["scope=workspace:<路径>","task=build"]}],"commitments":[{"who":"用户","what":"答应做什么","direction":"owed-by-me","due":"YYYY-MM-DD","cues":[]}],"relations":[{"who":"用户","note":"在意什么/忌讳什么","level":2,"cues":[]}],"valences":[{"trigger":"在什么情境下","valence":-1,"cues":[]}],"skipped":[{"title":"...","reason":"≤30字"}]}
+约束：route=memory → 填 appends/newIndex（target 白名单 notes/tools.md notes/flows.md notes/lessons.md notes/env.md notes/release.md；section = 既有 ## 小节名，或「父/子」树状路径（子节不存在时宿主自动建 ###，v21）；**裂 ### 判据（spec §8.1 分裂律）**：目标 ## 小节**子树正文 > 1000 字**（R=一次读取单元）**或同级条目 > 6 条**（K，防横向膨胀）→ 裂出子节、用「父/子」路径写入；否则并入父节（宁并勿滥裂，一层必须缩小候选集才有意义）；**text 教程式三段**「目标：… 1. … 2. … 注意：…」只写方向指引级浓缩——目标形态/步骤轮廓/关键注意点，不搬细节条文，纯事实类可省步骤保留目标行；**newIndex.line 格式权威=记忆库 spec §8**：[tag] 主题 · 概况短语/短语/短语 → notes/<file>.md §小节，定界符 ·=段界 /=短语界 →=指针，主题≤12字名词性禁冒号复合，概况名词短语 / 分隔、≤30字、高判别实词（专名/数值/路径关键词）、禁日期溯源），profiles/projectCards 留空；profiles 仅在 route=memory 时可填（0-2 条，宁缺毋滥，须是稳定画像而非一次性事实）；route=project → 填 projectCards（cardType: how-to=操作步骤/reference=契约事实/decision=架构决策），其余留空；route=discard → 除 skipped 全空；与 route 不匹配的条目宿主拒收。教训/踩坑类（notes/lessons.md 或 [lesson] 语境）可在 appends 条目附可选 rootCause/avoidWhen（各 ≤30 字，v5）——宿主写入时自动追加「- 根因：…」「- 不适用：…」两行，让教训带 WHY 与不适用条件（对标 WikiSkill pattern 双记 + When NOT to Apply），其余条目省略。
+${JUDGEMENT_HINT}`
+
+// ── 宿主注入样板判别：**实现在 `distill-candidates`（唯一一份）**，此处只**转发**保 API 兼容 ──
+// ⚠ 2026-09-14（P5 施工中实测发现并修）：本文件曾**逐字复制**一份 `CANDIDATE_NOISE` + `isNoiseIntent`，
+//   两处都写着「单一实现」—— 而这正是「同一事实的第二份副本」（仓内铁律禁止的漂移源）。
+//   实测：两个数组**逐字相同**，且本文件的导出**无任何消费方**（`distill-activation` 用的是 candidates 那份）
+//   ⇒ 是「死 + 重复」双重问题。现改为转发：调用方零感知，副本归零。
+export { CANDIDATE_NOISE, isNoiseIntent } from './distill-candidates.js'
+
+// ── 预筛信号词（零拷贝优先动态加载记忆仓 engine/signals.mjs；不可达时内嵌兜底副本，与 engine 同源）──
+const PRESCAN_STRONG = ['记住', '以后', '注意', '踩坑', '原来是这样', '应该改成', '别再用', '纠正', '别忘了', '务必']
+const PRESCAN_MID = [/失败.{0,24}(换|改)用/, /(报错|失败).{0,16}(换|改)用/, /改用.{0,12}(工具|方式|方案|命令)/, /原因.{0,12}(是|为|在于)/, /(记|存).{0,6}(到|进)/, /根因/, /对策/, /(要|该)记住/, /下次(要|得|注意)/]
+let hasDistillSignalsImpl: ((text: string) => boolean) | null = null
+const hasDistillSignals = (text: string): boolean => {
+  if (!text) return false
+  if (hasDistillSignalsImpl) return hasDistillSignalsImpl(text)
+  if (PRESCAN_STRONG.some((s) => text.includes(s))) return true
+  return PRESCAN_MID.some((re) => re.test(text))
+}
+const loadEngineSignals = async (): Promise<void> => {
+  const candidates = [join(memoryLibRoot(), 'engine', 'signals.mjs')]
+  for (const p of candidates) {
+    try {
+      const mod = await import(pathToFileURL(p).href)
+      if (mod && typeof mod.hasDistillSignals === 'function') { hasDistillSignalsImpl = mod.hasDistillSignals; return }
+    } catch { /* 下一个 */ }
+  }
+}
+
+import { runNode, textOf } from './distill-proc.js'
+import type { RunResult } from './distill-proc.js'
+import { createWriteApi } from './distill-write.js'
+import { createActApi } from './distill-activation.js'
+import { createAgentApi } from './distill-agent.js'
+import { createHooksApi, mountDistillEvents } from './distill-hooks.js'
+import { createBankApi } from './distill-bank.js'
+import { createEmbedApi } from './distill-embed.js'
+
+// ── 蒸馏器主体 ──
+/**
+ * S3-1（2026-09-14）：**蒸馏触发入口的条件包装**。
+ *
+ * 为什么在模块级：装配函数受 `audit-wiring` **I1（≤120 行）**约束 —— 此块连注释约 12 行，
+ *   内联会把 `registerDistill` 顶到 **128 行**（实测违规），故按仓内既有出路抽成模块级函数。
+ *
+ * 语义（`enableDistill === false` 时）：只把**触发入口**置 no-op ——
+ *   · `armIdleTimer`：蒸馏的**唯一外部触发入口**（装配期不武装；`distill-agent.ts:59` 的内部
+ *     重武装只在其自身流程内可达 ⇒ 入口关了便不可达）；
+ *   · `runDistillNow`：手动入口（面板 `/distill/run`）。
+ * **保留 `distillAgent`** —— 深睡以它为归纳回调（`write: { distillAgent: agent.distillAgent }`），
+ *   整体 noop 会让**维护链失去归纳能力**。
+ * ⇒ 由此实现「生产链（蒸馏）与维护链（深睡）独立启停」：关蒸馏不再连带关掉深睡。
+ */
+export function distillEntryOf(agent: ReturnType<typeof createAgentApi>, enableDistill: boolean | undefined): ReturnType<typeof createAgentApi> {
+  if (enableDistill !== false) return agent
+  return {
+    ...agent,
+    armIdleTimer: () => { /* 蒸馏已关闭：不武装（深睡不走此入口） */ },
+    runDistillNow: async () => ({ ok: false, sessions: 0, note: 'enableDistill=false（蒸馏已关闭）' }),
+  }
+}
+
+export function registerDistill(ctx: AppContext, config: DistillConfig): {
+  getDeepSleepStatus: () => DeepSleepStatus
+  runDeepSleepNow: () => Promise<{ ok: boolean; error?: string; result?: 'done' | 'failed' | 'no-traces' }>
+  getConfig: () => {
+    enableDeepSleep: boolean
+    deepSleepIdleMs: number
+    deepSleepProbe: boolean
+    deepSleepProbeAfterMs: number
+    deepSleepProbeWindowMs: number
+  }
+  runDistillNow: () => Promise<{ ok: boolean; sessions: number; note?: string }>
+} {
+
+  const { SHORT, logFile, kRoot, watermarkFile, auditFile, ledgerFile, pendDir, episodeFile, candidateDir, EPISODE_CAP, stubDir } = createDistillPaths()
+
+  // ── 领域模块装配（阶段 C）：依赖**按领域窄传**，实现在 distill-*.ts ──
+  const st = newDistillState()
+
+  const infra = createInfraApi({
+    logFile, auditFile, ledgerFile, episodeFile, stubDir, kRoot, EPISODE_CAP, LEDGER_FILE,
+  })
+  const embed = createEmbedApi({ config })
+
+  const cand = createCandApi({
+    candidateDir,
+    embedCfgOf: () => embed.embedCfgOf(), // 惰性：embedCfgOf 定义在本函数更下方（TDZ），箭头延迟求值
+    ledger: infra.ledger,
+  })
+
+  const wm = createWmApi({
+    watermarkFile, log: infra.log, audit: infra.audit, sidShort: infra.sidShort, st,
+  })
+
+ // 并发守卫：同会话蒸馏在途标记（防 turn/end 重武装导致双写/竞态）
+
+  // 单库化（2026-09-08 用户拍板）：守藏只有一个记忆库（生产根），不再有 presence 二分与降级链。
+  // 库缺席（部署残缺）时由各写入点如实审计，不再静默换库。
+
+  loadEngineSignals()
+
+  // LLM 路由连败弃用（坑位补强：连败≥2 回落继承主会话模型，成功后复位）
+  const llmState = { providerFailCount: 0 }
+
+  const llm = createLlmApi({ log: infra.log, llmState, config, ctx })
+
+  // ── 领域模块装配（阶段 C-2）：依赖**按领域窄传**，实现在 distill-*.ts ──
+  const write = createWriteApi({
+    kRoot, pendDir, infra, cand, llm, st, config,
+    embedCfgOf: () => embed.embedCfgOf(), // 惰性：embedCfgOf 定义在本函数更下方（TDZ），箭头延迟求值
+  })
+  const bank = createBankApi({ kRoot, infra, config })
+
+  // ── 领域模块装配（阶段 C-2b）：依赖**按领域窄传**，实现在 distill-*.ts ──
+  const parent = createParentApi({ log: infra.log, config, ctx, st })
+
+  const agent = createAgentApi({
+    io: { infra, pendDir },
+    wm: { wm, st },
+    write: { write, bankSnapshot: bank.bankSnapshot },
+    llm: { llm, llmState, embedCfgOf: () => embed.embedCfgOf() }, // 惰性：embedCfgOf 定义更靠下（TDZ）
+    cand: { cand },
+    parent: { parent },
+    env: { config, ctx, hasDistillSignals, DEFAULT_DISTILL_PROMPT },
+  })
+
+  /** 返回 'done'=本轮窗口已消化（推进水位）；'failed'=瞬时故障（回滚水位，下轮可重试同一批痕迹） */
+
+  // ── 深睡状态机装配（2026-09-12 P1 二期：1499 行已迁至 ./deepsleep.ts）──────────
+  // 依赖倒置：把蒸馏侧回调（distillAgent / writeDispatch）与共享设施**注入**，
+  //   deepsleep.ts 因此**零 import distill** —— 依赖方向保持严格单向、零环不破。
+  //   （若让 deepsleep 直接 import distill，就会因为「深睡回调蒸馏」形成循环依赖。）
+  // ⚠ 2026-09-12 阶段 B：依赖**按领域分组**注入（io/cfg/llm/session/write/housekeep，每组 ≤8 字段），
+  //   取代原先 32 字段一把梭的扁平 ctx —— 深睡侧每个实现函数只从自己那组取 3–7 个。
+  const ds = createDeepSleep({
+    io: { log: infra.log, audit: infra.audit, ledger: infra.ledger, kRoot, auditFile, pendDir, candidateDir, probeScriptPath: llm.probeScriptPath },
+    cfg: { config, PROFILE_HEADER: write.PROFILE_HEADER, capEnv: write.capEnv, llmState },
+    llm: { runNode, textOf, resolveLlm: llm.resolveLlm, resolveDefaultModel: parent.resolveDefaultModel, validateProvider: llm.validateProvider },
+    session: { pickParent: parent.pickParent, ensureDaemonParent: parent.ensureDaemonParent, locateTranscript: llm.locateTranscript, hasActiveSubagents: parent.hasActiveSubagents },
+    write: { distillAgent: agent.distillAgent, writeDispatch: write.writeDispatch, writeProfileLine: write.writeProfileLine, parseAgentJson: agent.parseAgentJson, normalizeProfileTarget: write.normalizeProfileTarget },
+    housekeep: {
+      runSelfCheck: bank.runSelfCheck, bankSnapshot: bank.bankSnapshot,
+      // 惰性包裹：embedCfgOf 定义在本调用之后（TDZ），箭头函数延迟求值即可，无需搬动其定义位置。
+      embedCfgOf: () => embed.embedCfgOf(),
+    },
+    appCtx: ctx,
+  })
+
+  // ── 事件钩子 + 工具注册（3 个 ctx.on + 6 个 ctx.effect）整块在 distill-hooks.mountDistillEvents ──
+
+  // ═══ 路线④ 打扰度观察（shadow-first MVP）：打分/滞回/冷却/落影子日志，默认不做上下文注入 ═══
+  // 设计（v5.2 §5 + §9④）：先攒真实样本校准阈值（T_on/T_off 初值 0.62/0.52），校准满意后再由用户开
+  //   activationPrefetch 走 active（注入接线=后续档，非本 MVP）。
+  // DS4 合并第二刀（2026-09-13）：落点由 `activation-shadow.jsonl` 改为**统一台账** `ledger.jsonl`
+  //   （行内 `type=activation.shadow`）。该流代码侧零读取者 ⇒ 无需改消费方。
+  const actShadowFile = join(kRoot, 'audit', 'ledger.jsonl')
+
+  const actState = new Map<string, { state: 'idle' | 'prefetch'; cooldown: number; prevScore: number }>()
+
+  const actConf = {
+    on: Number(config.activationTOn) || 0.65,
+    off: Number(config.activationTOff) || 0.6,
+    cooldown: Math.max(0, Number(config.activationCooldownSteps) || 3),
+    topK: Math.min(5, Math.max(1, Number(config.activationTopK) || 3)),
+  }
+
+  const act = createActApi({
+
+    actShadowFile, actConf, actState, infra, st, config,
+    embedCfgOf: () => embed.embedCfgOf(), // 同上，惰性求值避 TDZ
+  })
+
+  // S3-1：蒸馏触发入口按开关包装（实现见模块级 `distillEntryOf`）—— 两链独立启停的落点
+  const domDistill = distillEntryOf(agent, config.enableDistill)
+  const hooks = createHooksApi({ io: { infra, kRoot, SHORT }, dom: { write, parent, wm, distill: domDistill, act, llm, bank }, state: st, sleep: ds, env: { ctx, config } })
+  mountDistillEvents(ctx, { io: { infra, kRoot, SHORT }, dom: { write, parent, wm, distill: domDistill, act, llm, bank }, state: st, sleep: ds, env: { ctx, config } })
+
+  return { getDeepSleepStatus: ds.getDeepSleepStatus, runDeepSleepNow: ds.runDeepSleepNow, getConfig: ds.getConfig, runDistillNow: domDistill.runDistillNow }
+}
+

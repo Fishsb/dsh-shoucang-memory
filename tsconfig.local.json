@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "baseUrl": ".",
+    "paths": {
+      "cordis": ["node_modules/@deepseek-ai/cordis"]
+    }
+  },
+  "include": ["src"]
+}

@@ -1,0 +1,70 @@
+# 治理文档本地化：不入开源发布仓（2026-09-08 pmg 治理体系已整体移除；本文件仍按开源红线本地化）
+AGENTS.md
+CLAUDE.md
+HANDOVER.md
+
+# 依赖与构建产物（注意：lib/ 构建产物按 dsh 插件仓惯例提交入库，不在此列）
+node_modules/
+dist/
+.tsbuild/
+__pycache__/
+
+# 本地环境
+.env
+*.local
+# 本机面板实例配置（登记 D:\FF\shoucang 为守藏 root 时生成；含本机可调值，不入公开仓）
+shoucang.config.yaml
+
+# ---- 瞬态数据 ----
+.internal/
+
+# ---- 私人记忆数据区（2026-09-08 自 dsh-managing-memory 迁入；隐私红线：不入公开仓）----
+/_memory/
+
+# ---- 开发知识库（本机参考，不入公开仓）----
+docs/devref/
+skill/docs/devref/
+
+# ---- 记忆脚本瞬态产物（沿自源仓 gitignore）----
+.tmp-*
+*.tmpdir/
+*.tmp
+# 一次性重构/迁移脚本（2026-09-12 清理）：阶段 C 的 8 件 `_tmp-*.mjs` 曾误入公开仓，
+#   而 files 含 scripts ⇒ 被打进发行包。**根部解决**：gitignore 层挡住，新增同类不再可能被 add。
+scripts/_tmp-*
+
+# ---- WorkBuddy 本地工作记忆（AI 协作数据，不入公开仓）----
+.workbuddy/
+.workbuddy-ai/
+
+# ---- 视觉工具链本机缓存（@anionex/dsh-vision-toolkit 的 artifacts/tmp；含本机会话图片副本，不入公开仓）----
+.dsh-vision-toolkit/
+# S3：client 打包中间产物（构建脚本失败时会留下，成功后自动清理）
+client.js.build.tmp
+# S3：组件库主题令牌层的展平产物（build:client 生成）
+src-client/.vendor-css.generated.js
+
+# ---- 重构前的本地备份（本地保险，**不入公开仓**）----
+# 背景：2026-09-13 拆前端大函数时按纪律给 body.js / client.js 加了 `.bak-<阶段>-<时间戳>`，
+#   但当时 .gitignore 无对应规则 ⇒ `git status` 里是 untracked、`git add .` 会直接带进公开树。
+#   本仓有「推送前确认公开树纯净」红线，故在根部设防（与此前 `scripts/_tmp-*` 同一处理方式）。
+*.bak-*
+*.pre-u1
+
+# ��� /root/bootstrap ������ָ��ֿ���������ɵ���Ǽ�׮��2026-09-13 ʵ�⣩
+/whitelist.json
+
+# ��� /root/bootstrap ������ָ��ֿ���������ɵ���Ǽ�׮��2026-09-13 ʵ�⣩
+/memory-whitelist-spec.md
+
+# ��� /root/bootstrap ������ָ��ֿ���������ɵ���Ǽ�׮��2026-09-13 ʵ�⣩
+/task-protocols.md
+
+# ��� /root/bootstrap ������ָ��ֿ���������ɵ���Ǽ�׮��2026-09-13 ʵ�⣩
+/human-execution-loop.md
+
+# ��� /root/bootstrap ������ָ��ֿ���������ɵ���Ǽ�׮��2026-09-13 ʵ�⣩
+/notes/
+
+# 过程性 UI 比对截图（319 件 / 27 MB，可重生成；2026-09-15 移出仓库，本地保留）
+deliverables/v9-compare/

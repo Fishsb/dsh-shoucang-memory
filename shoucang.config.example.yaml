@@ -1,0 +1,21 @@
+# ============================================================
+# 守藏 · 根目录配置模板（v3，2026-09-08 与 panel 解析器对齐重写）
+# 用途：本文件是「守藏根目录」的配置（shoucang.config.yaml）——在面板登记根目录后，
+#       「配置管理」读取/编辑的就是它；面板布尔开关与标量设置直接改写本文件（备份先行 .bak-*）。
+# 说明：仅列 panel 识别的键（parseView + /toggle + /set 白名单）；
+#       插件级配置（蒸馏/深度睡眠/suite 成员）走 ~/.dsh/suite/scheduler.json 与插件 Config，不在此文件。
+# ============================================================
+
+shoucang:
+  injection:                    # R1 热记忆注入（每轮提示词，指针式；2026-09-10 起以全局 ~/.dsh/suite/scheduler.json 为准，本段作兼容回退读取）
+    hot_memory: true            # 总开关（面板可 toggle）
+    level: smart                # off|low|medium|high|smart —— MEMORY 索引热取行数 0/2/4/8/10
+    persona: both               # off|me|you|both —— 画像注入范围（v16 生效：me=agent 画像 AGENT.md / you=用户画像 USER.md）
+    max_tokens: 3000            # 100–8000，注入总预算（中文粗估 ~2 字符/token；v16 接通生效）
+    agent_max_chars: 0          # AGENT.md（含 [原则] 习得原则）注入上限（字符；0=不裁，默认）
+    user_max_chars: 0           # USER.md 注入上限（字符；0=不裁，默认）
+    memory_max_chars: 0         # MEMORY.md 注入上限（字符，档位行数后二次裁切；0=不裁，默认）
+  # embedding:                  # 向量检索配置——由面板「本地模型 · 部署并启用」自动写入，勿手工编辑
+  #   base_url: http://127.0.0.1:<port>
+  #   model: <model-id>
+  #   dimension: 1024

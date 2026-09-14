@@ -1,0 +1,163 @@
+// dynamic-select.ts — 动态面**选行**领域（L5 · 2026-09-14 自 `panel-shared` 抽出）
+//
+// **由来**：这段原嵌在 `panel-shared#buildHotMemoryText` 体内（约 92 行），而该模块受
+//   `check-module-growth` **大模块冻结棘轮**约束（基线 831 / 上限 846 —— 改动前已**顶格 846**）
+//   ⇒ 任何新增都无法落地（S4-3 的**中层 `process` 槽**正卡在此处）。
+//   门禁给出的出路即「**按领域接缝拆**」（而不是按行数硬切），本件按此办理：**只移动、不改逻辑**。
+//
+// **职责**：把「基线池 + 查询」变成「本步该注入的知识索引行」——
+//   三通道叠加 = **相关性**（MCL 预热融合召回 ∪ 词法召回）∪ **新鲜度槽** ∪ **位置式基线补齐**，
+//   并在基线/补位排序中贯穿**冷热降权**（cold 后置、`hits30` 高者先占槽）。
+//
+// **边界**：本件**只选行** —— 不渲染、不裁切（裁切归 `clampLines`）、不记账（归 `supply-assembly`）。
+//   纯读：只读 `MEMORY.md` 与 `activity.jsonl`；路径由调用方派生（本件零硬编码路径）。
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { knowledgeRoot, recallIndex, recallKeyOf } from './targets.js'
+
+export interface DynamicSelectDeps {
+  /** 基线池（panel 侧已做分层过滤的 P/always 行） */
+  allMem: readonly string[]
+  /** 动态面行数上限（= `budgetOf().dynamic` 派生的 cap，随档位） */
+  cap: number
+  /** 本轮查询（空 ⇒ 只走基线，不铺 gated 行） */
+  q: string
+  /** 记忆库根（读 `MEMORY.md`） */
+  memRoot: string
+  /** `activity.jsonl` 全路径（冷热/命中次来源；由调用方派生） */
+  activityFile: string
+  /** suite 配置读取（注入而非直连，保持本件可独立测试） */
+  readSuite: () => Record<string, unknown>
+  /** S4-3（2026-09-14）**中层 `process` 槽**配置（`enabled:false` ⇒ 零行为变化）；字段名与注册表一致以便整对象传入 */
+  process?: { enabled?: boolean; carrierTag?: readonly string[]; topN?: number }
+  /**
+   * S4-3：`process` 槽的**候选源** —— **全层索引行**（三索引的 `[tag] … → notes/` 薄行）。
+   * ⚠ **不能复用** `allMem`（只含 P 层 always）或 `allMemFill`（只读 MEMORY.md）：
+   *   **`[路径]` 属 R 层 gated**，在 `AGENT.md` 里（实测 5 条），上述两源**都取不到** ⇒ 槽会**恒空**
+   *   （本项首版即踩此坑，由"开启后仍无 `[路径]`"的实测当场暴露）。
+   */
+  processRows?: readonly string[]
+}
+
+/**
+ * S4-3（2026-09-14）**中层 `process` 槽选行**：按**标签**取 `[路径]` 行（**不走内容相关性竞争**）。
+ *
+ * 判因：人类三层里**中层是唯一没有专用通路的层** —— `[路径]` 原经 R 层 gated 相关性召回，
+ *   与知识索引行争同一 `dynamic` 预算 ⇒ 「**可复用步骤**」这种过程指引会被"内容相关性"挤掉。
+ *   本槽给它**优先进位**（与 `situation`/`serendipity` 同构的理由：改权重解决不了，只能分槽）。
+ *
+ * 边界：**只选行**（不渲染、不裁切、不记账）；`enabled !== true` ⇒ 返回空（**缺省零行为变化**）。
+ */
+export function selectProcessLines(
+  allIndexRows: readonly string[],
+  opts?: { enabled?: boolean; carrierTag?: readonly string[]; topN?: number },
+): string[] {
+  if (opts?.enabled !== true) return []
+  const tags = opts.carrierTag && opts.carrierTag.length ? opts.carrierTag : ['路径']
+  const topN = Math.max(1, Number(opts.topN) || 3)
+  const out: string[] = []
+  for (const l of allIndexRows) {
+    const m = /^\[([^\]\s]+)\]/.exec(String(l).trim())
+    if (!m || !tags.includes(m[1])) continue
+    if (!out.includes(l)) out.push(l)
+    if (out.length >= topN) break
+  }
+  return out
+}
+
+/**
+ * 动态面选行（**逐行为与抽取前等价** —— 只搬位置，未改判据、未改顺序）。
+ *
+ * 三通道叠加的顺序是**判据而非巧合**：相关性 → 新鲜度 → 基线补齐；
+ *   `picked` 为空时**保持基线**（`return memBase`），与抽取前的 `if (picked.length)` 等价。
+ */
+export function selectDynamicLines(dep: DynamicSelectDeps): string[] {
+  const { allMem, cap, q, memRoot, activityFile, readSuite } = dep
+  // v8（认知对照 P1「降权贯穿三通道」+「复习-强化」）注入侧的冷热感知 + 命中次权重。
+  //   R6 审查项：**回退分支也要生效**——否则 `injectRelevance=false` 或空 query 时「降权贯穿三通道」实际只剩两通道。
+  const actMap = new Map<string, { cold: boolean; hits30: number }>()
+  try {
+    for (const l of readFileSync(activityFile, 'utf8').split(/\r?\n/)) {
+      if (!l.trim()) continue
+      try {
+        const o = JSON.parse(l) as { f?: string; s?: string; status?: string; hits30?: number; retired?: boolean }
+        const f = String(o.f || '').replace(/^notes\//, '')
+        const s = String(o.s || '').trim().toLowerCase()
+        if (f && s) actMap.set(`${f}::${s}`, { cold: String(o.status) === 'cold' || !!o.retired, hits30: Number(o.hits30 || 0) })
+      } catch { /* 坏行跳过 */ }
+    }
+  } catch { /* 无 activity.jsonl = 不感知（保持旧行为） */ }
+  const rowWeight = (l: string): { cold: boolean; hits30: number } => {
+    const fm = (l.match(/notes\/([A-Za-z0-9_-]+)\.md/) || [])[1] || ''
+    const tail = l.split('→').pop() || ''
+    let cold = false
+    let hits = 0
+    for (const m of tail.matchAll(/§([^/→]+)/g)) {
+      const s = String(m[1]).replace(/\s*[（(]\s*20\d{2}[^）)]*[）)]\s*$/, '').trim().toLowerCase()
+      const e = actMap.get(`${fm}::${s}`) || actMap.get(`${fm}.md::${s}`)
+      if (!e) continue
+      if (e.cold) cold = true
+      hits = Math.max(hits, e.hits30)
+    }
+    return { cold, hits30: hits }
+  }
+  // 回退基线 = 位置式前 N 行，但**冷行稳定后置**（组内原序不变，故仍属"位置式"）
+  const memBase = [...allMem]
+    .sort((a, b) => (rowWeight(a).cold ? 1 : 0) - (rowWeight(b).cold ? 1 : 0))
+    .slice(0, cap)
+  const relOn = readSuite().injectRelevance !== false
+  const allMemFill = (() => {
+    try {
+      return readFileSync(join(memRoot, 'MEMORY.md'), 'utf8').split(/\r?\n/).map((l) => l.trim()).filter(Boolean).filter((l) => /^\[/.test(l))
+    } catch { return [...allMem] }
+  })()
+  // S4-3（2026-09-14）：**中层 `process` 槽**先算（与 query 无关 —— 任务级供给在任务开始即生效）
+  const proc = selectProcessLines(dep.processRows ?? [], dep.process)
+  // 合并：`process` 行**前置**且**额外占位**（不吃 dynamic 的 cap ⇒ 这就是它的"独立额度"简化实现）
+  const merge = (base: string[]): string[] => {
+    if (!proc.length) return base
+    const out = [...proc]
+    for (const l of base) {
+      if (out.length >= cap + proc.length) break
+      if (!out.includes(l)) out.push(l)
+    }
+    return out
+  }
+  if (!q || !relOn) return merge(memBase)
+  const fresh = Math.max(0, Math.min(Number(readSuite().injectFreshSlots) || 2, cap))
+  const picked: string[] = []
+  // R1（2026-09-13 · 质量评估）：优先用 MCL **预热的本轮融合召回**（dense 0.7 + lexical 0.3）。
+  //   动机（实测）：真实自然语言提问在纯词法地板上 **0 命中** ⇒ 知识索引只剩 P 层基线；而 MCL 的
+  //   async pre-step 已经用 `recallRanked` 算过同一 query（含向量档），复用它 = **零新增嵌入开销**。
+  //   键不匹配 / 过期（>120s）⇒ 自动退回词法通道，语义不变。
+  try {
+    const wf = join(knowledgeRoot(), 'audit', 'warm-recall.json')
+    if (existsSync(wf)) {
+      const w = JSON.parse(readFileSync(wf, 'utf8')) as { at?: number; key?: string; rows?: Array<{ line?: string; file?: string }> }
+      if (w?.key === recallKeyOf(q) && Number(w.at) > 0 && Date.now() - Number(w.at) < 120000) {
+        for (const x of w.rows || []) {
+          const ln = String(x?.line || '').trim()
+          if (ln && String(x?.file || 'MEMORY.md') === 'MEMORY.md' && !picked.includes(ln)) picked.push(ln)
+        }
+      }
+    }
+  } catch { /* 预热缓存不可用 ⇒ 保持词法通道 */ }
+  try {
+    // 相关性通道**不限层**：它本身就是契约指定的 gated 渲染器（`gated:index` → recallIndex/recallRanked
+    //   「按任务型/相关性选择」）。故 R/E 行可在此**按需**出现（且受 cap 约束）。
+    const { rows } = recallIndex(memRoot, q, cap, 'all')
+    for (const r of rows) if (r.file === 'MEMORY.md' && !picked.includes(r.line)) picked.push(r.line)
+  } catch { /* 召回异常=保持位置式回退 */ }
+  for (const l of allMemFill.slice(Math.max(0, allMemFill.length - fresh))) if (!picked.includes(l)) picked.push(l)
+  // 槽位不足时用**位置式基线**补齐：防「短指令（如"继续"）零命中」导致知识行从 cap 缩到 fresh 的信息损失。
+  // 三者叠加 = 相关性 ∪ 新鲜度 ∪ 基线覆盖，任一维度都不牺牲。
+  const rest = allMemFill.filter((l) => !picked.includes(l))
+  rest.sort((a, b) => {
+    const A = rowWeight(a)
+    const B = rowWeight(b)
+    if (A.cold !== B.cold) return A.cold ? 1 : -1
+    return B.hits30 - A.hits30
+  })
+  for (const l of rest) { if (picked.length >= cap) break; picked.push(l) }
+  return merge(picked.length ? picked.slice(0, cap) : memBase)
+}
