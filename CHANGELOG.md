@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Changed
+- **docs · 仓库展示面重构（2026-09-15）**：README.md / README.en.md 按成熟记忆项目（mem0 / Letta 等）通行版式整体重构——痛点·答案对照表前置、功能一览、快速开始「装后三现象」、mermaid 机制图、记忆库结构/面板/配置/隐私分节；英文 README 修复与中文版的结构漂移（仍写已废弃的 `PRINCIPLES.md` 旧分层）。同步整改 GitHub 元数据：About 双语化、Topics 清理（去 `npm` 无效标签，补 ai-memory / agent-memory / context-engineering / self-improving）、首发 Release `v0.3.1`（含 tag）。
 - **S4R/R2 · 账转真 + 裁切归位（2026-09-14）**：`supplyUsage` 此前是「**按装配器口径重算的近似值**」
   （`panel-shared` 自述），**不可当作主路径实际保留了什么**。现让账直接吃主路径自己的裁切结果
   （新增 `real` 参数）⇒ `kept` = 实际保留行数，并**新增 `droppedRows` = 实际被丢弃的行内容**（逐条可比）。
