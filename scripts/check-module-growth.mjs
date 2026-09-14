@@ -100,7 +100,8 @@ const FREEZE = {
   // UI1/U1（2026-09-15）：抽出 CSS（933 行）到 styles.js ⇒ **棘轮下调** 5476 → 4527
   // UI1/U1（2026-09-15）：抽出 dom.js（el/svg/ICONS，38 行）⇒ **棘轮下调** 4528 → 4490
   // UI1/U1（2026-09-15）：抽出 state.js（Bus/Store/Log/Prog，82 行）⇒ **棘轮下调** 4490 → 4409
-  'src-client/body.js': 4409,
+  // UI1/U1（2026-09-15）：抽出 Cfg/Fold（74 行）到 state.js ⇒ **棘轮下调** 4409 → 4338
+  'src-client/body.js': 4337,
   // UI1/U1（2026-09-15）：新模块（自 body.js 抽出的样式表）。目标：U2 完成后本件亦应被拆/下探
   'src-client/styles.js': 945,
 }
@@ -120,7 +121,7 @@ if (!ROOTS.some((r) => existsSync(r.dir))) {
  *   本件按上述保守口径实测 2 处：`mcl.ts` 的 msgFactory、`distill.ts` 的惰性实现缓存）。
  *   两件并存不冲突：那件给全貌，本件做**可回写、可收紧的棘轮**。
  */
-const MUTABLE_BASELINE = 2
+const MUTABLE_BASELINE = 0
 
 /** 剥注释（本件内联，避免 import 触发 check-file-channel 的顶层执行逻辑） */
 function stripCommentsLite(s) {
@@ -129,10 +130,36 @@ function stripCommentsLite(s) {
     .replace(/\/\*[\s\S]*?\*\//g, '')
 }
 
-/** 列 0 的 `let`/`var` 顶层声明数（模块级可变全局的保守口径，可单测） */
+/**
+ * 模块级**可变全局**数（列 0 的 `let`/`var`，且**确被重新赋值**）。
+ *
+ * ⚠ **口径已精确化（UI1/U1 · 2026-09-15）**：原口径按关键字计数 `^(let|var)\s` ⇒ 会把
+ *   `var Bus = (function () { … })();` 这类**一次绑定**误判为可变全局（实测抽服务后 6 处 IIFE
+ *   绑定被误报，而它们**从不被重新赋值**）。
+ *
+ *   为什么不能简单改成 `const` 了事：仓内多件门禁/测试按 **`var X = ` 字面**抽区段
+ *   （`test-fold-state` / `check-ui-contract` ⑥）⇒ 改 `const` 会让它们全部失配（实测连挂两次）。
+ *   ⇒ 故**修门口径**（精确化，不是放宽）：只有「**在别处被重新赋值**」的绑定才算可变全局。
+ *   **真的可变状态仍会被抓到**（见 `--selftest` 的反例用例）。
+ */
 export function countMutableGlobals(code) {
+  const lines = stripCommentsLite(code).split('\n')
+  const bound = []
+  for (const l of lines) {
+    const m = /^(?:var|let)\s+([A-Za-z_$][\w$]*)\s*=/.exec(l)
+    if (m) bound.push(m[1])
+  }
   let n = 0
-  for (const l of stripCommentsLite(code).split('\n')) if (/^(let|var)\s/.test(l)) n++
+  for (const name of bound) {
+    // 被重新赋值 = 在**非声明行**上出现 `name = …`（行内任意位置都算）。
+    //   ⚠ 两条边界**都由 selftest 的反例抓出**（本函数改了三版，每版都被自证拦住）：
+    //     · 要求"行首" ⇒ `function f() { Y = 2; }` **漏检**（门被悄悄放宽）；
+    //     · 不跳声明行 ⇒ `var Bus = (…)` 里的 `Bus = ` **被当成重新赋值**（6 处误报）。
+    //   `[^=]` 排除 `==`；`[^\w.$]` 前缀排除 `obj.name =`（改属性 ≠ 改变量绑定）。
+    const isDecl = new RegExp(`^\\s*(?:var|let|const)\\s+${name}\\s*=`)
+    const re = new RegExp(`(?:^|[^\\w.$])${name}\\s*=[^=]`)
+    if (lines.some((l) => !isDecl.test(l) && re.test(l))) n++
+  }
   return n
 }
 
@@ -234,13 +261,28 @@ if (process.argv.includes('--selftest')) {
     { name: '幽灵基线条目 ⇒ 红', rows: [{ file: 'a.ts', lines: 10 }], freeze: { 'gone.ts': 900 }, want: 1 },
     { name: '未冻结的小模块增长 ⇒ 不拦（不受冻结约束）', rows: [{ file: 's.ts', lines: 599 }], freeze: {}, want: 0 },
     { name: '可变全局超基线 ⇒ 红', rows: [{ file: 'a.ts', lines: 10, mutable: 3 }], freeze: {}, want: 1 },
-    { name: '可变全局等于基线 ⇒ 不红', rows: [{ file: 'a.ts', lines: 10, mutable: 2 }], freeze: {}, want: 0 },
+    { name: '可变全局等于基线 ⇒ 不红', rows: [{ file: 'a.ts', lines: 10, mutable: 0 }], freeze: {}, want: 0 },
     // ── 2026-09-15 UI1/U0：硬顶豁免（拆分对象专用）──
     { name: '超硬顶且**不在豁免集** ⇒ 红', rows: [{ file: 'big.js', lines: 5000 }], freeze: { 'big.js': 5000 }, exempt: new Set(), want: 1 },
     { name: '超硬顶但在**豁免集** ⇒ 不因硬顶红（豁免生效）', rows: [{ file: 'big.js', lines: 5000 }], freeze: { 'big.js': 5000 }, exempt: new Set(['big.js']), want: 0 },
     { name: '⚠ 豁免硬顶 **≠** 豁免棘轮：豁免集内增长超容差 ⇒ 仍红', rows: [{ file: 'big.js', lines: 5020 }], freeze: { 'big.js': 5000 }, exempt: new Set(['big.js']), want: 1 },
   ]
   let bad = 0
+  // ── countMutableGlobals 口径自证（UI1/U1：口径精确化后必须证明"没放宽"）──
+  const mutCases = [
+    { n: 'IIFE 一次绑定 ⇒ **不算**可变（旧口径误报的正是这类）', src: 'var Bus = (function () { return {} })();\n', want: 0 },
+    { n: 'let 一次绑定 ⇒ 不算可变', src: 'let W = (function () { return 1 })();\n', want: 0 },
+    { n: 'const 绑定 ⇒ 不算可变', src: 'const Z = {}\n', want: 0 },
+    { n: '⚠ 顶层**重新赋值** ⇒ 仍算可变（未放宽）', src: 'var X = 1;\nX = 2;\n', want: 1 },
+    { n: '⚠ 函数内**重新赋值** ⇒ 仍算可变（未放宽）', src: 'var Y = 1;\nfunction f() { Y = 2; }\n', want: 1 },
+    { n: 'var 无初值 ⇒ 不计入（口径只认 `= ` 绑定）', src: 'var A;\n', want: 0 },
+  ]
+  for (const c of mutCases) {
+    const got = countMutableGlobals(c.src)
+    const pass = got === c.want
+    if (!pass) bad++
+    console.log(`${pass ? '✅' : '❌'} [可变口径] ${c.n}（期望 ${c.want} · 实得 ${got}）`)
+  }
   for (const c of cases) {
     const got = evaluate(c.rows, c.freeze, undefined, undefined, undefined, undefined, c.exempt ?? new Set()).problems.length
     const ok = got === c.want

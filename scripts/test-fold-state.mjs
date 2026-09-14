@@ -19,9 +19,18 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 /* S3（2026-09-13）：client.js 已由 esbuild 打包生成（局部变量会被重命名），
- * 故源码级断言改读**源码** src-client/body.js；产物级断言（CSS 抽取 / 渲染几何）仍读 client.js。 */
-const CLIENT = existsSync(join(ROOT, 'src-client', 'body.js')) ? join(ROOT, 'src-client', 'body.js') : join(ROOT, 'client.js')
-const src = readFileSync(CLIENT, 'utf8')
+ * 故源码级断言改读**源码**；产物级断言（CSS 抽取 / 渲染几何）仍读 client.js。 */
+/* UI1/U1（2026-09-15）：`Fold` 已自 body.js 抽到 **state.js**（U1 抽服务）⇒ 写死 body.js 会失配。
+ * 改为**自适应定位**：在候选源码里找**实际含 \`var Fold = \`** 的那个文件 ⇒ 以后再搬也不会断
+ *（本件此前已被抽服务打断一次 —— 这正是"按符号抽区段"类门禁的通病）。 */
+/* ⚠ **本件跨两个源文件**（UI1/U1 实测教训）：断言同时涉及
+ *     · `Fold`（已抽到 **state.js**）
+ *     · `deferFold`/`flushFolds`/`secFoldKey`/`UI.fold`（**仍在 body.js**）
+ *   ⇒ 只读任一份都会假红。故**读两份并拼接**，让"抽区段"与"符号存在性"两类断言都能命中；
+ *     任一处以后再搬走，本件依然成立（不再因抽服务而断）。 */
+const SRC_FILES = ['state.js', 'body.js'].map((f) => join(ROOT, 'src-client', f)).filter(existsSync)
+if (!SRC_FILES.length) SRC_FILES.push(join(ROOT, 'client.js'))
+const src = SRC_FILES.map((f) => readFileSync(f, 'utf8')).join('\n')
 
 let pass = 0, fail = 0
 const ok = (m) => { pass++; console.log('  ✅ ' + m) }

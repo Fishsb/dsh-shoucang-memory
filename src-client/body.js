@@ -13,7 +13,7 @@
  * 非 Obsidian 存储面。
  */
 import { CSS } from './styles.js'
-import { Bus, Log, Prog, Store, setLogStatusSink } from './state.js'
+import { Bus, Cfg, Fold, Log, Prog, Store, setLogStatusSink } from './state.js'
 import { ICONS, el, svg } from './dom.js'
 
 (function () {
@@ -115,80 +115,6 @@ import { ICONS, el, svg } from './dom.js'
 
       function make(k, v) { var o = {}; o[k] = v; return o; }
 
-      /* ---- 5. Cfg：UI 参数化配置（自由度，localStorage 持久化） ---- */
-      var Cfg = (function () {
-        var KEY = 'shoucang.ui.cfg.v1';
-        var DEF = {
-          density: 'comfortable',      // comfortable | compact
-          navWidth: 216,               // 左导航宽度 px（v9 对齐：方案 --nav-w 216）
-          autoRefresh: true,           // 打开面板/写操作后自动刷新
-          refreshMs: 60000,            // 轮询间隔（0=关闭）
-          showLogs: false,             // 状态栏上方是否显示日志面板（v9 对齐：默认折叠，Ctrl/⌘+Shift+L 唤出）
-          logLevel: 'info',            // info | warn | error
-          overviewMode: true,          // 概览—详情分层（列表默认折叠详情）
-          maxRows: 50,                 // 长列表默认折叠阈值
-          startView: 'overview',       // 启动时视图（深链 > 上次视图 > 此项）
-          navGroups: true,             // 导航分组显示（v9 设置页该行：按语义显示分组标题）
-          footBar: true,               // 页脚健康条（v9 设置页该行：常驻显示记忆库状态与库路径）
-          skin: 'v9'                   // 皮肤：v9（方案调色板）| host（跟随宿主主题令牌）
-        };
-        var cache = null;
-        function load() {
-          if (cache) return cache;
-          cache = Object.assign({}, DEF);
-          try {
-            var raw = localStorage.getItem(KEY);
-            if (raw) { var o = JSON.parse(raw); if (o && typeof o === 'object') cache = Object.assign(cache, o); }
-          } catch (e) { }
-          return cache;
-        }
-        return {
-          get: function (k, d) { var c = load(); return k === undefined ? c : (c[k] !== undefined ? c[k] : d); },
-          set: function (k, v) { var c = load(); c[k] = v; cache = c; try { localStorage.setItem(KEY, JSON.stringify(c)); } catch (e) { } Bus.emit('cfg:' + k, v); return v; },
-          reset: function () { cache = Object.assign({}, DEF); try { localStorage.removeItem(KEY); } catch (e) { } Bus.emit('cfg', cache); return cache; },
-          defs: function () { return Object.assign({}, DEF); }
-        };
-      })();
-
-      /* ---- 5b. Fold：展开/收起的**唯一数据源**（2026-09-12 重构） ----
-       * 背景：此前 4 套折叠实现各自存状态——`UI.collapsible` 存 DOM class、`scheduleFold` 存闭包变量、
-       *       高级阈值存局部变量、小节树**从 DOM 反推**（`!body.classList.contains('sc-hidden')`）。
-       * 后果：① 状态与渲染互相依赖，任何重绘或编程改动即失同步（笔记小节保存后整棵树塌回）；
-       *       ② 嵌套项相互影响（父节点 open 由子节点 DOM 参与计算）；
-       *       ③ 无法表达「禁用 / 空数据 / 异步中」三种边界。
-       * 约定：**DOM 只反映状态，绝不参与状态判定**；key 稳定 ⇒ 可预置、可复位、可按前缀清空防残留。 */
-      var Fold = (function () {
-        var m = {};
-        var hasOwn = Object.prototype.hasOwnProperty;
-        function norm(k) { return String(k === undefined || k === null ? '' : k); }
-        return {
-          /* 读：未登记 ⇒ 用调用方给的默认值（默认值不入库，各处可各自定义缺省） */
-          get: function (key, dflt) {
-            var s = norm(key);
-            return hasOwn.call(m, s) ? m[s] : !!dflt;
-          },
-          /* 写：同值不广播（避免 paint↔set 回环） */
-          set: function (key, v) {
-            var s = norm(key), next = !!v;
-            if (hasOwn.call(m, s) && m[s] === next) return next;
-            m[s] = next;
-            Bus.emit('fold', { key: s, open: next });
-            return next;
-          },
-          toggle: function (key, dflt) { return Fold.set(key, !Fold.get(key, dflt)); },
-          /* 清空：按前缀或全清。切视图 / 换数据源时调用，防止旧 key 的状态残留到新数据上。 */
-          clear: function (prefix) {
-            var p = (prefix === undefined || prefix === null) ? null : String(prefix);
-            var hit = Object.keys(m).filter(function (s) { return p === null || s.indexOf(p) === 0; });
-            hit.forEach(function (s) { delete m[s]; });
-            if (hit.length) Bus.emit('fold:clear', { prefix: p, keys: hit });
-            return hit.length;
-          },
-          keys: function () { return Object.keys(m); },
-          size: function () { return Object.keys(m).length; },
-          _raw: function () { return m; }
-        };
-      })();
 
       /* ---- 5b. Derive：派生状态映射（显式逻辑的单一事实源） ----
        * 病根：此前「provider→徽章色 / provider→中文名 / provider→语义召回态 / 水位→等级 /
