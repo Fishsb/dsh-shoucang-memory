@@ -17,13 +17,14 @@
 
 import { readFileSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
+import { clientSource } from './lib-client-src.mjs'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 /* S3（2026-09-13）：client.js 已由 esbuild 打包生成（局部变量会被重命名），
  * 故源码级断言改读**源码** src-client/body.js；产物级断言（CSS 抽取 / 渲染几何）仍读 client.js。 */
-const CLIENT = existsSync(join(ROOT, 'src-client', 'body.js')) ? join(ROOT, 'src-client', 'body.js') : join(ROOT, 'client.js')
-const src = readFileSync(CLIENT, 'utf8')
+/* UI1/U1：`UI` 已抽到 ui-kit.js ⇒ 单文件读法必失配（实测），改用**源码拼接**统一口径 */
+const src = clientSource(ROOT)
 
 let pass = 0, fail = 0
 const ok = (m) => { pass++; console.log('  ✅ ' + m) }

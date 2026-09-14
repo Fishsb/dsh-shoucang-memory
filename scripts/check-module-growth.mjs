@@ -101,7 +101,8 @@ const FREEZE = {
   // UI1/U1（2026-09-15）：抽出 dom.js（el/svg/ICONS，38 行）⇒ **棘轮下调** 4528 → 4490
   // UI1/U1（2026-09-15）：抽出 state.js（Bus/Store/Log/Prog，82 行）⇒ **棘轮下调** 4490 → 4409
   // UI1/U1（2026-09-15）：抽出 Cfg/Fold（74 行）到 state.js ⇒ **棘轮下调** 4409 → 4338
-  'src-client/body.js': 4337,
+  // UI1/U1（2026-09-15）：抽出 ui-kit.js（UI，451 行）⇒ **棘轮下调** 4337 → 3886
+  'src-client/body.js': 3886,
   // UI1/U1（2026-09-15）：新模块（自 body.js 抽出的样式表）。目标：U2 完成后本件亦应被拆/下探
   'src-client/styles.js': 945,
 }

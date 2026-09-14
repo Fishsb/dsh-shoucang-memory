@@ -18,6 +18,7 @@
 import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { join, dirname } from 'node:path'
+import { clientSource } from './lib-client-src.mjs'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -37,7 +38,9 @@ console.log(`UI 契约机检（client.js ↔ src/panel*.ts · ${PANEL_FILES.leng
 if (!existsSync(CLIENT)) { bad('找不到 client.js'); summary() }
 if (!PANEL_FILES.length) { bad('找不到 src/panel*.ts'); summary() }
 
-const clientSrc = readFileSync(CLIENT, 'utf8')
+/* UI1/U1（2026-09-15）：源码级断言改读**源码拼接**（原读产物 `client.js` —— esbuild 会重排/改名，
+ * 且抽服务后 `UI` 等符号已不在产物同一处）。`CLIENT` 仍保留：它还兼作产物同步检查。 */
+const clientSrc = clientSource(ROOT)
 const panelSrc = PANEL_FILES.map((f) => readFileSync(join(PANEL_DIR, f), 'utf8')).join('\n')
 
 /* ---------- ① 语法 ---------- */
@@ -110,6 +113,12 @@ else {
 // 有意不在 UI 暴露的端点：必须写明理由，否则不得列入
 const ALLOW_NO_ENTRY = {
   // 例：'/internal/xxx': '仅脚本调用，UI 不暴露'
+  // UI1/U1（2026-09-15）：本门改读**源码拼接**后变准，暴露此端点**确实没有 UI 入口** ——
+  //   此前读产物 `client.js`，而契约被挂全局 `window.__SC_CONTRACT__` ⇒ 产物里必然含该串
+  //   ⇒ 被误判为"有入口"（**产物掩盖了真问题**）。改源码后它才浮出来。
+  //   `/content-types` 是 S0 内容类型契约的**查询端点**，供诊断/开发核对「类型边界」用，
+  //   面板无对应视图 —— 属**有意不暴露**。
+  '/content-types': 'S0 内容类型契约查询端点，供诊断/开发用；面板无对应视图（有意不暴露）',
 }
 
 const endpoints = [...new Set((panelSrc.match(/route\('\/[a-zA-Z0-9\/_-]*'/g) || []).map((s) => s.slice(7, -1)))]
@@ -138,7 +147,10 @@ if (existsSync(LIB_CLIENT)) {
   // 归一化换行后比对：仓内为 CRLF，npm 发布后会被规范化为 LF，逐字节比对会产生假红。
   const norm = (s) => s.replace(/\r/g, '')
   const a = norm(readFileSync(LIB_CLIENT, 'utf8'))
-  const b = norm(clientSrc)
+  // ⚠ **本段必须独立读产物**（不能用上面的 `clientSrc`）：`clientSrc` 自 UI1/U1 起指向
+  //   **源码拼接**（供源码级断言用）；拿它比产物 ⇒ 得到"源码 ≠ 产物"的**必然**不一致（实测假红）。
+  //   教训：源码级断言与产物级断言**必须用两个不同的变量**，否则一改就互相污染。
+  const b = norm(readFileSync(CLIENT, 'utf8'))
   if (a === b) ok('前端产物已同步（lib/client.js 与 client.js 一致，换行符已归一化）')
   else bad('前端产物漂移：lib/client.js 与 client.js 不一致 —— 请执行 npm run build:client')
 } else {

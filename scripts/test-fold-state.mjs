@@ -15,6 +15,7 @@
 
 import { readFileSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
+import { clientSource } from './lib-client-src.mjs'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -28,9 +29,8 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
  *     · `deferFold`/`flushFolds`/`secFoldKey`/`UI.fold`（**仍在 body.js**）
  *   ⇒ 只读任一份都会假红。故**读两份并拼接**，让"抽区段"与"符号存在性"两类断言都能命中；
  *     任一处以后再搬走，本件依然成立（不再因抽服务而断）。 */
-const SRC_FILES = ['state.js', 'body.js'].map((f) => join(ROOT, 'src-client', f)).filter(existsSync)
-if (!SRC_FILES.length) SRC_FILES.push(join(ROOT, 'client.js'))
-const src = SRC_FILES.map((f) => readFileSync(f, 'utf8')).join('\n')
+/* UI1/U1：改用**共用口径** `clientSource`（拼接全部业务模块）—— 上轮的手写拼接已并入该工具 */
+const src = clientSource(ROOT)
 
 let pass = 0, fail = 0
 const ok = (m) => { pass++; console.log('  ✅ ' + m) }
