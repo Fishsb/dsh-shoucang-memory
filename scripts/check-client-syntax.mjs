@@ -63,5 +63,19 @@ for (const f of files) {
   ok(isIife, 'A3 `body.js` 仍是 IIFE 形态（U1/U2 拆分时若改为 ESM，须同步更新本件与方案 U1-7）')
 }
 
-console.log(fail ? `\nFAIL（${fail} 项）` : '\nPASS（src-client 全部可解析；形态声明一致）')
+// ── A4 **import 必须在模块顶层**（UI1/U1 实测：同一个错犯了两次）──
+//   现象：把抽出服务的 `import` 锚在"被抽块的原位置"，而那个位置**在 IIFE 内**
+//         ⇒ esbuild 报 `Unexpected "{"`（`import` 语句在函数体里非法）。
+//   本断言把它变成机检：**IIFE 起始行之后不得出现顶层 `import`**。
+{
+  const body = readFileSync(join(DIR, 'body.js'), 'utf8').split(/\r?\n/)
+  const iife = body.findIndex((l) => /^\(function \(\) \{/.test(l))
+  const stray = iife < 0 ? [] : body.map((l, i) => ({ l, i })).filter((x) => /^\s*import\s/.test(x.l) && x.i > iife)
+  ok(stray.length === 0,
+    `A4 IIFE（L${iife + 1}）之后无 \`import\`（实际 ${stray.length} 条${stray.length ? '：L' + stray.map((x) => x.i + 1).join(', L') : ''}）`)
+  const topImports = iife < 0 ? [] : body.slice(0, iife).filter((l) => l.startsWith('import'))
+  console.log(`     顶层 import ${topImports.length} 条：${topImports.map((l) => l.split(' from ')[1] || l).join(' ')}`)
+}
+
+console.log(fail ? `\nFAIL（${fail} 项）` : '\nPASS（src-client 全部可解析；形态声明一致；import 位置合规）')
 process.exit(fail ? 1 : 0)
