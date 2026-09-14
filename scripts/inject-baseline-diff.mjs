@@ -38,17 +38,33 @@ const baselinePath = bIdx >= 0 && argv[bIdx + 1]
 const CASES = ['', '深睡蒸馏', 'xyzzy-nonexistent-token']
 
 /**
- * **归一化：只守「结构骨架」，不守「记忆内容」**（2026-09-14 修正 · S4Y）。
+ * **归一化：只守「结构骨架」，不守「活的记忆内容」**（2026-09-14 立 · 2026-09-15 补全）。
  *
- * 为什么必须归一化：**记忆库是活的** —— 深睡、蒸馏、其他会话**持续写**（实测：本门首版在
- * 深睡产出 3 条原则后立刻假红，随后又因新增原则再次假红）。若把"内容行变化"当失败，
+ * 为什么必须归一化：**记忆库是活的** —— 深睡、蒸馏、环记录**持续写**。若把"内容行变化"当失败，
  * 这个门在活跃系统里会**频繁假红**，最终被人静音 —— 那就等于没有。
  *
- * 归一化规则：`- ` 开头的行是**记忆条目**（画像行 / 索引行），替换为占位符；
- *   其余行（抬头 / 段标题 / 省略提示 / 三层判据块 / 情境块标题）**原样保留比对**。
- * ⇒ 记忆增删**不报**，而**结构/格式/顺序/裁切提示**的任何变化**仍会抓到** —— 后者才是本门要守的。
+ * **骨架 = 段标题 + 段顺序 + 段存在性**；**内容 = 段内的行**（条数与文本都会变）。
+ *
+ * ⚠ **2026-09-15 补全**：首版只归一化了 `- ` 开头的**记忆条目**，**漏了 `[环·…]` 开头的环记录段**
+ *   （实测对拍时差异正是落在 `[环·决策]` 上）—— 归一化必须覆盖**所有活数据行**，否则门照旧假红。
+ *   同时补「**连续同类行压缩**」：环记录**条数**会增减，行数变化**不是**骨架变化。
  */
-const normalize = (t) => String(t).split('\n').map((l) => (/^-\s/.test(l) ? '- <row>' : l)).join('\n')
+const normalize = (t) => {
+  const marks = t.split('\n').map((l) => {
+    if (/^-\s/.test(l)) return '- <row>'                       // 记忆条目（画像行 / 索引行）
+    if (/^\[环·/.test(l)) return '[环·<row>]'                   // 环记录（承诺/关系/决策…活数据）
+    if (/^（.*省略.*）/.test(l)) return '（<omission-note>）'    // 省略/预算提示（数字会变）
+    return l
+  })
+  // 连续同类占位行压成一行：**条数变化 ≠ 骨架变化**
+  const out = []
+  for (const m of marks) {
+    if (/^(- <row>|\[环·<row>\]|（<omission-note>）)$/.test(m) && out[out.length - 1] === m.replace(/\d+/g, '') && out[out.length - 1] === m) continue
+    if (/^(- <row>|\[环·<row>\]|（<omission-note>）)$/.test(m) && out.length && out[out.length - 1] === m) continue
+    out.push(m)
+  }
+  return out.join('\n')
+}
 
 const PORT = process.env.DSH_PORT || '3080'
 const base = `http://127.0.0.1:${PORT}/api/shoucang-panel/inject/preview`

@@ -83,6 +83,10 @@ const CHECKS = [
   //   漏了 **8 件含个人信息的文件**，且**全部已在远端公开**（最早 2026-09-08）。
   //   本门把该纪律变成机检：编码感知（实测踩过 UTF-16LE 漏扫的坑）+ URL 剥离 + 反例自证。
   ['scripts/check-public-tree.mjs'],
+  // S4Z/S4Y（2026-09-15）**对拍归一化的双向自证**：`inject-baseline-diff` 的 normalize 决定该门
+  //   在活跃系统里能否使用 —— 太窄 ⇒ 假红（实测漏了 `[环·…]` 环记录段）；太宽 ⇒ 假绿。
+  //   本件从被测脚本**原样提取** normalize（不是另写一份），双向各锁 4 条。
+  ['scripts/test-inject-baseline-normalize.mjs'],
   ['scripts/check-carriers.mjs'],
   ['scripts/check-field-usage.mjs'],
   ['scripts/test-layering.mjs'],
