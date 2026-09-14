@@ -94,6 +94,12 @@ const CHECKS = [
   ['scripts/check-ui-components.mjs'],
   ['scripts/check-ui-components.mjs', '--selftest'],
   ['scripts/check-client-syntax.mjs'],
+  // UI1/U5-a（2026-09-15）**行为级证据**：`test-route-schema` 只证明"坏请求被 400 拦住"，
+  //   **从未验证合法请求的副作用**（真的写进去、能读回）。而 U1/U2 要大规模拆分前端
+  //   （`body.js` 5476 行 → 7 个 pane），"拆分后行为不变"必须有行为证据 —— `ui-geo-regress`
+  //   只测几何与组件承载（实测 submit/fetch/POST 全为 0），缺口由此件补。
+  //   **零副作用设计**：读原文 → 写回**同样内容** → 再读比对（无恢复步骤 = 无恢复失败风险）。
+  ['scripts/test-save-roundtrip.mjs'],
   ['scripts/check-carriers.mjs'],
   ['scripts/check-field-usage.mjs'],
   ['scripts/test-layering.mjs'],
