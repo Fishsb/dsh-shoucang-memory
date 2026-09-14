@@ -19,7 +19,10 @@
 //
 // 口径声明（本仓反复栽在口径不一致上，故显式钉死）：
 //   · 行数 = **物理行数**（`content.split('\n')` 去掉单一末尾空行），与 `wc -l` 一致；
-//   · 扫描面 = `src/**/*.ts`，**排除 `*.generated.ts`**（生成物由生成器产出，冻结它无意义且必然误红）；
+//   · 扫描面 = **多根**：`src/**/*.ts` + `src-client/**/*.js`，**均排除 `*.generated.*`**
+//     （生成物由生成器产出，冻结它无意义且必然误红）；
+//     ⚠ 2026-09-15 扩面：原先只扫 `src/`，导致前端 `body.js` **5477 行零门禁**（UI1/U0 起纳入）；
+//   · 键 = **仓根相对路径**（`src/x.ts` / `src-client/x.js`）—— 多根后裸名会互相串；
 //   · 与 `audit-architecture` 的行数可能差 1（后者另计图相关数据），**本件口径以本件输出为准**。
 //
 // 退出码：0 = pass · 1 = fail · 3 = skip（src 缺席，诚实跳过）
@@ -28,15 +31,40 @@
 //   --rebase  把当前实测行数**回写**进本文件的 FREEZE 表（有意为之的增长走这条路，
 //             回写后必须用 git diff 复核——这让「允许某模块变大」成为显式可见的决定）
 import { readFileSync, readdirSync, writeFileSync, existsSync } from 'node:fs'
-import { join, dirname, relative } from 'node:path'
+import { join, dirname, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const SRC = join(root, 'src')
 const SELF = fileURLToPath(import.meta.url)
+
+/**
+ * **扫描根（多根 · 2026-09-15 扩面）**。
+ *
+ * 为什么扩：本件原先只扫 `src/**\/*.ts`，于是 **`src-client/` 一条门禁都没有** ——
+ *   实测 `body.js` 长到 **5477 行**而无人知（后端最大模块 `panel-shared.ts` 779 行，却受棘轮紧盯）。
+ *   「**前端不受纪律约束**」本身才是真病灶，故把同一套棘轮覆盖到前端。
+ *
+ * ⚠ **键格式随之迁移**：从**裸文件名**改为**仓根相对路径**（`src/x.ts` / `src-client/x.js`）——
+ *   两个根可能有同名文件，裸名会互相串。
+ */
+const ROOTS = [
+  { dir: join(root, 'src'), ext: '.ts', skip: (f) => f.includes('.generated.') },
+  { dir: join(root, 'src-client'), ext: '.js', skip: (f) => f.includes('.generated.') },
+]
 
 /** 硬顶：任何模块（生成物除外）超过即红 */
 const HARD_CAP = 1000
+/**
+ * **硬顶豁免（临时 · 拆分对象专用）**（2026-09-15 UI1/U0 引入）。
+ *
+ * 为什么需要：`src-client/body.js` **5476 行 > HARD_CAP** ⇒ 若不豁免，**硬顶先判**，
+ *   于是它**在拆分完成前会一直红** —— 连"登记基线"都过不去，任何前端改动都被堵死。
+ *   而它恰恰是 UI1 的**拆分对象**：门的作用应是**逼出拆分**，不是**阻塞拆分**。
+ *
+ * 语义：豁免者**退出硬顶**，但**仍受冻结棘轮**（只许降）—— 于是拆分每推进一步，基线随之下调。
+ * ⚠ **留痕要求**：本集合**必须在对应模块拆完后清空**（条目长期留着 = 一个永久后门）。
+ */
+const HARD_CAP_EXEMPT = new Set(['src-client/body.js'])
 /** 进入冻结名单的下限：≥ 此行数的模块必须登记基线且只许降 */
 const FREEZE_THRESHOLD = 600
 /**
@@ -58,21 +86,25 @@ const SLACK = 15
  * 2026-09-14 定基线（实测取样，口径见件头）。每完成一次瘦身，应把对应条目**下调**。
  */
 const FREEZE = {
+  // ⚠ **2026-09-15 键格式迁移**：裸文件名 → **仓根相对路径**（多根扫描后，裸名会在 `src/` 与 `src-client/` 间互相串）
   // L5（2026-09-14）：动态面选行抽取后**下调** 831 → 764（棘轮只许收紧；原上限 846 曾使 S4-3 无法接入）
   // S4R/R1（2026-09-14）：渲染收敛（主路径改调 `renderSupplyText`，含 3 行说明注释）⇒ **有意增长** 764 → 775
   // S4X/X1（2026-09-14）：修 L8（`droppedStable` 真实化 + 判因注释）⇒ **有意增长** 775 → 779
-  'panel-shared.ts': 779,
-  'scheduler.ts': 745,
-  'treeops.ts': 706,
+  'src/panel-shared.ts': 779,
+  'src/scheduler.ts': 745,
+  'src/treeops.ts': 706,
   // S4-6′/D1（2026-09-14）：有意增长（审计增 rowsN/missReason/zeroGain/switchSource），按 --rebase 口径回写
-  'mcl.ts': 627,
+  'src/mcl.ts': 627,
+  // UI1/U0（2026-09-15）：**前端首次纳入棘轮**。`body.js` 是 UI 侧唯一大模块（5477 行、210 函数、
+  //   顶层 125 声明），此前**零门禁**。本条目 = 拆分的**起点基线**，此后只许降（UI1 目标 < 800）。
+  'src-client/body.js': 5476,
 }
 
 const PRINT = process.argv.includes('--print')
 const REBASE = process.argv.includes('--rebase')
 
-if (!existsSync(SRC)) {
-  console.log('check-module-growth: src/ 缺席 ⇒ skip（exit 3）')
+if (!ROOTS.some((r) => existsSync(r.dir))) {
+  console.log('check-module-growth: 所有扫描根缺席 ⇒ skip（exit 3）')
   process.exit(3)
 }
 
@@ -106,10 +138,17 @@ function lineCountOf(s) {
   return parts.length
 }
 
-const files = readdirSync(SRC).filter((f) => f.endsWith('.ts') && !f.includes('.generated.'))
+const files = []
+for (const r of ROOTS) {
+  if (!existsSync(r.dir)) continue
+  for (const f of readdirSync(r.dir)) {
+    if (!f.endsWith(r.ext) || r.skip(f)) continue
+    files.push({ rel: join(relative(root, r.dir), f).split(sep).join('/'), abs: join(r.dir, f) })
+  }
+}
 const rows = files.map((f) => {
-  const code = readFileSync(join(SRC, f), 'utf8')
-  return { file: f, lines: lineCountOf(code), mutable: countMutableGlobals(code) }
+  const code = readFileSync(f.abs, 'utf8')
+  return { file: f.rel, lines: lineCountOf(code), mutable: countMutableGlobals(code) }
 }).sort((a, b) => b.lines - a.lines)
 
 if (PRINT) {
@@ -138,13 +177,13 @@ if (REBASE) {
  * 为什么要抽出来：`HARD_CAP` 1000 对当前最大模块 879 而言**今天谁也碰不到**，
  *   不写自证就分不清「判定对了」与「分支根本没走到」。
  */
-export function evaluate(rows, freeze = FREEZE, cap = HARD_CAP, threshold = FREEZE_THRESHOLD, mutBaseline = MUTABLE_BASELINE, slack = SLACK) {
+export function evaluate(rows, freeze = FREEZE, cap = HARD_CAP, threshold = FREEZE_THRESHOLD, mutBaseline = MUTABLE_BASELINE, slack = SLACK, exempt = HARD_CAP_EXEMPT) {
   const problems = []
   const shrunk = []
   const within = []
 
   for (const r of rows) {
-    if (r.lines > cap) {
+    if (r.lines > cap && !exempt.has(r.file)) {
       problems.push(`[硬顶] ${r.file} 实测 ${r.lines} 行 > ${cap}（必须拆分，不许继续堆）`)
       continue
     }
@@ -191,10 +230,14 @@ if (process.argv.includes('--selftest')) {
     { name: '未冻结的小模块增长 ⇒ 不拦（不受冻结约束）', rows: [{ file: 's.ts', lines: 599 }], freeze: {}, want: 0 },
     { name: '可变全局超基线 ⇒ 红', rows: [{ file: 'a.ts', lines: 10, mutable: 3 }], freeze: {}, want: 1 },
     { name: '可变全局等于基线 ⇒ 不红', rows: [{ file: 'a.ts', lines: 10, mutable: 2 }], freeze: {}, want: 0 },
+    // ── 2026-09-15 UI1/U0：硬顶豁免（拆分对象专用）──
+    { name: '超硬顶且**不在豁免集** ⇒ 红', rows: [{ file: 'big.js', lines: 5000 }], freeze: { 'big.js': 5000 }, exempt: new Set(), want: 1 },
+    { name: '超硬顶但在**豁免集** ⇒ 不因硬顶红（豁免生效）', rows: [{ file: 'big.js', lines: 5000 }], freeze: { 'big.js': 5000 }, exempt: new Set(['big.js']), want: 0 },
+    { name: '⚠ 豁免硬顶 **≠** 豁免棘轮：豁免集内增长超容差 ⇒ 仍红', rows: [{ file: 'big.js', lines: 5020 }], freeze: { 'big.js': 5000 }, exempt: new Set(['big.js']), want: 1 },
   ]
   let bad = 0
   for (const c of cases) {
-    const got = evaluate(c.rows, c.freeze).problems.length
+    const got = evaluate(c.rows, c.freeze, undefined, undefined, undefined, undefined, c.exempt ?? new Set()).problems.length
     const ok = got === c.want
     if (!ok) bad++
     console.log(`${ok ? '✅' : '❌'} ${c.name}（期望 ${c.want} 项错 · 实得 ${got}）`)

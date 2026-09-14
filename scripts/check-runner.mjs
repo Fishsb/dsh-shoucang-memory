@@ -87,6 +87,13 @@ const CHECKS = [
   //   在活跃系统里能否使用 —— 太窄 ⇒ 假红（实测漏了 `[环·…]` 环记录段）；太宽 ⇒ 假绿。
   //   本件从被测脚本**原样提取** normalize（不是另写一份），双向各锁 4 条。
   ['scripts/test-inject-baseline-normalize.mjs'],
+  // UI1/U0（2026-09-15）**前端终于有门了**：此前 `src-client/` **零门禁** ⇒ `body.js` 长到 5476 行无人知，
+  //   且**连语法错误都不检查**（后端有 tsc，前端什么都没有）。两件互补：
+  //   · check-ui-components —— 组件库 import ↔ 字面量使用**双向**对账（vendor.js 头注早有该约定，无机检）；
+  //   · check-client-syntax —— 解析可读性（两种模块形态都试：ESM 的 entry/vendor 与 IIFE+CJS 的 body）。
+  ['scripts/check-ui-components.mjs'],
+  ['scripts/check-ui-components.mjs', '--selftest'],
+  ['scripts/check-client-syntax.mjs'],
   ['scripts/check-carriers.mjs'],
   ['scripts/check-field-usage.mjs'],
   ['scripts/test-layering.mjs'],
