@@ -109,6 +109,29 @@ else {
   else bad('VIEWS 登记但 show() 无分派（点击后空白）: ' + undisp.join(', '))
 }
 
+/* ---------- ③b 组件选型判因的**存在性**护栏（UI1/U3-b · 2026-09-15） ---------- */
+/* 判因：\`wa-select\` 经**像素级证据**否决（箭头渲染尺寸为 0），已**二度回滚**，现用原生 \`select\`。
+ *   该判因此前**只存在于 \`ui-geo-regress\` 的源码注释里** ⇒ 读码者容易把它当成"漏改的遗留"而去"修"，
+ *   结果**打红那两条断言**。本段做**双向锁定**：
+ *     · 断言仍在（有人删了护栏即报）；
+ *     · 判因文本仍在（有人删了说明即报 —— 少了它，后来人就只剩"照做"而无从判断）。
+ *   ⚠ 本段**不判实现**（不检查有没有 wa-select）；渲染层判定归 \`ui-geo-regress\`（它有真机像素证据）。 */
+{
+  const GEO = join(ROOT, 'scripts', 'ui-geo-regress.mjs')
+  if (!existsSync(GEO)) bad('缺少 ui-geo-regress.mjs —— 组件选型判因无处可查')
+  else {
+    const g = readFileSync(GEO, 'utf8')
+    const hasZeroAssert = /零 wa-select 残留/.test(g)
+    const hasNativeAssert = /下拉为原生实现/.test(g)
+    const hasRationale = /渲染尺寸为 0|像素穷举|像素级证据/.test(g)
+    const hasRenderedCaliber = /注册了.*≠.*能渲染|rendered\(icon\)|rendered\(/.test(g)
+    if (hasZeroAssert && hasNativeAssert) ok('组件选型护栏在位（零 wa-select 残留 + 下拉为原生实现）')
+    else bad('组件选型护栏被移除或改写（零残留=' + hasZeroAssert + ' · 原生=' + hasNativeAssert + '）')
+    if (hasRationale && hasRenderedCaliber) ok('组件选型判因在位（像素级证据 + 「注册了≠能渲染」口径）')
+    else bad('组件选型判因文本缺失（像素证据=' + hasRationale + ' · rendered 口径=' + hasRenderedCaliber + '）⇒ 后来人无从判断为何不用 wa-select')
+  }
+}
+
 /* ---------- ④ 端点覆盖（核心护栏） ---------- */
 // 有意不在 UI 暴露的端点：必须写明理由，否则不得列入
 const ALLOW_NO_ENTRY = {
