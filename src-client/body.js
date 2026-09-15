@@ -549,7 +549,11 @@ import { ICONS, el, svg } from './dom.js'
           return c;
         }
 
-        /* ---- 取数（全部现有端点） ---- */
+        /* ---- 页面：参数（开关渲染 renderToggles* / 根目录 renderViewRoots / 设置读写） ----
+ *  ⚠ 标题订正（UI1/U2-B · 2026-09-15）：原题「取数（全部现有端点）」与内容**不符** ——
+ *    实测本节装的是 9 个 render（renderViewToggles / renderTogglesInject / …Cap / …Model /
+ *    …ModelVec / …ModelLlm / …Sched / numSetting / renderViewRoots）。
+ *    原题属**标注漂移**：代码后来长进来了、标题没跟着改 ⇒ 按标题找代码会找错（由 check-pane-sections 暴露）。 */
         api('/memory/overview').then(function (r) {
           var d = r || {};
           var ds = d.distillStats || {};
