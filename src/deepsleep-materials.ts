@@ -8,6 +8,8 @@ import { join } from 'node:path'
 // 阶段 4（2026-09-14）：sectionExists 随「主动遗忘」一块迁至 forgetops（口径仍与 matchSection 同源）
 import { sectionExists } from './forgetops.js'
 import { dayKey } from './activity.js'
+import { loadStore } from './record-shadow.js'
+import { openDecisions } from './decision-ring.js'
 
 /** 一轮深睡需要的全部「现行材料」文本（供 userInput 拼装；全部只读派生）。 */
 export interface SleepMaterials {
@@ -19,11 +21,13 @@ export interface SleepMaterials {
   splitCandidates: string
   forgetCandidates: string
   replayRecent: string
+  /** 待回收的裁决（P5 outcomes 通道的材料；见实现处注释） */
+  pendingDecisions: string
   hotCtx: string
   interCtx: string
   /** S3-3/S3-4（2026-09-14）材料段**条数**：审计可见化用 —— 让"本轮给了几条候选"可查
    *  （此前审计只有消费结果 `forgetArchived`/`forgetKept`，没有输入量）。 */
-  counts: { split: number; forget: number; replay: number; hot: number; inter: number }
+  counts: { split: number; forget: number; replay: number; hot: number; inter: number; pending: number }
 }
 
 export function gatherMaterials(root: string): SleepMaterials {
@@ -184,6 +188,25 @@ export function gatherMaterials(root: string): SleepMaterials {
       return rows ? `## 互抑候选（同文件 § 名高度重叠，低于唯一门阈值故并存至今；可经 treeOps.merge 并入或 pointerOps 合并概况）\n${rows}` : ''
     } catch { return '' }
   })()
+  /** **待回收的裁决**（P5 `outcomes` 通道的材料 —— 2026-09-15 补接线）。
+   *
+   *  **判因（H-1 · 实测确凿）**：prompt 早写明「材料若给出**待回收的裁决**（含 `decisionId` 与**当时预测**），
+   *   且你从痕迹看得出实际结果，就填 `outcomes[]`」（`deepsleep-core.ts` 的 P5 段）——
+   *   但**材料侧从未给过这一段** ⇒ 该条件**永不成立** ⇒ `outcomes` **结构性恒 0**
+   *   （实测：库内 `decision` 50 条、其中 **49 条待回收**，而历史上 `outcome` 只收过 **1** 条）。
+   *  ⇒ 本段＝把既有的 `openDecisions()`（`decision-ring` 早已实现，**不另造**）接进材料。
+   *  ⚠ 记录里若**无 `predicted`**，仍照实列出并标注「无预测」——**不编造预测**（伪造会让回收判据失真）。 */
+  const pendingDecisions = (() => {
+    try {
+      const { records } = loadStore(root)
+      const rows = openDecisions(records).map((r) => {
+        const m = (r.meta || {}) as Record<string, string>
+        const pred = String(m.predicted || '').trim()
+        return `- \`${String(r.id)}\`｜${String(r.text || '').trim()}｜当时预测：${pred || '（无预测记录）'}`
+      })
+      return rows.length ? rows.join('\n') : '（无）'
+    } catch { return '（无）' }
+  })()
   /** 段**条数**（空态与标题行不计）：口径统一「非空 且 非 `##` 标题行 且 非分隔线」。
    *  ⚠ **不做 per-段特判** —— 特判必然漂移；此处只求"输入量可查"，不求精确语义计数。 */
   const countOf = (s: string): number => {
@@ -192,9 +215,11 @@ export function gatherMaterials(root: string): SleepMaterials {
     return t.split('\n').filter((l) => { const x = l.trim(); return !!x && !x.startsWith('##') && x !== '---' }).length
   }
   return {
-    currentPrinciples, currentList, currentProfiles, currentMemIndex, currentTreeSections, splitCandidates, forgetCandidates, replayRecent, hotCtx, interCtx,
+    currentPrinciples, currentList, currentProfiles, currentMemIndex, currentTreeSections, splitCandidates, forgetCandidates, replayRecent, hotCtx, interCtx, pendingDecisions,
     // S3-3/S3-4（2026-09-14）：让"本轮给了多少条候选"进审计 —— 与消费结果配对后，才能区分
     //   「没候选可消费」（输入 0）与「有候选但代理没消费」（输入 >0 而产出 0）—— 两者此前**表现完全相同**。
-    counts: { split: countOf(splitCandidates), forget: countOf(forgetCandidates), replay: countOf(replayRecent), hot: countOf(hotCtx), inter: countOf(interCtx) },
+    // 2026-09-15（H-1）：`pending` 同理 —— 它一进审计，「outcomes 恒 0」就能立刻区分
+    //   「没有待回收裁决」与「有 49 条却没回收」。
+    counts: { split: countOf(splitCandidates), forget: countOf(forgetCandidates), replay: countOf(replayRecent), hot: countOf(hotCtx), inter: countOf(interCtx), pending: countOf(pendingDecisions) },
   }
 }

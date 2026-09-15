@@ -1658,6 +1658,17 @@
 - **panel client 迁移到 slot 契约（2026-09-05，解冻前置）**：client.js 注入声明加 `'slots'`，入口从直插侧栏 footArea DOM 改为注册 `sidebar.footer.action` 插槽按钮（无 slots 环境保留直插兜底）；host+client 已注入运行（ef85e372），构建产物 lib/ 重建
 
 ### Fixed
+- **H-1 · 深睡 `outcomes` 通道自上线起结构性恒 0 —— 材料侧从未供应（2026-09-15）**：prompt 的 P5 段写明
+  「材料若给出**待回收的裁决**（含 `decisionId` 与**当时预测**）…就填 `outcomes[]`」，而 `gatherMaterials`
+  **从未产出该段** ⇒ 条件永不成立。**实测**：库内 `decision` 50 条，其中 **49 条待回收**（`status=open` + `predicted`），
+  而历史上 `outcome` 只收过 **1** 条 ⇒ 通道几乎全死。**修法（不另造轮子）**：把既有的 `openDecisions()`
+  （`decision-ring` 早已实现）接进材料 —— 新增 `pendingDecisions` 材料段 + `counts.pending` 审计口径，
+  并在 `deepsleep-run` 的 userInput 拼上该段（**判据原文未改**，只是终于有素材可用）。
+  **根因修（关键）**：本仓 `check-injection-reach` 只守**注入文本**的抵达面，
+  **不守「prompt 依赖的材料段是否真的产出并被拼接」** ⇒ 这才是它能潜伏的结构性原因。
+  已在该件补两条**正面**断言（**不新开文件**）：**⑤** userInput 引用的每个 `M.<key>` 必须由 `gatherMaterials` 产出
+  （产出 12 键 · 引用 12 键）；**⑥ 通道锁**：prompt 声明的通道必须有材料段背书且已拼接
+  （**反例自证**：去掉材料段即报红）。
 - **UI1 收尾 · 人工视觉复核抓出并修复「深睡页加载失败」（2026-09-15）**：出图后逐张人眼核对，发现
   「深度睡眠」页显示 `加载失败: dsFmtTime is not defined` —— 而**构建 / 几何门 / 契约门 / A5 四门全绿**
   （构建不做未定义检查；几何门断言面不含深睡页；契约门只测两视图；A5 只监视"服务模块 + pane 间导出"，

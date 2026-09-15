@@ -8,6 +8,8 @@ export interface SleepMaterials {
     splitCandidates: string;
     forgetCandidates: string;
     replayRecent: string;
+    /** 待回收的裁决（P5 outcomes 通道的材料；见实现处注释） */
+    pendingDecisions: string;
     hotCtx: string;
     interCtx: string;
     /** S3-3/S3-4（2026-09-14）材料段**条数**：审计可见化用 —— 让"本轮给了几条候选"可查
@@ -18,6 +20,7 @@ export interface SleepMaterials {
         replay: number;
         hot: number;
         inter: number;
+        pending: number;
     };
 }
 export declare function gatherMaterials(root: string): SleepMaterials;

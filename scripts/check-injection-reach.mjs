@@ -72,6 +72,46 @@ if (indirect.length) console.log(`   · 其中**经调用间接抵达**（不在
 const situationOnly = /const finalText = shadow\.situationBlock \? `\$\{text\}\\n\\n\$\{shadow\.situationBlock\}` : text/.test(shared)
 ok(situationOnly, '④ 注入文本**只并入 situation 块**（`supply-assembly` 的 partial 现状被钉住；"装配器接管主路径"会在此翻红）')
 
+/* ══ ⑤⑥ **深睡 prompt 材料抵达面**（H-1 根因修 · 2026-09-15）══════════════
+ * 判因（实测）：prompt 的 P5 段写着「**材料若给出待回收的裁决**…就填 `outcomes[]`」，
+ *   而 `gatherMaterials` **从未产出**该段 ⇒ 条件永不成立 ⇒ `outcomes` **结构性恒 0**
+ *   （库内 49 条待回收裁决、历史只收过 1 条）。本仓有 `check-injection-reach` 守**注入文本**的抵达面，
+ *   却**没有**守「**prompt 依赖的材料段是否真的产出并被拼接**」—— 这就是它能潜伏的结构性原因。
+ * ⇒ 补两条**正面**断言（与既有 ③④ 同一风格，**不新开文件**）：
+ *   ⑤ userInput 里引用的每个 `M.<key>` 都必须由 `gatherMaterials` 产出（**用了但没产出 = 假绿**）；
+ *   ⑥ **通道锁**：prompt 声明的 P5 `outcomes` 通道，必须有材料段背书 **且** 已拼进 userInput。 */
+const runSrc = read('src/deepsleep-run.ts')
+const matSrc = read('src/deepsleep-materials.ts')
+const coreSrc = read('src/deepsleep-core.ts')
+/** 产出集：`gatherMaterials` 的 `return { … }` 里的键（**含 `counts`** —— 它也被 userInput 侧用于审计）
+ *  ⚠ 解析要点（首版踩过）：`return {` 行**开头的 `{`** 必须剥掉，否则首个键被当作非法标识符丢弃；
+ *    且 `counts: {…}` 是**嵌套对象**，需在它处**止步**（否则内层键会污染产出集）。 */
+const produced = (() => {
+  const lines = matSrc.split('\n')
+  const i = lines.findIndex((l) => /^\s*return \{/.test(l))
+  if (i < 0) return new Set()
+  const set = new Set()
+  for (let k = i; k < lines.length; k++) {
+    const t = lines[k].replace(/\/\/.*$/, '').trim()
+    if (k > i && /^counts\s*:/.test(t)) { set.add('counts'); break }
+    if (/^\}/.test(t)) break
+    for (const tok of t.replace(/^return\s*\{/, '').split(',')) {
+      const x = tok.trim()
+      if (/^[A-Za-z_$][\w$]*$/.test(x)) set.add(x)
+    }
+  }
+  return set
+})()
+/** 使用集：`deepsleep-run.ts` 里出现的 `M.<key>` */
+const used = new Set([...runSrc.matchAll(/\bM\.([A-Za-z_$][\w$]*)/g)].map((m) => m[1]))
+const missingKeys = [...used].filter((k) => !produced.has(k))
+ok(missingKeys.length === 0, `⑤ 深睡 userInput 引用的材料键**全部由 gatherMaterials 产出**（产出 ${produced.size} 键 · 引用 ${used.size} 键 · 缺：${missingKeys.join(', ') || '无'}）`)
+const unusedKeys = [...produced].filter((k) => !used.has(k))
+if (unusedKeys.length) console.log(`   · 产出但未被 userInput 引用（可见化，不判红）：${unusedKeys.join(', ')}`)
+const declaresOutcomes = /outcomes/.test(coreSrc.slice(coreSrc.indexOf('P5'), coreSrc.indexOf('P5') + 400))
+ok(!declaresOutcomes || (produced.has('pendingDecisions') && used.has('pendingDecisions')),
+  `⑥ 通道锁：prompt 声明的 P5 \`outcomes\` 通道**有材料背书且已拼接**（材料段=${produced.has('pendingDecisions')} · 拼接=${used.has('pendingDecisions')}）`)
+
 console.log('')
 console.log('📋 抵达面申报（**不静默**：partial/none 逐条写明理由）：')
 for (const r of REACH) console.log(`   · ${r.reaches.padEnd(7)} ${r.module}#${r.symbol} —— ${r.path}`)
