@@ -94,7 +94,8 @@ const FREEZE = {
   // UI1/U2（2026-09-15）：抽出 panes-arch(4)/panes-observe(3) ⇒ 棘轮 1552 → 实测值
   // UI1/U2（2026-09-15）：抽出 panes-suite(2 符号) ⇒ 棘轮 1065 → 840
   // UI1/U2（2026-09-15）：抽出 panes-settings(11 符号) ⇒ 棘轮 840 → 实测值
-  'src-client/body.js': 648,
+  // UI1 收尾（2026-09-15）：DS_STATE_TEXT/DS_PROBE_TEXT/dsFmt* 迁入 panes-suite.js + 删 dsFmtTime 重复定义 ⇒ 棘轮 648 → 626
+  'src-client/body.js': 626,
   'src-client/styles.js': 726,
   'src/scheduler.ts': 611,
   'src/treeops.ts': 588,
