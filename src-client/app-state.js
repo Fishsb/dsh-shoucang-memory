@@ -24,6 +24,10 @@ export const appState = {
   statusFn: null,
   /** 错误定位器（`fail()`）。 */
   failFn: null,
+  /** 当前视图重绘器（`refreshCurrentView()`）——pane 改配置后触发刷新。 */
+  refreshView: null,
+  /** DOM 句柄表（`refs`）——**可变**,UI1/C′ 原则：可变句柄统一在本容器。 */
+  refs: null,
   /** 当前视图名（`show()` 维护；`refreshCurrentView` 读） */
   currentView: null,
   /** 轮询定时器句柄（`restartPolling` 写；`0`/`null` 表示未启动） */

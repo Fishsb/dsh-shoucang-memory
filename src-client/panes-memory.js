@@ -12,24 +12,24 @@ import { Derive, fmtTime } from './derive.js'
 import { appState } from './app-state.js'
 
 function openMemoryNote(pointer, autoSection, returnRender) {
-  if (!pointer) { status('该条目无 notes 跳转目标'); return; }
+  if (!pointer) { appState.statusFn('该条目无 notes 跳转目标'); return; }
   var rel = String(pointer).split('§')[0].trim();
-  if (!/^notes\/[a-z]+\.md$/.test(rel)) { status('指针目标非 notes 白名单：' + pointer); return; }
-  appState.memoryViewScroll = refs.view.scrollTop; // 记录进入前滚动位置（返回时恢复）
+  if (!/^notes\/[a-z]+\.md$/.test(rel)) { appState.statusFn('指针目标非 notes 白名单：' + pointer); return; }
+  appState.memoryViewScroll = appState.refs.view.scrollTop; // 记录进入前滚动位置（返回时恢复）
   appState.noteReturnRender = returnRender || null; // 来源板块上下文（返回时回原板块，默认记忆板块）
-  api('/memory/sections?rel=' + encodeURIComponent(rel)).then(function (r) {
-    if (!r || !r.present) { status((r && r.error) || '小节不可用'); return; }
+  appState.api('/memory/sections?rel=' + encodeURIComponent(rel)).then(function (r) {
+    if (!r || !r.present) { appState.statusFn((r && r.error) || '小节不可用'); return; }
     Fold.clear('note:'); // 换笔记 ⇒ 清掉上一篇的小节开合态，避免 key 无界增长与旧态串味
-    renderNoteSections(refs.view, r);
+    renderNoteSections(appState.refs.view, r);
     if (autoSection) {
       /* 旧实现用 `h.click()` 模拟点击来展开——依赖 DOM 结构（nextElementSibling 恰是 body）
          且会连带触发一次真实 toggle（若该节点本就展开则反而被收起）。
          现直接对单一数据源置位，由各自的 paint 订阅同步 DOM，幂等且不碰结构。 */
-      refs.view.querySelectorAll('[data-fold-key]').forEach(function (h) {
+      appState.refs.view.querySelectorAll('[data-fold-key]').forEach(function (h) {
         if ((h.textContent || '').indexOf(autoSection) !== -1) Fold.set(h.getAttribute('data-fold-key'), true);
       });
     }
-  }).catch(fail);
+  }).catch(appState.failFn);
 }
 
 function makeMemoryPointerRow(title, pointer, meta, summary) {
@@ -116,7 +116,7 @@ function renderPersona(view, data) {
     actions: [el('span', 'sc-proto-note', '压缩执行位：下方 USER.md 卡')]
   });
   if (!data || !data.present || !Derive.has(data.indexes)) {
-    status((data && data.error) || '记忆库画像不可用');
+    appState.statusFn((data && data.error) || '记忆库画像不可用');
     return;
   }
   var pair = data.indexes.filter(function (f) { return f.name === 'USER.md' || f.name === 'AGENT.md' });
@@ -212,9 +212,9 @@ function renderPersona(view, data) {
        * （deepsleep 的树整理负责把高分重复条目折叠为索引项），故按钮只做「触发一次深睡归纳」，
        * 文案与 confirm 都写明这层依赖，不做无 onclick 的假按钮。 */
       right.push(UI.button('压缩画像', function () {
-        status('画像压缩（深度睡眠归纳）触发中…');
-        return api('/deepsleep/trigger', { method: 'POST', body: '{}' })
-          .then(function (rr) { status(rr && rr.ok ? '✓ 已触发深睡归纳（高分重复条目将折叠为索引项）' : '⚠ 触发失败：' + ((rr && rr.error) || '')); });
+        appState.statusFn('画像压缩（深度睡眠归纳）触发中…');
+        return appState.api('/deepsleep/trigger', { method: 'POST', body: '{}' })
+          .then(function (rr) { appState.statusFn(rr && rr.ok ? '✓ 已触发深睡归纳（高分重复条目将折叠为索引项）' : '⚠ 触发失败：' + ((rr && rr.error) || '')); });
       }, {
         async: true, busyText: '压缩中…', okText: '已触发归纳',
         title: '画像压缩：触发一次深度睡眠归纳，由树整理把高分重复条目折叠为索引项（无独立端点）',
@@ -233,7 +233,7 @@ function renderPersona(view, data) {
   });
   /* v9 画面末尾的**注脚**（.bp-note）：说明口径与依据，此前面板无此块 */
   view.appendChild(el('div', 'sc-note', '注：容量百分比与容量条按 write_gate 的实际上限计算；指针行点击可直达 notes/ 对应小节。'));
-  status('画像 · ' + totalRows + ' 条指针');
+  appState.statusFn('画像 · ' + totalRows + ' 条指针');
 }
 
 export { openMemoryNote, makeMemoryPointerRow, idxHue, idxPill, TAG_ORDER, renderIndexRows, renderPersona };

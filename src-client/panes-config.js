@@ -1,17 +1,64 @@
 /**
- * panes-config.js — 配置类视图（UI1/U2 **验证刀** · 2026-09-15）
+ * panes-config.js — 自 `body.js` 抽出的 pane 模块（UI1/U2 · 2026-09-15）
  *
- * **为什么先拿它开刀**：精确依赖实测（剥注释/字符串后按词边界）——它是 24 个 render 里
- *   **依赖最少**的（原 2 个），且在 `fmtTime` 归位 `derive.js`、`api` 进 `appState` 之后**只剩 1 个**。
+ * **抽取方式**：`scripts/extract-pane.mjs`，用 **TypeScript AST** 取精确区间
+ *   （花括号配平与缩进边界都试过、都会切错 —— 见该脚本头注）。
  *
- * **取依赖的方式**：从 `appState` 取（`appState.api` / `appState.refs` 等），**不是** import 服务模块 ——
- *   那会让"谁都能 import 全局服务"、pane 与入口的依赖方向变乱。
- *   ⚠ `appState` 字段由**入口**（`body.js` 的 `factory`）在启动时注入 ⇒ 调用时必已就绪。
+ * **取依赖**：从 `appState` 取（入口注入），不 import 全局服务模块。
  */
 import { UI } from './ui-kit.js'
 import { el } from './dom.js'
-import { fmtTime } from './derive.js'
+import { Derive, fmtTime } from './derive.js'
 import { appState } from './app-state.js'
+
+function renderViewRoots(view, rootListWrap) {
+  view.textContent = '';
+  UI.pageHead('守藏根目录', '指向含 shoucang.config.yaml 的工作区目录。该目录本身即为 Obsidian 兼容 vault（Markdown + frontmatter + [[双链]]），可用 Obsidian 直接打开。', { routes: ['/roots', '/get_root', '/root/bootstrap'] });
+
+  var listWrap = el('div'); rootListWrap(listWrap);
+  view.appendChild(listWrap);
+  var addItem = el('div', 'setting-item');
+  var info = el('div', 'setting-item-info');
+  info.appendChild(el('div', 'setting-item-name', '添加根目录'));
+  info.appendChild(el('div', 'setting-item-desc', '绝对路径，须包含 shoucang.config.yaml'));
+  var input = el('input', 'sc-input'); input.placeholder = '请输入 vault 的绝对路径';
+  var btn = el('button', 'sc-btn', '添加并启用');
+  btn.onclick = function () {
+    var p = input.value.trim(); if (!p) return;
+    appState.api('/set_root', { method: 'POST', body: JSON.stringify({ path: p }) })
+      .then(function () { input.value = ''; appState.statusFn('✓ 根目录已启用'); appState.refreshView(); })
+      .catch(appState.failFn);
+  };
+  addItem.appendChild(info); addItem.appendChild(input); addItem.appendChild(btn);
+  view.appendChild(addItem);
+
+  function draw(r) {
+    listWrap.textContent = '';
+    if (!Derive.has(r.roots)) {
+      var empty = el('div', 'setting-item');
+      empty.appendChild(el('div', 'setting-item-desc', '尚未登记任何根目录——在上方输入路径添加。'));
+      listWrap.appendChild(empty);
+      return; // 空态必须收口：原实现缺 return，紧接着 r.roots.forEach 在 /roots 未返回对象时必抛
+    }
+    r.roots.forEach(function (root) {
+      var item = el('div', 'setting-item sc-rootitem' + (root.id === r.active ? ' active' : ''));
+      var dot = el('span', 'sc-dot' + (root.id === r.active ? ' on' : '')); void dot;
+      item.appendChild(dot.cloneNode ? dot : dot);
+      item.appendChild(el('span', 'sc-rootname', root.name));
+      item.appendChild(el('span', 'sc-rootpath', root.path)).title = root.path;
+      var useBtn = el('button', 'sc-btn subtle', root.id === r.active ? '当前' : '启用');
+      if (root.id === r.active) useBtn.disabled = true;
+      else useBtn.onclick = function () {
+        appState.api('/set_root', { method: 'POST', body: JSON.stringify({ path: root.path }) })
+          .then(function () { appState.statusFn('✓ 已启用 ' + root.name); appState.refreshView(); })
+          .catch(appState.failFn);
+      };
+      item.appendChild(useBtn);
+      listWrap.appendChild(item);
+    });
+  }
+  renderViewRoots._draw = draw;
+}
 
 function renderViewYaml(view, ta, saveRow) {
   view.textContent = '';
@@ -28,7 +75,7 @@ function renderViewYaml(view, ta, saveRow) {
   var recentBox = el('div', 'sc-recent');
   recentBox.appendChild(el('div', 'sc-recent-row', '读取中…'));
   view.appendChild(recentBox);
-  api('/config/recent').then(function (r) {
+  appState.api('/config/recent').then(function (r) {
     recentBox.textContent = '';
     var cfg = r && r.configMtime ? ('配置文件改动：' + fmtTime(r.configMtime)) : '配置文件尚无记录';
     recentBox.appendChild(el('div', 'sc-recent-row', cfg));
@@ -44,4 +91,27 @@ function renderViewYaml(view, ta, saveRow) {
   }).catch(function () { recentBox.textContent = ''; recentBox.appendChild(el('div', 'sc-recent-row', '读取失败（/config/recent）')); });
 }
 
-export { renderViewYaml };
+function renderConfigRaw(host) {
+  var rootSection = el('div');
+  var yamlSection = el('div');
+  var ta = document.createElement('textarea'); appState.refs.ta = ta;
+  var saveRow = el('div');
+  renderViewRoots(rootSection, function (w) { appState.refs.rootListWrap = w; });
+  renderViewYaml(yamlSection, ta, saveRow);
+  host.appendChild(rootSection);
+  host.appendChild(yamlSection);
+  appState.api('/roots').then(function (r) { if (renderViewRoots._draw) renderViewRoots._draw(r); }).catch(appState.failFn);
+  if (saveRow._btn) {
+    saveRow._btn.onclick = function () {
+      appState.api('/save', { method: 'POST', body: JSON.stringify({ text: ta.value }) })
+        .then(function () { appState.statusFn('✓ 已保存，原文件已备份为 .bak-*'); })
+        .catch(appState.failFn);
+    };
+  }
+  appState.api('/config').then(function (r) {
+    ta.value = r.text || '';
+    if (!r.text) appState.statusFn(r.error === 'no-active-root' ? '未激活根目录——请在「高级 · 根目录」区添加。' : (r.error || ''));
+  }).catch(appState.failFn);
+}
+
+export { renderViewRoots, renderViewYaml, renderConfigRaw };

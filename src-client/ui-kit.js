@@ -11,6 +11,7 @@
  */
 import { ICONS, el, svg } from './dom.js'
 import { Bus, Cfg, Fold, Log, Store } from './state.js'
+import { appState } from './app-state.js'
 
 /* 页头槽的**渲染轮次**（原在 body.js 渲染层；见本件头注的"状态归属变更"） */
 var headEpoch = 0, headUsed = -1;
@@ -127,7 +128,7 @@ var UI = {
       acts.appendChild(srch);
     }
     if (o.refresh) {
-      acts.appendChild(UI.button('刷新', function () { refreshCurrentView(); status('已重新取数'); }, { title: '重新取数并重绘本页' }));
+      acts.appendChild(UI.button('刷新', function () { appState.refreshView(); appState.statusFn('已重新取数'); }, { title: '重新取数并重绘本页' }));
     }
     /* 页头自定义动作（v9 页头右侧可放主操作，如插件集合页的「重新装配」） */
     (o.actions || []).forEach(function (n) { if (n) acts.appendChild(n); });
@@ -193,11 +194,11 @@ var UI = {
     b.textContent = text;
     b.onclick = function () {
       if (o.confirm && !confirm(o.confirm)) return;
-      if (!o.async) { try { onClick(); } catch (e) { fail(e); } return; }
+      if (!o.async) { try { onClick(); } catch (e) { appState.failFn(e); } return; }
       b.disabled = true; b.setAttribute('loading', '');
       var old = b.textContent; if (o.busyText) b.textContent = o.busyText;
       Promise.resolve().then(onClick).then(function (r) { Log.info(o.okText || (text + ' 完成')); return r; })
-        .catch(fail).then(function () {
+        .catch(appState.failFn).then(function () {
           b.disabled = false; b.removeAttribute('loading'); b.textContent = old;
         });
     };

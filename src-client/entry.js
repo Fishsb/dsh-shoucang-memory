@@ -11,8 +11,9 @@
  *   都从产物里原地抽取 `var CSS = [ ... ].join('')`；压缩会破坏该锚点与可读性。
  */
 import './vendor.js'
-import { PANEL_CONTRACT } from './panel-contract.generated.js'
-
-/* S4：接口契约挂全局供面板本体消费（body.js 保持"无 import 的脚本体"，沿用 __SC_VENDOR_CSS__ 同款做法） */
-if (typeof window !== 'undefined') window.__SC_CONTRACT__ = PANEL_CONTRACT
+/* UI1/U2（2026-09-15）：契约挂载**单独成件**并在 body **之前** import ——
+ *   原先写在本文件顶层的赋值语句会被 `import './body.js'`（**静态提升**）越过 ⇒
+ *   实测产物里 body 的读取早于赋值、`CONTRACT` 恒为 null。本件靠 ESM
+ *   「被 import 的模块先求值」保证顺序，不再依赖打包器的巧合排序。 */
+import './contract-global.js'
 import './body.js'

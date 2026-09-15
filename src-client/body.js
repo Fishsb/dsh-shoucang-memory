@@ -2,6 +2,7 @@ import { UI } from './ui-kit.js'
 import { appState } from './app-state.js'
 import { Derive, fmtTime } from './derive.js'
 import { renderPersona, renderIndexRows, openMemoryNote, makeMemoryPointerRow } from './panes-memory.js'
+import { renderViewRoots, renderViewYaml, renderConfigRaw } from './panes-config.js'
 /**
  *dsh-shoucang-memory — client 半区（纯 DOM，样式照搬 Obsidian 设置窗口）。守藏单插件 2026-09-08 合并。
  *
@@ -42,12 +43,20 @@ import { ICONS, el, svg } from './dom.js'
        * fail() 会自动读取 e.__ctx ⇒ **所有旧调用点零改动即获得错误定位与调用日志**。 */
       /* S4：接口契约（后端契约表生成的共享产物）——用于**发请求前**预检必填字段。
        *   判因：必填缺失以前要等后端 400 一个来回才暴露；现在本地即拦，错误信息同源（字段名一致）。 */
-      var CONTRACT = (typeof window !== 'undefined' && window.__SC_CONTRACT__) || null;
+      /* UI1/U2（2026-09-15）**修潜伏的顺序耦合**：原为模块加载期一次性读取
+       *   `var CONTRACT = window.__SC_CONTRACT__ || null` —— 而该全局由 `entry.js` 在**模块顶层**赋值，
+       *   本 IIFE 在 **factory 内**执行 ⇒ 二者在产物的**拓扑序**由 esbuild 决定。
+       *   实测（加入 `panes-config.js` 依赖后）：产物里**读取(L8095) 早于赋值(L11884)** ⇒ `CONTRACT` 恒为 null
+       *   ⇒ 契约预检全线失效（真机 9 项断言红）。**不是新 bug，是一直靠"碰巧顺序对"活着。**
+       *   ⇒ 改为**惰性取用**：`contract()` 每次从 window 现取 ⇒ **与模块执行顺序解耦**。 */
+      function contract() {
+        return (typeof window !== 'undefined' && window.__SC_CONTRACT__) || null;
+      }
       function contractOf(path) {
-        if (!CONTRACT) return null;
+        if (!contract()) return null;
         if (!appState.contractByPath) {
           appState.contractByPath = {};
-          (CONTRACT.routes || []).forEach(function (r) { appState.contractByPath[r.path] = r; });
+          (contract()?.routes || []).forEach(function (r) { appState.contractByPath[r.path] = r; });
         }
         return appState.contractByPath[path] || null;
       }
@@ -1304,87 +1313,11 @@ import { ICONS, el, svg } from './dom.js'
         }).catch(function (e) { dZone.textContent = ''; dZone.appendChild(el('div', 'sc-desc', '⚠ 读取失败：' + e.message)); });
       }
 
-      function renderViewRoots(view, rootListWrap) {
-        view.textContent = '';
-        UI.pageHead('守藏根目录', '指向含 shoucang.config.yaml 的工作区目录。该目录本身即为 Obsidian 兼容 vault（Markdown + frontmatter + [[双链]]），可用 Obsidian 直接打开。', { routes: ['/roots', '/get_root', '/root/bootstrap'] });
-
-        var listWrap = el('div'); rootListWrap(listWrap);
-        view.appendChild(listWrap);
-        var addItem = el('div', 'setting-item');
-        var info = el('div', 'setting-item-info');
-        info.appendChild(el('div', 'setting-item-name', '添加根目录'));
-        info.appendChild(el('div', 'setting-item-desc', '绝对路径，须包含 shoucang.config.yaml'));
-        var input = el('input', 'sc-input'); input.placeholder = '请输入 vault 的绝对路径';
-        var btn = el('button', 'sc-btn', '添加并启用');
-        btn.onclick = function () {
-          var p = input.value.trim(); if (!p) return;
-          api('/set_root', { method: 'POST', body: JSON.stringify({ path: p }) })
-            .then(function () { input.value = ''; status('✓ 根目录已启用'); refreshCurrentView(); })
-            .catch(fail);
-        };
-        addItem.appendChild(info); addItem.appendChild(input); addItem.appendChild(btn);
-        view.appendChild(addItem);
-
-        function draw(r) {
-          listWrap.textContent = '';
-          if (!Derive.has(r.roots)) {
-            var empty = el('div', 'setting-item');
-            empty.appendChild(el('div', 'setting-item-desc', '尚未登记任何根目录——在上方输入路径添加。'));
-            listWrap.appendChild(empty);
-            return; // 空态必须收口：原实现缺 return，紧接着 r.roots.forEach 在 /roots 未返回对象时必抛
-          }
-          r.roots.forEach(function (root) {
-            var item = el('div', 'setting-item sc-rootitem' + (root.id === r.active ? ' active' : ''));
-            var dot = el('span', 'sc-dot' + (root.id === r.active ? ' on' : '')); void dot;
-            item.appendChild(dot.cloneNode ? dot : dot);
-            item.appendChild(el('span', 'sc-rootname', root.name));
-            item.appendChild(el('span', 'sc-rootpath', root.path)).title = root.path;
-            var useBtn = el('button', 'sc-btn subtle', root.id === r.active ? '当前' : '启用');
-            if (root.id === r.active) useBtn.disabled = true;
-            else useBtn.onclick = function () {
-              api('/set_root', { method: 'POST', body: JSON.stringify({ path: root.path }) })
-                .then(function () { status('✓ 已启用 ' + root.name); refreshCurrentView(); })
-                .catch(fail);
-            };
-            item.appendChild(useBtn);
-            listWrap.appendChild(item);
-          });
-        }
-        renderViewRoots._draw = draw;
-      }
+      
 
       /* ---------- 页面：配置原文 ---------- */
 
-      function renderViewYaml(view, ta, saveRow) {
-        view.textContent = '';
-        UI.pageHead('配置原文', '直接编辑 shoucang.config.yaml 全文。保存时原文件自动备份为 .bak-时间戳。', { routes: ['/config', '/save'] });
-        ta.id = 'sc-yaml'; ta.spellcheck = false;
-        view.appendChild(ta);
-        saveRow.className = 'setting-item';
-        var spacer = el('div', 'setting-item-info');
-        saveRow.appendChild(spacer);
-        saveRow.appendChild(saveRow._btn = el('button', 'sc-btn', '保存'));
-        view.appendChild(saveRow);
-        /* U2（B9）：最近改动 5 条 —— 读库 git reflog + 配置 mtime（按需端点，零新增常驻注入） */
-        view.appendChild(el('div', 'sc-mem-group-title', '最近改动（5 条）'));
-        var recentBox = el('div', 'sc-recent');
-        recentBox.appendChild(el('div', 'sc-recent-row', '读取中…'));
-        view.appendChild(recentBox);
-        api('/config/recent').then(function (r) {
-          recentBox.textContent = '';
-          var cfg = r && r.configMtime ? ('配置文件改动：' + fmtTime(r.configMtime)) : '配置文件尚无记录';
-          recentBox.appendChild(el('div', 'sc-recent-row', cfg));
-          var items = (r && r.recent) || [];
-          if (!Derive.has(items)) { recentBox.appendChild(el('div', 'sc-recent-row', '记忆库尚无 git 快照（写入一次即出现）')); return; }
-          items.forEach(function (it) {
-            var row = el('div', 'sc-recent-row');
-            row.appendChild(el('span', 'sc-recent-at', it.at ? fmtTime(it.at) : '-'));
-            row.appendChild(el('span', 'sc-recent-msg', it.msg || ''));
-            row.title = it.msg || '';
-            recentBox.appendChild(row);
-          });
-        }).catch(function () { recentBox.textContent = ''; recentBox.appendChild(el('div', 'sc-recent-row', '读取失败（/config/recent）')); });
-      }
+      
 
       /* ---------- 页面：画像 / 记忆板块 ---------- */
 
@@ -3085,28 +3018,7 @@ import { ICONS, el, svg } from './dom.js'
       }
 
       /* 配置原文 + 根目录管理（原「配置原文」一级视图 → 下沉到 设置 · 高级，P1-4） */
-      function renderConfigRaw(host) {
-        var rootSection = el('div');
-        var yamlSection = el('div');
-        var ta = document.createElement('textarea'); refs.ta = ta;
-        var saveRow = el('div');
-        renderViewRoots(rootSection, function (w) { refs.rootListWrap = w; });
-        renderViewYaml(yamlSection, ta, saveRow);
-        host.appendChild(rootSection);
-        host.appendChild(yamlSection);
-        api('/roots').then(function (r) { if (renderViewRoots._draw) renderViewRoots._draw(r); }).catch(fail);
-        if (saveRow._btn) {
-          saveRow._btn.onclick = function () {
-            api('/save', { method: 'POST', body: JSON.stringify({ text: ta.value }) })
-              .then(function () { status('✓ 已保存，原文件已备份为 .bak-*'); })
-              .catch(fail);
-          };
-        }
-        api('/config').then(function (r) {
-          ta.value = r.text || '';
-          if (!r.text) status(r.error === 'no-active-root' ? '未激活根目录——请在「高级 · 根目录」区添加。' : (r.error || ''));
-        }).catch(fail);
-      }
+      
 
       /* ---------- 界面设置的运行时应用（自由度） ---------- */
       /* ---------- 界面设置的运行时应用 —— ① 设置生效 ---------- */
@@ -3547,7 +3459,12 @@ import { ICONS, el, svg } from './dom.js'
          *     · 任一条件不满足 ⇒ 走既有 DOM 直插（行为与旧版一致，零回归） */
         var reactEl = null;
         try { reactEl = require('react'); } catch (e) { reactEl = null; }
-        appState.slotReact = reactEl;
+        appState.slotReact = reactEl
+      /* UI1/C′ 补齐：视图刷新器与 DOM 句柄表也进容器（pane 经它取）。
+       *  ⚠ **必须在 factory 内** —— 实测曾误插到 IIFE 之外，模块作用域看不到 `refreshCurrentView`
+       *     ⇒ 产物里该行是**裸名**（esbuild 未改名）+ 真机 `ReferenceError`（由 test-panel-view-contract 抓出）。 */
+      appState.refreshView = refreshCurrentView;
+      appState.refs = refs;;
         var SLOT_OK = !!(reactEl && typeof reactEl.createElement === 'function' &&
           ctx && typeof ctx.effect === 'function' && ctx.slots && typeof ctx.slots.inject === 'function' &&
           typeof ctx.slots.register === 'function');
