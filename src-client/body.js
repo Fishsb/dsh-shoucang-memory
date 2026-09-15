@@ -660,6 +660,7 @@ import { ICONS, el, svg } from './dom.js'
        *   拆分后逐项比对，**清单不变 = 行为等价**。
        * 注意：子函数是**模块级**函数（不是嵌套在父函数里）——否则父函数仍是 600+ 行，
        *   拆分只换取了个位置、跨度门禁照样红（棘轮只认跨度）。 */
+      /* ---------- 页面：参数 —— ① 注入与容量 ---------- */
       function renderViewToggles(view, parsed, global) {
         view.textContent = '';
         UI.pageHead('参数调节', '注入参数（全局，写 ~/.dsh/suite/scheduler.json）与运行时通道。改动即时写回（scheduler.json 备份先行）。注入配置已迁全局，不再随 root 切换变化（root YAML 仅剩「配置原文」页可直接编辑）。', { routes: ['/config', '/save', '/toggle'] });
@@ -887,6 +888,7 @@ import { ICONS, el, svg } from './dom.js'
         renderTogglesModelVec(host);
         renderTogglesModelLlm(host);
       }
+      /* ---------- 页面：参数 —— ② 模型与向量 ---------- */
       function renderTogglesModelVec(host) {
         host.appendChild(el('div', 'sc-desc', '链路与模型选择；本组改动写入自持配置，需重载插件后生效。'));
         host.appendChild(el('div', 'sc-h3', '向量与模型 · 当前链路'));
@@ -1155,6 +1157,7 @@ import { ICONS, el, svg } from './dom.js'
         }).catch(function () { llmCard.appendChild(el('div', 'sc-desc', '⚠ 宿主模型不可用')); });
         host.appendChild(llmCard);
       }
+      /* ---------- 页面：参数 —— ③ 调度与根目录 ---------- */
       function renderTogglesSched(host, g) {
         function gVal(key, fallback) { return (g[key] !== undefined && g[key] !== null) ? g[key] : fallback; }
 
@@ -1390,6 +1393,7 @@ import { ICONS, el, svg } from './dom.js'
       /* ---------- 页面：画像 / 记忆板块 ---------- */
 
       /** 记忆库指针行：点击打开 notes 小节（只读 /memory/sections）；pointer=null 时不跳转。 */
+      /* ---------- 页面：记忆 —— ① 索引与画像 ---------- */
       function openMemoryNote(pointer, autoSection, returnRender) {
         if (!pointer) { status('该条目无 notes 跳转目标'); return; }
         var rel = String(pointer).split('§')[0].trim();
@@ -1720,6 +1724,7 @@ import { ICONS, el, svg } from './dom.js'
 
       /** 记忆板块（阶段4 UI 重排 2026-09-06）：分区展示——蒸馏运行 / 记忆库状态 / 知识索引 / pending / notes / 守藏知识区。
        * 去重原则：USER/AGENT 画像只在画像板块；MEMORY 容量百分比只在进度条；蒸馏水位读 suite 活水位。 */
+      /* ---------- 页面：记忆 —— ② 概览展开 ---------- */
       function renderMemoryExpanded(view, data) {
         view.textContent = '';
         /* v9 布局对齐（第三轮·块级）：v9 的记忆库页 `.view` **只有一张卡「容量占用」**，
@@ -2029,6 +2034,7 @@ import { ICONS, el, svg } from './dom.js'
 
       /* notes 小节的稳定折叠键：rel + 层级路径 + 标题。
        * 带路径是必要的——同一笔记里不同层级的兄弟小节可能同名，只按标题取键会互相串状态。 */
+      /* ---------- 页面：记忆 —— ③ 小节与编辑 ---------- */
       function secFoldKey(rel, path, title) {
         return 'note:' + (rel || '') + ':' + (path || '') + '§' + (title || '');
       }
@@ -3325,6 +3331,7 @@ import { ICONS, el, svg } from './dom.js'
       }
 
       /* ---------- 界面设置的运行时应用（自由度） ---------- */
+      /* ---------- 界面设置的运行时应用 —— ① 设置生效 ---------- */
       function applyDensity() {
         var m = document.getElementById('scpanl-modal');
         if (!m) return;
@@ -3375,6 +3382,7 @@ import { ICONS, el, svg } from './dom.js'
       }
 
       /* 关键指标采集（C4）——同时为 /inject/stats 提供 UI 入口（B1） */
+      /* ---------- 界面设置的运行时应用 —— ② 轮询与指标 ---------- */
       function collectMetrics() {
         var m = {};
         function put(k, v) { m[k] = v; Store.patch('metrics', m); }
@@ -3394,6 +3402,7 @@ import { ICONS, el, svg } from './dom.js'
       }
 
       /* 快捷键（C5）：Ctrl/⌘+Shift+S 开关面板；Esc 关闭；Ctrl/⌘+Shift+L 切日志面板 */
+      /* ---------- 界面设置的运行时应用 —— ③ 面板壳与宿主挂载 ---------- */
       function installShortcuts() {
         if (installShortcuts._done) return;
         installShortcuts._done = true;
@@ -3415,6 +3424,7 @@ import { ICONS, el, svg } from './dom.js'
           }
         });
       }
+      /* ---------- 界面设置的运行时应用 —— ③a 壳·模态 ---------- */
       function togglePanel() {
         var mask = document.getElementById('scpanl-mask');
         if (!mask) return;
@@ -3552,6 +3562,7 @@ import { ICONS, el, svg } from './dom.js'
         root.classList.toggle('sc-skin-host', skin === 'host');
         try { Cfg.set('theme', dark ? 'dark' : 'light'); } catch (e) { }
       }
+      /* ---------- 界面设置的运行时应用 —— ③b 壳·入口挂载 ---------- */
       function mount() {
         if (document.getElementById('scpanl-mask')) { syncTheme(); return true; }
         var rootEl = el('div'); rootEl.id = 'scpanl-root';
@@ -3670,6 +3681,7 @@ import { ICONS, el, svg } from './dom.js'
        * 组件复用宿主运行时（require('react')），类名用宿主既有 setting-item 体系 ⇒ 自动跟随宿主主题；
        * 面板内「设置」视图保留（自有壳兜底 + 配置原文/根目录等高风险项仍在面板内）。 */
       var slotReact = null;
+      /* ---------- 界面设置的运行时应用 —— ③c 插件入口与副作用 ---------- */
       function applyCfgSideEffect(key) {
         try {
           if (key === 'density') applyDensity();

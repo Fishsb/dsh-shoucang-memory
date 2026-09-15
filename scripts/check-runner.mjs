@@ -94,6 +94,13 @@ const CHECKS = [
   ['scripts/check-ui-components.mjs'],
   ['scripts/check-ui-components.mjs', '--selftest'],
   ['scripts/check-client-syntax.mjs'],
+  // UI1/U2-B（2026-09-15）**分区块规模门**：U2「拆 7 个 pane 文件」的前提经三次实测证伪
+  //   （首刀依赖 20 符号 · 应用层拖 5 符号 · refs 跨壳层与视图层 · factory 注册契约不可外移，
+  //    外移实测致插件完全不加载：75 条渲染断言全挂且无页面错误）⇒ 改判据为
+  //   「\`factory\` 内分区块 + 守每区块行数 + 守覆盖完整性」。
+  //   **两个防绕过断言**（各有反例自证）：节数下限（防"合并标记"）· 无主区域（防"删标记"）。
+  ['scripts/check-pane-sections.mjs'],
+  ['scripts/check-pane-sections.mjs', '--selftest'],
   // UI1/U5-a（2026-09-15）**行为级证据**：`test-route-schema` 只证明"坏请求被 400 拦住"，
   //   **从未验证合法请求的副作用**（真的写进去、能读回）。而 U1/U2 要大规模拆分前端
   //   （`body.js` 5476 行 → 7 个 pane），"拆分后行为不变"必须有行为证据 —— `ui-geo-regress`
