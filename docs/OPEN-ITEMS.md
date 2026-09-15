@@ -74,6 +74,37 @@
 > **不属于本次 S0–S4 目标**。登记在此仅为**不再散落**；处理与否由用户决定。
 > ⚠ 其中标注「**待核实**」的，我只读到扫描片段、**未逐行核对**，不得当作已确认的待办。
 
+### 5′. **处置结论（2026-09-15 逐项核实 · 全部有结论）**
+
+> **核实口径**：每条给**实测证据**（不照抄原文）。结论只有四类：**真缺陷（已修+带门）** / **已解决（后来做掉了）** /
+> **前提消失（架构已改，该项已无对象）** / **待你决策或待时间**。
+
+| 项 | 结论 | 实测证据 |
+|---|---|---|
+| **H-1** | 🔴→✅ **真缺陷·已修+带门** | prompt 的 P5 段要求「材料若给出**待回收的裁决**就填 `outcomes[]`」，而 `gatherMaterials` **从未产出该段** ⇒ 通道自上线起**结构性恒 0**。**实测**：库内 `decision` 50 条、**49 条待回收**，历史只收过 **1** 条 outcome。已接上 `pendingDecisions`（复用既有 `openDecisions`）+ `counts.pending`；**根因修**：`check-injection-reach` 补 ⑤（材料键抵达）+ ⑥（通道锁），含反例自证。CHANGELOG 已记 |
+| **H-2** | ✅ **早已结清（非缺陷）· 原文自相矛盾** | `anthropomorphic-plan` **L463** 写「**E5 ✅ 关闭为非缺陷（Q3 结清）**」且给实测（独立计数 E 层画像行 = **25**，与 reconcile **完全一致**；成因＝无标签画像行回落 E）；**L853** 仍写「Q3 待补」——**那是没同步的旧行**，本表抄了旧行。另：`layerCounts` 在 `src/` **已不存在** |
+| **H-3** | ✅ 已决 **no-go** | 原文；待「真实写入样本」且确需单事实源才翻转 |
+| **H-4** | ✅ **已解决** | 两键已进 zod（`scheduler.ts:204-205`，注释标「U3 转正」）**且**进 panel-config 键表（`:98/:101/:152/:158/:218/:220/:251/:284`） |
+| **H-5 + H-16** | ⏳ **真实缺口 · 待你决策**（同一件事两处登记） | 6 个蒸馏节流键（`enableDistill`/`idleWakeMs`/`minTurnChars`/`distillPrescan`/`llmProvider`/`llmModel`）**无持久 UI 通道**。**需产品决策**：进面板设置页，还是宿主设置中心？（H-16＝用户明确要求记住的 F-001/F-002） |
+| **H-6** | ✅ **已解决** | 全 `src/` 已无「接线待办」注释（`distill.ts` 现 **343 行**；`panel-arch.ts:193` 那处指的是**现行的** `criteria.json#wiring.pending` 机制，非漂移） |
+| **H-7** | ✅ **前提消失** | `scripts/memory-ab-baseline.mjs` **已不存在**（仓内只有 `memory-reconcile.mjs`）⇒ 无「与 reconcile 合并」的对象 |
+| **H-8** | ✅ **已解决（且有门）** | ① `RING_OF_KIND.valence = 'value'`（`rings.ts:37`），由 **`check-ring-coverage` 双向机检**与 `record-store.KINDS` 一致；② `dueRank` 已与 S4-4 的 **`dueSoon`** 并存（`ring-supply.ts:89/:108`），`content-types.ts:37` 判 `due → dueSoon` 且 **`wired: true`**，由 `check-content-types` 守 |
+| **H-9** | ✅ **T1/T2 均已做** | **T1**（内容类型契约层）：`src/content-types.ts` 66 行 + 生成物 + `check-content-types` 门；**T2**（deepsleep 职责归属）：`src/deepsleep.ts` 112 行，`distill.ts` 仅留**装配点**（注释写明：让 deepsleep 直接 import distill 会**成环**） |
+| **H-10** | ⏳ **待时间** | S6 观测收尾：自然跑 **2–3 天**。条件明确：样本自然累积，无代码动作 |
+| **H-11** | ⏳ **低优先（文档整理）** | `ui-todo.md` 已标「均于 2026-09-08 落地」，建议标题归档化 —— 纯整理 |
+| **H-12** | ✅ **目的已达成（机制更强）** | 未加 `turnSeq` 字段，但水位行现记 `sessionId → lastSeq` **+ 双证**（格式代 + 锚点事件指纹，v19 · 2026-09-10），注释明确「宁可重蒸，不可错漏」；`test-watermark-guard` **44 PASS / 0 FAIL** 覆盖双证失效→降级基线（含 ⑪ 组） |
+| **H-13** | ✅ **前提消失** | `journal.jsonl` 在 `src/` **与磁盘均不存在** ⇒ 该设计已被后来的架构替换 |
+| **H-14** | ✅ **目的已达成** | 「蒸馏期互斥/卡死」已由**方案 E** 覆盖（**10min 超时 race + 仅 completed 推水位**，见 `dev-scenarios` 场景 10 ✅），并有 `test-idle-arm-wiring.mjs` 驱动真 turn/end 断言（**已登记门禁**） |
+| **H-15** | ✅ **4 项子待办均已解决 · 场景 5 实测无多代** | ① devDeps 自包含 ✅（`typescript ^5.9.0` + `@types/node ^24.13.3` + `npm run typecheck`；**用 tsc 方案，不需要 tsdown**）· ② src 单源生成 lib ✅（`build:host = tsc`，lib 随仓 **209 件**）· ③ 引擎基线 ✅（`skill/scripts/test.mjs` **41 PASS / 0 FAIL**）· ④ 方案 E watcher 单测 ✅（`test-idle-arm-wiring.mjs`，已登记）；**场景 5**：loader 中 `dsh-shoucang-memory` **单条 entry**、本会话热重载 **4+ 次**均「重建 1 fiber」、注入器 `reload 450✓/0✗` ⇒ **未见多代并存** |
+
+**⇒ 16 项净结果**：**1 项真缺陷（H-1，已修且补门）** · **10 项早已解决或前提消失**（H-2/4/6/7/8/9/12/13/14/15）· **1 项已决 no-go**（H-3）
+· **剩余 3 项**：**H-5+H-16**（同一件事，**需你决策 UI 落点**）· **H-10**（**等 2–3 天**）· **H-11**（**低优先文档整理**）。
+
+> ⚠ **本节的教训**：`§5` 当初按「扫描片段」登记、**未逐行核对**（原文自己标注了这一点）——
+> 结果 16 项里 **10 项已经做掉了**却长期挂在表上，**让待办表看起来永远做不完**。
+> ⇒ **登记时就要把"判据"写全**（怎样算做完），否则登记本身会变成噪音。
+
+
 | # | 来源 | 事项 | 性质 / 处置 |
 |---|---|---|---|
 | H-1 | `anthropomorphic-plan-2026-09-14.md` §14.3 · §878 | **P5 E2E**（`outcomes`/`narratives` 两通道） | ⚠ **已从"不可判定"变为"可判定"**（2026-09-14 实测）：原文判"**不可由我触发，需会话停止活动**"——**该判断已被推翻**（`/deepsleep/trigger` 手动触发成功，`result: done`）。<br>**实测**：`write.consolidate` **9 条，channel 全部 `principles`**、target 全部 `AGENT.md`；`ring-commit`（15:47，source=distill）为 `decisions:4 · commitments:1 · relations:1 · valences:1 · **outcomes:0** · episodes:0`。<br>⇒ **不是"没跑到"，是"无 outcomes 素材 / 该通道未被触发"**。**下一步可查**：`outcomes` 通道的触发条件（读 `ring-commit` 的 outcomes 分支判据） |
