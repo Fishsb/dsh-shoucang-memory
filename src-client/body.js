@@ -7,6 +7,8 @@ import { renderViewRoots, renderViewYaml, renderConfigRaw } from './panes-config
 import { ovCRow, ovPill, ovCriteriaCard, renderViewOverview } from './panes-overview.js'
 import { renderFacts, renderViewArch } from './panes-arch.js'
 import { renderViewObserve, buildLogPanel, renderRunExtras } from './panes-observe.js'
+import { renderSuite, renderDeepSleep } from './panes-suite.js'
+import { makeToggle, renderViewSettings, dsNumber, applyDensity, applyNavWidth, applyLogPanel, applyNavGroups, applyFootBar, restartPolling, collectMetrics, syncTheme } from './panes-settings.js'
 import { renderViewToggles } from './panes-toggles.js'
 /**
  *dsh-shoucang-memory — client 半区（纯 DOM，样式照搬 Obsidian 设置窗口）。守藏单插件 2026-09-08 合并。
@@ -264,13 +266,7 @@ import { ICONS, el, svg } from './dom.js'
         });
         return q.length;
       }
-      function makeToggle(key, name, desc, initial, onToggle) {
-        // A2：改用 UI.item（DOM 等价）—— extra 承载作用域徽标；wrapControl:false 保持
-        // 既有「开关直接挂 item、无 .setting-item-control 包装」的结构，避免替换改变 DOM。
-        var sw = el('input', 'checkbox-container'); sw.type = 'checkbox'; sw.checked = !!initial;
-        sw.onchange = function () { onToggle(key, sw); };
-        return UI.item(name, desc, sw, { extra: [metaBadges(key)], wrapControl: false });
-      }
+      
 
       /* ---------- 运行总览（P1-1）：一屏回答「现在怎么样」 ----------
        * 设计来源：deliverables/ui-redesign-v9-2026-09-13.html
@@ -461,229 +457,14 @@ import { ICONS, el, svg } from './dom.js'
       
 
       /* ---------- 界面设置视图（自由度：密度/布局/刷新/日志；统一配置入口 D5） ---------- */
-      function renderViewSettings(view) {
-        view.textContent = '';
-        UI.pageHead('设置', '界面偏好与高级操作。配置原文（YAML）与行级编辑收在此处，配风险提示。', {
-          routes: ['/config', '/save', '/roots', '/memory/edit'],
-          actions: [UI.button('导出快照', function () {
-            /* 真实动作：把「后端配置原文 + 浏览器侧界面偏好」导出为一份 JSON 快照（排障/迁移用）。 */
-            return api('/config').then(function (c) {
-              var snap = {
-                at: new Date().toISOString(),
-                config: { file: (c && c.file) || '', text: (c && c.text) || '' },
-                ui: Cfg.get()
-              };
-              var blob = new Blob([JSON.stringify(snap, null, 2)], { type: 'application/json' });
-              var a = document.createElement('a');
-              a.href = URL.createObjectURL(blob);
-              a.download = 'shoucang-config-snapshot-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '') + '.json';
-              a.click(); URL.revokeObjectURL(a.href);
-              status('✓ 配置快照已导出');
-            });
-          }, { async: true, busyText: '导出中…', okText: '配置快照已导出', title: '导出配置原文 + 界面偏好（JSON）' })]
-        });
-        var pLook = el('div'); var pAdv = el('div'); var _tb = UI.tabs("settings", [{ id: 'pref', label: '界面偏好', pane: pLook }, { id: 'advanced', label: '高级', pane: pAdv }]);
-        view.appendChild(_tb.box);
-        var host = _tb.pane('pref');
-
-        /* ── v9 结构（DOM 实测 §8）：界面偏好 pane = **一张 card 平铺全部行** + 「快捷键」card + 「恢复默认」行 ──
-         * 此前是 6 个折叠组（外观 / 行为 / 可观察性 / 启动 / 外观皮肤 / 快捷键）——折叠组是面板自造的一层，
-         * 原型的层级只有「页头 → 卡(.card：卡头 + 卡体) → 行」。原型该 pane 内 12 行同质平铺、**无小标题**，
-         * 故这里也不再分小节（项少，平铺可读）。 */
-        var pref = UI.card(null);
-        host.appendChild(pref.box);
-        var box = pref.body;
-        box.appendChild(UI.item('显示密度', '紧凑模式隐藏描述文字、压缩行高，提升信息密度。',
-          UI.select([{ value: 'comfortable', label: '舒适' }, { value: 'compact', label: '紧凑' }], Cfg.get('density', 'comfortable'),
-            function (v) { Cfg.set('density', v); applyDensity(); }), {}));
-        box.appendChild(UI.item('导航宽度', '左侧导航像素宽度（140–320）；窄屏（≤900px）由响应式断点接管。',
-          UI.input(Cfg.get('navWidth', 216), function (v) {
-            var n = parseInt(v, 10); if (isNaN(n)) return;
-            Cfg.set('navWidth', Math.max(140, Math.min(320, n))); applyNavWidth();
-          }, { type: 'number', width: '120px', ariaLabel: '导航宽度' }), {}));
-        box.appendChild(UI.item('打开时自动刷新', '打开面板即重新拉取当前视图数据。',
-          UI.toggle(Cfg.get('autoRefresh', true), function (v) { Cfg.set('autoRefresh', v); }), {}));
-        box.appendChild(UI.item('轮询间隔（毫秒）', '0 = 关闭轮询。影响运行态数据刷新频率。',
-          UI.input(Cfg.get('refreshMs', 60000), function (v) {
-            var n = parseInt(v, 10); if (isNaN(n)) return;
-            Cfg.set('refreshMs', Math.max(0, n)); restartPolling();
-          }, { type: 'number', width: '140px', ariaLabel: '轮询间隔' }), {}));
-        box.appendChild(UI.item('概览—详情分层', '列表默认折叠详情，先给概览再按需展开。',
-          UI.toggle(Cfg.get('overviewMode', true), function (v) { Cfg.set('overviewMode', v); }), {}));
-        box.appendChild(UI.item('长列表折叠阈值', '超过该行数的列表默认折叠。',
-          UI.input(Cfg.get('maxRows', 50), function (v) {
-            var n = parseInt(v, 10); if (isNaN(n)) return;
-            Cfg.set('maxRows', Math.max(5, Math.min(500, n)));
-          }, { type: 'number', width: '120px', ariaLabel: '折叠阈值' }), {}));
-        box.appendChild(UI.item('显示日志面板', '在状态栏上方常驻显示调用日志。',
-          UI.toggle(Cfg.get('showLogs', true), function (v) { Cfg.set('showLogs', v); applyLogPanel(); }), {}));
-        box.appendChild(UI.item('日志级别', '过滤日志面板显示的最低级别（全部 / 警告+ / 仅错误）。',
-          UI.select([{ value: 'info', label: '全部' }, { value: 'warn', label: '警告+' }, { value: 'error', label: '仅错误' }],
-            Cfg.get('logLevel', 'info'), function (v) { Cfg.set('logLevel', v); Bus.emit('log', null); }), {}));
-        box.appendChild(UI.item('启动时视图', '打开面板后默认落地的页面。优先级：#sc=<视图名> 深链 > 上次视图记忆 > 此项。',
-          UI.select(VIEWS.map(function (v) { return { value: v[0], label: v[1] }; }), Cfg.get('startView', 'overview'),
-            function (v) { Cfg.set('startView', v); }), {}));
-        box.appendChild(UI.item('界面皮肤', 'v9 = 方案调色板（默认）；宿主 = 跟随 DSH 主题令牌（与宿主同色）。',
-          UI.select([{ value: 'v9', label: 'v9 方案皮肤' }, { value: 'host', label: '宿主原生皮肤' }], Cfg.get('skin', 'v9'),
-            function (v) { Cfg.set('skin', v); syncTheme(); refreshCurrentView(); }), {}));
-        /* v9 设置页的最后两行（此前面板未暴露——功能本就在：导航分组标题与页脚健康条都会渲染） */
-        box.appendChild(UI.item('导航分组显示', '按语义显示分组标题（守藏 / 总览 / 记忆 / 运行 / 配置）。',
-          UI.toggle(Cfg.get('navGroups', true), function (v) { Cfg.set('navGroups', v); applyNavGroups(); }), {}));
-        box.appendChild(UI.item('页脚健康条', '常驻显示记忆库状态与库路径。',
-          UI.toggle(Cfg.get('footBar', true), function (v) { Cfg.set('footBar', v); applyFootBar(); }), {}));
-
-        /* 快捷键卡（原型：card 卡头「快捷键」+ 3 × .row：左 动作 / 作用域 + 右 键位 pill）
-         * pill 走**中性色**（原型键位胶囊是灰底描边，非语义色）。 */
-        var keys = UI.card('快捷键', { sub: '面板内可用' });
-        keys.body.appendChild(ovCRow('打开 / 关闭面板', '全局', [ovPill('Ctrl/⌘ + Shift + S', '', true)]));
-        keys.body.appendChild(ovCRow('切换日志面板', '面板内', [ovPill('Ctrl/⌘ + Shift + L', '', true)]));
-        keys.body.appendChild(ovCRow('关闭面板', '面板内', [ovPill('Esc', '', true)]));
-        host.appendChild(keys.box);
-
-        // 高级：配置原文（YAML）与根目录管理 —— 原「配置原文」一级视图下沉至此（P1-4）
-        var adv = el('div');
-        adv.appendChild(el('div', 'sc-desc', '配置原文（shoucang.config.yaml）保存后自动备份 .bak-*；根目录切换与新增在此。'));
-        renderConfigRaw(adv);
-        host = _tb.pane('advanced');
-        host.appendChild(UI.collapsible('高级 · 配置原文与根目录', adv, { open: false }));
-
-        /* 深度睡眠阈值（原深睡页「阈值」小节迁入）：与「配置原文」同性质 —— 都写 ~/.dsh/suite/scheduler.json、
-         * 都需重载插件生效。v9 深睡页只保留**执行位**（状态分布卡头的按钮），配置出口收敛到本页一处。 */
-        var dsAdv = el('div');
-        dsAdv.appendChild(el('div', 'sc-desc', '写入 ~/.dsh/suite/scheduler.json；改后需重载插件生效。'));
-        host.appendChild(UI.collapsible('深度睡眠阈值', dsAdv, { open: false, key: 'settings:dsadv' }));
-        api('/deepsleep/config').then(function (cfg) {
-          var run = cfg.running || {};
-          dsAdv.appendChild(makeToggle('enableDeepSleep', '启用深度睡眠自动归纳 enableDeepSleep', '全部会话停滞 ≥ 阈值后自动提炼原则层（关闭 = 暂停，等于原「暂停到明天」）。', !!run.enableDeepSleep, function (key, sw) {
-            api('/deepsleep/config', { method: 'POST', body: JSON.stringify({ enableDeepSleep: sw.checked }) })
-              .then(function () { status('✓ 已保存（重载生效）'); })
-              .catch(function (e) { fail(e); sw.checked = !sw.checked; });
-          }));
-          dsAdv.appendChild(dsNumber('停滞阈值 deepSleepIdleMs', '全部会话无活动持续满此毫秒数才触发（默认 3 小时）。', Math.round((run.deepSleepIdleMs || 10800000) / 60000), 10, 720, '分钟', function (m) { return m * 60000; }, 'deepSleepIdleMs'));
-          dsAdv.appendChild(dsNumber('探测发起延迟 deepSleepProbeAfterMs', 'running 无事件持续此毫秒后发起输出增长探测（默认 3 小时）。', Math.round((run.deepSleepProbeAfterMs || 10800000) / 60000), 10, 720, '分钟', function (m) { return m * 60000; }, 'deepSleepProbeAfterMs'));
-          dsAdv.appendChild(dsNumber('探测采样间隔 deepSleepProbeWindowMs', '两轮采样之间的间隔（默认 60 秒）。', Math.round((run.deepSleepProbeWindowMs || 60000) / 1000), 5, 600, '秒', function (s) { return s * 1000; }, 'deepSleepProbeWindowMs'));
-        }).catch(function (e) {
-          dsAdv.appendChild(el('div', 'sc-mem-empty', '阈值加载失败：' + (e && e.message ? e.message : e)));
-        });
-
-        /* 恢复默认：原型该 pane 底部是 .acts（按钮 + 右侧说明文字），非裸按钮 */
-        var acts = el('div', 'sc-acts');
-        acts.appendChild(UI.button('恢复默认设置', function () {
-          Cfg.reset(); applyDensity(); applyNavWidth(); applyNavGroups(); applyFootBar(); applyLogPanel(); restartPolling(); refreshCurrentView();
-          Log.info('界面设置已恢复默认');
-        }, { confirm: '确认恢复全部界面设置为默认值？' }));
-        acts.appendChild(el('span', 'sc-acts-note', '重置 10 项界面偏好并立即重绘（密度 / 导航宽度 / 日志面板 / 轮询全部重新应用）'));
-        host.appendChild(acts);
-      }
+      
 
       /* ---------- 插件集合视图（#3 · v9 卡片级对齐 2026-09-13） ----------
        * v9 该页块序列（DOM 实测）：页头（右「重新装配」）→ **卡片网格**（每成员一张 .pcard：
        * 图标 + 名称 + 描述 + meta）+ **虚线「添加目标库」卡** → **「suite 装配矩阵」卡**（卡头 + `GET /suite` chip
        * + 表格：目标库 / 容量 / 已用 / 装配内容 / 状态 pill）。
        * 面板此前是 `UI.item` 行式列表 + 一行 summary ⇒ 组成完全不同，本轮按原型重排。 */
-      function renderSuite(view, data) {
-        view.textContent = '';
-        UI.pageHead('插件集合', 'suite 装配矩阵由 targets.ts 的 suiteAssemblyMatrix() 单一实现；面板与 scheduler 共用。', {
-          routes: ['/suite'], routesInline: true,
-          actions: [UI.button('重新装配', function () { refreshCurrentView(); status('已按注入器 registry + profiles 重新核装配'); }, { title: '重取装配矩阵（/suite）' })]
-        });
-        var members = (data && data.members) || [];
-        var grid = el('div', 'sc-pgrid');
-        /* 成员图标：按角色取语义图标（v9 每卡一个图标；缺省回落 suite 图标） */
-        var iconOf = function (m) {
-          var k = String((m && (m.id || m.package)) || '').toLowerCase();
-          if (k.indexOf('memory') >= 0 || k.indexOf('skill') >= 0) return 'vault';
-          if (k.indexOf('core') >= 0) return 'persona';
-          if (k.indexOf('sched') >= 0) return 'sleep';
-          if (k.indexOf('panel') >= 0) return 'overview';
-          return 'suite';
-        };
-        members.forEach(function (m) {
-          var st = Derive.suiteStatus(m.status);           // 装配状态 → 文案 + 语义类（单一映射）
-          /* v9 卡片结构（markup 1:1）：.ph(图标 + <b>名称</b>) → 行内小灰字描述 → .pmeta 两个灰 span。
-           * v9 的 meta 左 span 是"工具数"（原型示意值），面板 /suite 无该字段 ⇒ 用真实 package 顶替，
-           * 右 span 仍是状态文案（**纯文本，不是胶囊** —— 上一版错用了 badge 胶囊）。 */
-          var c = el('div', 'sc-pcard');
-          var ph = el('div', 'ph');
-          var ic = el('span', 'ic'); ic.appendChild(svg(ICONS[iconOf(m)] || ICONS.suite)); ph.appendChild(ic);
-          ph.appendChild(el('b', null, String(m.id || m.name || m.package || '?')));
-          c.appendChild(ph);
-          c.appendChild(el('div', 'pd', String(m.role || m.desc || m.description || m.detail || '—')));
-          var meta = el('div', 'pmeta');
-          meta.appendChild(el('span', null, String(m.repo || m.package || '')));
-          var stSpan = el('span', null, st.text);
-          if (st.tip) stSpan.title = st.tip;   // 口径差异移入 title（原型只有「已装配」两字）
-          meta.appendChild(stSpan);
-          c.appendChild(meta);
-          grid.appendChild(c);
-        });
-        /* 「添加目标库」虚线卡（v9 同款；非动作卡：登记走后端白名单，不在 UI 里造写入路径） */
-        var add = el('div', 'sc-pcard is-add');
-        var aph = el('div', 'ph');
-        var aic = el('span', 'ic'); aic.appendChild(svg(ICONS.suite)); aph.appendChild(aic);
-        aph.appendChild(el('b', null, '添加目标库'));
-        add.appendChild(aph);
-        add.appendChild(el('div', 'pd', '需在白名单内登记（target-registry / members 配置）'));
-        grid.appendChild(add);
-        view.appendChild(grid);
-
-        /* 装配矩阵卡：行 = 目标库容量注册表（数据取自 /memory/overview 的 indexes，真实字段；不造数） */
-        var mtx = UI.card('suite 装配矩阵', { sub: '单一实现：targets.ts · suiteAssemblyMatrix()', right: [el('span', 'sc-src', 'GET /suite')] });
-        view.appendChild(mtx.box);
-        var tbl = el('table', 'sc-table');
-        var thead = el('thead'); var htr = el('tr');
-        ['目标库', '容量', '已用', '装配内容', '状态'].forEach(function (h) { htr.appendChild(el('th', null, h)); });
-        thead.appendChild(htr); tbl.appendChild(thead);
-        var tbody = el('tbody'); tbl.appendChild(tbody);
-        mtx.body.appendChild(tbl);
-        var CONTENT = { 'MEMORY.md': '原则 + 路径', 'USER.md': '画像 + 偏好', 'AGENT.md': '经验 + 反例' };
-        var pill = function (ok, text) { return el('span', 'pill' + (ok ? ' ok' : ' warn'), text); };
-        /* 追加一行（v9 的 notes/ · archive/：**无容量门** ⇒ 容量列写"不限"，已用列带"条"） */
-        var addRow = function (name, used, content, ok) {
-          var tr = el('tr');
-          tr.appendChild(el('td', 'tgt', name));
-          tr.appendChild(el('td', 'num', '不限'));
-          tr.appendChild(el('td', 'num', used));
-          tr.appendChild(el('td', null, content));
-          var td = el('td'); td.appendChild(pill(ok !== false, ok === false ? '水位偏高' : '正常'));
-          tr.appendChild(td);
-          tbody.appendChild(tr);
-        };
-        var fill = function (idx) {
-          tbody.textContent = '';
-          if (!Derive.has(idx)) { tbody.appendChild(el('tr', null, '（无容量注册表数据）')); return; }
-          idx.forEach(function (f) {
-            var pct = f.cap ? Math.round((f.chars || 0) / f.cap * 100) : null;
-            var kind = pct === null ? 'ended' : Derive.capKind(pct);
-            var tr = el('tr');
-            /* v9 的"目标库"列是**去 .md 后缀**的名字（MEMORY / USER / AGENT） */
-            tr.appendChild(el('td', 'tgt', String(f.name || '').replace(/\.md$/i, '')));
-            tr.appendChild(el('td', 'num', f.cap ? Derive.num(f.cap) : '不限'));
-            tr.appendChild(el('td', 'num', Derive.num(f.chars || 0)));
-            tr.appendChild(el('td', null, CONTENT[f.name] || '—'));
-            var td = el('td');
-            td.appendChild(pill(kind === 'ended', kind === 'ended' ? '正常' : (kind === 'stalled' ? '超阈' : '水位偏高')));
-            tr.appendChild(td);
-            tbody.appendChild(tr);
-          });
-        };
-        fill((data && data.indexes) || null);
-        if (data && data.summary) mtx.body.appendChild(el('div', 'sc-note', String(data.summary)));
-        /* 面板的 /suite 只给成员行（不含容量列）⇒ 另取一次 /memory/overview 补目标库容量，
-         * 失败则保留成员摘要，不伪造容量数字。 */
-        api('/memory/overview').then(function (r) {
-          fill((r && r.indexes) || null);
-          /* notes/ 行：v9 表格有这一行（无容量门 ⇒「不限 / N 条 / 便签」）；真实文件数取自 notes 清单 */
-          var n = Derive.count(r && r.notes);
-          if (n) addRow('notes/', n + ' 条', '便签', true);
-        }).catch(function () { });
-        /* archive/ 行：已用数取自 /cognition/report 的真实归档清单；端点不可用 ⇒ 不出行（宁缺勿造） */
-        api('/cognition/report').then(function (r) {
-          var ar = (r && r.archive) || [];
-          if (!r || !r.ok || !Derive.has(ar)) return;
-          addRow('archive/', ar.length + ' 条', '归档', true);
-        }).catch(function () { });
-      }
+      
 
       /* ---------- 深度睡眠视图（T1 状态机 + T2 计时/控制；docs/ui-todo.md） ---------- */
 
@@ -717,205 +498,12 @@ import { ICONS, el, svg } from './dom.js'
       };
       /* 死代码已删（2026-09-13 v9 深睡页重排）：dsBadge（会话徽章行改由「睡眠状态分布」卡图例承担）、
        * dsStat（计时条改由状态机卡水位条 + 分布卡 sub 承担）。UI.dsBadge 本体仍在用（向量状态行）。 */
-      function dsNumber(name, desc, initial, min, max, unit, encode, key) {
-        var item = el('div', 'setting-item');
-        var info = el('div', 'setting-item-info');
-        info.appendChild(el('div', 'setting-item-name', name));
-        info.appendChild(el('div', 'setting-item-desc', desc));
-        var wrap = el('div'); wrap.className = 'sc-range-wrap';
-        var lab = el('span', 'sc-range-label'); lab.textContent = initial + ' ' + unit;
-        var range = el('input'); range.type = 'range'; range.min = String(min); range.max = String(max); range.step = '1'; range.value = String(initial);
-        range.addEventListener('input', function () { lab.textContent = range.value + ' ' + unit; });
-        range.addEventListener('change', function () {
-          var o = {}; o[key] = encode(range.value);
-          api('/deepsleep/config', { method: 'POST', body: JSON.stringify(o) })
-            .then(function () { status('✓ ' + name + ' = ' + range.value + ' ' + unit + '（重载生效）'); })
-            .catch(fail);
-        });
-        wrap.appendChild(lab); wrap.appendChild(range);
-        item.appendChild(info); item.appendChild(wrap);
-        return item;
-      }
+      
       /** U1（ADR-122 UI）：运行面扩展 —— 判据与对账 + 认知环（MCL）。
        *  判因：这两块此前在记忆板块（判据卡在最前）→ 首屏过载；改落既有「运行」视图，数据走按需端点，零新增常驻注入。 */
       
 
-      function renderDeepSleep(view) {
-        view.textContent = '';
-        UI.pageHead('深度睡眠 · 会话状态机', '全部根会话停滞 ≥ 阈值后自动回想当天记忆、提炼原则层 PRINCIPLES.md。状态机区分「正常长任务 / 卡住 / 异常退出」：仅长任务正在推进才拦睡，其余正常睡。', { routes: ['/deepsleep', '/deepsleep/trigger', '/deepsleep/config'] });
-        var smSlot = el('div'); view.appendChild(smSlot); // v9 顺序（原型第 1 张卡）：状态机占位（异步回填）
-        var distSlot = el('div'); view.appendChild(distSlot); // v9 顺序：分布卡占位（异步回填，见 /deepsleep 回调）
-        /* v9 顺序：回执（原型第 3 块）与下轮材料预估（第 4 块右）由 /cognition/report 异步回填 ——
-         *   占位必须在此**同步**插入，并且两者装进同一个 stack（否则后到的异步卡会落到页尾）。 */
-        var cogSlot = el('div', 'sc-stack'); view.appendChild(cogSlot);
-        /* v9：原 renderRunExtras（判据与对账 + 账本对账 + 认知环三卡）**不再挂本页** ——
-         * 原型深睡页 DOM 实测只有 6 块，无这三张卡；判据/认知环在总览页已有，
-         * 账本对账迁到运行观测页「关键指标」Tab（唯一未被原型覆盖的真实功能，不丢）。 */
-        api('/deepsleep').then(function (r) {
-          if (!r.active) {
-            view.appendChild(el('div', 'sc-desc', '深度睡眠归纳器当前未激活（蒸馏器 enableDistill 未启用或尚未就绪）。'));
-            return;
-          }
-          /* v9：会话徽章行**移除** —— 原型深睡页无此块，五态计数已由下方「睡眠状态分布」卡的图例
-           * （running/ended/probing/suspect/stalled + 计数）完整表达，不是删信息而是去重复。 */
-          /* v9 严格对齐（第五轮 · 深睡页）：状态机卡（原型深睡页的**第 1 张卡**，此前整块缺失）
-           *   三节点 = 插件真实存在的**三段停滞时间轴**，不是自造状态：
-           *     ① 清醒    —— 会话仍有活动（停滞 < 判定线）
-           *     ② 判定中  —— 停滞 ≥ probeAfterMs（进入卡住/长任务判定）
-           *     ③ 可入睡  —— 停滞 ≥ idleMs（满足自动归纳条件）
-           *   当前阶段由 now 与两个阈值比较直接得出；水位条 = 停滞时长 / 阈值
-           *   （对应原型「睡眠水位 1,240 / 3,000」的位置）。零新端点、零猜测。 */
-          (function () {
-            var now = Date.now();
-            var idleMs = Number(r.idleMs) || 0;
-            var probeMs = Number(r.probeAfterMs) || idleMs;
-            var act = Number(r.lastActivityAt) || 0;
-            var stalled = act ? Math.max(0, now - act) : 0;
-            var stage = (idleMs > 0 && stalled >= idleMs) ? 3 : ((probeMs > 0 && stalled >= probeMs) ? 2 : 1);
-            var mMin = function (ms) { return Math.round(Number(ms) / 60000); };
-            var smCard = UI.card('状态机', {
-              sub: '停滞 ≥ ' + mMin(idleMs) + ' 分钟触发一次结构整理（判定线 ' + mMin(probeMs) + ' 分钟）'
-                + (r.lastDeepSleepAt ? ' · 上次入睡 ' + dsFmtTime(r.lastDeepSleepAt) : ''),
-              right: [el('span', 'sc-src', '/deepsleep')]
-            });
-            smSlot.appendChild(smCard.box);
-            var sm = el('div', 'sc-sm');
-            [
-              ['清醒', 'M20 6L9 17l-5-5', '会话有活动，不触发整理'],
-              ['判定中', 'M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z', '已停滞 ≥ ' + mMin(probeMs) + ' 分钟，等待判定是长任务还是卡住'],
-              ['可入睡', 'M12 3v12|M6 9l6 6 6-6|M5 21h14', '停滞 ≥ ' + mMin(idleMs) + ' 分钟，满足自动归纳条件']
-            ].forEach(function (n, i) {
-              var idx = i + 1;
-              var node = el('div', 'sc-sm-node' + (idx < stage ? ' done' : (idx === stage ? ' on' : '')));
-              node.title = n[2];
-              var cir = el('div', 'sc-sm-circle');
-              cir.appendChild(svg(n[1]));
-              node.appendChild(cir);
-              node.appendChild(el('div', 'sc-sm-label', idx === stage ? n[0] + ' · 当前' : n[0]));
-              sm.appendChild(node);
-              if (i < 2) sm.appendChild(el('div', 'sc-sm-seg' + (idx < stage ? ' done' : '')));
-            });
-            smCard.body.appendChild(sm);
-            var water = el('div', 'sc-prog');
-            var wbar = document.createElement('wa-progress-bar');
-            wbar.className = 'sc-prog-bar';
-            wbar.setAttribute('max', '100');
-            wbar.setAttribute('value', String(idleMs ? Math.min(100, Math.round(stalled / idleMs * 100)) : 0));
-            water.appendChild(wbar);
-            water.appendChild(el('div', 'sc-prog-txt',
-              '睡眠水位 · 已停滞 ' + mMin(stalled) + ' / ' + mMin(idleMs) + ' 分钟'
-              + (idleMs ? '（' + Math.min(100, Math.round(stalled / idleMs * 100)) + '%）' : '')));
-            smCard.body.appendChild(water);
-          })();
-          /* v9 严格对齐：睡眠状态分布（分段条 + 图例）—— 原型深睡页的第 2 张卡。
-           *   数据就是同一份五态计数，只是**形态**从徽章改成比例条 + 图例（看得见"分布"）。 */
-          (function () {
-            var segs = [['running', r.running], ['ended', r.ended], ['probing', r.probing], ['suspect', r.suspect], ['stalled', r.stalled]];
-            var sum = segs.reduce(function (a, s) { return a + (Number(s[1]) || 0); }, 0);
-            if (!sum) return;
-            var idleMin = Math.round((r.idleMs || 0) / 60000);
-            /* v9：执行位就在本卡卡头右侧（原型 `div.right` = 路由 chip + `button.btn.sm.primary`
-             * 「立即进入深睡」）⇒ 原页尾「控制」小节的两枚按钮并入此处：触发按钮即「立即进入深睡」；
-             * 「暂停到明天」不另设按钮（同一开关 enableDeepSleep 已在设置页「深度睡眠阈值」里）。 */
-            var distCard = UI.card('睡眠状态分布', {
-              sub: 'idle ' + idleMin + ' 分钟 · 下次可睡 ' + (r.nextEligibleAt ? dsFmtTime(r.nextEligibleAt) : '—'),
-              right: [el('span', 'sc-src', 'GET /deepsleep'), UI.button('立即进入深睡', function () {
-                status('深度睡眠归纳中…');
-                return api('/deepsleep/trigger', { method: 'POST', body: '{}' })
-                  .then(function (rr) { status(rr.ok ? '✓ 已触发归纳（见日志）' : '⚠ 触发失败：' + (rr.error || '')); });
-              }, { primary: true, async: true, busyText: '归纳中…', okText: '已触发归纳', confirm: '立即触发一次深度睡眠归纳？将调用归纳子代理回顾当天记忆痕迹。' })]
-            });
-            distSlot.appendChild(distCard.box);
-            /* 2026-09-14（用户拍板）：分布按**用户可见状态**聚合（待蒸馏 / 停滞），
-             * 与「最近会话」卡的 pill **同源同词**（`DS_STATE_TEXT`）——不再把状态机内部五态术语摆到界面上。
-             * 内部五态的细节仍在会话行的 sub（探针结论）里可查；CSS 复用既有类（不加新样式）。 */
-            var byLabel = {};
-            segs.forEach(function (s) { var k = DS_STATE_TEXT[s[0]] || s[0]; byLabel[k] = (byLabel[k] || 0) + Number(s[1] || 0); });
-            var merged = Object.keys(byLabel).map(function (k) { return [k, byLabel[k]]; });
-            var bar = el('div', 'sc-dseg');
-            merged.forEach(function (s) { if (Number(s[1]) > 0) { var i = el('i', s[0] === '停滞' ? 'stalled' : 'running'); i.style.flex = String(s[1]); bar.appendChild(i); } });
-            distCard.body.appendChild(bar);
-            var legend = el('div', 'sc-dlegend');
-            merged.forEach(function (s) {
-              var it = el('span', 'sc-dlegend-i');
-              it.appendChild(el('i', 'sc-segdot ' + (s[0] === '停滞' ? 'stalled' : 'running')));
-              it.appendChild(el('span', null, s[0] + ' ' + String(s[1] || 0)));
-              legend.appendChild(it);
-            });
-            distCard.body.appendChild(legend);
-          })();
-          /* v9：「已停滞 / 下次预计入睡 / 上次入睡」三格独立条**移除**（原型无此块）——
-           * 前两项已分别由状态机卡的「睡眠水位」条与分布卡 sub 表达；「上次入睡」并入状态机卡 sub，
-           * 信息不丢（见上方 smCard）。 */
-          // v9：认知可视化——本轮产出回执 / 下轮材料预估 / 历次趋势（此前"睡完做了什么"完全不可见）
-          renderCognitionReport(cogSlot, 'sleep');
-          /* ── v2.2 睡眠期自检裁决（宿主义务：子代理只归纳，检测在其完成后由宿主执行） ──
-           * v9 形态：执行位在**卡头右侧**（路由 chip + 按钮「运行自检」），面板此前把按钮放在卡尾。 */
-          var scRun = UI.button('运行自检', function () {
-            return api('/selfcheck/run', { method: 'POST', body: '{}' })
-              .then(function (rr) { status('✓ 自检完成：' + (rr.verdict || '?')); renderDeepSleep(view); });
-          }, { async: true, busyText: '自检中…', okText: '自检完成' });
-          var scWrap = UI.card('睡眠期自检（判据门 / 载体门 / 分层 / 成熟度 / 影子 / 对账）', {
-            sub: '上次结果读 selfcheck-latest.json（GET）；执行走 POST',
-            right: [el('span', 'sc-src', 'GET /selfcheck · POST /selfcheck/run'), scRun]
-          });
-          view.appendChild(scWrap.box);
-          var scBox = el('div', 'sc-mem-stats');
-          var scCard = function (label, value, sub) {
-            var c = el('div', 'sc-mem-stat');
-            c.appendChild(el('div', 'sc-mem-stat-label', label));
-            c.appendChild(el('div', 'sc-mem-stat-value', value));
-            if (sub) c.appendChild(el('div', 'sc-mem-stat-sub', sub));
-            return c;
-          };
-          scBox.appendChild(scCard('自检', '…', '读取中'));
-          scWrap.body.appendChild(scBox);
-          api('/selfcheck').then(function (s) {
-            scBox.textContent = '';
-            if (!s || !s.active) {
-              scBox.appendChild(scCard('自检', '尚未跑过', (s && s.error) || '定时器/深睡后会自动执行'));
-            } else {
-              var v = String(s.verdict || '?');
-              var sm = s.summary || {};
-              var ck = sm.checks || {};
-              scBox.appendChild(scCard('裁决', v === 'ok' ? '✅ ok' : v === 'adjust' ? '🔧 adjust' : '⚠ warn', '于 ' + fmtTime(s.at)));
-              scBox.appendChild(scCard('六项检测', Object.keys(ck).map(function (k) { return (ck[k] === 'pass' ? '✅' : ck[k] === 'skipped' ? '⏭' : '❌') + k; }).join(' '), '影子 flipReady=' + sm.flipScoreWeights + ' · 成熟度就绪=' + sm.maturationReady + ' · 闭合=' + (sm.closureOk === null ? 'n/a' : sm.closureOk)));
-              scBox.appendChild(scCard('白名单调整', (Derive.has(s.adjustments) ? s.adjustments.map(function (a) { return a.id; }).join(' · ') : '无'), '仅窄动作且可回滚；改 α/gate/判据 一律只建议'));
-            }
-          }).catch(function () { scBox.textContent = ''; scBox.appendChild(scCard('自检', '读取失败', '/selfcheck')); });
-          /* v9：会话明细 → **「最近会话」卡**（原型该块是 card：hd 标题 + sub，bd 内若干 `.row`：
-           * 左状态 pill + 描述）。原型的行尾有「查看」按钮 —— 面板**没有**会话详情视图 ⇒ 不放该按钮
-           * （与归档区同一处置：不做「看得见点不动」的控件）。 */
-          if (Derive.has(r.sessions)) {
-            var sessCard = UI.card('最近会话', { sub: r.sessions.length + ' 条在册' });
-            view.appendChild(sessCard.box);
-            r.sessions.forEach(function (s) {
-              /* 状态进 **pill**（彩色，最显眼）；时间与探针细节进 **sub**。 */
-              var sub = dsFmtAgo(s.state === 'ended' ? s.lastEndAt : s.lastEventAt);
-              if (s.probeResult) sub += ' · ' + (DS_PROBE_TEXT[s.probeResult] || s.probeResult);
-              var pk = (s.state === 'stalled' || s.state === 'suspect') ? 'warn' : (s.state === 'probing' ? 'info' : 'ok');
-              /* 2026-09-14（用户拍板）：行名改**三块** = `工作区 · 会话栏标题缩写 · 会话编码`。
-               *   标题与工作区由 host 富化（`session/title` 事件与 `session.header.cwd`，**与宿主会话栏同源**）；
-               *   host 取不到时自动只显示编码（退化为旧行为，不出现空块）。 */
-              var ttl = String(s.title || '');
-              if (ttl.length > 14) ttl = ttl.slice(0, 14) + '…';
-              var nm = [s.workspace, ttl, s.sid].filter(function (x) { return !!x; }).join(' · ');
-              sessCard.body.appendChild(ovCRow(nm, sub, [ovPill(DS_STATE_TEXT[s.state] || s.state, pk)]));
-            });
-          }
-          // 卡住告警（T2）
-          var hasStall = r.stalled > 0 || (r.sessions || []).some(function (s) { return s.probeResult === 'stall'; });
-          if (hasStall) {
-            view.appendChild(el('div', 'sc-ds-alert', '⚠ 检测到疑似卡住的会话（无输出增长但会话仍在）：已正常计入停滞并安排睡眠，但建议你确认该任务是否真的卡住——必要时手动重启该会话。'));
-          }
-          /* v9：原「控制」小节（立即归纳一次 / 暂停到明天）与「阈值」小节**移除** ——
-           *   触发按钮已并入「睡眠状态分布」卡头右侧（原型把执行位放在该卡）；
-           *   4 项阈值（enableDeepSleep / 停滞阈值 / 探测延迟 / 采样间隔）迁到**设置页 › 高级**
-           *   （与「配置原文」同处：都是"改后需重载插件"的后端配置），深睡页不再有第二处配置入口。 */
-        }).catch(function (e) {
-          view.appendChild(el('div', 'sc-desc', '加载失败：' + (e && e.message ? e.message : e)));
-        });
-      }
+      
       var refs = {};
       var state = { parsed: null };
       /* 页头槽的**渲染轮次**：页头改挂固定槽后，同一次渲染里若有第二个 UI.pageHead（嵌套视图，
@@ -994,73 +582,22 @@ import { ICONS, el, svg } from './dom.js'
 
       /* ---------- 界面设置的运行时应用（自由度） ---------- */
       /* ---------- 界面设置的运行时应用 —— ① 设置生效 ---------- */
-      function applyDensity() {
-        var m = document.getElementById('scpanl-modal');
-        if (!m) return;
-        m.classList.toggle('sc-density-compact', Cfg.get('density', 'comfortable') === 'compact');
-      }
+      
       /* 导航宽度：写 CSS 变量而非内联 width —— 内联样式会压过媒体查询（除 !important），
          导致用户在宽屏设的宽度被带到移动端。改变量后，响应式断点可正常接管。 */
-      function applyNavWidth() {
-        var m = document.getElementById('scpanl-modal');
-        if (!m) return;
-        var n = parseInt(Cfg.get('navWidth', 216), 10);
-        if (!n) n = 216;
-        m.style.setProperty('--sc-nav-w', Math.max(140, Math.min(320, n)) + 'px');
-      }
-      function applyLogPanel() {
-        var main = document.querySelector('.sc-main');
-        if (!main) return;
-        var old = main.querySelector('.sc-logwrap');
-        if (old) old.remove();
-        var collapsed = !Cfg.get('showLogs', true);
-        var bar = document.getElementById('sc-statusbar');
-        var lp = buildLogPanel(collapsed ? 33 : 150, { collapsible: true, collapsed: collapsed });
-        if (bar && bar.parentNode === main) main.insertBefore(lp, bar); else main.appendChild(lp);
-      }
+      
+      
       /* 导航分组标题 / 页脚健康条（v9 设置页同名的两行）——真实开关：直接切对应节点的显示。
        * 与密度/导航宽度同构（改 modal 类），故不必重绘整页。 */
-      function applyNavGroups() {
-        var m = document.getElementById('scpanl-modal');
-        if (m) m.classList.toggle('sc-nogroups', !Cfg.get('navGroups', true));
-      }
-      function applyFootBar() {
-        var m = document.getElementById('scpanl-modal');
-        if (m) m.classList.toggle('sc-nofoot', !Cfg.get('footBar', true));
-      }
+      
+      
 
       /* 轮询：间隔可配（0=关闭），替代写死的 setInterval */
-      function restartPolling() {
-        if (appState.pollTimer) { clearInterval(appState.pollTimer); appState.pollTimer = null; }
-        var ms = parseInt(Cfg.get('refreshMs', 60000), 10) || 0;
-        if (ms <= 0) return;
-        appState.pollTimer = setInterval(function () {
-          // 仅在面板打开时轮询，关闭时不空转
-          var mask = document.getElementById('scpanl-mask');
-          if (!mask || !mask.classList.contains('open')) return;
-          if (Cfg.get('autoRefresh', true)) refreshCurrentView();
-        }, ms);
-      }
+      
 
       /* 关键指标采集（C4）——同时为 /inject/stats 提供 UI 入口（B1） */
       /* ---------- 界面设置的运行时应用 —— ② 轮询与指标 ---------- */
-      function collectMetrics() {
-        var m = {};
-        function put(k, v) { m[k] = v; Store.patch('metrics', m); }
-        api('/mcl/status').then(function (r) {
-          put('MCL 状态', (r && (r.mode || r.state)) || '—');
-          if (r && r.familiarity != null) put('熟悉度', String(r.familiarity));
-        }).catch(function () { put('MCL 状态', '获取失败'); });
-        api('/vector/status2').then(function (r) {
-          put('向量档', r && r.present ? (String(r.rows || 0) + ' 行') : '未启用');
-        }).catch(function () { put('向量档', '获取失败'); });
-        api('/inject/stats').then(function (r) {
-          put('注入统计', r && typeof r === 'object' ? JSON.stringify(r).slice(0, 160) : String(r));
-        }).catch(function () { put('注入统计', '获取失败'); });
-        api('/get_root').then(function (r) {
-          put('当前根', (r && (r.root || r.path || r.active)) || '—');
-        }).catch(function () { put('当前根', '获取失败'); });
-      }
+      
 
       /* 快捷键（C5）：Ctrl/⌘+Shift+S 开关面板；Esc 关闭；Ctrl/⌘+Shift+L 切日志面板 */
       /* ---------- 界面设置的运行时应用 —— ③ 面板壳与宿主挂载 ---------- */
@@ -1204,25 +741,7 @@ import { ICONS, el, svg } from './dom.js'
       }
 
       /* v9 对齐：探测宿主实际主题并打标记（面板此前完全依赖宿主变量，无法保证与方案同色） */
-      function syncTheme() {
-        var root = document.getElementById('scpanl-root');
-        if (!root) return;
-        var probe = document.querySelector('.hHd-Xa_settingsArea, .hHd-Xa_footerActions, [class*="sidebar"], body');
-        var bg = probe ? getComputedStyle(probe).backgroundColor : '';
-        var m = /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/.exec(bg || '');
-        var dark = true;
-        if (m) { var lum = (Number(m[1]) * 299 + Number(m[2]) * 587 + Number(m[3]) * 114) / 1000; dark = lum < 140; }
-        var skin = String(Cfg.get('skin', 'v9')) === 'host' ? 'host' : 'v9';
-        root.classList.toggle('sc-dark', dark);
-        root.classList.toggle('sc-light', !dark);
-        /* 组件库暗色（S3）：WA 默认主题是**浅色**，与深色面板冲突；其 .wa-dark 提供暗色调色板，
-         *   已由构建期限定在 #scpanl-root 作用域内 ⇒ 只影响面板，不动宿主页。 */
-        root.classList.toggle('wa-dark', dark);
-        root.classList.toggle('wa-light', !dark);
-        root.classList.toggle('sc-skin-v9', skin === 'v9');
-        root.classList.toggle('sc-skin-host', skin === 'host');
-        try { Cfg.set('theme', dark ? 'dark' : 'light'); } catch (e) { }
-      }
+      
       /* ---------- 界面设置的运行时应用 —— ③b 壳·入口挂载 ---------- */
       function mount() {
         if (document.getElementById('scpanl-mask')) { syncTheme(); return true; }
@@ -1511,6 +1030,8 @@ import { ICONS, el, svg } from './dom.js'
       appState.opCard = opCard;
       appState.renderRunExtras = renderRunExtras;
       appState.applyLogPanel = applyLogPanel;
+      appState.views = VIEWS;
+      appState.dsNumber = dsNumber;
       appState.deferFold = deferFold;
       appState.filterViewRows = filterViewRows;
 

@@ -50,6 +50,8 @@ export const INJECT_MAP = {
   opCard: 'opCard',
   renderRunExtras: 'renderRunExtras',
   applyLogPanel: 'applyLogPanel',
+  views: 'VIEWS',
+  dsNumber: 'dsNumber',
 }
 
 /** 纯函数：给定源码，返回问题清单（供 selftest 驱动） */

@@ -10,6 +10,7 @@ import { UI } from './ui-kit.js'
 import { el } from './dom.js'
 import { Derive, fmtTime } from './derive.js'
 import { appState } from './app-state.js'
+import { renderNoteSections } from './panes-memory-detail.js'
 import { Log, Fold } from './state.js'
 
 function openMemoryNote(pointer, autoSection, returnRender) {

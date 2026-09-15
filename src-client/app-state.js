@@ -28,6 +28,10 @@ export const appState = {
   refreshView: null,
   /** DOM 句柄表（`refs`）——**可变**,UI1/C′ 原则：可变句柄统一在本容器。 */
   refs: null,
+  /** 视图注册表（`VIEWS`）——设置页需按视图名跳转/遍历。**只读**语义。 */
+  views: null,
+  /** 数值格式化（`dsNumber`）。 */
+  dsNumber: null,
   /** 深睡/运行附加块渲染器（`renderRunExtras`）——运行观测视图调用。 */
   renderRunExtras: null,
   /** 日志面板应用器（`applyLogPanel`）。 */

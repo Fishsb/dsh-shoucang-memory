@@ -13,7 +13,7 @@ import { appState } from './app-state.js'
 import { Bus, Fold } from './state.js'
 /* UI1/U2：本模块用到**同领域**的 pane 导出（记忆索引行 / 指针行构造）。
  *  依赖方向单向：memory-detail → memory（无环）。 */
-import { renderIndexRows, makeMemoryPointerRow, openMemoryNote } from './panes-memory.js'
+import { renderIndexRows, makeMemoryPointerRow, openMemoryNote, renderPersona } from './panes-memory.js'
 import { ovCRow, ovPill } from './panes-overview.js'
 
 /* UI1/U2（2026-09-15）：此处原有 `sparkline()`（迷你趋势图，25 行）—— 经核查是**死代码**：

@@ -91,18 +91,31 @@ for (const f of files) {
     setLogStatusSink: './state.js', appState: './app-state.js',
   }
   const paneFiles = readdirSync(DIR).filter((x) => x.startsWith('panes-') && x.endsWith('.js'))
+  /* **pane 间导出**也要纳入判据（2026-09-15 补）：
+   *   实测踩过：`panes-settings.js` 的 `applyLogPanel` 用了 `buildLogPanel`（在 `panes-observe.js`）
+   *   却未 import ⇒ 构建绿、真机 `ReferenceError: buildLogPanel is not defined`（23 项渲染断言红）。
+   *   首版 A5 只查**服务模块**（UI/el/state…）⇒ 漏了这类。现把**所有 pane 的导出名**一并纳入。 */
+  const paneExports = new Set()
+  for (const f of paneFiles) {
+    const src = readFileSync(join(DIR, f), 'utf8')
+    const m = /export \{ ([^}]+) \}/.exec(src)
+    if (m) m[1].split(',').map((x) => x.trim()).filter(Boolean).forEach((n) => paneExports.add(n))
+  }
+  const WATCH = { ...SERVICES }
+  for (const n of paneExports) WATCH[n] = '(pane 导出)'
   let miss = 0
   for (const f of paneFiles) {
     const src = readFileSync(join(DIR, f), 'utf8')
     const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
     const imported = new Set((src.match(/import \{ ([^}]+) \}/g) || []).flatMap((s) => s.replace(/import \{|\}/g, '').split(',').map((x) => x.trim())))
-    const bad = Object.keys(SERVICES).filter((s) => !imported.has(s) && new RegExp('(?:^|[^.\\w$])' + s + '\\b').test(code))
+    const own = new Set(((/export \{ ([^}]+) \}/.exec(src) || [, ''])[1]).split(',').map((x) => x.trim()))
+    const bad = Object.keys(WATCH).filter((s) => !imported.has(s) && !own.has(s) && new RegExp('(?:^|[^.\\w$])' + s + '\\b').test(code))
     if (bad.length) {
       miss++
       bad.forEach((b) => console.log('  ❌ ' + f + ' 用了 ' + b + ' 但未 import（构建不报，运行时 ReferenceError ⇒ 面板整体不渲染）'))
     }
   }
-  ok(miss === 0, `A5 pane 服务 import 完整（扫 ${paneFiles.length} 个 pane · ${miss} 个缺失）`)
+  ok(miss === 0, `A5 pane 服务与 pane 间导出 import 完整（扫 ${paneFiles.length} 个 pane · 监视 ${Object.keys(WATCH).length} 个符号 · ${miss} 个缺失）`)
 }
 
 console.log(fail ? `\nFAIL（${fail} 项）` : '\nPASS（src-client 全部可解析；形态声明一致；import 位置合规；pane 服务 import 完整）')
