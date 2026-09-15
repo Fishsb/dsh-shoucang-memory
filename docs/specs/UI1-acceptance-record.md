@@ -147,11 +147,12 @@
 
 | 层 | 判据 | 实测（命令输出） |
 |---|---|---|
-| ① **仓内绿** | typecheck / build / 门禁 | ✅ `tsc --noEmit` 零错 · `build:client ✓ 632924 bytes` · **106 pass · 0 xfail · 0 skip** |
+| ① **仓内绿** | typecheck / build / 门禁 | ✅ `tsc --noEmit` 零错 · `build:client ✓ 632842 bytes` · **108 pass · 0 xfail · 0 skip** |
 | ② **部署同步** | 副本与仓内 `lib/` 逐件 sha1 | ✅ `deploy-installed` 报"无需同步" · `check-installed-sync --strict` **逐文件 sha1 一致** |
 | ③ **运行态生效** | **热重载过**（只 build+deploy **不算生效**） | ✅ `dev_reload_package` **清缓存 68 模块 · 重建 1 fiber** · `before [active] → after [active]` |
 | ④ **功能探针** | 装上去的那份带着本轮能力 | ✅ `check-installed-features` **5 项全通过**（含组件库按钮 30px 紫胶囊 / 日志默认折叠 / 宿主设置中心分区） |
-| ⑤ **云端 + pin** | 远端 = HEAD = pin | ✅ **三方同为 `debb8a41ab29`** · 未提交 0 |
+| ⑤ **云端 + pin** | 远端 = HEAD = **pin**（改 pin 后**同步 lock/.modules.yaml**，否则又三处不一致） | ✅ **三方同为 `9fac3e1ea5cf`** · `check-version-pin --strict` **PASS（三处一致 @ 9fac3e1e）** · 未提交 0 |
+| ⑥ **公开树** | 推送前必须 PASS | ✅ `check-public-tree` PASS（**出图集已 gitignore** —— 见 §3″：`check-public-tree` 跳过 `.png`，入库风险高于收益） |
 
 **终态事实**（node 解析，非模式推导）：
 
@@ -160,7 +161,8 @@
 | `src-client/body.js` | **648 有效行**（棘轮 648 · 原 5476） |
 | `src-client/styles.js` | 726（棘轮 726） |
 | pane 模块 | **9 个**：toggles 661 · memory-detail 509 · overview 380 · arch 309 · suite 293 · observe 284 · settings 242 · memory 237 · config 117 |
-| `client.js` | **631.7 KB**（拆分前 ~640 KB ⇒ **反而更小**：死代码清除 + tree-shaking） |
+| `client.js` | **632.8 KB**（拆分前 ~640 KB ⇒ **反而更小**：死代码清除 + tree-shaking） |
+| 门禁件数 | **108**（U2 收尾 106 + 本轮 `audit-pane-deps` 主件与 selftest） |
 | 门禁件数 | **106** |
 
 ---
