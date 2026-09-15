@@ -80,4 +80,16 @@ var Derive = (function () {
   };
 })();
 
+/* UI1/U2（2026-09-15）：`fmtTime` 自 `body.js` 迁入（**共享格式化工具**）。
+ *  它原有 **7 个调用点、跨 5 个视图** ⇒ 若随某个 pane 走，其余调用点要反向 import（造环）；
+ *  故此归"格式化"域（本件），而非某个 pane。 */
+export function fmtTime(iso) {
+  if (!iso) return '—';
+  try {
+    var d = new Date(iso);
+    var p = function (n) { return (n < 10 ? '0' : '') + n; };
+    return p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  } catch (e) { return String(iso).slice(0, 16); }
+}
+
 export { Derive };

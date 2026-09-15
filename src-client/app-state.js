@@ -17,6 +17,13 @@
 
 /** 共享句柄容器（字段语义见各自注释；**只放句柄，不放业务数据**） */
 export const appState = {
+  /** RPC 句柄（`api()`）——由入口在启动时注入。**pane 模块经它取**，而不是各自 import `api.js`
+   *  （那会让"谁都能 import 全局服务"，且 pane 与入口的依赖方向变乱）。 */
+  api: null,
+  /** 状态栏写入器（`status()`）——pane 模块经它报状态，而非 import 全局。 */
+  statusFn: null,
+  /** 错误定位器（`fail()`）。 */
+  failFn: null,
   /** 当前视图名（`show()` 维护；`refreshCurrentView` 读） */
   currentView: null,
   /** 轮询定时器句柄（`restartPolling` 写；`0`/`null` 表示未启动） */
