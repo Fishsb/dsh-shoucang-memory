@@ -5,6 +5,21 @@
 ## [Unreleased]
 
 ### Changed
+- **UI1/U2 · 24 个 render 全部迁出（2026-09-15）**：`body.js` **5476 → 648 有效行（-88%）**，**达成 <800 目标**。
+  抽出 **9 个 pane 模块**（toggles 661 / memory-detail 509 / overview 380 / arch 309 / suite 293 / observe 284 /
+  settings 242 / memory 237 / config 117）；`body.js` 只剩**壳层 / 挂载 / `apply` 插件入口 / `VIEWS`·`show` 枢纽**
+  （**注册契约面，不可外移**）。
+  **抽取器**：新增 `scripts/extract-pane.mjs` —— **TypeScript AST 精确区间** + 重叠检测 + **写盘自证 + 失败回滚**。
+  ⚠ 前两次用**花括号配平**与**缩进边界**界定函数块**都切错了**（配平在相邻符号时跨块；缩进在 `}).catch(` 处误判），
+  **两次真的破坏了源文件**（第二次由抽取器自身的自证机制拦下并回滚）⇒ 只有 AST 可靠。
+  **新增 3 道门**（均带反例自证）：`check-inject-order`（共享句柄注入**必须晚于声明、早于调用** ——
+  实测两个方向都踩过：太晚 ⇒ `appState.api is not a function` 页面静默空掉；太早 ⇒ `var` 无提升值 ⇒ undefined）·
+  `check-client-syntax` **A5**（pane 的**服务与 pane 间导出 import 完整性** —— 扩展前只查服务，
+  扩展后**一次抓出 8 处漏 import**，全是"构建绿、一点就崩"）· `test-split-equivalence`（**U5-b 拆分等价性证据**）。
+  **顺带清理**：死代码 `sparkline()` + 4 条 `.sc-spark` 死 CSS（死代码一直是死代码，
+  此前被 `audit-css-usage` 的**子串判据**误判为"在用"—— 因为产物里有同名**函数名**）。
+  **门禁 103 → 106 件。**
+
 - **UI1 · 前端架构整理（2026-09-15）**：`src-client/` 此前**零门禁**（后端有冻结棘轮/装配/函数跨度三道，前端一条没有）
   ⇒ `body.js` 长到 **5476 行**而无人知。本轮补上纪律并把可拆的服务全部抽出：
   **`body.js` 5476 → 3827**（`styles.js` 933 · `dom.js` 38 · `state.js` 156 · `ui-kit.js` 451 · `derive.js` 70 五刀，

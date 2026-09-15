@@ -106,6 +106,10 @@ const CHECKS = [
   //   断言用 AST：每个 appState.X = Y 的 Y 必须已声明且早于注入，且注入在 return 之前。
   ['scripts/check-inject-order.mjs'],
   ['scripts/check-inject-order.mjs', '--selftest'],
+  // UI1/U5-b（2026-09-15）**拆分等价性证据门**：U2 把 24 个 render 迁到 9 个 pane 后，
+  //   事后无法取"拆分前"DOM ⇒ 改为**证明两个渲染门确实能抓到拆分破坏**（先红后绿可信度）。
+  //   ⚠ 本件会临时改源码 + 重建产物（约 1-2 分钟），finally 中逐字节还原。
+  ['scripts/test-split-equivalence.mjs'],
   // UI1/U5-a（2026-09-15）**行为级证据**：`test-route-schema` 只证明"坏请求被 400 拦住"，
   //   **从未验证合法请求的副作用**（真的写进去、能读回）。而 U1/U2 要大规模拆分前端
   //   （`body.js` 5476 行 → 7 个 pane），"拆分后行为不变"必须有行为证据 —— `ui-geo-regress`

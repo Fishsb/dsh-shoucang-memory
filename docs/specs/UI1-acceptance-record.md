@@ -93,13 +93,51 @@
 | # | 断言 | 实测 |
 |---|---|---|
 | **Z1** | typecheck + build | ✅ 零错 · `build:client ✓ 649,658 bytes` |
-| **Z2** | `check-runner` 全绿 | ✅ **103 pass · 0 xfail · 0 skip** |
+| **Z2** | `check-runner` 全绿 | ✅ **106 pass · 0 xfail · 0 skip** |
 | **Z3** | `ui-geo-regress` | ✅ **100 PASS / 0 FAIL** |
 | **Z4** | 契约三向一致 | ✅ `check-panel-contract` 5 PASS · `gen-panel-contract --check` **产物新鲜（42 路由 · 3 份一致）** |
-| **Z5** | `src-client/` 在扫描面内 | ✅ `body.js 3827/基线 3816` · `styles.js 945/945` |
+| **Z5** | `src-client/` 在扫描面内 | ✅ `body.js **648**/基线 648`（**达成 `<800`**） |
 | **Z6** | 运行态 | ✅ 副本逐件 sha1 一致 · 特征探针通过 |
 | **Z7** | 公开树纯净 | ✅ PASS |
-| **Z8** | CHANGELOG + 体积 | ✅ 344 条结构正常 · `client.js 647.1 KB`（无异常膨胀） |
+| **Z8** | CHANGELOG + 体积 | ✅ 结构正常 · `client.js ~618 KB`（**较拆分前更小** —— 死代码清除 + tree-shaking） |
+
+---
+
+## 2′. **U2 终态与 U5-b**（2026-09-15 补 · 全部实跑）
+
+### U2 终态：`body.js` **5476 → 648 有效行**（**-88%**，达成 `<800`）
+
+| pane 模块 | 行 | 域 |
+|---|---|---|
+| `panes-toggles.js` | 661 | 参数（开关渲染组） |
+| `panes-memory-detail.js` | 509 | 记忆·展开（`mm*` 组 + notes 小节） |
+| `panes-overview.js` | 380 | 运行总览（`ov*` 卡片组） |
+| `panes-arch.js` | 309 | 架构 |
+| `panes-suite.js` | 293 | 插件集合 + 深度睡眠 |
+| `panes-observe.js` | 284 | 运行观测 |
+| `panes-settings.js` | 242 | 设置 + **应用层**（`apply*`/`syncTheme`/轮询） |
+| `panes-memory.js` | 237 | 记忆·索引与画像 |
+| `panes-config.js` | 117 | 配置原文 / YAML / 根目录 |
+| **`body.js`** | **648** | 壳层 / 挂载 / `apply` 插件入口 / `VIEWS`·`show` 枢纽（**注册契约面，不可外移**） |
+
+**手段**：`scripts/extract-pane.mjs`（**TypeScript AST 精确区间** + 重叠检测 + 写盘自证 + 失败回滚）。
+⚠ 前两次尝试用**花括号配平**与**缩进边界**界定函数块，**都切错了**（配平在相邻符号时跨块；缩进在 `}).catch(` 处误判）——
+**只有 AST 可靠**（`TAG_ORDER` 是单行，前两法分别算出 46 行 / 3 行）。
+
+### U5-b：**拆分等价性证据**（`test-split-equivalence.mjs`，已登记 → 门禁 105→106）
+
+**判据怎么落地**：U2 之后**无法再取"拆分前"的 DOM**（旧版本不在工作树）⇒ 改为
+**证明两个渲染门确实能抓到拆分破坏**（**先红后绿**的可信度证据，而非"我说没坏"）：
+
+| 断言 | 实测 |
+|---|---|
+| **A1** 反例：故意不渲染「参数」页 sched tab ⇒ `test-panel-view-contract` 必须报"缺失" | ✅ **34 → 21 项** |
+| **A2** 反例：故意把 `--sc-nav-w` 压到 4px ⇒ `ui-geo-regress` 必须 FAIL | ✅ FAIL |
+| **A3a/b** 两源文件**逐字节还原** | ✅ |
+| **A3c/d** 还原后两门**回绿** | ✅ PASS / 100 PASS |
+
+⚠ **本门自身踩过的坑**：首版把反例打在**门没覆盖的视图**（运行总览 `ov*Card`）上 ⇒ 门"没抓到"，
+**差点被误判为"门的缺陷"**。教训：**反例必须打在门覆盖的面上**，否则反例自身无效（已写入本件头注）。
 
 ---
 
