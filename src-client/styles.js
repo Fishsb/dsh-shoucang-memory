@@ -615,10 +615,11 @@
         '#scpanl-root .sc-mem-sub{font-size:var(--sc-fs-sm);color:var(--sc-muted);',
         'line-height:var(--sc-lh-normal);margin:2px 0 0;padding-bottom:var(--sc-sp-2);}',
         '#scpanl-root .sc-mem-sub.muted{color:var(--sc-muted);}',
-        '#scpanl-root .sc-spark{display:block;margin-top:var(--sc-sp-2);}',
-        '#scpanl-root .sc-spark path{fill:none;stroke:var(--sc-accent);stroke-width:1.5;stroke-linejoin:round;}',
-        '#scpanl-root .sc-spark circle{fill:var(--sc-accent);}',
-        '#scpanl-root .sc-spark .base{stroke:var(--sc-border);stroke-width:1;}',
+        /* UI1/U2（2026-09-15）：此处原有 4 条 `.sc-spark` 规则（迷你趋势图）—— 已随
+         *   **死代码 `sparkline()` 一并删除**。此前未被发现，是因为 `audit-css-usage` 用
+         *   子串包含判"是否被使用"，而产物里恰有 `sparkline` 这个**函数名** ⇒ 误判为在用。
+         *   函数迁到 pane 模块后无人 import ⇒ tree-shaking 掉函数名 ⇒ 真死规则暴露。
+         *   ⇒ 删函数 + 删规则（**不是加 ALLOW_NO_STYLE 白名单掩盖**）。 */
         /* 注：`.sc-danger` 规则已随 v9 严格对齐删除（其唯一使用者是记忆库页「蒸馏运行」段内的失败文字，
          *   该段属「运行态」Tab —— 原型记忆库页无此 Tab ⇒ 一并移除；CSS 审计门禁正是靠"死规则"抓到的）。 */
         /* 指针卡（可点击跳转） */

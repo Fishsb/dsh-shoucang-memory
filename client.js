@@ -5930,7 +5930,7 @@
   };
 
   // src-client/state.js
-  var Bus = /* @__PURE__ */ (function() {
+  var Bus2 = /* @__PURE__ */ (function() {
     var m3 = {};
     return {
       on: function(k2, fn) {
@@ -5968,7 +5968,7 @@
           } catch (e8) {
           }
         });
-        Bus.emit("store:" + k2, v2);
+        Bus2.emit("store:" + k2, v2);
         return v2;
       },
       patch: function(k2, o9) {
@@ -6002,7 +6002,7 @@
       var a4 = (Store.get("logs") || []).concat([e8]);
       if (a4.length > MAX) a4 = a4.slice(a4.length - MAX);
       Store.set("logs", a4);
-      Bus.emit("log", e8);
+      Bus2.emit("log", e8);
       if (level === "error") {
         var _s = statusSinkBox.get();
         if (_s) _s(msg, "error");
@@ -6022,20 +6022,20 @@
       },
       clear: function() {
         Store.set("logs", []);
-        Bus.emit("log", null);
+        Bus2.emit("log", null);
       }
     };
   })();
   var Prog = {
     start: function(id3, label) {
       Store.patch("progress", Object.assign({}, Store.get("progress"), make(id3, { id: id3, label: label || "", pct: 0, note: "\u8FDB\u884C\u4E2D", on: true })));
-      Bus.emit("progress", Store.get("progress"));
+      Bus2.emit("progress", Store.get("progress"));
     },
     set: function(id3, pct, note) {
       var cur = (Store.get("progress") || {})[id3];
       if (!cur) return;
       Store.patch("progress", Object.assign({}, Store.get("progress"), make(id3, Object.assign({}, cur, { pct: Math.max(0, Math.min(100, pct || 0)), note: note || cur.note }))));
-      Bus.emit("progress", Store.get("progress"));
+      Bus2.emit("progress", Store.get("progress"));
     },
     done: function(id3, ok, msg) {
       var cur = (Store.get("progress") || {})[id3];
@@ -6043,13 +6043,13 @@
       var p4 = Object.assign({}, Store.get("progress"));
       p4[id3] = Object.assign({}, cur, { on: false, pct: 100, note: msg || (ok ? "\u5B8C\u6210" : "\u5931\u8D25"), ok: ok !== false });
       Store.set("progress", p4);
-      Bus.emit("progress", p4);
+      Bus2.emit("progress", p4);
       var self = this;
       setTimeout(function() {
         var q = Object.assign({}, Store.get("progress"));
         delete q[id3];
         Store.set("progress", q);
-        Bus.emit("progress", q);
+        Bus2.emit("progress", q);
       }, ok === false ? 6e3 : 1800);
     }
   };
@@ -6108,7 +6108,7 @@
           localStorage.setItem(KEY, JSON.stringify(c5));
         } catch (e8) {
         }
-        Bus.emit("cfg:" + k2, v2);
+        Bus2.emit("cfg:" + k2, v2);
         return v2;
       },
       reset: function() {
@@ -6117,7 +6117,7 @@
           localStorage.removeItem(KEY);
         } catch (e8) {
         }
-        Bus.emit("cfg", cache);
+        Bus2.emit("cfg", cache);
         return cache;
       },
       defs: function() {
@@ -6142,7 +6142,7 @@
         var s4 = norm(key), next = !!v2;
         if (hasOwn.call(m3, s4) && m3[s4] === next) return next;
         m3[s4] = next;
-        Bus.emit("fold", { key: s4, open: next });
+        Bus2.emit("fold", { key: s4, open: next });
         return next;
       },
       toggle: function(key, dflt) {
@@ -6157,7 +6157,7 @@
         hit.forEach(function(s4) {
           delete m3[s4];
         });
-        if (hit.length) Bus.emit("fold:clear", { prefix: p4, keys: hit });
+        if (hit.length) Bus2.emit("fold:clear", { prefix: p4, keys: hit });
         return hit.length;
       },
       keys: function() {
@@ -6185,6 +6185,10 @@
     refreshView: null,
     /** DOM 句柄表（`refs`）——**可变**,UI1/C′ 原则：可变句柄统一在本容器。 */
     refs: null,
+    /** 带上下文标签的 RPC 包装（`apiCtx`）——总览卡片用它报错定位。 */
+    apiCtx: null,
+    /** 操作卡构造器（`opCard`）——总览/观测视图的进度卡。 */
+    opCard: null,
     /** 当前视图名（`show()` 维护；`refreshCurrentView` 读） */
     currentView: null,
     /** 轮询定时器句柄（`restartPolling` 写；`0`/`null` 表示未启动） */
@@ -6589,14 +6593,14 @@
         off1();
         off2();
       }
-      var off1 = Bus.on("fold", function(p4) {
+      var off1 = Bus2.on("fold", function(p4) {
         if (!alive()) {
           unsubscribe();
           return;
         }
         if (p4 && p4.key === ctl.key) ctl.sync();
       });
-      var off2 = Bus.on("fold:clear", function() {
+      var off2 = Bus2.on("fold:clear", function() {
         if (!alive()) {
           unsubscribe();
           return;
@@ -6740,7 +6744,7 @@
         txt.textContent = (s4.label ? s4.label + " \xB7 " : "") + (s4.pct || 0) + "% \xB7 " + (s4.note || "");
       }
       render(Store.get("progress"));
-      Bus.on("progress", render);
+      Bus2.on("progress", render);
       return box;
     },
     /* 键值对（信息密度） */
@@ -6947,7 +6951,7 @@
       container.appendChild(row);
     });
   }
-  function renderPersona(view, data) {
+  function renderPersona2(view, data) {
     view.textContent = "";
     UI.pageHead("\u753B\u50CF", "USER.md\uFF08\u7528\u6237\u753B\u50CF\uFF09\u4E0E AGENT.md\uFF08Agent \u753B\u50CF\uFF09\u7684\u552F\u4E00\u5C55\u793A\u4F4D\u3002", {
       routes: ["/memory/overview"],
@@ -7046,11 +7050,935 @@
         return;
       }
       var list = el("div", "sc-idx-list");
-      renderIndexRows(list, f3.lines, renderPersona);
+      renderIndexRows(list, f3.lines, renderPersona2);
       c5.body.appendChild(list);
     });
     view.appendChild(el("div", "sc-note", "\u6CE8\uFF1A\u5BB9\u91CF\u767E\u5206\u6BD4\u4E0E\u5BB9\u91CF\u6761\u6309 write_gate \u7684\u5B9E\u9645\u4E0A\u9650\u8BA1\u7B97\uFF1B\u6307\u9488\u884C\u70B9\u51FB\u53EF\u76F4\u8FBE notes/ \u5BF9\u5E94\u5C0F\u8282\u3002"));
     appState.statusFn("\u753B\u50CF \xB7 " + totalRows + " \u6761\u6307\u9488");
+  }
+
+  // src-client/panes-overview.js
+  function ovCRow(title, desc, right) {
+    var r7 = el("div", "sc-crow");
+    var l6 = el("div");
+    l6.appendChild(el("div", "sc-ct", title));
+    if (desc) l6.appendChild(el("div", "sc-cd", desc));
+    r7.appendChild(l6);
+    var rr = el("div", "sc-right");
+    (right || []).forEach(function(n6) {
+      if (n6) rr.appendChild(n6);
+    });
+    r7.appendChild(rr);
+    return r7;
+  }
+  function ovPill(text, kind, mono) {
+    return el("span", "sc-pill" + (kind ? " " + kind : "") + (mono ? " mono" : ""), text);
+  }
+  function ovAgo(ts) {
+    var t6 = typeof ts === "number" ? ts : ts ? Date.parse(String(ts)) : 0;
+    if (!t6 || isNaN(t6)) return "";
+    var m3 = Math.max(0, Math.round((Date.now() - t6) / 6e4));
+    if (m3 < 1) return "\u521A\u521A";
+    if (m3 < 60) return m3 + " \u5206\u949F\u524D";
+    if (m3 < 1440) return Math.round(m3 / 60) + " \u5C0F\u65F6\u524D";
+    return Math.round(m3 / 1440) + " \u5929\u524D";
+  }
+  function ovMorningCard() {
+    var card = UI.card("\u6668\u8D77\u6458\u8981", { right: [el("span", "sc-src", "/memory/overview \xB7 delta / weekDiff")] });
+    var box = el("div");
+    box.appendChild(el("div", "sc-desc", "\u8BFB\u53D6\u4E2D\u2026"));
+    card.body.appendChild(box);
+    appState.api("/memory/overview").then(function(d3) {
+      var dl = (d3 || {}).delta || {}, wd = (d3 || {}).weekDiff || {};
+      var sub = card.head && card.head.querySelector(".sub");
+      if (sub) {
+        if (dl.present && dl.staleAt) {
+          var h3 = Math.round((Date.parse(dl.staleAt) - Date.now()) / 36e5);
+          sub.textContent = "delta \xB7 \u5269\u4F59 " + (h3 > 0 ? h3 + "h" : "\u5DF2\u8FC7\u671F") + " \u6709\u6548";
+        } else sub.textContent = "delta \xB7 weekDiff";
+      }
+      box.textContent = "";
+      var rows = (dl.rows || []).slice(0, 2);
+      if (!Derive.has(rows)) box.appendChild(el("div", "sc-desc", "\u672C\u6B21\u65E0\u6668\u8D77\u6458\u8981\uFF08delta.md \u672A\u751F\u6210\u6216\u5DF2\u8FC7\u671F\uFF09\u3002"));
+      rows.forEach(function(t6, i7) {
+        box.appendChild(ovCRow(String(t6), "\u6765\u6E90\uFF1Adelta.md", [
+          i7 === 0 ? ovPill("injections " + Derive.num(dl.injections || 0), null, true) : ovPill("delta", "info")
+        ]));
+      });
+      var n6 = Number(wd.deepAdded || 0);
+      box.appendChild(ovCRow("\u8FD1 7 \u5929\u6DF1\u7761\u65B0\u4E60\u5F97 " + Derive.num(n6) + " \u6761", "weekDiff.deepAdded", [ovPill("+" + Derive.num(n6), "ok")]));
+    }).catch(function() {
+      box.textContent = "";
+      box.appendChild(el("div", "sc-desc", "\u6668\u8D77\u6458\u8981\u8BFB\u53D6\u5931\u8D25\uFF08/memory/overview\uFF09\u3002"));
+    });
+    return card.box;
+  }
+  function ovTimelineCard() {
+    var card = UI.card("\u6700\u8FD1\u52A8\u6001", { right: [ovPill("\u6700\u8FD1 24 \u5C0F\u65F6")] });
+    var tl = el("div", "sc-tl");
+    tl.appendChild(el("div", "sc-desc", "\u8BFB\u53D6\u4E2D\u2026"));
+    card.body.appendChild(tl);
+    Promise.all([
+      appState.api("/memory/overview").catch(function() {
+        return {};
+      }),
+      appState.api("/deepsleep").catch(function() {
+        return {};
+      })
+    ]).then(function(rs) {
+      var d3 = rs[0] || {}, sl = rs[1] || {};
+      var ds = d3.distillStats || {}, g2 = d3.growth || {}, pend = d3.pending || {};
+      var it = [];
+      if (ds.last && ds.last.at) {
+        it.push({
+          t: Date.parse(ds.last.at) || 0,
+          k: "ok",
+          title: "\u84B8\u998F\u5B8C\u6210 \xB7 \u672C\u6708 " + Derive.num(ds.runs || 0) + " \u6B21",
+          desc: "\u7D2F\u8BA1\u5165\u5E93 " + Derive.num(ds.added || 0) + " \u6761 \xB7 \u5F02\u5E38 " + Derive.num(ds.failed || 0) + " \u6761",
+          time: ovAgo(ds.last.at)
+        });
+      }
+      if (g2.sleep && g2.sleep.passes) {
+        it.push({
+          t: Number(sl.lastDeepSleepAt) || 0,
+          k: "ok",
+          title: "\u6DF1\u5EA6\u7761\u7720\u6574\u7406 \xB7 \u672C\u6708 " + Derive.num(g2.sleep.passes) + " \u6B21",
+          desc: "\u4E60\u5F97\u539F\u5219 " + Derive.num(g2.sleep.principleAdded || 0) + " \xB7 \u66FF\u6362 " + Derive.num(g2.sleep.replaced || 0) + " \xB7 \u753B\u50CF " + Derive.num(g2.sleep.profilesAdded || 0),
+          time: sl.lastDeepSleepAt ? ovAgo(sl.lastDeepSleepAt) : "\u672C\u6708"
+        });
+      }
+      (d3.indexes || []).forEach(function(f3) {
+        if (!f3 || !f3.cap) return;
+        var pct = Math.round((f3.chars || 0) / f3.cap * 100);
+        if (pct < 80) return;
+        it.push({
+          t: 0,
+          k: "warn",
+          title: "\u5BB9\u91CF\u9884\u8B66 \xB7 " + String(f3.name || "") + " \u8FBE " + pct + "%",
+          desc: "\u7EA2\u7EBF\u7531 write_gate \u5199\u5165\u65F6\u5F3A\u5236\uFF1B\u5EFA\u8BAE\u5728\u4E0B\u4E00\u6B21\u6DF1\u7761\u4E2D\u6267\u884C\u753B\u50CF\u538B\u7F29",
+          time: "\u9608\u503C 80%"
+        });
+      });
+      if (pend.count) {
+        it.push({
+          t: 0,
+          k: pend.count > 5 ? "warn" : "",
+          title: "\u5019\u9009\u5F85\u88C1\u51B3 \xB7 " + Derive.num(pend.count) + " \u6761",
+          desc: "24h \u5185\u65B0\u589E " + Derive.num(pend.last24h || 0) + " \u6761",
+          time: "\u5F85\u5904\u7406"
+        });
+      }
+      tl.textContent = "";
+      if (!Derive.has(it)) {
+        tl.appendChild(el("div", "sc-desc", "\u6682\u65E0\u52A8\u6001\u3002"));
+        return;
+      }
+      it.sort(function(a4, b3) {
+        return (b3.t || 0) - (a4.t || 0);
+      });
+      it.slice(0, 4).forEach(function(x2) {
+        var box = el("div", "sc-tl-item" + (x2.k ? " " + x2.k : ""));
+        box.appendChild(el("div", "sc-tl-t", x2.title));
+        box.appendChild(el("div", "sc-tl-d", x2.desc));
+        box.appendChild(el("div", "sc-tl-time", x2.time));
+        tl.appendChild(box);
+      });
+    });
+    return card.box;
+  }
+  function ovCriteriaCard() {
+    var card = UI.card("\u5224\u636E\u4E0E\u91CD\u6392\u95E8", {
+      sub: "\u73B0\u72B6\u5DF2\u6709 \xB7 \u4EC5\u6539\u5F52\u5C5E",
+      right: [el("span", "sc-src", "GET /criteria")]
+    });
+    var mini = el("div", "sc-mini");
+    var note = el("div", "sc-mem-stat-rule", "\u8BFB\u53D6\u4E2D\u2026");
+    card.body.appendChild(mini);
+    card.body.appendChild(note);
+    appState.api("/criteria").then(function(c5) {
+      var o9 = c5 || {};
+      var gate = o9.rerankGate || {}, h3 = o9.health || {}, bg = o9.bankGit || {}, led = o9.ledger || {};
+      mini.textContent = "";
+      var put = function(k2, v2) {
+        mini.appendChild(el("div", "k", k2));
+        mini.appendChild(el("div", "v", v2));
+      };
+      put("\u5224\u636E\u7248\u672C", String(o9.version || "\u2014"));
+      put("\u53F0\u8D26\u884C\u6570", Derive.num(led.rows || 0));
+      put("notes \u544A\u8B66\u9608\u503C", h3.notesWarn == null ? "\u2014" : Derive.num(h3.notesWarn));
+      put("\u91CD\u6392\u95E8", Derive.num(gate.indexRows || 0) + " / " + Derive.num(gate.threshold || 0) + " \xB7 \u884C\u6570\u95E8" + (gate.ready ? "\u5DF2\u8FBE" : "\u672A\u8FBE"));
+      put("\u5E93\u7248\u672C", Derive.num(bg.commits || 0) + " \u63D0\u4EA4");
+      note.textContent = "\u5065\u5EB7\u5EA6 health.R / K \u4E0E caps \u7531 criteria-gate.json \u63D0\u4F9B\uFF1B\u672C\u5361\u53EA\u8BFB\u3002";
+    }).catch(function() {
+      note.textContent = "\u5224\u636E\u53F0\u8D26\u8BFB\u53D6\u5931\u8D25\uFF08GET /criteria\uFF09\u3002";
+    });
+    return card.box;
+  }
+  function ovQuickCard() {
+    var card = UI.card("\u5FEB\u6377\u64CD\u4F5C");
+    var row = el("div", "sc-toolbar");
+    row.style.flexWrap = "wrap";
+    var res = el("div", "sc-desc", "");
+    row.appendChild(UI.button("\u6D4B\u8BD5\u5D4C\u5165\u8FDE\u901A", function() {
+      res.textContent = "\u8BFB\u53D6\u914D\u7F6E\u2026";
+      return appState.api("/embed/config").then(function(c5) {
+        var g2 = c5 && c5.effective || c5 && c5.persisted || {};
+        var baseUrl = String(g2.baseUrl || g2.embedBaseUrl || "").trim();
+        if (!baseUrl) {
+          res.textContent = "\u2717 \u672A\u914D\u7F6E embedBaseUrl\uFF08\u4E14\u7F3A\u7701\u4E0D\u53EF\u7528\uFF09";
+          return;
+        }
+        var dflt = c5 && c5.isDefault || {};
+        var src = dflt.embedBaseUrl ? "\uFF08\u7F3A\u7701\u5728\u7528\uFF09" : "\uFF08\u5DF2\u843D\u76D8\uFF09";
+        res.textContent = "\u6D4B\u8BD5\u4E2D\u2026 " + baseUrl + src;
+        return appState.apiCtx("/embed/test", {
+          method: "POST",
+          body: JSON.stringify({ baseUrl, apiKey: String(g2.apiKey || g2.embedApiKey || "").trim() })
+        }, "\u5D4C\u5165\u8FDE\u901A\u6027").then(function(r7) {
+          res.textContent = r7 && r7.error ? "\u2717 " + r7.error + " \xB7 " + baseUrl + src : "\u2713 \u53EF\u8FBE \xB7 " + Derive.count(r7 && r7.models) + " \u4E2A\u6A21\u578B \xB7 " + baseUrl + src;
+        });
+      }).catch(function(e8) {
+        res.textContent = "\u2717 " + e8.message;
+      });
+    }, { async: true, busyText: "\u6D4B\u8BD5\u4E2D\u2026", okText: "\u5D4C\u5165\u8FDE\u901A\u6027\u6D4B\u8BD5\u5B8C\u6210", title: "POST /embed/test \u2014\u2014 \u9A8C\u8BC1\u5F53\u524D embedding \u914D\u7F6E\u662F\u5426\u53EF\u7528" }));
+    row.appendChild(UI.button("\u6839\u76EE\u5F55\u5F15\u5BFC", function() {
+      res.textContent = "\u6267\u884C\u4E2D\u2026";
+      return appState.apiCtx("/root/bootstrap", { method: "POST", body: JSON.stringify({}) }, "\u6839\u76EE\u5F55\u5F15\u5BFC").then(function(r7) {
+        res.textContent = "\u2713 " + JSON.stringify(r7).slice(0, 200);
+      }).catch(function(e8) {
+        res.textContent = "\u2717 " + e8.message;
+      });
+    }, { async: true, busyText: "\u6267\u884C\u4E2D\u2026", okText: "\u6839\u76EE\u5F55\u5F15\u5BFC\u5B8C\u6210", confirm: "\u6267\u884C\u6839\u76EE\u5F55\u5F15\u5BFC\u4F1A\u5C1D\u8BD5\u521B\u5EFA\u7F3A\u5931\u7684\u76EE\u5F55\u7ED3\u6784\uFF0C\u786E\u8BA4\u7EE7\u7EED\uFF1F" }));
+    row.appendChild(UI.button("\u6210\u719F\u5EA6\u626B\u63CF", function() {
+      res.textContent = "\u626B\u63CF\u4E2D\u2026";
+      return appState.apiCtx("/maturation/scan", { method: "POST", body: JSON.stringify({}) }, "\u6210\u719F\u5EA6\u626B\u63CF").then(function(r7) {
+        res.textContent = r7 && r7.active ? "\u2713 \u626B\u63CF\u5B8C\u6210\uFF08\u5206\u6863\u5DF2\u5199\u5165 audit/maturation.jsonl\uFF09" : "\u26A0 " + (r7 && r7.error || "\u672A\u751F\u6210");
+      }).catch(function(e8) {
+        res.textContent = "\u2717 " + e8.message;
+      });
+    }, { async: true, busyText: "\u626B\u63CF\u4E2D\u2026", okText: "\u6210\u719F\u5EA6\u626B\u63CF\u5B8C\u6210", title: "POST /maturation/scan \u2014\u2014 \u91CD\u7B97\u5E93\u5185\u5C0F\u8282\u6210\u719F\u5EA6\u5E76\u8986\u76D6\u53F0\u8D26\uFF08\u53EA\u5199\u53F0\u8D26\uFF0C\u4E0D\u6539\u8BB0\u5FC6\u5185\u5BB9\uFF09" }));
+    row.appendChild(UI.button("\u8D26\u672C\u5BF9\u8D26", function() {
+      res.textContent = "\u5BF9\u8D26\u4E2D\u2026";
+      return appState.apiCtx("/reconcile", { method: "POST", body: JSON.stringify({}) }, "\u8D26\u672C\u5BF9\u8D26").then(function(r7) {
+        res.textContent = r7 && r7.active ? "\u2713 \u5BF9\u8D26\u5B8C\u6210" : "\u26A0 " + (r7 && r7.error || "\u5931\u8D25");
+      }).catch(function(e8) {
+        res.textContent = "\u2717 " + e8.message;
+      });
+    }, { async: true, busyText: "\u5BF9\u8D26\u4E2D\u2026", okText: "\u8D26\u672C\u5BF9\u8D26\u5B8C\u6210", title: "POST /reconcile \u2014\u2014 \u8BB0\u5FC6\u5E93\u5BF9\u8D26\uFF08\u53EA\u8BFB\u6C47\u603B\uFF09" }));
+    card.body.appendChild(row);
+    card.body.appendChild(res);
+    return card.box;
+  }
+  function renderViewOverview(view) {
+    view.textContent = "";
+    UI.pageHead("\u8FD0\u884C\u603B\u89C8", "\u4E00\u5C4F\u56DE\u7B54\u300C\u73B0\u5728\u600E\u4E48\u6837\u300D\u3002\u5FBD\u7AE0\u884C = \u539F\u8BB0\u5FC6\u677F\u5757 \xA70 \u7684 7 \u679A\u72B6\u6001\u5FBD\u7AE0\uFF0C\u6574\u4F53\u63D0\u5347\u4E3A\u72EC\u7ACB\u9996\u5C4F\u3002", {
+      routes: ["/memory/overview", "/cognition/report", "/mcl/status"],
+      refresh: true,
+      actions: [el("span", "sc-proto-note", "\u84B8\u998F\u6267\u884C\u4F4D\uFF1A\u4E0B\u65B9\u64CD\u4F5C\u5361\uFF08\u672C\u9875\u4EC5\u4E00\u5904\uFF09")]
+    });
+    var badges = el("div", "sc-ds-badges");
+    function bd(t6, k2) {
+      var h3 = UI.dsBadge(t6, k2);
+      badges.appendChild(h3.box);
+      return h3;
+    }
+    var bDistill = bd("\u84B8\u998F \u2026");
+    var bVec = bd("\u5411\u91CF \u2026");
+    var bPend = bd("\u5019\u9009 \u2026");
+    var bMem = bd("\u8BB0\u5FC6\u5E93 \u2026");
+    var bMcl = bd("\u8BA4\u77E5\u73AF \u2026");
+    var bCrit = bd("\u5224\u636E\u53F0\u8D26 \u2026");
+    var bGit = bd("\u5E93\u7248\u672C \u2026");
+    view.appendChild(badges);
+    var alertBox = el("div", "sc-ds-alert warn sc-hidden");
+    alertBox.setAttribute("role", "status");
+    view.appendChild(alertBox);
+    function setAlert(head, detail, linkText, linkGo) {
+      if (!head) {
+        alertBox.classList.add("sc-hidden");
+        return;
+      }
+      alertBox.textContent = "";
+      var body = el("div");
+      body.appendChild(el("b", null, head));
+      if (detail) body.appendChild(el("span", null, " \u2014\u2014 " + detail));
+      if (linkText) {
+        var a4 = el("a", null, linkText);
+        a4.setAttribute("role", "button");
+        a4.onclick = function() {
+          if (typeof linkGo === "function") linkGo();
+        };
+        body.appendChild(a4);
+      }
+      alertBox.appendChild(body);
+      alertBox.classList.remove("sc-hidden");
+    }
+    var ops = el("div", "sc-opgrid");
+    ops.appendChild(appState.opCard("\u7ACB\u5373\u84B8\u998F", "\u904D\u5386\u6839\u4F1A\u8BDD\u84B8\u998F\uFF0C\u643A\u5E26 pending \u5019\u9009\u56DE\u6D41\uFF1B\u7B49\u4EF7\u4E8E\u7B49\u4F1A\u8BDD\u7A7A\u95F2\u81EA\u52A8\u89E6\u53D1\u3002", "POST /distill/run", "\u84B8\u998F", function() {
+      return appState.apiCtx("/distill/run", { method: "POST", body: JSON.stringify({}) }, "\u84B8\u998F").then(function(r7) {
+        appState.statusFn(r7 && r7.ok ? "\u2713 " + (r7.note || "\u84B8\u998F\u5B8C\u6210") : "\u26A0 " + (r7 && r7.note || "\u672A\u89E6\u53D1\uFF1A\u6839\u4F1A\u8BDD\u6D3B\u8DC3\u4E2D\u4F1A\u8DF3\u8FC7\uFF0C\u7B49\u95F2\u7F6E\u81EA\u52A8\u8DD1"));
+        appState.refreshView();
+      });
+    }, { icon: "M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1", busyText: "\u84B8\u998F\u4E2D\u2026", okText: "\u84B8\u998F\u5B8C\u6210" }));
+    ops.appendChild(appState.opCard("\u7ACB\u5373\u8FDB\u5165\u6DF1\u7761", "\u79BB\u7EBF\u56DE\u60F3\uFF0C\u63D0\u70BC\u300C[\u539F\u5219]/[\u8DEF\u5F84]\u300D\u5E76\u505A\u7ED3\u6784\u6574\u7406\u4E0E\u5F52\u6863\uFF08\u7981\u76F4\u5220\uFF09\u3002\u9884\u8BA1 1\u20133 \u5206\u949F\u3002", "POST /deepsleep/trigger", "\u6DF1\u7761", function() {
+      return appState.apiCtx("/deepsleep/trigger", { method: "POST", body: JSON.stringify({}) }, "\u6DF1\u7761").then(function() {
+        appState.statusFn("\u2713 \u5DF2\u89E6\u53D1\u6DF1\u7761\u5F52\u7EB3\uFF08\u540E\u53F0\u6267\u884C\uFF0C\u56DE\u6267\u89C1\u300C\u6DF1\u5EA6\u7761\u7720\u300D\uFF09");
+      });
+    }, { icon: "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z", confirm: "\u7ACB\u5373\u89E6\u53D1\u4E00\u6B21\u6DF1\u5EA6\u7761\u7720\u5F52\u7EB3\uFF1F\u5C06\u8C03\u7528\u5F52\u7EB3\u5B50\u4EE3\u7406\u56DE\u987E\u5F53\u5929\u8BB0\u5FC6\u75D5\u8FF9\u3002" }));
+    ops.appendChild(appState.opCard("\u8FD0\u884C\u81EA\u68C0", "\u6821\u9A8C\u5224\u636E\u95E8 / \u8F7D\u4F53\u95E8 / \u5206\u5C42 / \u6210\u719F\u5EA6 / \u5F71\u5B50 / \u5BF9\u8D26\u516D\u9879\uFF1B\u8D85\u65F6\u4E0A\u9650 180s\u3002", "POST /selfcheck/run", "\u81EA\u68C0", function() {
+      return appState.apiCtx("/selfcheck/run", { method: "POST", body: JSON.stringify({}) }, "\u81EA\u68C0").then(function() {
+        appState.statusFn("\u2713 \u81EA\u68C0\u5DF2\u6267\u884C\uFF0C\u7ED3\u679C\u89C1\u300C\u8FD0\u884C\u89C2\u6D4B\u300D");
+      });
+    }, { icon: "M20 6L9 17l-5-5", busyText: "\u81EA\u68C0\u4E2D\u2026", confirm: "\u7ACB\u5373\u8DD1\u4E00\u6B21\u8FD0\u884C\u81EA\u68C0\uFF1F\u6267\u884C\u671F\u95F4\u8BF7\u52FF\u5173\u95ED\u9762\u677F\u3002" }));
+    view.appendChild(ops);
+    var kpis = el("div", "sc-kpis");
+    var kMem = UI.kpi("\u8BB0\u5FC6\u5E93\u5BB9\u91CF", { val: "\u2014", sub: "MEMORY.md", pct: 0, kind: "ended" });
+    var kLevel = UI.kpi("\u84B8\u998F\u6C34\u4F4D", { val: "\u2014", sub: "\u672C\u8F6E\u84B8\u998F\u4E8B\u4EF6", pct: 0, kind: "ended" });
+    var kSleep = UI.kpi("\u6DF1\u5EA6\u7761\u7720", { val: "\u2014", txt: true, sub: "\u2014", pct: null, kind: "probing" });
+    var kVec = UI.kpi("\u5411\u91CF\u6863", { val: "\u672A\u542F\u7528", sub: "\u8BCD\u6CD5\u53EC\u56DE\u515C\u5E95", pct: null, kind: "ended" });
+    [kMem, kLevel, kSleep, kVec].forEach(function(c5) {
+      kpis.appendChild(c5.box);
+    });
+    view.appendChild(kpis);
+    var cols2 = el("div", "sc-cols2");
+    var gCard = UI.card("\u672C\u6708\u6210\u957F", { right: [el("span", "sc-src", "/memory/overview \xB7 growth")] });
+    var sCard = UI.card("\u7CFB\u7EDF\u72B6\u6001", { right: [el("span", "sc-src", "/mcl/status \xB7 /inject/stats")] });
+    var colL = el("div"), colR = el("div");
+    colL.appendChild(gCard.box);
+    colL.appendChild(ovMorningCard());
+    colL.appendChild(ovTimelineCard());
+    colR.appendChild(sCard.box);
+    colR.appendChild(ovCriteriaCard());
+    colR.appendChild(ovQuickCard());
+    cols2.appendChild(colL);
+    cols2.appendChild(colR);
+    view.appendChild(cols2);
+    var growthBox = gCard.body;
+    var sysBox = sCard.body;
+    function ovStat(label, value, sub) {
+      var c5 = el("div", "sc-mem-stat");
+      c5.appendChild(el("div", "sc-mem-stat-label", label));
+      c5.appendChild(el("div", "sc-mem-stat-value", value));
+      if (sub) c5.appendChild(el("div", "sc-mem-stat-sub", sub));
+      return c5;
+    }
+    appState.api("/memory/overview").then(function(r7) {
+      var d3 = r7 || {};
+      var ds = d3.distillStats || {};
+      bDistill.setText("\u84B8\u998F \xB7 " + (ds.last && ds.last.at ? ovAgo(ds.last.at) : "\u5F85\u547D\u4E2D")).setKind(ds.runs || 0 ? "ended" : "running");
+      if (Derive.vectorOn(d3)) {
+        var vp = d3.vector.provider || "off";
+        bVec.setText("\u5411\u91CF " + String(vp)).setKind(Derive.providerKind(vp, ["fusion"]));
+      } else {
+        bVec.setText("\u5411\u91CF \u672A\u542F\u7528").setKind("stalled");
+      }
+      var pend = d3.pending || {};
+      bPend.setText("\u5019\u9009 " + String(pend.count || 0)).setKind(pend.count || 0 ? "suspect" : "ended");
+      var mf = null;
+      (d3.indexes || []).forEach(function(f3) {
+        if (f3.name === "MEMORY.md") mf = f3;
+      });
+      if (mf) {
+        var pct = mf.cap ? Math.round((mf.chars || 0) / mf.cap * 100) : null;
+        bMem.setText("\u8BB0\u5FC6\u5E93 \xB7 " + (pct === null ? "\u6B63\u5E38" : Derive.capKind(pct) !== "ended" ? "\u6C34\u4F4D\u504F\u9AD8" : "\u6B63\u5E38")).setKind(pct === null ? "ended" : Derive.capKind(pct));
+        kMem.set(pct === null ? Derive.num(mf.chars || 0) : pct + "%", Derive.num(mf.chars || 0) + " / " + Derive.num(mf.cap || "\u2014") + " \u5B57\u7B26" + (Derive.count(mf.lines) ? " \xB7 " + Derive.count(mf.lines) + " \u884C" : ""));
+        kMem.fill(pct, pct === null ? "" : Derive.capKind(pct));
+        if (appState.refs.navHealth) appState.refs.navHealth(pct === null ? "\u6B63\u5E38" : Derive.capKind(pct) !== "ended" ? "\u6C34\u4F4D\u504F\u9AD8" : "\u6B63\u5E38", pct === null ? "ended" : Derive.capKind(pct));
+      }
+      var dLast = d3.distill && d3.distill.last;
+      if (dLast && dLast.lastSeq != null) {
+        kLevel.set(String(dLast.lastSeq), "\u672C\u8F6E\u84B8\u998F\u4E8B\u4EF6 \xB7 " + fmtTime(dLast.at));
+        kLevel.fill(100, "ok");
+      } else {
+        kLevel.set("\u2014", "\u5C1A\u65E0\u84B8\u998F\u4E8B\u4EF6");
+      }
+      if (Derive.vectorOn(d3)) {
+        kVec.set(Derive.num(d3.vector.cacheLines || 0), "\u884C \xB7 " + (d3.vector.provider || "\u2014") + (d3.vector.enabled === false ? " \xB7 \u5DF2\u5173\u95ED" : " \xB7 \u5DF2\u542F\u7528"));
+        kVec.fill(null);
+      }
+      var g2 = d3.growth;
+      if (g2) {
+        if (gCard.head) {
+          var subEl = gCard.head.querySelector(".sub");
+          if (subEl) subEl.textContent = "\xB7 " + g2.month;
+        }
+        var g3 = el("div", "sc-mem-grid");
+        var s32 = g2.sleep || {}, d32 = g2.distill || {}, n32 = g2.now || {};
+        g3.appendChild(ovStat("\u6DF1\u7761\u5F52\u7EB3", Derive.num(s32.passes || 0) + " \u6B21", "\u4E60\u5F97 " + Derive.num(s32.principleAdded || 0) + " \xB7 \u66FF\u6362 " + Derive.num(s32.replaced || 0) + " \xB7 \u753B\u50CF " + Derive.num(s32.profilesAdded || 0)));
+        g3.appendChild(ovStat("\u84B8\u998F", Derive.num(d32.runs || 0) + " \u6B21", "\u6210\u529F " + Derive.num(d32.ok || 0) + " \xB7 \u5F02\u5E38 " + Derive.num(d32.bad || 0) + " \xB7 \u9884\u7B5B\u8DF3\u8FC7 " + Derive.num(d32.skips || 0)));
+        g3.appendChild(ovStat("AGENT \u753B\u50CF", Derive.num(n32.tagRows != null ? n32.tagRows : "\u2014") + " \u884C", "\u539F\u5219 " + Derive.num(n32.principleRows || 0) + " \xB7 \u8DEF\u5F84 " + Derive.num(n32.pathRows || 0) + " \xB7 " + Derive.num(n32.agentChars || 0) + " \u5B57\u7B26"));
+        growthBox.appendChild(g3);
+      }
+      var warn = [];
+      if (pend.count) warn.push("\u5019\u9009\u533A " + pend.count + " \u6761\u5F85\u88C1\u51B3");
+      if ((d3.queue || {}).undone) warn.push("\u5F85\u5F52\u6863\u4F1A\u8BDD " + d3.queue.undone + " \u4E2A");
+      if (Derive.vectorOn(d3) && Derive.providerDown(d3.vector.provider)) warn.push("\u5D4C\u5165\u670D\u52A1\u4E0D\u53EF\u8FBE\uFF0C\u5411\u91CF\u53EC\u56DE\u5DF2\u964D\u7EA7\u4E3A\u8BCD\u6CD5");
+      if (Derive.has(warn)) setAlert(warn.length + " \u9879\u5F85\u5904\u7406", warn.join("\uFF1B"), "\u524D\u5F80\u5904\u7406", function() {
+        show("memory");
+      });
+      else setAlert("");
+    }).catch(appState.failFn);
+    appState.api("/mcl/status").then(function(m3) {
+      bMcl.setText("\u8BA4\u77E5\u73AF " + (m3 && m3.active ? "\u5FEB" + (m3.fast || 0) + "/\u6162" + (m3.slow || 0) : "\u672A\u88C5\u914D")).setKind(m3 && m3.active ? "ended" : "stalled");
+    }).catch(function() {
+      bMcl.setText("\u8BA4\u77E5\u73AF \u8BFB\u53D6\u5931\u8D25").setKind("stalled");
+    });
+    appState.api("/criteria").then(function(c5) {
+      bCrit.setText("\u5224\u636E\u53F0\u8D26 \xB7 " + (c5 && c5.active ? "\u5DF2\u5C31\u7EEA" : "\u4E0D\u53EF\u8BFB")).setKind(c5 && c5.active ? "ended" : "stalled");
+      var bg = (c5 || {}).bankGit || {};
+      bGit.setText("\u5E93\u7248\u672C \xB7 " + (bg.commits || 0 ? "\u5DF2\u542F\u7528" : "\u672A\u521D\u59CB\u5316")).setKind(bg.commits || 0 ? "ended" : "stalled");
+    }).catch(function() {
+      bGit.setText("\u5E93\u7248\u672C \u8BFB\u53D6\u5931\u8D25");
+    });
+    appState.api("/deepsleep").then(function(d3) {
+      var st = d3 || {};
+      var mode = st.running ? "\u6DF1\u7761\u6574\u7406\u4E2D" : st.ended || st.ended === 0 ? "\u6D45\u7761" : "\u2014";
+      kSleep.set(mode, (st.idleMs ? "\u7A7A\u95F2 " + Math.round(st.idleMs / 6e4) + " \u5206\u949F \xB7 " : "") + (st.nextEligibleAt ? "\u4E0B\u6B21\u53EF\u7761 " + fmtTime(st.nextEligibleAt) : "\u6309\u6C34\u4F4D\u89E6\u53D1"), true);
+    }).catch(function() {
+      kSleep.set("\u2014", "\u8BFB\u53D6\u5931\u8D25", true);
+    });
+    Promise.all([
+      appState.api("/get_root").catch(function() {
+        return {};
+      }),
+      appState.api("/mcl/status").catch(function() {
+        return {};
+      }),
+      appState.api("/inject/stats").catch(function() {
+        return {};
+      }),
+      appState.api("/vector/status2").catch(function() {
+        return {};
+      })
+    ]).then(function(rs) {
+      var r0 = rs[0] || {}, m3 = rs[1] || {}, s4 = rs[2] || {}, v2 = rs[3] || {};
+      sysBox.textContent = "";
+      var root = r0.root || r0.path || r0.active || "\u2014";
+      sysBox.appendChild(ovCRow("\u5F53\u524D\u6839\u76EE\u5F55", String(root), [
+        ovPill(r0.active ? "\u5DF2\u6FC0\u6D3B" : "\u672A\u6FC0\u6D3B", r0.active ? "ok" : "warn")
+      ]));
+      var ch = m3.active ? String(m3.mode) === "slow" ? "\u6162\u901A\u9053" : "\u5FEB\u901A\u9053" : "\u672A\u88C5\u914D";
+      sysBox.appendChild(ovCRow(
+        "MCL \u8BA4\u77E5\u73AF",
+        "\u719F\u6089\u5EA6 " + (m3.familiarity != null ? m3.familiarity : "\u2014") + " \xB7 " + ch,
+        [ovPill(ch, m3.active ? "brand" : "warn")]
+      ));
+      sysBox.appendChild(ovCRow(
+        "\u6CE8\u5165\u7EDF\u8BA1",
+        "\u672C\u6B21\u4F1A\u8BDD " + Derive.num(s4.calls || 0) + " \u6B21" + (s4.lastAt ? " \xB7 \u6700\u8FD1 " + ovAgo(s4.lastAt) : "") + (s4.root ? " \xB7 root=" + s4.root : ""),
+        [ovPill(Derive.num(s4.calls || 0))]
+      ));
+      sysBox.appendChild(ovCRow(
+        "\u5D4C\u5165\u670D\u52A1",
+        "provider=" + String(v2.provider || "off") + " \xB7 " + Derive.num(v2.rows || 0) + " \u884C",
+        [ovPill(v2.present ? "\u53EF\u8FBE" : "\u672A\u542F\u7528", v2.present ? "ok" : "warn")]
+      ));
+    });
+  }
+
+  // src-client/panes-memory-detail.js
+  function renderCognitionReport(view, mode) {
+    appState.api("/cognition/report").then(function(r7) {
+      if (!r7 || !r7.ok) return;
+      var host = view;
+      var box = view;
+      var group = function(t6) {
+        if (mode === "sleep") {
+          var c5 = UI.card(t6);
+          host.appendChild(c5.box);
+          box = c5.body;
+        } else {
+          box.appendChild(el("div", "sc-mem-group-title", t6));
+        }
+      };
+      var sleeps = r7.sleeps || [], last = Derive.has(sleeps) ? sleeps[sleeps.length - 1] : null;
+      if (mode === "sleep") {
+        group("\u672C\u8F6E\u4EA7\u51FA\u56DE\u6267" + (last && last.at ? " \xB7 " + fmtTime(last.at) : ""));
+        if (!last) {
+          box.appendChild(el("div", "sc-mem-empty", "\uFF08\u5C1A\u65E0\u6DF1\u7761\u8BB0\u5F55\uFF09"));
+        } else {
+          var kpiRow = function(defs) {
+            var g2 = el("div", "sc-kpis");
+            defs.forEach(function(d3) {
+              g2.appendChild(UI.kpi(d3[0], { val: String(d3[1] == null ? 0 : d3[1]), sub: d3[2], plain: true }).box);
+            });
+            return g2;
+          };
+          box.appendChild(kpiRow([["\u65B0\u589E\u539F\u5219", last.added, "added"], ["\u66FF\u6362\u539F\u5219", last.replaced, "replaced"], ["\u753B\u50CF\u66F4\u65B0", last.profiles, "profiles"]]));
+          box.appendChild(kpiRow([
+            ["\u6307\u9488\u66F4\u65B0", last.pointers, "pointers"],
+            ["\u6811\u64CD\u4F5C", last.tree, "tree"],
+            ["\u5F52\u6863", last.forgetArchived, "forgetArchived"],
+            ["\u4FDD\u7559", last.forgetKept, "forgetKept"]
+          ]));
+          if (last.stop && last.stop !== "completed") {
+            box.appendChild(el("div", "sc-ds-alert", "\u26A0 \u4E0A\u6B21\u672A\u5B8C\u6210\uFF08stop=" + last.stop + "\uFF09\u2014\u2014\u6309\u300C\u6DF1\u7761\u6C34\u4F4D\u62A4\u680F\u300D\u6C34\u4F4D\u5DF2\u56DE\u6EDA\uFF0C\u540C\u6279\u75D5\u8FF9\u4E0B\u8F6E\u91CD\u8BD5"));
+          }
+        }
+        var m3 = r7.materials || {};
+        group("\u4E0B\u8F6E\u6750\u6599\u9884\u4F30" + (r7.day ? " \xB7 " + r7.day : ""));
+        [
+          ["\u9057\u5FD8\u5019\u9009", "cold \u4E14 \u226590 \u5929\u96F6\u547D\u4E2D", m3.forget],
+          ["\u52A0\u6DF1\u5019\u9009", "hits30 \u2265 5", m3.hot],
+          ["\u4E92\u6291\u5019\u9009", "\xA7 \u540D\u91CD\u53E0 0.5\u20130.66", m3.interference]
+        ].forEach(function(kv) {
+          box.appendChild(ovCRow(kv[0], kv[1], [el("b", null, String(kv[2] == null ? 0 : kv[2]) + " \u6761")]));
+        });
+      } else {
+        var ar = r7.archive || [];
+        if (Derive.has(ar)) {
+          group("\u5F52\u6863\u533A notes/archive/ \xB7 " + ar.length + " \u4E2A\u6587\u4EF6\uFF08forgetOps \u4EA7\u7269\uFF0C\u590D\u5236\u56DE notes/ \u5373\u6062\u590D\uFF09");
+          box.appendChild(el("div", "sc-mem-sub", ar.map(function(x2) {
+            return x2.file + "\uFF08" + x2.chars + " \u5B57\uFF09";
+          }).join(" \xB7 ")));
+        }
+      }
+    }).catch(function() {
+    });
+  }
+  function renderMemoryExpanded(view, data) {
+    view.textContent = "";
+    UI.pageHead("\u8BB0\u5FC6\u5E93", "MEMORY.md \u7D22\u5F15\u3001\u5019\u9009\u3001\u7B14\u8BB0\u4E0E\u5F52\u6863\u533A\uFF0C\u6309\u300C\u5E93 \u2192 \u5F85\u6D88\u5316 \u2192 \u8BE6\u60C5 \u2192 \u5DF2\u5F52\u6863\u300D\u7684\u751F\u547D\u5468\u671F\u6392\u5E8F\u3002", { routes: ["/memory/overview", "/memory/sections", "/memory/approve"], search: { placeholder: "\u8FC7\u6EE4\u7D22\u5F15 / \u5019\u9009 / \u7B14\u8BB0\u2026", onInput: appState.filterViewRows }, refresh: true });
+    var cap = UI.card("\u5BB9\u91CF\u5360\u7528", { sub: "\u5199\u5165\u7531 write_gate \u5F3A\u5236\u7EA2\u7EBF" });
+    view.appendChild(cap.box);
+    var capGrid = el("div", "sc-cap3");
+    cap.body.appendChild(capGrid);
+    cap.body.appendChild(el("div", "sc-cap-note", "\u53EA\u6709\u5B58\u5728\u771F\u5B9E\u5BB9\u91CF\u95E8\u7684\u8F7D\u4F53\u624D\u7ED9\u767E\u5206\u6BD4\u4E0E\u8FDB\u5EA6\u6761\uFF1AMEMORY.md\uFF08cap_memory\uFF09\u4E0E\u753B\u50CF\uFF08cap_user / cap_agent\uFF09\uFF1Bnotes / pending \u65E0\u5BB9\u91CF\u95E8 \u21D2 \u53EA\u62A5\u7EDD\u5BF9\u91CF\u3002\u8D85\u9650\u7531 write_gate \u62D2\u5199\u3002"));
+    if (!data || !data.present) {
+      appState.statusFn(data && data.error || "\u8BB0\u5FC6\u5E93\u4E0D\u53EF\u7528");
+      return;
+    }
+    var memoryFile = null;
+    (data.indexes || []).forEach(function(f3) {
+      if (f3.name === "MEMORY.md") memoryFile = f3;
+    });
+    var pM1 = el("div");
+    var pM2 = el("div");
+    var pM3 = el("div");
+    var pM4 = el("div");
+    var pM5 = el("div");
+    var _tb = UI.tabs("memory", [
+      { id: "index", label: "\u77E5\u8BC6\u7D22\u5F15 " + String(Derive.count(memoryFile && memoryFile.lines)), pane: pM1 },
+      { id: "pending", label: "\u5019\u9009\u533A " + String((data.pending || {}).count || 0), pane: pM2 },
+      { id: "notes", label: "\u7B14\u8BB0 " + String(Derive.count(data.notes)) + " \u7C7B", pane: pM3 },
+      /* v9（原型第 4 枚 Tab）：归档区。面板此前无此 Tab（上轮"无独立数据源"未造）——
+       * 数据其实来自 `/cognition/report` 的 `archive:[{file,chars}]`，本轮补齐。 */
+      { id: "archive", label: "\u5F52\u6863\u533A", pane: pM5 },
+      { id: "growth", label: "\u7EDF\u8BA1", pane: pM4 }
+    ]);
+    cap.body.appendChild(_tb.box);
+    var ds = data.distillStats;
+    var mkCapItem = function(label, value, sub, pct, kind) {
+      var it = el("div", "sc-cap-item");
+      it.appendChild(el("div", "sc-cap-top", label));
+      it.appendChild(el("div", "sc-cap-val", value));
+      it.appendChild(el("div", "sc-cap-sub", sub || ""));
+      var track = el("div", "sc-cap-track" + (pct === null || pct === void 0 ? " na" : ""));
+      var bar = el("i", kind || "");
+      if (pct !== null && pct !== void 0) bar.style.setProperty("--sc-pct", pct + "%");
+      track.appendChild(bar);
+      it.appendChild(track);
+      return it;
+    };
+    var pMeta0 = data.pending || {};
+    capGrid.textContent = "";
+    (function fillCap() {
+      var mf = memoryFile;
+      var pct = mf && mf.cap ? Math.round((mf.chars || 0) / mf.cap * 100) : null;
+      capGrid.appendChild(mkCapItem(
+        "MEMORY.md \u5BB9\u91CF",
+        pct === null ? Derive.num(mf ? mf.chars : "\u2014") : pct + "%",
+        mf ? Derive.num(mf.chars) + " / " + Derive.num(mf.cap) + " \u5B57\u7B26 \xB7 " + Derive.count(mf.lines) + " \u6761" : "\u2014",
+        pct,
+        pct === null ? "" : Derive.capKind(pct)
+      ));
+      var secCount = 0;
+      (data.notes || []).forEach(function(nf) {
+        secCount += Derive.count(nf.sections);
+      });
+      capGrid.appendChild(mkCapItem(
+        "notes \xB7 \u7B14\u8BB0",
+        Derive.num(Derive.count(data.notes)),
+        "\u4E2A\u6587\u4EF6 \xB7 " + Derive.num(secCount) + " \u4E2A\u5C0F\u8282 \xB7 \u65E0\u5BB9\u91CF\u95E8",
+        null
+      ));
+      capGrid.appendChild(mkCapItem(
+        "pending \u5019\u9009",
+        Derive.num(pMeta0.count || 0),
+        "\u6761\u5F85\u88C1\u51B3 \xB7 \u65E0\u5BB9\u91CF\u95E8\uFF08ADD-only \u6682\u5B58\uFF09",
+        null
+      ));
+    })();
+    if (appState.refs.navHealth) {
+      var navPct = memoryFile && memoryFile.cap ? Math.round((memoryFile.chars || 0) / memoryFile.cap * 100) : null;
+      appState.refs.navHealth(navPct === null ? "\u6B63\u5E38" : Derive.capKind(navPct) !== "ended" ? "\u6C34\u4F4D\u504F\u9AD8" : "\u6B63\u5E38", navPct === null ? "ended" : Derive.capKind(navPct));
+    }
+    renderCognitionReport(_tb.pane("growth"), "memory");
+    var ctx = { _tb, data, view, memoryFile, cap };
+    mmGrowthMonth(ctx);
+    mmIndexRows(ctx);
+    mmPendingRows(ctx);
+    mmNotesChips(ctx);
+    mmArchiveZone(ctx);
+    mmSuiteZone(ctx);
+    mmGrowthDelta(ctx);
+    appState.statusFn("\u8BB0\u5FC6 \xB7 MEMORY " + (memoryFile ? Derive.num(memoryFile.chars) + "/" + Derive.num(memoryFile.cap) + " \xB7 " + Derive.count(memoryFile.lines) + " \u884C" : "\u4E0D\u53EF\u7528") + " \xB7 \u84B8\u998F " + (ds ? Derive.num(ds.runs || 0) + " \u6B21" : "\u2014"));
+    appState.flushFolds();
+  }
+  var mkStat = function(label, value, sub) {
+    var card = el("div", "sc-mem-stat");
+    card.appendChild(el("div", "sc-mem-stat-label", label));
+    card.appendChild(el("div", "sc-mem-stat-value", value));
+    if (sub) card.appendChild(el("div", "sc-mem-stat-sub", sub));
+    return card;
+  };
+  function mmGrowthMonth(ctx) {
+    var host = ctx._tb.pane("growth");
+    var data = ctx.data, view = ctx.view, memoryFile = ctx.memoryFile, cap = ctx.cap;
+    var group = function(t6) {
+      host.appendChild(el("div", "sc-mem-group-title", t6));
+    };
+    var gGrowth = data.growth;
+    if (gGrowth) {
+      group("\u672C\u6708\u6210\u957F \xB7 " + gGrowth.month);
+      var g3 = el("div", "sc-mem-grid");
+      var s32 = gGrowth.sleep || {}, d3 = gGrowth.distill || {}, n32 = gGrowth.now || {};
+      g3.appendChild(mkStat("\u6DF1\u7761\u5F52\u7EB3", String(s32.passes || 0) + " \u6B21", "\u4E60\u5F97 " + String(s32.principleAdded || 0) + " \xB7 \u66FF\u6362 " + String(s32.replaced || 0) + " \xB7 \u753B\u50CF " + String(s32.profilesAdded || 0)));
+      g3.appendChild(mkStat("\u84B8\u998F", String(d3.runs || 0) + " \u6B21", "\u6210\u529F " + String(d3.ok || 0) + " \xB7 \u5F02\u5E38 " + String(d3.bad || 0) + " \xB7 \u9884\u7B5B\u8DF3\u8FC7 " + String(d3.skips || 0)));
+      g3.appendChild(mkStat("AGENT \u753B\u50CF", String(n32.tagRows != null ? n32.tagRows : "\u2014") + " \u884C", "\u539F\u5219 " + String(n32.principleRows || 0) + " \xB7 \u8DEF\u5F84 " + String(n32.pathRows || 0) + " \xB7 " + String(n32.agentChars || 0) + " \u5B57\u7B26"));
+      host.appendChild(g3);
+      var rds = gGrowth.recentDeep || [];
+      if (Derive.has(rds)) {
+        host.appendChild(el("div", "sc-mem-group-title", "\u672C\u6708\u6709\u6548\u6DF1\u7761\u4EA7\u51FA"));
+        var dl3 = el("div", "sc-idx-list");
+        rds.forEach(function(r7) {
+          dl3.appendChild(el("div", "sc-mem-sub", String(r7.at || "").slice(0, 10) + "  \u539F\u5219 +" + String(r7.added || 0) + "/\u66FF\u6362 " + String(r7.replaced || 0) + " \xB7 \u753B\u50CF +" + String(r7.profiles || 0) + " \xB7 gate=" + String(r7.gate || "")));
+        });
+        host.appendChild(dl3);
+      } else if ((s32.passes || 0) > 0) {
+        host.appendChild(el("div", "sc-mem-empty", "\u672C\u6708\u6DF1\u7761\u6709\u8FD0\u884C\u4F46\u65E0\u4EA7\u51FA\uFF08\u5185\u5BB9\u5224\u636E\u5408\u89C4\u4FDD\u5B88\uFF1A\u6750\u6599\u4E0D\u8DB3\u5B81\u7F3A\u6BCB\u6EE5\uFF09"));
+      }
+    }
+  }
+  function mmIndexRows(ctx) {
+    var host = ctx._tb.pane("index");
+    var data = ctx.data, view = ctx.view, memoryFile = ctx.memoryFile, cap = ctx.cap;
+    var group = function(t6) {
+      host.appendChild(el("div", "sc-mem-group-title", t6));
+    };
+    if (Derive.has(memoryFile && memoryFile.lines)) {
+      group("\u77E5\u8BC6\u7D22\u5F15 MEMORY.md \xB7 " + memoryFile.lines.length + " \u6761");
+      host.appendChild(el("div", "sc-desc", "\u70B9\u51FB\u884C\u76F4\u8FBE notes \u8BE6\u60C5\u5C0F\u8282\uFF08\u53EA\u8BFB\uFF09\u3002"));
+      var idxWrap = el("div");
+      idxWrap.classList.add("sc-box");
+      var IDX_PREVIEW = 8;
+      var allLines = memoryFile.lines || [];
+      renderIndexRows(idxWrap, allLines.slice(0, IDX_PREVIEW), renderMemoryExpanded, true);
+      if (allLines.length > IDX_PREVIEW) {
+        var moreBtn = el("button", "sc-idx-more", "\u5C55\u5F00\u5168\u90E8 " + allLines.length + " \u6761");
+        moreBtn.type = "button";
+        moreBtn.addEventListener("click", function() {
+          idxWrap.textContent = "";
+          renderIndexRows(idxWrap, allLines, renderMemoryExpanded, true);
+        });
+        idxWrap.appendChild(moreBtn);
+      }
+      host.appendChild(idxWrap);
+    }
+  }
+  function mmPendingRows(ctx) {
+    var host = ctx._tb.pane("pending");
+    var data = ctx.data, view = ctx.view, memoryFile = ctx.memoryFile, cap = ctx.cap;
+    var group = function(t6) {
+      host.appendChild(el("div", "sc-mem-group-title", t6));
+    };
+    if (data.pending && data.pending.count) {
+      group("pending \u5019\u9009\u961F\u5217 \xB7 " + data.pending.count + " \u6761");
+      var plist = el("div", "sc-pointer-list");
+      (data.pending.recent || []).forEach(function(p22) {
+        var row = makeMemoryPointerRow(String(p22.name || "").replace(/\.md$/, ""), null, (p22.mtime || "").slice(0, 10));
+        var act = el("div", "sc-row-gap");
+        var fname = String(p22.name || "");
+        var okBtn = el("button", "sc-btn subtle", "\u6279\u51C6");
+        okBtn.type = "button";
+        okBtn.classList.add("sc-btn-xs", "sc-btn-ok");
+        okBtn.addEventListener("click", function() {
+          appState.api("/memory/approve", { method: "POST", body: JSON.stringify({ pendingFile: fname }) }).then(function() {
+            appState.statusFn("\u2713 \u5DF2\u6279\u51C6 " + fname + "\uFF08\u79FB .processed\uFF0C\u5185\u5BB9\u7531\u84B8\u998F\u6B63\u5E38\u5165\u518C\uFF09");
+          }).catch(appState.failFn);
+        });
+        var rmBtn = UI.button("\u5FFD\u7565", function() {
+          return appState.api("/memory/approve", { method: "POST", body: JSON.stringify({ pendingFile: fname }) }).then(function() {
+            appState.statusFn("\u5DF2\u5FFD\u7565 " + fname);
+          });
+        }, { danger: true, async: true, busyText: "\u5FFD\u7565\u4E2D\u2026", okText: "\u5DF2\u5FFD\u7565", confirm: "\u5FFD\u7565\u5E76\u79FB\u51FA\u5019\u9009\u961F\u5217\uFF1A" + fname + "\uFF1F" });
+        act.appendChild(okBtn);
+        act.appendChild(rmBtn);
+        row.appendChild(act);
+        plist.appendChild(row);
+      });
+      host.appendChild(plist);
+      host.appendChild(el("div", "sc-desc", "\u5171 " + data.pending.count + " \u6761\uFF08\u4EC5\u663E\u793A\u6700\u8FD1 " + Derive.count(data.pending.recent) + " \u6761\uFF09\xB7 \u6279\u51C6=\u786E\u8BA4\u6709\u4EF7\u503C\u5165\u518C\uFF0C\u5FFD\u7565=\u79FB\u51FA\u961F\u5217"));
+      var pTip = el("div", "sc-ds-alert info");
+      pTip.appendChild(el("div", null, "\u5347\u683C / \u964D\u683C\u8D70 /memory/approve\uFF0C\u7531 L0 \u5224\u636E\u88C1\u51B3\u3002\u7D22\u5F15\u884C\u53EA\u8BFB\uFF0C\u6B63\u6587\u7F16\u8F91\u8D70 /memory/section-edit\u3002"));
+      host.appendChild(pTip);
+    }
+  }
+  function mmNotesChips(ctx) {
+    var host = ctx._tb.pane("notes");
+    var data = ctx.data, view = ctx.view, memoryFile = ctx.memoryFile, cap = ctx.cap;
+    var group = function(t6) {
+      host.appendChild(el("div", "sc-mem-group-title", t6));
+    };
+    group("notes \u8BE6\u60C5\u5C0F\u8282");
+    var nw = el("div", "sc-notes-list");
+    (data.notes || []).forEach(function(nf) {
+      var chip = el("div", "sc-note-chip");
+      chip.appendChild(el("span", null, nf.name));
+      chip.appendChild(el("span", "sc-tag", String(nf.sections.length)));
+      chip.title = nf.rel + " \xB7 " + nf.sections.map(function(s4) {
+        return s4.title;
+      }).join(" / ");
+      chip.addEventListener("click", function() {
+        appState.memoryViewScroll = view.scrollTop;
+        appState.noteReturnRender = null;
+        appState.api("/memory/sections?rel=" + encodeURIComponent(nf.rel)).then(function(r7) {
+          renderNoteSections2(view, r7);
+        }).catch(appState.failFn);
+      });
+      nw.appendChild(chip);
+    });
+    host.appendChild(nw);
+  }
+  function mmArchiveZone(ctx) {
+    var host = ctx._tb.pane("archive");
+    host.appendChild(el("div", "sc-mem-group-title", "\u5F52\u6863\u533A notes/archive/"));
+    var list = el("div");
+    host.appendChild(list);
+    list.appendChild(el("div", "sc-desc", "\u8BFB\u53D6\u4E2D\u2026"));
+    appState.api("/cognition/report").then(function(r7) {
+      var ar = r7 && r7.archive || [];
+      var tabsEls = ctx._tb.box.querySelectorAll("wa-tab");
+      if (tabsEls[3]) tabsEls[3].textContent = "\u5F52\u6863\u533A " + ar.length;
+      list.textContent = "";
+      if (!Derive.has(ar)) list.appendChild(el("div", "sc-desc", "\u6682\u65E0\u5F52\u6863\u6761\u76EE\u3002"));
+      else ar.forEach(function(a4) {
+        list.appendChild(ovCRow(
+          String(a4.file || "\u2014"),
+          "notes/archive/ \xB7 \u4EC5\u5F52\u6863\u4E0D\u5220\u9664",
+          [ovPill(Derive.num(a4.chars || 0) + " \u5B57\u7B26")]
+        ));
+      });
+      var tip = el("div", "sc-ds-alert ok");
+      tip.appendChild(el("div", null, "\u4E3B\u52A8\u9057\u5FD8\u53EA\u5F52\u6863\u3001\u4E0D\u5220\u9664 \u2014\u2014 applyForgetOps \u7981\u76F4\u5220\uFF0C\u70ED\u8282\u4E0E\u753B\u50CF\u8282\u6709\u5B88\u536B\u3002\u5982\u9700\u6062\u590D\uFF0C\u628A notes/archive/ \u4E0B\u7684\u6587\u4EF6\u79FB\u56DE notes/ \u5373\u53EF\uFF08\u9762\u677F\u4E0D\u63D0\u4F9B\u5199\u5165\u53E3\uFF09\u3002"));
+      host.appendChild(tip);
+    }).catch(function() {
+      list.textContent = "";
+      list.appendChild(el("div", "sc-desc", "\u5F52\u6863\u533A\u8BFB\u53D6\u5931\u8D25\uFF08/cognition/report\uFF09\u3002"));
+    });
+  }
+  function mmSuiteZone(ctx) {
+    var host = ctx._tb.pane("index");
+    var data = ctx.data, view = ctx.view, memoryFile = ctx.memoryFile, cap = ctx.cap;
+    var group = function(t6) {
+      host.appendChild(el("div", "sc-mem-group-title", t6));
+    };
+    var suite = data.suite;
+    if (suite && suite.present) {
+      group("\u5B88\u85CF\u672C\u5730\u77E5\u8BC6\u533A \xB7 suite/knowledge");
+      var sMemory = null;
+      (suite.indexes || []).forEach(function(f3) {
+        if (f3.name === "MEMORY.md") sMemory = f3;
+      });
+      host.appendChild(el("div", "sc-desc", "\u5B88\u85CF\u84B8\u998F\u5668\u4E8B\u5B9E\u6E90\uFF08ADR-0002\uFF09\uFF1AMEMORY " + (sMemory ? Derive.num(sMemory.chars) + "/" + Derive.num(sMemory.cap) + " \xB7 " + Derive.count(sMemory.lines) + " \u884C" : "\u2014") + " \xB7 pending " + String(suite.pending ? suite.pending.count : 0) + " \u6761\u3002"));
+      if (Derive.has(suite.notes)) {
+        var snw = el("div", "sc-notes-list");
+        suite.notes.forEach(function(nf) {
+          var chip = el("div", "sc-note-chip");
+          chip.appendChild(el("span", null, nf.name));
+          chip.appendChild(el("span", "sc-tag", String(nf.sections.length)));
+          chip.title = "suite \xB7 " + nf.rel + " \xB7 " + nf.sections.map(function(s4) {
+            return s4.title;
+          }).join(" / ");
+          chip.addEventListener("click", function() {
+            appState.memoryViewScroll = view.scrollTop;
+            appState.noteReturnRender = null;
+            appState.api("/memory/sections?rel=" + encodeURIComponent(nf.rel) + "&root=suite").then(function(r7) {
+              renderNoteSections2(view, r7);
+            }).catch(appState.failFn);
+          });
+          snw.appendChild(chip);
+        });
+        host.appendChild(snw);
+      }
+    } else {
+      host.appendChild(el("div", "sc-mem-empty", "\u5B88\u85CF\u672C\u5730\u77E5\u8BC6\u533A\u672A\u542F\u7528\uFF08suite/knowledge \u4E0D\u5B58\u5728\uFF09"));
+    }
+  }
+  function mmGrowthDelta(ctx) {
+    var host = ctx._tb.pane("growth");
+    var data = ctx.data, view = ctx.view, memoryFile = ctx.memoryFile, cap = ctx.cap;
+    var group = function(t6) {
+      host.appendChild(el("div", "sc-mem-group-title", t6));
+    };
+    if (data.delta && data.delta.present && Derive.has(data.delta.rows)) {
+      group("\u6700\u8FD1\u6210\u957F delta \xB7 \u6DF1\u7761\u4EA7\u51FA");
+      var dl8 = el("div", "sc-idx-list");
+      data.delta.rows.forEach(function(row) {
+        var r8 = el("div", "sc-idx-row");
+        r8.appendChild(el("span", "sc-idx-subject", String(row).replace(/^\[/, "[")));
+        dl8.appendChild(r8);
+      });
+      host.appendChild(dl8);
+      var staleNote = "";
+      if (data.delta.staleAt) {
+        try {
+          var remain = Math.max(0, new Date(data.delta.staleAt) - Date.now());
+          staleNote = " \xB7 \u5269\u4F59 " + Math.ceil(remain / 36e5) + "h \u6709\u6548";
+        } catch (e8) {
+        }
+      }
+      host.appendChild(el("div", "sc-mem-sub muted", "\u672C\u6B21\u6DF1\u7761\u5F52\u7EB3\u4EA7\u51FA\uFF0848h \u6709\u6548" + staleNote + "\uFF09\xB7 \u5DF2\u5728\u4F1A\u8BDD\u6CE8\u5165\u53EF\u89C1"));
+    }
+    if (data.weekDiff && (data.weekDiff.deepAdded || 0) > 0) {
+      group("\u672C\u5468\u6210\u957F \xB7 \u589E\u91CF");
+      var g9 = el("div", "sc-mem-grid");
+      g9.appendChild(mkStat("\u6DF1\u7761\u65B0\u4E60\u5F97", String(data.weekDiff.deepAdded || 0) + " \u6761", "\u8FD1 7 \u5929 [\u539F\u5219]/[\u8DEF\u5F84] \u5F52\u7EB3"));
+      host.appendChild(g9);
+    }
+  }
+  function secFoldKey(rel, path, title) {
+    return "note:" + (rel || "") + ":" + (path || "") + "\xA7" + (title || "");
+  }
+  function renderNoteSections2(view, data) {
+    if (!data || !data.present || !data.sections) {
+      appState.statusFn(data && data.error || "\u65E0\u5C0F\u8282");
+      return;
+    }
+    view.textContent = "";
+    UI.pageHead(data.name, (data.root === "suite" ? "suite \u77E5\u8BC6\u533A \xB7 " : "") + data.rel + " \xB7 " + data.sections.length + " \u4E2A\u5C0F\u8282\uFF08\u767D\u540D\u5355\u53EA\u8BFB\uFF09");
+    var back = el("button", "sc-btn subtle", "\u2190 \u8FD4\u56DE" + (appState.noteReturnRender === renderPersona ? "\u753B\u50CF\u677F\u5757" : data.root === "suite" ? "\u5B88\u85CF\u77E5\u8BC6\u533A" : "\u8BB0\u5FC6\u5E93"));
+    back.type = "button";
+    back.addEventListener("click", function() {
+      var backRender = appState.noteReturnRender || renderMemoryExpanded;
+      appState.api("/memory/overview").then(function(r7) {
+        backRender(view, r7);
+        requestAnimationFrame(function() {
+          view.scrollTop = appState.memoryViewScroll;
+        });
+      }).catch(appState.failFn);
+    });
+    view.appendChild(back);
+    view.scrollTop = 0;
+    if (Derive.has(data.backrefs)) {
+      var bl = el("div");
+      bl.appendChild(el("div", "sc-mem-group-title", "\u88AB\u5F15\u7528 \xB7 " + data.backrefs.length));
+      var bList = el("div", "sc-idx-list");
+      data.backrefs.slice(0, 8).forEach(function(br) {
+        var row = el("div", "sc-idx-row");
+        row.appendChild(el("span", "sc-idx-tag", String(br.from || "").split("/").pop()));
+        row.appendChild(el("span", "sc-idx-subject", String(br.line || "").slice(0, 90)));
+        row.title = br.line || "";
+        bList.appendChild(row);
+      });
+      bl.appendChild(bList);
+      if (data.backrefs.length > Derive.BACKREF_LIMIT) bl.appendChild(el("div", "sc-mem-sub muted", "\u2026 \u5171 " + data.backrefs.length + " \u5904\u5F15\u7528"));
+      view.appendChild(bl);
+    }
+    function renderSecNode(sec, depth, container, path) {
+      var pad = Math.min(depth, 4) * 14;
+      var hasKids = !!(sec.children && sec.children.length);
+      var key = secFoldKey(data.rel, path, sec.title);
+      var head = el("div", "sc-mem-group-title" + (depth > 0 ? " sub" : ""));
+      var arrow = el("span", "sc-sec-arrow");
+      head.appendChild(arrow);
+      head.appendChild(document.createTextNode(sec.title));
+      head.title = "\u70B9\u51FB\u5C55\u5F00/\u6536\u8D77" + (depth > 0 ? "\uFF08\u5B50\u6811\uFF09" : "");
+      head.classList.add("sc-card-head");
+      head.setAttribute("data-fold-key", key);
+      if (pad) head.style.setProperty("--sc-indent", pad + "px");
+      var body = el("div", "sc-card-body");
+      body.textContent = sec.body || (hasKids ? "" : "\uFF08\u7A7A\u5C0F\u8282\uFF09");
+      var editSec = el("button", "sc-btn subtle sc-edit-sec", "\u270E \u7F16\u8F91\u6B64\u5C0F\u8282");
+      editSec.type = "button";
+      if (pad) editSec.style.setProperty("--sc-indent", pad + "px");
+      editSec.addEventListener("click", function() {
+        editNoteSection(data, sec, view);
+      });
+      var kidsWrap = el("div");
+      function paint(open) {
+        body.classList.toggle("sc-hidden", !open);
+        editSec.classList.toggle("sc-hidden", !open);
+        kidsWrap.classList.toggle("sc-hidden", !open || !hasKids);
+        arrow.textContent = open ? "\u25BE" : "\u25B8";
+        head.classList.toggle("sc-on", open);
+      }
+      paint(Fold.get(key, false));
+      head.addEventListener("click", function() {
+        paint(Fold.toggle(key, false));
+      });
+      var off = Bus.on("fold", function(p4) {
+        if (!head.isConnected && !body.isConnected) {
+          off();
+          return;
+        }
+        if (p4 && p4.key === key) paint(Fold.get(key, false));
+      });
+      container.appendChild(head);
+      container.appendChild(body);
+      container.appendChild(editSec);
+      if (hasKids) {
+        var kidPath = (path ? path + "/" : "") + sec.title;
+        (sec.children || []).forEach(function(c5) {
+          renderSecNode(c5, depth + 1, kidsWrap, kidPath);
+        });
+        container.appendChild(kidsWrap);
+      }
+    }
+    (data.sections || []).forEach(function(sec) {
+      renderSecNode(sec, 0, view, "");
+    });
+    appState.statusFn(data.rel + " \xB7 " + Derive.count(data.sections) + " \u9876\u5C42\u5C0F\u8282\uFF08\u6811\u72B6\uFF0C\u70B9\u51FB\u9010\u5C42\u5C55\u5F00\uFF1B\u7F16\u8F91\u5728\u8282\u70B9\u7EC6\u8282\uFF09");
+  }
+  function editNoteSection(data, sec, view) {
+    if (!data || !data.rel || !sec) return;
+    var bodyTxt = sec.body || "";
+    var ta = el("textarea", "sc-input sc-ta");
+    ta.value = bodyTxt;
+    var wrap = el("div");
+    wrap.appendChild(el("div", "sc-desc", "\u7F16\u8F91 \xA7" + sec.title + " \u6B63\u6587\uFF08" + data.rel + "\uFF09\u2014\u2014\u4FDD\u7559\u5F00\u5934\u6458\u8981\u884C\u6700\u4F73\uFF1B\u4FDD\u5B58\u8D70\u5199\u95E8\uFF08\u5907\u4EFD+\u5BB9\u91CF\u7EA2\u7EBF\uFF09\uFF0C\u7D22\u5F15\u6307\u9488\u4E0D\u53D8\u3002"));
+    wrap.appendChild(ta);
+    var bar = el("div", "sc-toolbar");
+    var saveBtn = el("button", "sc-btn", "\u4FDD\u5B58\u6B63\u6587");
+    saveBtn.type = "button";
+    saveBtn.addEventListener("click", function() {
+      var next = ta.value.trim();
+      if (!next) {
+        appState.statusFn("\u6B63\u6587\u4E0D\u80FD\u4E3A\u7A7A\u2014\u2014\u5982\u9700\u6E05\u7A7A\u8BF7\u7528\u5220\u9664");
+        return;
+      }
+      saveBtn.disabled = true;
+      saveBtn.textContent = "\u4FDD\u5B58\u4E2D\u2026";
+      appState.api("/memory/section-edit", { method: "POST", body: JSON.stringify({ rel: data.rel, section: sec.title, newBody: next }) }).then(function() {
+        appState.statusFn("\u2713 \xA7" + sec.title + " \u6B63\u6587\u5DF2\u4FDD\u5B58\uFF08write_gate \u901A\u8FC7\uFF09");
+        appState.api("/memory/sections?rel=" + encodeURIComponent(data.rel) + (data.root === "suite" ? "&root=suite" : "")).then(function(r7) {
+          renderNoteSections2(view, r7);
+        }).catch(appState.failFn);
+      }).catch(function(e8) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = "\u4FDD\u5B58\u6B63\u6587";
+        appState.failFn(e8);
+      });
+    });
+    var cancelBtn = el("button", "sc-btn subtle", "\u53D6\u6D88");
+    cancelBtn.type = "button";
+    cancelBtn.addEventListener("click", function() {
+      view.removeChild(wrap);
+    });
+    bar.appendChild(saveBtn);
+    bar.appendChild(cancelBtn);
+    wrap.appendChild(bar);
+    view.appendChild(wrap);
   }
 
   // src-client/panes-config.js
@@ -7228,9 +8156,9 @@
         var hit = 0;
         items.forEach(function(it) {
           var t6 = (it.textContent || "").toLowerCase();
-          var show = !kw || t6.indexOf(kw) > -1;
-          it.classList.toggle("sc-filtered", !show);
-          if (show) hit++;
+          var show2 = !kw || t6.indexOf(kw) > -1;
+          it.classList.toggle("sc-filtered", !show2);
+          if (show2) hit++;
         });
         cnt.textContent = kw ? "\u5339\u914D " + hit + " / " + items.length + " \u9879" : "";
       };
@@ -8514,10 +9442,11 @@
     "#scpanl-root .sc-mem-sub{font-size:var(--sc-fs-sm);color:var(--sc-muted);",
     "line-height:var(--sc-lh-normal);margin:2px 0 0;padding-bottom:var(--sc-sp-2);}",
     "#scpanl-root .sc-mem-sub.muted{color:var(--sc-muted);}",
-    "#scpanl-root .sc-spark{display:block;margin-top:var(--sc-sp-2);}",
-    "#scpanl-root .sc-spark path{fill:none;stroke:var(--sc-accent);stroke-width:1.5;stroke-linejoin:round;}",
-    "#scpanl-root .sc-spark circle{fill:var(--sc-accent);}",
-    "#scpanl-root .sc-spark .base{stroke:var(--sc-border);stroke-width:1;}",
+    /* UI1/U2（2026-09-15）：此处原有 4 条 `.sc-spark` 规则（迷你趋势图）—— 已随
+     *   **死代码 `sparkline()` 一并删除**。此前未被发现，是因为 `audit-css-usage` 用
+     *   子串包含判"是否被使用"，而产物里恰有 `sparkline` 这个**函数名** ⇒ 误判为在用。
+     *   函数迁到 pane 模块后无人 import ⇒ tree-shaking 掉函数名 ⇒ 真死规则暴露。
+     *   ⇒ 删函数 + 删规则（**不是加 ALLOW_NO_STYLE 白名单掩盖**）。 */
     /* 注：`.sc-danger` 规则已随 v9 严格对齐删除（其唯一使用者是记忆库页「蒸馏运行」段内的失败文字，
      *   该段属「运行态」Tab —— 原型记忆库页无此 Tab ⇒ 一并移除；CSS 审计门禁正是靠"死规则"抓到的）。 */
     /* 指针卡（可点击跳转） */
@@ -9043,956 +9972,6 @@
             onToggle(key, sw);
           };
           return UI.item(name, desc, sw, { extra: [metaBadges(key)], wrapControl: false });
-        }
-        function ovCRow(title, desc, right) {
-          var r7 = el("div", "sc-crow");
-          var l6 = el("div");
-          l6.appendChild(el("div", "sc-ct", title));
-          if (desc) l6.appendChild(el("div", "sc-cd", desc));
-          r7.appendChild(l6);
-          var rr = el("div", "sc-right");
-          (right || []).forEach(function(n6) {
-            if (n6) rr.appendChild(n6);
-          });
-          r7.appendChild(rr);
-          return r7;
-        }
-        function ovPill(text, kind, mono) {
-          return el("span", "sc-pill" + (kind ? " " + kind : "") + (mono ? " mono" : ""), text);
-        }
-        function ovAgo(ts) {
-          var t6 = typeof ts === "number" ? ts : ts ? Date.parse(String(ts)) : 0;
-          if (!t6 || isNaN(t6)) return "";
-          var m3 = Math.max(0, Math.round((Date.now() - t6) / 6e4));
-          if (m3 < 1) return "\u521A\u521A";
-          if (m3 < 60) return m3 + " \u5206\u949F\u524D";
-          if (m3 < 1440) return Math.round(m3 / 60) + " \u5C0F\u65F6\u524D";
-          return Math.round(m3 / 1440) + " \u5929\u524D";
-        }
-        function ovMorningCard() {
-          var card = UI.card("\u6668\u8D77\u6458\u8981", { right: [el("span", "sc-src", "/memory/overview \xB7 delta / weekDiff")] });
-          var box = el("div");
-          box.appendChild(el("div", "sc-desc", "\u8BFB\u53D6\u4E2D\u2026"));
-          card.body.appendChild(box);
-          api("/memory/overview").then(function(d3) {
-            var dl = (d3 || {}).delta || {}, wd = (d3 || {}).weekDiff || {};
-            var sub = card.head && card.head.querySelector(".sub");
-            if (sub) {
-              if (dl.present && dl.staleAt) {
-                var h3 = Math.round((Date.parse(dl.staleAt) - Date.now()) / 36e5);
-                sub.textContent = "delta \xB7 \u5269\u4F59 " + (h3 > 0 ? h3 + "h" : "\u5DF2\u8FC7\u671F") + " \u6709\u6548";
-              } else sub.textContent = "delta \xB7 weekDiff";
-            }
-            box.textContent = "";
-            var rows = (dl.rows || []).slice(0, 2);
-            if (!Derive.has(rows)) box.appendChild(el("div", "sc-desc", "\u672C\u6B21\u65E0\u6668\u8D77\u6458\u8981\uFF08delta.md \u672A\u751F\u6210\u6216\u5DF2\u8FC7\u671F\uFF09\u3002"));
-            rows.forEach(function(t6, i7) {
-              box.appendChild(ovCRow(String(t6), "\u6765\u6E90\uFF1Adelta.md", [
-                i7 === 0 ? ovPill("injections " + Derive.num(dl.injections || 0), null, true) : ovPill("delta", "info")
-              ]));
-            });
-            var n6 = Number(wd.deepAdded || 0);
-            box.appendChild(ovCRow("\u8FD1 7 \u5929\u6DF1\u7761\u65B0\u4E60\u5F97 " + Derive.num(n6) + " \u6761", "weekDiff.deepAdded", [ovPill("+" + Derive.num(n6), "ok")]));
-          }).catch(function() {
-            box.textContent = "";
-            box.appendChild(el("div", "sc-desc", "\u6668\u8D77\u6458\u8981\u8BFB\u53D6\u5931\u8D25\uFF08/memory/overview\uFF09\u3002"));
-          });
-          return card.box;
-        }
-        function ovTimelineCard() {
-          var card = UI.card("\u6700\u8FD1\u52A8\u6001", { right: [ovPill("\u6700\u8FD1 24 \u5C0F\u65F6")] });
-          var tl = el("div", "sc-tl");
-          tl.appendChild(el("div", "sc-desc", "\u8BFB\u53D6\u4E2D\u2026"));
-          card.body.appendChild(tl);
-          Promise.all([
-            api("/memory/overview").catch(function() {
-              return {};
-            }),
-            api("/deepsleep").catch(function() {
-              return {};
-            })
-          ]).then(function(rs) {
-            var d3 = rs[0] || {}, sl = rs[1] || {};
-            var ds = d3.distillStats || {}, g2 = d3.growth || {}, pend = d3.pending || {};
-            var it = [];
-            if (ds.last && ds.last.at) {
-              it.push({
-                t: Date.parse(ds.last.at) || 0,
-                k: "ok",
-                title: "\u84B8\u998F\u5B8C\u6210 \xB7 \u672C\u6708 " + Derive.num(ds.runs || 0) + " \u6B21",
-                desc: "\u7D2F\u8BA1\u5165\u5E93 " + Derive.num(ds.added || 0) + " \u6761 \xB7 \u5F02\u5E38 " + Derive.num(ds.failed || 0) + " \u6761",
-                time: ovAgo(ds.last.at)
-              });
-            }
-            if (g2.sleep && g2.sleep.passes) {
-              it.push({
-                t: Number(sl.lastDeepSleepAt) || 0,
-                k: "ok",
-                title: "\u6DF1\u5EA6\u7761\u7720\u6574\u7406 \xB7 \u672C\u6708 " + Derive.num(g2.sleep.passes) + " \u6B21",
-                desc: "\u4E60\u5F97\u539F\u5219 " + Derive.num(g2.sleep.principleAdded || 0) + " \xB7 \u66FF\u6362 " + Derive.num(g2.sleep.replaced || 0) + " \xB7 \u753B\u50CF " + Derive.num(g2.sleep.profilesAdded || 0),
-                time: sl.lastDeepSleepAt ? ovAgo(sl.lastDeepSleepAt) : "\u672C\u6708"
-              });
-            }
-            (d3.indexes || []).forEach(function(f3) {
-              if (!f3 || !f3.cap) return;
-              var pct = Math.round((f3.chars || 0) / f3.cap * 100);
-              if (pct < 80) return;
-              it.push({
-                t: 0,
-                k: "warn",
-                title: "\u5BB9\u91CF\u9884\u8B66 \xB7 " + String(f3.name || "") + " \u8FBE " + pct + "%",
-                desc: "\u7EA2\u7EBF\u7531 write_gate \u5199\u5165\u65F6\u5F3A\u5236\uFF1B\u5EFA\u8BAE\u5728\u4E0B\u4E00\u6B21\u6DF1\u7761\u4E2D\u6267\u884C\u753B\u50CF\u538B\u7F29",
-                time: "\u9608\u503C 80%"
-              });
-            });
-            if (pend.count) {
-              it.push({
-                t: 0,
-                k: pend.count > 5 ? "warn" : "",
-                title: "\u5019\u9009\u5F85\u88C1\u51B3 \xB7 " + Derive.num(pend.count) + " \u6761",
-                desc: "24h \u5185\u65B0\u589E " + Derive.num(pend.last24h || 0) + " \u6761",
-                time: "\u5F85\u5904\u7406"
-              });
-            }
-            tl.textContent = "";
-            if (!Derive.has(it)) {
-              tl.appendChild(el("div", "sc-desc", "\u6682\u65E0\u52A8\u6001\u3002"));
-              return;
-            }
-            it.sort(function(a4, b3) {
-              return (b3.t || 0) - (a4.t || 0);
-            });
-            it.slice(0, 4).forEach(function(x2) {
-              var box = el("div", "sc-tl-item" + (x2.k ? " " + x2.k : ""));
-              box.appendChild(el("div", "sc-tl-t", x2.title));
-              box.appendChild(el("div", "sc-tl-d", x2.desc));
-              box.appendChild(el("div", "sc-tl-time", x2.time));
-              tl.appendChild(box);
-            });
-          });
-          return card.box;
-        }
-        function ovCriteriaCard() {
-          var card = UI.card("\u5224\u636E\u4E0E\u91CD\u6392\u95E8", {
-            sub: "\u73B0\u72B6\u5DF2\u6709 \xB7 \u4EC5\u6539\u5F52\u5C5E",
-            right: [el("span", "sc-src", "GET /criteria")]
-          });
-          var mini = el("div", "sc-mini");
-          var note = el("div", "sc-mem-stat-rule", "\u8BFB\u53D6\u4E2D\u2026");
-          card.body.appendChild(mini);
-          card.body.appendChild(note);
-          api("/criteria").then(function(c5) {
-            var o9 = c5 || {};
-            var gate = o9.rerankGate || {}, h3 = o9.health || {}, bg = o9.bankGit || {}, led = o9.ledger || {};
-            mini.textContent = "";
-            var put = function(k2, v2) {
-              mini.appendChild(el("div", "k", k2));
-              mini.appendChild(el("div", "v", v2));
-            };
-            put("\u5224\u636E\u7248\u672C", String(o9.version || "\u2014"));
-            put("\u53F0\u8D26\u884C\u6570", Derive.num(led.rows || 0));
-            put("notes \u544A\u8B66\u9608\u503C", h3.notesWarn == null ? "\u2014" : Derive.num(h3.notesWarn));
-            put("\u91CD\u6392\u95E8", Derive.num(gate.indexRows || 0) + " / " + Derive.num(gate.threshold || 0) + " \xB7 \u884C\u6570\u95E8" + (gate.ready ? "\u5DF2\u8FBE" : "\u672A\u8FBE"));
-            put("\u5E93\u7248\u672C", Derive.num(bg.commits || 0) + " \u63D0\u4EA4");
-            note.textContent = "\u5065\u5EB7\u5EA6 health.R / K \u4E0E caps \u7531 criteria-gate.json \u63D0\u4F9B\uFF1B\u672C\u5361\u53EA\u8BFB\u3002";
-          }).catch(function() {
-            note.textContent = "\u5224\u636E\u53F0\u8D26\u8BFB\u53D6\u5931\u8D25\uFF08GET /criteria\uFF09\u3002";
-          });
-          return card.box;
-        }
-        function ovQuickCard() {
-          var card = UI.card("\u5FEB\u6377\u64CD\u4F5C");
-          var row = el("div", "sc-toolbar");
-          row.style.flexWrap = "wrap";
-          var res = el("div", "sc-desc", "");
-          row.appendChild(UI.button("\u6D4B\u8BD5\u5D4C\u5165\u8FDE\u901A", function() {
-            res.textContent = "\u8BFB\u53D6\u914D\u7F6E\u2026";
-            return api("/embed/config").then(function(c5) {
-              var g2 = c5 && c5.effective || c5 && c5.persisted || {};
-              var baseUrl = String(g2.baseUrl || g2.embedBaseUrl || "").trim();
-              if (!baseUrl) {
-                res.textContent = "\u2717 \u672A\u914D\u7F6E embedBaseUrl\uFF08\u4E14\u7F3A\u7701\u4E0D\u53EF\u7528\uFF09";
-                return;
-              }
-              var dflt = c5 && c5.isDefault || {};
-              var src = dflt.embedBaseUrl ? "\uFF08\u7F3A\u7701\u5728\u7528\uFF09" : "\uFF08\u5DF2\u843D\u76D8\uFF09";
-              res.textContent = "\u6D4B\u8BD5\u4E2D\u2026 " + baseUrl + src;
-              return apiCtx("/embed/test", {
-                method: "POST",
-                body: JSON.stringify({ baseUrl, apiKey: String(g2.apiKey || g2.embedApiKey || "").trim() })
-              }, "\u5D4C\u5165\u8FDE\u901A\u6027").then(function(r7) {
-                res.textContent = r7 && r7.error ? "\u2717 " + r7.error + " \xB7 " + baseUrl + src : "\u2713 \u53EF\u8FBE \xB7 " + Derive.count(r7 && r7.models) + " \u4E2A\u6A21\u578B \xB7 " + baseUrl + src;
-              });
-            }).catch(function(e8) {
-              res.textContent = "\u2717 " + e8.message;
-            });
-          }, { async: true, busyText: "\u6D4B\u8BD5\u4E2D\u2026", okText: "\u5D4C\u5165\u8FDE\u901A\u6027\u6D4B\u8BD5\u5B8C\u6210", title: "POST /embed/test \u2014\u2014 \u9A8C\u8BC1\u5F53\u524D embedding \u914D\u7F6E\u662F\u5426\u53EF\u7528" }));
-          row.appendChild(UI.button("\u6839\u76EE\u5F55\u5F15\u5BFC", function() {
-            res.textContent = "\u6267\u884C\u4E2D\u2026";
-            return apiCtx("/root/bootstrap", { method: "POST", body: JSON.stringify({}) }, "\u6839\u76EE\u5F55\u5F15\u5BFC").then(function(r7) {
-              res.textContent = "\u2713 " + JSON.stringify(r7).slice(0, 200);
-            }).catch(function(e8) {
-              res.textContent = "\u2717 " + e8.message;
-            });
-          }, { async: true, busyText: "\u6267\u884C\u4E2D\u2026", okText: "\u6839\u76EE\u5F55\u5F15\u5BFC\u5B8C\u6210", confirm: "\u6267\u884C\u6839\u76EE\u5F55\u5F15\u5BFC\u4F1A\u5C1D\u8BD5\u521B\u5EFA\u7F3A\u5931\u7684\u76EE\u5F55\u7ED3\u6784\uFF0C\u786E\u8BA4\u7EE7\u7EED\uFF1F" }));
-          row.appendChild(UI.button("\u6210\u719F\u5EA6\u626B\u63CF", function() {
-            res.textContent = "\u626B\u63CF\u4E2D\u2026";
-            return apiCtx("/maturation/scan", { method: "POST", body: JSON.stringify({}) }, "\u6210\u719F\u5EA6\u626B\u63CF").then(function(r7) {
-              res.textContent = r7 && r7.active ? "\u2713 \u626B\u63CF\u5B8C\u6210\uFF08\u5206\u6863\u5DF2\u5199\u5165 audit/maturation.jsonl\uFF09" : "\u26A0 " + (r7 && r7.error || "\u672A\u751F\u6210");
-            }).catch(function(e8) {
-              res.textContent = "\u2717 " + e8.message;
-            });
-          }, { async: true, busyText: "\u626B\u63CF\u4E2D\u2026", okText: "\u6210\u719F\u5EA6\u626B\u63CF\u5B8C\u6210", title: "POST /maturation/scan \u2014\u2014 \u91CD\u7B97\u5E93\u5185\u5C0F\u8282\u6210\u719F\u5EA6\u5E76\u8986\u76D6\u53F0\u8D26\uFF08\u53EA\u5199\u53F0\u8D26\uFF0C\u4E0D\u6539\u8BB0\u5FC6\u5185\u5BB9\uFF09" }));
-          row.appendChild(UI.button("\u8D26\u672C\u5BF9\u8D26", function() {
-            res.textContent = "\u5BF9\u8D26\u4E2D\u2026";
-            return apiCtx("/reconcile", { method: "POST", body: JSON.stringify({}) }, "\u8D26\u672C\u5BF9\u8D26").then(function(r7) {
-              res.textContent = r7 && r7.active ? "\u2713 \u5BF9\u8D26\u5B8C\u6210" : "\u26A0 " + (r7 && r7.error || "\u5931\u8D25");
-            }).catch(function(e8) {
-              res.textContent = "\u2717 " + e8.message;
-            });
-          }, { async: true, busyText: "\u5BF9\u8D26\u4E2D\u2026", okText: "\u8D26\u672C\u5BF9\u8D26\u5B8C\u6210", title: "POST /reconcile \u2014\u2014 \u8BB0\u5FC6\u5E93\u5BF9\u8D26\uFF08\u53EA\u8BFB\u6C47\u603B\uFF09" }));
-          card.body.appendChild(row);
-          card.body.appendChild(res);
-          return card.box;
-        }
-        function renderViewOverview(view) {
-          view.textContent = "";
-          UI.pageHead("\u8FD0\u884C\u603B\u89C8", "\u4E00\u5C4F\u56DE\u7B54\u300C\u73B0\u5728\u600E\u4E48\u6837\u300D\u3002\u5FBD\u7AE0\u884C = \u539F\u8BB0\u5FC6\u677F\u5757 \xA70 \u7684 7 \u679A\u72B6\u6001\u5FBD\u7AE0\uFF0C\u6574\u4F53\u63D0\u5347\u4E3A\u72EC\u7ACB\u9996\u5C4F\u3002", {
-            routes: ["/memory/overview", "/cognition/report", "/mcl/status"],
-            refresh: true,
-            actions: [el("span", "sc-proto-note", "\u84B8\u998F\u6267\u884C\u4F4D\uFF1A\u4E0B\u65B9\u64CD\u4F5C\u5361\uFF08\u672C\u9875\u4EC5\u4E00\u5904\uFF09")]
-          });
-          var badges = el("div", "sc-ds-badges");
-          function bd(t6, k2) {
-            var h3 = UI.dsBadge(t6, k2);
-            badges.appendChild(h3.box);
-            return h3;
-          }
-          var bDistill = bd("\u84B8\u998F \u2026");
-          var bVec = bd("\u5411\u91CF \u2026");
-          var bPend = bd("\u5019\u9009 \u2026");
-          var bMem = bd("\u8BB0\u5FC6\u5E93 \u2026");
-          var bMcl = bd("\u8BA4\u77E5\u73AF \u2026");
-          var bCrit = bd("\u5224\u636E\u53F0\u8D26 \u2026");
-          var bGit = bd("\u5E93\u7248\u672C \u2026");
-          view.appendChild(badges);
-          var alertBox = el("div", "sc-ds-alert warn sc-hidden");
-          alertBox.setAttribute("role", "status");
-          view.appendChild(alertBox);
-          function setAlert(head, detail, linkText, linkGo) {
-            if (!head) {
-              alertBox.classList.add("sc-hidden");
-              return;
-            }
-            alertBox.textContent = "";
-            var body = el("div");
-            body.appendChild(el("b", null, head));
-            if (detail) body.appendChild(el("span", null, " \u2014\u2014 " + detail));
-            if (linkText) {
-              var a4 = el("a", null, linkText);
-              a4.setAttribute("role", "button");
-              a4.onclick = function() {
-                if (typeof linkGo === "function") linkGo();
-              };
-              body.appendChild(a4);
-            }
-            alertBox.appendChild(body);
-            alertBox.classList.remove("sc-hidden");
-          }
-          var ops = el("div", "sc-opgrid");
-          ops.appendChild(opCard("\u7ACB\u5373\u84B8\u998F", "\u904D\u5386\u6839\u4F1A\u8BDD\u84B8\u998F\uFF0C\u643A\u5E26 pending \u5019\u9009\u56DE\u6D41\uFF1B\u7B49\u4EF7\u4E8E\u7B49\u4F1A\u8BDD\u7A7A\u95F2\u81EA\u52A8\u89E6\u53D1\u3002", "POST /distill/run", "\u84B8\u998F", function() {
-            return apiCtx("/distill/run", { method: "POST", body: JSON.stringify({}) }, "\u84B8\u998F").then(function(r7) {
-              status(r7 && r7.ok ? "\u2713 " + (r7.note || "\u84B8\u998F\u5B8C\u6210") : "\u26A0 " + (r7 && r7.note || "\u672A\u89E6\u53D1\uFF1A\u6839\u4F1A\u8BDD\u6D3B\u8DC3\u4E2D\u4F1A\u8DF3\u8FC7\uFF0C\u7B49\u95F2\u7F6E\u81EA\u52A8\u8DD1"));
-              refreshCurrentView();
-            });
-          }, { icon: "M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1", busyText: "\u84B8\u998F\u4E2D\u2026", okText: "\u84B8\u998F\u5B8C\u6210" }));
-          ops.appendChild(opCard("\u7ACB\u5373\u8FDB\u5165\u6DF1\u7761", "\u79BB\u7EBF\u56DE\u60F3\uFF0C\u63D0\u70BC\u300C[\u539F\u5219]/[\u8DEF\u5F84]\u300D\u5E76\u505A\u7ED3\u6784\u6574\u7406\u4E0E\u5F52\u6863\uFF08\u7981\u76F4\u5220\uFF09\u3002\u9884\u8BA1 1\u20133 \u5206\u949F\u3002", "POST /deepsleep/trigger", "\u6DF1\u7761", function() {
-            return apiCtx("/deepsleep/trigger", { method: "POST", body: JSON.stringify({}) }, "\u6DF1\u7761").then(function() {
-              status("\u2713 \u5DF2\u89E6\u53D1\u6DF1\u7761\u5F52\u7EB3\uFF08\u540E\u53F0\u6267\u884C\uFF0C\u56DE\u6267\u89C1\u300C\u6DF1\u5EA6\u7761\u7720\u300D\uFF09");
-            });
-          }, { icon: "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z", confirm: "\u7ACB\u5373\u89E6\u53D1\u4E00\u6B21\u6DF1\u5EA6\u7761\u7720\u5F52\u7EB3\uFF1F\u5C06\u8C03\u7528\u5F52\u7EB3\u5B50\u4EE3\u7406\u56DE\u987E\u5F53\u5929\u8BB0\u5FC6\u75D5\u8FF9\u3002" }));
-          ops.appendChild(opCard("\u8FD0\u884C\u81EA\u68C0", "\u6821\u9A8C\u5224\u636E\u95E8 / \u8F7D\u4F53\u95E8 / \u5206\u5C42 / \u6210\u719F\u5EA6 / \u5F71\u5B50 / \u5BF9\u8D26\u516D\u9879\uFF1B\u8D85\u65F6\u4E0A\u9650 180s\u3002", "POST /selfcheck/run", "\u81EA\u68C0", function() {
-            return apiCtx("/selfcheck/run", { method: "POST", body: JSON.stringify({}) }, "\u81EA\u68C0").then(function() {
-              status("\u2713 \u81EA\u68C0\u5DF2\u6267\u884C\uFF0C\u7ED3\u679C\u89C1\u300C\u8FD0\u884C\u89C2\u6D4B\u300D");
-            });
-          }, { icon: "M20 6L9 17l-5-5", busyText: "\u81EA\u68C0\u4E2D\u2026", confirm: "\u7ACB\u5373\u8DD1\u4E00\u6B21\u8FD0\u884C\u81EA\u68C0\uFF1F\u6267\u884C\u671F\u95F4\u8BF7\u52FF\u5173\u95ED\u9762\u677F\u3002" }));
-          view.appendChild(ops);
-          var kpis = el("div", "sc-kpis");
-          var kMem = UI.kpi("\u8BB0\u5FC6\u5E93\u5BB9\u91CF", { val: "\u2014", sub: "MEMORY.md", pct: 0, kind: "ended" });
-          var kLevel = UI.kpi("\u84B8\u998F\u6C34\u4F4D", { val: "\u2014", sub: "\u672C\u8F6E\u84B8\u998F\u4E8B\u4EF6", pct: 0, kind: "ended" });
-          var kSleep = UI.kpi("\u6DF1\u5EA6\u7761\u7720", { val: "\u2014", txt: true, sub: "\u2014", pct: null, kind: "probing" });
-          var kVec = UI.kpi("\u5411\u91CF\u6863", { val: "\u672A\u542F\u7528", sub: "\u8BCD\u6CD5\u53EC\u56DE\u515C\u5E95", pct: null, kind: "ended" });
-          [kMem, kLevel, kSleep, kVec].forEach(function(c5) {
-            kpis.appendChild(c5.box);
-          });
-          view.appendChild(kpis);
-          var cols2 = el("div", "sc-cols2");
-          var gCard = UI.card("\u672C\u6708\u6210\u957F", { right: [el("span", "sc-src", "/memory/overview \xB7 growth")] });
-          var sCard = UI.card("\u7CFB\u7EDF\u72B6\u6001", { right: [el("span", "sc-src", "/mcl/status \xB7 /inject/stats")] });
-          var colL = el("div"), colR = el("div");
-          colL.appendChild(gCard.box);
-          colL.appendChild(ovMorningCard());
-          colL.appendChild(ovTimelineCard());
-          colR.appendChild(sCard.box);
-          colR.appendChild(ovCriteriaCard());
-          colR.appendChild(ovQuickCard());
-          cols2.appendChild(colL);
-          cols2.appendChild(colR);
-          view.appendChild(cols2);
-          var growthBox = gCard.body;
-          var sysBox = sCard.body;
-          function ovStat(label, value, sub) {
-            var c5 = el("div", "sc-mem-stat");
-            c5.appendChild(el("div", "sc-mem-stat-label", label));
-            c5.appendChild(el("div", "sc-mem-stat-value", value));
-            if (sub) c5.appendChild(el("div", "sc-mem-stat-sub", sub));
-            return c5;
-          }
-          api("/memory/overview").then(function(r7) {
-            var d3 = r7 || {};
-            var ds = d3.distillStats || {};
-            bDistill.setText("\u84B8\u998F \xB7 " + (ds.last && ds.last.at ? ovAgo(ds.last.at) : "\u5F85\u547D\u4E2D")).setKind(ds.runs || 0 ? "ended" : "running");
-            if (Derive.vectorOn(d3)) {
-              var vp = d3.vector.provider || "off";
-              bVec.setText("\u5411\u91CF " + String(vp)).setKind(Derive.providerKind(vp, ["fusion"]));
-            } else {
-              bVec.setText("\u5411\u91CF \u672A\u542F\u7528").setKind("stalled");
-            }
-            var pend = d3.pending || {};
-            bPend.setText("\u5019\u9009 " + String(pend.count || 0)).setKind(pend.count || 0 ? "suspect" : "ended");
-            var mf = null;
-            (d3.indexes || []).forEach(function(f3) {
-              if (f3.name === "MEMORY.md") mf = f3;
-            });
-            if (mf) {
-              var pct = mf.cap ? Math.round((mf.chars || 0) / mf.cap * 100) : null;
-              bMem.setText("\u8BB0\u5FC6\u5E93 \xB7 " + (pct === null ? "\u6B63\u5E38" : Derive.capKind(pct) !== "ended" ? "\u6C34\u4F4D\u504F\u9AD8" : "\u6B63\u5E38")).setKind(pct === null ? "ended" : Derive.capKind(pct));
-              kMem.set(pct === null ? Derive.num(mf.chars || 0) : pct + "%", Derive.num(mf.chars || 0) + " / " + Derive.num(mf.cap || "\u2014") + " \u5B57\u7B26" + (Derive.count(mf.lines) ? " \xB7 " + Derive.count(mf.lines) + " \u884C" : ""));
-              kMem.fill(pct, pct === null ? "" : Derive.capKind(pct));
-              if (refs.navHealth) refs.navHealth(pct === null ? "\u6B63\u5E38" : Derive.capKind(pct) !== "ended" ? "\u6C34\u4F4D\u504F\u9AD8" : "\u6B63\u5E38", pct === null ? "ended" : Derive.capKind(pct));
-            }
-            var dLast = d3.distill && d3.distill.last;
-            if (dLast && dLast.lastSeq != null) {
-              kLevel.set(String(dLast.lastSeq), "\u672C\u8F6E\u84B8\u998F\u4E8B\u4EF6 \xB7 " + fmtTime(dLast.at));
-              kLevel.fill(100, "ok");
-            } else {
-              kLevel.set("\u2014", "\u5C1A\u65E0\u84B8\u998F\u4E8B\u4EF6");
-            }
-            if (Derive.vectorOn(d3)) {
-              kVec.set(Derive.num(d3.vector.cacheLines || 0), "\u884C \xB7 " + (d3.vector.provider || "\u2014") + (d3.vector.enabled === false ? " \xB7 \u5DF2\u5173\u95ED" : " \xB7 \u5DF2\u542F\u7528"));
-              kVec.fill(null);
-            }
-            var g2 = d3.growth;
-            if (g2) {
-              if (gCard.head) {
-                var subEl = gCard.head.querySelector(".sub");
-                if (subEl) subEl.textContent = "\xB7 " + g2.month;
-              }
-              var g3 = el("div", "sc-mem-grid");
-              var s32 = g2.sleep || {}, d32 = g2.distill || {}, n32 = g2.now || {};
-              g3.appendChild(ovStat("\u6DF1\u7761\u5F52\u7EB3", Derive.num(s32.passes || 0) + " \u6B21", "\u4E60\u5F97 " + Derive.num(s32.principleAdded || 0) + " \xB7 \u66FF\u6362 " + Derive.num(s32.replaced || 0) + " \xB7 \u753B\u50CF " + Derive.num(s32.profilesAdded || 0)));
-              g3.appendChild(ovStat("\u84B8\u998F", Derive.num(d32.runs || 0) + " \u6B21", "\u6210\u529F " + Derive.num(d32.ok || 0) + " \xB7 \u5F02\u5E38 " + Derive.num(d32.bad || 0) + " \xB7 \u9884\u7B5B\u8DF3\u8FC7 " + Derive.num(d32.skips || 0)));
-              g3.appendChild(ovStat("AGENT \u753B\u50CF", Derive.num(n32.tagRows != null ? n32.tagRows : "\u2014") + " \u884C", "\u539F\u5219 " + Derive.num(n32.principleRows || 0) + " \xB7 \u8DEF\u5F84 " + Derive.num(n32.pathRows || 0) + " \xB7 " + Derive.num(n32.agentChars || 0) + " \u5B57\u7B26"));
-              growthBox.appendChild(g3);
-            }
-            var warn = [];
-            if (pend.count) warn.push("\u5019\u9009\u533A " + pend.count + " \u6761\u5F85\u88C1\u51B3");
-            if ((d3.queue || {}).undone) warn.push("\u5F85\u5F52\u6863\u4F1A\u8BDD " + d3.queue.undone + " \u4E2A");
-            if (Derive.vectorOn(d3) && Derive.providerDown(d3.vector.provider)) warn.push("\u5D4C\u5165\u670D\u52A1\u4E0D\u53EF\u8FBE\uFF0C\u5411\u91CF\u53EC\u56DE\u5DF2\u964D\u7EA7\u4E3A\u8BCD\u6CD5");
-            if (Derive.has(warn)) setAlert(warn.length + " \u9879\u5F85\u5904\u7406", warn.join("\uFF1B"), "\u524D\u5F80\u5904\u7406", function() {
-              show("memory");
-            });
-            else setAlert("");
-          }).catch(fail);
-          api("/mcl/status").then(function(m3) {
-            bMcl.setText("\u8BA4\u77E5\u73AF " + (m3 && m3.active ? "\u5FEB" + (m3.fast || 0) + "/\u6162" + (m3.slow || 0) : "\u672A\u88C5\u914D")).setKind(m3 && m3.active ? "ended" : "stalled");
-          }).catch(function() {
-            bMcl.setText("\u8BA4\u77E5\u73AF \u8BFB\u53D6\u5931\u8D25").setKind("stalled");
-          });
-          api("/criteria").then(function(c5) {
-            bCrit.setText("\u5224\u636E\u53F0\u8D26 \xB7 " + (c5 && c5.active ? "\u5DF2\u5C31\u7EEA" : "\u4E0D\u53EF\u8BFB")).setKind(c5 && c5.active ? "ended" : "stalled");
-            var bg = (c5 || {}).bankGit || {};
-            bGit.setText("\u5E93\u7248\u672C \xB7 " + (bg.commits || 0 ? "\u5DF2\u542F\u7528" : "\u672A\u521D\u59CB\u5316")).setKind(bg.commits || 0 ? "ended" : "stalled");
-          }).catch(function() {
-            bGit.setText("\u5E93\u7248\u672C \u8BFB\u53D6\u5931\u8D25");
-          });
-          api("/deepsleep").then(function(d3) {
-            var st = d3 || {};
-            var mode = st.running ? "\u6DF1\u7761\u6574\u7406\u4E2D" : st.ended || st.ended === 0 ? "\u6D45\u7761" : "\u2014";
-            kSleep.set(mode, (st.idleMs ? "\u7A7A\u95F2 " + Math.round(st.idleMs / 6e4) + " \u5206\u949F \xB7 " : "") + (st.nextEligibleAt ? "\u4E0B\u6B21\u53EF\u7761 " + fmtTime(st.nextEligibleAt) : "\u6309\u6C34\u4F4D\u89E6\u53D1"), true);
-          }).catch(function() {
-            kSleep.set("\u2014", "\u8BFB\u53D6\u5931\u8D25", true);
-          });
-          Promise.all([
-            api("/get_root").catch(function() {
-              return {};
-            }),
-            api("/mcl/status").catch(function() {
-              return {};
-            }),
-            api("/inject/stats").catch(function() {
-              return {};
-            }),
-            api("/vector/status2").catch(function() {
-              return {};
-            })
-          ]).then(function(rs) {
-            var r0 = rs[0] || {}, m3 = rs[1] || {}, s4 = rs[2] || {}, v2 = rs[3] || {};
-            sysBox.textContent = "";
-            var root = r0.root || r0.path || r0.active || "\u2014";
-            sysBox.appendChild(ovCRow("\u5F53\u524D\u6839\u76EE\u5F55", String(root), [
-              ovPill(r0.active ? "\u5DF2\u6FC0\u6D3B" : "\u672A\u6FC0\u6D3B", r0.active ? "ok" : "warn")
-            ]));
-            var ch = m3.active ? String(m3.mode) === "slow" ? "\u6162\u901A\u9053" : "\u5FEB\u901A\u9053" : "\u672A\u88C5\u914D";
-            sysBox.appendChild(ovCRow(
-              "MCL \u8BA4\u77E5\u73AF",
-              "\u719F\u6089\u5EA6 " + (m3.familiarity != null ? m3.familiarity : "\u2014") + " \xB7 " + ch,
-              [ovPill(ch, m3.active ? "brand" : "warn")]
-            ));
-            sysBox.appendChild(ovCRow(
-              "\u6CE8\u5165\u7EDF\u8BA1",
-              "\u672C\u6B21\u4F1A\u8BDD " + Derive.num(s4.calls || 0) + " \u6B21" + (s4.lastAt ? " \xB7 \u6700\u8FD1 " + ovAgo(s4.lastAt) : "") + (s4.root ? " \xB7 root=" + s4.root : ""),
-              [ovPill(Derive.num(s4.calls || 0))]
-            ));
-            sysBox.appendChild(ovCRow(
-              "\u5D4C\u5165\u670D\u52A1",
-              "provider=" + String(v2.provider || "off") + " \xB7 " + Derive.num(v2.rows || 0) + " \u884C",
-              [ovPill(v2.present ? "\u53EF\u8FBE" : "\u672A\u542F\u7528", v2.present ? "ok" : "warn")]
-            ));
-          });
-        }
-        function sparkline(values, w2, h3) {
-          if (!values || values.length < 2) return null;
-          var min = Math.min.apply(null, values), max = Math.max.apply(null, values);
-          if (min === max) return null;
-          var ns = "http://www.w3.org/2000/svg";
-          var svg2 = document.createElementNS(ns, "svg");
-          svg2.setAttribute("class", "sc-spark");
-          svg2.setAttribute("width", w2 || 120);
-          svg2.setAttribute("height", h3 || 26);
-          svg2.setAttribute("viewBox", "0 0 " + (w2 || 120) + " " + (h3 || 26));
-          var W = (w2 || 120) - 4, H2 = (h3 || 26) - 6, x0 = 2, y0 = 3;
-          var pts = values.map(function(v2, i7) {
-            var x2 = x0 + (values.length === 1 ? 0 : i7 * W / (values.length - 1));
-            var y3 = y0 + (H2 - (v2 - min) * H2 / (max - min));
-            return [x2, y3];
-          });
-          var d3 = pts.map(function(p4, i7) {
-            return (i7 ? "L" : "M") + p4[0].toFixed(1) + "," + p4[1].toFixed(1);
-          }).join(" ");
-          var path = document.createElementNS(ns, "path");
-          path.setAttribute("d", d3);
-          svg2.appendChild(path);
-          var lastPt = pts[pts.length - 1];
-          var dot = document.createElementNS(ns, "circle");
-          dot.setAttribute("cx", lastPt[0].toFixed(1));
-          dot.setAttribute("cy", lastPt[1].toFixed(1));
-          dot.setAttribute("r", 2);
-          svg2.appendChild(dot);
-          return svg2;
-        }
-        function renderCognitionReport(view, mode) {
-          api("/cognition/report").then(function(r7) {
-            if (!r7 || !r7.ok) return;
-            var host = view;
-            var box = view;
-            var group = function(t6) {
-              if (mode === "sleep") {
-                var c5 = UI.card(t6);
-                host.appendChild(c5.box);
-                box = c5.body;
-              } else {
-                box.appendChild(el("div", "sc-mem-group-title", t6));
-              }
-            };
-            var sleeps = r7.sleeps || [], last = Derive.has(sleeps) ? sleeps[sleeps.length - 1] : null;
-            if (mode === "sleep") {
-              group("\u672C\u8F6E\u4EA7\u51FA\u56DE\u6267" + (last && last.at ? " \xB7 " + fmtTime(last.at) : ""));
-              if (!last) {
-                box.appendChild(el("div", "sc-mem-empty", "\uFF08\u5C1A\u65E0\u6DF1\u7761\u8BB0\u5F55\uFF09"));
-              } else {
-                var kpiRow = function(defs) {
-                  var g2 = el("div", "sc-kpis");
-                  defs.forEach(function(d3) {
-                    g2.appendChild(UI.kpi(d3[0], { val: String(d3[1] == null ? 0 : d3[1]), sub: d3[2], plain: true }).box);
-                  });
-                  return g2;
-                };
-                box.appendChild(kpiRow([["\u65B0\u589E\u539F\u5219", last.added, "added"], ["\u66FF\u6362\u539F\u5219", last.replaced, "replaced"], ["\u753B\u50CF\u66F4\u65B0", last.profiles, "profiles"]]));
-                box.appendChild(kpiRow([
-                  ["\u6307\u9488\u66F4\u65B0", last.pointers, "pointers"],
-                  ["\u6811\u64CD\u4F5C", last.tree, "tree"],
-                  ["\u5F52\u6863", last.forgetArchived, "forgetArchived"],
-                  ["\u4FDD\u7559", last.forgetKept, "forgetKept"]
-                ]));
-                if (last.stop && last.stop !== "completed") {
-                  box.appendChild(el("div", "sc-ds-alert", "\u26A0 \u4E0A\u6B21\u672A\u5B8C\u6210\uFF08stop=" + last.stop + "\uFF09\u2014\u2014\u6309\u300C\u6DF1\u7761\u6C34\u4F4D\u62A4\u680F\u300D\u6C34\u4F4D\u5DF2\u56DE\u6EDA\uFF0C\u540C\u6279\u75D5\u8FF9\u4E0B\u8F6E\u91CD\u8BD5"));
-                }
-              }
-              var m3 = r7.materials || {};
-              group("\u4E0B\u8F6E\u6750\u6599\u9884\u4F30" + (r7.day ? " \xB7 " + r7.day : ""));
-              [
-                ["\u9057\u5FD8\u5019\u9009", "cold \u4E14 \u226590 \u5929\u96F6\u547D\u4E2D", m3.forget],
-                ["\u52A0\u6DF1\u5019\u9009", "hits30 \u2265 5", m3.hot],
-                ["\u4E92\u6291\u5019\u9009", "\xA7 \u540D\u91CD\u53E0 0.5\u20130.66", m3.interference]
-              ].forEach(function(kv) {
-                box.appendChild(ovCRow(kv[0], kv[1], [el("b", null, String(kv[2] == null ? 0 : kv[2]) + " \u6761")]));
-              });
-            } else {
-              var ar = r7.archive || [];
-              if (Derive.has(ar)) {
-                group("\u5F52\u6863\u533A notes/archive/ \xB7 " + ar.length + " \u4E2A\u6587\u4EF6\uFF08forgetOps \u4EA7\u7269\uFF0C\u590D\u5236\u56DE notes/ \u5373\u6062\u590D\uFF09");
-                box.appendChild(el("div", "sc-mem-sub", ar.map(function(x2) {
-                  return x2.file + "\uFF08" + x2.chars + " \u5B57\uFF09";
-                }).join(" \xB7 ")));
-              }
-            }
-          }).catch(function() {
-          });
-        }
-        function renderMemoryExpanded(view, data) {
-          view.textContent = "";
-          UI.pageHead("\u8BB0\u5FC6\u5E93", "MEMORY.md \u7D22\u5F15\u3001\u5019\u9009\u3001\u7B14\u8BB0\u4E0E\u5F52\u6863\u533A\uFF0C\u6309\u300C\u5E93 \u2192 \u5F85\u6D88\u5316 \u2192 \u8BE6\u60C5 \u2192 \u5DF2\u5F52\u6863\u300D\u7684\u751F\u547D\u5468\u671F\u6392\u5E8F\u3002", { routes: ["/memory/overview", "/memory/sections", "/memory/approve"], search: { placeholder: "\u8FC7\u6EE4\u7D22\u5F15 / \u5019\u9009 / \u7B14\u8BB0\u2026", onInput: filterViewRows }, refresh: true });
-          var cap = UI.card("\u5BB9\u91CF\u5360\u7528", { sub: "\u5199\u5165\u7531 write_gate \u5F3A\u5236\u7EA2\u7EBF" });
-          view.appendChild(cap.box);
-          var capGrid = el("div", "sc-cap3");
-          cap.body.appendChild(capGrid);
-          cap.body.appendChild(el("div", "sc-cap-note", "\u53EA\u6709\u5B58\u5728\u771F\u5B9E\u5BB9\u91CF\u95E8\u7684\u8F7D\u4F53\u624D\u7ED9\u767E\u5206\u6BD4\u4E0E\u8FDB\u5EA6\u6761\uFF1AMEMORY.md\uFF08cap_memory\uFF09\u4E0E\u753B\u50CF\uFF08cap_user / cap_agent\uFF09\uFF1Bnotes / pending \u65E0\u5BB9\u91CF\u95E8 \u21D2 \u53EA\u62A5\u7EDD\u5BF9\u91CF\u3002\u8D85\u9650\u7531 write_gate \u62D2\u5199\u3002"));
-          if (!data || !data.present) {
-            status(data && data.error || "\u8BB0\u5FC6\u5E93\u4E0D\u53EF\u7528");
-            return;
-          }
-          var memoryFile = null;
-          (data.indexes || []).forEach(function(f3) {
-            if (f3.name === "MEMORY.md") memoryFile = f3;
-          });
-          var pM1 = el("div");
-          var pM2 = el("div");
-          var pM3 = el("div");
-          var pM4 = el("div");
-          var pM5 = el("div");
-          var _tb = UI.tabs("memory", [
-            { id: "index", label: "\u77E5\u8BC6\u7D22\u5F15 " + String(Derive.count(memoryFile && memoryFile.lines)), pane: pM1 },
-            { id: "pending", label: "\u5019\u9009\u533A " + String((data.pending || {}).count || 0), pane: pM2 },
-            { id: "notes", label: "\u7B14\u8BB0 " + String(Derive.count(data.notes)) + " \u7C7B", pane: pM3 },
-            /* v9（原型第 4 枚 Tab）：归档区。面板此前无此 Tab（上轮"无独立数据源"未造）——
-             * 数据其实来自 `/cognition/report` 的 `archive:[{file,chars}]`，本轮补齐。 */
-            { id: "archive", label: "\u5F52\u6863\u533A", pane: pM5 },
-            { id: "growth", label: "\u7EDF\u8BA1", pane: pM4 }
-          ]);
-          cap.body.appendChild(_tb.box);
-          var ds = data.distillStats;
-          var mkCapItem = function(label, value, sub, pct, kind) {
-            var it = el("div", "sc-cap-item");
-            it.appendChild(el("div", "sc-cap-top", label));
-            it.appendChild(el("div", "sc-cap-val", value));
-            it.appendChild(el("div", "sc-cap-sub", sub || ""));
-            var track = el("div", "sc-cap-track" + (pct === null || pct === void 0 ? " na" : ""));
-            var bar = el("i", kind || "");
-            if (pct !== null && pct !== void 0) bar.style.setProperty("--sc-pct", pct + "%");
-            track.appendChild(bar);
-            it.appendChild(track);
-            return it;
-          };
-          var pMeta0 = data.pending || {};
-          capGrid.textContent = "";
-          (function fillCap() {
-            var mf = memoryFile;
-            var pct = mf && mf.cap ? Math.round((mf.chars || 0) / mf.cap * 100) : null;
-            capGrid.appendChild(mkCapItem(
-              "MEMORY.md \u5BB9\u91CF",
-              pct === null ? Derive.num(mf ? mf.chars : "\u2014") : pct + "%",
-              mf ? Derive.num(mf.chars) + " / " + Derive.num(mf.cap) + " \u5B57\u7B26 \xB7 " + Derive.count(mf.lines) + " \u6761" : "\u2014",
-              pct,
-              pct === null ? "" : Derive.capKind(pct)
-            ));
-            var secCount = 0;
-            (data.notes || []).forEach(function(nf) {
-              secCount += Derive.count(nf.sections);
-            });
-            capGrid.appendChild(mkCapItem(
-              "notes \xB7 \u7B14\u8BB0",
-              Derive.num(Derive.count(data.notes)),
-              "\u4E2A\u6587\u4EF6 \xB7 " + Derive.num(secCount) + " \u4E2A\u5C0F\u8282 \xB7 \u65E0\u5BB9\u91CF\u95E8",
-              null
-            ));
-            capGrid.appendChild(mkCapItem(
-              "pending \u5019\u9009",
-              Derive.num(pMeta0.count || 0),
-              "\u6761\u5F85\u88C1\u51B3 \xB7 \u65E0\u5BB9\u91CF\u95E8\uFF08ADD-only \u6682\u5B58\uFF09",
-              null
-            ));
-          })();
-          if (refs.navHealth) {
-            var navPct = memoryFile && memoryFile.cap ? Math.round((memoryFile.chars || 0) / memoryFile.cap * 100) : null;
-            refs.navHealth(navPct === null ? "\u6B63\u5E38" : Derive.capKind(navPct) !== "ended" ? "\u6C34\u4F4D\u504F\u9AD8" : "\u6B63\u5E38", navPct === null ? "ended" : Derive.capKind(navPct));
-          }
-          renderCognitionReport(_tb.pane("growth"), "memory");
-          var ctx = { _tb, data, view, memoryFile, cap };
-          mmGrowthMonth(ctx);
-          mmIndexRows(ctx);
-          mmPendingRows(ctx);
-          mmNotesChips(ctx);
-          mmArchiveZone(ctx);
-          mmSuiteZone(ctx);
-          mmGrowthDelta(ctx);
-          status("\u8BB0\u5FC6 \xB7 MEMORY " + (memoryFile ? Derive.num(memoryFile.chars) + "/" + Derive.num(memoryFile.cap) + " \xB7 " + Derive.count(memoryFile.lines) + " \u884C" : "\u4E0D\u53EF\u7528") + " \xB7 \u84B8\u998F " + (ds ? Derive.num(ds.runs || 0) + " \u6B21" : "\u2014"));
-          flushFolds();
-        }
-        var mkStat = function(label, value, sub) {
-          var card = el("div", "sc-mem-stat");
-          card.appendChild(el("div", "sc-mem-stat-label", label));
-          card.appendChild(el("div", "sc-mem-stat-value", value));
-          if (sub) card.appendChild(el("div", "sc-mem-stat-sub", sub));
-          return card;
-        };
-        function mmGrowthMonth(ctx) {
-          var host = ctx._tb.pane("growth");
-          var data = ctx.data, view = ctx.view, memoryFile = ctx.memoryFile, cap = ctx.cap;
-          var group = function(t6) {
-            host.appendChild(el("div", "sc-mem-group-title", t6));
-          };
-          var gGrowth = data.growth;
-          if (gGrowth) {
-            group("\u672C\u6708\u6210\u957F \xB7 " + gGrowth.month);
-            var g3 = el("div", "sc-mem-grid");
-            var s32 = gGrowth.sleep || {}, d3 = gGrowth.distill || {}, n32 = gGrowth.now || {};
-            g3.appendChild(mkStat("\u6DF1\u7761\u5F52\u7EB3", String(s32.passes || 0) + " \u6B21", "\u4E60\u5F97 " + String(s32.principleAdded || 0) + " \xB7 \u66FF\u6362 " + String(s32.replaced || 0) + " \xB7 \u753B\u50CF " + String(s32.profilesAdded || 0)));
-            g3.appendChild(mkStat("\u84B8\u998F", String(d3.runs || 0) + " \u6B21", "\u6210\u529F " + String(d3.ok || 0) + " \xB7 \u5F02\u5E38 " + String(d3.bad || 0) + " \xB7 \u9884\u7B5B\u8DF3\u8FC7 " + String(d3.skips || 0)));
-            g3.appendChild(mkStat("AGENT \u753B\u50CF", String(n32.tagRows != null ? n32.tagRows : "\u2014") + " \u884C", "\u539F\u5219 " + String(n32.principleRows || 0) + " \xB7 \u8DEF\u5F84 " + String(n32.pathRows || 0) + " \xB7 " + String(n32.agentChars || 0) + " \u5B57\u7B26"));
-            host.appendChild(g3);
-            var rds = gGrowth.recentDeep || [];
-            if (Derive.has(rds)) {
-              host.appendChild(el("div", "sc-mem-group-title", "\u672C\u6708\u6709\u6548\u6DF1\u7761\u4EA7\u51FA"));
-              var dl3 = el("div", "sc-idx-list");
-              rds.forEach(function(r7) {
-                dl3.appendChild(el("div", "sc-mem-sub", String(r7.at || "").slice(0, 10) + "  \u539F\u5219 +" + String(r7.added || 0) + "/\u66FF\u6362 " + String(r7.replaced || 0) + " \xB7 \u753B\u50CF +" + String(r7.profiles || 0) + " \xB7 gate=" + String(r7.gate || "")));
-              });
-              host.appendChild(dl3);
-            } else if ((s32.passes || 0) > 0) {
-              host.appendChild(el("div", "sc-mem-empty", "\u672C\u6708\u6DF1\u7761\u6709\u8FD0\u884C\u4F46\u65E0\u4EA7\u51FA\uFF08\u5185\u5BB9\u5224\u636E\u5408\u89C4\u4FDD\u5B88\uFF1A\u6750\u6599\u4E0D\u8DB3\u5B81\u7F3A\u6BCB\u6EE5\uFF09"));
-            }
-          }
-        }
-        function mmIndexRows(ctx) {
-          var host = ctx._tb.pane("index");
-          var data = ctx.data, view = ctx.view, memoryFile = ctx.memoryFile, cap = ctx.cap;
-          var group = function(t6) {
-            host.appendChild(el("div", "sc-mem-group-title", t6));
-          };
-          if (Derive.has(memoryFile && memoryFile.lines)) {
-            group("\u77E5\u8BC6\u7D22\u5F15 MEMORY.md \xB7 " + memoryFile.lines.length + " \u6761");
-            host.appendChild(el("div", "sc-desc", "\u70B9\u51FB\u884C\u76F4\u8FBE notes \u8BE6\u60C5\u5C0F\u8282\uFF08\u53EA\u8BFB\uFF09\u3002"));
-            var idxWrap = el("div");
-            idxWrap.classList.add("sc-box");
-            var IDX_PREVIEW = 8;
-            var allLines = memoryFile.lines || [];
-            renderIndexRows(idxWrap, allLines.slice(0, IDX_PREVIEW), renderMemoryExpanded, true);
-            if (allLines.length > IDX_PREVIEW) {
-              var moreBtn = el("button", "sc-idx-more", "\u5C55\u5F00\u5168\u90E8 " + allLines.length + " \u6761");
-              moreBtn.type = "button";
-              moreBtn.addEventListener("click", function() {
-                idxWrap.textContent = "";
-                renderIndexRows(idxWrap, allLines, renderMemoryExpanded, true);
-              });
-              idxWrap.appendChild(moreBtn);
-            }
-            host.appendChild(idxWrap);
-          }
-        }
-        function mmPendingRows(ctx) {
-          var host = ctx._tb.pane("pending");
-          var data = ctx.data, view = ctx.view, memoryFile = ctx.memoryFile, cap = ctx.cap;
-          var group = function(t6) {
-            host.appendChild(el("div", "sc-mem-group-title", t6));
-          };
-          if (data.pending && data.pending.count) {
-            group("pending \u5019\u9009\u961F\u5217 \xB7 " + data.pending.count + " \u6761");
-            var plist = el("div", "sc-pointer-list");
-            (data.pending.recent || []).forEach(function(p22) {
-              var row = makeMemoryPointerRow(String(p22.name || "").replace(/\.md$/, ""), null, (p22.mtime || "").slice(0, 10));
-              var act = el("div", "sc-row-gap");
-              var fname = String(p22.name || "");
-              var okBtn = el("button", "sc-btn subtle", "\u6279\u51C6");
-              okBtn.type = "button";
-              okBtn.classList.add("sc-btn-xs", "sc-btn-ok");
-              okBtn.addEventListener("click", function() {
-                api("/memory/approve", { method: "POST", body: JSON.stringify({ pendingFile: fname }) }).then(function() {
-                  status("\u2713 \u5DF2\u6279\u51C6 " + fname + "\uFF08\u79FB .processed\uFF0C\u5185\u5BB9\u7531\u84B8\u998F\u6B63\u5E38\u5165\u518C\uFF09");
-                }).catch(fail);
-              });
-              var rmBtn = UI.button("\u5FFD\u7565", function() {
-                return api("/memory/approve", { method: "POST", body: JSON.stringify({ pendingFile: fname }) }).then(function() {
-                  status("\u5DF2\u5FFD\u7565 " + fname);
-                });
-              }, { danger: true, async: true, busyText: "\u5FFD\u7565\u4E2D\u2026", okText: "\u5DF2\u5FFD\u7565", confirm: "\u5FFD\u7565\u5E76\u79FB\u51FA\u5019\u9009\u961F\u5217\uFF1A" + fname + "\uFF1F" });
-              act.appendChild(okBtn);
-              act.appendChild(rmBtn);
-              row.appendChild(act);
-              plist.appendChild(row);
-            });
-            host.appendChild(plist);
-            host.appendChild(el("div", "sc-desc", "\u5171 " + data.pending.count + " \u6761\uFF08\u4EC5\u663E\u793A\u6700\u8FD1 " + Derive.count(data.pending.recent) + " \u6761\uFF09\xB7 \u6279\u51C6=\u786E\u8BA4\u6709\u4EF7\u503C\u5165\u518C\uFF0C\u5FFD\u7565=\u79FB\u51FA\u961F\u5217"));
-            var pTip = el("div", "sc-ds-alert info");
-            pTip.appendChild(el("div", null, "\u5347\u683C / \u964D\u683C\u8D70 /memory/approve\uFF0C\u7531 L0 \u5224\u636E\u88C1\u51B3\u3002\u7D22\u5F15\u884C\u53EA\u8BFB\uFF0C\u6B63\u6587\u7F16\u8F91\u8D70 /memory/section-edit\u3002"));
-            host.appendChild(pTip);
-          }
-        }
-        function mmNotesChips(ctx) {
-          var host = ctx._tb.pane("notes");
-          var data = ctx.data, view = ctx.view, memoryFile = ctx.memoryFile, cap = ctx.cap;
-          var group = function(t6) {
-            host.appendChild(el("div", "sc-mem-group-title", t6));
-          };
-          group("notes \u8BE6\u60C5\u5C0F\u8282");
-          var nw = el("div", "sc-notes-list");
-          (data.notes || []).forEach(function(nf) {
-            var chip = el("div", "sc-note-chip");
-            chip.appendChild(el("span", null, nf.name));
-            chip.appendChild(el("span", "sc-tag", String(nf.sections.length)));
-            chip.title = nf.rel + " \xB7 " + nf.sections.map(function(s4) {
-              return s4.title;
-            }).join(" / ");
-            chip.addEventListener("click", function() {
-              appState.memoryViewScroll = view.scrollTop;
-              appState.noteReturnRender = null;
-              api("/memory/sections?rel=" + encodeURIComponent(nf.rel)).then(function(r7) {
-                renderNoteSections2(view, r7);
-              }).catch(fail);
-            });
-            nw.appendChild(chip);
-          });
-          host.appendChild(nw);
-        }
-        function mmArchiveZone(ctx) {
-          var host = ctx._tb.pane("archive");
-          host.appendChild(el("div", "sc-mem-group-title", "\u5F52\u6863\u533A notes/archive/"));
-          var list = el("div");
-          host.appendChild(list);
-          list.appendChild(el("div", "sc-desc", "\u8BFB\u53D6\u4E2D\u2026"));
-          api("/cognition/report").then(function(r7) {
-            var ar = r7 && r7.archive || [];
-            var tabsEls = ctx._tb.box.querySelectorAll("wa-tab");
-            if (tabsEls[3]) tabsEls[3].textContent = "\u5F52\u6863\u533A " + ar.length;
-            list.textContent = "";
-            if (!Derive.has(ar)) list.appendChild(el("div", "sc-desc", "\u6682\u65E0\u5F52\u6863\u6761\u76EE\u3002"));
-            else ar.forEach(function(a4) {
-              list.appendChild(ovCRow(
-                String(a4.file || "\u2014"),
-                "notes/archive/ \xB7 \u4EC5\u5F52\u6863\u4E0D\u5220\u9664",
-                [ovPill(Derive.num(a4.chars || 0) + " \u5B57\u7B26")]
-              ));
-            });
-            var tip = el("div", "sc-ds-alert ok");
-            tip.appendChild(el("div", null, "\u4E3B\u52A8\u9057\u5FD8\u53EA\u5F52\u6863\u3001\u4E0D\u5220\u9664 \u2014\u2014 applyForgetOps \u7981\u76F4\u5220\uFF0C\u70ED\u8282\u4E0E\u753B\u50CF\u8282\u6709\u5B88\u536B\u3002\u5982\u9700\u6062\u590D\uFF0C\u628A notes/archive/ \u4E0B\u7684\u6587\u4EF6\u79FB\u56DE notes/ \u5373\u53EF\uFF08\u9762\u677F\u4E0D\u63D0\u4F9B\u5199\u5165\u53E3\uFF09\u3002"));
-            host.appendChild(tip);
-          }).catch(function() {
-            list.textContent = "";
-            list.appendChild(el("div", "sc-desc", "\u5F52\u6863\u533A\u8BFB\u53D6\u5931\u8D25\uFF08/cognition/report\uFF09\u3002"));
-          });
-        }
-        function mmSuiteZone(ctx) {
-          var host = ctx._tb.pane("index");
-          var data = ctx.data, view = ctx.view, memoryFile = ctx.memoryFile, cap = ctx.cap;
-          var group = function(t6) {
-            host.appendChild(el("div", "sc-mem-group-title", t6));
-          };
-          var suite = data.suite;
-          if (suite && suite.present) {
-            group("\u5B88\u85CF\u672C\u5730\u77E5\u8BC6\u533A \xB7 suite/knowledge");
-            var sMemory = null;
-            (suite.indexes || []).forEach(function(f3) {
-              if (f3.name === "MEMORY.md") sMemory = f3;
-            });
-            host.appendChild(el("div", "sc-desc", "\u5B88\u85CF\u84B8\u998F\u5668\u4E8B\u5B9E\u6E90\uFF08ADR-0002\uFF09\uFF1AMEMORY " + (sMemory ? Derive.num(sMemory.chars) + "/" + Derive.num(sMemory.cap) + " \xB7 " + Derive.count(sMemory.lines) + " \u884C" : "\u2014") + " \xB7 pending " + String(suite.pending ? suite.pending.count : 0) + " \u6761\u3002"));
-            if (Derive.has(suite.notes)) {
-              var snw = el("div", "sc-notes-list");
-              suite.notes.forEach(function(nf) {
-                var chip = el("div", "sc-note-chip");
-                chip.appendChild(el("span", null, nf.name));
-                chip.appendChild(el("span", "sc-tag", String(nf.sections.length)));
-                chip.title = "suite \xB7 " + nf.rel + " \xB7 " + nf.sections.map(function(s4) {
-                  return s4.title;
-                }).join(" / ");
-                chip.addEventListener("click", function() {
-                  appState.memoryViewScroll = view.scrollTop;
-                  appState.noteReturnRender = null;
-                  api("/memory/sections?rel=" + encodeURIComponent(nf.rel) + "&root=suite").then(function(r7) {
-                    renderNoteSections2(view, r7);
-                  }).catch(fail);
-                });
-                snw.appendChild(chip);
-              });
-              host.appendChild(snw);
-            }
-          } else {
-            host.appendChild(el("div", "sc-mem-empty", "\u5B88\u85CF\u672C\u5730\u77E5\u8BC6\u533A\u672A\u542F\u7528\uFF08suite/knowledge \u4E0D\u5B58\u5728\uFF09"));
-          }
-        }
-        function mmGrowthDelta(ctx) {
-          var host = ctx._tb.pane("growth");
-          var data = ctx.data, view = ctx.view, memoryFile = ctx.memoryFile, cap = ctx.cap;
-          var group = function(t6) {
-            host.appendChild(el("div", "sc-mem-group-title", t6));
-          };
-          if (data.delta && data.delta.present && Derive.has(data.delta.rows)) {
-            group("\u6700\u8FD1\u6210\u957F delta \xB7 \u6DF1\u7761\u4EA7\u51FA");
-            var dl8 = el("div", "sc-idx-list");
-            data.delta.rows.forEach(function(row) {
-              var r8 = el("div", "sc-idx-row");
-              r8.appendChild(el("span", "sc-idx-subject", String(row).replace(/^\[/, "[")));
-              dl8.appendChild(r8);
-            });
-            host.appendChild(dl8);
-            var staleNote = "";
-            if (data.delta.staleAt) {
-              try {
-                var remain = Math.max(0, new Date(data.delta.staleAt) - Date.now());
-                staleNote = " \xB7 \u5269\u4F59 " + Math.ceil(remain / 36e5) + "h \u6709\u6548";
-              } catch (e8) {
-              }
-            }
-            host.appendChild(el("div", "sc-mem-sub muted", "\u672C\u6B21\u6DF1\u7761\u5F52\u7EB3\u4EA7\u51FA\uFF0848h \u6709\u6548" + staleNote + "\uFF09\xB7 \u5DF2\u5728\u4F1A\u8BDD\u6CE8\u5165\u53EF\u89C1"));
-          }
-          if (data.weekDiff && (data.weekDiff.deepAdded || 0) > 0) {
-            group("\u672C\u5468\u6210\u957F \xB7 \u589E\u91CF");
-            var g9 = el("div", "sc-mem-grid");
-            g9.appendChild(mkStat("\u6DF1\u7761\u65B0\u4E60\u5F97", String(data.weekDiff.deepAdded || 0) + " \u6761", "\u8FD1 7 \u5929 [\u539F\u5219]/[\u8DEF\u5F84] \u5F52\u7EB3"));
-            host.appendChild(g9);
-          }
-        }
-        function secFoldKey(rel, path, title) {
-          return "note:" + (rel || "") + ":" + (path || "") + "\xA7" + (title || "");
-        }
-        function renderNoteSections2(view, data) {
-          if (!data || !data.present || !data.sections) {
-            status(data && data.error || "\u65E0\u5C0F\u8282");
-            return;
-          }
-          view.textContent = "";
-          UI.pageHead(data.name, (data.root === "suite" ? "suite \u77E5\u8BC6\u533A \xB7 " : "") + data.rel + " \xB7 " + data.sections.length + " \u4E2A\u5C0F\u8282\uFF08\u767D\u540D\u5355\u53EA\u8BFB\uFF09");
-          var back = el("button", "sc-btn subtle", "\u2190 \u8FD4\u56DE" + (appState.noteReturnRender === renderPersona ? "\u753B\u50CF\u677F\u5757" : data.root === "suite" ? "\u5B88\u85CF\u77E5\u8BC6\u533A" : "\u8BB0\u5FC6\u5E93"));
-          back.type = "button";
-          back.addEventListener("click", function() {
-            var backRender = appState.noteReturnRender || renderMemoryExpanded;
-            api("/memory/overview").then(function(r7) {
-              backRender(view, r7);
-              requestAnimationFrame(function() {
-                view.scrollTop = appState.memoryViewScroll;
-              });
-            }).catch(fail);
-          });
-          view.appendChild(back);
-          view.scrollTop = 0;
-          if (Derive.has(data.backrefs)) {
-            var bl = el("div");
-            bl.appendChild(el("div", "sc-mem-group-title", "\u88AB\u5F15\u7528 \xB7 " + data.backrefs.length));
-            var bList = el("div", "sc-idx-list");
-            data.backrefs.slice(0, 8).forEach(function(br) {
-              var row = el("div", "sc-idx-row");
-              row.appendChild(el("span", "sc-idx-tag", String(br.from || "").split("/").pop()));
-              row.appendChild(el("span", "sc-idx-subject", String(br.line || "").slice(0, 90)));
-              row.title = br.line || "";
-              bList.appendChild(row);
-            });
-            bl.appendChild(bList);
-            if (data.backrefs.length > Derive.BACKREF_LIMIT) bl.appendChild(el("div", "sc-mem-sub muted", "\u2026 \u5171 " + data.backrefs.length + " \u5904\u5F15\u7528"));
-            view.appendChild(bl);
-          }
-          function renderSecNode(sec, depth, container, path) {
-            var pad = Math.min(depth, 4) * 14;
-            var hasKids = !!(sec.children && sec.children.length);
-            var key = secFoldKey(data.rel, path, sec.title);
-            var head = el("div", "sc-mem-group-title" + (depth > 0 ? " sub" : ""));
-            var arrow = el("span", "sc-sec-arrow");
-            head.appendChild(arrow);
-            head.appendChild(document.createTextNode(sec.title));
-            head.title = "\u70B9\u51FB\u5C55\u5F00/\u6536\u8D77" + (depth > 0 ? "\uFF08\u5B50\u6811\uFF09" : "");
-            head.classList.add("sc-card-head");
-            head.setAttribute("data-fold-key", key);
-            if (pad) head.style.setProperty("--sc-indent", pad + "px");
-            var body = el("div", "sc-card-body");
-            body.textContent = sec.body || (hasKids ? "" : "\uFF08\u7A7A\u5C0F\u8282\uFF09");
-            var editSec = el("button", "sc-btn subtle sc-edit-sec", "\u270E \u7F16\u8F91\u6B64\u5C0F\u8282");
-            editSec.type = "button";
-            if (pad) editSec.style.setProperty("--sc-indent", pad + "px");
-            editSec.addEventListener("click", function() {
-              editNoteSection(data, sec, view);
-            });
-            var kidsWrap = el("div");
-            function paint(open) {
-              body.classList.toggle("sc-hidden", !open);
-              editSec.classList.toggle("sc-hidden", !open);
-              kidsWrap.classList.toggle("sc-hidden", !open || !hasKids);
-              arrow.textContent = open ? "\u25BE" : "\u25B8";
-              head.classList.toggle("sc-on", open);
-            }
-            paint(Fold2.get(key, false));
-            head.addEventListener("click", function() {
-              paint(Fold2.toggle(key, false));
-            });
-            var off = Bus.on("fold", function(p4) {
-              if (!head.isConnected && !body.isConnected) {
-                off();
-                return;
-              }
-              if (p4 && p4.key === key) paint(Fold2.get(key, false));
-            });
-            container.appendChild(head);
-            container.appendChild(body);
-            container.appendChild(editSec);
-            if (hasKids) {
-              var kidPath = (path ? path + "/" : "") + sec.title;
-              (sec.children || []).forEach(function(c5) {
-                renderSecNode(c5, depth + 1, kidsWrap, kidPath);
-              });
-              container.appendChild(kidsWrap);
-            }
-          }
-          (data.sections || []).forEach(function(sec) {
-            renderSecNode(sec, 0, view, "");
-          });
-          status(data.rel + " \xB7 " + Derive.count(data.sections) + " \u9876\u5C42\u5C0F\u8282\uFF08\u6811\u72B6\uFF0C\u70B9\u51FB\u9010\u5C42\u5C55\u5F00\uFF1B\u7F16\u8F91\u5728\u8282\u70B9\u7EC6\u8282\uFF09");
-        }
-        function editNoteSection(data, sec, view) {
-          if (!data || !data.rel || !sec) return;
-          var bodyTxt = sec.body || "";
-          var ta = el("textarea", "sc-input sc-ta");
-          ta.value = bodyTxt;
-          var wrap = el("div");
-          wrap.appendChild(el("div", "sc-desc", "\u7F16\u8F91 \xA7" + sec.title + " \u6B63\u6587\uFF08" + data.rel + "\uFF09\u2014\u2014\u4FDD\u7559\u5F00\u5934\u6458\u8981\u884C\u6700\u4F73\uFF1B\u4FDD\u5B58\u8D70\u5199\u95E8\uFF08\u5907\u4EFD+\u5BB9\u91CF\u7EA2\u7EBF\uFF09\uFF0C\u7D22\u5F15\u6307\u9488\u4E0D\u53D8\u3002"));
-          wrap.appendChild(ta);
-          var bar = el("div", "sc-toolbar");
-          var saveBtn = el("button", "sc-btn", "\u4FDD\u5B58\u6B63\u6587");
-          saveBtn.type = "button";
-          saveBtn.addEventListener("click", function() {
-            var next = ta.value.trim();
-            if (!next) {
-              status("\u6B63\u6587\u4E0D\u80FD\u4E3A\u7A7A\u2014\u2014\u5982\u9700\u6E05\u7A7A\u8BF7\u7528\u5220\u9664");
-              return;
-            }
-            saveBtn.disabled = true;
-            saveBtn.textContent = "\u4FDD\u5B58\u4E2D\u2026";
-            api("/memory/section-edit", { method: "POST", body: JSON.stringify({ rel: data.rel, section: sec.title, newBody: next }) }).then(function() {
-              status("\u2713 \xA7" + sec.title + " \u6B63\u6587\u5DF2\u4FDD\u5B58\uFF08write_gate \u901A\u8FC7\uFF09");
-              api("/memory/sections?rel=" + encodeURIComponent(data.rel) + (data.root === "suite" ? "&root=suite" : "")).then(function(r7) {
-                renderNoteSections2(view, r7);
-              }).catch(fail);
-            }).catch(function(e8) {
-              saveBtn.disabled = false;
-              saveBtn.textContent = "\u4FDD\u5B58\u6B63\u6587";
-              fail(e8);
-            });
-          });
-          var cancelBtn = el("button", "sc-btn subtle", "\u53D6\u6D88");
-          cancelBtn.type = "button";
-          cancelBtn.addEventListener("click", function() {
-            view.removeChild(wrap);
-          });
-          bar.appendChild(saveBtn);
-          bar.appendChild(cancelBtn);
-          wrap.appendChild(bar);
-          view.appendChild(wrap);
         }
         function opCard(title, desc, ep, btn, run, opts) {
           var o9 = opts || {};
@@ -10659,7 +10638,7 @@
             });
           }
           render();
-          Bus.on("log", render);
+          Bus2.on("log", render);
           return wrap;
         }
         function renderViewSettings(view) {
@@ -10769,7 +10748,7 @@
               Cfg.get("logLevel", "info"),
               function(v2) {
                 Cfg.set("logLevel", v2);
-                Bus.emit("log", null);
+                Bus2.emit("log", null);
               }
             ),
             {}
@@ -11264,9 +11243,9 @@
         }
         appState.currentView = Cfg.get("startView", "overview");
         function refreshCurrentView() {
-          show(appState.currentView);
+          show2(appState.currentView);
         }
-        function show(name) {
+        function show2(name) {
           if (appState.currentView !== name) Fold2.clear();
           appState.currentView = name;
           try {
@@ -11297,7 +11276,7 @@
             renderViewOverview(refs.view);
           } else if (name === "persona") {
             api("/memory/overview").then(function(r7) {
-              renderPersona(refs.view, r7);
+              renderPersona2(refs.view, r7);
             }).catch(fail);
           } else if (name === "memory") {
             api("/memory/overview").then(function(r7) {
@@ -11458,12 +11437,12 @@
             item.setAttribute("tabindex", "0");
             item.setAttribute("aria-label", v2[1]);
             item.onclick = function() {
-              show(v2[0]);
+              show2(v2[0]);
             };
             item.onkeydown = function(e8) {
               if (e8.key === "Enter" || e8.key === " ") {
                 e8.preventDefault();
-                show(v2[0]);
+                show2(v2[0]);
               }
             };
             refs.navItems.push({ name: v2[0], el: item });
@@ -11529,7 +11508,7 @@
             }
           } catch (e8) {
           }
-          show(startView);
+          show2(startView);
         }
         function openPanel() {
           var mask = document.getElementById("scpanl-mask");
@@ -11890,7 +11869,11 @@
         appState.switchKeys = SWITCH_KEYS;
         appState.metaBadges = metaBadges;
         appState.makeToggle = makeToggle;
-        appState.show = show;
+        appState.show = show2;
+        appState.apiCtx = apiCtx;
+        appState.opCard = opCard;
+        appState.deferFold = deferFold;
+        appState.filterViewRows = filterViewRows;
         return module.exports;
       }
     });

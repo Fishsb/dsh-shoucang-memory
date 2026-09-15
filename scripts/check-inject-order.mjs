@@ -42,6 +42,12 @@ export const INJECT_MAP = {
   metaBadges: 'metaBadges',
   makeToggle: 'makeToggle',
   show: 'show',
+  // UI1/U2（2026-09-15）第二轮：记忆板块 pane 所需句柄
+  // ⚠ **加字段必须同时加这里** —— 否则新字段不被"晚于声明"断言覆盖（门只守表内项）。
+  deferFold: 'deferFold',
+  filterViewRows: 'filterViewRows',
+  apiCtx: 'apiCtx',
+  opCard: 'opCard',
 }
 
 /** 纯函数：给定源码，返回问题清单（供 selftest 驱动） */

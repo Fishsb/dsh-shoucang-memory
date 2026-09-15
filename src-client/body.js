@@ -2,7 +2,9 @@ import { UI } from './ui-kit.js'
 import { appState } from './app-state.js'
 import { Derive, fmtTime } from './derive.js'
 import { renderPersona, renderIndexRows, openMemoryNote, makeMemoryPointerRow } from './panes-memory.js'
+import { renderCognitionReport, renderMemoryExpanded, renderNoteSections } from './panes-memory-detail.js'
 import { renderViewRoots, renderViewYaml, renderConfigRaw } from './panes-config.js'
+import { ovCRow, ovPill, ovCriteriaCard, renderViewOverview } from './panes-overview.js'
 import { renderViewToggles } from './panes-toggles.js'
 /**
  *dsh-shoucang-memory — client 半区（纯 DOM，样式照搬 Obsidian 设置窗口）。守藏单插件 2026-09-08 合并。
@@ -278,386 +280,31 @@ import { ICONS, el, svg } from './dom.js'
        *   数据全部来自现有端点（+ 本轮新增的 /maturation/scan），**不编造事件流/不造假数据**。 ── */
 
       /** 卡内行（原型 `.card > .bd .row`）：左 title（13px/520）+ desc（11.5px faint）· 右 pill/值组（右靠）。 */
-      function ovCRow(title, desc, right) {
-        var r = el('div', 'sc-crow');
-        var l = el('div');
-        l.appendChild(el('div', 'sc-ct', title));
-        if (desc) l.appendChild(el('div', 'sc-cd', desc));
-        r.appendChild(l);
-        var rr = el('div', 'sc-right');
-        (right || []).forEach(function (n) { if (n) rr.appendChild(n); });
-        r.appendChild(rr);
-        return r;
-      }
+      
       /** 胶囊（原型 `.pill`；kind: ok/warn/info/brand；mono 走等宽）。 */
-      function ovPill(text, kind, mono) {
-        return el('span', 'sc-pill' + (kind ? ' ' + kind : '') + (mono ? ' mono' : ''), text);
-      }
+      
       /** 相对时间（无时间戳时返回空串 —— 由调用方给口径词，绝不编造时间）。 */
-      function ovAgo(ts) {
-        var t = typeof ts === 'number' ? ts : (ts ? Date.parse(String(ts)) : 0);
-        if (!t || isNaN(t)) return '';
-        var m = Math.max(0, Math.round((Date.now() - t) / 60000));
-        if (m < 1) return '刚刚';
-        if (m < 60) return m + ' 分钟前';
-        if (m < 1440) return Math.round(m / 60) + ' 小时前';
-        return Math.round(m / 1440) + ' 天前';
-      }
+      
 
       /** 总览 · 晨起摘要（原型左栏第 2 张）：delta（剩余有效期 / 注入次数）+ weekDiff（近 7 天深睡新习得）。
        * 原型 3 行；面板按可用字段渲染（delta.rows 最多 2 行 + weekDiff 1 行），**零新端点**。 */
-      function ovMorningCard() {
-        var card = UI.card('晨起摘要', { right: [el('span', 'sc-src', '/memory/overview · delta / weekDiff')] });
-        var box = el('div');
-        box.appendChild(el('div', 'sc-desc', '读取中…'));
-        card.body.appendChild(box);
-        api('/memory/overview').then(function (d) {
-          var dl = (d || {}).delta || {}, wd = (d || {}).weekDiff || {};
-          var sub = card.head && card.head.querySelector('.sub');
-          if (sub) {
-            if (dl.present && dl.staleAt) {
-              var h = Math.round((Date.parse(dl.staleAt) - Date.now()) / 3600000);
-              sub.textContent = 'delta · 剩余 ' + (h > 0 ? h + 'h' : '已过期') + ' 有效';
-            } else sub.textContent = 'delta · weekDiff';
-          }
-          box.textContent = '';
-          var rows = (dl.rows || []).slice(0, 2);
-          if (!Derive.has(rows)) box.appendChild(el('div', 'sc-desc', '本次无晨起摘要（delta.md 未生成或已过期）。'));
-          rows.forEach(function (t, i) {
-            box.appendChild(ovCRow(String(t), '来源：delta.md', [
-              i === 0 ? ovPill('injections ' + Derive.num(dl.injections || 0), null, true) : ovPill('delta', 'info')
-            ]));
-          });
-          var n = Number(wd.deepAdded || 0);
-          box.appendChild(ovCRow('近 7 天深睡新习得 ' + Derive.num(n) + ' 条', 'weekDiff.deepAdded', [ovPill('+' + Derive.num(n), 'ok')]));
-        }).catch(function () { box.textContent = ''; box.appendChild(el('div', 'sc-desc', '晨起摘要读取失败（/memory/overview）。')); });
-        return card.box;
-      }
+      
 
       /** 总览 · 最近动态（原型左栏第 3 张）：`.tl` 时间线，最多 4 条。
        * **口径自决**：原型未标端点 ⇒ 用现有端点聚合**真实**动态（蒸馏 / 深睡 / 容量预警 / 候选积压），
        * 时间戳取自各端点；无时间戳的条目显示口径词（"本月"/"待处理"），不编造时间。 */
-      function ovTimelineCard() {
-        var card = UI.card('最近动态', { right: [ovPill('最近 24 小时')] });
-        var tl = el('div', 'sc-tl');
-        tl.appendChild(el('div', 'sc-desc', '读取中…'));
-        card.body.appendChild(tl);
-        Promise.all([
-          api('/memory/overview').catch(function () { return {}; }),
-          api('/deepsleep').catch(function () { return {}; })
-        ]).then(function (rs) {
-          var d = rs[0] || {}, sl = rs[1] || {};
-          var ds = d.distillStats || {}, g = d.growth || {}, pend = d.pending || {};
-          var it = [];
-          if (ds.last && ds.last.at) {
-            it.push({ t: Date.parse(ds.last.at) || 0, k: 'ok',
-              title: '蒸馏完成 · 本月 ' + Derive.num(ds.runs || 0) + ' 次',
-              desc: '累计入库 ' + Derive.num(ds.added || 0) + ' 条 · 异常 ' + Derive.num(ds.failed || 0) + ' 条',
-              time: ovAgo(ds.last.at) });
-          }
-          if (g.sleep && g.sleep.passes) {
-            it.push({ t: Number(sl.lastDeepSleepAt) || 0, k: 'ok',
-              title: '深度睡眠整理 · 本月 ' + Derive.num(g.sleep.passes) + ' 次',
-              desc: '习得原则 ' + Derive.num(g.sleep.principleAdded || 0) + ' · 替换 ' + Derive.num(g.sleep.replaced || 0) + ' · 画像 ' + Derive.num(g.sleep.profilesAdded || 0),
-              time: sl.lastDeepSleepAt ? ovAgo(sl.lastDeepSleepAt) : '本月' });
-          }
-          (d.indexes || []).forEach(function (f) {
-            if (!f || !f.cap) return;
-            var pct = Math.round((f.chars || 0) / f.cap * 100);
-            if (pct < 80) return;
-            it.push({ t: 0, k: 'warn', title: '容量预警 · ' + String(f.name || '') + ' 达 ' + pct + '%',
-              desc: '红线由 write_gate 写入时强制；建议在下一次深睡中执行画像压缩', time: '阈值 80%' });
-          });
-          if (pend.count) {
-            it.push({ t: 0, k: (pend.count > 5 ? 'warn' : ''), title: '候选待裁决 · ' + Derive.num(pend.count) + ' 条',
-              desc: '24h 内新增 ' + Derive.num(pend.last24h || 0) + ' 条', time: '待处理' });
-          }
-          tl.textContent = '';
-          if (!Derive.has(it)) { tl.appendChild(el('div', 'sc-desc', '暂无动态。')); return; }
-          it.sort(function (a, b) { return (b.t || 0) - (a.t || 0); });
-          it.slice(0, 4).forEach(function (x) {
-            var box = el('div', 'sc-tl-item' + (x.k ? ' ' + x.k : ''));
-            box.appendChild(el('div', 'sc-tl-t', x.title));
-            box.appendChild(el('div', 'sc-tl-d', x.desc));
-            box.appendChild(el('div', 'sc-tl-time', x.time));
-            tl.appendChild(box);
-          });
-        });
-        return card.box;
-      }
+      
 
       /** 总览 · 判据与重排门（原型右栏第 2 张）：`.mini` 双列 5 组 + 口径注脚。数据 `GET /criteria`。
        * 上轮误判「原型无此块」而挂在深睡页；本轮**迁到总览**（原型总览有、深睡页无）。 */
-      function ovCriteriaCard() {
-        var card = UI.card('判据与重排门', {
-          sub: '现状已有 · 仅改归属',
-          right: [el('span', 'sc-src', 'GET /criteria')]
-        });
-        var mini = el('div', 'sc-mini');
-        var note = el('div', 'sc-mem-stat-rule', '读取中…');
-        card.body.appendChild(mini); card.body.appendChild(note);
-        api('/criteria').then(function (c) {
-          var o = c || {};
-          var gate = o.rerankGate || {}, h = o.health || {}, bg = o.bankGit || {}, led = o.ledger || {};
-          mini.textContent = '';
-          var put = function (k, v) { mini.appendChild(el('div', 'k', k)); mini.appendChild(el('div', 'v', v)); };
-          put('判据版本', String(o.version || '—'));
-          put('台账行数', Derive.num(led.rows || 0));
-          put('notes 告警阈值', h.notesWarn == null ? '—' : Derive.num(h.notesWarn));
-          put('重排门', Derive.num(gate.indexRows || 0) + ' / ' + Derive.num(gate.threshold || 0) + ' · 行数门' + (gate.ready ? '已达' : '未达'));
-          put('库版本', Derive.num(bg.commits || 0) + ' 提交');
-          note.textContent = '健康度 health.R / K 与 caps 由 criteria-gate.json 提供；本卡只读。';
-        }).catch(function () { note.textContent = '判据台账读取失败（GET /criteria）。'; });
-        return card.box;
-      }
+      
 
       /** 总览 · 快捷操作（原型右栏第 3 张）：4 个运维动作。
        * 其中「成熟度扫描」在插件运行时**无对应能力**（实现是库内 scripts/maturation-scan.mjs），
        * 本轮按 reconcile 的既有模式端点化（POST /maturation/scan），不留假按钮。 */
-      function ovQuickCard() {
-        var card = UI.card('快捷操作');
-        var row = el('div', 'sc-toolbar');
-        row.style.flexWrap = 'wrap';
-        var res = el('div', 'sc-desc', '');
-        row.appendChild(UI.button('测试嵌入连通', function () {
-          res.textContent = '读取配置…';
-          return api('/embed/config').then(function (c) {
-            /* ⚠ 字段口径（2026-09-14 实测两处错）：① 原读 `c.global`（端点返回 `persisted`/`effective`，**无 global**）
-             *   ② 有效载荷用的是**运行态形状** `baseUrl`（与 `/vector/status2` 的 running 同源），不是 `embedBaseUrl`
-             *   ⇒ 两次都取到空值 ⇒ 恒报"未配置"。现读 `effective.baseUrl` 并如实标注来源。 */
-            var g = (c && c.effective) || (c && c.persisted) || {};
-            var baseUrl = String(g.baseUrl || g.embedBaseUrl || '').trim();
-            if (!baseUrl) { res.textContent = '✗ 未配置 embedBaseUrl（且缺省不可用）'; return; }
-            var dflt = (c && c.isDefault) || {};
-            var src = dflt.embedBaseUrl ? '（缺省在用）' : '（已落盘）';
-            res.textContent = '测试中… ' + baseUrl + src;
-            return apiCtx('/embed/test', {
-              method: 'POST', body: JSON.stringify({ baseUrl: baseUrl, apiKey: String(g.apiKey || g.embedApiKey || '').trim() })
-            }, '嵌入连通性').then(function (r) {
-              res.textContent = (r && r.error) ? ('✗ ' + r.error + ' · ' + baseUrl + src) : ('✓ 可达 · ' + Derive.count(r && r.models) + ' 个模型 · ' + baseUrl + src);
-            });
-          }).catch(function (e) { res.textContent = '✗ ' + e.message; });
-        }, { async: true, busyText: '测试中…', okText: '嵌入连通性测试完成', title: 'POST /embed/test —— 验证当前 embedding 配置是否可用' }));
-        row.appendChild(UI.button('根目录引导', function () {
-          res.textContent = '执行中…';
-          return apiCtx('/root/bootstrap', { method: 'POST', body: JSON.stringify({}) }, '根目录引导')
-            .then(function (r) { res.textContent = '✓ ' + JSON.stringify(r).slice(0, 200); })
-            .catch(function (e) { res.textContent = '✗ ' + e.message; });
-        }, { async: true, busyText: '执行中…', okText: '根目录引导完成', confirm: '执行根目录引导会尝试创建缺失的目录结构，确认继续？' }));
-        row.appendChild(UI.button('成熟度扫描', function () {
-          res.textContent = '扫描中…';
-          return apiCtx('/maturation/scan', { method: 'POST', body: JSON.stringify({}) }, '成熟度扫描')
-            .then(function (r) {
-              res.textContent = (r && r.active) ? '✓ 扫描完成（分档已写入 audit/maturation.jsonl）' : ('⚠ ' + ((r && r.error) || '未生成'));
-            })
-            .catch(function (e) { res.textContent = '✗ ' + e.message; });
-        }, { async: true, busyText: '扫描中…', okText: '成熟度扫描完成', title: 'POST /maturation/scan —— 重算库内小节成熟度并覆盖台账（只写台账，不改记忆内容）' }));
-        row.appendChild(UI.button('账本对账', function () {
-          res.textContent = '对账中…';
-          return apiCtx('/reconcile', { method: 'POST', body: JSON.stringify({}) }, '账本对账')
-            .then(function (r) { res.textContent = (r && r.active) ? '✓ 对账完成' : ('⚠ ' + ((r && r.error) || '失败')); })
-            .catch(function (e) { res.textContent = '✗ ' + e.message; });
-        }, { async: true, busyText: '对账中…', okText: '账本对账完成', title: 'POST /reconcile —— 记忆库对账（只读汇总）' }));
-        card.body.appendChild(row);
-        card.body.appendChild(res);
-        return card.box;
-      }
+      
 
-      function renderViewOverview(view) {
-        view.textContent = '';
-        /* v9 标准（原型 .pagehead）：描述文案 + 右侧「刷新」+ 一枚 .proto-note 标注**本页唯一执行位**。 */
-        UI.pageHead('运行总览', '一屏回答「现在怎么样」。徽章行 = 原记忆板块 §0 的 7 枚状态徽章，整体提升为独立首屏。', {
-          routes: ['/memory/overview', '/cognition/report', '/mcl/status'], refresh: true,
-          actions: [el('span', 'sc-proto-note', '蒸馏执行位：下方操作卡（本页仅一处）')]
-        });
-
-        var badges = el('div', 'sc-ds-badges');
-        function bd(t, k) { var h = UI.dsBadge(t, k); badges.appendChild(h.box); return h; }
-        var bDistill = bd('蒸馏 …');
-        var bVec = bd('向量 …');
-        var bPend = bd('候选 …');
-        var bMem = bd('记忆库 …');
-        var bMcl = bd('认知环 …');
-        var bCrit = bd('判据台账 …');
-        var bGit = bd('库版本 …');
-        view.appendChild(badges);
-
-        var alertBox = el('div', 'sc-ds-alert warn sc-hidden');
-        alertBox.setAttribute('role', 'status');
-        view.appendChild(alertBox);
-        /* v9 标准（原型 .alert）：三角图标 + 「**N 项待处理** —— 描述」+ 可点击直达。 */
-        function setAlert(head, detail, linkText, linkGo) {
-          if (!head) { alertBox.classList.add('sc-hidden'); return; }
-          alertBox.textContent = '';
-          var body = el('div');
-          body.appendChild(el('b', null, head));
-          if (detail) body.appendChild(el('span', null, ' —— ' + detail));
-          if (linkText) {
-            var a = el('a', null, linkText);
-            a.setAttribute('role', 'button');
-            a.onclick = function () { if (typeof linkGo === 'function') linkGo(); };
-            body.appendChild(a);
-          }
-          alertBox.appendChild(body);
-          alertBox.classList.remove('sc-hidden');
-        }
-
-        /* §1 三张操作卡：同页唯一动作入口，按钮同规格（全部 primary） */
-        /* opCard 已提到**闭包级**（2026-09-14）：架构视图也用同一实现——**单一实现，勿在此复制** */
-        var ops = el('div', 'sc-opgrid');
-        ops.appendChild(opCard('立即蒸馏', '遍历根会话蒸馏，携带 pending 候选回流；等价于等会话空闲自动触发。', 'POST /distill/run', '蒸馏', function () {
-          return apiCtx('/distill/run', { method: 'POST', body: JSON.stringify({}) }, '蒸馏').then(function (r) {
-            status(r && r.ok ? '✓ ' + (r.note || '蒸馏完成') : '⚠ ' + ((r && r.note) || '未触发：根会话活跃中会跳过，等闲置自动跑'));
-            refreshCurrentView();
-          });
-        }, { icon: 'M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1', busyText: '蒸馏中…', okText: '蒸馏完成' }));
-        ops.appendChild(opCard('立即进入深睡', '离线回想，提炼「[原则]/[路径]」并做结构整理与归档（禁直删）。预计 1–3 分钟。', 'POST /deepsleep/trigger', '深睡', function () {
-          return apiCtx('/deepsleep/trigger', { method: 'POST', body: JSON.stringify({}) }, '深睡').then(function () {
-            status('✓ 已触发深睡归纳（后台执行，回执见「深度睡眠」）');
-          });
-        }, { icon: 'M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z', confirm: '立即触发一次深度睡眠归纳？将调用归纳子代理回顾当天记忆痕迹。' }));
-        ops.appendChild(opCard('运行自检', '校验判据门 / 载体门 / 分层 / 成熟度 / 影子 / 对账六项；超时上限 180s。', 'POST /selfcheck/run', '自检', function () {
-          return apiCtx('/selfcheck/run', { method: 'POST', body: JSON.stringify({}) }, '自检').then(function () {
-            status('✓ 自检已执行，结果见「运行观测」');
-          });
-        }, { icon: 'M20 6L9 17l-5-5', busyText: '自检中…', confirm: '立即跑一次运行自检？执行期间请勿关闭面板。' }));
-        view.appendChild(ops);
-
-        /* §2 四张 KPI（v9 修正点：数值行等高 + 条钉卡底 ⇒ 四卡进度条共线） */
-        var kpis = el('div', 'sc-kpis');
-        var kMem = UI.kpi('记忆库容量', { val: '—', sub: 'MEMORY.md', pct: 0, kind: 'ended' });
-        var kLevel = UI.kpi('蒸馏水位', { val: '—', sub: '本轮蒸馏事件', pct: 0, kind: 'ended' });
-        var kSleep = UI.kpi('深度睡眠', { val: '—', txt: true, sub: '—', pct: null, kind: 'probing' });
-        var kVec = UI.kpi('向量档', { val: '未启用', sub: '词法召回兜底', pct: null, kind: 'ended' });
-        [kMem, kLevel, kSleep, kVec].forEach(function (c) { kpis.appendChild(c.box); });
-        view.appendChild(kpis);
-
-        /* §3 本月成长 / §4 系统状态 —— v9 对齐：**两栏卡片**（方案此两块是并排 card：左 成长 / 右 系统状态，
-         * 卡头带路由 chip），此前是全宽分节标题 + 通栏行。窄屏（≤900px）堆叠。 */
-        var cols2 = el('div', 'sc-cols2');
-        var gCard = UI.card('本月成长', { right: [el('span', 'sc-src', '/memory/overview · growth')] });
-        var sCard = UI.card('系统状态', { right: [el('span', 'sc-src', '/mcl/status · /inject/stats')] });
-        /* v9 标准（原型 DOM）：两栏各是一个**列容器**，各自纵向堆 3 张卡 ——
-         * 不能把 6 张卡平铺进 2 列 grid（那样会 1/2、3/4、5/6 交叉排，视觉顺序全错）。
-         * 左栏：本月成长 / 晨起摘要 / 最近动态 · 右栏：系统状态 / 判据与重排门 / 快捷操作。 */
-        var colL = el('div'), colR = el('div');
-        colL.appendChild(gCard.box);
-        colL.appendChild(ovMorningCard());
-        colL.appendChild(ovTimelineCard());
-        colR.appendChild(sCard.box);
-        colR.appendChild(ovCriteriaCard());
-        colR.appendChild(ovQuickCard());
-        cols2.appendChild(colL); cols2.appendChild(colR);
-        view.appendChild(cols2);
-        var growthBox = gCard.body;
-        var sysBox = sCard.body;
-        function ovStat(label, value, sub) {
-          var c = el('div', 'sc-mem-stat');
-          c.appendChild(el('div', 'sc-mem-stat-label', label));
-          c.appendChild(el('div', 'sc-mem-stat-value', value));
-          if (sub) c.appendChild(el('div', 'sc-mem-stat-sub', sub));
-          return c;
-        }
-
-        /* ---- 页面：参数（开关渲染 renderToggles* / 根目录 renderViewRoots / 设置读写） ---- */
-        api('/memory/overview').then(function (r) {
-          var d = r || {};
-          var ds = d.distillStats || {};
-          bDistill.setText('蒸馏 · ' + (ds.last && ds.last.at ? ovAgo(ds.last.at) : '待命中')).setKind((ds.runs || 0) ? 'ended' : 'running');
-          if (Derive.vectorOn(d)) {
-            var vp = d.vector.provider || 'off';
-            /* v9 标准：原型是「向量 **fusion**」—— provider 是**标识符**，不做中文化（旧实现译成"融合"）。 */
-            bVec.setText('向量 ' + String(vp)).setKind(Derive.providerKind(vp, ['fusion']));
-          } else { bVec.setText('向量 未启用').setKind('stalled'); }
-          var pend = d.pending || {};
-          bPend.setText('候选 ' + String(pend.count || 0)).setKind((pend.count || 0) ? 'suspect' : 'ended');
-
-          var mf = null;
-          (d.indexes || []).forEach(function (f) { if (f.name === 'MEMORY.md') mf = f; });
-          if (mf) {
-            var pct = mf.cap ? Math.round((mf.chars || 0) / mf.cap * 100) : null;
-            bMem.setText('记忆库 · ' + (pct === null ? '正常' : (Derive.capKind(pct) !== 'ended' ? '水位偏高' : '正常')))
-              .setKind(pct === null ? 'ended' : Derive.capKind(pct));
-            kMem.set((pct === null ? Derive.num(mf.chars || 0) : pct + '%'), Derive.num(mf.chars || 0) + ' / ' + Derive.num(mf.cap || '—') + ' 字符' + (Derive.count(mf.lines) ? ' · ' + Derive.count(mf.lines) + ' 行' : ''));
-            kMem.fill(pct, pct === null ? '' : Derive.capKind(pct));
-            /* 导航脚状态块同步（同一份数据，不额外取数） */
-            if (refs.navHealth) refs.navHealth(pct === null ? '正常' : (Derive.capKind(pct) !== 'ended' ? '水位偏高' : '正常'), pct === null ? 'ended' : Derive.capKind(pct));
-          }
-          var dLast = d.distill && d.distill.last;
-          if (dLast && dLast.lastSeq != null) {
-            kLevel.set(String(dLast.lastSeq), '本轮蒸馏事件 · ' + fmtTime(dLast.at));
-            kLevel.fill(100, 'ok');
-          } else { kLevel.set('—', '尚无蒸馏事件'); }
-          if (Derive.vectorOn(d)) {
-            kVec.set(Derive.num(d.vector.cacheLines || 0), '行 · ' + (d.vector.provider || '—') + (d.vector.enabled === false ? ' · 已关闭' : ' · 已启用'));
-            kVec.fill(null);
-          }
-          var g = d.growth;
-          if (g) {
-            /* 卡头承担标题（v9 的 card > .hd），卡体只放三张数值块 —— 同页信息不重复 */
-            if (gCard.head) {
-              var subEl = gCard.head.querySelector('.sub');
-              if (subEl) subEl.textContent = '· ' + g.month;
-            }
-            var g3 = el('div', 'sc-mem-grid');
-            var s3 = g.sleep || {}, d3 = g.distill || {}, n3 = g.now || {};
-            g3.appendChild(ovStat('深睡归纳', Derive.num(s3.passes || 0) + ' 次', '习得 ' + Derive.num(s3.principleAdded || 0) + ' · 替换 ' + Derive.num(s3.replaced || 0) + ' · 画像 ' + Derive.num(s3.profilesAdded || 0)));
-            g3.appendChild(ovStat('蒸馏', Derive.num(d3.runs || 0) + ' 次', '成功 ' + Derive.num(d3.ok || 0) + ' · 异常 ' + Derive.num(d3.bad || 0) + ' · 预筛跳过 ' + Derive.num(d3.skips || 0)));
-            g3.appendChild(ovStat('AGENT 画像', Derive.num(n3.tagRows != null ? n3.tagRows : '—') + ' 行', '原则 ' + Derive.num(n3.principleRows || 0) + ' · 路径 ' + Derive.num(n3.pathRows || 0) + ' · ' + Derive.num(n3.agentChars || 0) + ' 字符'));
-            growthBox.appendChild(g3);
-          }
-          var warn = [];
-          if (pend.count) warn.push('候选区 ' + pend.count + ' 条待裁决');
-          if ((d.queue || {}).undone) warn.push('待归档会话 ' + d.queue.undone + ' 个');
-          if (Derive.vectorOn(d) && Derive.providerDown(d.vector.provider)) warn.push('嵌入服务不可达，向量召回已降级为词法');
-          if (Derive.has(warn)) setAlert(warn.length + ' 项待处理', warn.join('；'), '前往处理', function () { show('memory'); });
-          else setAlert('');
-        }).catch(fail);
-
-        api('/mcl/status').then(function (m) {
-          bMcl.setText('认知环 ' + ((m && m.active) ? ('快' + (m.fast || 0) + '/慢' + (m.slow || 0)) : '未装配')).setKind((m && m.active) ? 'ended' : 'stalled');
-        }).catch(function () { bMcl.setText('认知环 读取失败').setKind('stalled'); });
-
-        api('/criteria').then(function (c) {
-          /* v9 标准：原型徽章是「标签 · 状态词」（数值已在 KPI 卡里给，徽章不重复堆数字）。 */
-          bCrit.setText('判据台账 · ' + ((c && c.active) ? '已就绪' : '不可读')).setKind((c && c.active) ? 'ended' : 'stalled');
-          var bg = (c || {}).bankGit || {};
-          bGit.setText('库版本 · ' + ((bg.commits || 0) ? '已启用' : '未初始化')).setKind((bg.commits || 0) ? 'ended' : 'stalled');
-        }).catch(function () { bGit.setText('库版本 读取失败'); });
-
-        api('/deepsleep').then(function (d) {
-          var st = d || {};
-          var mode = st.running ? '深睡整理中' : (st.ended || st.ended === 0 ? '浅睡' : '—');
-          kSleep.set(mode, (st.idleMs ? '空闲 ' + Math.round(st.idleMs / 60000) + ' 分钟 · ' : '') + (st.nextEligibleAt ? '下次可睡 ' + fmtTime(st.nextEligibleAt) : '按水位触发'), true);
-        }).catch(function () { kSleep.set('—', '读取失败', true); });
-
-        /* v9 标准（原型 DOM 实测）：系统状态卡是 **4 行**（当前根目录 / MCL 认知环 / 注入统计 / 嵌入服务），
-         *   每行 title + desc + 右侧 `.pill`。上一轮曾据**方案文档正文**「该卡只有一行」删掉 3 行 ——
-         *   文档说法与 DOM 不符，本轮恢复。四路取数用 Promise.all 一次性渲染，避免异步先后决定行序。 */
-        Promise.all([
-          api('/get_root').catch(function () { return {}; }),
-          api('/mcl/status').catch(function () { return {}; }),
-          api('/inject/stats').catch(function () { return {}; }),
-          api('/vector/status2').catch(function () { return {}; })
-        ]).then(function (rs) {
-          var r0 = rs[0] || {}, m = rs[1] || {}, s = rs[2] || {}, v = rs[3] || {};
-          sysBox.textContent = '';
-          var root = (r0.root || r0.path || r0.active) || '—';
-          sysBox.appendChild(ovCRow('当前根目录', String(root), [
-            ovPill(r0.active ? '已激活' : '未激活', r0.active ? 'ok' : 'warn')
-          ]));
-          var ch = m.active ? (String(m.mode) === 'slow' ? '慢通道' : '快通道') : '未装配';
-          sysBox.appendChild(ovCRow('MCL 认知环',
-            '熟悉度 ' + (m.familiarity != null ? m.familiarity : '—') + ' · ' + ch,
-            [ovPill(ch, m.active ? 'brand' : 'warn')]));
-          sysBox.appendChild(ovCRow('注入统计',
-            '本次会话 ' + Derive.num(s.calls || 0) + ' 次' + (s.lastAt ? ' · 最近 ' + ovAgo(s.lastAt) : '') + (s.root ? ' · root=' + s.root : ''),
-            [ovPill(Derive.num(s.calls || 0))]));
-          sysBox.appendChild(ovCRow('嵌入服务',
-            'provider=' + String(v.provider || 'off') + ' · ' + Derive.num(v.rows || 0) + ' 行',
-            [ovPill(v.present ? '可达' : '未启用', v.present ? 'ok' : 'warn')]));
-        });
-      }
+      
 
       /* ────────── 参数页（P1-1 拆分后）：父函数只做页头 + 页签装配 ──────────
        * 拆分背景：本函数原为 615 行单函数（全前端唯一 >400 行债务）。现按配置域切成 4 个
@@ -666,7 +313,6 @@ import { ICONS, el, svg } from './dom.js'
        *   拆分后逐项比对，**清单不变 = 行为等价**。
        * 注意：子函数是**模块级**函数（不是嵌套在父函数里）——否则父函数仍是 600+ 行，
        *   拆分只换取了个位置、跨度门禁照样红（棘轮只认跨度）。 */
-      /* ---------- 页面：参数 —— ① 注入与容量 ---------- */
       
       /* 数值输入项（参数页 cap / sched 两 pane 共用 → 拆分为模块级，避免各 pane 各写一份） */
       
@@ -677,22 +323,17 @@ import { ICONS, el, svg } from './dom.js'
        *   两块之间**无共享状态**（只靠 host 串联），故可直接切开；行为等价由
        *   `scripts/test-panel-view-contract.mjs` 的 6 项 model 契约守。 */
       
-      /* ---------- 页面：参数 —— ② 模型与向量 ---------- */
       
       
-      /* ---------- 页面：参数 —— ③ 调度与根目录 ---------- */
       
 
       
 
-      /* ---------- 页面：配置原文 ---------- */
 
       
 
-      /* ---------- 页面：画像 / 记忆板块 ---------- */
 
       /** 记忆库指针行：点击打开 notes 小节（只读 /memory/sections）；pointer=null 时不跳转。 */
-      /* ---------- 页面：记忆 —— ① 索引与画像 ---------- */
       
       
 
@@ -706,93 +347,13 @@ import { ICONS, el, svg } from './dom.js'
       /** ISO → 本地 'MM-DD HH:MM'（蒸馏水位展示用）。 */
       
 
-      /** 迷你趋势图（sparkline，Tufte）：纯 SVG 无依赖；values 全为同一值时不画（无趋势信息）。 */
-      function sparkline(values, w, h) {
-        if (!values || values.length < 2) return null;
-        var min = Math.min.apply(null, values), max = Math.max.apply(null, values);
-        if (min === max) return null; // 无变化 → 无趋势可表达（data-ink：不画装饰性平线）
-        var ns = 'http://www.w3.org/2000/svg';
-        var svg = document.createElementNS(ns, 'svg');
-        svg.setAttribute('class', 'sc-spark');
-        svg.setAttribute('width', w || 120); svg.setAttribute('height', h || 26);
-        svg.setAttribute('viewBox', '0 0 ' + (w || 120) + ' ' + (h || 26));
-        var W = (w || 120) - 4, H = (h || 26) - 6, x0 = 2, y0 = 3;
-        var pts = values.map(function (v, i) {
-          var x = x0 + (values.length === 1 ? 0 : i * W / (values.length - 1));
-          var y = y0 + (H - (v - min) * H / (max - min));
-          return [x, y];
-        });
-        var d = pts.map(function (p, i) { return (i ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' ');
-        var path = document.createElementNS(ns, 'path');
-        path.setAttribute('d', d);
-        svg.appendChild(path);
-        var lastPt = pts[pts.length - 1];
-        var dot = document.createElementNS(ns, 'circle');
-        dot.setAttribute('cx', lastPt[0].toFixed(1)); dot.setAttribute('cy', lastPt[1].toFixed(1)); dot.setAttribute('r', 2);
-        svg.appendChild(dot);
-        return svg;
-      }
+      /* UI1/U2（2026-09-15）：此处原有死注释 `/** 迷你趋势图（sparkline，Tufte）… *​/`
+       *   （描述的函数经核查是死代码，已删；见 `panes-memory-detail.js` 顶部说明）。 */
 
       /** 认知可视化（v9）：睡眠/记忆两视图共用 —— 单端点 /cognition/report。
        *  mode='sleep'：本轮产出回执 + 下轮材料预估 + 历次趋势；mode='memory'：仅归档区（冷热分布/超 R 节/指针健康 已按用户要求移除）。
        *  端点不可用=静默（不阻塞主视图）。 */
-      function renderCognitionReport(view, mode) {
-        api('/cognition/report').then(function (r) {
-          if (!r || !r.ok) return;
-          /* 分区标题的**层级随页面而定**（v9 块级实测）：
-         *   · sleep 页：原型是**多张独立卡**（本轮产出回执 / 下轮材料预估 / 最近会话 …）⇒ 这里出卡片；
-         *   · memory 页：原型只有一张「容量占用」卡，卡内分区是**小节标题** ⇒ 这里出标题（卡中不再套卡）。 */
-        /* ⚠ 两个游标必须分开：**卡挂到容器、内容挂到卡体**。
-         *   此前 group() 只用一个变量，第二次调用就把新卡挂进了上一张卡的卡体
-         *   （实测出图：「下轮材料预估」嵌在「本轮产出回执」卡里）；只改成 cur 同样错——
-         *   因为 cur 在 group 内被推成卡体。 */
-        var host = view;   // 卡 / 小节标题的挂载点（容器）
-        var box = view;    // 行内容的挂载点（当前卡的卡体）
-        var group = function (t) {
-          if (mode === 'sleep') {
-            var c = UI.card(t);
-            host.appendChild(c.box);
-            box = c.body;
-          } else {
-            box.appendChild(el('div', 'sc-mem-group-title', t));
-          }
-        };
-          var sleeps = r.sleeps || [], last = Derive.has(sleeps) ? sleeps[sleeps.length - 1] : null;
-          if (mode === 'sleep') {
-            /* v9 形态（DOM 实测）：本轮产出回执 = **7 张 KPI**（上一行 3 张 + 下一行 4 张，4 列网格；
-             *   值 = 条数，副行 = 后端字段名 added/replaced/…）。面板此前是 7 行 .sc-comp-row 键值行 ⇒ 形态不对。 */
-            group('本轮产出回执' + (last && last.at ? ' · ' + fmtTime(last.at) : ''));
-            if (!last) { box.appendChild(el('div', 'sc-mem-empty', '（尚无深睡记录）')); }
-            else {
-              var kpiRow = function (defs) {
-                var g = el('div', 'sc-kpis');
-                defs.forEach(function (d) { g.appendChild(UI.kpi(d[0], { val: String(d[1] == null ? 0 : d[1]), sub: d[2], plain: true }).box); });
-                return g;
-              };
-              box.appendChild(kpiRow([['新增原则', last.added, 'added'], ['替换原则', last.replaced, 'replaced'], ['画像更新', last.profiles, 'profiles']]));
-              box.appendChild(kpiRow([['指针更新', last.pointers, 'pointers'], ['树操作', last.tree, 'tree'],
-                ['归档', last.forgetArchived, 'forgetArchived'], ['保留', last.forgetKept, 'forgetKept']]));
-              if (last.stop && last.stop !== 'completed') {
-                box.appendChild(el('div', 'sc-ds-alert', '⚠ 上次未完成（stop=' + last.stop + '）——按「深睡水位护栏」水位已回滚，同批痕迹下轮重试'));
-              }
-            }
-            /* 下轮材料预估（原型：3 × .row = 标题 / 触发条件 / 右侧条数） */
-            var m = r.materials || {};
-            group('下轮材料预估' + (r.day ? ' · ' + r.day : ''));
-            [['遗忘候选', 'cold 且 ≥90 天零命中', m.forget], ['加深候选', 'hits30 ≥ 5', m.hot],
-             ['互抑候选', '§ 名重叠 0.5–0.66', m.interference]].forEach(function (kv) {
-              box.appendChild(ovCRow(kv[0], kv[1], [el('b', null, String(kv[2] == null ? 0 : kv[2]) + ' 条')]));
-            });
-            /* v9：原型深睡页无「历次产出趋势」块 ⇒ 移除（该趋势在总览「本月成长」已表达，不是丢信息） */
-          } else {
-            var ar = r.archive || [];
-            if (Derive.has(ar)) {
-              group('归档区 notes/archive/ · ' + ar.length + ' 个文件（forgetOps 产物，复制回 notes/ 即恢复）');
-              box.appendChild(el('div', 'sc-mem-sub', ar.map(function (x) { return x.file + '（' + x.chars + ' 字）'; }).join(' · ')));
-            }
-          }
-        }).catch(function () { /* 端点不可用：静默 */ });
-      }
+      
       /** 画像板块（F-003）：USER.md/AGENT.md 画像专属视图——容量与指针行**只在此板块**展示（记忆板块不重复统计画像）。
        * v9 严格对齐（2026-09-13 第五轮 · 形态层）：
        *   · 页头右侧加「压缩执行位」占位 chip（与 v9 原型 .proto-note 同形态）
@@ -805,433 +366,30 @@ import { ICONS, el, svg } from './dom.js'
 
       /** 记忆板块（阶段4 UI 重排 2026-09-06）：分区展示——蒸馏运行 / 记忆库状态 / 知识索引 / pending / notes / 守藏知识区。
        * 去重原则：USER/AGENT 画像只在画像板块；MEMORY 容量百分比只在进度条；蒸馏水位读 suite 活水位。 */
-      /* ---------- 页面：记忆 —— ② 概览展开 ---------- */
-      function renderMemoryExpanded(view, data) {
-        view.textContent = '';
-        /* v9 布局对齐（第三轮·块级）：v9 的记忆库页 `.view` **只有一张卡「容量占用」**，
-         * 三列容量 + 说明段 + **tabs 都在卡体里**；面板此前是**页级 `.sc-tabbox`** ⇒ 层级反了。
-         * 现按原型重排：页头 → 卡「容量占用」{ 三列容量 · 说明 · tabs · 卡内小节 }。 */
-        UI.pageHead('记忆库', 'MEMORY.md 索引、候选、笔记与归档区，按「库 → 待消化 → 详情 → 已归档」的生命周期排序。', { routes: ['/memory/overview', '/memory/sections', '/memory/approve'], search: { placeholder: '过滤索引 / 候选 / 笔记…', onInput: filterViewRows }, refresh: true });
-        var cap = UI.card('容量占用', { sub: '写入由 write_gate 强制红线' });
-        view.appendChild(cap.box);
-        var capGrid = el('div', 'sc-cap3');
-        cap.body.appendChild(capGrid);
-        /* v9 的容量口径说明段（卡内、灰字）：解释"哪些载体给百分比、哪些只报绝对量" */
-        cap.body.appendChild(el('div', 'sc-cap-note', '只有存在真实容量门的载体才给百分比与进度条：MEMORY.md（cap_memory）与画像（cap_user / cap_agent）；notes / pending 无容量门 ⇒ 只报绝对量。超限由 write_gate 拒写。'));
-        if (!data || !data.present) {
-          status((data && data.error) || '记忆库不可用');
-          return;
-        }
-        var memoryFile = null;
-        (data.indexes || []).forEach(function (f) { if (f.name === 'MEMORY.md') memoryFile = f; });
-        /* v9 严格对齐（2026-09-13 用户拍板「从视觉统一对齐，组件样式和展示效果」）：
-         *   原型记忆库页**没有**「运行态」Tab —— 其「蒸馏运行 / 记忆库状态」在原型里属**运行总览**页；
-         *   tab 文案**带计数**、形态为**胶囊分段**。本轮按原型收敛为 4 项并加计数，默认落「知识索引」。
-         *   ⚠ 原型第 4 项「归档区」面板无独立数据源，未造（如实记录，不假装对齐）。 */
-        var pM1 = el('div'); var pM2 = el('div'); var pM3 = el('div'); var pM4 = el('div'); var pM5 = el('div');
-        var _tb = UI.tabs("memory", [
-          { id: 'index', label: '知识索引 ' + String(Derive.count(memoryFile && memoryFile.lines)), pane: pM1 },
-          { id: 'pending', label: '候选区 ' + String((data.pending || {}).count || 0), pane: pM2 },
-          { id: 'notes', label: '笔记 ' + String(Derive.count(data.notes)) + ' 类', pane: pM3 },
-          /* v9（原型第 4 枚 Tab）：归档区。面板此前无此 Tab（上轮"无独立数据源"未造）——
-           * 数据其实来自 `/cognition/report` 的 `archive:[{file,chars}]`，本轮补齐。 */
-          { id: 'archive', label: '归档区', pane: pM5 },
-          { id: 'growth', label: '统计', pane: pM4 }
-        ]);
-        cap.body.appendChild(_tb.box);
-        var ds = data.distillStats; // 段1 与尾部 status 共用（原在段1 内定义，跨段引用 ⇒ 提到父级）
-        /* v9 的三列容量块（.cap-item：标签 + 值 + 明细，百分比项带条）。无容量门的两列给"无容量门"空槽语义。 */
-        var mkCapItem = function (label, value, sub, pct, kind) {
-          var it = el('div', 'sc-cap-item');
-          it.appendChild(el('div', 'sc-cap-top', label));
-          it.appendChild(el('div', 'sc-cap-val', value));
-          it.appendChild(el('div', 'sc-cap-sub', sub || ''));
-          var track = el('div', 'sc-cap-track' + (pct === null || pct === undefined ? ' na' : ''));
-          var bar = el('i', kind || '');
-          if (pct !== null && pct !== undefined) bar.style.setProperty('--sc-pct', pct + '%');
-          track.appendChild(bar);
-          it.appendChild(track);
-          return it;
-        };
-        var pMeta0 = data.pending || {};
-        capGrid.textContent = '';
-        (function fillCap() {
-          var mf = memoryFile;
-          var pct = mf && mf.cap ? Math.round((mf.chars || 0) / mf.cap * 100) : null;
-          capGrid.appendChild(mkCapItem('MEMORY.md 容量', pct === null ? Derive.num(mf ? mf.chars : '—') : pct + '%',
-            (mf ? Derive.num(mf.chars) + ' / ' + Derive.num(mf.cap) + ' 字符 · ' + Derive.count(mf.lines) + ' 条' : '—'),
-            pct, pct === null ? '' : Derive.capKind(pct)));
-          /* v9：notes 列副标给**真实**绝对值（文件数 + 小节数），不抄原型示意的「148 个文件 · 6.2 MB」
-             —— 本机 notes 是 7 类固定文件，抄示意值等于造假数据。 */
-          var secCount = 0;
-          (data.notes || []).forEach(function (nf) { secCount += Derive.count(nf.sections); });
-          capGrid.appendChild(mkCapItem('notes · 笔记', Derive.num(Derive.count(data.notes)),
-            '个文件 · ' + Derive.num(secCount) + ' 个小节 · 无容量门', null));
-          capGrid.appendChild(mkCapItem('pending 候选', Derive.num(pMeta0.count || 0),
-            '条待裁决 · 无容量门（ADD-only 暂存）', null));
-        })();
-        /* 导航脚状态块（原在「记忆库状态」KPI 段内；该段按 v9 删除后，本处接管同一份数据的同步，不丢功能） */
-        if (refs.navHealth) {
-          var navPct = (memoryFile && memoryFile.cap) ? Math.round((memoryFile.chars || 0) / memoryFile.cap * 100) : null;
-          refs.navHealth(navPct === null ? '正常' : (Derive.capKind(navPct) !== 'ended' ? '水位偏高' : '正常'), navPct === null ? 'ended' : Derive.capKind(navPct));
-        }
-        /* v9 层级：卡体内的分区是**小节标题**（.sc-mem-group-title），不是第二层卡片
-         * （原型 memory 页只有一张「容量占用」卡，卡内是标题 + 列表行）。 */
-        // v9：认知可视化——仅归档区（冷热分布 / 超 R 节 / 指针健康 已按 2026-09-11 用户要求移除）
-        renderCognitionReport(_tb.pane('growth'), 'memory');
-
-        /* U1（ADR-122 UI）：判据注册表卡已**移出记忆板块** → 落在「运行」视图（renderRunExtras），
-         * 判因：记忆板块此前 11 组、判据卡又在最前，首屏过载（方案 §3 A5 自我修正）。 */
-
-        var ctx = { _tb: _tb, data: data, view: view, memoryFile: memoryFile, cap: cap };
-        /* v9 严格对齐：原 mmRunMain（徽章行 + 蒸馏运行）与 mmRunStatus（记忆库状态 KPI 行）已删 ——
-         *   这两块在原型里属**运行总览**页，记忆库页只有「容量占用」一张卡 + 4 个 Tab。
-         *   导航脚状态同步（refs.navHealth）随之迁到本函数 fillCap 之后，不丢功能。 */
-        mmGrowthMonth(ctx);
-        mmIndexRows(ctx);
-        mmPendingRows(ctx);
-        mmNotesChips(ctx);
-        mmArchiveZone(ctx);
-        mmSuiteZone(ctx);
-        mmGrowthDelta(ctx);
-        status('记忆 · MEMORY ' + (memoryFile ? Derive.num(memoryFile.chars) + '/' + Derive.num(memoryFile.cap) + ' · ' + Derive.count(memoryFile.lines) + ' 行' : '不可用') + ' · 蒸馏 ' + (ds ? Derive.num(ds.runs || 0) + ' 次' : '—'));
-        flushFolds(); // 同步收口（见 deferFold 注释：消除 setTimeout 造成的"先铺开再收起"抖动）
-      }
+      
       /* 统计小卡（记忆库页 4 个段共用 → 提为模块级，纯函数只依赖 el） */
-      var mkStat = function (label, value, sub) {
-        var card = el('div', 'sc-mem-stat');
-        card.appendChild(el('div', 'sc-mem-stat-label', label));
-        card.appendChild(el('div', 'sc-mem-stat-value', value));
-        if (sub) card.appendChild(el('div', 'sc-mem-stat-sub', sub));
-        return card;
-      };
-      function mmGrowthMonth(ctx) {
-        var host = ctx._tb.pane('growth');
-        var data = ctx.data, view = ctx.view, memoryFile = ctx.memoryFile, cap = ctx.cap;
-        var group = function (t) { host.appendChild(el('div', 'sc-mem-group-title', t)); };
-        /* ── 路线③ 本月成长（审计聚合 + AGENT 画像快照；零定时器，纯读） ── */
-        var gGrowth = data.growth;
-        if (gGrowth) {
-        group('本月成长 · ' + gGrowth.month);
-          var g3 = el('div', 'sc-mem-grid');
-          var s3 = gGrowth.sleep || {}, d3 = gGrowth.distill || {}, n3 = gGrowth.now || {};
-          g3.appendChild(mkStat('深睡归纳', String(s3.passes || 0) + ' 次', '习得 ' + String(s3.principleAdded || 0) + ' · 替换 ' + String(s3.replaced || 0) + ' · 画像 ' + String(s3.profilesAdded || 0)));
-          g3.appendChild(mkStat('蒸馏', String(d3.runs || 0) + ' 次', '成功 ' + String(d3.ok || 0) + ' · 异常 ' + String(d3.bad || 0) + ' · 预筛跳过 ' + String(d3.skips || 0)));
-          g3.appendChild(mkStat('AGENT 画像', String(n3.tagRows != null ? n3.tagRows : '—') + ' 行', '原则 ' + String(n3.principleRows || 0) + ' · 路径 ' + String(n3.pathRows || 0) + ' · ' + String(n3.agentChars || 0) + ' 字符'));
-          host.appendChild(g3);
-          var rds = gGrowth.recentDeep || [];
-          if (Derive.has(rds)) {
-        host.appendChild(el('div', 'sc-mem-group-title', '本月有效深睡产出'));
-            var dl3 = el('div', 'sc-idx-list');
-            rds.forEach(function (r) {
-              dl3.appendChild(el('div', 'sc-mem-sub', String(r.at || '').slice(0, 10) + '  原则 +' + String(r.added || 0) + '/替换 ' + String(r.replaced || 0) + ' · 画像 +' + String(r.profiles || 0) + ' · gate=' + String(r.gate || '')));
-            });
-            host.appendChild(dl3);
-          } else if ((s3.passes || 0) > 0) {
-            host.appendChild(el('div', 'sc-mem-empty', '本月深睡有运行但无产出（内容判据合规保守：材料不足宁缺毋滥）'));
-          }
-        }
-      }
-      function mmIndexRows(ctx) {
-        var host = ctx._tb.pane('index');
-        var data = ctx.data, view = ctx.view, memoryFile = ctx.memoryFile, cap = ctx.cap;
-        var group = function (t) { host.appendChild(el('div', 'sc-mem-group-title', t)); };
-        /* ── §3 知识索引 MEMORY.md（progressive disclosure：默认 8 条 + 展开全部） ── */
-        if (Derive.has(memoryFile && memoryFile.lines)) {
-        group('知识索引 MEMORY.md · ' + memoryFile.lines.length + ' 条');
-          host.appendChild(el('div', 'sc-desc', '点击行直达 notes 详情小节（只读）。'));
-          var idxWrap = el('div');
-          idxWrap.classList.add('sc-box');
-          var IDX_PREVIEW = 8;
-          var allLines = memoryFile.lines || [];
-          renderIndexRows(idxWrap, allLines.slice(0, IDX_PREVIEW), renderMemoryExpanded, true);
-          if (allLines.length > IDX_PREVIEW) {
-            var moreBtn = el('button', 'sc-idx-more', '展开全部 ' + allLines.length + ' 条');
-            moreBtn.type = 'button';
-            moreBtn.addEventListener('click', function () {
-              idxWrap.textContent = '';
-              renderIndexRows(idxWrap, allLines, renderMemoryExpanded, true);
-            });
-            idxWrap.appendChild(moreBtn);
-          }
-          host.appendChild(idxWrap);
-        }
-      }
-      function mmPendingRows(ctx) {
-        var host = ctx._tb.pane('pending');
-        var data = ctx.data, view = ctx.view, memoryFile = ctx.memoryFile, cap = ctx.cap;
-        var group = function (t) { host.appendChild(el('div', 'sc-mem-group-title', t)); };
-        /* ── §4 pending 候选队列（U5：行尾加批准/忽略——Cursor/Mem0 审核态借鉴；写走 /memory/approve 门禁） ── */
-        if (data.pending && data.pending.count) {
-        group('pending 候选队列 · ' + data.pending.count + ' 条');
-          var plist = el('div', 'sc-pointer-list');
-          (data.pending.recent || []).forEach(function (p2) {
-            var row = makeMemoryPointerRow(String(p2.name || '').replace(/\.md$/, ''), null, (p2.mtime || '').slice(0, 10));
-            // 批准=确认有价值（移 .processed 跳过后续蒸馏裁决）；忽略=同语义手动处置；均只读安全
-            var act = el('div', 'sc-row-gap');
-            var fname = String(p2.name || '');
-            var okBtn = el('button', 'sc-btn subtle', '批准');
-            okBtn.type = 'button';
-            okBtn.classList.add('sc-btn-xs', 'sc-btn-ok');
-            okBtn.addEventListener('click', function () {
-              api('/memory/approve', { method: 'POST', body: JSON.stringify({ pendingFile: fname }) })
-                .then(function () { status('✓ 已批准 ' + fname + '（移 .processed，内容由蒸馏正常入册）'); })
-                .catch(fail);
-            });
-            var rmBtn = UI.button('忽略', function () {
-              return api('/memory/approve', { method: 'POST', body: JSON.stringify({ pendingFile: fname }) })
-                .then(function () { status('已忽略 ' + fname); });
-            }, { danger: true, async: true, busyText: '忽略中…', okText: '已忽略', confirm: '忽略并移出候选队列：' + fname + '？' });
-            act.appendChild(okBtn); act.appendChild(rmBtn);
-            row.appendChild(act);
-            plist.appendChild(row);
-          });
-          host.appendChild(plist);
-          host.appendChild(el('div', 'sc-desc', '共 ' + data.pending.count + ' 条（仅显示最近 ' + Derive.count(data.pending.recent) + ' 条）· 批准=确认有价值入册，忽略=移出队列'));
-          /* v9（原型候选区 `.alert.info`）：升格/降格的口径与边界说明。 */
-          var pTip = el('div', 'sc-ds-alert info');
-          pTip.appendChild(el('div', null, '升格 / 降格走 /memory/approve，由 L0 判据裁决。索引行只读，正文编辑走 /memory/section-edit。'));
-          host.appendChild(pTip);
-        }
-      }
-      function mmNotesChips(ctx) {
-        var host = ctx._tb.pane('notes');
-        var data = ctx.data, view = ctx.view, memoryFile = ctx.memoryFile, cap = ctx.cap;
-        var group = function (t) { host.appendChild(el('div', 'sc-mem-group-title', t)); };
-        /* U1：折叠哨兵 —— 之后的所有组（notes 详情 / 本地知识区 / 向量召回 / delta / 周增量）收进「展开更多」。
-         * 用 setTimeout(0) 自调度：本函数同步渲染完毕后才折叠，故无需改动任何后续分组代码（易回滚）。 */
-        /* ── §5 notes 详情小节 ── */
-        group('notes 详情小节');
-        var nw = el('div', 'sc-notes-list');
-        (data.notes || []).forEach(function (nf) {
-          var chip = el('div', 'sc-note-chip');
-          chip.appendChild(el('span', null, nf.name));
-          chip.appendChild(el('span', 'sc-tag', String(nf.sections.length)));
-          chip.title = nf.rel + ' · ' + nf.sections.map(function (s) { return s.title }).join(' / ');
-          chip.addEventListener('click', function () {
-            appState.memoryViewScroll = view.scrollTop; // 记录进入前滚动位置（返回时恢复）
-            appState.noteReturnRender = null; // 来源=记忆板块
-            api('/memory/sections?rel=' + encodeURIComponent(nf.rel)).then(function (r) {
-              renderNoteSections(view, r);
-            }).catch(fail);
-          });
-          nw.appendChild(chip);
-        });
-        host.appendChild(nw);
-      }
+      
+      
+      
+      
+      
       /** v9 记忆库页新增 Tab「归档区」：主动遗忘的产物（库内 `notes/archive/`）。
        * 数据 = `/cognition/report` 的 `archive:[{file,chars}]`（与运行观测页同源，不新增端点）。
        * **只读**：插件没有「复制回 notes/」的端点 ⇒ **不放该按钮**（原型画了），改为在 alert 里写明恢复方式
        * ——「看得见点不动」的假控件比没有更糟。 */
-      function mmArchiveZone(ctx) {
-        var host = ctx._tb.pane('archive');
-        host.appendChild(el('div', 'sc-mem-group-title', '归档区 notes/archive/'));
-        var list = el('div');
-        host.appendChild(list);
-        list.appendChild(el('div', 'sc-desc', '读取中…'));
-        api('/cognition/report').then(function (r) {
-          var ar = (r && r.archive) || [];
-          /* v9 的 Tab 文案**带计数**（原型「归档区 4」）：归档区是唯一异步取数的分区，计数只能等本端返回后回填
-           * —— 为此加一个同步端点不值，故直接回写该 Tab 元素。 */
-          var tabsEls = ctx._tb.box.querySelectorAll('wa-tab');
-          if (tabsEls[3]) tabsEls[3].textContent = '归档区 ' + ar.length;
-          list.textContent = '';
-          if (!Derive.has(ar)) list.appendChild(el('div', 'sc-desc', '暂无归档条目。'));
-          else ar.forEach(function (a) {
-            list.appendChild(ovCRow(String(a.file || '—'), 'notes/archive/ · 仅归档不删除',
-              [ovPill(Derive.num(a.chars || 0) + ' 字符')]));
-          });
-          var tip = el('div', 'sc-ds-alert ok');
-          tip.appendChild(el('div', null, '主动遗忘只归档、不删除 —— applyForgetOps 禁直删，热节与画像节有守卫。'
-            + '如需恢复，把 notes/archive/ 下的文件移回 notes/ 即可（面板不提供写入口）。'));
-          host.appendChild(tip);
-        }).catch(function () {
-          list.textContent = '';
-          list.appendChild(el('div', 'sc-desc', '归档区读取失败（/cognition/report）。'));
-        });
-      }
-      function mmSuiteZone(ctx) {
-        var host = ctx._tb.pane('index');
-        var data = ctx.data, view = ctx.view, memoryFile = ctx.memoryFile, cap = ctx.cap;
-        var group = function (t) { host.appendChild(el('div', 'sc-mem-group-title', t)); };
-        /* ── §6 守藏本地知识区（单行摘要，不再重复三索引卡；画像/索引详情在画像与记忆分区） ── */
-        var suite = data.suite;
-        if (suite && suite.present) {
-        group('守藏本地知识区 · suite/knowledge');
-          var sMemory = null;
-          (suite.indexes || []).forEach(function (f) { if (f.name === 'MEMORY.md') sMemory = f; });
-          host.appendChild(el('div', 'sc-desc', '守藏蒸馏器事实源（ADR-0002）：MEMORY ' + (sMemory ? Derive.num(sMemory.chars) + '/' + Derive.num(sMemory.cap) + ' · ' + Derive.count(sMemory.lines) + ' 行' : '—') + ' · pending ' + String(suite.pending ? suite.pending.count : 0) + ' 条。'));
-          if (Derive.has(suite.notes)) {
-            var snw = el('div', 'sc-notes-list');
-            suite.notes.forEach(function (nf) {
-              var chip = el('div', 'sc-note-chip');
-              chip.appendChild(el('span', null, nf.name));
-              chip.appendChild(el('span', 'sc-tag', String(nf.sections.length)));
-              chip.title = 'suite · ' + nf.rel + ' · ' + nf.sections.map(function (s) { return s.title }).join(' / ');
-              chip.addEventListener('click', function () {
-                appState.memoryViewScroll = view.scrollTop; // 记录进入前滚动位置（返回时恢复）
-                appState.noteReturnRender = null; // 来源=记忆板块（suite 区板块本身在记忆视图内）
-                api('/memory/sections?rel=' + encodeURIComponent(nf.rel) + '&root=suite').then(function (r) {
-                  renderNoteSections(view, r);
-                }).catch(fail);
-              });
-              snw.appendChild(chip);
-            });
-            host.appendChild(snw);
-          }
-        } else {
-          host.appendChild(el('div', 'sc-mem-empty', '守藏本地知识区未启用（suite/knowledge 不存在）'));
-        }
-      }
-      function mmGrowthDelta(ctx) {
-        var host = ctx._tb.pane('growth');
-        var data = ctx.data, view = ctx.view, memoryFile = ctx.memoryFile, cap = ctx.cap;
-        var group = function (t) { host.appendChild(el('div', 'sc-mem-group-title', t)); };
-        /* ── §8 晨起摘要 delta（U4：深睡产出可见物；只读，存在才渲染） ── */
-        if (data.delta && data.delta.present && Derive.has(data.delta.rows)) {
-        group('最近成长 delta · 深睡产出');
-          var dl8 = el('div', 'sc-idx-list');
-          data.delta.rows.forEach(function (row) {
-            var r8 = el('div', 'sc-idx-row');
-            r8.appendChild(el('span', 'sc-idx-subject', String(row).replace(/^\[/, '[')));
-            dl8.appendChild(r8);
-          });
-          host.appendChild(dl8);
-          var staleNote = '';
-          if (data.delta.staleAt) {
-            try { var remain = Math.max(0, new Date(data.delta.staleAt) - Date.now()); staleNote = ' · 剩余 ' + Math.ceil(remain / 3600e3) + 'h 有效'; } catch (e) { /* */ }
-          }
-          host.appendChild(el('div', 'sc-mem-sub muted', '本次深睡归纳产出（48h 有效' + staleNote + '）· 已在会话注入可见'));
-        }
-
-        /* ── §9 本周成长 diff（U4：增量可见物——Basic Memory 借鉴：总量已有成长卡，此处补增量） ── */
-        if (data.weekDiff && ((data.weekDiff.deepAdded || 0) > 0)) {
-        group('本周成长 · 增量');
-          var g9 = el('div', 'sc-mem-grid');
-          g9.appendChild(mkStat('深睡新习得', String(data.weekDiff.deepAdded || 0) + ' 条', '近 7 天 [原则]/[路径] 归纳'));
-          host.appendChild(g9);
-        }
-      }
+      
+      
+      
 
       /* notes 小节的稳定折叠键：rel + 层级路径 + 标题。
        * 带路径是必要的——同一笔记里不同层级的兄弟小节可能同名，只按标题取键会互相串状态。 */
-      /* ---------- 页面：记忆 —— ③ 小节与编辑 ---------- */
-      function secFoldKey(rel, path, title) {
-        return 'note:' + (rel || '') + ':' + (path || '') + '§' + (title || '');
-      }
+      
 
       /** notes 小节正文浏览（只读；/memory/sections）。返回时恢复来源板块与滚动位置（记忆/画像/守藏区均可进入）。
        *  UI1/C′：`memoryViewScroll`/`noteReturnRender` 已收进 `appState`（初值在 `app-state.js`）。 */
-      function renderNoteSections(view, data) {
-        if (!data || !data.present || !data.sections) { status((data && data.error) || '无小节'); return; }
-        view.textContent = '';
-        UI.pageHead(data.name, (data.root === 'suite' ? 'suite 知识区 · ' : '') + data.rel + ' · ' + data.sections.length + ' 个小节（白名单只读）');
-        var back = el('button', 'sc-btn subtle', '← 返回' + (appState.noteReturnRender === renderPersona ? '画像板块' : data.root === 'suite' ? '守藏知识区' : '记忆库'));
-        back.type = 'button';
-        back.addEventListener('click', function () {
-          var backRender = appState.noteReturnRender || renderMemoryExpanded;
-          api('/memory/overview').then(function (r) {
-            backRender(view, r);
-            requestAnimationFrame(function () { view.scrollTop = appState.memoryViewScroll; }); // 恢复滚动位置，不跳顶
-          }).catch(fail);
-        });
-        view.appendChild(back);
-        view.scrollTop = 0; // 二级视图自身从顶部开始读
-        // U5：反链聚合（Logseq/思源借鉴）——引用此文件小节的来源清单
-        if (Derive.has(data.backrefs)) {
-          var bl = el('div');
-          bl.appendChild(el('div', 'sc-mem-group-title', '被引用 · ' + data.backrefs.length));
-          var bList = el('div', 'sc-idx-list');
-          data.backrefs.slice(0, 8).forEach(function (br) {
-            var row = el('div', 'sc-idx-row');
-            row.appendChild(el('span', 'sc-idx-tag', String(br.from || '').split('/').pop()));
-            row.appendChild(el('span', 'sc-idx-subject', String(br.line || '').slice(0, 90)));
-            row.title = br.line || '';
-            bList.appendChild(row);
-          });
-          bl.appendChild(bList);
-          if (data.backrefs.length > Derive.BACKREF_LIMIT) bl.appendChild(el('div', 'sc-mem-sub muted', '… 共 ' + data.backrefs.length + ' 处引用'));
-          view.appendChild(bl);
-        }
-        // v5.4 树状：递归渲染小节树（## 顶层 → children ###/#### 子树逐层展开）
-        /* 状态改造（原实现最脆的一处）：旧代码**从 DOM 反推开合**
-         *   `var open = !body.classList.contains('sc-hidden') || !kidsWrap.classList.contains('sc-hidden')`
-         * ⇒ ① 状态与渲染互为因果，任何重绘/编程改动即失同步（保存小节后整棵树塌回）；
-         *    ② 父节点 open 依赖子容器 class，嵌套项相互影响；③ 无法预置、无法禁用。
-         * 现改为：开合只由 Fold 中该节点 key 的值决定，DOM 仅负责把状态画出来。 */
-        function renderSecNode(sec, depth, container, path) {
-          var pad = Math.min(depth, 4) * 14; // 子树缩进（最多 4 层视觉缩进）
-          var hasKids = !!(sec.children && sec.children.length);
-          var key = secFoldKey(data.rel, path, sec.title);
-          var head = el('div', 'sc-mem-group-title' + (depth > 0 ? ' sub' : ''));
-          var arrow = el('span', 'sc-sec-arrow');
-          head.appendChild(arrow);
-          head.appendChild(document.createTextNode(sec.title));
-          head.title = '点击展开/收起' + (depth > 0 ? '（子树）' : '');
-          head.classList.add('sc-card-head'); // U2.5b：cursor/布局入 CSS；动态缩进走 --sc-indent
-          head.setAttribute('data-fold-key', key); // 供 openMemoryNote 精确置位（替代模拟 click）
-          if (pad) head.style.setProperty('--sc-indent', pad + 'px');
-          var body = el('div', 'sc-card-body');
-          body.textContent = sec.body || (hasKids ? '' : '（空小节）');
-          var editSec = el('button', 'sc-btn subtle sc-edit-sec', '✎ 编辑此小节');
-          editSec.type = 'button';
-          if (pad) editSec.style.setProperty('--sc-indent', pad + 'px');
-          editSec.addEventListener('click', function () { editNoteSection(data, sec, view); });
-          var kidsWrap = el('div');
-
-          function paint(open) {
-            body.classList.toggle('sc-hidden', !open);
-            editSec.classList.toggle('sc-hidden', !open);
-            kidsWrap.classList.toggle('sc-hidden', !open || !hasKids); // 无子节点 ⇒ 容器恒空
-            arrow.textContent = open ? '▾' : '▸';
-            head.classList.toggle('sc-on', open);
-          }
-          paint(Fold.get(key, false)); // 先画后插：插入即正确开合态，无闪动
-          head.addEventListener('click', function () { paint(Fold.toggle(key, false)); });
-          var off = Bus.on('fold', function (p) {
-            if (!head.isConnected && !body.isConnected) { off(); return; }
-            if (p && p.key === key) paint(Fold.get(key, false));
-          });
-
-          container.appendChild(head);
-          container.appendChild(body);
-          container.appendChild(editSec);
-          if (hasKids) {
-            var kidPath = (path ? path + '/' : '') + sec.title;
-            (sec.children || []).forEach(function (c) { renderSecNode(c, depth + 1, kidsWrap, kidPath); });
-            container.appendChild(kidsWrap);
-          }
-        }
-        (data.sections || []).forEach(function (sec) { renderSecNode(sec, 0, view, ''); });
-        status(data.rel + ' · ' + Derive.count(data.sections) + ' 顶层小节（树状，点击逐层展开；编辑在节点细节）');
-      }
+      
       /** R3：notes 小节正文编辑（走 /memory/section-edit 门禁；索引指针不动，只改详情正文） */
-      function editNoteSection(data, sec, view) {
-        if (!data || !data.rel || !sec) return;
-        var bodyTxt = sec.body || '';
-        var ta = el('textarea', 'sc-input sc-ta');
-        ta.value = bodyTxt;
-        var wrap = el('div');
-        wrap.appendChild(el('div', 'sc-desc', '编辑 §' + sec.title + ' 正文（' + data.rel + '）——保留开头摘要行最佳；保存走写门（备份+容量红线），索引指针不变。'));
-        wrap.appendChild(ta);
-        var bar = el('div', 'sc-toolbar');
-        var saveBtn = el('button', 'sc-btn', '保存正文');
-        saveBtn.type = 'button';
-        saveBtn.addEventListener('click', function () {
-          var next = ta.value.trim();
-          if (!next) { status('正文不能为空——如需清空请用删除'); return; }
-          saveBtn.disabled = true; saveBtn.textContent = '保存中…';
-          api('/memory/section-edit', { method: 'POST', body: JSON.stringify({ rel: data.rel, section: sec.title, newBody: next }) })
-            .then(function () { status('✓ §' + sec.title + ' 正文已保存（write_gate 通过）'); api('/memory/sections?rel=' + encodeURIComponent(data.rel) + (data.root === 'suite' ? '&root=suite' : '')).then(function (r) { renderNoteSections(view, r); }).catch(fail); })
-            .catch(function (e) { saveBtn.disabled = false; saveBtn.textContent = '保存正文'; fail(e); });
-        });
-        var cancelBtn = el('button', 'sc-btn subtle', '取消');
-        cancelBtn.type = 'button';
-        cancelBtn.addEventListener('click', function () { view.removeChild(wrap); });
-        bar.appendChild(saveBtn); bar.appendChild(cancelBtn);
-        wrap.appendChild(bar);
-        view.appendChild(wrap);
-      }
+      
 
       /** 记忆板块：Obsidian 仓库文件夹（文件树 + 笔记预览 + 属性块 + 双链跳转）。 */
       /* ---------- 组装 ---------- */
@@ -2905,6 +2063,10 @@ import { ICONS, el, svg } from './dom.js'
       appState.metaBadges = metaBadges;
       appState.makeToggle = makeToggle;
       appState.show = show;
+      appState.apiCtx = apiCtx;
+      appState.opCard = opCard;
+      appState.deferFold = deferFold;
+      appState.filterViewRows = filterViewRows;
 
       return module.exports;
     }
