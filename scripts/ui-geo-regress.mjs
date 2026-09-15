@@ -729,6 +729,10 @@ setTimeout(function () {
 
 if (process.argv.includes('--shots')) {
   const dir = process.argv[process.argv.indexOf('--shots') + 1] || tmpdir()
+  /* UI1 收尾（2026-09-15）：**原来不建目录** ⇒ 传入不存在的路径时 Chrome `--screenshot` 静默失败，
+   *   12 张图全部产出 `✗`，而门本身仍报 100 PASS ⇒ **"出图失败"被吞掉**（典型的假绿）。
+   *   ⇒ 显式 `mkdirSync(recursive)`；并在末尾汇总**实际产出数**，缺图即红。 */
+  mkdirSync(dir, { recursive: true })
   shoot(1280, 860, '运行总览', join(dir, 'shot-overview.png'))
   shoot(1280, 860, '参数', join(dir, 'shot-params.png'))
   /* 记忆库页（2026-09-13 P1-2 拆分 renderMemoryExpanded 后纳入出图集）——
@@ -753,6 +757,24 @@ if (process.argv.includes('--shots')) {
    *   先出两张信息最密的：装配（含 storeMode 存储模式控件）· 认知环旋钮（4 数值 + 4 开关 + 探针）。 */
   shoot(1280, 860, '架构', join(dir, 'shot-arch-asm.png'), '装配')
   shoot(1280, 860, '架构', join(dir, 'shot-arch-mcl.png'), '认知环旋钮')
+
+  /* ── **产出汇总 + 缺图即红**（UI1 收尾补 · 2026-09-15）──
+   *   判因：出图集此前**不校验产出** —— 12 张全 `✗`（目录不存在）而门仍 100 PASS，
+   *   即"**出图失败被吞掉**"，与"日志面板静默空掉"是同一类假绿。
+   *   ⇒ 逐张核对存在且非空；缺一张即 FAIL（exit 1），并写明差在哪。 */
+  const SHOTS = ['shot-overview', 'shot-params', 'shot-memory', 'shot-observe', 'shot-settings',
+    'shot-persona', 'shot-suite', 'shot-sleep', 'shot-arch', 'shot-arch-asm', 'shot-arch-mcl']
+  const missing = SHOTS.filter((n) => {
+    const p = join(dir, n + '.png')
+    return !existsSync(p) || statSync(p).size < 5000
+  })
+  console.log(`\n出图汇总：${SHOTS.length - missing.length}/${SHOTS.length} 张有效（目录 ${dir}）`)
+  if (missing.length) {
+    console.log('❌ 缺图/过小：' + missing.join(', '))
+    console.log('   （Chrome `--screenshot` 对不可写路径会静默失败 —— 已加 mkdirSync，若仍缺请查 Chrome 路径/权限）')
+    process.exit(1)
+  }
+  console.log('✅ 出图完整（可直接人工视觉复核）')
 }
 
 /* 骨架实测：逐页两侧各一份 txt，供程序化 diff（比肉眼可靠，也是"差异清单"的证据来源） */

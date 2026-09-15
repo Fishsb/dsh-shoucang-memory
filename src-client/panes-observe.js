@@ -27,7 +27,7 @@ function renderViewObserve(view) {
         a.click(); URL.revokeObjectURL(a.href);
         appState.statusFn('✓ 观测数据已导出（' + logsAll.length + ' 条日志）');
       }, { title: '下载当前日志/错误/指标（JSON）' }),
-      UI.button('清空日志', function () { Store.set('logs', []); Store.set('errors', []); refreshCurrentView(); appState.statusFn('已清空日志与错误记录'); }, { danger: true, confirm: '确认清空全部日志与错误记录？' })
+      UI.button('清空日志', function () { Store.set('logs', []); Store.set('errors', []); appState.refreshView(); appState.statusFn('已清空日志与错误记录'); }, { danger: true, confirm: '确认清空全部日志与错误记录？' })
     ]
   });
   /* v9 严格对齐：4 张观测 KPI（请求总数 / 成功率 / 平均耗时 / 错误）——
@@ -96,7 +96,7 @@ function renderViewObserve(view) {
       ));
     });
     ebox.appendChild(list);
-    ebox.appendChild(UI.button('清空错误', function () { Store.set('errors', []); refreshCurrentView(); }, { danger: true, confirm: '确认清空错误记录？' }));
+    ebox.appendChild(UI.button('清空错误', function () { Store.set('errors', []); appState.refreshView(); }, { danger: true, confirm: '确认清空错误记录？' }));
   }
   obErrs.appendChild(ebox);
 

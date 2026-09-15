@@ -7214,7 +7214,7 @@
       if ((d3.queue || {}).undone) warn.push("\u5F85\u5F52\u6863\u4F1A\u8BDD " + d3.queue.undone + " \u4E2A");
       if (Derive.vectorOn(d3) && Derive.providerDown(d3.vector.provider)) warn.push("\u5D4C\u5165\u670D\u52A1\u4E0D\u53EF\u8FBE\uFF0C\u5411\u91CF\u53EC\u56DE\u5DF2\u964D\u7EA7\u4E3A\u8BCD\u6CD5");
       if (Derive.has(warn)) setAlert(warn.length + " \u9879\u5F85\u5904\u7406", warn.join("\uFF1B"), "\u524D\u5F80\u5904\u7406", function() {
-        show("memory");
+        appState.show("memory");
       });
       else setAlert("");
     }).catch(appState.failFn);
@@ -8246,14 +8246,14 @@
       { id: "mcl", label: "\u8BA4\u77E5\u73AF\u65CB\u94AE", pane: pMcl }
     ]);
     view.appendChild(tb.box);
-    api("/rings").then(function(r7) {
+    appState.api("/rings").then(function(r7) {
       pRings.textContent = "";
       var c5 = UI.card("\u4E94\u73AF KPI \u4E0E\u73AF\u4E8B\u4EF6\u5BF9\u8D26");
       pRings.appendChild(c5.box);
       renderFacts(c5.body, r7, 0);
       rawDetails(c5.body, r7);
     }).catch(appState.failFn);
-    api("/arch/records").then(function(r7) {
+    appState.api("/arch/records").then(function(r7) {
       pRec.textContent = "";
       var c1 = UI.card("\u8BB0\u5F55\u5C42\uFF08Record \u4E8B\u5B9E\u6E90\uFF09");
       pRec.appendChild(c1.box);
@@ -8289,7 +8289,7 @@
         c1.body.appendChild(box);
       });
       c1.body.appendChild(el("div", "sc-desc", r7.address && r7.address.note || ""));
-      api("/arch/graph").then(function(g2) {
+      appState.api("/arch/graph").then(function(g2) {
         pObs.textContent = "";
         var c22 = UI.card("\u65AD\u8A00\u56FE\uFF08\u5173\u7CFB\u5373\u4E8B\u5B9E\uFF09");
         pRec.appendChild(c22.box);
@@ -8310,7 +8310,7 @@
         ]));
       }).catch(appState.failFn);
     }).catch(appState.failFn);
-    api("/arch/observability").then(function(r7) {
+    appState.api("/arch/observability").then(function(r7) {
       pObs.textContent = "";
       var c5 = UI.card("\u7EDF\u4E00\u53F0\u8D26\u4E0E\u89C2\u6D4B\u9762");
       pObs.appendChild(c5.box);
@@ -8334,7 +8334,7 @@
       c5.body.appendChild(el("div", "sc-desc", "\u57DF\uFF1A" + (reg.domains || []).join(" \xB7 ")));
       c5.body.appendChild(el("div", "sc-desc", "\u6743\u5A01\uFF1A" + String(reg.authority || "") + "\uFF08suite \u57DF\u4E8B\u4EF6\u6D41\u76EE\u6807 = " + String((reg.baseline || {}).suiteEventStreams) + "\uFF09"));
     }).catch(appState.failFn);
-    api("/arch/assembly").then(function(r7) {
+    appState.api("/arch/assembly").then(function(r7) {
       pAsm.textContent = "";
       var c5 = UI.card("\u88C5\u914D\u6839\uFF08composition root\uFF09\u4E0E\u5DF2\u88C5\u80FD\u529B");
       pAsm.appendChild(c5.box);
@@ -8351,11 +8351,11 @@
           [{ value: "md", label: "md\uFF08\u53EA\u7528 md \u6295\u5F71\uFF09" }, { value: "dual", label: "dual\uFF08md \u2194 Record \u53CC\u5199\uFF09" }],
           st2.mode === "dual" ? "dual" : "md",
           function(v2) {
-            api("/set", { method: "POST", body: JSON.stringify({ key: "storeMode", value: v2 }) }).then(function(res) {
-              status(res && res.ok ? "\u2713 storeMode = " + v2 + "\uFF08\u5DF2\u5199 scheduler.json\uFF09" : "\u26A0 \u672A\u751F\u6548");
+            appState.api("/set", { method: "POST", body: JSON.stringify({ key: "storeMode", value: v2 }) }).then(function(res) {
+              appState.statusFn(res && res.ok ? "\u2713 storeMode = " + v2 + "\uFF08\u5DF2\u5199 scheduler.json\uFF09" : "\u26A0 \u672A\u751F\u6548");
               renderArchBody(view, safeFail);
             }).catch(function() {
-              status("\u26A0 storeMode \u5199\u5165\u5931\u8D25\uFF08\u679A\u4E3E\u6216\u767D\u540D\u5355\u62D2\u7EDD\uFF09", "error");
+              appState.statusFn("\u26A0 storeMode \u5199\u5165\u5931\u8D25\uFF08\u679A\u4E3E\u6216\u767D\u540D\u5355\u62D2\u7EDD\uFF09", "error");
             });
           },
           "\u5B58\u50A8\u6A21\u5F0F"
@@ -8379,7 +8379,7 @@
     }).catch(appState.failFn);
     function renderMclKnobs() {
       pMcl.textContent = "";
-      api("/mcl/config").then(function(r7) {
+      appState.api("/mcl/config").then(function(r7) {
         pMcl.textContent = "";
         var cur = r7.persisted || {};
         var run = r7.running || {};
@@ -8393,8 +8393,8 @@
         var save = function(key, val) {
           var patch = {};
           patch[key] = val;
-          api("/mcl/config", { method: "POST", body: JSON.stringify(patch) }).then(function() {
-            status("\u2713 " + key + " = " + val + "\uFF08\u5DF2\u5199\u5165 scheduler.json\uFF0C\u91CD\u8F7D\u540E\u751F\u6548\uFF09");
+          appState.api("/mcl/config", { method: "POST", body: JSON.stringify(patch) }).then(function() {
+            appState.statusFn("\u2713 " + key + " = " + val + "\uFF08\u5DF2\u5199\u5165 scheduler.json\uFF0C\u91CD\u8F7D\u540E\u751F\u6548\uFF09");
             renderMclKnobs();
           }).catch(appState.failFn);
         };
@@ -8499,7 +8499,7 @@
         UI.button("\u6E05\u7A7A\u65E5\u5FD7", function() {
           Store.set("logs", []);
           Store.set("errors", []);
-          refreshCurrentView();
+          appState.refreshView();
           appState.statusFn("\u5DF2\u6E05\u7A7A\u65E5\u5FD7\u4E0E\u9519\u8BEF\u8BB0\u5F55");
         }, { danger: true, confirm: "\u786E\u8BA4\u6E05\u7A7A\u5168\u90E8\u65E5\u5FD7\u4E0E\u9519\u8BEF\u8BB0\u5F55\uFF1F" })
       ]
@@ -8563,7 +8563,7 @@
       ebox.appendChild(list);
       ebox.appendChild(UI.button("\u6E05\u7A7A\u9519\u8BEF", function() {
         Store.set("errors", []);
-        refreshCurrentView();
+        appState.refreshView();
       }, { danger: true, confirm: "\u786E\u8BA4\u6E05\u7A7A\u9519\u8BEF\u8BB0\u5F55\uFF1F" }));
     }
     obErrs.appendChild(ebox);
@@ -9065,6 +9065,34 @@
       view.appendChild(el("div", "sc-desc", "\u52A0\u8F7D\u5931\u8D25\uFF1A" + (e8 && e8.message ? e8.message : e8)));
     });
   }
+  function dsFmtAgo(ts) {
+    if (!ts) return "\u2014";
+    var s4 = Math.max(0, Math.floor((Date.now() - ts) / 1e3));
+    if (s4 < 60) return s4 + " \u79D2";
+    var m3 = Math.floor(s4 / 60);
+    if (m3 < 60) return m3 + " \u5206\u949F";
+    var h3 = Math.floor(m3 / 60);
+    if (h3 < 24) return h3 + " \u5C0F\u65F6 " + m3 % 60 + " \u5206";
+    return Math.floor(h3 / 24) + " \u5929 " + h3 % 24 + " \u5C0F\u65F6";
+  }
+  function dsFmtTime(ts) {
+    if (!ts) return "\u4ECE\u672A";
+    try {
+      return new Date(ts).toLocaleString("zh-CN", { hour12: false });
+    } catch (e8) {
+      return String(ts);
+    }
+  }
+  var DS_STATE_TEXT = { running: "\u5F85\u84B8\u998F", ended: "\u5F85\u84B8\u998F", probing: "\u5F85\u84B8\u998F", suspect: "\u5F85\u84B8\u998F", stalled: "\u505C\u6EDE" };
+  var DS_PROBE_TEXT = {
+    "long-run": "\u957F\u4EFB\u52A1\u8FDB\u884C\u4E2D",
+    "suspect": "\u5F85\u4E0B\u8F6E\u590D\u6838",
+    "conflict": "\u72B6\u6001\u6D3B\u8DC3\u4F46\u65E0\u8F93\u51FA\u589E\u957F",
+    "stall": "\u5DF2\u786E\u8BA4\u65E0\u8F93\u51FA",
+    "exit": "\u4F1A\u8BDD\u5DF2\u9000\u51FA",
+    "no-transcript": "\u63A2\u9488\u4E0D\u53EF\u7528",
+    "error": "\u63A2\u6D4B\u5F02\u5E38"
+  };
 
   // src-client/panes-settings.js
   function makeToggle(key, name, desc, initial, onToggle) {
@@ -9466,9 +9494,9 @@
         var hit = 0;
         items.forEach(function(it) {
           var t6 = (it.textContent || "").toLowerCase();
-          var show2 = !kw || t6.indexOf(kw) > -1;
-          it.classList.toggle("sc-filtered", !show2);
-          if (show2) hit++;
+          var show = !kw || t6.indexOf(kw) > -1;
+          it.classList.toggle("sc-filtered", !show);
+          if (show) hit++;
         });
         cnt.textContent = kw ? "\u5339\u914D " + hit + " / " + items.length + " \u9879" : "";
       };
@@ -11114,7 +11142,7 @@
           });
           return miss.length ? { error: "preflight_missing_field", detail: "\u7F3A\u5C11\u5FC5\u586B\u5B57\u6BB5\uFF1A" + miss.join(", ") } : null;
         }
-        function api2(path, opts) {
+        function api(path, opts) {
           var o9 = opts || {};
           var t0 = Date.now();
           var ctx = { method: o9.method || "GET", path, params: o9.body || null };
@@ -11173,7 +11201,7 @@
           n6.className = "sc-statusbar sc-status-" + (level || "info");
         }
         setLogStatusSink(setStatusText);
-        function status2(msg, level) {
+        function status(msg, level) {
           var lv = level || "info";
           setStatusText(msg, lv);
           if (msg) Log.add(lv, msg);
@@ -11183,7 +11211,7 @@
           var c5 = ctx || e8 && e8.__ctx || null;
           var where = c5 ? " [" + (c5.method || "") + " " + (c5.path || "") + (c5.params ? " " + JSON.stringify(c5.params) : "") + "]" : "";
           var msg = "\u26A0 " + err.message + where;
-          status2(msg, "error");
+          status(msg, "error");
           var rec = { t: Date.now(), message: err.message, ctx: c5, stack: (err.stack || "").split("\n").slice(0, 4).join(" | ") };
           var a4 = (Store.get("errors") || []).concat([rec]);
           Store.set("errors", a4.slice(-100));
@@ -11195,7 +11223,7 @@
           var t0 = Date.now();
           var ctx = { method: o9.method || "GET", path, params: o9.body || null };
           if (label) Prog.start(path, label);
-          return api2(path, o9).then(function(r7) {
+          return api(path, o9).then(function(r7) {
             if (label) Prog.done(path, true, "\u5B8C\u6210 " + Math.round((Date.now() - t0) / 100) / 10 + "s");
             Log.info((o9.method || "GET") + " " + path + " \u2713 " + (Date.now() - t0) + "ms", ctx);
             return r7;
@@ -11310,34 +11338,6 @@
           ["toggles", "\u53C2\u6570", "toggles", "\u914D\u7F6E"],
           ["settings", "\u8BBE\u7F6E", "settings", "\u914D\u7F6E"]
         ];
-        function dsFmtAgo2(ts) {
-          if (!ts) return "\u2014";
-          var s4 = Math.max(0, Math.floor((Date.now() - ts) / 1e3));
-          if (s4 < 60) return s4 + " \u79D2";
-          var m3 = Math.floor(s4 / 60);
-          if (m3 < 60) return m3 + " \u5206\u949F";
-          var h3 = Math.floor(m3 / 60);
-          if (h3 < 24) return h3 + " \u5C0F\u65F6 " + m3 % 60 + " \u5206";
-          return Math.floor(h3 / 24) + " \u5929 " + h3 % 24 + " \u5C0F\u65F6";
-        }
-        function dsFmtTime2(ts) {
-          if (!ts) return "\u4ECE\u672A";
-          try {
-            return new Date(ts).toLocaleString("zh-CN", { hour12: false });
-          } catch (e8) {
-            return String(ts);
-          }
-        }
-        var DS_STATE_TEXT2 = { running: "\u5F85\u84B8\u998F", ended: "\u5F85\u84B8\u998F", probing: "\u5F85\u84B8\u998F", suspect: "\u5F85\u84B8\u998F", stalled: "\u505C\u6EDE" };
-        var DS_PROBE_TEXT2 = {
-          "long-run": "\u957F\u4EFB\u52A1\u8FDB\u884C\u4E2D",
-          "suspect": "\u5F85\u4E0B\u8F6E\u590D\u6838",
-          "conflict": "\u72B6\u6001\u6D3B\u8DC3\u4F46\u65E0\u8F93\u51FA\u589E\u957F",
-          "stall": "\u5DF2\u786E\u8BA4\u65E0\u8F93\u51FA",
-          "exit": "\u4F1A\u8BDD\u5DF2\u9000\u51FA",
-          "no-transcript": "\u63A2\u9488\u4E0D\u53EF\u7528",
-          "error": "\u63A2\u6D4B\u5F02\u5E38"
-        };
         var refs = {};
         var state = { parsed: null };
         function filterViewRows(q) {
@@ -11353,10 +11353,10 @@
           return q ? n6 : rows.length;
         }
         appState.currentView = Cfg.get("startView", "overview");
-        function refreshCurrentView2() {
-          show2(appState.currentView);
+        function refreshCurrentView() {
+          show(appState.currentView);
         }
-        function show2(name) {
+        function show(name) {
           if (appState.currentView !== name) Fold.clear();
           appState.currentView = name;
           try {
@@ -11386,25 +11386,25 @@
           if (name === "overview") {
             renderViewOverview(refs.view);
           } else if (name === "persona") {
-            api2("/memory/overview").then(function(r7) {
+            api("/memory/overview").then(function(r7) {
               renderPersona(refs.view, r7);
             }).catch(fail);
           } else if (name === "memory") {
-            api2("/memory/overview").then(function(r7) {
+            api("/memory/overview").then(function(r7) {
               renderMemoryExpanded(refs.view, r7);
             }).catch(fail);
           } else if (name === "suite") {
-            api2("/suite").then(function(r7) {
+            api("/suite").then(function(r7) {
               renderSuite(refs.view, r7);
             }).catch(fail);
           } else if (name === "toggles") {
-            api2("/config").then(function(r7) {
+            api("/config").then(function(r7) {
               if (!r7.global) {
-                status2(r7.error === "no-active-root" ? "\u672A\u6FC0\u6D3B\u6839\u76EE\u5F55\u2014\u2014\u8BF7\u5230\u300C\u914D\u7F6E\u539F\u6587\u300D\u9875\u6839\u76EE\u5F55\u533A\u6DFB\u52A0\u3002" : r7.error || "");
+                status(r7.error === "no-active-root" ? "\u672A\u6FC0\u6D3B\u6839\u76EE\u5F55\u2014\u2014\u8BF7\u5230\u300C\u914D\u7F6E\u539F\u6587\u300D\u9875\u6839\u76EE\u5F55\u533A\u6DFB\u52A0\u3002" : r7.error || "");
                 return;
               }
-              if (!r7.parsed) status2("\u6CE8\u5165\u53C2\u6570\u5DF2\u5168\u5C40\u53EF\u7528\uFF08scheduler.json\uFF09\uFF1Broot \u672A\u767B\u8BB0\u2014\u2014\u300C\u8BB0\u5FC6\u677F\u5757\u663E\u793A\u300D\u5F00\u5173\u5F85\u767B\u8BB0\u540E\u53EF\u7528\u3002");
-              else status2("\u5DF2\u52A0\u8F7D " + (r7.file || ""));
+              if (!r7.parsed) status("\u6CE8\u5165\u53C2\u6570\u5DF2\u5168\u5C40\u53EF\u7528\uFF08scheduler.json\uFF09\uFF1Broot \u672A\u767B\u8BB0\u2014\u2014\u300C\u8BB0\u5FC6\u677F\u5757\u663E\u793A\u300D\u5F00\u5173\u5F85\u767B\u8BB0\u540E\u53EF\u7528\u3002");
+              else status("\u5DF2\u52A0\u8F7D " + (r7.file || ""));
               renderViewToggles(refs.view, r7.parsed || {}, r7.global);
             }).catch(fail);
           } else if (name === "deepsleep") {
@@ -11432,7 +11432,7 @@
               e8.preventDefault();
               Cfg.set("showLogs", !Cfg.get("showLogs", true));
               applyLogPanel();
-              status2("\u65E5\u5FD7\u9762\u677F\u5DF2" + (Cfg.get("showLogs") ? "\u663E\u793A" : "\u9690\u85CF"), "info");
+              status("\u65E5\u5FD7\u9762\u677F\u5DF2" + (Cfg.get("showLogs") ? "\u663E\u793A" : "\u9690\u85CF"), "info");
               return;
             }
             if (e8.key === "Escape") {
@@ -11476,12 +11476,12 @@
             item.setAttribute("tabindex", "0");
             item.setAttribute("aria-label", v2[1]);
             item.onclick = function() {
-              show2(v2[0]);
+              show(v2[0]);
             };
             item.onkeydown = function(e8) {
               if (e8.key === "Enter" || e8.key === " ") {
                 e8.preventDefault();
-                show2(v2[0]);
+                show(v2[0]);
               }
             };
             refs.navItems.push({ name: v2[0], el: item });
@@ -11547,7 +11547,7 @@
             }
           } catch (e8) {
           }
-          show2(startView);
+          show(startView);
         }
         function openPanel() {
           var mask = document.getElementById("scpanl-mask");
@@ -11555,7 +11555,7 @@
           if (!mask.querySelector("#scpanl-modal")) buildModal(mask);
           mask.classList.add("open");
           syncTheme();
-          refreshCurrentView2();
+          refreshCurrentView();
         }
         function mount() {
           if (document.getElementById("scpanl-mask")) {
@@ -11695,7 +11695,7 @@
             else if (key === "refreshMs") restartPolling();
             else if (key === "skin") {
               syncTheme();
-              refreshCurrentView2();
+              refreshCurrentView();
             } else if (key === "startView" || key === "logLevel" || key === "overviewMode" || key === "maxRows") {
             }
           } catch (e8) {
@@ -11801,7 +11801,7 @@
                 var now = Date.now();
                 if (now - lastFocusRefresh < 1500) return;
                 lastFocusRefresh = now;
-                refreshCurrentView2();
+                refreshCurrentView();
               } catch (e8) {
               }
             };
@@ -11876,16 +11876,16 @@
         }
         exports.inject = inject;
         exports.apply = apply;
-        appState.api = api2;
-        appState.statusFn = status2;
+        appState.api = api;
+        appState.statusFn = status;
         appState.failFn = fail;
-        appState.refreshView = refreshCurrentView2;
+        appState.refreshView = refreshCurrentView;
         appState.refs = refs;
         appState.flushFolds = flushFolds;
         appState.switchKeys = SWITCH_KEYS;
         appState.metaBadges = metaBadges;
         appState.makeToggle = makeToggle;
-        appState.show = show2;
+        appState.show = show;
         appState.apiCtx = apiCtx;
         appState.opCard = opCard;
         appState.renderRunExtras = renderRunExtras;

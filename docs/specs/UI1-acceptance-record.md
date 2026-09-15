@@ -185,12 +185,74 @@
 
 ---
 
-## 3′. **遗留的口径债**（不影响 objective，但如实登记）
+## 3′. **遗留项 —— 均已闭环（2026-09-15 收尾第二轮）**
 
-| 项 | 说明 |
+| 项 | 状态与证据 |
 |---|---|
-| `check-version-pin` 三处不一致 | `package.json` / `pnpm-lock.yaml` / `node_modules/.modules.yaml` 的版本钉点**仍不一致**（报告态门）。根治需在 profile 跑一次 `pnpm install` 重生成 lock（**会触发宿主批量删除保护，宜择时手动**）—— **与 UI1 无关**，是既存项。 |
-| `uat` 类人工验收 | 本记录全部为**机检证据**（门 / 渲染 / 几何 / sha1）；人工视觉复核（除 `ui-geo-regress --shots` 出图外）未做。 |
+| **`check-version-pin` 三处不一致** | ✅ **已闭环**。判因：`19dc8a4d…` 是**历史重置前的 commit（现已不可达）**——`git cat-file -t` 报 `Not a valid object name` ⇒ 漂移是**元数据记录**，**内容早已同步**（已装 `lib/client.js` sha1 `020BCD2DBD83A91E` **与仓内逐字节一致**，且含 UI1 全部符号）。⇒ **未跑 `pnpm install`**（那会按旧 lock 退回旧代 + 触发宿主批量删除保护），改为**只把 lock 与 `.modules.yaml` 里的旧 hash 换成当前 pin**：5 处 + 1 处，**改前备份**至 `~/.dsh/backup/versionpin-20260915-213929/`。<br>先红：`--strict` **exit=1**（`a7db85f8 / 19dc8a4d / 19dc8a4d`）→ 转绿：**PASS（三处一致 @ a7db85f8）exit=0**。改后复验：内容 sha1 未变 · 两文件 YAML 结构完好 · 特性探针 exit=0 · **热重载 fiber active**。 |
+| **人工视觉复核** | ✅ **已闭环** —— 见 §3″。**并因此抓出一个四门全绿却真实存在的缺陷。** |
+
+---
+
+## 3″. **人工视觉复核（逐图 · 2026-09-15）**
+
+**方法**：`node scripts/ui-geo-regress.mjs --shots deliverables/ui1-shots` ⇒ 11 张图，**逐张人眼核对**。
+
+### 前置工具修复（本身就是一处假绿）
+
+出图**首次全失败**（12 张全 `✗`）而门仍报 **100 PASS** —— 根因：`--shots` **不创建输出目录**，
+Chrome `--screenshot=<不存在的目录>` **静默失败**。⇒ 已修：① `mkdirSync(dir, { recursive: true })`；
+② **末尾汇总 + 缺图即红**（`< 5000 B` 视为无效），把"出图失败被吞掉"堵死。
+⚠ 与"日志面板静默空掉"是**同一类假绿**：**失败路径没人看**。
+
+### 逐图结论（9 个主页面 + 2 个架构页签）
+
+| 图 | 核对点 | 结论 |
+|---|---|---|
+| `shot-overview` | 7 枚徽章**一行不换行** · 3 操作卡等宽 · **4 KPI 在首屏** · 「日志 13 条」**折叠成一行** | ✅ |
+| `shot-params` | **4 个 tab 全在**（注入/容量/模型/调度）· 分段选择器/开关/档位段选三类控件齐 | ✅（**这正是当时"3 个 tab 静默空掉"的现场，已修复**） |
+| `shot-memory` | 容量卡三列不换行 · 5 个带计数 Tab · **索引行（色标+标题+指针+tag+条数）** | ✅ |
+| `shot-persona` | USER 78% / AGENT 48% 进度条 · 构成计数 · **成熟度分布柱图** | ✅ |
+| `shot-suite` | 3 插件卡 + **suite 装配矩阵表**（MEMORY/USER/AGENT/notes/archive 五行，水位徽章） | ✅ |
+| `shot-sleep` | 状态机 stepper · 睡眠水位 67% · 状态分布条 · 本轮产出回执 | ✅ **（首轮此处报「加载失败」，见下）** |
+| `shot-observe` | 4 KPI · 4 Tab · **日志表 6 行**（含端点/耗时/状态码/时间） | ✅ |
+| `shot-arch` | 3 操作卡 · 4 KPI（记忆记录 967 / 载体对账 11/11 / 写时自证 33/0 / 装配面 0 桥）· 5 Tab · **五环 KPI 表** | ✅ |
+| `shot-arch-asm` / `shot-arch-mcl` | 架构页两个页签出图 | ✅（几何门另有页签断言） |
+
+### 🔴 **本轮抓到的真实缺陷**（自动化门全绿，只有人眼看见）
+
+```
+深度睡眠 · 会话状态机
+    加载失败: dsFmtTime is not defined
+```
+
+| 门 | 为何漏 |
+|---|---|
+| 构建（esbuild） | **不做未定义变量检查** |
+| `ui-geo-regress` | 断言面不含深睡页 |
+| `test-panel-view-contract` | 只测「参数」「记忆库」 |
+| `check-client-syntax` A5 | 只监视「服务模块 + pane 间导出」；`dsFmtTime`/`DS_STATE_TEXT` 是 **`body.js` 本地符号**，不在面内 |
+
+**根因（两处）**：
+1. `dsFmtTime`/`dsFmtAgo` 定义在 `body.js`，而迁走的 `panes-suite.js` 直接用它们、**未 import**；
+2. **我自己上一轮手工迁移时按字符区间删除，却按"升序"逐个删 —— 偏移串味，把 `DS_STATE_TEXT` 连注释一起误删**
+   （**正确做法：降序删除**，本轮的修复脚本已按降序并带断言重做）。
+
+**修复**：两个表（`DS_STATE_TEXT`/`DS_PROBE_TEXT`）与两个格式化函数**整体迁进 `panes-suite.js`**（**深睡域**，谁用谁持有）；
+另修 3 处同类裸引用：`panes-arch.js` 的 `api`/`status` → `appState.*`、`panes-observe.js` 的 `refreshCurrentView` → `appState.refreshView`、
+`panes-overview.js` 的 `show` → `appState.show`。
+
+**复验（真机出图）**：深睡页现完整渲染 —— 「上次入睡 `2026/9/14 21:52:36`」（`dsFmtTime` 生效）、
+「`idle 180 分钟` · 下次可睡 `2026/9/15 22:52:36`」（`dsFmtAgo` 生效）、「待蒸馏 27 / 停滞 5」（**`DS_STATE_TEXT` 生效**）。
+
+### 新增门：`audit-pane-deps.mjs`（**防复发**）
+
+把每个 pane 的**全部自由标识符**逐类判定：内建（**显式列举** 112 个）· 本文件已声明（含**具名函数表达式**）·
+已 import · pane 导出 · 服务模块导出 · 其它 `src-client` 文件（含 `body.js` 顶层）· **全仓无定义** ⇒ 后四类**即 FAIL**。
+**3 条反例自证**（临时目录夹具，不碰真实树）：干净 pane ⇒ PASS · 用未导入的 body 本地符号 ⇒ FAIL · 用全仓无定义符号 ⇒ FAIL。
+
+**门禁 106 → 108 件。** 另把 `check-pane-sections` 的节数下限 **15 → 11**（附原因：内容整体迁出后已清空壳标记；
+仍有效力 —— 合并 2 节即 10 < 11 报错）。
 
 ---
 

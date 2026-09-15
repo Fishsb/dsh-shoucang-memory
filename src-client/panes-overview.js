@@ -332,7 +332,7 @@ function renderViewOverview(view) {
     if (pend.count) warn.push('候选区 ' + pend.count + ' 条待裁决');
     if ((d.queue || {}).undone) warn.push('待归档会话 ' + d.queue.undone + ' 个');
     if (Derive.vectorOn(d) && Derive.providerDown(d.vector.provider)) warn.push('嵌入服务不可达，向量召回已降级为词法');
-    if (Derive.has(warn)) setAlert(warn.length + ' 项待处理', warn.join('；'), '前往处理', function () { show('memory'); });
+    if (Derive.has(warn)) setAlert(warn.length + ' 项待处理', warn.join('；'), '前往处理', function () { appState.show('memory'); });
     else setAlert('');
   }).catch(appState.failFn);
 

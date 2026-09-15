@@ -110,6 +110,12 @@ const CHECKS = [
   //   事后无法取"拆分前"DOM ⇒ 改为**证明两个渲染门确实能抓到拆分破坏**（先红后绿可信度）。
   //   ⚠ 本件会临时改源码 + 重建产物（约 1-2 分钟），finally 中逐字节还原。
   ['scripts/test-split-equivalence.mjs'],
+  // UI1 收尾（2026-09-15）**pane 自由标识符全量审计**：人工视觉复核抓出深睡页
+  //   「加载失败: dsFmtTime is not defined」——而构建/几何门/契约门/A5 **四门全绿**。
+  //   本件把每个 pane 的自由标识符按「内建/本文件已声明/已 import/pane 导出/服务/别处定义/全仓无定义」
+  //   逐类判定，**说不清来源即 FAIL**（附 3 条反例自证）。
+  ['scripts/audit-pane-deps.mjs'],
+  ['scripts/audit-pane-deps.mjs', '--selftest'],
   // UI1/U5-a（2026-09-15）**行为级证据**：`test-route-schema` 只证明"坏请求被 400 拦住"，
   //   **从未验证合法请求的副作用**（真的写进去、能读回）。而 U1/U2 要大规模拆分前端
   //   （`body.js` 5476 行 → 7 个 pane），"拆分后行为不变"必须有行为证据 —— `ui-geo-regress`

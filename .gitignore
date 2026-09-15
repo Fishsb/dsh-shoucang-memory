@@ -68,3 +68,9 @@ src-client/.vendor-css.generated.js
 
 # 过程性 UI 比对截图（319 件 / 27 MB，可重生成；2026-09-15 移出仓库，本地保留）
 deliverables/v9-compare/
+
+# 过程性 UI 出图（UI1 收尾 · 2026-09-15）：11 张 / 1.2 MB，可重生成
+#   依据 docs/PUBLISH-POLICY.md「过程性截图已移出仓库」；且 check-public-tree **跳过 .png**
+#   ⇒ 图片无法被隐私门扫到，入库风险高于收益。复核方法与逐图结论见
+#   docs/specs/UI1-acceptance-record.md §3″（人工视觉复核）
+deliverables/ui1-shots/

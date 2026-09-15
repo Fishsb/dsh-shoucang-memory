@@ -140,7 +140,7 @@ function renderArchBody(view, safeFail) {
   view.appendChild(tb.box);
 
   /* ① 内容环（后端已有端点但此前**无 UI 入口**） */
-  api('/rings').then(function (r) {
+  appState.api('/rings').then(function (r) {
     pRings.textContent = ''; /* 图检发现：占位符必须清掉，否则与真实数据并存 */
     var c = UI.card('五环 KPI 与环事件对账');
     pRings.appendChild(c.box);
@@ -149,7 +149,7 @@ function renderArchBody(view, safeFail) {
   }).catch(appState.failFn);
 
   /* ② 记录层 + 断言图 */
-  api('/arch/records').then(function (r) {
+  appState.api('/arch/records').then(function (r) {
     pRec.textContent = ''; /* 图检发现：占位符必须清掉，否则与真实数据并存 */
     var c1 = UI.card('记录层（Record 事实源）');
     pRec.appendChild(c1.box);
@@ -183,7 +183,7 @@ function renderArchBody(view, safeFail) {
     });
     c1.body.appendChild(el('div', 'sc-desc', (r.address && r.address.note) || ''));
 
-    api('/arch/graph').then(function (g) {
+    appState.api('/arch/graph').then(function (g) {
     pObs.textContent = ''; /* 图检发现：占位符必须清掉，否则与真实数据并存 */
       var c2 = UI.card('断言图（关系即事实）');
       pRec.appendChild(c2.box);
@@ -203,7 +203,7 @@ function renderArchBody(view, safeFail) {
   }).catch(appState.failFn);
 
   /* ③ 观测面 */
-  api('/arch/observability').then(function (r) {
+  appState.api('/arch/observability').then(function (r) {
     pObs.textContent = ''; /* 图检发现：占位符必须清掉，否则与真实数据并存 */
     var c = UI.card('统一台账与观测面');
     pObs.appendChild(c.box);
@@ -227,7 +227,7 @@ function renderArchBody(view, safeFail) {
   }).catch(appState.failFn);
 
   /* ④ 装配面 */
-  api('/arch/assembly').then(function (r) {
+  appState.api('/arch/assembly').then(function (r) {
     pAsm.textContent = ''; /* 图检发现：占位符必须清掉，否则与真实数据并存 */
     var c = UI.card('装配根（composition root）与已装能力');
     pAsm.appendChild(c.box);
@@ -243,9 +243,9 @@ function renderArchBody(view, safeFail) {
       UI.select([{ value: 'md', label: 'md（只用 md 投影）' }, { value: 'dual', label: 'dual（md ↔ Record 双写）' }],
         st2.mode === 'dual' ? 'dual' : 'md',
         function (v) {
-          api('/set', { method: 'POST', body: JSON.stringify({ key: 'storeMode', value: v }) })
-            .then(function (res) { status(res && res.ok ? '✓ storeMode = ' + v + '（已写 scheduler.json）' : '⚠ 未生效'); renderArchBody(view, safeFail); })
-            .catch(function () { status('⚠ storeMode 写入失败（枚举或白名单拒绝）', 'error'); });
+          appState.api('/set', { method: 'POST', body: JSON.stringify({ key: 'storeMode', value: v }) })
+            .then(function (res) { appState.statusFn(res && res.ok ? '✓ storeMode = ' + v + '（已写 scheduler.json）' : '⚠ 未生效'); renderArchBody(view, safeFail); })
+            .catch(function () { appState.statusFn('⚠ storeMode 写入失败（枚举或白名单拒绝）', 'error'); });
         }, '存储模式'),
       {}));
     renderFacts(c.body, cp.handles || [], 1);
@@ -264,7 +264,7 @@ function renderArchBody(view, safeFail) {
   /* ⑤ 认知环旋钮（唯一写入口：白名单补丁；改后重载生效） */
   function renderMclKnobs() {
     pMcl.textContent = '';
-    api('/mcl/config').then(function (r) {
+    appState.api('/mcl/config').then(function (r) {
     pMcl.textContent = ''; /* 图检发现：占位符必须清掉，否则与真实数据并存 */
       var cur = r.persisted || {};
       var run = r.running || {};
@@ -277,8 +277,8 @@ function renderArchBody(view, safeFail) {
       ]));
       var save = function (key, val) {
         var patch = {}; patch[key] = val;
-        api('/mcl/config', { method: 'POST', body: JSON.stringify(patch) })
-          .then(function () { status('✓ ' + key + ' = ' + val + '（已写入 scheduler.json，重载后生效）'); renderMclKnobs(); })
+        appState.api('/mcl/config', { method: 'POST', body: JSON.stringify(patch) })
+          .then(function () { appState.statusFn('✓ ' + key + ' = ' + val + '（已写入 scheduler.json，重载后生效）'); renderMclKnobs(); })
           .catch(appState.failFn);
       };
       var lim = r.limits || {};

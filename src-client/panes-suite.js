@@ -294,4 +294,41 @@ function renderDeepSleep(view) {
   });
 }
 
-export { renderSuite, renderDeepSleep };
+function dsFmtAgo(ts) {
+  if (!ts) return '—';
+  var s = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+  if (s < 60) return s + ' 秒';
+  var m = Math.floor(s / 60); if (m < 60) return m + ' 分钟';
+  var h = Math.floor(m / 60); if (h < 24) return h + ' 小时 ' + (m % 60) + ' 分';
+  return Math.floor(h / 24) + ' 天 ' + (h % 24) + ' 小时';
+}
+
+function dsFmtTime(ts) {
+  if (!ts) return '从未';
+  try { return new Date(ts).toLocaleString('zh-CN', { hour12: false }); } catch (e) { return String(ts); }
+}
+
+
+/* UI1 收尾（2026-09-15）：`DS_STATE_TEXT` / `DS_PROBE_TEXT` 自 `body.js` 迁入 ——
+ *   两个表**只被深睡视图使用**，属本域；留在 body 会让本模块"用了却没定义"。
+ *   实测（人工视觉复核抓出）：`dsFmtTime`/`DS_STATE_TEXT` 未定义 ⇒ 深睡页显示「加载失败」。
+ *   **四个自动化门全绿而页面上明写失败** ⇒ 补 `audit-pane-deps.mjs` 做全量自由标识符审计。 */
+/* 2026-09-14（用户拍板）：标签表达**蒸馏生命周期**，且**只按会话状态映射、不依赖任何其他信息**——
+ *   `stalled`（探针连续确认无输出）⇒ **停滞**；其余（running/ended/probing/suspect）⇒ **待蒸馏**
+ *   （会话还活着/未决 ⇒ 内容迟早要被蒸馏；`ended` 即「任务完成、等待蒸馏」）。
+ *   旧标签是状态机内部术语（活跃/已结束/探测中/待复核/疑似卡住），**对使用者不可读**，
+ *   且把「阻塞睡眠」这类内部机制暴露到界面上——用户实测被它误导（以为「没睡」）。 */
+var DS_STATE_TEXT = { running: '待蒸馏', ended: '待蒸馏', probing: '待蒸馏', suspect: '待蒸馏', stalled: '停滞' };
+
+/* 探针细节（次要信息，附在时间后面）：去掉「阻塞睡眠」等内部机制措辞，只留人话。 */
+var DS_PROBE_TEXT = {
+  'long-run': '长任务进行中',
+  'suspect': '待下轮复核',
+  'conflict': '状态活跃但无输出增长',
+  'stall': '已确认无输出',
+  'exit': '会话已退出',
+  'no-transcript': '探针不可用',
+  'error': '探测异常'
+};
+
+export { renderSuite, renderDeepSleep, dsFmtAgo, dsFmtTime, DS_STATE_TEXT, DS_PROBE_TEXT };

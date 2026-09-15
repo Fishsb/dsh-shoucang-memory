@@ -5,6 +5,11 @@
 ## [Unreleased]
 
 ### Changed
+- **UI1 收尾 · 出图集与仓库策略（2026-09-15）**：`deliverables/ui1-shots/`（11 张 / 1.2 MB）**不入库**
+  （`.gitignore`）—— 依据 `docs/PUBLISH-POLICY.md`「过程性截图已移出仓库」，且 `check-public-tree` **跳过 `.png`**
+  ⇒ 图片无法被隐私门扫到，入库风险高于收益。复核方法与**逐图结论**留在
+  `docs/specs/UI1-acceptance-record.md` §3″。`check-pane-sections` 节数下限 **15 → 11**（附原因）。
+
 - **UI1/U2 · 24 个 render 全部迁出（2026-09-15）**：`body.js` **5476 → 648 有效行（-88%）**，**达成 <800 目标**。
   抽出 **9 个 pane 模块**（toggles 661 / memory-detail 509 / overview 380 / arch 309 / suite 293 / observe 284 /
   settings 242 / memory 237 / config 117）；`body.js` 只剩**壳层 / 挂载 / `apply` 插件入口 / `VIEWS`·`show` 枢纽**
@@ -1638,6 +1643,28 @@
 - **panel client 迁移到 slot 契约（2026-09-05，解冻前置）**：client.js 注入声明加 `'slots'`，入口从直插侧栏 footArea DOM 改为注册 `sidebar.footer.action` 插槽按钮（无 slots 环境保留直插兜底）；host+client 已注入运行（ef85e372），构建产物 lib/ 重建
 
 ### Fixed
+- **UI1 收尾 · 人工视觉复核抓出并修复「深睡页加载失败」（2026-09-15）**：出图后逐张人眼核对，发现
+  「深度睡眠」页显示 `加载失败: dsFmtTime is not defined` —— 而**构建 / 几何门 / 契约门 / A5 四门全绿**
+  （构建不做未定义检查；几何门断言面不含深睡页；契约门只测两视图；A5 只监视"服务模块 + pane 间导出"，
+  漏了 **`body.js` 本地符号**这一类）。根因两处：① `dsFmtTime`/`dsFmtAgo` 定义在 `body.js` 而迁出的
+  `panes-suite.js` 直接用却未 import；② **我自己手工迁移时按字符区间"升序"逐个删 ⇒ 偏移串味，
+  把 `DS_STATE_TEXT` 连注释一起误删**（正确做法：**降序删除**）。已把两个表与两个格式化函数
+  **整体迁进 `panes-suite.js`**（深睡域，谁用谁持有），并修同类裸引用 3 处（`panes-arch` 的 `api`/`status`、
+  `panes-observe` 的 `refreshCurrentView`、`panes-overview` 的 `show` → 一律走 `appState`）。
+  **真机复验**：深睡页完整渲染（`上次入睡 2026/9/14 21:52:36` · `idle 180 分钟` · `待蒸馏 27 / 停滞 5`）。
+- **新增门 `audit-pane-deps.mjs`（防复发）**：把每个 pane 的**全部自由标识符**逐类判定 ——
+  内建（显式列举 112 个）/ 本文件已声明（含**具名函数表达式**）/ 已 import / pane 导出 / 服务导出 /
+  其它 `src-client` 文件（含 `body.js` 顶层）/ **全仓无定义** ⇒ **后四类即 FAIL**；附 **3 条反例自证**
+  （临时目录夹具，不碰真实树）。**门禁 106 → 108 件。**
+- **修「出图失败被吞掉」的假绿**：`ui-geo-regress --shots` **不创建输出目录** ⇒ Chrome 对不存在路径
+  **静默失败**，12 张图全 `✗` 而门仍报 100 PASS。现 `mkdirSync(recursive)` + **末尾汇总 + 缺图即红**
+  （`< 5000 B` 视为无效）。⚠ 与"日志面板静默空掉"同类：**失败路径没人看**。
+- **版本钉点三处不一致 → 闭环**：`19dc8a4d…` 系**历史重置前的 commit（`git cat-file` 报 Not a valid object name）**，
+  即漂移只在**元数据记录**、内容早已同步（已装 `lib/client.js` sha1 与仓内逐字节一致）。**未跑 `pnpm install`**
+  （会按旧 lock 退回旧代 + 触发宿主批量删除保护），改为只把 lock 与 `.modules.yaml` 的旧 hash 换成当前 pin
+  （5 + 1 处，**改前备份**）。先红 `--strict` exit=1 → 转绿 **PASS（三处一致 @ a7db85f8）**；
+  改后复验内容 sha1 未变 · YAML 结构完好 · 特性探针 exit=0 · 热重载 fiber active。
+
 - **UI1/U1 · 抽服务暴露的两处潜伏问题（2026-09-15）**：① 抽 `Log` 打破闭包 ⇒ `setStatusText` 在产物中成
   自由变量（esbuild 改名 `setStatusText2` 为证）⇒ **`ui-geo-regress` 仍全绿，只因 error 分支未触发**；
   现改为**显式注入**（`setLogStatusSink`），并把 `check-ui-contract` ⑥ 改为**正面锁定注入实参**。
