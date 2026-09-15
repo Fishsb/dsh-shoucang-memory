@@ -86,26 +86,12 @@ const SLACK = 15
  * 2026-09-14 定基线（实测取样，口径见件头）。每完成一次瘦身，应把对应条目**下调**。
  */
 const FREEZE = {
-  // ⚠ **2026-09-15 键格式迁移**：裸文件名 → **仓根相对路径**（多根扫描后，裸名会在 `src/` 与 `src-client/` 间互相串）
-  // L5（2026-09-14）：动态面选行抽取后**下调** 831 → 764（棘轮只许收紧；原上限 846 曾使 S4-3 无法接入）
-  // S4R/R1（2026-09-14）：渲染收敛（主路径改调 `renderSupplyText`，含 3 行说明注释）⇒ **有意增长** 764 → 775
-  // S4X/X1（2026-09-14）：修 L8（`droppedStable` 真实化 + 判因注释）⇒ **有意增长** 775 → 779
-  'src/panel-shared.ts': 779,
-  'src/scheduler.ts': 745,
-  'src/treeops.ts': 706,
-  // S4-6′/D1（2026-09-14）：有意增长（审计增 rowsN/missReason/zeroGain/switchSource），按 --rebase 口径回写
-  'src/mcl.ts': 627,
-  // UI1/U0（2026-09-15）：**前端首次纳入棘轮**。`body.js` 是 UI 侧唯一大模块（5477 行、210 函数、
-  //   顶层 125 声明），此前**零门禁**。本条目 = 拆分的**起点基线**，此后只许降（UI1 目标 < 800）。
-  // UI1/U1（2026-09-15）：抽出 CSS（933 行）到 styles.js ⇒ **棘轮下调** 5476 → 4527
-  // UI1/U1（2026-09-15）：抽出 dom.js（el/svg/ICONS，38 行）⇒ **棘轮下调** 4528 → 4490
-  // UI1/U1（2026-09-15）：抽出 state.js（Bus/Store/Log/Prog，82 行）⇒ **棘轮下调** 4490 → 4409
-  // UI1/U1（2026-09-15）：抽出 Cfg/Fold（74 行）到 state.js ⇒ **棘轮下调** 4409 → 4338
-  // UI1/U1（2026-09-15）：抽出 ui-kit.js（UI，451 行）⇒ **棘轮下调** 4337 → 3886
-  // UI1/U1（2026-09-15）：抽出 derive.js（Derive，70 行）⇒ **棘轮下调** 3886 → 3816
-  'src-client/body.js': 3816,
-  // UI1/U1（2026-09-15）：新模块（自 body.js 抽出的样式表）。目标：U2 完成后本件亦应被拆/下探
-  'src-client/styles.js': 945,
+  'src-client/body.js': 3147,
+  'src-client/styles.js': 730,
+  'src/scheduler.ts': 611,
+  'src/treeops.ts': 588,
+  'src/panel-shared.ts': 547,
+  'src/mcl.ts': 433,
 }
 
 const PRINT = process.argv.includes('--print')
@@ -165,11 +151,35 @@ export function countMutableGlobals(code) {
   return n
 }
 
-/** 物理行数：去掉单一末尾空行后计数（与 wc -l 同口径） */
-function lineCountOf(s) {
+/**
+ * **有效行数 = 物理行数 − 注释行 − 空行**（2026-09-15 用户指正后改）。
+ *
+ * **为什么必须这么改**（两条实证）：
+ *   ① **注释撑开棘轮**：UI1/U2-B 用"只加注释"做分区块 ⇒ `body.js` 从 3816 → **3831**，
+ *      **正好吃满 15 行容差** ⇒ 此后**加一行注释就红** ⇒ 门会**把它自己锁死**。
+ *   ② **口径与直觉不符**：门的本意是守"**代码规模**"，而注释与空行**不是规模**。
+ *      一个满注释的实现被算成"超大模块"、而删掉注释就能"变瘦" —— 那守的是**风格**，不是**规模**。
+ *
+ * 口径（保守、可复算）：
+ *   · 剥 `//` 行注释 与 `/* … *​/` 块注释（**含跨行块**，且**不误伤字符串里的 `//`** ——
+ *     本件按"整行以注释符起头"判定，避免解析 JS 字符串的复杂度）；
+ *   · 空行不计；
+ *   · **行尾注释也算注释**（整行只有 `code // comment` 时，该行**仍计入** —— 它含代码）。
+ */
+export function codeLinesOf(s) {
   const parts = s.split('\n')
   if (parts.length && parts[parts.length - 1] === '') parts.pop()
-  return parts.length
+  let inBlock = false
+  let n = 0
+  for (const raw of parts) {
+    const l = raw.trim()
+    if (!l) continue // 空行
+    if (inBlock) { if (l.includes('*/')) inBlock = false; continue } // 块注释内
+    if (l.startsWith('/*')) { if (!l.includes('*/')) inBlock = true; continue } // 块注释起
+    if (l.startsWith('//')) continue // 行注释
+    n++
+  }
+  return n
 }
 
 const files = []
@@ -182,7 +192,7 @@ for (const r of ROOTS) {
 }
 const rows = files.map((f) => {
   const code = readFileSync(f.abs, 'utf8')
-  return { file: f.rel, lines: lineCountOf(code), mutable: countMutableGlobals(code) }
+  return { file: f.rel, lines: codeLinesOf(code), mutable: countMutableGlobals(code) }
 }).sort((a, b) => b.lines - a.lines)
 
 if (PRINT) {

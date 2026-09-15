@@ -24,6 +24,9 @@
 // 退出码：0 = pass · 1 = fail · 3 = skip（src-client 缺席）
 import { readFileSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
+/* UI1（2026-09-15 用户指正）：节大小用**有效行数**（注释/空行不计）——与 check-module-growth 同口径。
+ *  原按物理行 ⇒ 注释灌水也能"达标"，且 U2-B 的"只加注释"会虚增节大小。 */
+import { codeLinesOf } from './check-module-growth.mjs'
 import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -31,7 +34,8 @@ const BODY = join(root, 'src-client', 'body.js')
 if (!existsSync(BODY)) { console.log('check-pane-sections: src-client/body.js 缺席 ⇒ skip（exit 3）'); process.exit(3) }
 
 /** 每节行数上限（**先红基线**：实测后按棘轮思路只许降 —— 本值即"当前最坏节"的量级） */
-const SECTION_CAP = Number(process.env.PANE_CAP || 400)
+/** 上限（**有效行数口径** · 2026-09-15 改）：原 400 是物理行；改口径后按同量级取 320 */
+const SECTION_CAP = Number(process.env.PANE_CAP || 320)
 /** 节数下限（防"合并标记"绕过；实测值见下方 BASELINE_SECTIONS） */
 const BASELINE_SECTIONS = 15
 /**
@@ -95,7 +99,8 @@ export function evaluate(text, cap = SECTION_CAP, baseSections = BASELINE_SECTIO
   const sizes = marks.map((m, i) => {
     const from = m.ln - 1
     const to = (i + 1 < marks.length ? marks[i + 1].ln - 1 : fr.e) - 1
-    return { title: m.title, ln: m.ln, lines: to - from + 1 }
+    // **有效行数**：把该节的源码片断交给 codeLinesOf（注释/空行不计）
+    return { title: m.title, ln: m.ln, lines: codeLinesOf(lines.slice(from, to + 1).join('\n')) }
   })
   // A2 超限
   for (const s of sizes) if (s.lines > cap) problems.push(`[超限] 节「${s.title}」(L${s.ln}) 实测 ${s.lines} 行 > 上限 ${cap} ⇒ 该节需要**按领域接缝**再分（不是按行数硬切）`)

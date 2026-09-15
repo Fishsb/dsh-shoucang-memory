@@ -1,4 +1,5 @@
 import { UI } from './ui-kit.js'
+import { appState } from './app-state.js'
 import { Derive } from './derive.js'
 /**
  *dsh-shoucang-memory — client 半区（纯 DOM，样式照搬 Obsidian 设置窗口）。守藏单插件 2026-09-08 合并。
@@ -41,14 +42,13 @@ import { ICONS, el, svg } from './dom.js'
       /* S4：接口契约（后端契约表生成的共享产物）——用于**发请求前**预检必填字段。
        *   判因：必填缺失以前要等后端 400 一个来回才暴露；现在本地即拦，错误信息同源（字段名一致）。 */
       var CONTRACT = (typeof window !== 'undefined' && window.__SC_CONTRACT__) || null;
-      var CONTRACT_BY_PATH = null;
       function contractOf(path) {
         if (!CONTRACT) return null;
-        if (!CONTRACT_BY_PATH) {
-          CONTRACT_BY_PATH = {};
-          (CONTRACT.routes || []).forEach(function (r) { CONTRACT_BY_PATH[r.path] = r; });
+        if (!appState.contractByPath) {
+          appState.contractByPath = {};
+          (CONTRACT.routes || []).forEach(function (r) { appState.contractByPath[r.path] = r; });
         }
-        return CONTRACT_BY_PATH[path] || null;
+        return appState.contractByPath[path] || null;
       }
       function preflight(path, body) {
         var c = contractOf(path);
@@ -232,13 +232,12 @@ import { ICONS, el, svg } from './dom.js'
        *      ③ 渲染函数抛异常时哨兵 div 会永久留在 DOM 里。
        * 现在：渲染期只做 deferFold 登记，由 flushFolds() 在**同一个同步流程末尾**统一收口 ——
        * 时序与旧实现等价（仍在所有同步 append 之后、任何网络回调之前），但不再跨任务边界。 */
-      var _foldQueue = [];
       function deferFold(host, mark, label, openDefault, key) {
-        _foldQueue.push({ host: host, mark: mark, label: label, open: !!openDefault, key: key });
+        appState.foldQueue.push({ host: host, mark: mark, label: label, open: !!openDefault, key: key });
       }
       function flushFolds() {
-        var q = _foldQueue;
-        _foldQueue = [];
+        var q = appState.foldQueue;
+        appState.foldQueue = [];
         q.forEach(function (t) {
           try {
             scheduleFold(t.host, t.mark, t.label, t.open, t.key);
@@ -1394,8 +1393,8 @@ import { ICONS, el, svg } from './dom.js'
         if (!pointer) { status('该条目无 notes 跳转目标'); return; }
         var rel = String(pointer).split('§')[0].trim();
         if (!/^notes\/[a-z]+\.md$/.test(rel)) { status('指针目标非 notes 白名单：' + pointer); return; }
-        memoryViewScroll = refs.view.scrollTop; // 记录进入前滚动位置（返回时恢复）
-        noteReturnRender = returnRender || null; // 来源板块上下文（返回时回原板块，默认记忆板块）
+        appState.memoryViewScroll = refs.view.scrollTop; // 记录进入前滚动位置（返回时恢复）
+        appState.noteReturnRender = returnRender || null; // 来源板块上下文（返回时回原板块，默认记忆板块）
         api('/memory/sections?rel=' + encodeURIComponent(rel)).then(function (r) {
           if (!r || !r.present) { status((r && r.error) || '小节不可用'); return; }
           Fold.clear('note:'); // 换笔记 ⇒ 清掉上一篇的小节开合态，避免 key 无界增长与旧态串味
@@ -1924,8 +1923,8 @@ import { ICONS, el, svg } from './dom.js'
           chip.appendChild(el('span', 'sc-tag', String(nf.sections.length)));
           chip.title = nf.rel + ' · ' + nf.sections.map(function (s) { return s.title }).join(' / ');
           chip.addEventListener('click', function () {
-            memoryViewScroll = view.scrollTop; // 记录进入前滚动位置（返回时恢复）
-            noteReturnRender = null; // 来源=记忆板块
+            appState.memoryViewScroll = view.scrollTop; // 记录进入前滚动位置（返回时恢复）
+            appState.noteReturnRender = null; // 来源=记忆板块
             api('/memory/sections?rel=' + encodeURIComponent(nf.rel)).then(function (r) {
               renderNoteSections(view, r);
             }).catch(fail);
@@ -1984,8 +1983,8 @@ import { ICONS, el, svg } from './dom.js'
               chip.appendChild(el('span', 'sc-tag', String(nf.sections.length)));
               chip.title = 'suite · ' + nf.rel + ' · ' + nf.sections.map(function (s) { return s.title }).join(' / ');
               chip.addEventListener('click', function () {
-                memoryViewScroll = view.scrollTop; // 记录进入前滚动位置（返回时恢复）
-                noteReturnRender = null; // 来源=记忆板块（suite 区板块本身在记忆视图内）
+                appState.memoryViewScroll = view.scrollTop; // 记录进入前滚动位置（返回时恢复）
+                appState.noteReturnRender = null; // 来源=记忆板块（suite 区板块本身在记忆视图内）
                 api('/memory/sections?rel=' + encodeURIComponent(nf.rel) + '&root=suite').then(function (r) {
                   renderNoteSections(view, r);
                 }).catch(fail);
@@ -2035,20 +2034,19 @@ import { ICONS, el, svg } from './dom.js'
         return 'note:' + (rel || '') + ':' + (path || '') + '§' + (title || '');
       }
 
-      /** notes 小节正文浏览（只读；/memory/sections）。返回时恢复来源板块与滚动位置（记忆/画像/守藏区均可进入）。 */
-      var memoryViewScroll = 0; // 进二级视图前的 .sc-view 滚动位置
-      var noteReturnRender = null; // 来源板块渲染器（null=记忆板块 renderMemoryExpanded）
+      /** notes 小节正文浏览（只读；/memory/sections）。返回时恢复来源板块与滚动位置（记忆/画像/守藏区均可进入）。
+       *  UI1/C′：`memoryViewScroll`/`noteReturnRender` 已收进 `appState`（初值在 `app-state.js`）。 */
       function renderNoteSections(view, data) {
         if (!data || !data.present || !data.sections) { status((data && data.error) || '无小节'); return; }
         view.textContent = '';
         UI.pageHead(data.name, (data.root === 'suite' ? 'suite 知识区 · ' : '') + data.rel + ' · ' + data.sections.length + ' 个小节（白名单只读）');
-        var back = el('button', 'sc-btn subtle', '← 返回' + (noteReturnRender === renderPersona ? '画像板块' : data.root === 'suite' ? '守藏知识区' : '记忆库'));
+        var back = el('button', 'sc-btn subtle', '← 返回' + (appState.noteReturnRender === renderPersona ? '画像板块' : data.root === 'suite' ? '守藏知识区' : '记忆库'));
         back.type = 'button';
         back.addEventListener('click', function () {
-          var backRender = noteReturnRender || renderMemoryExpanded;
+          var backRender = appState.noteReturnRender || renderMemoryExpanded;
           api('/memory/overview').then(function (r) {
             backRender(view, r);
-            requestAnimationFrame(function () { view.scrollTop = memoryViewScroll; }); // 恢复滚动位置，不跳顶
+            requestAnimationFrame(function () { view.scrollTop = appState.memoryViewScroll; }); // 恢复滚动位置，不跳顶
           }).catch(fail);
         });
         view.appendChild(back);
@@ -3248,14 +3246,15 @@ import { ICONS, el, svg } from './dom.js'
         }
         return q ? n : rows.length;
       }
-      var currentView = Cfg.get('startView', 'overview');
-      function refreshCurrentView() { show(currentView); }
+      /** UI1/C′：`currentView` 已收进 `appState`；启动视图由 `Cfg` 决定，在 `app-state.js` 外赋值处见 `mount`。 */
+      appState.currentView = Cfg.get('startView', 'overview');
+      function refreshCurrentView() { show(appState.currentView); }
       function show(name) {
         /* 折叠态的生命周期边界：**换视图**才清空（避免上一个视图的 key 残留到新数据上）；
            同一视图内的重绘（自动轮询 / 保存后重取 / 手动刷新）**保留**开合态 ——
            这正是旧实现最难受的一点：60s 一轮询，用户展开的区块就被强制收起。 */
-        if (currentView !== name) Fold.clear();
-        currentView = name;
+        if (appState.currentView !== name) Fold.clear();
+        appState.currentView = name;
         // A6：记住最后视图（面板重开即回到上次位置）
         try { Cfg.set('lastView', name); } catch (e) { }
         // D6：视图区变化时给读屏一个可识别的名字
@@ -3270,7 +3269,7 @@ import { ICONS, el, svg } from './dom.js'
         /* 页头槽随之清空：视图未调 UI.pageHead（或异步渲染尚未回填）时不残留上一视图的标题 */
         var _hs = document.getElementById('scpanl-headslot'); if (_hs) _hs.textContent = '';
         UI.bumpHeadEpoch();       /* 新渲染轮次：本轮允许写入一次页头（实现见 ui-kit.js） */
-        _foldQueue.length = 0;   // 丢弃上一次渲染未收口的登记（异常路径残留），防止串到本次
+        appState.foldQueue.length = 0;   // 丢弃上一次渲染未收口的登记（异常路径残留），防止串到本次
         refs.view.scrollTop = 0; // 切视图回到顶部（此前长视图切页后停在上一页滚动位置）
         if (name === 'overview') {
           renderViewOverview(refs.view);
@@ -3364,12 +3363,11 @@ import { ICONS, el, svg } from './dom.js'
       }
 
       /* 轮询：间隔可配（0=关闭），替代写死的 setInterval */
-      var pollTimer = null;
       function restartPolling() {
-        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+        if (appState.pollTimer) { clearInterval(appState.pollTimer); appState.pollTimer = null; }
         var ms = parseInt(Cfg.get('refreshMs', 60000), 10) || 0;
         if (ms <= 0) return;
-        pollTimer = setInterval(function () {
+        appState.pollTimer = setInterval(function () {
           // 仅在面板打开时轮询，关闭时不空转
           var mask = document.getElementById('scpanl-mask');
           if (!mask || !mask.classList.contains('open')) return;
@@ -3591,8 +3589,7 @@ import { ICONS, el, svg } from './dom.js'
       }
 
       // 上移入口：直插侧栏 footArea 首行（记忆插件(footerActions 单行)上方、设置上方），不占 Cordis 插槽
-      var sidebarObserver = null;
-      var sidebarTries = 0;
+      /* UI1/C′：`sidebarObserver`/`sidebarTries` 已收进 `appState`（初值在 `app-state.js`）。 */
       function mountSidebarEntry() {
         if (document.getElementById('scpanl-btn')) return true;
         var foot = null;
@@ -3600,7 +3597,7 @@ import { ICONS, el, svg } from './dom.js'
         if (mneme) foot = mneme.closest('[class*="footArea"]') || mneme.closest('[class*="foot-area"]');
         if (!foot) foot = document.querySelector('[class*="footArea"]') || document.querySelector('[class*="foot-area"]');
         if (!foot) {
-          if (sidebarTries++ < 40) { setTimeout(mountSidebarEntry, 500); return false; }
+          if (appState.sidebarTries++ < 40) { setTimeout(mountSidebarEntry, 500); return false; }
           mountFallbackEntry();
           return false;
         }
@@ -3654,7 +3651,7 @@ import { ICONS, el, svg } from './dom.js'
             var wr = btn.parentElement;
             btn.remove();
             if (wr && wr !== foot && wr.children.length === 0) wr.remove(); // 清空独立行容器
-            sidebarTries = 0;
+            appState.sidebarTries = 0;
             mountSidebarEntry();
             return;
           }
@@ -3664,9 +3661,9 @@ import { ICONS, el, svg } from './dom.js'
         };
         sync();
         if (root && typeof MutationObserver !== 'undefined') {
-          sidebarObserver = new MutationObserver(sync);
-          sidebarObserver.observe(root, { attributes: true, attributeFilter: ['class'] });
-          sidebarObserver.observe(foot, { childList: true });
+          appState.sidebarObserver = new MutationObserver(sync);
+          appState.sidebarObserver.observe(root, { attributes: true, attributeFilter: ['class'] });
+          appState.sidebarObserver.observe(foot, { childList: true });
         }
         return true;
       }
@@ -3676,7 +3673,7 @@ import { ICONS, el, svg } from './dom.js'
        * 判因：界面偏好此前只存在于自建面板的设置视图里 —— 用户找设置会去宿主设置中心，两处分离即"设置 rot"。
        * 组件复用宿主运行时（require('react')），类名用宿主既有 setting-item 体系 ⇒ 自动跟随宿主主题；
        * 面板内「设置」视图保留（自有壳兜底 + 配置原文/根目录等高风险项仍在面板内）。 */
-      var slotReact = null;
+      /* UI1/C′：`slotReact` 已收进 `appState`（初值在 `app-state.js`）。 */
       /* ---------- 界面设置的运行时应用 —— ③c 插件入口与副作用 ---------- */
       function applyCfgSideEffect(key) {
         try {
@@ -3691,7 +3688,7 @@ import { ICONS, el, svg } from './dom.js'
         } catch (e) { Log.warn('设置生效失败（' + key + '）：' + (e && e.message)); }
       }
       function ShoucangSettingsSection() {
-        var h = slotReact.createElement;
+        var h = appState.slotReact.createElement;
         function row(key, title, desc, control) {
           return h('div', { className: 'setting-item', key: key },
             h('div', { className: 'setting-item-info' },
@@ -3767,7 +3764,7 @@ import { ICONS, el, svg } from './dom.js'
          *     · 任一条件不满足 ⇒ 走既有 DOM 直插（行为与旧版一致，零回归） */
         var reactEl = null;
         try { reactEl = require('react'); } catch (e) { reactEl = null; }
-        slotReact = reactEl;
+        appState.slotReact = reactEl;
         var SLOT_OK = !!(reactEl && typeof reactEl.createElement === 'function' &&
           ctx && typeof ctx.effect === 'function' && ctx.slots && typeof ctx.slots.inject === 'function' &&
           typeof ctx.slots.register === 'function');
@@ -3813,7 +3810,7 @@ import { ICONS, el, svg } from './dom.js'
           if (!document.getElementById('scpanl-btn')) mountSidebarEntry();
         }
         return function () {
-          if (sidebarObserver) { try { sidebarObserver.disconnect(); } catch (e) { /* noop */ } }
+          if (appState.sidebarObserver) { try { appState.sidebarObserver.disconnect(); } catch (e) { /* noop */ } }
           var n = document.getElementById('scpanl-root'); if (n) n.remove();
           var b = document.getElementById('scpanl-btn'); if (b) b.remove();
         };

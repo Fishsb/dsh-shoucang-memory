@@ -171,7 +171,12 @@ const miss = need.filter((s) => src.indexOf(s) < 0)
 if (miss.length === 0) ok('折叠基础设施符号齐备（Fold / deferFold / flushFolds / secFoldKey）')
 else bad('缺少符号: ' + miss.join(', '))
 
-if (src.indexOf('if (currentView !== name) Fold.clear();') >= 0) ok('生命周期边界：仅换视图时 clear（同视图重绘保留开合态）')
+/* UI1/C′（2026-09-15）：原按**字面串**匹配 `if (currentView !== name) Fold.clear();`
+ *   ⇒ C′ 把该变量收进 `appState`（`appState.currentView`）后**串就不匹配**，报"未找到边界处理"。
+ *   **功能是对的**（`ui-geo-regress` 100 PASS 为证）—— 是**断言的匹配串过脆**。
+ *   本会话同类问题已第 **4** 次（`Fold` 抽走 · `UI` 抽走 · `derive` 抽走 · 本次改名），故在此根治：
+ *   **容忍可选容器前缀**（`appState.` 等 `\w+.`），只锁"语义形态"而非"字面写法"。 */
+if (/(?:[\w$]+\.)?currentView\s*!==\s*name\s*\)\s*Fold\.clear\(\)/.test(src)) ok('生命周期边界：仅换视图时 clear（同视图重绘保留开合态）')
 else bad('未找到「换视图才 clear」的边界处理')
 
 // B5：UI.fold 必须支持三种边界
