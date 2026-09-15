@@ -48,6 +48,8 @@ export const INJECT_MAP = {
   filterViewRows: 'filterViewRows',
   apiCtx: 'apiCtx',
   opCard: 'opCard',
+  renderRunExtras: 'renderRunExtras',
+  applyLogPanel: 'applyLogPanel',
 }
 
 /** 纯函数：给定源码，返回问题清单（供 selftest 驱动） */
@@ -60,6 +62,13 @@ export function checkOrder(text) {
   const walk = (n) => {
     if ((ts.isFunctionDeclaration(n) || ts.isVariableDeclaration(n)) && n.name && ts.isIdentifier(n.name)) {
       if (!decl.has(n.name.text)) decl.set(n.name.text, { ln: lineOf(n.getStart(sf)), kind: ts.isFunctionDeclaration(n) ? 'function' : 'var' })
+    }
+    /* **import 的绑定也算已声明**（UI1/U2 · 2026-09-15 补）：
+     *   符号迁到 pane 模块后，`body.js` 改为 `import` 它 ⇒ 注入的 RHS 变成**导入绑定**。
+     *   ESM 的 import **先于模块体求值** ⇒ 注入时必然可用，顺序上永远安全。
+     *   早前本门只认 `function`/`var` 声明 ⇒ 对导入符号误报 `[未声明]`（实测 renderRunExtras）。 */
+    if (ts.isImportSpecifier(n)) {
+      if (!decl.has(n.name.text)) decl.set(n.name.text, { ln: lineOf(n.getStart(sf)), kind: 'import' })
     }
     if (ts.isReturnStatement(n) && n.expression && n.expression.getText(sf) === 'module.exports') retPos = n.getStart(sf)
     if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken) {

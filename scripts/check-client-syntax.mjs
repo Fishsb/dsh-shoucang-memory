@@ -77,5 +77,33 @@ for (const f of files) {
   console.log(`     顶层 import ${topImports.length} 条：${topImports.map((l) => l.split(' from ')[1] || l).join(' ')}`)
 }
 
-console.log(fail ? `\nFAIL（${fail} 项）` : '\nPASS（src-client 全部可解析；形态声明一致；import 位置合规）')
+/* ── A5：pane 用了但没导入的服务（UI1/U2 · 2026-09-15 立）──
+ *   判因：panes-*.js 是 U2 抽出的视图模块，依赖**显式 import**（不靠闭包）。
+ *   实测踩过：panes-observe.js 里用了 Cfg 却没 import ⇒ 构建**成功**（esbuild 不做未定义变量检查）
+ *   ⇒ 真机 ReferenceError: Cfg is not defined ⇒ **整个面板不渲染**（弹窗 0% 宽、KPI 0/4）。
+ *   ⇒ 本段按**服务清单**逐项断言：凡在代码中出现即必须 import。
+ *   ⚠ 与 A1-A4 一样，属"构建绿但运行时崩"这一类 —— 只有静态断言能提前拦。 */
+{
+  const SERVICES = {
+    UI: './ui-kit.js', el: './dom.js', svg: './dom.js', ICONS: './dom.js',
+    Derive: './derive.js', fmtTime: './derive.js',
+    Bus: './state.js', Store: './state.js', Log: './state.js', Prog: './state.js', Cfg: './state.js', Fold: './state.js',
+    setLogStatusSink: './state.js', appState: './app-state.js',
+  }
+  const paneFiles = readdirSync(DIR).filter((x) => x.startsWith('panes-') && x.endsWith('.js'))
+  let miss = 0
+  for (const f of paneFiles) {
+    const src = readFileSync(join(DIR, f), 'utf8')
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+    const imported = new Set((src.match(/import \{ ([^}]+) \}/g) || []).flatMap((s) => s.replace(/import \{|\}/g, '').split(',').map((x) => x.trim())))
+    const bad = Object.keys(SERVICES).filter((s) => !imported.has(s) && new RegExp('(?:^|[^.\\w$])' + s + '\\b').test(code))
+    if (bad.length) {
+      miss++
+      bad.forEach((b) => console.log('  ❌ ' + f + ' 用了 ' + b + ' 但未 import（构建不报，运行时 ReferenceError ⇒ 面板整体不渲染）'))
+    }
+  }
+  ok(miss === 0, `A5 pane 服务 import 完整（扫 ${paneFiles.length} 个 pane · ${miss} 个缺失）`)
+}
+
+console.log(fail ? `\nFAIL（${fail} 项）` : '\nPASS（src-client 全部可解析；形态声明一致；import 位置合规；pane 服务 import 完整）')
 process.exit(fail ? 1 : 0)

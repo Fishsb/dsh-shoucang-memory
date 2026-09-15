@@ -91,7 +91,8 @@ const FREEZE = {
   // UI1/U2（2026-09-15）：抽出 panes-toggles.js（8 符号）⇒ **棘轮下调** 2867 → 2610
   // UI1/U2（2026-09-15）：抽出 panes-memory-detail.js（14 符号）+ 删死代码 sparkline ⇒ 棘轮 2314 → 1849
   // UI1/U2（2026-09-15）：抽出 panes-overview.js（8 符号）+ 清空壳标记 ⇒ 棘轮 1882 → 实测值
-  'src-client/body.js': 1552,
+  // UI1/U2（2026-09-15）：抽出 panes-arch(4)/panes-observe(3) ⇒ 棘轮 1552 → 实测值
+  'src-client/body.js': 1065,
   'src-client/styles.js': 726,
   'src/scheduler.ts': 611,
   'src/treeops.ts': 588,

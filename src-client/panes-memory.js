@@ -10,6 +10,7 @@ import { UI } from './ui-kit.js'
 import { el } from './dom.js'
 import { Derive, fmtTime } from './derive.js'
 import { appState } from './app-state.js'
+import { Log, Fold } from './state.js'
 
 function openMemoryNote(pointer, autoSection, returnRender) {
   if (!pointer) { appState.statusFn('该条目无 notes 跳转目标'); return; }

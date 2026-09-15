@@ -1,0 +1,288 @@
+/**
+ * panes-observe.js — 自 `body.js` 抽出的 pane 模块（UI1/U2 · 2026-09-15）
+ *
+ * **抽取方式**：`scripts/extract-pane.mjs`，用 **TypeScript AST** 取精确区间
+ *   （花括号配平与缩进边界都试过、都会切错 —— 见该脚本头注）。
+ *
+ * **取依赖**：从 `appState` 取（入口注入），不 import 全局服务模块。
+ */
+import { UI } from './ui-kit.js'
+import { el } from './dom.js'
+import { Derive, fmtTime } from './derive.js'
+import { appState } from './app-state.js'
+import { Bus, Store, Log, Cfg } from './state.js'
+
+function renderViewObserve(view) {
+  view.textContent = '';
+  /* v9 严格对齐：页头右侧 = 「导出」+「清空日志」(danger)；路由 chip 对齐原型 4 个端点 */
+  var logsAll = Store.get('logs') || [];
+  UI.pageHead('运行观测', '执行进度、调用日志、错误定位与关键指标。日志保留最近 500 条，错误带端点/参数/堆栈，便于定位而非只剩一行提示。', {
+    routes: ['/cognition/report', '/selfcheck', '/reconcile', '/embed/test'], refresh: true,
+    actions: [
+      UI.button('导出', function () {
+        var blob = new Blob([JSON.stringify({ logs: logsAll, errors: Store.get('errors') || [], metrics: Store.get('metrics') || {} }, null, 2)], { type: 'application/json' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'shoucang-observe-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '') + '.json';
+        a.click(); URL.revokeObjectURL(a.href);
+        appState.statusFn('✓ 观测数据已导出（' + logsAll.length + ' 条日志）');
+      }, { title: '下载当前日志/错误/指标（JSON）' }),
+      UI.button('清空日志', function () { Store.set('logs', []); Store.set('errors', []); refreshCurrentView(); appState.statusFn('已清空日志与错误记录'); }, { danger: true, confirm: '确认清空全部日志与错误记录？' })
+    ]
+  });
+  /* v9 严格对齐：4 张观测 KPI（请求总数 / 成功率 / 平均耗时 / 错误）——
+   *   数据全部从本地 Store 统计（logs 的 "N ms" 字样 + errors），**零新端点**。 */
+  (function () {
+    var msList = [];
+    var failCount = 0;
+    logsAll.forEach(function (l) {
+      var msg = String((l && l.message) || '');
+      var mt = /(\d+(?:\.\d+)?)\s*ms/.exec(msg);
+      if (mt) msList.push(parseFloat(mt[1]));
+      if (/✗|error|失败/.test(msg)) failCount++;
+    });
+    var errCount = Derive.count(Store.get('errors')); // 判空纪律（D7d）：统一走 Derive.count，不散落兜底写法
+    var total = logsAll.length;
+    var okCount = Math.max(0, total - failCount);
+    var avgMs = msList.length ? Math.round(msList.reduce(function (a, b) { return a + b; }, 0) / msList.length) : 0;
+    var okPct = total ? Math.round(okCount / total * 100) : null;
+    var grid2 = el('div', 'sc-kpis');
+    /* v9 §6-1：观测页 KPI **无状态点、无进度条**（原型 DOM 实测 kpi:4 内零 dot/bar，卡高 104）——
+     * 面板此前复用容量类 KPI（dot:4 bar:4 / 110 高）⇒ 形态不对齐。 */
+    grid2.appendChild(UI.kpi('请求总数', { val: Derive.num(total), sub: '本地保留（上限 500 条）', plain: true }).box);
+    grid2.appendChild(UI.kpi('成功率', { val: total ? (Math.round(okCount / total * 1000) / 10) + '%' : '—', sub: '非失败请求占比', plain: true }).box);
+    grid2.appendChild(UI.kpi('平均耗时', { val: avgMs + 'ms', sub: msList.length ? '按 ' + msList.length + ' 条带耗时记录均算' : '暂无带耗时的记录', plain: true }).box);
+    grid2.appendChild(UI.kpi('错误', { val: Derive.num(errCount), sub: errCount ? '见下方「错误定位」' : '无记录', plain: true }).box);
+    view.appendChild(grid2);
+  })();
+
+  // 1) 进度 —— v9 §6-2：原型是**卡**（.card：卡头「执行进度」+ 路由 chip / 卡体内 .cap 进度条），
+  //    面板此前是折叠块（.sc-fold.open）⇒ 形态不同。有真实进度时才渲染条，无进度给卡内空态。
+  var pc = UI.card('执行进度', { sub: '本次会话的深睡 / 蒸馏进度', right: [el('span', 'sc-src', '/cognition/report')] });
+  var p = Store.get('progress') || {};
+  var ids = Object.keys(p);
+  if (!Derive.has(ids)) pc.body.appendChild(el('div', 'sc-desc', '当前无进行中的任务。'));
+  else ids.forEach(function (id) { pc.body.appendChild(UI.progress(id)); });
+  view.appendChild(pc.box);
+
+  /* v9 严格对齐（第五轮 · 观测页形态）：原型是「4 KPI + 执行进度卡 + **3 组 Tab**」，
+   * 面板此前把 6 块内容做成**叠放折叠块**（同页纵向堆叠、互相挤占首屏）。
+   * 现改为 Tab 容器：调用日志 / 错误定位 / 运维操作（原型 3 组），
+   * 「关键指标」为真实功能但原型无此组 ⇒ 独立成一枚（不删功能）；
+   * 「高级：行级编辑 / 删除」并入运维操作（同属危险运维语义）。
+   * Tab 态经 Cfg('tab:observe') 持久化，与参数页 / 记忆库页同一 UI.tabs 实现。 */
+  var obLogs = el('div'); var obErrs = el('div'); var obOps = el('div'); var obMetrics = el('div');
+  var _ob = UI.tabs('observe', [
+    { id: 'logs', label: '调用日志 ' + Derive.count(Store.get('logs')), pane: obLogs },
+    { id: 'errors', label: '错误定位 ' + Derive.count(Store.get('errors')), pane: obErrs },
+    { id: 'ops', label: '运维操作', pane: obOps },
+    { id: 'metrics', label: '关键指标', pane: obMetrics }
+  ]);
+  view.appendChild(_ob.box);
+
+  // 2) 错误（C3 可定位）
+  var errs = Store.get('errors') || [];
+  var ebox = el('div');
+  if (!Derive.has(errs)) ebox.appendChild(el('div', 'sc-desc', '暂无错误。'));
+  else {
+    var list = el('div');
+    errs.slice().reverse().slice(0, 30).forEach(function (r) {
+      var ctx = r.ctx;
+      var where = ctx ? ((ctx.method || '') + ' ' + (ctx.path || '') + (ctx.params ? ' ' + JSON.stringify(ctx.params) : '')) : '—';
+      list.appendChild(UI.collapsible(
+        new Date(r.t).toLocaleTimeString() + '  ' + r.message,
+        UI.kv([['端点', where], ['堆栈', r.stack || '—']]),
+        {}
+      ));
+    });
+    ebox.appendChild(list);
+    ebox.appendChild(UI.button('清空错误', function () { Store.set('errors', []); refreshCurrentView(); }, { danger: true, confirm: '确认清空错误记录？' }));
+  }
+  obErrs.appendChild(ebox);
+
+  // 3) 关键指标（C4）
+  var mbox = el('div');
+  var m = Store.get('metrics') || {};
+  var mk = Object.keys(m);
+  if (!Derive.has(mk)) mbox.appendChild(el('div', 'sc-desc', '暂无指标（切换各视图会自动采集）。'));
+  else mbox.appendChild(UI.kv(mk.map(function (k) { return [k, String(m[k])]; })));
+  obMetrics.appendChild(mbox);
+  /* 账本对账与产出健康（原在深睡页；v9 深睡页无此卡 ⇒ 迁到本 Tab，与该 Tab 的运维/健康语义相符） */
+  appState.renderRunExtras(obMetrics);
+
+  // 4) 日志（C2）
+  obLogs.appendChild(buildLogPanel(400));
+
+  /* 运维操作（B1）：为后端已实现但界面无入口的端点补齐入口 —— /embed/test、/root/bootstrap */
+  var ops = el('div');
+  var embedRes = el('div', 'sc-desc', '未测试');
+  ops.appendChild(UI.item('嵌入服务连通性', 'POST /embed/test —— 验证当前 embedding 配置是否可用（配完即可验证，不必等实际调用失败）。',
+    UI.button('测试连接', function () {
+      embedRes.textContent = '读取配置…';
+      // /embed/test 需要 { baseUrl, apiKey }——先从 /embed/config 取当前配置再测（不可发空 body）
+      return appState.api('/embed/config').then(function (c) {
+        var g = (c && c.global) || {};
+        var baseUrl = String(g.embedBaseUrl || '').trim();
+        if (!baseUrl) { embedRes.textContent = '✗ 未配置 embedBaseUrl，请先到「参数调节」填写。'; return; }
+        embedRes.textContent = '测试中… ' + baseUrl;
+        return appState.apiCtx('/embed/test', {
+          method: 'POST',
+          body: JSON.stringify({ baseUrl: baseUrl, apiKey: String(g.embedApiKey || '').trim() })
+        }, '嵌入连通性').then(function (r) {
+          var n = Derive.count(r && r.models);
+          embedRes.textContent = (r && r.error) ? ('✗ ' + r.error) : ('✓ 可达 · ' + n + ' 个模型');
+          Log.info('嵌入服务连通性测试' + ((r && r.error) ? '失败：' + r.error : '通过'));
+        });
+      }).catch(function (e) { embedRes.textContent = '✗ ' + e.message; });
+    }, { async: true, busyText: '测试中…', okText: '嵌入连通性测试完成' }), {}));
+  ops.appendChild(embedRes);
+
+  var bootRes = el('div', 'sc-desc', '未执行');
+  ops.appendChild(UI.item('根目录引导', 'POST /root/bootstrap —— 初始化/修复记忆根目录结构。',
+    UI.button('执行引导', function () {
+      bootRes.textContent = '执行中…';
+      return appState.apiCtx('/root/bootstrap', { method: 'POST', body: JSON.stringify({}) }, '根目录引导')
+        .then(function (r) { bootRes.textContent = '✓ ' + JSON.stringify(r).slice(0, 240); })
+        .catch(function (e) { bootRes.textContent = '✗ ' + e.message; });
+    }, { async: true, busyText: '执行中…', confirm: '执行根目录引导会尝试创建缺失的目录结构，确认继续？' }), {}));
+  ops.appendChild(bootRes);
+
+  obOps.appendChild(ops);
+
+  /* 高级（B1 收口）：/memory/edit · /memory/remove 为**行级**原语，作用对象是记忆文件本身。
+   * 注意：既有设计 R3 明确「索引行只读——直接改索引行会与 notes 详情错位」，常规编辑请走小节编辑
+   * （/memory/section-edit）。此处仅为「无死角入口」要求暴露，并附显式风险提示，默认折叠。 */
+  var adv = el('div');
+  adv.appendChild(el('div', 'sc-desc', '⚠ 行级直接改写记忆文件。改索引行可能导致指针与 notes 正文不一致（详见 R3），常规编辑请用「记忆板块 → 小节编辑」。'));
+  var fInp = UI.input('MEMORY.md', null, { placeholder: '文件，如 MEMORY.md / notes/lessons.md', width: '260px', ariaLabel: '记忆文件' });
+  var lInp = UI.input('', null, { placeholder: '待匹配的原始行文本', width: '320px', ariaLabel: '原始行' });
+  var nInp = UI.input('', null, { placeholder: '新行文本（仅编辑需要）', width: '320px', ariaLabel: '新行' });
+  adv.appendChild(UI.item('目标文件', 'isWritable 白名单内的记忆文件。', fInp, {}));
+  adv.appendChild(UI.item('原始行', '必须与原文件中的一行完全一致（后端按行匹配）。', lInp, {}));
+  adv.appendChild(UI.item('新行文本', '编辑时必填；删除时忽略。', nInp, {}));
+  var advRes = el('div', 'sc-desc', '未执行');
+  var row = el('div', 'sc-toolbar'); // 与全站「操作按钮行」同一原语（旧实现三行内联样式各写各的间距）
+  row.appendChild(UI.button('按行编辑', function () {
+    var file = fInp.value.trim(), line = lInp.value.trim(), nt = nInp.value.trim();
+    if (!file || !line || !nt) { advRes.textContent = '✗ 文件 / 原始行 / 新行 三项均必填'; return; }
+    return appState.apiCtx('/memory/edit', { method: 'POST', body: JSON.stringify({ file: file, line: line, newText: nt }) }, '行级编辑')
+      .then(function () { advRes.textContent = '✓ 已改写该行'; Log.warn('行级编辑已执行（可能需同步索引）：' + file); })
+      .catch(function (e) { advRes.textContent = '✗ ' + e.message; });
+  }, { async: true, busyText: '提交中…' }));
+  row.appendChild(UI.button('按行删除', function () {
+    var file = fInp.value.trim(), line = lInp.value.trim();
+    if (!file || !line) { advRes.textContent = '✗ 文件与原始行必填'; return; }
+    // 确认文案需带「目标行内容」⇒ 用动态 confirm；此处不再走 opts.confirm（原实现两者并存 ⇒ 弹两次）
+    if (!confirm('确认删除该行？此操作不可撤销（会由写门备份）。\n\n' + line)) return;
+    return appState.apiCtx('/memory/remove', { method: 'POST', body: JSON.stringify({ file: file, line: line }) }, '行级删除')
+      .then(function () { advRes.textContent = '✓ 已删除该行'; Log.warn('行级删除已执行（可能需同步索引）：' + file); })
+      .catch(function (e) { advRes.textContent = '✗ ' + e.message; });
+  }, { async: true, busyText: '提交中…', danger: true, confirm: '确认执行行级删除？' }));
+  adv.appendChild(row);
+  adv.appendChild(advRes);
+  obOps.appendChild(UI.collapsible('高级：行级编辑 / 删除（谨慎）', adv, { open: false }));
+}
+
+function buildLogPanel(maxH, opts) {
+  var o = opts || {};
+  var wrap = el('div', 'sc-logwrap');
+  if (maxH) wrap.style.setProperty('--sc-log-h', maxH + 'px'); // 高度走变量（CSS 兜底 150px）
+  if (o.collapsed) wrap.classList.add('sc-log-collapsed');
+  var head = el('div', 'sc-log-head');
+  var arrow = el('span', 'sc-sec-arrow', o.collapsed ? '▸' : '▾');
+  if (o.collapsible) {
+    /* v9 对齐：日志折叠为一行可点开的条带（此前是"要么常驻面板、要么整个移除"两态） */
+    head.classList.add('sc-log-toggle');
+    head.setAttribute('role', 'button');
+    head.setAttribute('tabindex', '0');
+    head.setAttribute('aria-expanded', o.collapsed ? 'false' : 'true');
+    head.onclick = function (ev) {
+      if (ev && ev.target && ev.target.tagName === 'SELECT') return; // 级别下拉不触发折叠
+      Cfg.set('showLogs', !!Cfg.get('showLogs', true) ? false : true);
+      appState.applyLogPanel();
+    };
+    head.onkeydown = function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); head.onclick(ev) } };
+  }
+  head.appendChild(arrow);
+  head.appendChild(el('span', null, '日志'));
+  var lvSel = UI.select(
+    [{ value: 'info', label: '全部' }, { value: 'warn', label: '警告+' }, { value: 'error', label: '仅错误' }],
+    Cfg.get('logLevel', 'info'),
+    function (v) { Cfg.set('logLevel', v); render(); }
+  );
+  lvSel.setAttribute('aria-label', '日志级别');
+  head.appendChild(lvSel);
+  var cnt = el('span', null, '');
+  head.appendChild(cnt);
+  head.appendChild(el('span', 'sc-spacer')); // 推右侧（原为内联 marginLeft:auto）
+  head.appendChild(UI.button('清空', function () { Log.clear(); render(); }));
+  wrap.appendChild(head);
+  var body = el('div');
+  wrap.appendChild(body);
+  var ORDER = { info: 0, warn: 1, error: 2 };
+  function render() {
+    var min = ORDER[Cfg.get('logLevel', 'info')] || 0;
+    var all = (Store.get('logs') || []).filter(function (l) { return (ORDER[l.level] || 0) >= min; });
+    cnt.textContent = all.length + ' 条';
+    body.textContent = '';
+    if (!Derive.has(all)) { body.appendChild(el('div', 'sc-log-row', '（无）')); return; }
+    /* v9 §6-4 行形态：级别图标 + 方法 + 端点 + 耗时 + 状态码（后两者取自 api() 写入 ctx 的真实值）。
+     * 无 ctx 的纯文本日志（业务提示）回落「图标 + 文本」，不伪造端点与状态码。 */
+    var LVICON = { info: '·', warn: '!', error: '✗' };
+    all.slice(-200).reverse().forEach(function (l) {
+      var row = el('div', 'sc-log-row sc-log-' + l.level);
+      var c = l.ctx || {};
+      row.appendChild(el('span', 'sc-log-lv', LVICON[l.level] || '·'));
+      if (c.path) {
+        row.appendChild(el('span', 'sc-log-m', c.method || 'GET'));
+        row.appendChild(el('span', 'sc-log-p', String(c.path)));
+        if (c.ms !== undefined) row.appendChild(el('span', 'sc-log-ms', c.ms + 'ms'));
+        if (c.status !== undefined) row.appendChild(el('span', 'sc-log-st', String(c.status)));
+      } else {
+        row.appendChild(el('span', 'sc-log-msg', l.msg));
+      }
+      row.appendChild(el('span', 'sc-spacer'));
+      row.appendChild(el('span', 'sc-log-t', new Date(l.t).toLocaleTimeString()));
+      body.appendChild(row);
+    });
+  }
+  render();
+  Bus.on('log', render);
+  return wrap;
+}
+
+function renderRunExtras(view) {
+  /* v9 对齐：分节标题 → 卡片（与记忆板块同层级）；group2 返回卡体，后续内容 append 进卡体 */
+  var gHost = view;
+  var gRoot = view;   /* 卡片的挂载根固定为视图（否则第二张卡会挂进第一张卡体 ⇒ 嵌套） */
+  var group2 = function (t) { var c = UI.card(t); gRoot.appendChild(c.box); gHost = c.body; return c.body; };
+  var mk = function (label, value, sub) {
+    var card = el('div', 'sc-mem-stat');
+    card.appendChild(el('div', 'sc-mem-stat-label', label));
+    card.appendChild(el('div', 'sc-mem-stat-value', value));
+    if (sub) card.appendChild(el('div', 'sc-mem-stat-sub', sub));
+    return card;
+  };
+  /* v9 深睡页（DOM 实测）**没有**这三张卡：判据与对账 → 总览页已有「判据与重排门」卡
+   * （ovCriteriaCard，同一 /criteria 数据）；认知环 → 总览页徽章 + 系统状态卡已表达。
+   * 本函数因此只留「账本对账与产出健康」一项真实功能（原型无对应卡，但其数据无处可去 ⇒
+   * 迁到运行观测页的「关键指标」Tab，语义相符且不丢功能）。 */
+  group2('账本对账与产出健康（v2.1 M3）');
+  var rw = el('div', 'sc-mem-stats');
+  rw.appendChild(mk('对账', '…', '读取中'));
+  gHost.appendChild(rw);
+  appState.api('/reconcile').then(function (r) {
+    rw.textContent = '';
+    if (!r || !r.active) { rw.appendChild(mk('对账', '未就绪', (r && r.error) || 'memory-reconcile.mjs 未部署')); return; }
+    var cl = r.closure || {};
+    var h = r.health || {};
+    var ly = (r.layers || {}).counts || {};
+    var P = ly.P || { index: 0, profile: 0 }, R = ly.R || { index: 0, profile: 0 }, E = ly.E || { index: 0, profile: 0 };
+    rw.appendChild(mk('账本闭合', cl.ok === null ? '样本不足' : cl.ok ? '✅ 差异 0' : '⚠ 有差异', '台账 ' + ((r.window || {}).ledgerRows || 0) + ' 行 · 写事件 ' + (h.writeEvents || 0) + ' 次'));
+    rw.appendChild(mk('上次有效深睡', h.lastSuccessfulWrite ? fmtTime(h.lastSuccessfulWrite) : '（无）', '连续空转 ' + (h.idleStreak || 0) + ' 轮 · 深睡轮次 ' + (h.deepSleepRounds || 0)));
+    rw.appendChild(mk('写入被拒率', h.rejectRate === null || h.rejectRate === undefined ? 'n/a' : (h.rejectRate * 100).toFixed(0) + '%', '拒 ' + (h.rejectedWrites || 0) + ' / 写事件 ' + (h.writeEvents || 0) + ' · 尝试 ' + (h.attemptedTotal || 0) + ' 条'));
+    rw.appendChild(mk('三层占比', 'P ' + (P.index + P.profile) + ' · R ' + R.index + ' · E ' + (E.index + E.profile), 'P=恒常（索引+P 层画像行 ≤' + ((r.layers || {}).profileCap || 3) + '/档）· R=任务门控 · E=相关性门控'));
+  }).catch(function () { rw.textContent = ''; rw.appendChild(mk('对账', '读取失败', '/reconcile')); });
+}
+
+export { renderViewObserve, buildLogPanel, renderRunExtras };

@@ -10,6 +10,7 @@ import { UI } from './ui-kit.js'
 import { el } from './dom.js'
 import { Derive, fmtTime } from './derive.js'
 import { appState } from './app-state.js'
+import { Bus, Fold } from './state.js'
 /* UI1/U2：本模块用到**同领域**的 pane 导出（记忆索引行 / 指针行构造）。
  *  依赖方向单向：memory-detail → memory（无环）。 */
 import { renderIndexRows, makeMemoryPointerRow, openMemoryNote } from './panes-memory.js'

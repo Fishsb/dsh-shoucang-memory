@@ -28,6 +28,10 @@ export const appState = {
   refreshView: null,
   /** DOM 句柄表（`refs`）——**可变**,UI1/C′ 原则：可变句柄统一在本容器。 */
   refs: null,
+  /** 深睡/运行附加块渲染器（`renderRunExtras`）——运行观测视图调用。 */
+  renderRunExtras: null,
+  /** 日志面板应用器（`applyLogPanel`）。 */
+  applyLogPanel: null,
   /** 带上下文标签的 RPC 包装（`apiCtx`）——总览卡片用它报错定位。 */
   apiCtx: null,
   /** 操作卡构造器（`opCard`）——总览/观测视图的进度卡。 */
