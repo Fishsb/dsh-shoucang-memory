@@ -735,6 +735,11 @@ if (process.argv.includes('--shots')) {
   mkdirSync(dir, { recursive: true })
   shoot(1280, 860, '运行总览', join(dir, 'shot-overview.png'))
   shoot(1280, 860, '参数', join(dir, 'shot-params.png'))
+  /* 参数页「④ 后台与调度」页签（2026-09-15 补）：该页签承载**蒸馏节流 4 键 + 蒸馏/深睡模型下拉**
+   *   （即 H-5/H-16 = F-001 唤醒空闲时长 / F-002 蒸馏子代理模型）。
+   *   判因：此前出图集只出**默认页签①** ⇒ 这 6 个键的 UI 长期没有视觉证据，
+   *   以致 `OPEN-ITEMS` 里"无持久 UI 通道"的**过时判断**能存活很久（实测它们**早已有控件**）。 */
+  shoot(1280, 860, '参数', join(dir, 'shot-params-sched.png'), '④ 后台与调度')
   /* 记忆库页（2026-09-13 P1-2 拆分 renderMemoryExpanded 后纳入出图集）——
    * 该页是 5 Tab + 容量卡 + 徽章行的复合结构，只靠断言看不见「层级反了 / 内容被挤出去」。 */
   shoot(1280, 860, '记忆库', join(dir, 'shot-memory.png'))
@@ -762,7 +767,7 @@ if (process.argv.includes('--shots')) {
    *   判因：出图集此前**不校验产出** —— 12 张全 `✗`（目录不存在）而门仍 100 PASS，
    *   即"**出图失败被吞掉**"，与"日志面板静默空掉"是同一类假绿。
    *   ⇒ 逐张核对存在且非空；缺一张即 FAIL（exit 1），并写明差在哪。 */
-  const SHOTS = ['shot-overview', 'shot-params', 'shot-memory', 'shot-observe', 'shot-settings',
+  const SHOTS = ['shot-overview', 'shot-params', 'shot-params-sched', 'shot-memory', 'shot-observe', 'shot-settings',
     'shot-persona', 'shot-suite', 'shot-sleep', 'shot-arch', 'shot-arch-asm', 'shot-arch-mcl']
   const missing = SHOTS.filter((n) => {
     const p = join(dir, n + '.png')

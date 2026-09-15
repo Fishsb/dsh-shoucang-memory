@@ -30,8 +30,24 @@ const run = (script) => {
   try { return execFileSync(process.execPath, [script], { encoding: 'utf8', cwd: root }) }
   catch (e) { return String(e.stdout || '') + String(e.stderr || '') }
 }
+/**
+ * 重建 client 产物。
+ *
+ * ⚠ **不得依赖 npm 在 PATH**（2026-09-15 实证缺陷）：本件曾用 `npm.cmd run build:client`，
+ *   而实测环境里 npm **可能不在 PATH**（本会话就发生了）⇒ 构建**静默失败**（被 catch 吞掉）
+ *   ⇒ 反例自证里「破坏未生效」⇒ 门报出**误导性结论**（"门没抓到"，真因是"根本没重建"）。
+ *   这正是本项目反复治的**静默失效**类，且**发生在我自己的门上**。
+ * ⇒ 两处加固：① 直接跑构建脚本（`node scripts/build-client.mjs`，与 package.json 的 `build:client` **同源**）；
+ *   ② **不再吞异常** —— 构建失败即门失败（退出码非 0），绝不降级成"破坏未生效"。
+ */
 const build = () => {
-  try { execFileSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'build:client'], { stdio: 'pipe', cwd: root, shell: process.platform === 'win32' }) } catch (e) { /* 构建失败也要继续，由断言判 */ }
+  try {
+    execFileSync(process.execPath, [join(root, 'scripts', 'build-client.mjs')], { stdio: 'pipe', cwd: root })
+  } catch (e) {
+    console.log('❌ 构建失败（门无法判定"破坏是否生效"）—— 原始报错：')
+    console.log('   ' + String((e.stdout || '') + (e.stderr || '') || e.message).slice(0, 400))
+    process.exit(1)
+  }
 }
 
 let bad = 0

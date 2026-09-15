@@ -1658,6 +1658,18 @@
 - **panel client 迁移到 slot 契约（2026-09-05，解冻前置）**：client.js 注入声明加 `'slots'`，入口从直插侧栏 footArea DOM 改为注册 `sidebar.footer.action` 插槽按钮（无 slots 环境保留直插兜底）；host+client 已注入运行（ef85e372），构建产物 lib/ 重建
 
 ### Fixed
+- **H-5/H-16 · 蒸馏节流 6 键「无持久 UI 通道」是**误登记**——通道早已存在，真缺陷是**标题与控件被隔开**（2026-09-15）**：
+  6 键**都有可编辑 UI**（`enableDistill`/`distillPrescan` 开关 · `idleWakeMs`（=**F-001 唤醒空闲时长**）/`minTurnChars`
+  数字输入 · `llmProvider`/`llmModel` 作缺省、由「蒸馏模型 / 深睡归纳模型」下拉覆盖＝**F-002**），
+  走专用路由 **`/distill/config`**（契约 `panel-contract.ts:76`），且**视图契约基线已把这 4 键算作 `[sched]` 项**（34/34 PASS）。
+  **真缺陷**：该节**标题在函数开头、控件容器在函数末尾**创建 ⇒ 中间隔着「召回与库版本」「认知环」两整段
+  ⇒ **标题下空白、控件落到页尾且无小节标题** —— **这正是当初登记为"无通道"的成因**（看一眼标题下面没东西）。
+  已修（标题 + 说明 + 容器一起前置）。**并新增该页签的永久出图 `shot-params-sched.png`** —— 此前出图集只出默认页签①
+  ⇒ 这 6 个键长期没有视觉证据（**这就是误登记能存活的原因**）。真机复验：标题下即控件，且动态回填当前生效值。
+- **修自家门的一处静默失效：`test-split-equivalence` 曾依赖 `npm` 在 PATH（2026-09-15）**：本件原用
+  `npm.cmd run build:client`，而实测环境 npm **可能不在 PATH**（本会话就发生）⇒ 构建**静默失败**（被 catch 吞掉）
+  ⇒ 反例自证里"破坏未生效" ⇒ 门报出**误导性结论**（"门没抓到"，真因是"根本没重建"）。⇒ 加固两处：
+  ① 直接跑 `node scripts/build-client.mjs`（与 `build:client` **同源**，不依赖 npm）；② **不再吞异常** —— 构建失败即门失败。
 - **H-1 · 深睡 `outcomes` 通道自上线起结构性恒 0 —— 材料侧从未供应（2026-09-15）**：prompt 的 P5 段写明
   「材料若给出**待回收的裁决**（含 `decisionId` 与**当时预测**）…就填 `outcomes[]`」，而 `gatherMaterials`
   **从未产出该段** ⇒ 条件永不成立。**实测**：库内 `decision` 50 条，其中 **49 条待回收**（`status=open` + `predicted`），

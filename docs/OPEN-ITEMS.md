@@ -85,7 +85,7 @@
 | **H-2** | ✅ **早已结清（非缺陷）· 原文自相矛盾** | `anthropomorphic-plan` **L463** 写「**E5 ✅ 关闭为非缺陷（Q3 结清）**」且给实测（独立计数 E 层画像行 = **25**，与 reconcile **完全一致**；成因＝无标签画像行回落 E）；**L853** 仍写「Q3 待补」——**那是没同步的旧行**，本表抄了旧行。另：`layerCounts` 在 `src/` **已不存在** |
 | **H-3** | ✅ 已决 **no-go** | 原文；待「真实写入样本」且确需单事实源才翻转 |
 | **H-4** | ✅ **已解决** | 两键已进 zod（`scheduler.ts:204-205`，注释标「U3 转正」）**且**进 panel-config 键表（`:98/:101/:152/:158/:218/:220/:251/:284`） |
-| **H-5 + H-16** | ⏳ **真实缺口 · 待你决策**（同一件事两处登记） | 6 个蒸馏节流键（`enableDistill`/`idleWakeMs`/`minTurnChars`/`distillPrescan`/`llmProvider`/`llmModel`）**无持久 UI 通道**。**需产品决策**：进面板设置页，还是宿主设置中心？（H-16＝用户明确要求记住的 F-001/F-002） |
+| **H-5 + H-16** | ✅ **已解决（通道早已存在）· 并修掉导致误登记的呈现缺陷** | 6 键**都有可编辑 UI**：`enableDistill`/`distillPrescan` = 开关，`idleWakeMs`（**=F-001 唤醒空闲时长**）/`minTurnChars` = 数字输入，`llmProvider`/`llmModel` = 作为缺省、由**蒸馏模型 / 深睡归纳模型**下拉（「继承主会话」）覆盖（**F-002**）。通道 = 专用路由 **`/distill/config`**（`panel-observe.ts:550`，契约 `panel-contract.ts:76`）；**视图契约基线已把这 4 个键算作 `[sched]` 项**（`守藏蒸馏器 enableDistill` / `零成本预筛 distillPrescan` / `空闲唤醒 idleWakeMs` / `本轮最少字符 minTurnChars`）且 `test-panel-view-contract` **34/34 PASS**。<br>⚠ **本轮实测发现的真缺陷**：该节**标题在函数开头、控件容器在函数末尾**创建 ⇒ 中间隔着「召回与库版本」「认知环」两段 ⇒ **标题下空白、控件落到页尾无标题** —— **这正是当初把"无持久 UI 通道"登记进表的成因**（看一眼标题下面没东西）。已修（标题+说明+容器一起前置），并**新增该页签的永久出图 `shot-params-sched.png`**（此前出图集只出默认页签① ⇒ 该页签 6 个键长期无视觉证据）。真机复验：标题下即控件，且**动态回填当前生效值**（`空闲 10 分钟 / 本轮最少 200 字符 / 预筛 开 / 蒸馏模型 继承主会话`） |
 | **H-6** | ✅ **已解决** | 全 `src/` 已无「接线待办」注释（`distill.ts` 现 **343 行**；`panel-arch.ts:193` 那处指的是**现行的** `criteria.json#wiring.pending` 机制，非漂移） |
 | **H-7** | ✅ **前提消失** | `scripts/memory-ab-baseline.mjs` **已不存在**（仓内只有 `memory-reconcile.mjs`）⇒ 无「与 reconcile 合并」的对象 |
 | **H-8** | ✅ **已解决（且有门）** | ① `RING_OF_KIND.valence = 'value'`（`rings.ts:37`），由 **`check-ring-coverage` 双向机检**与 `record-store.KINDS` 一致；② `dueRank` 已与 S4-4 的 **`dueSoon`** 并存（`ring-supply.ts:89/:108`），`content-types.ts:37` 判 `due → dueSoon` 且 **`wired: true`**，由 `check-content-types` 守 |
@@ -97,8 +97,11 @@
 | **H-14** | ✅ **目的已达成** | 「蒸馏期互斥/卡死」已由**方案 E** 覆盖（**10min 超时 race + 仅 completed 推水位**，见 `dev-scenarios` 场景 10 ✅），并有 `test-idle-arm-wiring.mjs` 驱动真 turn/end 断言（**已登记门禁**） |
 | **H-15** | ✅ **4 项子待办均已解决 · 场景 5 实测无多代** | ① devDeps 自包含 ✅（`typescript ^5.9.0` + `@types/node ^24.13.3` + `npm run typecheck`；**用 tsc 方案，不需要 tsdown**）· ② src 单源生成 lib ✅（`build:host = tsc`，lib 随仓 **209 件**）· ③ 引擎基线 ✅（`skill/scripts/test.mjs` **41 PASS / 0 FAIL**）· ④ 方案 E watcher 单测 ✅（`test-idle-arm-wiring.mjs`，已登记）；**场景 5**：loader 中 `dsh-shoucang-memory` **单条 entry**、本会话热重载 **4+ 次**均「重建 1 fiber」、注入器 `reload 450✓/0✗` ⇒ **未见多代并存** |
 
-**⇒ 16 项净结果**：**1 项真缺陷（H-1，已修且补门）** · **10 项早已解决或前提消失**（H-2/4/6/7/8/9/12/13/14/15）· **1 项已决 no-go**（H-3）
-· **剩余 3 项**：**H-5+H-16**（同一件事，**需你决策 UI 落点**）· **H-10**（**等 2–3 天**）· **H-11**（**低优先文档整理**）。
+**⇒ 16 项净结果**：**2 项真缺陷，均已修并补了护具** ——
+**H-1**（深睡 `outcomes` 通道自上线起死掉 ⇒ 接材料 + `check-injection-reach` ⑤⑥）·
+**H-5/H-16**（通道**早已存在**，但**标题与控件被两段隔开** ⇒ 被误登记为"无通道"；已修 + 新增该页签永久出图）·
+**10 项早已解决或前提消失**（H-2/4/6/7/8/9/12/13/14/15）· **1 项已决 no-go**（H-3）
+· **剩余 2 项**：**H-10**（**等 2–3 天**）· **H-11**（**低优先文档整理**）。**无"可施工而未施工"的项。**
 
 > ⚠ **本节的教训**：`§5` 当初按「扫描片段」登记、**未逐行核对**（原文自己标注了这一点）——
 > 结果 16 项里 **10 项已经做掉了**却长期挂在表上，**让待办表看起来永远做不完**。

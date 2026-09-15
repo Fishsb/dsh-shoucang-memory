@@ -516,7 +516,20 @@ function renderTogglesSched(host, g) {
   // 但不持久（注入插件不进 loader 配置持久化），此前只能手写 ~/.dsh/suite/scheduler.json；
   // 现经 /distill/config 读写同一文件（与深度睡眠同通道），**改动需重载插件后生效**。
   host.appendChild(el('div', 'sc-desc', '高级项：蒸馏节流 / 召回与库版本 / 认知环；改后需重载生效。'));
+  /* ⚠ **本节（标题 + 容器）必须在这里一次性建立**（2026-09-15 修正）：
+   *   原来标题在函数开头、而容器 `dDesc`/`dZone` 在**函数末尾**才创建 ⇒ 中间隔着
+   *   「召回与库版本」「认知环」两整段 ⇒ **标题下空白、控件落到页尾且无小节标题**。
+   *   实证后果：`docs/OPEN-ITEMS.md` 把「6 个蒸馏节流键**无持久 UI 通道**」登记为待办（H-5/H-16），
+   *   而通道**早已存在**（路由 `/distill/config` + 控件 + 视图契约基线均覆盖）——
+   *   **登记人看到的就是"标题下面没东西"**。
+   *   现把三者一起前置；`dDesc`/`dZone` 由闭包在后面（异步回填时）使用 ——
+   *   内层 `function` 声明有提升，`distillToggle`/`distillInput` 在后面定义也照样可调。 */
   host.appendChild(el('div', 'sc-h3', '蒸馏节流（运行时通道）'));
+  var dDesc = el('div', 'sc-desc', '写入自持配置 ~/.dsh/suite/scheduler.json（深度睡眠同通道）。改动不会立刻作用到在跑的会话——**需重载插件后生效**。当前值读取中…');
+  host.appendChild(dDesc);
+  var dZone = el('div');
+  dZone.appendChild(el('div', 'sc-desc', '读取中…'));
+  host.appendChild(dZone);
   /* U2：桶④ 默认折叠（B6 高级后置）——哨兵 + 自调度，后续节点自动收进折叠体 */
   // U3（B5 能力对齐）：召回融合策略（v2 回滚开关）+ 库版本化 + 认知环 6 键 —— 均在桶④折叠体内
   host.appendChild(el('div', 'sc-h3', '召回与库版本'));
@@ -568,12 +581,8 @@ function renderTogglesSched(host, g) {
       .then(function () { appState.statusFn('✓ 已切换 ' + key + '（需重载生效）'); })
       .catch(function (e) { appState.failFn(e); sw.checked = !sw.checked; });
   }));
-  // 说明文本动态化（2026-09-10）：不写死缺省值，拿到 /distill/config 后回填**当前生效值**
-  var dDesc = el('div', 'sc-desc', '写入自持配置 ~/.dsh/suite/scheduler.json（深度睡眠同通道）。改动不会立刻作用到在跑的会话——**需重载插件后生效**。当前值读取中…');
-  host.appendChild(dDesc);
-  var dZone = el('div');
-  dZone.appendChild(el('div', 'sc-desc', '读取中…'));
-  host.appendChild(dZone);
+  // 说明文本与容器**已在函数开头建立**（2026-09-15 修正：原先在此处才创建 ⇒ 标题与控件被两段隔开、
+  //   标题下空白 ⇒ 被误登记为"无 UI 通道"）。此处只保留辅助函数与异步回填。
   function distillSave(patch, onFail) {
     return appState.api('/distill/config', { method: 'POST', body: JSON.stringify(patch) })
       .then(function () { appState.statusFn('✓ 已写入 ' + Object.keys(patch).join(',') + '（重载后生效）'); })
