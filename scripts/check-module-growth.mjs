@@ -86,7 +86,10 @@ const SLACK = 15
  * 2026-09-14 定基线（实测取样，口径见件头）。每完成一次瘦身，应把对应条目**下调**。
  */
 const FREEZE = {
-  'src-client/body.js': 3147,
+  // UI1/U2（2026-09-15）：抽出 panes-memory(240)/panes-config(118) ⇒ **棘轮下调** 3147 → 2867
+  //   （口径：**有效行数** = 物理行 − 注释 − 空行，见 codeLinesOf）
+  // UI1/U2（2026-09-15）：抽出 panes-toggles.js（8 符号）⇒ **棘轮下调** 2867 → 2610
+  'src-client/body.js': 2314,
   'src-client/styles.js': 730,
   'src/scheduler.ts': 611,
   'src/treeops.ts': 588,

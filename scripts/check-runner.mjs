@@ -101,6 +101,11 @@ const CHECKS = [
   //   **两个防绕过断言**（各有反例自证）：节数下限（防"合并标记"）· 无主区域（防"删标记"）。
   ['scripts/check-pane-sections.mjs'],
   ['scripts/check-pane-sections.mjs', '--selftest'],
+  // UI1/U2（2026-09-15）**共享句柄注入位置门**：实测两个方向都踩过 ——
+  //   注入太晚（调用早于注入）⇒ pane 静默空掉；注入太早（var 无提升值）⇒ 注入 undefined。
+  //   断言用 AST：每个 appState.X = Y 的 Y 必须已声明且早于注入，且注入在 return 之前。
+  ['scripts/check-inject-order.mjs'],
+  ['scripts/check-inject-order.mjs', '--selftest'],
   // UI1/U5-a（2026-09-15）**行为级证据**：`test-route-schema` 只证明"坏请求被 400 拦住"，
   //   **从未验证合法请求的副作用**（真的写进去、能读回）。而 U1/U2 要大规模拆分前端
   //   （`body.js` 5476 行 → 7 个 pane），"拆分后行为不变"必须有行为证据 —— `ui-geo-regress`
