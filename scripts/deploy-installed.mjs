@@ -75,6 +75,13 @@ function planCopy(src, dst, label, createIfMissing) {
 }
 
 // ── 面 1：lib/**（全扩展名；**缺失补建**）──
+// ⚠ **范围说明（2026-09-17 实测留痕，防重踩）**：本面**不含仓根 `client.js`**，且这是**正确**的 ——
+//   · **加载面是 `lib/client.js`**：`package.json` 的 `sideEffects: ["./lib/client.js"]` 自述
+//     「面向宿主加载器的发布提示」；`build-client.mjs:6` 亦写明「产物 = 仓根 `client.js`（IIFE）→
+//     **再复制到 `lib/client.js`（沿用「lib/client.js 即 client bundle」契约）**」。
+//   · ⇒ 仓根 `client.js` 是**构建中间产物**；其副本滞后**无害**（实测四者曾同时字节一致）。
+//   · 故**勿**为"补齐仓根 client.js"而加面 —— 那是复制冗余件的堆叠（与仓内极简约定冲突）。
+//     仅当将来 `sideEffects` / 构建契约改为指向根件时，才需要把根件纳入本面。
 const repoLib = join(root, 'lib')
 const targets = probeInstalled()
 if (!existsSync(repoLib)) { console.log('⏭ 跳过：仓内 lib/ 不存在（先 npm run build）'); process.exit(3) }
