@@ -105,26 +105,34 @@ sec-fetch-site     → 403   ✅ 修复前 200
 `check-changelog` PASS · `check-public-tree` PASS · `audit-wiring` 0 违规 · `audit-architecture --gate` PASS ·
 `typecheck` 0 错。
 
-### 剩余红项（终态 · 逐条实测归属）
+### 红项收敛（终态 · 逐条实测归属）
 
-> ⚠ **本节含一次自我更正**：早期版本把 `test-panel-wiring` 判为"既有问题"，**那是错的** ——
-> 它是本轮改动引入的**真实回归**，被门禁抓出并修复（见 §自身缺陷 5）。
+> ⚠ **本节含两次自我更正**：
+> ① 早期版本把 `test-panel-wiring` 判为"既有问题"，**那是错的** —— 它是本轮改动引入的
+>   **真实回归**，被门禁抓出并修复（见 §自身缺陷 5）。
+> ② 早期版本把 `deploy-installed.mjs` 不含仓根 `client.js` 列为待办，**那也是错的** ——
+>   加载面是 `lib/client.js`（`sideEffects` 自述契约），已被覆盖（见 §待办 的历史清理说明）。
 
-**终态：全量 `check-runner` 只剩 1 个红项，且非本方可控。**
+**终态：全量 `check-runner` = `exit 0`，零红项。** 五层验收全绿（见 §四）。
 
-| 红项 | 归属 | 根因（实测证据） |
+清零路径（全部实测，无一项留在"未解释"状态）：
+
+| 曾出现的红项 | 归属 | 收敛方式 |
 |---|---|---|
-| `check-i18n-keys.mjs` | **并发 i18n 会话** | 该件是**对方新建的未跟踪件**（`git status` = `??`），报「A 缺 EN 词条 **21** 个（宿主 `t()` 会静默回落成 key 字面量）」⇒ 其 i18n 工作**尚未补完词表**。我的两次提交（`211682d` / `0d91e15`）**零触碰**该件 |
+| `check-i18n-keys.mjs`（缺 EN 词条 21 个） | **并发 i18n 会话**（其未跟踪件） | 对方推进后**自行转绿**；我方两次提交零触碰该件 |
+| `check-pane-sections` · `check-module-growth` | **并发 i18n 会话** | 同一根因 `src-client/body.js` 冻结超限 +82 ⇒ 对方收敛后转绿 |
+| `test-split-equivalence`（A3d） | **并发 i18n 会话** | 曾因对方把 `ui-geo-regress` 检查数改成 85 而与硬编码期望 `100` 失同步 ⇒ 其恢复 100 后转绿（**瞬态**） |
+| `check-installed-sync`（`client.js`） | **并发 i18n 会话** | 对方 rebuild 后未部署的周期现象 ⇒ 现 **239/239 零漂移** |
+| `inject-baseline-diff` | **我方** | 归一化器覆盖缺口 ⇒ 修 + 扩展自证件至 10/10（§自身缺陷 6） |
+| `test-panel-wiring` | **我方** | `fenced` 丢弃 promise ⇒ `return guarded(...)`（§自身缺陷 5） |
+| `test-usage-truth` · `check-record-parity` | runner 内时序偶发 | 单独跑均 exit 0；非判据缺陷 |
 
-**过程中曾出现、已由并发会话自行收敛的红项**（非本方可控，观察记录）：
-`check-pane-sections` / `check-module-growth`（同一根因 `src-client/body.js` 冻结超限 +82）·
-`test-split-equivalence`（A3d 硬编码期望 `100 PASS` vs `ui-geo-regress` 实产 85）·
-`check-installed-sync`（对方 rebuild `client.js` 后未部署）—— 三者**均已随对方推进而转绿**，
-我的提交始终零触碰 `src-client/` `client.js` `lib/client.js` `ui-geo-regress` `test-split-equivalence`。
+**归属不变式**：我的三次提交（`211682d` / `0d91e15` / `f94d6bc`）始终**零触碰**
+`src-client/` · `client.js` · `lib/client.js` · `ui-geo-regress` · `test-split-equivalence`
+—— 可逐次 `git show --name-only` 复核。
 
 **已由本轮修复而转绿**：`inject-baseline-diff`（归一化器缺口 · §自身缺陷 6）·
-`test-panel-wiring`（§自身缺陷 5）·
-`test-usage-truth` / `check-record-parity`（runner 内时序偶发：单独跑均 exit 0 PASS）。
+`test-panel-wiring`（§自身缺陷 5）。
 
 ### 本轮自查发现并修复的**自身**缺陷（6 处，如实记录）
 
@@ -140,9 +148,17 @@ sec-fetch-site     → 403   ✅ 修复前 200
 | # | 待办 | 阻塞/归属 |
 |---|---|---|
 | 1 | **T1-a 密钥轮换** | 只有用户能做；且须**先探测是否已被使用**（否则证据消失）。库内遮蔽只是止损。 |
-| 2 | **并发会话的两个红项** | `src-client/body.js` 冻结超限（须其按领域接缝拆或经用户授权 `--rebase`）· `ui-geo-regress` 检查数变更后的硬编码期望（须其同步 `test-split-equivalence.mjs:100`）。**均非本方可控**。 |
-| 3 | A 的「非对称防护判据缺口」补断言 | 会议裁定「正确但未锁」（依赖"两出口恰好都被接线"这一人工事实），判据待补。 |
-| 4 | `deploy-installed.mjs` 不含仓根 `client.js` | **本轮实测发现**：该脚本只覆盖面 1（`lib/**`）与面 2（记忆库面），**仓根 `client.js` 不在其列** ⇒ 并发会话 build 后需手工同步。建议纳入脚本（属独立待办，未擅改）。 |
+| 2 | A 的「非对称防护判据缺口」补断言 | 会议裁定「正确但未锁」（依赖"两出口恰好都被接线"这一人工事实），判据待补。 |
+
+> ✅ **已于收尾轮清除的两条**（原文保留在上方表格历史中不再列）：
+> · ~~并发会话的两个红项~~ —— 对方推进后**自行转绿**（`ui-geo-regress` 检查数已恢复 100，
+>   `src-client/body.js` 冻结超限亦收敛）；全量 `check-runner` 现 **exit 0**。
+> · ~~`deploy-installed.mjs` 不含仓根 `client.js`~~ —— **该条是我的误判，特此更正**：
+>   实测四者字节完全一致（仓根 / 仓 `lib/` / 副本根 / 副本 `lib/`，均 682182B 同哈希），
+>   而权威契约是 `package.json` 的 `sideEffects: ["./lib/client.js"]`（`build-client.mjs:6` 自述
+>   「**沿用「lib/client.js 即 client bundle」契约**」）⇒ **加载面是 `lib/client.js`**，
+>   已由部署脚本面 1（`lib/**`）覆盖；**仓根 `client.js` 只是构建中间产物**（build 先写根、再复制到 lib），
+>   其副本滞后**无害**。⇒ 无需改脚本（改了反而是复制冗余件的堆叠）。
 
 ---
 
