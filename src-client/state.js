@@ -1,3 +1,4 @@
+import { lang, tr } from './i18n.js'
 /**
  * state.js — 事件总线 / 状态容器 / 日志 / 进度（自 `body.js` 抽出 · UI1/U1 · 2026-09-15）
  *
@@ -90,7 +91,7 @@ var Log = (function () {
 /* ---- 4. Prog：执行进度（C1） ---- */
 var Prog = {
   start: function (id, label) {
-    Store.patch('progress', Object.assign({}, Store.get('progress'), make(id, { id: id, label: label || '', pct: 0, note: '进行中', on: true })));
+    Store.patch('progress', Object.assign({}, Store.get('progress'), make(id, { id: id, label: label || '', pct: 0, note: tr("进行中"), on: true })));
     Bus.emit('progress', Store.get('progress'));
   },
   set: function (id, pct, note) {
@@ -101,7 +102,7 @@ var Prog = {
   done: function (id, ok, msg) {
     var cur = (Store.get('progress') || {})[id]; if (!cur) return;
     var p = Object.assign({}, Store.get('progress'));
-    p[id] = Object.assign({}, cur, { on: false, pct: 100, note: msg || (ok ? '完成' : '失败'), ok: ok !== false });
+    p[id] = Object.assign({}, cur, { on: false, pct: 100, note: msg || (ok ? tr("完成") : tr("失败")), ok: ok !== false });
     Store.set('progress', p); Bus.emit('progress', p);
     var self = this;
     setTimeout(function () {

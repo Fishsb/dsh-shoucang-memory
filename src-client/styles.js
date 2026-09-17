@@ -332,7 +332,13 @@
         '#scpanl-root .sc-tag{display:inline-block;padding:0 6px;margin:0 4px 2px 0;border-radius:var(--sc-r-pill);',
         'background:var(--sc-bg3);border:1px solid var(--sc-border);color:var(--sc-muted);',
         'font-size:var(--sc-fs-xs);line-height:18px;}',
-        '#scpanl-root .sc-ctrl-meta{display:flex;flex-wrap:wrap;gap:var(--sc-sp-1);margin-top:var(--sc-sp-1);}',
+        /* 作用域/生效态徽标组（接缝① 阶段 2b · 2026-09-17）：**必须 fit-content**。
+         *  判因（实测几何，比初判更精确）：本元素是 `display:flex` 的**块级 div**，
+         *  在**块级父**（`.setting-item-info`，`extra` 挂载路径）里按块级宽度**撑满** = 966px，
+         *  在 **flex 父**（`.setting-item`，`children` 挂载路径）里按内容宽 = 112px
+         *  ⇒ 同一组件两态宽、徽标左边界漂在 286/898/1066 三处（用户实测「chip 位置漂移」）。
+         *  `width:fit-content` 让**两种父容器下都是内容宽** ⇒ 一处定义根治两条路径。 */
+        '#scpanl-root .sc-ctrl-meta{display:flex;flex-wrap:wrap;gap:var(--sc-sp-1);margin-top:var(--sc-sp-1);width:fit-content;}',
         /* 折叠（概览—详情分层） */
         '#scpanl-root .sc-fold{border:1px solid var(--sc-border);border-radius:var(--sc-r-md);background:var(--sc-bg-card);',
         'margin:var(--sc-gap-row) 0;overflow:hidden;}',
@@ -642,6 +648,11 @@
         'font-weight:var(--sc-fw-bold);}',
         /* 索引行 / 笔记 chip */
         '#scpanl-root .sc-idx-list{display:flex;flex-direction:column;gap:1px;margin-bottom:var(--sc-gap-row);}',
+        /* 索引组头（接缝① · 2026-09-17 阶段 2）：标签与「N 条」在此**只出现一次** ——
+         *  修「每行重复 N 条」与「标签两页前后不一」两处用户实测症状。 */
+        '#scpanl-root .sc-idx-group{display:flex;align-items:center;gap:var(--sc-sp-2);margin:var(--sc-sp-3) 0 var(--sc-sp-1);}',
+        '#scpanl-root .sc-idx-group:first-child{margin-top:0;}',
+        '#scpanl-root .sc-idx-group-n{color:var(--sc-faint);font-size:var(--sc-fs-xs);font-variant-numeric:tabular-nums;}',
         '#scpanl-root .sc-idx-row{display:flex;gap:var(--sc-sp-2);align-items:baseline;padding:4px var(--sc-sp-1);',
         'cursor:pointer;border-radius:var(--sc-r-sm);transition:background var(--sc-t-fast) var(--sc-ease);}',
         '#scpanl-root .sc-idx-row:hover{background:var(--sc-hover);}',

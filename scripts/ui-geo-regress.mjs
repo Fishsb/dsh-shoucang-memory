@@ -54,7 +54,7 @@ const VIEWPORTS = [[1024, 760], [1280, 860], [1600, 1000]]
 /* 逐视图**冒烟**集（各视图"渲染非空"）。⚠ 实测澄清（2026-09-14）：**严格**几何断言
  *   （4 KPI 共线 / 3 操作卡 / 组件按钮 / shadowRoot）目前**只覆盖「运行总览」**（`run(w,h,'运行总览')`），
  *   其余视图走本冒烟集。『架构』纳入本集；其版式对齐同族标准，逐页签内容由探针上报 + 出图集取证。 */
-const VIEWS = ['运行总览', '记忆库', '画像', '参数', '设置', '架构']
+const VIEWS = ['overview', 'memory', 'persona', 'toggles', 'settings', 'arch']
 
 /* ⚠⚠ **本模板字符串内禁止出现反引号** —— 一个反引号就会**提前终止模板串** ⇒
    SyntaxError: Unexpected identifier（已踩两次：2026-09-13 成熟度注释、归档区注释）。
@@ -166,8 +166,8 @@ const PROBE = (view) => `<script>
 setTimeout(function () {
   var b = document.getElementById('scpanl-btn'); if (b) b.click();
   setTimeout(function () {
-    var items = document.querySelectorAll('#scpanl-root .sc-nav-item');
-    for (var i = 0; i < items.length; i++) { if ((items[i].textContent || '').trim() === '${view}') { items[i].click(); break } }
+    var items = document.querySelectorAll('#scpanl-root .sc-nav-item[data-view]');
+    for (var i = 0; i < items.length; i++) { if (items[i].getAttribute('data-view') === '${view}') { items[i].click(); break } }
     setTimeout(function () {
       function R(e) { var r = e.getBoundingClientRect(); return { t: Math.round(r.top), b: Math.round(r.bottom), l: Math.round(r.left), r: Math.round(r.right), w: Math.round(r.width), h: Math.round(r.height) } }
       var out = { view: '${view}', vw: innerWidth, vh: innerHeight };
@@ -218,7 +218,7 @@ setTimeout(function () {
       out.waLabel = waLabel;
       /* 架构页**逐页签**内容探针（2026-09-14）：实测踩过"默认页签有内容、其余页签空白"这类静默空态——
        *   只截默认页签 / 只看整页都发现不了。此处量每个 wa-tab-panel 内 .sc-tabpane 的文字量。 */
-      if ('${view}' === '架构') {
+      if ('${view}' === 'arch') {
         var g2 = document.querySelector('#scpanl-root wa-tab-group');
         var tabs2 = g2 ? [].slice.call(g2.querySelectorAll('wa-tab')) : [];
         out.archTabContent = tabs2.map(function (t) {
@@ -339,8 +339,8 @@ function shoot (w, h, view, out, tab) {
 setTimeout(function () {
   var b = document.getElementById('scpanl-btn'); if (b) b.click();
   setTimeout(function () {
-    var items = document.querySelectorAll('#scpanl-root .sc-nav-item');
-    for (var i = 0; i < items.length; i++) { if ((items[i].textContent || '').trim() === '${view}') { items[i].click(); break } }
+    var items = document.querySelectorAll('#scpanl-root .sc-nav-item[data-view]');
+    for (var i = 0; i < items.length; i++) { if (items[i].getAttribute('data-view') === '${view}') { items[i].click(); break } }
     /* 页签（可选）：加视图后**必须能逐页签取证**——只截默认页签会漏掉"其余页签空白/控件缺失"。 */
     var tb = '${tab || ''}';
     if (tb) setTimeout(function () {
@@ -421,8 +421,8 @@ function pageHtml (view, proto, extra) {
     + '<script>' + client + '</script>'
     + '<script>try{window.__scMod.apply({logger:{info:function(){},warn:function(){}},effect:function(){},on:function(){},get:function(){return undefined}})}catch(e){window.BE=String(e)}</script>'
     + '<script>setTimeout(function(){var b=document.getElementById("scpanl-btn");if(b)b.click();setTimeout(function(){'
-    + 'var items=document.querySelectorAll("#scpanl-root .sc-nav-item");for(var i=0;i<items.length;i++){'
-    + 'if((items[i].textContent||"").trim()==="' + view + '"){items[i].click();break}}},500)},350)</script>'
+    + 'var items=document.querySelectorAll("#scpanl-root .sc-nav-item[data-view]");for(var i=0;i<items.length;i++){'
+    + 'if(items[i].getAttribute("data-view")==="' + view + '"){items[i].click();break}}},500)},350)</script>'
     + (extra || '') + '</body></html>'
 }
 
@@ -553,7 +553,7 @@ console.log('UI 几何回归（真实 client.js × ' + VIEWPORTS.length + ' 视�
 
 for (const [w, h] of VIEWPORTS) {
   console.log('\n── 视口 ' + w + '×' + h + ' ──')
-  const g = run(w, h, '运行总览')
+  const g = run(w, h, 'overview')
   if (!g) { bad('取不到几何数据（渲染失败）'); continue }
   /* ① 弹窗随视口自适应 */
   if (!g.modal) bad('弹窗未渲染')
@@ -620,7 +620,7 @@ console.log('\n── 其余视图冒烟（1280×860） ──')
  *   其蒸馏运行/记忆库状态属运行总览页），故此处同步收敛。 */
 /* 各页分段数：记忆库 5（知识索引 / 候选区 / 笔记 / **归档区** / 统计，与 v9 原型 DOM 一致 ——
    2026-09-13 补归档区后 4→5）；参数 4；设置 2。 */
-const TABBED = { 记忆库: 5, 参数: 4, 设置: 2 }
+const TABBED = { memory: 5, toggles: 4, settings: 2 }
 VIEWS.slice(1).forEach((v) => {
   const g = run(1280, 860, v)
   if (!g) return bad(v + '：取不到几何数据')
@@ -630,7 +630,7 @@ VIEWS.slice(1).forEach((v) => {
    *   「图里没有」≠「没渲染」（本仓已两次栽在"判据看不见"上：H-5/H-16 是看代码对位置失明）。
    *   ⇒ 渲染类判据一律 **图证 + DOM 几何** 双判据：此处查 `out.epochRow`（探针见 PROBE 的 S-P1d 段），
    *     只看"元素在不在 DOM、rect 是否非零" —— **与折叠、滚动位置、是否在截图内全都无关**。 */
-  if (v === '深度睡眠') {
+  if (v === 'deepsleep') {
     const er = g.epochRow || {}
     er.found && er.rect && er.rect.h > 0
       ? ok('S-P1d 纪元行已渲染（DOM 几何 h=' + er.rect.h + 'px · 相对内容区 top=' + er.relTop + 'px · 视口内=' + er.visibleInViewport + '）')
@@ -638,7 +638,7 @@ VIEWS.slice(1).forEach((v) => {
   }
   /* S3：组件库 Tab —— 结构齐备 + 同时只显示一个面板 + web component 已注册 */
   /* S3：设置页的表单控件必须已由组件库承载且**值已绑定**（不是空壳） */
-  if (v === '设置') {
+  if (v === 'settings') {
     const fm = g.forms || {}
     fm.switches >= 1 ? ok('开关由组件库承载（wa-switch ×' + fm.switches + '）') : bad('开关未走组件库（' + fm.switches + '）')
     fm.waSelects === 0 ? ok('零 wa-select 残留（二度回滚彻底；判因见源码注释）') : bad('仍有 ' + fm.waSelects + ' 个 wa-select（回滚不彻底）')
@@ -791,34 +791,34 @@ if (process.argv.includes('--shots')) {
    *   12 张图全部产出 `✗`，而门本身仍报 100 PASS ⇒ **"出图失败"被吞掉**（典型的假绿）。
    *   ⇒ 显式 `mkdirSync(recursive)`；并在末尾汇总**实际产出数**，缺图即红。 */
   mkdirSync(dir, { recursive: true })
-  shoot(1280, 860, '运行总览', join(dir, 'shot-overview.png'))
-  shoot(1280, 860, '参数', join(dir, 'shot-params.png'))
+  shoot(1280, 860, 'overview', join(dir, 'shot-overview.png'))
+  shoot(1280, 860, 'toggles', join(dir, 'shot-params.png'))
   /* 参数页「④ 后台与调度」页签（2026-09-15 补）：该页签承载**蒸馏节流 4 键 + 蒸馏/深睡模型下拉**
    *   （即 H-5/H-16 = F-001 唤醒空闲时长 / F-002 蒸馏子代理模型）。
    *   判因：此前出图集只出**默认页签①** ⇒ 这 6 个键的 UI 长期没有视觉证据，
    *   以致 `OPEN-ITEMS` 里"无持久 UI 通道"的**过时判断**能存活很久（实测它们**早已有控件**）。 */
-  shoot(1280, 860, '参数', join(dir, 'shot-params-sched.png'), '④ 后台与调度')
+  shoot(1280, 860, 'toggles', join(dir, 'shot-params-sched.png'), '④ 后台与调度')
   /* 记忆库页（2026-09-13 P1-2 拆分 renderMemoryExpanded 后纳入出图集）——
    * 该页是 5 Tab + 容量卡 + 徽章行的复合结构，只靠断言看不见「层级反了 / 内容被挤出去」。 */
-  shoot(1280, 860, '记忆库', join(dir, 'shot-memory.png'))
+  shoot(1280, 860, 'memory', join(dir, 'shot-memory.png'))
   /* 运行观测页（2026-09-13 P0-1 接入 wa-progress-bar 后纳入）——本页是 4 折叠区 + 日志，
    * 组件替换的布局影响只在这里可见（进度条本身在 mock 下 hidden，故另配常驻 CSS 变量断言）。 */
-  shoot(1280, 860, '运行观测', join(dir, 'shot-observe.png'))
-  shoot(1280, 860, '设置', join(dir, 'shot-settings.png'))
+  shoot(1280, 860, 'observe', join(dir, 'shot-observe.png'))
+  shoot(1280, 860, 'settings', join(dir, 'shot-settings.png'))
   /* 画像 / 插件集合 / 深度睡眠（2026-09-13 第五轮 v9 逐页对齐纳入）——
    * 这三页是"形态差异断言天然失明"的重灾区：柱高全 0、状态机整块缺失、卡片数量不符，
    * 门禁全绿也照样错；只有出图肉眼比对才看得见。 */
-  shoot(1280, 860, '画像', join(dir, 'shot-persona.png'))
-  shoot(1280, 860, '插件集合', join(dir, 'shot-suite.png'))
+  shoot(1280, 860, 'persona', join(dir, 'shot-persona.png'))
+  shoot(1280, 860, 'suite', join(dir, 'shot-suite.png'))
   /* S-P1d 判据（2026-09-15 · 用户指正后立）**深度睡眠页 · 纪元行的 DOM 几何断言**。
    *   ⚠ 为什么挂在这里而不是上面的冒烟循环：实测该循环的 `VIEWS.slice(1)` **不含「深度睡眠」**
    *     （我先把断言写在那里，跑完日志里**一条 S-P1d 都没有** ⇒ 断言根本没执行 ⇒ 典型的"以为覆盖了"）。
    *   **面板内容区有滑动导轨（内部滚动容器）** ⇒ **纯像素截图对视口折叠线以下系统性失明**，
    *     「图里没有」≠「没渲染」。故渲染类判据一律 **图证 + DOM 几何** 双判据：
    *     此处 `run()` 重取该视图探针，只看"元素在不在 DOM、rect 是否非零" —— 与折叠/滚动/截图无关。 */
-  shoot(1280, 860, '深度睡眠', join(dir, 'shot-sleep.png'))
+  shoot(1280, 860, 'deepsleep', join(dir, 'shot-sleep.png'))
   {
-    const gs = run(1280, 860, '深度睡眠')
+    const gs = run(1280, 860, 'deepsleep')
     const er = (gs && gs.epochRow) || {}
     er.found && er.rect && er.rect.h > 0
       ? ok('S-P1d 纪元行已渲染（DOM 几何 h=' + er.rect.h + 'px · 相对内容区 top=' + er.relTop + 'px · 视口内=' + er.visibleInViewport + ' · text=' + String(er.text || '').slice(0, 46) + '）')
@@ -828,11 +828,11 @@ if (process.argv.includes('--shots')) {
    *   本轮实证：新视图曾因图标 key 缺失让**整页白屏**，而出图集里没有它 ⇒ 差点漏判。
    *   该页是 5 Tab（内容环/记录与图/观测/装配/认知环旋钮）+ 通用事实表的复合结构，
    *   只靠形态断言看不见「Tab 挤没了 / 键值表错行 / 旋钮换行」，必须出图。 */
-  shoot(1280, 860, '架构', join(dir, 'shot-arch.png'))
+  shoot(1280, 860, 'arch', join(dir, 'shot-arch.png'))
   /* 逐页签出图（2026-09-14 接通）：`shoot()` 的页签参数已落到点击脚本（wa-tab 按文字点选）。
    *   先出两张信息最密的：装配（含 storeMode 存储模式控件）· 认知环旋钮（4 数值 + 4 开关 + 探针）。 */
-  shoot(1280, 860, '架构', join(dir, 'shot-arch-asm.png'), '装配')
-  shoot(1280, 860, '架构', join(dir, 'shot-arch-mcl.png'), '认知环旋钮')
+  shoot(1280, 860, 'arch', join(dir, 'shot-arch-asm.png'), '装配')
+  shoot(1280, 860, 'arch', join(dir, 'shot-arch-mcl.png'), '认知环旋钮')
 
   /* ── **产出汇总 + 缺图即红**（UI1 收尾补 · 2026-09-15）──
    *   判因：出图集此前**不校验产出** —— 12 张全 `✗`（目录不存在）而门仍 100 PASS，
@@ -887,7 +887,7 @@ if (process.argv.includes('--full-shots')) {
 /* wa-icon 可渲染性（P2 前置门禁）：数据已在 PROBE 的 out.waIcon 里。
  * 这里只做轻量额外探针（不计入 pass/fail 计数，避免门禁恒红），靠 grep 解析输出。 */
 if (process.argv.includes('--icon-check')) {
-  const probe = run(1280, 860, '设置')
+  const probe = run(1280, 860, 'settings')
   if (probe && probe.waIcon) {
     const wi = probe.waIcon
     console.log('wa-icon: defined=' + wi.defined + ' rendered=' + wi.rendered + ' size=' + wi.w + 'x' + wi.h)
@@ -898,7 +898,7 @@ if (process.argv.includes('--icon-check')) {
 
 /* P0-1 进度条探针（诊断用，与 --icon-check 同风格：不参与 pass/fail 计数） */
 if (process.argv.includes('--prog-check')) {
-  const probe = run(1280, 860, '运行总览')
+  const probe = run(1280, 860, 'overview')
   console.log('progress-bar: ' + (probe && probe.prog ? JSON.stringify(probe.prog) : '取不到探针结果'))
 }
 

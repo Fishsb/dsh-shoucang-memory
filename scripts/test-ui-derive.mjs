@@ -59,7 +59,13 @@ if (!deriveSrc) {
   process.exit(1)
 }
 // eslint-disable-next-line no-eval
-const Derive = eval('(function(){ ' + deriveSrc + '; return Derive; })()')
+/* i18n（2026-09-17）：抽出并 eval 的 Derive 片段里的 `tr(...)` 调用需要注入。
+ *  真机里 `tr` 是模块级 import（body.js 的 factory 作用域）；而本件把片段 eval 在**独立作用域**下，
+ *  故必须提供同名桩函数 —— 桩的语义与 i18n.js 一致：**zh 态直接返回中文原文**（即 key 本身），
+ *  这样「等价性」断言比较的仍是中文口径，与原金标准同尺度。
+ *  ⚠ 不要改成「返回空串」之类：那会让断言变成比较 `''` vs 中文 ⇒ 假红。 */
+const tr = (key) => key
+const Derive = eval('(function(tr){ ' + deriveSrc + '; return Derive; })(tr)')
 
 /* ── 原实现的逐字复刻（改动前的三元链），作为「金标准」 ── */
 // 向量区：st = (s2.provider || 'off')

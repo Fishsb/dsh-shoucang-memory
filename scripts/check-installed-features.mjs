@@ -28,6 +28,16 @@ const client = read('lib/client.js')
 const contract = read('lib/panel-contract.js')
 
 /** 特性 → 产物 → 标记（**客户端/契约侧**，S1–S4） */
+const FEATURES_I18N = [
+  /* ── i18n（中英文切换 · 2026-09-17）────────────────────────────────────
+   * 判因：v2.1 验收⑥原写「须先补 i18n 标记」却**没有判据** —— 该件当时是报告态，
+   *   不加标记照样全绿 ⇒ 等于恒真（红队指出的「新假绿形态」）。
+   *   现写死 3 个必检标记，缺一即在报告里标为 MUST（见下方 --strict 口径）。 */
+  ['i18n 运行时（缺键记录容器）', 'lib/client.js', '__SC_I18N_MISS__'],
+  ['i18n 接入函数（attachLocale 入产物）', 'lib/client.js', 'attachLocale'],
+  ['i18n 标签映射（tagLabel 入产物）', 'lib/client.js', 'tagLabel'],
+  ['i18n 词表非空（英文词条已随产物送达）', 'lib/client.js', 'Shoucang'],
+]
 const FEATURES = [
   ['S2 侧栏入口走宿主插槽', 'lib/client.js', 'sidebar.footer.action'],
   ['S2 设置进宿主设置中心', 'lib/client.js', 'settings.section'],
@@ -94,9 +104,25 @@ for (const [group, list] of [['客户端/契约（S1–S4）', FEATURES], ['宿�
   console.log(`  ${okFlag ? '✅' : '❌'} 三条惰性桥已全退役（已安装 lib 中无 -share.js 引用；实测 ${refs.length} 件${refs.length ? '：' + refs.join(',') : ''}）`)
 }
 
+/* ── i18n 能力（2026-09-17 · v2.1 验收⑥）─────────────────────────────────
+ * 该组**不只是报告**：`--require-i18n` 时缺失即 exit 1。
+ * 判因：v2.1 原写「须先补 i18n 标记」而无判据 ⇒ 不加标记照样全绿 = 恒真（红队指出的新假绿）。
+ * 默认仍为报告态（与全件口径一致：安装副本更新链含 push/热重载等环境侧步骤）；
+ * 但**发布前置的第⑥条**应显式带 `--require-i18n`，把「装上去的那份带着 i18n 能力」变成可红判据。 */
+let i18nMissing = 0
+{
+  console.log('\n── i18n 能力（本轮新增）──')
+  for (const [name, file, marker] of FEATURES_I18N) {
+    const text = readCached(file)
+    const okFlag = !!text && text.indexOf(marker) >= 0
+    if (!okFlag) { missing++; i18nMissing++ }
+    console.log('  ' + (okFlag ? '✅' : '❌') + ' ' + name + '  [' + file + ' · ' + marker + ']')
+  }
+}
+
 console.log(missing === 0
-  ? `\n✅ 已安装副本带着本轮全部特性（${FEATURES.length + HOST_FEATURES.length + 1} 项标记齐全）`
-  : `\n⚠️  ${missing} 项标记缺失 —— 安装副本落后于仓内（跑部署脚本后重试）`)
+  ? `\n✅ 已安装副本带着本轮全部特性（${FEATURES.length + HOST_FEATURES.length + FEATURES_I18N.length + 1} 项标记齐全）`
+  : `\n⚠️  ${missing} 项标记缺失（其中 i18n ${i18nMissing} 项）—— 安装副本落后于仓内（跑部署脚本后重试）`)
 console.log('  · lib/client.js ' + Math.round((readCached('lib/client.js') || '').length / 1024) + 'KB')
 console.log('  · lib/panel-contract.js ' + Math.round((readCached('lib/panel-contract.js') || '').length / 1024) + 'KB')
 console.log('\n重启 DSH 后的真机核对清单（人工）：')
@@ -105,4 +131,10 @@ console.log('  2) 宿主设置中心出现「守藏」分区（含显示密度/�
 console.log('  3) 面板设置页可切「v9 方案皮肤 / 宿主原生皮肤」，切换即时生效')
 console.log('  4) 分段 Tab、操作卡按钮为组件库实现且观感与方案一致（按钮 30px 紫胶囊）')
 console.log('  5) 日志面板默认折叠成一行')
+console.log('  6) 宿主设置中心切「语言」为 English ⇒ 面板导航/标题即时变英文，切回中文即时复原')
+// `--require-i18n`：把 i18n 能力缺失变成**红灯**（发布前置第⑥条用）
+if (process.argv.includes('--require-i18n') && i18nMissing > 0) {
+  console.error(`\n❌ --require-i18n：i18n 标记缺失 ${i18nMissing} 项 ⇒ 装上去的那份**不带**本轮 i18n 能力`)
+  process.exit(1)
+}
 process.exit(0)

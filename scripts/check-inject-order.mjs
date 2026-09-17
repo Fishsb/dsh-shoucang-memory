@@ -38,7 +38,10 @@ export const INJECT_MAP = {
   refreshView: 'refreshCurrentView',
   refs: 'refs',
   flushFolds: 'flushFolds',
-  switchKeys: 'SWITCH_KEYS',
+  // i18n（2026-09-17）：`SWITCH_KEYS` 由**装配期表**改为**惰性函数** `switchKeys()`。
+  //   判因：表在 factory 装配期构造，`tr()` 那时取不到词表（locale 未接入）⇒ 值冻死为中文。
+  //   改为函数后每次调用重建（渲染期求值）；消费点 `panes-toggles.js` 同步改 `switchKeys()`。
+  switchKeys: 'switchKeys',
   metaBadges: 'metaBadges',
   makeToggle: 'makeToggle',
   show: 'show',

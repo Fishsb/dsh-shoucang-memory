@@ -12,6 +12,7 @@
 import { ICONS, el, svg } from './dom.js'
 import { Bus, Cfg, Fold, Log, Store } from './state.js'
 import { appState } from './app-state.js'
+import { lang, tr } from './i18n.js'
 
 /* 页头槽的**渲染轮次**（原在 body.js 渲染层；见本件头注的"状态归属变更"） */
 var headEpoch = 0, headUsed = -1;
@@ -25,24 +26,25 @@ var UI = {
   bumpHeadEpoch: function () { headEpoch++; },
   /* 标准设置行：标题 + 描述 + 右侧控件（对齐 Obsidian setting-item） */
   /* 标准设置行：标题 + 描述 + 右侧控件（对齐 Obsidian setting-item）。
-   * opts:
-   *   cls          —— 附加类名
-   *   extra        —— 数组，追加进 setting-item-info（如作用域徽标）；用于覆盖"info 内还有额外子节点"的既有写法
-   *   wrapControl  —— true(默认) 包进 .setting-item-control；false = 直接挂 row（兼容既有未包装写法）
-   *   children     —— 数组，追加为 row 的平级子节点（如 info + badge + slider 三子节点形态）
-   * ⚠ 这三个开关是为**等价替换旧写法**而设：既有 DOM 结构千差万别（实测三处三种形态），
-   *   组件层必须能无损表达它们，否则替换就会改变 DOM —— 与"结构不变"要求冲突。 */
+ * opts:
+ *   cls          —— 附加类名
+ *   children     —— 数组，追加为 row 的平级子节点（如徽标 + 控件）
+ *
+ * ⚠ 开关收敛（接缝① · 2026-09-17 阶段 2c）：原设计有 **四开关**（文件自陈「三处三种形态」）——
+ *   extra（挂进 .setting-item-info **内**）与 children（挂 row **平级**）让**同一语义**
+ *   （作用域徽标）落在两处 ⇒ 实测徽标左边界在设置页与参数页**相差 612px**（898 vs 286）。
+ *   现只留 children：行形状**唯一** —— [info] [children…]，次序与内容由调用方决定。
+ *   （extra 唯一使用点 panes-settings.js 已改；wrapControl 随之无消费者，一并删除。） */
   item: function (name, desc, control, opts) {
     var o = opts || {};
     var row = el('div', 'setting-item' + (o.cls ? ' ' + o.cls : ''));
     var info = el('div', 'setting-item-info');
     if (name) info.appendChild(el('div', 'setting-item-name', name));
     if (desc) info.appendChild(el('div', 'setting-item-desc', desc));
-    (o.extra || []).forEach(function (n) { if (n) info.appendChild(n); });
+
     row.appendChild(info);
     if (control) {
-      if (o.wrapControl === false) row.appendChild(control);
-      else { var c = el('div', 'setting-item-control'); c.appendChild(control); row.appendChild(c); }
+      var c = el('div', 'setting-item-control'); c.appendChild(control); row.appendChild(c);
     }
     (o.children || []).forEach(function (n) { if (n) row.appendChild(n); });
     return row;
@@ -121,14 +123,14 @@ var UI = {
       srch.appendChild(svg(ICONS.search));
       var inp = document.createElement('input');
       inp.type = 'search';
-      inp.placeholder = o.search.placeholder || '过滤…';
-      inp.setAttribute('aria-label', o.search.placeholder || '过滤');
+      inp.placeholder = o.search.placeholder || tr("过滤…");
+      inp.setAttribute('aria-label', o.search.placeholder || tr("过滤"));
       inp.oninput = function () { if (o.search.onInput) o.search.onInput(String(inp.value || '').trim()); };
       srch.appendChild(inp);
       acts.appendChild(srch);
     }
     if (o.refresh) {
-      acts.appendChild(UI.button('刷新', function () { appState.refreshView(); appState.statusFn('已重新取数'); }, { title: '重新取数并重绘本页' }));
+      acts.appendChild(UI.button(tr("刷新"), function () { appState.refreshView(); appState.statusFn(tr("已重新取数")); }, { title: tr("重新取数并重绘本页") }));
     }
     /* 页头自定义动作（v9 页头右侧可放主操作，如插件集合页的「重新装配」） */
     (o.actions || []).forEach(function (n) { if (n) acts.appendChild(n); });
@@ -197,7 +199,7 @@ var UI = {
       if (!o.async) { try { onClick(); } catch (e) { appState.failFn(e); } return; }
       b.disabled = true; b.setAttribute('loading', '');
       var old = b.textContent; if (o.busyText) b.textContent = o.busyText;
-      Promise.resolve().then(onClick).then(function (r) { Log.info(o.okText || (text + ' 完成')); return r; })
+      Promise.resolve().then(onClick).then(function (r) { Log.info(o.okText || (text + tr(' 完成'))); return r; })
         .catch(appState.failFn).then(function () {
           b.disabled = false; b.removeAttribute('loading'); b.textContent = old;
         });
@@ -254,7 +256,7 @@ var UI = {
     var o = opts || {};
     var isMore = o.variant === 'more';
     var dflt = !!o.open;
-    var label = o.label || '展开';
+    var label = o.label || tr("展开");
     var nodes = [];
 
     var box = isMore ? null : el('div', 'sc-fold');
@@ -279,7 +281,7 @@ var UI = {
     function paint(open) {
       if (isMore) {
         body.classList.toggle('sc-hidden', !open);
-        head.textContent = open ? '收起 ▴' : label + ' ▾';
+        head.textContent = open ? tr("收起 ▴") : label + ' ▾';
       } else {
         box.classList.toggle('open', open);
         arrow.textContent = open ? '▾' : '▸';
@@ -293,7 +295,7 @@ var UI = {
     ctl.empty = function () { return body.childNodes.length === 0; };
     ctl.seal = function () {
       if (ctl.empty() && o.emptyText !== false) {
-        body.appendChild(el('div', 'sc-mem-empty', o.emptyText || '（无内容）'));
+        body.appendChild(el('div', 'sc-mem-empty', o.emptyText || tr("（无内容）")));
       }
       return ctl;
     };

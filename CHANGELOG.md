@@ -4,6 +4,7 @@
 
 ## [Unreleased]
 
+
 ### Changed
 - **收口三件"没做的"（2026-09-17）**：
   ① **profile pin 四处对齐（含 integrity 重算，不跑 `pnpm install`）**：此前"三处不一致"的根因不是缺一次 install，
@@ -2666,6 +2667,156 @@
   半成品进了运行态，随即修好并**把部署改成"构建成功才部署"**。**部署必须以构建成功为前提**。
 
 ### Added
+- **中英文切换（跟随 DSH 语言设置 · 2026-09-17）**：面板全部界面文案随宿主 `locale` 服务切换，
+  含**索引小节标签分类**的显示层映射（`env`→「环境」/「Environment」、`lesson`→「教训」/「Lesson」等 21 键）。
+  要点与判因：
+  - **原文即键**：`tr("中文")` 单参形态，**zh 态不查表、原样返回** ⇒ 「zh 零回归」是**结构性**保证，
+    不靠逐条比对。已用 `git show HEAD:client.js` 与当前产物做**全页对照**实证：**9/9 视图逐字节一致**。
+  - **标签只改显示层**：库数据（`criteria.json#carriers.tags`）**一字未动**，`_memory/` 零改动；
+    色相/排序/统计仍直连**原始 tag**（AST 断言 G 守），1:N 撞名（`env`+`环境`）用 `ambiguousTags` 消歧。
+  - **新增机检 5 件**（均已登记 `CHECKS`，无 `xfail`）：`check-i18n-keys`（9 断言：双向键集/占位符/
+    标签映射完整性/红线守卫/tag 数据流/词表清单对账）· `check-i18n-scan`（CJK 参与比较/分支即红，含 `--selftest`）·
+    `check-i18n-redlines`（三条核心红线常驻守卫）· `test-i18n-render`（**两态渲染**：zh/en 都挂载、语言切换真生效、
+    en 零中文残留、无裸键、缺键记录为空）· `i18n-smoke`（装载冒烟，捕获**顶层静默异常**）。
+  - **过程中自证抓出 4 个「构建绿、真机炸」型缺陷**：转换器漏插 import（面板 KPI 全空）· 顶层 `tr()` 引用
+    （整包不注册、面板消失无提示）· `DICTS` TDZ（假「dump 失败」）· 比较位点被机械包成 `tr()`（切语言后
+    比较恒 false ⇒ 色条永远 running 色，且 AST 扫描**看不见**该形态 ⇒ 另建 `i18n-blindspot.mjs` 专司捕获）。
+  - **修复：索引行「双标签」（用户实测报告「点击展开全部又是双标签」）** —— 每行同时渲染了
+    **左列胶囊**与**右列胶囊**（同一个标签，真机实测 `pills=2 "环境 | 环境"`）。
+    判因（**架构层，非实现细节**）：v9 对齐时**新增右列胶囊**（`.sc-right` = 标签 + 「N 条」），
+    却**没移走 v9 之前就存在的左列胶囊** ⇒ 两代实现并存、同一行重复显示；且折叠态与「展开全部」
+    走同一 `renderIndexRows(..., withTagCount=true)`，故展开后同样重复。
+    修法：两分支互斥归属 —— `withTagCount`（记忆库页，原型 `.row > .right`）时标签归**右列**；
+    否则（画像页右列是成熟度数值）归**左列**。补 `test-idxrow-pills`（真机逐行数 `.sc-idx-tag`，
+    **3 项**，登记 CHECKS）：断言每行恰好 1 个、无标签丢失、右列「标签 + N 条」未被一并删掉。
+  - **改造（阶段 5 · 接缝④）：破前端双向环 + 前端纳入分层门禁**
+    **判因**：`audit-architecture.mjs` 默认 `REL='src'`，而 `check-runner.mjs:360` 登记时**未带 `--dir`**
+    ⇒ **前端 31 个模块从未被扫**（全被打 `??` = 无层级），且**已存在 1 处双向环无人看见**：
+    `panes-memory ↔ panes-memory-detail`（前者 import 后者的 `renderNoteSections`；
+    后者 import 前者的 `renderIndexRows`/`makeMemoryPointerRow`/`openMemoryNote`/`renderPersona`）。
+    **破环**：`panes-memory.js` 去掉对 detail 的 import，改由 `appState.renderNoteSections` 句柄调用
+    （本仓对跨模块句柄的**既有机制** —— `opCard`/`applyLogPanel`/`renderRunExtras` 同法），
+    由 `body.js`（同时 import 两侧）注入 ⇒ 依赖变**单向**（detail → memory）。
+    **加门**：`check-runner` 增 `audit-architecture --dir src-client --gate`。
+    ⚠ **顺序不可颠倒**（实测）：破环前该门 **exit 1**，破环后 **exit 0**。
+    **实测**：`静态循环依赖: 0` · `动态边隐藏环: 0` · `--gate exit=0`；
+    `check-appstate-contract` 四方仍一致（新句柄声明+注入+消费齐备）。
+  - **阶段 0–5 全部落地（六条验收全过）**：① typecheck `exit=0` ② build ✅
+    ③ `check-runner` **PASS（139 pass · 0 xfail · 0 skip）** ④ `ui-geo-regress` `exit=0`
+    ⑤ 契约三向 `5 PASS / 0 FAIL` + 产物新鲜（42 路由）⑥ `check-installed-features` `exit=0`。
+  - **改造（阶段 3 · 接缝②）：`appState` 契约补齐 + **四方对账门禁**（含先红用例）**
+    **判因**（圆桌会议 `arch` 成因 B）：`app-state.js` 声明 **20** 字段，而 `body.js` 注入 **24** ——
+    **7 个字段「有注入、无声明」**（`show` / `switchKeys` / `makeToggle` / `metaBadges` /
+    `filterViewRows` / `deferFold` / `flushFolds`）。两层后果：① 契约面**不完整**（读声明文件
+    看不出这些句柄存在）；② **拼错字段名静默为 undefined** —— client 半区是纯 JS 无类型检查，
+    也**无任何门禁判它错**（与「假绿」同类）。另有**反向穿透**：`pollTimer` 声明在容器、写点在 pane。
+    **修法**：① `app-state.js` 补齐 7 行声明（各带语义注释，声明数 20 → **27**）；
+    ② 新增 `scripts/check-appstate-contract.mjs` —— **四方对账**（声明 / body 注入 / pane 写 / 全仓消费），
+    契约外字段与死声明均判 FAIL；已登记 CHECKS + REQUIRED_CHECKS。
+    **先红/转绿实证**：造 `zzBogus`（写）/ `zzRead`（读）两字段 ⇒ **exit 1** 且逐条报出字段名；
+    还原 ⇒ **exit 0**「四方一致：无契约外字段、无死声明」（实测 声明 27 · 注入 24 · pane 写 3 · 消费 27）。
+  - **改造（阶段 4 · 接缝③）：词表注册改为「按目录自动发现」**
+    **判因**：成因 C 的根不是「忘了写」，而是**注册无契约** —— 「哪几份词表要注册」写成
+    `body.js` 里的**手写 import 列表**，漏改一行的后果是**静默回落成中文**（不是报错），
+    且无任何机检守它。实测因此漏了 3 份 / 700 键、英文态 7/9 视图仍中文。
+    **修法**：新增 `scripts/gen-i18n-dict-index.mjs` —— 扫 `src-client/i18n-dict-*.js` 生成
+    `src-client/i18n-dict-index.generated.js`（含全部 import 与合并，单一事实源＝目录本身），
+    由 `build:client` 自动调用（与 `gen-panel-contract` 同一模式）；`body.js` **只 import 生成物**。
+    ⇒ **新增词表文件无须改任何手写清单即生效**；生成物过期由 `check-i18n-registered` 判（`--check` 模式）。
+    **先红实证**：新增一份词表文件（不改任何清单）⇒ `gen --check` **exit 1「生成物过期」**；
+    重生成后 **6 份**（自动发现生效）；删除后回到 5 份且 check ✅。
+  - **修 bug（自查 · 接缝③引入）**：生成物文件名同样匹配 `i18n-dict-*` ⇒ ① 生成器把它自己列为词表
+    造成**自引用**（`Object.assign` 静默跳过 `undefined` ⇒ **少装配一份却不报错**，正是本接缝要消灭的形态）
+    ② `check-i18n-keys` 断言 H 把它误判为「未登记词表」。三处扫描（生成器 / `check-i18n-registered` /
+    断言 H）均已加 `!/\.generated\./` 过滤；实测 5 份、593 条英文值无损失。
+  - **撤回一项方案条目（实证否判）**：`minimal` 主张的 M1「行容器 5 套 → 1 套」**前提不成立，撤回**。
+    施工期逐类核对 CSS 后确认：五个类**不是同一语义的五套实现，而是五种语义** ——
+    `.sc-row`=表单行（`flex:none`/无内距）· `.sc-crow`=卡内行（有内距+下边框）·
+    `.sc-kv-row`=**`display:contents`**（根本不是行容器）· `.sc-idx-row`=可点击索引行（cursor/hover）·
+    `.sc-recent-row`=小字号单行。**决定性证据**：`styles.js:596` 原有注释已写明
+    「卡内行**不能复用 `.sc-row`**，混用会把表单布局带坏，故单列 `.sc-crow`」⇒ 强合并会**重新引入
+    已被记录过教训的布局陷阱**。真实问题只是「类名不表达语义」（改名可解，收益低于风险）⇒ 列 backlog。
+    保留的收敛成果：2a/2b/2c/2d 已修掉**用户可见**的两处不一致（标签位置、chip 漂移/重复）。
+  - **改造（阶段 2d · 接缝①续）：设置行徽标「两枚 → 一枚」**
+    每行原渲染**两枚**胶囊：作用域（`全局注入`/`写门容量`/`召回融合`/`调度`…）+ 生效态（`即时`/`需重载`）。
+    **判因**（`minimal` 按「不做会怎样 / 能否用既有能力替代 / 是否解决不存在的问题 / 是否冗余限制」
+    四问得出，主持人采纳）：**作用域在同一小节内逐行重复**（语境已由 Tab 与小节标题给出）⇒ 冗余；
+    **生效态逐行不同**（要不要重载是行动信息）⇒ 必须保留。
+    **修法**：`metaBadges` 只渲染生效态一枚；作用域**移入 `title`**（悬停可达，信息不丢 ——
+    与本仓「标签原始键留在 title/aria-label」同一手法）。`ctrlScopeText` 仍被消费，无死代码。
+    **实测验收**：真机出图确认每行由两枚变一枚、位置齐贴控件左侧。
+  - **改造（阶段 2b/2c · 接缝①续）：设置行「徽标组」宽度与挂载路径归一**
+    **症状**（用户实测）：参数页同一组徽标（`全局注入`/`即时`）左边界漂在 **286 / 898 / 1066** 三处。
+    **判因（实测几何，比初判更准）**：`.sc-ctrl-meta` 是 `display:flex` 的**块级 div** ——
+    在**块级父**（`.setting-item-info`，走 `extra` 挂载）里按块级宽度**撑满 = 966px**；
+    在 **flex 父**（`.setting-item`，走 `children` 挂载）里按内容宽 **= 112px**。
+    ⇒ 同一组件两态宽；叠加两条**挂载路径**（info 内 vs row 平级）⇒ 徽标落在两处。
+    **修法一（2b · 1 行 CSS）**：`.sc-ctrl-meta` 加 `width:fit-content` ⇒ **两种父容器下都是内容宽**。
+    **修法二（2c · 删两开关）**：`UI.item` 原设计**四开关**（`cls`/`extra`/`wrapControl`/`children`，
+    文件自陈「三处三种形态」）—— `extra`（挂 info **内**）与 `children`（挂 row **平级**）让**同一语义**
+    落在两处。现**只留 `children`**：行形状唯一 `[info] [children…]`。
+    `panes-settings.js` 唯一使用点已改（`extra` + `wrapControl:false` → `children:[徽标, 开关]`）；
+    `extra` / `wrapControl` 两开关**从 `UI.item` 删除**（`o.extra` 残留 0，仅余注释）。
+    **实测验收**：参数页 5 行徽标全部 `w=112 · 父=setting-item`（原 2 行 `w=966 · 父=setting-item-info`）；
+    真机出图确认徽标齐贴控件左侧、位置一致。
+  - **修 bug（自查）**：2c 补丁脚本两次把反引号/引号塞进单引号串 ⇒ 脚本自身语法错（未污染源码）。
+    已固定为「独立 `.mjs` 补丁 + 行范围替换」模式（对应 notes §内联脚本转义）。
+  - **改造（阶段 2a · 接缝①）：索引行形状归一 —— 标签归组头、删布尔分叉**
+    修两处用户实测症状（**同根**）：① 「标签位置前后不一」（记忆库页在右列 / 画像页在左列）
+    ② 「每行重复 N 条」（`tagCount` 是整集合内该 tag 的总数，却在**每一行**渲染 ⇒
+    展开 220 行后 22 个 env 行每行都写「22 条」）。
+    **修法**：`renderIndexRows(container, lines, returnRender, withTagCount)` **删掉布尔形参**，
+    改为一律 `组头 [标签胶囊] N 条` + `行 主文本 … 指针`；两处调用点同步去实参；
+    补 `.sc-idx-group` / `.sc-idx-group-n` 样式（`.sc-idx-tag.hued` 色相保留在组头）。
+    **验收**：真数据出图确认「组头只出现一次、行内零胶囊、指针右对齐」；
+    `test-idxrow-pills` 判据由「每行恰好 1 个胶囊」改为「组头恰好 1 个 + 行内零胶囊 + 组头带 N 条」（6 项）。
+  - **改造（同批）：`i18n-parity` 的 A 判据改用夹具基线**（`scripts/fixtures/i18n-zh-baseline.json`）
+    原基线是 `git show HEAD:client.js` —— 只能抓「**未提交**的意外漂移」（提交后与自身比对即恒真），
+    而**刻意**的 UI 改动在提交前必红、无法验收。现改为夹具比对（与提交状态无关），
+    刻意改动时跑 `--update-baseline` 显式更新并记账。
+  - **修 bug（自查）**：阶段 2a 首次落地的 CSS 规则 **漏了右花括号 `}`** ⇒ 未闭合的 `{` 让解析器
+    **吞掉其后全部规则**（`.sc-idx-row`/`.sc-idx-subject`/`.sc-idx-pointer` 全失效，实测 `display` 从 flex
+    退化为 block、指针与主文本粘连）。**该类别本已被 `check-layout-px` 的「花括号配平」覆盖** ——
+    是我**跳过门禁直接目视**才漏掉。教训：UI 改动须**先跑门禁再出图**。
+  - **修复（阶段 0 · 成因 C）：三份词表从未注册 ⇒ 英文态 7/9 视图仍显示中文**
+    圆桌会议 `arch` 发现、主持人**产物级复核确认**：`i18n-dict-cfg.js`(283键) / `-pane-run.js`(231) /
+    `-pane-arch.js`(186) **只建了文件、从未被 import**（`body.js` 只 import NAV+MEM）⇒ 700 条英文词条
+    从未注册 ⇒ 英文态下参数/运行总览/架构/运行观测/设置/插件集合/配置原文**7 个视图仍是中文**
+    （实测 752 条唯一串、约 74%）。**修法 3 行**：`body.js` 补 3 个 import + `attachLocale` 合并处并入。
+    产物由 681,509B → 748,946B；英文值进包命中率由 1%/3%/3% → **100%**。
+  - **修复（同批）：验收替身绕过真实注册路径 ⇒ 同一缺陷「结构上不可能被发现」**
+    `i18n-parity` / `panel-shot-real` / `test-i18n-render` 三件的 locale 替身：`register` 写成**空实现**、
+    `bind` 直接查**自读的词表文件**、`effect` 写成**空函数**（而 `i18n.js:162` 把注册包在 `ctx.effect` 内）
+    ⇒ 注册路径**从不被行使**。现改为忠实协议：`register` 累积 / `bind` 活查 / `effect` 执行回调。
+    **先红实证**：旧代码跑忠实测试 ⇒ 9/9 FAIL；修复版 ⇒ PASS。
+  - **新增门禁 2 件（均登记 CHECKS + REQUIRED_CHECKS）**：
+    `check-i18n-registered`（**产物层**判「词表是否真的进了包」，补断言 H 只查「文件存在」的假绿面；
+    先红实测：旧代码 exit 1 / 修复版 exit 0）；
+    `check-i18n-attr-literal`（扫「**该包 tr() 却裸写中文**」的 `placeholder`/`title`/`aria-label`/
+    `textContent` 直接字面量 —— 英文态出图实测发现参数页搜索框 placeholder 是裸中文串，
+    而文本级残留检查**天然看不见属性**；实测全仓仅 1 处，已修并补词条）。
+  - **新增核对能力：真数据出图支持英文态与分段出图**（`panel-shot-real.mjs` 加 `--en` / `--full`）
+    `--en` 走**忠实 locale 替身**（真实注册路径被行使）；`--full` 按滚动容器 (`.sc-view`) 分段出图 ——
+    判因（用户提示）：面板内容区有纵向滚动导轨，**默认只截到首屏**，实测设置页 1406px 内容 /
+    633px 视口 ⇒ **55% 在折叠线以下**，此前的目视核对系统性漏掉下半页。
+  - **修复：标签「· 原始键」后缀（用户二次实测「点击展开全部又是双标签」）** —— 展开后每行胶囊显示
+    `环境 · env`。判因：折叠态只有 8 行、tag 少**不撞名** ⇒ 无后缀；**展开全部后 212 行里 `env` 与
+    `环境` 同时出现** ⇒ 触发 1:N 撞名判据 ⇒ 每行多拼一截 `· env` ⇒ 看上去就是「双标签」。
+    修法：**可见文本只留映射名**（`环境`），消歧整体改由 `title`/`aria-label` 承载；
+    随之删除已成死代码的 `ambiguousTags`（含其导出与判据）。
+    **目视证据**：新增 `scripts/panel-shot-real.mjs`（从运行中的宿主直取真数据渲染出图）——
+    修复前展开态为 `环境 · env`，修复后为 `环境`；画像页为左列单一标签 `身份`/`环境`/`硬件`。
+    ⚠ 判因（方法论）：此前只读源码 + 自造夹具 ⇒ 漏掉该类**结构性**缺陷；夹具不产生真实形态数据，
+    几何门禁又不数同类节点个数 ⇒ 已补「真实数据出图 + 人眼核对」这一面。
+  - **修复：标签重复显示（用户实测报告）** —— 索引与小节里 `偏好`/`习惯` 渲染成「偏好 · 偏好」。
+    判因：撞名判据 `ambiguousTags` 按**出现次数**（`group.length > 1`）判定，而文档注释写的是
+    「两个**不同的**原始 tag」—— **注释与实现不一致**：同一 tag 出现两次即被误判撞名，于是
+    「显示名 · 原始键」拼出自己和自己重复。修法双重防线：① 判据改为**不同 tag 数 > 1**（先去重再判）
+    ② 显示名与原始键相同时**不附键**（`env`→「环境 · env」仍可消歧，`环境`→「环境」不再自重复）。
+    补 `test-i18n-taglabel`（**9 项**，登记 CHECKS）覆盖显示层行为——该层此前**零测试覆盖**；
+    并用真实 `_memory/` 索引数据复现验证（`i18n-tagprobe`）。
+  - **冻结棘轮**：接线曾把 `body.js` 顶到 708（基线 626+15）⇒ 按**领域接缝**把导航文案层抽成
+    `src-client/i18n-nav.js`（视图表 + 标签映射 + 语言切换补丁的单一归属），body.js 回落到 **636（容差内）**。
 - **注入出口 `{{` 防护（圆桌会议册三 · 2026-09-17）**：新增 `src/inject-guard.ts`（纯函数
   `guardContextText` / `wouldThrowHostInterpolation`，零 IO），接线 `panel-inject.ts`（order 88）
   与 `mcl.ts`（order 89）**两处**注入出口。判因：宿主 `dsh-system-prompt` 的 `interpolate()`

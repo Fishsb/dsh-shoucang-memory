@@ -90,3 +90,10 @@ deliverables/ui1-shots/
 #   2026-09-17 实测：建团队前 check-hardcode 全绿，建团队后立刻报 2 处 ⇒ 同批已补进 SKIP_DIRS，
 #   否则「未被跟踪」只是巧合，git add -A 就会带进去（与上方 .roundtable/ 同一条判据）。
 .agent-teams/
+
+# ---- i18n 翻译流水线瞬态产物（2026-09-17）----
+#   判因：这些中间产物（分片/合并/译文）与改动前源码备份未 ignore 时，
+#   任何一次 git add -A 都会把它们带进公开树（备份目录更会让源码出现双份、审计误读）。
+#   译文已固化为 src-client/i18n-dict-*.js ⇒ 中间产物可安全丢弃。
+/.i18n-*.json
+/.i18n-backup-*/

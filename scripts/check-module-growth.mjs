@@ -99,7 +99,9 @@ const FREEZE = {
   // UI1/U2（2026-09-15）：抽出 panes-suite(2 符号) ⇒ 棘轮 1065 → 840
   // UI1/U2（2026-09-15）：抽出 panes-settings(11 符号) ⇒ 棘轮 840 → 实测值
   // UI1 收尾（2026-09-15）：DS_STATE_TEXT/DS_PROBE_TEXT/dsFmt* 迁入 panes-suite.js + 删 dsFmtTime 重复定义 ⇒ 棘轮 648 → 626
-  'src-client/body.js': 626,
+  // 2026-09-17 i18n：导航文案层（i18n-nav.js）与控件元数据域（i18n-ctrl.js）**按领域接缝外提**后，
+  //   body.js 由 708（超容差红）回落到 613 ⇒ 按棘轮纪律**下调基线**（只许收紧，不许借机抬高）。
+  'src-client/body.js': 613,
   'src-client/styles.js': 726,
   'src/scheduler.ts': 611,
   'src/treeops.ts': 588,

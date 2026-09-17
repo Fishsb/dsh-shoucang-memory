@@ -358,6 +358,10 @@ const CHECKS = [
   // 架构门禁（棘轮：只许收紧不许放松）——守「零循环依赖 / 模块规模 / 接口宽度 / 扇入上限」。
   // 与 check-srcmap 分工：srcmap 管 src↔lib 产物漂移，本件管模块依赖图的**结构性质**。
   ['scripts/audit-architecture.mjs', '--gate'],
+  // 前端分层门（接缝④ · 2026-09-17 阶段 5）：`audit-architecture` 默认 `REL='src'` ⇒ **前端从未被扫**，
+  //   全模块被打 `??`（无层级）、且已有 1 处双向环 `panes-memory ↔ panes-memory-detail` 无人看见。
+  //   ⚠ **顺序不可颠倒**：加本行前必须先破环（否则立刻红）—— 实测破环前 exit 1 / 破环后 exit 0。
+  ['scripts/audit-architecture.mjs', '--dir', 'src-client', '--gate'],
   // 阶段 0（2026-09-14）**防堆叠**两件（方案 `docs/architecture-landing-plan-20260914.md` §3）：
   //   · check-module-growth —— 大模块**冻结**（≥600 行只许降不许升）+ 硬顶 1000。
   //     为什么需要：模块行数门禁（2000）对当前最大模块 879 而言**恒绿/假绿**（今天谁也碰不到）；
@@ -506,7 +510,136 @@ const CHECKS = [
   //   大小写口径）/ 载体层单一实现（期望值数据驱动自 CARRIERS 注册表，不抄第二份标签名单）/
   //   同 § 族键与竞争性抑制 / 词法 token 地板 / 装配矩阵**全仓唯一实现** / 临时夹具库真读召回。
   ['scripts/test-targets.mjs'],
+  // ── i18n（中英文切换 · 2026-09-17）────────────────────────────────────────
+  // 判因：宿主 `t()` 缺键会**静默回落为 key 字面量且不抛错**（见 dsh-client-locale/lib/client.js
+  //   的 translate：`lookup(ns,key,chain) ?? lookup('common',key,chain) ?? key`）⇒ 界面出现
+  //   `nav.memory` 这种裸键而全绿，是本仓最典型的假绿形态。本件即该洞的正面拦截。
+  //   两件**均不带 xfail**：它们不依赖浏览器、不依赖环境，必须真红真绿。
+  // 断言 A–G：A 双向键集（缺键=裸键风险 / 多余键=死键）· B 占位符一致 · C 词表自检 ·
+  //   D 标签映射完整性（⊇ carriers.tags ∪ TAG_ORDER）· E 红线守卫（改动集/_memory 与 tags 基线）·
+  //   F i18n 模块 ≤400 行（补 module-growth 的 400–600 空白带）·
+  //   G tag 数据流（AST：色相/排序/统计不得经 tr/tagLabel 回流）。
+  //   带 --selftest 反向证伪（合成违规必红，防恒真）。
+  ['scripts/check-i18n-keys.mjs'],
+  // 词表**是否真的进了产物**（2026-09-17 圆桌会议 arch 成因 C）：
+  //   实测三份词表（cfg 283 / pane-run 231 / pane-arch 186 = 700 键）只建文件、从未 import
+  //   ⇒ 英文态 7/9 视图仍显示中文（752 串）；而当时六条验收 + 135 件门禁**全绿**，
+  //   因为断言 H 只查「文件存在」、验收件的 locale 替身自读词表绕过注册路径。本件在**产物层**判注册。
+  ['scripts/check-i18n-registered.mjs'],
+  // 「该包 tr() 却裸写中文」的**属性/文本赋值**（2026-09-17 英文态出图实测发现）：
+  //   参数页搜索框 placeholder 是裸中文串（panes-toggles.js:54），而 i18n-parity 报「en 无中文残留」
+  //   **为真** —— 它读文本节点，placeholder 是属性；i18n-coverage 又只扫已有 tr() 调用点。
+  //   ⇒ 两类检查合起来正好漏掉这一类。本件补上（23 模块扫描，只报直接字面量赋值）。
+  ['scripts/check-i18n-attr-literal.mjs'],
+  // appState **契约四方对账**（2026-09-17 圆桌会议 arch 成因 B）：
+  //   实测声明 20 / body 注入 24 / pane 写 3 / 消费 27 —— 原 7 个字段「有注入无声明」，
+  //   且拼错字段名（消费 appState.xxx 而无人注入）**静默为 undefined**，无任何门禁判它错。
+  //   本件对账四方（声明/注入/pane写/消费）—— 契约外字段与死声明均判 FAIL。
+  //   先红实测：造 zzBogus/zzRead 两字段 ⇒ exit 1 精确报出；还原 ⇒ exit 0。
+  ['scripts/check-appstate-contract.mjs'],
+  // 扫描件：CJK 字面量清单 + **逻辑耦合红线**（CJK 出现在比较/分支任一侧 ⇒ 无条件红）。
+  //   判因（实测）：全仓曾有 4 处拿文案做逻辑判断（m.effect==='需重载' / textContent==='设置' /
+  //   s[0]==='停滞'×2），切语言即**静默失效**（不崩溃、行为悄悄变错）——i18n 改造里最危险的一类。
+  //   排除面：*.bak-*（源码目录内 4 个 320KB 备份）与 *.generated.*（禁手改生成物）。
+  //   带 --selftest：合成违规样本必红 + 干净样本不误报，已实测 6/6。
+  ['scripts/check-i18n-scan.mjs'],
+  // 两态渲染验收（i18n）：zh/en 下装载真实 client.js + locale 服务替身，断言两态都挂载 /
+  //   导航文本确实不同 / en 态 chrome 区零中文残留 / 无裸键 / 缺键记录为空 / 无横向溢出。
+  //   ⚠ 不并入 ui-geo-regress（那件 xfail:true，会吞掉英文态断言）；本件独立计数、永不 xfail。
+  ['scripts/test-i18n-render.mjs'],
+  // 装载冒烟（i18n）：与 geo-regress 同款 mock ctx，捕获**顶层静默异常** —— 判因：esbuild 把 pane
+  //   提升到 __ModuleLoader__.load 之外求值，顶层写 tr() 会 ReferenceError ⇒ 整包不注册、面板消失且无提示。
+  ['scripts/i18n-smoke.mjs'],
+  // 三条核心红线的**常驻守卫**（i18n · 2026-09-17 目标轮 2/40 补）。
+  //   判因：v2.1 把三条红线写成「核心不变量」，但它们**只在人读文档时存在** —— 无任何机检守；
+  //     实测三条此前从未被实证过（是我手工逐条跑出来的）。手工证据随会话消失，本件把它变成可复跑判据。
+  //   R1 zh 态零回归 —— `tr()` 未接入 locale 时必须**原样返回中文且不查表**（控制流性质，只有跑才作数）；
+  //   R2 recall 匹配面 —— `targets.ts` 的 5 个匹配符号（indexRowTag/indexCarrierSet/highConfCarrierSet/
+  //      scanIndexRows/TAG_WEIGHT）必须存在（改名即断链）；
+  //   R3 真源不动 —— `carriers.tags` 逐键等于基线（查基线本身是否在）+ `_memory/` 无改动。
+  ['scripts/check-i18n-redlines.mjs'],
+  // 双验收（i18n · 2026-09-17）：A. zh 全页对照 git show HEAD:client.js（改动前产物）逐视图
+  //   断言逐字符一致（红线「zh 态除标签显示外逐字节不变」）；B. en 全页逐视图断言无裸键 / 无中文残留 / 零缺键。
+  //   ⚠ 为什么不并入 test-i18n-render：那件只验 **chrome 区**（导航/页头）+ 总览页 —— 实测放过两处真缺陷
+  //     （设置页裸键破 zh 红线 8/9 一致才发现；观测页 KPI 与装载期表 en 态残留中文）。chrome 干净 ≠ 页面干净。
+  ['scripts/i18n-parity.mjs'],
+  // 标签显示层行为（i18n · 2026-09-17，用户实测报告「索引和小节显示的标签重复了」）：
+  //   判因：`ambiguousTags` 的撞名判据按**出现次数**（group.length > 1）而非**不同 tag 数** ⇒
+  //   USER.md 的 `偏好`×2 / `习惯`×2 被误判撞名 ⇒ 胶囊渲染成「偏好 · 偏好」（自己和自己重复）。
+  //   本件把显示层行为钉成判据（此前**零测试覆盖**）：重复 tag 不判撞名 · 异名撞名附键 · 同名不附键 · 边界不抛。
+  ['scripts/test-i18n-taglabel.mjs'],
+  // 索引行**胶囊唯一性**（2026-09-17，用户实测报告「点击展开全部又是双标签」）：
+  //   判因（架构层）：v9 对齐时**新增右列胶囊**（`.sc-right` = 标签 + 「N 条」）却**没移走左列旧胶囊**
+  //   ⇒ 同一行渲染两次同一个标签（真机实测 pills=2 "环境 | 环境"）。折叠态与「展开全部」同一渲染器，故两处都重复。
+  //   本件用**真实 _memory/MEMORY.md** 造夹具、真机逐行数 `.sc-idx-tag`，断言「每行恰好 1 个」且右列计数仍在。
+  ['scripts/test-idxrow-pills.mjs'],
+  // S-P5（2026-09-17 **圆桌会议「灵枢模块吸收评审」产出**）**注入边界 `{{` 防护**。
+  //   判因（会议实证，非推测）：宿主 `dsh-system-prompt` 的 `interpolate()` 对注入文本做
+  //   严格 `{{var}}` 插值，三处 throw（lib/index.js L158/L164/L167）冒泡到 `assemble` ⇒
+  //   **该轮请求整体失败**；而记忆库内容来自用户对话原文（蒸馏沉淀），用户跑一次
+  //   `docker inspect --format '{{.Architecture}}'` 即可把引信写进库 ⇒ 会话**永久不可用**。
+  //   会议同时实证：守藏注入出口原有 **2 处**（panel-inject.ts:491 / mcl.ts:259），两处**均零处理**。
+  //   本件断言（对应 accept 判据 1/2/3）：① **先红**（未防护文本确实触发宿主 throw 路径 ——
+  //   防"先写绿再补红"造假）② 防护后不再触发 ③ 幂等逐字节 ④ **保真**（真实库取样 100 行
+  //   逐字节零改写，禁合成夹具）⑤ **双入口覆盖 2/2**（只测一处不算通过）。
+  //   ⚠ 口径留痕（verify 节点推翻主持人的修正）：触发条件是**完整 `{{...}}` 组**或
+  //   `{{` 与后续 `}}` 并存，**不是**「含裸 `{{` 即炸」——落单 `{{` 宿主透传，有反例断言。
+  ['scripts/test-inject-guard.mjs'],
+  // T3（2026-09-17 **圆桌会议「守藏整体方案会审」产出**）**面板路由来源栅栏**。
+  //   判因（**实弹实证**，非读码推断）：守藏以 `kind:'exact'` 注册 `/api/shoucang-panel/*`，
+  //   而宿主 `dsh-host-webserver` 的 `match()` **exact 优先于 prefix**（lib/index.js:322-331）
+  //   ⇒ 绕过挂在 `/api` prefix 上的来源栅栏（`isTrustedApiRequest`，scope 仅 `/api`）。
+  //   会议 security 节点实发请求实测（修复前）：`Host: evil.com` → **200** ·
+  //   `Origin: https://evil.com` → **200** · `sec-fetch-site: cross-site` → **200**；
+  //   对照 `GET /api` + `Host: evil.com` → **403**。42 条路由全在 fence 外，含写端点。
+  //   本件断言：① **先红侧**（三类伪造来源必拒 —— 修复前实测 200，故接线前必红）
+  //   ② **不误杀侧**（面板同源 fetch / 无 Origin 的合法客户端必放行）
+  //   ③ **单点覆盖**（`panel-shared.ts` 内仅一处 `webServer.register`，且栅栏在 `contract`
+  //      三元**之外** —— 折进分支会漏防 27 条无 contract 路由，含 `/deepsleep/trigger`）
+  //   ④ 判据与宿主 `isLoopbackHostname` 同口径（`localhost` / `[::1]` / `127/8`）。
+  ['scripts/test-panel-guard.mjs'],
+  // 册一 B（2026-09-17 **圆桌会议「守藏整体方案会审」产出**）**内容级凭据过滤**。
+  //   判因（**已发生事实**）：会议实测 `~/.dsh/suite/knowledge/pending/flow-candidates/
+  //   2026-09-16-dmjyix.md:3` 含明文 API 密钥（`sk-`+64hex，用户原话"这是我的秘钥"），
+  //   位于**待蒸馏吸收通道**；同串另落 `audit/ledger.jsonl:8528`（append-only）。
+  //   定层（arch 裁决）：凭据危险是「内容本不该存在」⇒ **写入侧**处置（与 `inject-guard`
+  //   的出口处置是同一成因两个投影，**不可互替**）。落点 = `memory_write_gate.mjs` 新增
+  //   exit 5 内容级准入（两份副本同批同改，见 RC-3）。
+  //   本件四组语料（accept 判据 B1–B4）：① **真命中 11 例**（各类凭据必须检出）
+  //   ② **误报对照 8 例**（含本库实测误杀锚点：无边界锚的 `\d{17,}` 会命中浮点
+  //   `0.018518518518518517` ⇒ 这组是判据成立**前置**，缺它则只会"宁可错杀"）
+  //   ③ **保真 150 行真实库取样**（非合成夹具）零误报 ④ **漏网边界如实断言**（分行 key /
+  //   无前缀 hex —— 把已知边界写成可执行事实，防后来人误以为"有正则即万无一失"）。
+  //   ⚠ **单一实现声明**：`src/secret-redact.ts`（host 侧 TS）与 gate 内联表同源，改一处须同步。
+  ['scripts/test-secret-redact.mjs'],
 ]
+/* ── 已登记在册的自证（i18n · 2026-09-17 · v2.1 验收③）─────────────────────────
+ * 判因：验收口径里写「须看到两个新件在册」，若靠**人眼确认**即为文本纪律
+ *   （本仓 N1 教训：立完纪律但没人执行 ⇒ 写了从未运行）。
+ *   这里把「在册」变成**脚本断言**：本运行器自己读 CHECKS，缺项即自身 exit 1。
+ * ⚠ 新增 i18n 相关件时**必须同步本表**，否则本运行器直接红——这就是它存在的意义。 */
+const REQUIRED_CHECKS = [
+  'scripts/check-i18n-keys.mjs',
+  'scripts/check-i18n-registered.mjs',
+  'scripts/check-i18n-attr-literal.mjs',
+  'scripts/check-appstate-contract.mjs',
+  'scripts/check-i18n-scan.mjs',
+  'scripts/test-i18n-render.mjs',
+  'scripts/i18n-smoke.mjs',
+  'scripts/check-i18n-redlines.mjs',
+  'scripts/i18n-parity.mjs',
+  'scripts/test-i18n-taglabel.mjs',
+  'scripts/test-idxrow-pills.mjs',
+]
+{
+  const registered = new Set(CHECKS.map((entry) => entry[0]))
+  const missing = REQUIRED_CHECKS.filter((f) => !registered.has(f))
+  if (missing.length) {
+    console.error(`❌ check-runner 自身断言：以下 i18n 检测件未登记在 CHECKS 中：${missing.join(', ')}`)
+    console.error('   （i18n 能力已落地但验收件不在册 ⇒ 等于没写；请登记后重跑）')
+    process.exit(1)
+  }
+}
 const rows = []
 for (const entry of CHECKS) {
   const [file, ...rest] = entry
