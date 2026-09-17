@@ -105,20 +105,26 @@ sec-fetch-site     → 403   ✅ 修复前 200
 `check-changelog` PASS · `check-public-tree` PASS · `audit-wiring` 0 违规 · `audit-architecture --gate` PASS ·
 `typecheck` 0 错。
 
-### 剩余红项（逐条实测归属 · 已定位根因）
+### 剩余红项（终态 · 逐条实测归属）
 
-> ⚠ **本节含一次自我更正**：上一版把 `test-panel-wiring` 判为"既有问题"，**那是错的** ——
-> 它是本轮改动引入的**真实回归**，已被门禁抓出并修复（见下表 + §自身缺陷 5）。
+> ⚠ **本节含一次自我更正**：早期版本把 `test-panel-wiring` 判为"既有问题"，**那是错的** ——
+> 它是本轮改动引入的**真实回归**，被门禁抓出并修复（见 §自身缺陷 5）。
+
+**终态：全量 `check-runner` 只剩 1 个红项，且非本方可控。**
 
 | 红项 | 归属 | 根因（实测证据） |
 |---|---|---|
-| `check-pane-sections` · `check-module-growth` | **并发 i18n 会话** | 同一根因：`src-client/body.js` **708 > 冻结基线 626+15**（+82；`git diff --numstat` = 172+/41-）。我的提交 `211682d` 零触碰该文件。出路② `--rebase` 抬基线**会议明令不授权**（只授权下调），故不可由本方收敛 |
-| `test-split-equivalence`（A3d） | **并发 i18n 会话** | 断言硬编码 `100 PASS / 0 FAIL`（`test-split-equivalence.mjs:100`），而 `ui-geo-regress` 现稳定产 **85 PASS / 0 FAIL**（连跑两次同值，非 flaky）。成因：并发会话改了 `scripts/ui-geo-regress.mjs`（`27+/27-`，检查数 100→85）却**未同步该硬编码期望**。两文件我方均零触碰 |
-| `test-panel-wiring`（`/vector/status2`） | ✅ **已修（曾是我的回归）** | 见下 §自身缺陷 5 |
+| `check-i18n-keys.mjs` | **并发 i18n 会话** | 该件是**对方新建的未跟踪件**（`git status` = `??`），报「A 缺 EN 词条 **21** 个（宿主 `t()` 会静默回落成 key 字面量）」⇒ 其 i18n 工作**尚未补完词表**。我的两次提交（`211682d` / `0d91e15`）**零触碰**该件 |
 
-**已转绿（本轮修复）**：`inject-baseline-diff`（归一化器覆盖缺口 · 见 §自身缺陷 6）·
-`test-usage-truth` / `check-record-parity`（runner 内时序偶发：单独跑均 exit 0 PASS；
-runner 串行跑 ~100 件期间记忆库/影子库被并发写入）。
+**过程中曾出现、已由并发会话自行收敛的红项**（非本方可控，观察记录）：
+`check-pane-sections` / `check-module-growth`（同一根因 `src-client/body.js` 冻结超限 +82）·
+`test-split-equivalence`（A3d 硬编码期望 `100 PASS` vs `ui-geo-regress` 实产 85）·
+`check-installed-sync`（对方 rebuild `client.js` 后未部署）—— 三者**均已随对方推进而转绿**，
+我的提交始终零触碰 `src-client/` `client.js` `lib/client.js` `ui-geo-regress` `test-split-equivalence`。
+
+**已由本轮修复而转绿**：`inject-baseline-diff`（归一化器缺口 · §自身缺陷 6）·
+`test-panel-wiring`（§自身缺陷 5）·
+`test-usage-truth` / `check-record-parity`（runner 内时序偶发：单独跑均 exit 0 PASS）。
 
 ### 本轮自查发现并修复的**自身**缺陷（6 处，如实记录）
 
