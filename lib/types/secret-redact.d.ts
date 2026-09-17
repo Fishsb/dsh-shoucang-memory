@@ -47,6 +47,31 @@ export interface SecretHit {
  * @returns 命中列表（保序、去重按"原始串"）。
  */
 export declare function findSecrets(text: unknown): SecretHit[];
+/**
+ * **就地脱敏**：把全部高置信凭据替换为其遮蔽形态（保留类别语境、去掉明文）。
+ *
+ * ## 为什么必须有这一件（2026-09-17 实测泄漏）
+ *
+ * 实测在守藏台账 `~/.dsh/suite/knowledge/audit/ledger.jsonl` 里发现**明文 API 密钥**：
+ *   `distill-activation.ts` 写 `activation-step` 时用 `excerpt: text.slice(0, 60)` ——
+ *   **原样截 60 字符**，而这条路径**没有走 `findSecrets`**（`distill-write.ts` 那条走了）。
+ *   ⇒ 凭据随"审计摘录"落了盘。
+ *
+ * ## 为什么不能只靠 `findSecrets`
+ *
+ * `findSecrets` 只**报告**（`SecretHit` 不带偏移，无法就地替换）；
+ *   而审计台账不能因检出凭据就整条丢弃（丢的是审计线索）。
+ *   ⇒ 需要"遮蔽后仍保留记录"的形态，故在本模块（**单一实现**）补 `redactText`。
+ *
+ * ## ⚠ 顺序：必须**先脱敏、后切片**
+ *
+ * 若先 `slice(0, 60)` 再脱敏，落在边界的凭据会被截成**不匹配正则的残段**（如只剩 `sk-5d`）
+ *   ⇒ 脱敏失效且明文残段照样落盘。故调用方一律 `redactText(x).slice(0, n)`。
+ *
+ * @param text 任意文本（非字符串返回空串）
+ * @returns 脱敏后的文本（无命中则原样返回）
+ */
+export declare function redactText(text: unknown): string;
 /** 命中即"含凭据"（供 gate 做准入判定的布尔快捷）。 */
 export declare function hasSecret(text: unknown): boolean;
 /** 供 gate 输出的告警文本（**不回显原值**，只给类别 + 遮蔽前缀）。 */

@@ -30,7 +30,7 @@ const ok = (name, cond, detail = '') => { if (cond) { pass++; return } fails.pus
 
 const implPath = join(ROOT, 'lib', 'secret-redact.js')
 if (!existsSync(implPath)) { console.log('test-secret-redact: lib/secret-redact.js 未构建 ⇒ skip（exit 3）'); process.exit(3) }
-const { findSecrets, hasSecret, secretWarnings } = await import(`file://${implPath.replaceAll('\\', '/')}`)
+const { findSecrets, hasSecret, secretWarnings, redactText } = await import(`file://${implPath.replaceAll('\\', '/')}`)
 ok('导出 findSecrets', typeof findSecrets === 'function')
 ok('导出 hasSecret', typeof hasSecret === 'function')
 
@@ -122,6 +122,34 @@ for (const [name, text, shouldMatch] of KNOWN_GAPS) {
 /* ── 辅助：告警文本不回显原值 ── */
 const warn = secretWarnings(findSecrets('sk-6b924112e7317ae1263febc591dac9fc2e41f9ca6beb9cf85672b2f2ee31024c'))
 ok('告警文本不回显完整原值', warn.length === 1 && !warn[0].includes('3febc591dac9fc2e41f9ca6beb9cf85672b2f2ee31024c'), warn[0])
+
+
+/* ── redactText：就地脱敏（2026-09-17 修实测泄漏时新增）──
+ *  判因：`distill-activation.ts` 写 `activation-step` 的 excerpt 时用 `text.slice(0, 60)` **原样截断**，
+ *    且该路径**未过 findSecrets**（蒸馏写入路径过了）⇒ 实测有明文 API 密钥落进审计台账。
+ *  ⚠ 夹具在**运行时拼接**，源码里不得出现完整凭据串。 */
+ok('导出 redactText', typeof redactText === 'function')
+
+const K = "sk-" + "6b924112e7317ae1263febc591dac9fc2e41f9ca6beb9cf85672b2f2ee31024c"
+const red = redactText("配置里的秘钥" + K + "（请勿外传）")
+ok('redactText 掩掉明文', !red.includes(K), red.slice(0, 40))
+ok('redactText 保留遮蔽形态（首 6 + 8· + 末 4，与 mask() 同口径）', red.includes('sk-6b9') && red.includes('024c'), red.slice(0, 40))
+ok('redactText 保留非凭据上下文', red.startsWith('配置里的秘钥') && red.endsWith('（请勿外传）'), red.slice(0, 40))
+ok('redactText 对无凭据文本原样返回', redactText('普通中文文本 ok') === '普通中文文本 ok')
+ok('redactText 对非字符串返回空串', redactText(null) === '' && redactText(123) === '' && redactText(undefined) === '')
+
+/* ── **顺序用例**：先切片会把边界凭据截成不匹配正则的残段 ⇒ 脱敏失效 ── */
+/* ⚠ 填充必须用**非 ASCII 词字符**（如中文）：正则以 `\bsk-` 起头，
+ *   若前面紧贴 ASCII 字母数字（如 `xxxxsk-…`）则 `\b` **不成立** ⇒ 不匹配 ⇒ 脱敏失效。
+ *   实测真实泄漏是 `秘钥sk-5d36…`（前缀为 CJK）⇒ `\b` 成立 ⇒ 能匹配。本用例照真实形态构造。 */
+const pad = "填".repeat(50)
+const boundary = pad + K
+const wrongOrder = redactText(boundary.slice(0, 60))
+const rightOrder = redactText(boundary).slice(0, 60)
+ok('【反例】先切片后脱敏 ⇒ 残留明文残段（证明顺序有必要）',
+  !wrongOrder.includes(K) && /sk-[A-Za-z0-9]{2,}$/.test(wrongOrder), wrongOrder.slice(-16))
+ok('【正例】先脱敏后切片 ⇒ 无明文残段',
+  !rightOrder.includes(K) && !/sk-[A-Za-z0-9]{20,}/.test(rightOrder) && rightOrder.includes('·'), rightOrder.slice(-16))
 
 if (fails.length) {
   console.error(`test-secret-redact: FAIL (${fails.length})`)

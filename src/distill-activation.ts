@@ -12,6 +12,7 @@ import type { EmbedCfg } from './vec.js'
 import { isNoiseIntent } from './distill-candidates.js'
 import { envelopeEvent as envelope } from './event-envelope.js'
 import type { DistillState } from './distill-state.js'
+import { redactText } from './secret-redact.js'
 
 export interface ActDeps {
   actShadowFile: string
@@ -89,7 +90,11 @@ const activationStep = async (dep: ActDeps, sid: string, event: any): Promise<vo
         metric, rel: Number(relSim.toFixed(3)), // ACT-024：判据量（abs-cos 为现行）；rel 留档旧口径便于对照
         state: actSt.state, prev, sim: Number(sim.toFixed(3)), tOn: dep.actConf.on, tOff: dep.actConf.off,
         emit, tokens: tokens.length, hit: rows.length ? rows[0].line.slice(0, 120) : '',
-        pointers: rows.slice(0, 2).map((r) => r.pointer), excerpt: text.slice(0, 60),
+// ⚠ **先脱敏、后切片**（2026-09-17 实测泄漏修复）：原为 `text.slice(0, 60)` 原样截断，
+//   而本路径**未过 `findSecrets`**（蒸馏写入路径过了）⇒ 实测有明文 API 密钥随审计摘录落盘
+//   （`~/.dsh/suite/knowledge/audit/ledger.jsonl` 的 excerpt 字段）。
+//   顺序不可颠倒：先切片会把边界处的凭据截成不匹配正则的**残段**（如只余 `sk-5d`）⇒ 脱敏失效。
+        pointers: rows.slice(0, 2).map((r) => r.pointer), excerpt: redactText(text).slice(0, 60),
       }, 'activation.shadow'), 'utf8')
     } catch { /* 影子日志失败静默 */ }
   } catch { /* 观察零抛出 */ }
