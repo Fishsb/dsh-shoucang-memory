@@ -197,7 +197,14 @@ export function createRouteBinder(webServer: RouteRegistry, logger: PanelLogger)
         sendJson(res, 403, { error: 'forbidden', detail: '请求来源不可信' })
         return
       }
-      guarded(req, res)
+      /* ⚠ **必须 `return`**（2026-09-17 修 · 实测踩坑）：
+       *   宿主是 `await route.handler(req, res)`（`dsh-host-webserver/lib/index.js:234`）。
+       *   若此处**丢弃**返回的 promise：① 异步 handler 的响应在宿主 await 返回后才写 ⇒
+       *   调用方读到"未写响应"（实测 `test-panel-wiring` 的 `/vector/status2` code=0；
+       *   本缺陷曾被我**误判为"既有问题"**，实为门禁抓出的真实回归）；
+       *   ② 更严重 —— 异步 handler 内的异常**逃脱**宿主 `handle().catch()`（同文件 :247）
+       *   ⇒ 变 unhandled rejection ⇒ **静默失效**（本仓明令禁止的失效形态）。 */
+      return guarded(req, res)
     }
     disposers.push(webServer.register({ kind: 'exact', path, handler: fenced }))
   }
