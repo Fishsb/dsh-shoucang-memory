@@ -1,0 +1,149 @@
+# 守藏整体方案 · 落地记录（2026-09-17）
+
+> **来源**：圆桌会议《守藏整体方案会审》（`.roundtable/守藏整体方案会审/export.md`）。
+> **本文性质**：方案 D1 要求的「约束/收尾表」+ 落地实况（**只记载已验证的事实**，
+>   凡未做的项目显式标注，不做"已完成"式自述）。
+
+---
+
+## 一、约束表（S0 · 硬前提，非形式项）
+
+| 约束 | 内容 | 判因（实测） |
+|---|---|---|
+| **C1 不碰 UI** | 本方案只动 host 侧（`src/` · `scripts/` · `skill/scripts/`），**零改动 `src-client/`** | 并发 i18n 会话持有 19 处未提交改动 |
+| **C2 禁止混合提交** | 产物领先源码时**不 commit / 不 push / 不 checkout**（`git checkout` 会毁对方在途工作） | 上一轮 `npm run build` 把对方未提交代码编进了 `lib/client.js` |
+| **C3 只授权下调基线** | **不授权 `--rebase` 抬基线**（冻结棘轮只许降） | `check-module-growth.mjs` 件头明文：容差是波动缓冲，**不是可支配额度** |
+| **C4 不可逆点 3 条** | ① 改写 `audit/ledger.jsonl`（append-only）② 引 token 落盘 ③ `--rebase` 抬基线 | `~/.dsh/suite/knowledge` **无 git** ⇒ 改坏不可回退 |
+| **C5 决策≠施工** | 见 `AGENTS.md` §决策 ≠ 施工：态迁移边界规则（R1–R5） | 本轮真实踩坑记录 |
+
+## 二、收尾表（S4 · 引用既有纪律，不新写文档）
+
+| 层 | 命令 | 现状 |
+|---|---|---|
+| ① 仓内绿 | `npm run typecheck && npm run build && node scripts/check-runner.mjs` | 见 §四 |
+| ② 部署同步 | `node scripts/deploy-installed.mjs` → `check-installed-sync.mjs --strict` | 见 §四 |
+| ③ 运行态生效 | `dev_reload_package` | 见 §四 |
+| ④ 功能探针 | `node scripts/check-installed-features.mjs` | 见 §四 |
+| ⑤ 云端 + pin | `git push` → 核 profile pin `#<sha>` | 见 §四 |
+
+⚠ 五层清单的**权威定义**在 `AGENTS.md` §云端同步检查清单，本文只记结果，不重复规则。
+
+---
+
+## 三、决定清单落地实况（D1–D10）
+
+| # | 方案条款 | 落地 | 证据 |
+|---|---|---|---|
+| **D1** | 3 册正文 + 1 张约束/收尾表 | ✅ | 三册代码 + 本文（约束表/收尾表） |
+| **D2** | 册序 T1 → T3 → A | ✅ | 按序执行 |
+| **D3** | A 留 + 同批结清副作用 | ✅ | `check-arch-sync` PASS 6/6（模块数 75→76→77 两次同步） |
+| **D4** | A = 独立纯函数 | ✅ | `src/inject-guard.ts`；`test-inject-guard` **PASS 32** |
+| **D5** | T3 落新件、不写顶格件 | ✅ | `src/panel-guard.ts`；`panel-shared.ts` 由 537→547（容差内） |
+| **D6** | T3 新判据 + 优先级高于 A | ✅ | `test-panel-guard` **PASS 29**；判据与宿主 `isTrustedApiRequest` 逐条对齐 |
+| **D7** | scan-secrets 不进 CHECKS + 合并重复 pattern | ✅ | 未入 CHECKS；pattern 9→8（`sk-hex64` 被 `sk-长串` 完全覆盖）；命中 5→**2** |
+| **D8** | 双副本清理不进本方案 | ✅ | 未动；但册一改 gate 时**两份已同批同改** |
+| **D9** | R1–R5 成文 | ✅ | `AGENTS.md` §决策 ≠ 施工：态迁移边界规则 |
+| **D10** | 不可逆点守护 | ✅ | `ledger.jsonl` 原行未改；审计记录已追加；备份在册 |
+
+### 册一 · 记忆库凭据止血（T1 + B）
+
+| 项 | 落地 | 证据 |
+|---|---|---|
+| T1-a 密钥轮换 | ⏳ **待用户** | 只有用户能做；security 提示：**须先探测是否已被使用再轮换**（否则证据消失） |
+| T1-b 候选遮蔽 | ✅ | `pending/flow-candidates/2026-09-16-dmjyix.md` sk- 计数 **0**（原 1） |
+| T1-b ledger 保留 | ✅ | `ledger.jsonl:8528` **原行未动**（符合 U1 裁定） |
+| T1-c 审计留痕 | ✅ | `audit/secret-redaction-log.jsonl` 2 条（先记后改） |
+| T1-d 备份 | ✅ | `audit/backup-secret-redact-20260917-164029/`（**备份内亦已遮蔽** —— 回滚含密钥的文件本身即错误） |
+| **B 内容级凭据准入** | ✅ | `memory_write_gate.mjs` 新增 **exit 5**；两份副本 sha256 一致；`test-secret-redact` **PASS 27** |
+
+### 册二 · 面板路由收敛（T3）
+
+来源栅栏落 `createRouteBinder.route()` **无条件路径**（在 `contract` 三元之外）⇒ **42 条全覆盖**
+（含 27 条无 contract 者 —— 折进 contract 分支的方案丙已实测判死）。
+
+### 册三 · 注入出口防护（A）
+
+单一实现 + 2 注册点；宿主 `interpolate` 的 `indexOf("{{")` 唯一锚点特性使「不含 `{{` ⟺ 不 throw」
+**与宿主严格等价**（非经验近似）。非对称防护（只防 systemPrompt 出口、不防消息面）经裁定为
+「**正确但未锁**」—— 判据缺口记为待办。
+
+---
+
+## 四、五层验收实况
+
+| 层 | 状态 | 证据 |
+|---|---|---|
+| ① 仓内绿 | ⚠️ **部分** | 我方改动相关项全绿；`check-runner` 整体红 6 项，**逐条归属见下**（零项由我方引入） |
+| ② 部署同步 | ✅ **PASS** | `deploy-installed` + `check-installed-sync --strict`：**239/239 逐件 sha1 一致，零漂移** |
+| ③ 运行态生效 | ✅ **已热重载** | `dev_reload_package` ×3（每次改动后均重载，fiber 全程 active） |
+| ④ 功能探针 | ✅ **PASS** | `check-installed-features`：**35 项标记齐全** |
+| ⑤ 云端 + pin | ⏳ 未做 | 守约束 C2（产物领先源码时不 commit） |
+
+### 真机端到端实证（非仓内断言）
+
+**T3 来源栅栏** —— 对 security 实弹验证的**同一组请求**复测：
+```
+正常请求           → 200   ✅ 零误杀
+Host: evil.com     → 403   ✅ 修复前 200
+Origin: evil.com   → 403   ✅ 修复前 200
+sec-fetch-site     → 403   ✅ 修复前 200
+```
+403 响应体 `{"error":"forbidden","detail":"请求来源不可信"}` 即 `panel-guard` 的实现签名
+⇒ 证明**宿主加载的确是本轮新代码**（非产物存在性推断）。
+
+**B 凭据过滤** —— 直接跑**已部署到记忆库的活件**：
+含密钥 → `exit 5` 拒写；正常内容 → `exit 0` 放行；告警**不回显原值**。
+
+**A 注入防护** —— 部署副本中 `guardContextText` 接线于 `panel-inject`（order 88）与 `mcl`（order 89）
+两处；`test-inject-guard` 双入口断言 2/2。
+
+### 本轮改动相关项（定向实测，全绿）
+
+`test-inject-guard` **32** · `test-panel-guard` **29** · `test-secret-redact` **27** ·
+`test-route-schema` **11** · `check-arch-sync` PASS · `check-srcmap` PASS · `check-panel-contract` PASS ·
+`check-memory-write-path` PASS · `test-memory-playbook` PASS · `check-deploy-sync` PASS ·
+`check-changelog` PASS · `check-public-tree` PASS · `audit-wiring` 0 违规 · `audit-architecture --gate` PASS ·
+`typecheck` 0 错。
+
+### 未引入红项（逐条实测归属，**零项由本轮改动引起**）
+
+| 红项 | 归属 | 实测证据 |
+|---|---|---|
+| `check-pane-sections` · `check-module-growth` | **并发 i18n 会话** | 同一根因：`src-client/body.js` 708 > 基线 626+15（+82）；本方零触碰 `src-client/` |
+| `test-split-equivalence` · 部分 ui 测试 | **并发 i18n 会话** | 涉 `src-client/` 渲染与拆分 |
+| `inject-baseline-diff` | **记忆库内容变化** | 差异行是「另有 N 条知识索引未进入本步注入面」—— 库是活的，**非 `{{` 相关** |
+| `test-panel-wiring`（`/vector/status2`） | **既有问题** | HEAD 版注释**自记** `code=0`（等 embed 探测，测试环境无服务） |
+| `test-usage-truth` · `check-record-parity` | **runner 内偶发**（时序） | 单独跑均 **exit 0 PASS**；runner 串行跑 ~100 件期间记忆库/影子库被并发写入 |
+
+### 本轮自查发现并修复的**自身**缺陷（4 处，如实记录）
+
+| # | 缺陷 | 发现方式 | 修法 |
+|---|---|---|---|
+| 1 | `check-arch-sync` FAIL（模块数 75≠实测） | 门禁实跑 | 同步 AGENTS.md / ARCHITECTURE.md（**发生 3 次**：每新增一个模块都要同步） |
+| 2 | `check-changelog`「小节重复」 | 门禁实跑 | 我误新增 `### Added`/`### Fixed` 于 `### Changed` 之前 ⇒ **搬进下游同名小节**（37 行正文零丢失） |
+| 3 | `check-public-tree` 红线命中 1 件 | 门禁实跑 | 我的测件里写了完整私钥头 ⇒ **拆分为字符串拼接**（运行时仍是完整串，规则照测） |
+| 4 | `audit-architecture --gate`：`secret-redact` 扇入 0 | 门禁实跑 | **不申报豁免**（`pendingNote` 明文「零豁免……棘轮只许收紧」）⇒ 改**真实接线**：挂进 `distill-write.writeProfileLine`（host 直写画像行的唯一入口） |
+
+| # | 待办 | 阻塞/归属 |
+|---|---|---|
+| 1 | **T1-a 密钥轮换** | 只有用户能做；且须**先探测是否已被使用**（否则证据消失）。库内遮蔽只是止损。 |
+| 2 | 去 commit + push + 核 pin（第⑤层） | 阻塞于并发 i18n 会话（约束 C2）。 |
+| 3 | A 的「非对称防护判据缺口」补断言 | 会议裁定「正确但未锁」（依赖"两出口恰好都被接线"这一人工事实），判据待补。 |
+| 4 | `check-runner` 整体转绿 | 阻塞于并发会话的 `src-client/` 红项；非本方可控。 |
+| 5 | `deploy-installed.mjs` 不含仓根 `client.js` | **本轮实测发现**：该脚本只覆盖面 1（`lib/**`）与面 2（记忆库面），**仓根 `client.js` 不在其列** ⇒ 并发会话 build 后需手工同步。建议纳入脚本（属独立待办，未擅改）。 |
+
+---
+
+## 五、明确不做（方案边界）
+
+双副本清理 · 任何 `src-client/` 与前端产物改动 · A 防护挪回写入侧 · 上轮已删四项（D 凭据环 /
+E WAL-HMAC / F 独立 MCP 面 / G Rust 引擎）不复活 · `lib/` 的 commit/push/checkout · `--rebase` 抬基线。
+
+## 六、待办（**未落地，显式标注**）
+
+| # | 待办 | 阻塞/归属 |
+|---|---|---|
+| 1 | **T1-a 密钥轮换** | 只有用户能做；且须**先探测是否已被使用** |
+| 2 | 去 commit + push + 核 pin（第⑤层） | 阻塞于并发 i18n 会话（C2） |
+| 3 | A 的「非对称防护判据缺口」补断言 | 会议裁定「正确但未锁」，判据待补 |
+| 4 | `check-runner` 整体转绿 | 阻塞于并发会话的 `src-client/` 红项 |

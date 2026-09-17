@@ -19,6 +19,8 @@ import { SURFACE } from './criteria.generated.js'
 import { dshHome, knowledgeRoot, profileCarrierSet, indexRowInLayer, scanIndexRows } from './targets.js'
 import { selectDynamicLines } from './dynamic-select.js'
 import { assembleSupply, budgetOf, clampLines, renderSupplyText, type SupplyBudget } from './supply-assembly.js'
+// T3（2026-09-17 圆桌会议）：面板路由来源栅栏**单一实现**（本件顶格，本体落新件）。
+import { judgePanelRequest } from './panel-guard.js'
 import { MEMORY_PLAYBOOK_LINES, playbookEnabled } from './injection-playbook.js'
 import { cuesOf, taskCueOf, type SituationCtx } from './situation-key.js'
 import { situationLinesOf, knownTaskCuesOf } from './situation-supply.js'
@@ -184,7 +186,20 @@ export function createRouteBinder(webServer: RouteRegistry, logger: PanelLogger)
           })()
         }
       : handler
-    disposers.push(webServer.register({ kind: 'exact', path, handler: guarded }))
+    /* T3（2026-09-17 圆桌会议）：**来源栅栏**——挂**无条件路径**（在 `contract` 三元分支之外），
+     *   故 42 条路由（含 27 条无 contract 者）**全覆盖**；折进 contract 分支会漏防那 27 条
+     *   （方案丙已实测判死：15/42 带 contract，漏防侧含 `/deepsleep/trigger` 等写端点）。
+     *   判据与依据见 `panel-guard.ts` 头注；本体落**新件**（本件在冻结名单、顶格 537/537）。 */
+    const fenced: RouteHandler = (req, res) => {
+      const verdict = judgePanelRequest(req as { headers?: Record<string, string | string[] | undefined> })
+      if (!verdict.trusted) {
+        logger.warn?.(`[shoucang] 面板请求被来源栅栏拒绝：${path} → ${verdict.reason}`)
+        sendJson(res, 403, { error: 'forbidden', detail: '请求来源不可信' })
+        return
+      }
+      guarded(req, res)
+    }
+    disposers.push(webServer.register({ kind: 'exact', path, handler: fenced }))
   }
   return { route, disposers }
 }

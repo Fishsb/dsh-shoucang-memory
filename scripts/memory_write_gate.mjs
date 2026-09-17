@@ -3,10 +3,54 @@
 // 用法: node scripts/memory_write_gate.mjs <目标文件> <临时文件>
 //   目标文件: MEMORY.md | USER.md | AGENT.md | notes/<file>.md（可绝对路径或相对技能目录）
 // 容量红线只对主文档（MEMORY/USER/AGENT=会话注入面）生效；notes 等辅助文档按需读取，不设硬限（超 NOTES_WARN 仅提示）
-// exit 0=允许（附核对：容量数字/占比、指针清单） 1=主文档超容量（合并精简或下沉 notes/） 2=指针悬空/未注册（先建子文档或 INDEX 注册） 3=用法错误
+// exit 0=允许（附核对：容量数字/占比、指针清单） 1=主文档超容量（合并精简或下沉 notes/） 2=指针悬空/未注册（先建子文档或 INDEX 注册） 3=用法错误 5=内容级凭据（改写后再写入）
+//
+// ══ B 内容级凭据过滤（2026-09-17 **圆桌会议「守藏整体方案会审」册一产出**）═════════
+// 判因（**已发生事实**，非推测）：会议主持人实测 `~/.dsh/suite/knowledge/pending/
+//   flow-candidates/2026-09-16-dmjyix.md:3` **含明文 API 密钥**（`sk-`+64 位 hex，用户原话
+//   "这是我的秘钥"），而该目录是**待蒸馏吸收通道** ⇒ 会话原文 → 蒸馏 → 库 的链路上
+//   **无任何内容级过滤**；同串另落 `audit/ledger.jsonl:8528`（append-only，不可改史）。
+// 定层依据（arch 裁决）：明文凭据的危险是「**内容本不该存在**」⇒ 在**写入侧**处置；
+//   与 `inject-guard`（`{{` 的危险是「消费面属性」⇒ 在出口处置）**是同一成因的两个投影，不可互替**。
+// 正则的边界（security 实测，**如实标注，勿当万无一失**）：
+//   · 漏网：分行/加空格的 key、无前缀纯 hex（与哈希不可区分 ⇒ 报则必误杀）；
+//   · 误杀：无边界锚的 `\d{17,}` 会命中浮点串 `0.018518518518518517`（本库真实数据）。
+//   ⇒ 故本实现**不收录**长度阈值型规则（如猜身份证），只收**有明确前缀/结构**的形态；
+//     边界由 `scripts/test-secret-redact.mjs` 四组语料（真命中/误报对照/保真/漏网）显式断言。
+// ⚠ **单一实现声明**：宿主侧 `src/secret-redact.ts` 是同一规则表的 TS 版（供 panel 等 host 侧复用）；
+//   本件因**子进程调用、零依赖**（不得 import src/）而内联同源规则表。
+//   **改任一处必须同批改另一处**，并由 `scripts/test-secret-redact.mjs` + 本件自证守一致。
 import fs from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+/** 高置信凭据形态（与 `src/secret-redact.ts` 的 RULES **同源**，改一处须同步另一处）。 */
+const SECRET_RULES = [
+  { category: 'api-key', re: /\bsk-[A-Za-z0-9_-]{20,}/g },
+  { category: 'api-key', re: /\bAKIA[0-9A-Z]{16}\b/g },
+  { category: 'api-key', re: /\bghp_[A-Za-z0-9]{20,}\b/g },
+  { category: 'api-key', re: /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g },
+  { category: 'bearer', re: /\bBearer\s+[A-Za-z0-9._~+/=-]{20,}/g },
+  { category: 'jwt', re: /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g },
+  { category: 'private-key', re: /-----BEGIN [A-Z ]*PRIVATE KEY-----/g },
+  { category: 'assign', re: /\b(?:api[_-]?key|apikey|access[_-]?token|secret|password|passwd|pwd)\b\s*[:=]\s*["']?[A-Za-z0-9_\-./+]{12,}/gi },
+  { category: 'cn-id', re: /(?<!\d)1[3-9]\d{9}(?!\d)/g },
+];
+/** 扫描文本 → 命中列表（遮蔽输出，不回显原值）。 */
+function findSecretHits (text) {
+  if (typeof text !== 'string' || text.length === 0) return [];
+  const seen = new Set(); const out = [];
+  for (const { category, re } of SECRET_RULES) {
+    re.lastIndex = 0; let m;
+    while ((m = re.exec(text)) !== null) {
+      if (seen.has(m[0])) continue;
+      seen.add(m[0]);
+      const raw = m[0];
+      out.push(`${category} ${raw.length <= 10 ? '·'.repeat(raw.length) : raw.slice(0, 6) + '········' + raw.slice(-4)}（len=${raw.length}）`);
+    }
+  }
+  return out;
+}
 
 const skillDir = process.env.MEMORY_ROOT ?? join(dirname(fileURLToPath(import.meta.url)), '..'); // 数据根（开发经 MEMORY_ROOT 指向私人区；缺省=脚本上一级兼容生产副本）
 
@@ -120,6 +164,18 @@ const FMT_LIMITS = (() => {
   return dflt;
 })();
 const fmtLimits = FMT_LIMITS; // 下方引用
+
+/* ── B（2026-09-17 圆桌会议册一）：**内容级凭据准入** ──
+ * 对所有目标文档生效（主文档与 notes 一视同仁 —— 凭据落进 notes 同样是落盘）。
+ * 与格式/容量校验**并列独立**：违反即拒（exit 5），不与其他 exit 码混淆。
+ * ⚠ 设计取舍：**宁可少报**（漏网只是没帮上忙；误杀会污染真实内容 —— 本库实测教训）。 */
+const secretHits = findSecretHits(tmpText);
+if (secretHits.length) {
+  console.error('exit=5 检出疑似凭据（**内容级准入拒绝**，改写后再写入）| '
+    + secretHits.join(' | ')
+    + ' ⇒ 处置：改为占位符（如 sk-[已遮蔽:凭据]）或移除；**不要把真值写进库**（会被蒸馏消费并出站到模型提供商）');
+  process.exit(5);
+}
 
 // v13：索引行格式校验（spec §8 概况规则 1-4 硬化；主题约束软提示）
 if (base === 'MEMORY.md' || base === 'USER.md' || base === 'AGENT.md') {

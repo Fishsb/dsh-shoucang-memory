@@ -45,7 +45,26 @@ L4 交互（DSH Web GUI）
 | **M10 自省** | `assistant_capabilities` | 能力面查询 | 只读，无 token |
 
 > **载体归属口径（2026-09-12 根治 A–D 后；2026-09-14 P1 订正）**：
-> `src/` 共 **75 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> `src/` 共 **78 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> **2026-09-17 新增 `secret-redact.ts`** ⇒ 77 → 78：内容级凭据过滤的**单一实现**（纯函数
+> `findSecrets` / `hasSecret` / `secretWarnings`，零 IO）。判因（**已发生事实**）：库内
+> `pending/flow-candidates/*.md` 实测含**明文 API 密钥**（用户原话"这是我的秘钥"），
+> 而该目录是**待蒸馏吸收通道** ⇒ 会话原文 → 蒸馏 → 库 链路上无任何内容级过滤。
+> 定层（arch 裁决）：凭据的危险是「**内容本不该存在**」⇒ **写入侧**处置 —— 与 `inject-guard`
+> 的出口处置（`{{` 的危险是消费面属性）是**同一成因的两个投影，不可互替**。
+> 与 `skill/scripts/memory_write_gate.mjs` 内联的同源规则表**须同批同改**（该件是子进程活件、
+> 零依赖，不得 import `src/`）。
+> **2026-09-17 新增 `panel-guard.ts`** ⇒ 76 → 77：面板路由**来源栅栏**的单一实现（纯函数
+> `judgePanelRequest` / `isLoopbackHostname`，零 IO）。判因（**实弹实证**）：守藏以
+> `kind:'exact'` 注册 `/api/shoucang-panel/*`，宿主 `dsh-host-webserver` 的 `match()`
+> **exact 优先于 prefix** ⇒ 绕过挂在 `/api` prefix 上的来源栅栏；实测伪造 `Host: evil.com` /
+> 跨站 `Origin` / `sec-fetch-site: cross-site` **均返回 200**（对照宿主 `/api` → 403）。
+> 本体落新件是因 `panel-shared.ts` 受大模块冻结棘轮约束（顶格），并避免就地写顶穿该门。
+> **2026-09-17 新增 `inject-guard.ts`** ⇒ 75 → 76：注入边界 `{{` 防护的**单一实现**（纯函数
+> `guardContextText` / `wouldThrowHostInterpolation`，零 IO）。判因：宿主 `dsh-system-prompt`
+> 的 `interpolate()` 以 `text.indexOf("{{")` 为唯一扫描锚点，完整 `{{...}}` 组会触发三处 throw
+> （`lib/index.js` L158/L164/L167）并冒泡到 `assemble` ⇒ **该轮请求整体失败、记忆永久在库
+> ⇒ 会话永久不可用**。主持人与两处注入出口（`panel-inject.ts` order 88 / `mcl.ts` order 89）共用此实现。
 > **2026-09-17 新增 `proc-async.ts`** ⇒ 74 → 75：D-I4 把「异步子进程调用」抽成**单一实现** —— 原先四处
 > `execFileSync` 在**同步 HTTP handler** 里独占宿主唯一事件循环（上限 180s / 30s / 30s / 12s）。
 > **2026-09-17 新增 `file-stat-cache.ts`** ⇒ 73 → 74：D-I5 按 `(mtimeMs,size)` 失效的文件读取缓存 +

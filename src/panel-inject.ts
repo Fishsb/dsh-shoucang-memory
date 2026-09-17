@@ -16,6 +16,10 @@ import { clearVecCache, vecStats } from './vec.js'
 import { contractFor } from './panel-contract.js'
 // S-P4e（2026-09-16）注入侧跨形态消重（薄引用缝：异步预热 + 同步逐字过滤）
 import { warmInjectDedup, filterInjectedText, dedupState } from './crossform-dedup.js'
+// S-P5（2026-09-17 圆桌会议）：注入边界 `{{` 防护**单一实现**（宿主 interpolate 三处 throw）。
+//   本处与 `mcl.ts` 两处注入出口共用同一实现——两处各写一份即漂移源头。
+//   ⚠ 只在**真注入出口**加，`/inject/preview` 保持原文（观测面 ≠ 真注入面，混同即假绿）。
+import { guardContextText } from './inject-guard.js'
 import { injectCacheReason } from './dynamic-select.js'
 import { isLocalBase, parseView, probeLocalEmbed, readBody, sendJson } from './panel-shared.js'
 import { fileReadStats, nonEmptyLineCount, statSize } from './file-stat-cache.js'
@@ -510,7 +514,7 @@ function mountHotMemoryInjection(ctx: Context, d: InjectDeps): void {
         const hit = holder ? injectMemo.get(holder) : undefined
         const reason = injectCacheReason(hit, { sid, evLen: arr.length, firstSeq, lib, q })
         if (hit && !reason) { meta.reused = (meta.reused || 0) + 1; bump(sidKey, q, ''); return hit.text }
-        const text = filterInjectedText(d.hot.build(q), dedupState().skip)
+        const text = guardContextText(filterInjectedText(d.hot.build(q), dedupState().skip))
         if (holder) injectMemo.set(holder, { text, sid, evLen: arr.length, firstSeq, lib, q })
         meta.rebuilt = (meta.rebuilt || 0) + 1
         meta.lastReason = reason || 'new'
