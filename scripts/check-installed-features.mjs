@@ -36,7 +36,11 @@ const FEATURES_I18N = [
   ['i18n 运行时（缺键记录容器）', 'lib/client.js', '__SC_I18N_MISS__'],
   ['i18n 接入函数（attachLocale 入产物）', 'lib/client.js', 'attachLocale'],
   ['i18n 标签映射（tagLabel 入产物）', 'lib/client.js', 'tagLabel'],
-  ['i18n 词表非空（英文词条已随产物送达）', 'lib/client.js', 'Shoucang'],
+  /* ⚠ 标记强度（2026-09-17 实测修正）：原用裸串 `Shoucang` —— 它在词表**之外**还有 29 处
+   *   （包名 `dsh-shoucang-memory` / 模块头注释 / 路由串）⇒ **无论词表在不在都为真**（恒真标记）。
+   *   改用**词组级**英文值：该串只可能来自词表 ⇒ 词表未进包时本标记即失败。
+   *   （成因 C 的严判在产物层由 `check-i18n-registered` 负责，本标记是第二道粗筛。） */
+  ['i18n 词表非空（英文词组级标记 · 原裸串 Shoucang 恒真已换）', 'lib/client.js', 'Shoucang distiller enableDistill'],
 ]
 const FEATURES = [
   ['S2 侧栏入口走宿主插槽', 'lib/client.js', 'sidebar.footer.action'],

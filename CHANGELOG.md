@@ -2689,6 +2689,26 @@
     修法：两分支互斥归属 —— `withTagCount`（记忆库页，原型 `.row > .right`）时标签归**右列**；
     否则（画像页右列是成熟度数值）归**左列**。补 `test-idxrow-pills`（真机逐行数 `.sc-idx-tag`，
     **3 项**，登记 CHECKS）：断言每行恰好 1 个、无标签丢失、右列「标签 + N 条」未被一并删掉。
+  - **修复（安全）：蒸馏审计摘录泄漏明文凭据 —— 补齐脱敏出口**
+    **发现**：发布前 `scan-secrets` 在守藏台账 `~/.dsh/suite/knowledge/audit/ledger.jsonl`
+    检出 1 条明文 `sk-` 凭据（在 `excerpt` 字段）。
+    **判因**：`distill-activation.ts` 写 `activation-step` 时用 `excerpt: text.slice(0, 60)` **原样截断**，
+    而该路径**未过 `findSecrets`**（蒸馏写入路径 `distill-write.ts` 过了）⇒ 凭据随审计摘录落盘。
+    **修法**：① `secret-redact.ts` 新增 `redactText()`（就地脱敏，复用既有 `RULES` + `mask`，单一实现）；
+    ② `distill-activation.ts` 的 excerpt 改为 **先脱敏、后切片**。
+    ⚠ **顺序不可颠倒**：先切片会把边界处的凭据截成**不匹配正则的残段**（如只余 `sk-5d`）⇒ 脱敏失效。
+    **测试**：`test-secret-redact` 补 9 条 `redactText` 断言（含「先切片」反例自证），**PASS 35 项**。
+    ⚠ **已知边界（如实记录，不修）**：正则以 `\bsk-` 起头 ⇒ 若凭据**紧贴 ASCII 字母数字**
+    （如 `xxxxsk-…`）则 `\b` 不成立即漏网（实测真实泄漏形态 `秘钥sk-…` 前缀为 CJK，`\b` 成立故能命中）。
+    **台账原行未改**（依本仓规则「追加型台账不可改史 · 保留原行 · 密钥真修复靠轮换」）⇒
+    **该凭据须由用户轮换**，本仓不代改真源。
+  - **修复：两处 BOM 与一处恒真标记**
+    `.gitignore` 与 `LICENSE` 首行 BOM 已剥除；`check-installed-features` 的 i18n 标记由裸串 `Shoucang`
+    （词表外另有 29 处 ⇒ **无论词表在不在都为真**）换为**词组级**英文值 `Shoucang distiller enableDistill`
+    （只可能来自词表）。
+  - **profile 版本钉点三处已一致**：`pnpm install`（带 v2rayN 代理）后
+    `package.json` / `pnpm-lock.yaml` / `.modules.yaml` 均为 `1047a2bc`。
+    此前 pin 落后 1 个提交时，`check-version-pin` 报「三处不一致」。
   - **改造（阶段 5 · 接缝④）：破前端双向环 + 前端纳入分层门禁**
     **判因**：`audit-architecture.mjs` 默认 `REL='src'`，而 `check-runner.mjs:360` 登记时**未带 `--dir`**
     ⇒ **前端 31 个模块从未被扫**（全被打 `??` = 无层级），且**已存在 1 处双向环无人看见**：
