@@ -2094,6 +2094,14 @@
   并要求**正向证据**：`origin==='subagent'` + **归属本会话** + `status!=='idle'` 三者齐备。
   新分支**排在 `active` 冲突分支之前** —— 子代理活跃是**正向进展证据**，比"状态说活跃但没输出"的证据冲突更强。
   并**顺手修正 `idleMin` 基准**：`rec.lastEventAt` 原先**只在"确认长任务"分支刷新** ⇒ `idleMin` 实为
+- **T1 明文密钥处置（册一 · 2026-09-17）**：`pending/flow-candidates/2026-09-16-dmjyix.md` 命中串
+  **已遮蔽**（sk- 计数 1→0）；备份目录内两件**同样遮蔽**（回滚含密钥的文件本身即错误）；
+  审计留痕 `audit/secret-redaction-log.jsonl`（**先记后改**）。`audit/ledger.jsonl:8528`
+  **保留原行不改**（append-only，删行＝改史；且 `~/.dsh/suite/knowledge` **无 git** ⇒ 改坏不可回退）。
+  ⚠ **密钥轮换仍待用户执行**：本地遮蔽只是止损。
+- **`scan-secrets.mjs` 合并重复 pattern**：`sk-hex64` 被 `sk-长串`**完全覆盖**（hex ⊂ alnum 字符集）
+  ⇒ 删之，命中数由"5 处（同串双报）"归正为真值。
+
   「距上次**确认长任务**的分钟数」而非「距上次输出」（**口径误导**，我就被误导过一轮），现两处一并刷新。
   新增 `scripts/test-deepsleep-probe-children.mjs`（**8 用例**，入 `CHECKS` ⇒ 门禁 **120 → 121**）。
   ⚠ 该测试**双向自证**：A 断言修复后判 `long-run`（**修复前必判 `stall` ⇒ 先红**）；
@@ -2641,6 +2649,37 @@
   半成品进了运行态，随即修好并**把部署改成"构建成功才部署"**。**部署必须以构建成功为前提**。
 
 ### Added
+- **注入出口 `{{` 防护（圆桌会议册三 · 2026-09-17）**：新增 `src/inject-guard.ts`（纯函数
+  `guardContextText` / `wouldThrowHostInterpolation`，零 IO），接线 `panel-inject.ts`（order 88）
+  与 `mcl.ts`（order 89）**两处**注入出口。判因：宿主 `dsh-system-prompt` 的 `interpolate()`
+  以 `text.indexOf("{{")` 为唯一扫描锚点，**完整 `{{...}}` 组**触发三处 throw（`lib/index.js`
+  L158/L164/L167）并冒泡到 `assemble` ⇒ **该轮请求整体失败、记忆永久在库 ⇒ 会话永久不可用**；
+  用户跑一次 `docker inspect --format '{{.Architecture}}'` 即可把引信写进库。
+  ⚠ 口径（会议 verify 推翻主持人）：触发条件是**完整 `{{...}}` 组**，**不是**「含裸 `{{` 即炸」。
+  判据 `scripts/test-inject-guard.mjs` **PASS 32**（先红 5 · 防护 10 · 幂等 8 · 保真 100 行真实库取样 · 双入口 2/2）。
+- **面板路由来源栅栏（册二 · 2026-09-17）**：新增 `src/panel-guard.ts`（纯函数 `judgePanelRequest`
+  / `isLoopbackHostname`），挂 `createRouteBinder.route()` **无条件路径** ⇒ **42 条路由全覆盖**。
+  判因（**实弹实证**）：守藏以 `kind:'exact'` 注册 `/api/shoucang-panel/*`，宿主
+  `dsh-host-webserver` 的 `match()` **exact 优先于 prefix** ⇒ 绕过挂在 `/api` prefix 上的
+  来源栅栏；会议 security 节点实发请求实测（修复前）`Host: evil.com` / 跨站 `Origin` /
+  `sec-fetch-site: cross-site` **均 200**（对照宿主 `/api` → 403）。**修复后真机复测：三项均 403、
+  正常请求 200**（零误杀）。判据与宿主 `isTrustedApiRequest`（`dsh-client-connection/lib/index.js:201-215`）
+  **逐条对齐**，不发明第二套语义。测件 `scripts/test-panel-guard.mjs` **PASS 29**。
+- **写入侧内容级凭据准入（册一 B · 2026-09-17）**：`memory_write_gate.mjs` 新增 **exit 5** —— 命中
+  高置信凭据形态即拒写。判因（**已发生事实**）：库内 `pending/flow-candidates/*.md` 实测含**明文
+  API 密钥**（用户原话"这是我的秘钥"），而该目录是**待蒸馏吸收通道** ⇒ 会话原文 → 蒸馏 → 库
+  链路上无任何内容级过滤；同串另落 `audit/ledger.jsonl:8528`。定层（arch 裁决）：凭据的危险是
+  「**内容本不该存在**」⇒ **写入侧**处置（与 `{{` 的出口处置是同一成因两个投影，**不可互替**）。
+  新增 `src/secret-redact.ts`（host 侧同源规则表）+ `scripts/test-secret-redact.mjs` **PASS 27**
+  （真命中 11 · **误报对照 8** · 保真 150 行真实库取样 · 漏网边界 3 如实断言）。
+  ⚠ **边界如实标注**：正则**会漏也会误杀**（security 实测：无边界锚的 `\d{17,}` 命中浮点
+  `0.018518518518518517`）⇒ 只收有明确前缀/结构的形态，**不收**长度阈值型规则。
+- **决策 ≠ 施工：态迁移边界规则 R1–R5 成文（AGENTS.md · 2026-09-17）**：判因＝一次会话中
+  「你自己决策」被读成"可以开工"，遂实际建文件接线（越权施工，状态＝**待追认**）。规则含
+  R1 态迁移门槛（**"你自己决策"＝只到决策态**）· R2 自主施工四条准入门槛 · R3 须拍板五类 ·
+  R4 越权施工＝待追认态（冻结、不自行 revert）· R5 可回答性。
+- **`deliverables/remediation-2026-09-17.md`**：方案 D1 要求的约束/收尾表 + D1–D10 落地实况。
+
 - **「注入搬进会话消息」只读观测：结论**不等价**，暂不搬（2026-09-16）**：用户要求"只注入一次"，而 system prompt
   内容**每步仍会发给模型**（API 语义）⇒ 要真正"只发一次"须改走**会话消息**。**先出只读观测再落刀**：
   挂 `agent/pre-step` 探针（**永远原样 `return next()`**、异常吞掉再放行 ⇒ **绝不改变任何一步的行为**），

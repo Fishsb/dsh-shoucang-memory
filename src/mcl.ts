@@ -27,6 +27,8 @@ import { createSupplyLedger, rowFingerprint, type SupplyLedger } from './supply-
 import { recallMissReasonOf } from './recall-diagnosis.js'
 import { nextZeroGain, shouldSwitchSource } from './recall-yield.js'
 import { envelopeEvent as envelope } from './event-envelope.js'
+// S-P5（2026-09-17 圆桌会议）：注入边界 `{{` 防护**单一实现**（与 panel-inject.ts 共用）。
+import { guardContextText } from './inject-guard.js'
 
 export interface MclConfig {
   enabled: boolean
@@ -279,7 +281,11 @@ function mountMaterialBlock(
         const t = sid ? (state.get(sid)?.materialText || '') : ''
         pushTrace(counters, aid && sid && aid !== sid ? 'renDIFF' : 'renSame', sid, t.length)
         if (t) { counters.sysBlockNonEmpty++; counters.sysBlockLastChars = t.length }
-        return t
+        // S-P5（2026-09-17 圆桌会议）：**注入边界 `{{` 防护**（第二处入口，与 panel-inject 共用同一实现）。
+        //   ⚠ 只防**本块的真注入出口**（systemPrompt 段）；同一材料走消息面时（materialInSystem=false，
+        //   见下方 handlePreStep 的 `material: { text: m.text }`）**不防** —— 消息面不做 `{{}}` 插值，
+        //   在那里转义反而是无谓改写真源内容。`guardContextText` 全函数不抛，故不会落入本块 catch。
+        return guardContextText(t)
       } catch { return '' }
     },
   })

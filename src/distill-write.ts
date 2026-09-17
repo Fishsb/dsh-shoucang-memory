@@ -12,6 +12,8 @@ import type { RunResult } from './distill-proc.js'
 import { semanticSim } from './vec.js'
 import { carrierFiles, mirrorAll, mirrorFile } from './record-shadow.js'
 import { commitRingChannels } from './ring-commit.js'
+// B（2026-09-17 圆桌会议册一）：内容级凭据准入**单一实现**（与 gate 内联表同源，改一处须同步）。
+import { findSecrets } from './secret-redact.js'
 import type { EmbedCfg } from './vec.js'
 import type { InfraApi } from './distill-infra.js'
 import type { CandApi } from './distill-candidates.js'
@@ -123,6 +125,12 @@ const writeProfileLine = (dep: WriteDeps, root: string, target: string, section:
     const sec = String(section || '').trim().replace(/^##+ */, '').trim()
     const ln = String(line || '').trim()
     if (!sec || !ln || ln.length > 160 || /[#`]/.test(sec)) return { st: 'rejected', why: `格式违规（${!sec ? '小节名为空' : !ln ? '行为空' : ln.length > 160 ? `行长 ${ln.length} > 160` : '小节名含 # 或 ` 注入字符'}）` }
+    /* B（2026-09-17 圆桌会议册一）：**内容级凭据准入**（与 `memory_write_gate.mjs` 的 exit 5 同一判据、
+     *   同源规则表 —— 那条是子进程活件、零依赖，不得 import src/；本处是 host 直写路径的**第二道同一判据**）。
+     *   判因：库内实测已落明文密钥，而本函数是「宿主直写画像行」的唯一入口 —— 原门禁链只有格式/去重/容量，
+     *   无内容维度。⚠ 宁可少报（漏网只是没帮上忙，误杀会污染真实内容）。 */
+    const secretHits = findSecrets(ln)
+    if (secretHits.length) return { st: 'rejected', why: `检出疑似凭据[${secretHits[0].category}]（${secretHits[0].masked}）⇒ 改为占位符或移除后再写入` }
     const file = join(root, canon)
     let body = ''
     try { body = readFileSync(file, 'utf8') } catch { body = (PROFILE_HEADER[canon] || `# ${canon}\n`) + '\n' }
