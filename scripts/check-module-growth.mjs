@@ -18,12 +18,16 @@
 //   ⇒ 出现新的 ≥600 行模块时，本件报「需登记基线」并 FAIL（不许无声混入）。
 //
 // 口径声明（本仓反复栽在口径不一致上，故显式钉死）：
-//   · 行数 = **物理行数**（`content.split('\n')` 去掉单一末尾空行），与 `wc -l` 一致；
+//   · 行数 = **代码行数**：先 `stripCommentsLite()` 剥掉 `//` 整行与 `/* */` 块注释，再 `split('\n')` 去末尾空行；
+//     ⚠ **不等于物理行数**（2026-09-17 实测订正：此前此处写"物理行数…与 `wc -l` 一致"，与实现不符 ——
+//     实测 `scheduler.ts` 本件 617 / audit-architecture 769 / `wc -l` 768，差值 152 而**不是**下方所称的"可能差 1"。
+//     该口径**此前一直是错的**，是文档缺陷而非门禁失效：棘轮逻辑自身自洽，只是标注误导。）
 //   · 扫描面 = **多根**：`src/**/*.ts` + `src-client/**/*.js`，**均排除 `*.generated.*`**
 //     （生成物由生成器产出，冻结它无意义且必然误红）；
 //     ⚠ 2026-09-15 扩面：原先只扫 `src/`，导致前端 `body.js` **5477 行零门禁**（UI1/U0 起纳入）；
 //   · 键 = **仓根相对路径**（`src/x.ts` / `src-client/x.js`）—— 多根后裸名会互相串；
-//   · 与 `audit-architecture` 的行数可能差 1（后者另计图相关数据），**本件口径以本件输出为准**。
+//   · 与 `audit-architecture` 的行数**口径不同**（本件剥注释、那件含注释），故差值可达数百行而非 1 行；
+//     **本件口径以本件输出为准**（冻结基线全部按本口径标定）。
 //
 // 退出码：0 = pass · 1 = fail · 3 = skip（src 缺席，诚实跳过）
 // 用法: node scripts/check-module-growth.mjs [--print] [--rebase]
@@ -99,7 +103,7 @@ const FREEZE = {
   'src-client/styles.js': 726,
   'src/scheduler.ts': 611,
   'src/treeops.ts': 588,
-  'src/panel-shared.ts': 547,
+  'src/panel-shared.ts': 537,
   'src/mcl.ts': 433,
 }
 

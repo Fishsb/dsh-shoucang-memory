@@ -5,6 +5,8 @@
 //   对外只暴露 createHooksApi(d) —— 返回绑定后的句柄，调用方零感知。
 import { existsSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
+// 触发阈值回退的单一来源（2026-09-15 P0.1 扩面订正）：本文件曾硬编码 2 处 `|| 10800000`（3h）。
+import { idleMsOf } from './deepsleep-core.js'
 import type { InfraApi } from './distill-infra.js'
 import type { WriteApi } from './distill-write.js'
 import type { ParentApi } from './distill-parent.js'
@@ -195,7 +197,7 @@ ctx.effect(() => {
 // 深度睡眠巡检定时器（10min 一查；effect 清理，reload 零泄漏）
 ctx.effect(() => {
   const probeOk = existsSync(dep.dom.llm.probeScriptPath)
-  dep.io.infra.log(`deep sleep 巡检启动（enable=${dep.env.config.enableDeepSleep} · 停滞阈值 ${Math.round((Number(dep.env.config.deepSleepIdleMs) || 10800000) / 60000)}min · 探测 ${dep.env.config.deepSleepProbe ? '开' : '关'}${dep.env.config.deepSleepProbe ? `（无事件 ${Math.round((Number(dep.env.config.deepSleepProbeAfterMs) || 10800000) / 60000)}min 后发起，探针${probeOk ? '就位' : '缺失→无法确认即正常睡'}）` : ''}）`)
+  dep.io.infra.log(`deep sleep 巡检启动（enable=${dep.env.config.enableDeepSleep} · 停滞阈值 ${Math.round(idleMsOf(dep.env.config) / 60000)}min · 探测 ${dep.env.config.deepSleepProbe ? '开' : '关'}${dep.env.config.deepSleepProbe ? `（无事件 ${Math.round(Number(dep.env.config.deepSleepProbeAfterMs) || idleMsOf(dep.env.config)) / 60000}min 后发起，探针${probeOk ? '就位' : '缺失→无法确认即正常睡'}）` : ''}）`)
   const iv = setInterval(() => { try { dep.sleep.deepSleepCheck() } catch { /* 巡检零抛出 */ } }, dep.sleep.DEEP_SLEEP_CHECK_MS)
   return () => clearInterval(iv)
 }, dep.io.SHORT + ': deep-sleep check')

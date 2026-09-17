@@ -7,21 +7,39 @@ import { spawn } from 'node:child_process'
 
 // ── 异步进程调用（禁 spawnSync 红线）──
 export type RunResult = { status: number | null; out: string; err: string }
+
+/** 子进程输出上限（**真正的封顶**）。
+ *  2026-09-17 修（M4 · 圆桌会审 P0）：原实现在 `spawn` 的 options 里写 `maxBuffer: 8MB` 并 `as any`
+ *  —— 但 `maxBuffer` 只属 `exec/execFile/SpawnSyncOptions`，**不属 async `SpawnOptions`** ⇒ 该行
+ *  **零运行时效果**（实测 `spawn(..., { maxBuffer: 1000 })` 输出 200000 B 仍 exit 0），
+ *  且 `as any` 让无效选项在类型检查期也不报。现改为：去掉无效选项与 `as any`，
+ *  在 data 回调里**按字节计数**，超限即记标记并 kill。 */
+const OUT_CAP = 8 * 1024 * 1024
 export function runNode(nodeBin: string, scriptPath: string, args: string[], opts?: { cwd?: string; env?: Record<string, string>; timeout?: number }): Promise<RunResult> {
   return new Promise((resolve) => {
-    let out = '', err = '', killed = false
+    let out = '', err = '', killed = false, overflow = false
     const child = spawn(nodeBin || 'node', [scriptPath, ...args], {
-      cwd: opts?.cwd, maxBuffer: 8 * 1024 * 1024, windowsHide: true,
+      cwd: opts?.cwd, windowsHide: true,
       // 2026-09-10 实锤修复：宿主 process.env 含 NODE_OPTIONS（inspector --inspect=9445），子进程继承后
       // 端口冲突 → Node 启动异常（status=null / 无 stdout），所有 runNode 子脚本静默失效。
       // 统一清空 NODE_OPTIONS（子脚本无需 inspector），彻底消除该干扰。
       env: { ...process.env, NODE_OPTIONS: '', ...(opts?.env || {}) },
-    } as any)
+    })
+    const push = (buf: string, chunk: unknown): string => {
+      if (overflow) return buf
+      const s = buf + String(chunk)
+      if (s.length > OUT_CAP) { overflow = true; try { child.kill() } catch { /* */ } return s.slice(0, OUT_CAP) }
+      return s
+    }
     const to = setTimeout(() => { killed = true; try { child.kill() } catch { /* */ } }, opts?.timeout ?? 60000)
-    child.stdout?.on('data', (d) => { out += d })
-    child.stderr?.on('data', (d) => { err += d })
+    child.stdout?.on('data', (d) => { out = push(out, d) })
+    child.stderr?.on('data', (d) => { err = push(err, d) })
     child.on('error', (e) => { clearTimeout(to); resolve({ status: null, out: '', err: String(e).slice(0, 200) }) })
-    child.on('close', (code) => { clearTimeout(to); resolve({ status: killed ? null : code, out, err: killed ? err + '\n[timed out]' : err }) })
+    child.on('close', (code) => {
+      clearTimeout(to)
+      const note = (overflow ? `\n[output truncated at ${OUT_CAP} bytes]` : '') + (killed ? '\n[timed out]' : '')
+      resolve({ status: killed || overflow ? null : code, out, err: err + note })
+    })
   })
 }
 export const textOf = (r: RunResult): string => (r.out + (r.err ? '\n[stderr] ' + r.err.trim() : '')).trim()

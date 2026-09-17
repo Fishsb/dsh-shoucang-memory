@@ -263,8 +263,21 @@ export declare const TRIGGER: {
     readonly probeAfterMs: 2700000;
     readonly probeWindowMs: 60000;
     readonly newTracesMin: 1;
+    readonly contentMinChars: null;
+    readonly materialChunkChars: null;
     readonly manual: true;
-    readonly note: "触发数据化（v2.1 §2.4 · B 档接线后为 runtime）：idleMs=全部根会话停滞阈值（缺省 3h）；probeAfterMs/probeWindowMs=卡住探测；newTracesMin=窗口内最少新痕迹数；manual=面板「立即归纳一次」。**改这里即改行为**（scheduler zod 缺省直接读本块）。";
+    readonly note: "触发数据化（v2.1 §2.4 · B 档接线后为 runtime）：idleMs=全部根会话停滞阈值；probeAfterMs/probeWindowMs=卡住探测；newTracesMin=窗口内最少新痕迹数；manual=面板「立即归纳一次」。**改这里即改行为**（scheduler zod 缺省直接读本块）。⚠ **2026-09-15 P0.1 实证订正**：本块原注释称「缺省 3h」，但**实际生效值是本块的 2700000ms（45min）**——`scheduler.ts` 的 zod `.default(TRIGGER.idleMs)` 取本块值，而**全仓 8 处** `|| 10800000`（3h）兜底因 zod 有 default 而是**死代码**（⚠ 首轮只报 4 处：检索用了大小写敏感的 `idleMs`，漏掉 `deepSleepIdleMs` 那 4 处 —— `deepsleep.ts` ×2 / `distill-hooks.ts` ×2 ⇒ 「模式派生集合先核对」的典型踩坑）。已修：**8 处全部**统一改引本块（**单一来源已下沉 `deepsleep-core#idleMsOf`**）+ 注释订正 + 护栏 `test-deepsleep-wiring` ⑦（可执行代码不得再出现该字面量），**数值未动**（P0 不改行为）。**数值本身待 P1 双维水位按预注册判据校准**。";
+};
+export interface ThresholdEntry {
+    id: string;
+    value: unknown;
+    owner: string;
+    preregistered: boolean;
+    samples: number;
+}
+export declare const THRESHOLDS: {
+    note: string;
+    entries: ThresholdEntry[];
 };
 export declare const WIRING: {
     note: string;
@@ -282,6 +295,7 @@ export declare const CRITERIA_ROWS: readonly [{
     readonly id: "ingest.route.r1";
     readonly domain: "ingest";
     readonly kind: "soft";
+    readonly judgeKind: "llm";
     readonly text: "R1 泛化方向指引 → memory";
     readonly params: {
         readonly route: "memory";
@@ -290,6 +304,7 @@ export declare const CRITERIA_ROWS: readonly [{
     readonly id: "ingest.route.r2";
     readonly domain: "ingest";
     readonly kind: "soft";
+    readonly judgeKind: "llm";
     readonly text: "R2 跨项目细粒度条文 → memory(notes/tools|lessons)";
     readonly params: {
         readonly route: "memory";
@@ -298,6 +313,7 @@ export declare const CRITERIA_ROWS: readonly [{
     readonly id: "ingest.route.r3";
     readonly domain: "ingest";
     readonly kind: "soft";
+    readonly judgeKind: "llm";
     readonly text: "R3 项目专属事实 → project（直写工作区）";
     readonly params: {
         readonly route: "project";
@@ -307,6 +323,7 @@ export declare const CRITERIA_ROWS: readonly [{
     readonly id: "ingest.route.r4";
     readonly domain: "ingest";
     readonly kind: "soft";
+    readonly judgeKind: "llm";
     readonly text: "R4 其余 → discard";
     readonly params: {
         readonly route: "discard";
@@ -315,18 +332,21 @@ export declare const CRITERIA_ROWS: readonly [{
     readonly id: "ingest.route.q0";
     readonly domain: "ingest";
     readonly kind: "soft";
+    readonly judgeKind: "vector";
     readonly text: "Q0 已有归属 → 不存";
     readonly params: {};
 }, {
     readonly id: "ingest.route.q1";
     readonly domain: "ingest";
     readonly kind: "soft";
+    readonly judgeKind: "llm";
     readonly text: "Q1 下周用不上 → 不存";
     readonly params: {};
 }, {
     readonly id: "ingest.route.q2";
     readonly domain: "ingest";
     readonly kind: "soft";
+    readonly judgeKind: "llm";
     readonly text: "Q2 归谁（用户/agent/环境）";
     readonly params: {
         readonly targets: readonly ["notes", "USER.md", "AGENT.md"];
@@ -335,12 +355,14 @@ export declare const CRITERIA_ROWS: readonly [{
     readonly id: "ingest.route.q3";
     readonly domain: "ingest";
     readonly kind: "soft";
+    readonly judgeKind: "vector";
     readonly text: "Q3 能合并 → replace 否则 add";
     readonly params: {};
 }, {
     readonly id: "ingest.route.rules-not-stored";
     readonly domain: "ingest";
     readonly kind: "soft";
+    readonly judgeKind: "deterministic";
     readonly text: "规则类不入库（SOUL 死支已删）";
     readonly params: {
         readonly reason: "rules-not-stored";
@@ -349,6 +371,7 @@ export declare const CRITERIA_ROWS: readonly [{
     readonly id: "ingest.placement.notes-kind";
     readonly domain: "ingest";
     readonly kind: "hard";
+    readonly judgeKind: "deterministic";
     readonly text: "落点须在 notes 白名单内";
     readonly params: {
         readonly notes: readonly ["env", "tools", "flows", "lessons", "release", "user", "agent"];
@@ -357,6 +380,7 @@ export declare const CRITERIA_ROWS: readonly [{
     readonly id: "ingest.placement.main-index";
     readonly domain: "ingest";
     readonly kind: "hard";
+    readonly judgeKind: "deterministic";
     readonly text: "主索引写入仅三主档";
     readonly params: {
         readonly indexTargets: readonly ["MEMORY.md", "USER.md", "AGENT.md"];
@@ -365,6 +389,7 @@ export declare const CRITERIA_ROWS: readonly [{
     readonly id: "ingest.granularity.split-law";
     readonly domain: "ingest";
     readonly kind: "hard";
+    readonly judgeKind: "deterministic";
     readonly text: "子树正文 > R 或同级条目 > K → 裂 ###（§8.1 分裂律）";
     readonly params: {
         readonly R: 1000;
@@ -374,6 +399,7 @@ export declare const CRITERIA_ROWS: readonly [{
     readonly id: "ingest.dedup.exact";
     readonly domain: "ingest";
     readonly kind: "hard";
+    readonly judgeKind: "deterministic";
     readonly text: "同 标签+主题 精确重复 → 拒收";
     readonly params: {
         readonly enabled: true;
@@ -382,6 +408,7 @@ export declare const CRITERIA_ROWS: readonly [{
     readonly id: "ingest.dedup.bigram";
     readonly domain: "ingest";
     readonly kind: "hard";
+    readonly judgeKind: "deterministic";
     readonly text: "主题 bigram 重叠 ≥ 阈值 → 近似重复拒收";
     readonly params: {
         readonly threshold: 0.66;
@@ -391,6 +418,7 @@ export declare const CRITERIA_ROWS: readonly [{
     readonly id: "ingest.format.index-line";
     readonly domain: "ingest";
     readonly kind: "hard";
+    readonly judgeKind: "deterministic";
     readonly text: "索引行四要素格式（spec §8）";
     readonly params: {
         readonly topicMax: 12;
@@ -406,6 +434,7 @@ export declare const CRITERIA_ROWS: readonly [{
     readonly id: "consolidate.support.principle";
     readonly domain: "consolidate";
     readonly kind: "soft";
+    readonly judgeKind: "vector";
     readonly text: "原则：同主题 ≥3 条痕迹（或当日反复命中）";
     readonly params: {
         readonly minTraces: 3;
@@ -414,6 +443,7 @@ export declare const CRITERIA_ROWS: readonly [{
     readonly id: "consolidate.support.path";
     readonly domain: "consolidate";
     readonly kind: "soft";
+    readonly judgeKind: "vector";
     readonly text: "路径：同型 ≥2 次且只从成功任务归纳";
     readonly params: {
         readonly minOccur: 2;
@@ -424,6 +454,7 @@ export declare const CRITERIA_ROWS: readonly [{
     readonly id: "consolidate.promote.premise";
     readonly domain: "consolidate";
     readonly kind: "soft";
+    readonly judgeKind: "llm";
     readonly text: "涉及隐含前提 → 必须写出，否则降级 notes";
     readonly params: {
         readonly requirePremiseWhenDependent: true;
@@ -432,6 +463,7 @@ export declare const CRITERIA_ROWS: readonly [{
     readonly id: "consolidate.cross-workspace-redline";
     readonly domain: "consolidate";
     readonly kind: "soft";
+    readonly judgeKind: "deterministic";
     readonly text: "跨工作区红线：项目专名/路径/版本号不提炼";
     readonly params: {
         readonly forbidProjectNames: true;
@@ -440,6 +472,7 @@ export declare const CRITERIA_ROWS: readonly [{
     readonly id: "consolidate.reshape.split-law";
     readonly domain: "consolidate";
     readonly kind: "hard";
+    readonly judgeKind: "llm";
     readonly text: "treeOps split：正文 > R 且 ≥2 语义正交子面";
     readonly params: {
         readonly R: 1000;
@@ -451,6 +484,7 @@ export declare const CRITERIA_ROWS: readonly [{
     readonly id: "consolidate.demote.archive";
     readonly domain: "consolidate";
     readonly kind: "hard";
+    readonly judgeKind: "deterministic";
     readonly text: "遗忘：cold 且 ≥90 天 + 三守卫；禁直删；画像节禁归档";
     readonly params: {
         readonly coldDays: 90;
@@ -463,6 +497,7 @@ export declare const CRITERIA_ROWS: readonly [{
     readonly id: "consolidate.cross.crossTopic";
     readonly domain: "consolidate";
     readonly kind: "hard";
+    readonly judgeKind: "deterministic";
     readonly text: "REM 相：crossTopic 源指针须覆盖 ≥2 个不同 §";
     readonly params: {
         readonly minSections: 2;
@@ -471,6 +506,7 @@ export declare const CRITERIA_ROWS: readonly [{
     readonly id: "consolidate.replay.cross-day";
     readonly domain: "consolidate";
     readonly kind: "soft";
+    readonly judgeKind: "vector";
     readonly text: "跨日二次激活：近 7 日再现 → 可扩容/提纯";
     readonly params: {
         readonly windowDays: 7;
@@ -479,6 +515,7 @@ export declare const CRITERIA_ROWS: readonly [{
     readonly id: "consolidate.pointer.update-only";
     readonly domain: "consolidate";
     readonly kind: "hard";
+    readonly judgeKind: "deterministic";
     readonly text: "pointerOps 只允许原地 update（禁增删索引行）";
     readonly params: {
         readonly allow: readonly ["update"];

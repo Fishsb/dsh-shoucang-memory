@@ -178,8 +178,307 @@
     "probeAfterMs": 2700000,
     "probeWindowMs": 60000,
     "newTracesMin": 1,
+    "contentMinChars": null,
+    "materialChunkChars": null,
     "manual": true,
-    "note": "触发数据化（v2.1 §2.4 · B 档接线后为 runtime）：idleMs=全部根会话停滞阈值（缺省 3h）；probeAfterMs/probeWindowMs=卡住探测；newTracesMin=窗口内最少新痕迹数；manual=面板「立即归纳一次」。**改这里即改行为**（scheduler zod 缺省直接读本块）。"
+    "note": "触发数据化（v2.1 §2.4 · B 档接线后为 runtime）：idleMs=全部根会话停滞阈值；probeAfterMs/probeWindowMs=卡住探测；newTracesMin=窗口内最少新痕迹数；manual=面板「立即归纳一次」。**改这里即改行为**（scheduler zod 缺省直接读本块）。⚠ **2026-09-15 P0.1 实证订正**：本块原注释称「缺省 3h」，但**实际生效值是本块的 2700000ms（45min）**——`scheduler.ts` 的 zod `.default(TRIGGER.idleMs)` 取本块值，而**全仓 8 处** `|| 10800000`（3h）兜底因 zod 有 default 而是**死代码**（⚠ 首轮只报 4 处：检索用了大小写敏感的 `idleMs`，漏掉 `deepSleepIdleMs` 那 4 处 —— `deepsleep.ts` ×2 / `distill-hooks.ts` ×2 ⇒ 「模式派生集合先核对」的典型踩坑）。已修：**8 处全部**统一改引本块（**单一来源已下沉 `deepsleep-core#idleMsOf`**）+ 注释订正 + 护栏 `test-deepsleep-wiring` ⑦（可执行代码不得再出现该字面量），**数值未动**（P0 不改行为）。**数值本身待 P1 双维水位按预注册判据校准**。"
+  },
+  "thresholds": {
+    "note": "阈值登记制（J0 · 2026-09-15 · 依据 docs/judge-layering-plan-2026-09-15.md §4.2）。**规则**：任何影响「接受/拒绝/归类/取舍」判断的数值阈值都必须登记在此，且登记项必须含 `preregisteredCriterion` + `samples` + `conclusion` + `recheck`。机检 scripts/check-threshold-registry.mjs（未登记 ⇒ 红；登记了但缺预注册或样本数 ⇒ 红）。**范围界定**：不含格式门（归 ingest.format.index-line 的 params）、容量/预算（归 gate.caps / surface.*）、工程常量（超时/重试/熔断）。**样板**：mcl.familiarThreshold 是全仓**唯一**有完整预注册校准记录的阈值。⚠ **暴露出的真问题**：13 项里 **12 项 samples=0 / 未预注册** —— 其中 activity.statusDays 已**实证失真**（假冷 26 条，见 skill/scripts/harvest-access.mjs:6）。",
+    "entries": [
+      {
+        "id": "trigger.materialChunkChars",
+        "probe": {
+          "registryPath": [
+            "trigger",
+            "materialChunkChars"
+          ]
+        },
+        "value": null,
+        "owner": "skill/engine/criteria.json#trigger.materialChunkChars",
+        "preregistered": false,
+        "preregisteredCriterion": null,
+        "samples": 0,
+        "conclusion": "**insufficient-data（维持关闭 = null）** —— S-P1c 分片**纯切分器已落地**（`deepsleep-core#splitByCap`：段边界即语义边界、永不切开单段、`cap<=0` 与改造前逐字等价），run 侧接线待做。阈值不可校准：截至 2026-09-15 仅 **1 个真实纪元**，单纪元材料分布未成形。⚠ **水位口径**：采取「**全片落地才推进**」而非方案册原写的「按片推进」—— 单一时间戳水位**表达不了片级进度**，片级推进会**永久排除失败片的材料**（正是 G-16/G-19 两次修掉的静默丢料）；片级进度改由 **ledger 留痕可见**，失败即整纪元回滚重试（写侧去重保证幂等）",
+        "recheck": "纪元累计 ≥10 个 ⇒ 取单纪元材料量分位定 cap（与 `trigger.contentMinChars` 同批校准）",
+        "calibrator": null,
+        "rollback": "置 `null`/`0` ⇒ 单片段（现行为）"
+      },
+      {
+        "id": "trigger.contentMinChars",
+        "probe": {
+          "registryPath": [
+            "trigger",
+            "contentMinChars"
+          ]
+        },
+        "value": null,
+        "owner": "skill/engine/criteria.json#trigger.contentMinChars",
+        "preregistered": false,
+        "preregisteredCriterion": null,
+        "samples": 0,
+        "conclusion": "🚫 **已停用（维持关闭 = null）· 口径经真机证伪** —— S-P1b 机制（第二触发维）代码仍在，但**度量口径不成立**：真机实测审计行 `materialBytes=0` 而 `materialChars=46692`（**差 4.6 万字符**）⇒ `windowMaterialBytes`（数 pending/+candidates/ 里 mtime>since 的 .md 字节）**不是深睡材料的来源**（材料由 `gatherDeepSleepTraces` 按 `since` 从 notes 命中/运行统计/待回收裁决等处**聚合**）。**根因是架构性的**：本系统材料模型是**窗口式**的 ⇒ 「材料量」与「窗口长度」**单调同源** ⇒ 内容维**不是独立轴**；按旧口径取阈会得到**永不触发的假阈值**。⇒ 代码已加**守卫**：`contentMinChars > 0` 时**告警并按关闭处理**（`contentMinEffective = 0`），宁可功能关着也不给假旋钮；`test-epoch-watermark` ④ 守该接线（变异绕过守卫 ⇒ 15/1 红）。⚠ 要真正启用，须先把度量换成**与材料同源**的口径（候选：触发层复用 `gatherDeepSleepTraces` 取 trace 字符数；或改用「上一纪元实测 `materialChars`」作前瞻代理），再解除守卫",
+        "recheck": "**口径定案后**才谈校准；纪元累计 ≥10 个（校准器已就位）",
+        "calibrator": null,
+        "rollback": "置 `0`（或删键）⇒ 回纯时间维；scheduler.json `deepSleepContentMinChars` 热生效"
+      },
+      {
+        "id": "mcl.familiarThreshold",
+        "probe": {
+          "registryPath": [
+            "surface",
+            "mcl",
+            "familiarThreshold"
+          ]
+        },
+        "value": 0.55,
+        "owner": "skill/engine/criteria.json#surface.mcl.familiarThreshold",
+        "preregistered": true,
+        "preregisteredCriterion": "目标覆盖率 = 注册表原始意图 27.5%（分位扫描取最接近者）",
+        "samples": 2154,
+        "conclusion": "维持 0.55（实测覆盖率 27.5%，距目标 0.0pp；降 0.54 会过冲至 39.1%）",
+        "recheck": "近期带 missReason 样本 N≥300（现 120）",
+        "calibrator": "scripts/mcl-calibrate.mjs",
+        "rollback": "面板 /set mclFamiliarThreshold 0.58（热生效）"
+      },
+      {
+        "id": "trigger.idleMs",
+        "probe": {
+          "registryPath": [
+            "trigger",
+            "idleMs"
+          ]
+        },
+        "value": 2700000,
+        "owner": "skill/engine/criteria.json#trigger.idleMs",
+        "preregistered": false,
+        "preregisteredCriterion": null,
+        "samples": 0,
+        "conclusion": "insufficient-data —— 值已生效（2026-09-15 P0.1 实证：运行态探针 idleMs=2700000）但**从未校准**；原注释误称 3h 已订正",
+        "recheck": "P1 双维水位落地时按预注册判据校准（需真实纪元材料量/触发间隔分布）",
+        "calibrator": null,
+        "rollback": "scheduler.json deepSleepIdleMs（热生效）"
+      },
+      {
+        "id": "ingest.dedup.bigram.threshold",
+        "probe": {
+          "registryPath": [
+            "ingest",
+            "criteria",
+            "ingest.dedup.bigram",
+            "params",
+            "threshold"
+          ]
+        },
+        "value": 0.66,
+        "owner": "skill/engine/criteria.json#ingest.criteria[ingest.dedup.bigram].params.threshold",
+        "preregistered": false,
+        "preregisteredCriterion": null,
+        "samples": 0,
+        "conclusion": "insufficient-data（未校准）",
+        "recheck": "J2",
+        "calibrator": null,
+        "rollback": "改注册表 → 重跑 gen-criteria"
+      },
+      {
+        "id": "tree.indexSemanticSim",
+        "probe": {
+          "file": "src/deepsleep-tree.ts",
+          "contains": "s >= 0.9"
+        },
+        "value": 0.9,
+        "owner": "src/deepsleep-tree.ts:142",
+        "preregistered": false,
+        "preregisteredCriterion": null,
+        "samples": 0,
+        "conclusion": "insufficient-data（未校准）",
+        "recheck": "J2",
+        "calibrator": null,
+        "rollback": "代码常量"
+      },
+      {
+        "id": "tree.sectionMergeSim",
+        "probe": {
+          "file": "src/deepsleep-tree.ts",
+          "contains": "sim < 0.95"
+        },
+        "value": 0.95,
+        "owner": "src/deepsleep-tree.ts:271",
+        "preregistered": false,
+        "preregisteredCriterion": null,
+        "samples": 0,
+        "conclusion": "insufficient-data（未校准）",
+        "recheck": "J2",
+        "calibrator": null,
+        "rollback": "代码常量"
+      },
+      {
+        "id": "inject.crossFormDedupSim",
+        "probe": {
+          "file": "src/crossform-dedup.ts",
+          "contains": "CROSS_FORM_DEDUP_SIM = 0.8"
+        },
+        "value": 0.8,
+        "owner": "src/crossform-dedup.ts",
+        "preregistered": false,
+        "preregisteredCriterion": null,
+        "samples": 0,
+        "conclusion": "S-P4e（2026-09-16）**注入侧跨形态消重**：细粒度叙事行若与某粗粒度行语义相似 ≥ 此值，则**注入时不再重复注入**该细行（粗行已涵盖其教训面）。**为何不做物理收敛**：两轮真机实测表明「让模型判同一性」在本模型上不可行（含语义 0.809 的候选，**0 提案**，且 out 顶层键里无 convergeOps）⇒ 改在**消费侧**用确定性向量阈值消重：**收益相同**（省注入预算），但**误判代价从「丢库内容」降为「少注入一行」**（库文件零改动 ⇒ 无需回滚）。口径与 write.semanticDupSim **同值但不同位**：那条管写侧「是否算重复写」，本条管消费侧「是否已被粗行涵盖」——**用途不同故各自登记，不共享魔数**。**失败开放**：向量不可用 ⇒ 空集 ⇒ 注入面逐字节回基线",
+        "recheck": "注入面观测 N≥10 轮后复核；若被消重行在某轮被真实消费（access-real 命中）⇒ 说明误消，须上调",
+        "calibrator": null,
+        "rollback": "置 0（或关掉预热调用）⇒ filterInjectedText 空集 ⇒ 注入面逐字节回基线"
+      },
+      {
+        "id": "write.semanticDupSim",
+        "probe": {
+          "file": "src/distill-write.ts",
+          "contains": "s >= 0.8"
+        },
+        "value": 0.8,
+        "owner": "src/distill-write.ts:263",
+        "preregistered": false,
+        "preregisteredCriterion": null,
+        "samples": 0,
+        "conclusion": "insufficient-data（未校准）",
+        "recheck": "J2",
+        "calibrator": null,
+        "rollback": "代码常量"
+      },
+      {
+        "id": "write.cardSimilar",
+        "probe": {
+          "file": "src/distill-write.ts",
+          "contains": "cardSimilar(title, ex) >= 0.42"
+        },
+        "value": 0.42,
+        "owner": "src/distill-write.ts:343,401",
+        "preregistered": false,
+        "preregisteredCriterion": null,
+        "samples": 0,
+        "conclusion": "insufficient-data（未校准）",
+        "recheck": "J2",
+        "calibrator": null,
+        "rollback": "代码常量"
+      },
+      {
+        "id": "activity.interferenceBand",
+        "probe": {
+          "file": "src/activity.ts",
+          "contains": "v >= 0.5 && v < 0.66"
+        },
+        "value": [
+          0.5,
+          0.66
+        ],
+        "owner": "src/activity.ts:245",
+        "preregistered": false,
+        "preregisteredCriterion": null,
+        "samples": 0,
+        "conclusion": "insufficient-data（未校准；且为**双阈值硬编码**，无任何来源说明）",
+        "recheck": "J2",
+        "calibrator": null,
+        "rollback": "代码常量"
+      },
+      {
+        "id": "mcl.fastGate",
+        "probe": {
+          "file": "src/mcl.ts",
+          "contains": "hit / sg.length >= 0.6"
+        },
+        "value": {
+          "minHits": 2,
+          "ratio": 0.6
+        },
+        "owner": "src/mcl.ts:368",
+        "preregistered": false,
+        "preregisteredCriterion": null,
+        "samples": 0,
+        "conclusion": "insufficient-data（未校准）",
+        "recheck": "J2",
+        "calibrator": null,
+        "rollback": "代码常量"
+      },
+      {
+        "id": "activity.statusDays",
+        "probe": {
+          "file": "src/activity.ts",
+          "contains": "warmDays ?? 14"
+        },
+        "value": {
+          "warm": 14,
+          "cold": 44,
+          "archive": 90
+        },
+        "owner": "src/activity.ts:82-85,184-196",
+        "preregistered": true,
+        "preregisteredCriterion": "天距分位：warm=p50 · cold=p75 · archive=p90（从**真实**命中天距分布取，不拍脑袋）",
+        "samples": 46,
+        "conclusion": "**insufficient-data（维持现值）** —— 2026-09-15 J2 实测（scripts/activity-calibrate.mjs）：真实天距 p50=2.1 / p75=2.4 / p90=5.0 / p95=5.3 / **max=6.2 天** ⇒ 分布**完全未覆盖** 14/44/90 任一阈值区间 ⇒ **不可校准**（按仓内纪律写 insufficient-data，**不猜方向**）。另：**假冷率复测 = 1/9 = 11.1%**，而历史登记为 **26/49 = 53%** ⇒ harvest-access 接线已消除大部分失真，J4（U2）的紧迫性**显著下降**（须以复测值为准）",
+        "recheck": "样本翻倍 或 库龄 ≥90 天（届时分布才可能覆盖 warm 区间）",
+        "calibrator": "scripts/activity-calibrate.mjs",
+        "rollback": "scheduler.json activityWarmDays/ColdDays/ArchiveDays（热生效）"
+      },
+      {
+        "id": "activity.hotHits",
+        "probe": {
+          "file": "src/activity.ts",
+          "contains": "hotHits ?? 23"
+        },
+        "value": 23,
+        "owner": "src/activity.ts:85,196",
+        "preregistered": true,
+        "preregisteredCriterion": "hot = 分布**上四分位**（p75）（设计原则：hot 的定义就是「高频尾部」，非对样本拟合）",
+        "samples": 46,
+        "conclusion": "**已调整：5 → 23**。2026-09-15 J2 实测：真实 hits30 p50=**9** / p75=23 / p90=34 / max=58 ⇒ 原阈值 5 **低于 p50** ⇒ 「hot 候选」含半数以上条目，判据意图（识别**高频**小节）**已失去区分度**。按预注册判据取 p75=23。四处默认位点已同步（activity.ts / scheduler.ts / panel-config.ts / deepsleep-run.ts）",
+        "recheck": "样本翻倍时重跑 scripts/activity-calibrate.mjs",
+        "calibrator": "scripts/activity-calibrate.mjs",
+        "rollback": "面板 `/set activityHotHits 5`（热生效）"
+      },
+      {
+        "id": "consolidate.demote.coldDays",
+        "probe": {
+          "registryPath": [
+            "consolidate",
+            "criteria",
+            "consolidate.demote.archive",
+            "params",
+            "coldDays"
+          ]
+        },
+        "value": 90,
+        "owner": "skill/engine/criteria.json#consolidate.criteria[consolidate.demote.archive].params.coldDays",
+        "preregistered": true,
+        "preregisteredCriterion": "同 activity.statusDays 族（archive 分位）；其输入「冷」的质量取决于该族",
+        "samples": 46,
+        "conclusion": "**insufficient-data（维持现值）** —— 依赖 activity.statusDays，而该族分布未覆盖阈值区间（真实天距 max=6.2 天 ≪ 90）⇒ 本轮不可校准。附带实证：判冷的上游已由 harvest 接线修正到假冷 11.1%（原 53%）",
+        "recheck": "与 activity.statusDays 同步（样本翻倍 或 库龄 ≥90 天）",
+        "calibrator": "scripts/activity-calibrate.mjs",
+        "rollback": "改注册表 → 重跑 gen-criteria"
+      },
+      {
+        "id": "ingest.granularity.splitLaw",
+        "probe": {
+          "registryPath": [
+            "ingest",
+            "criteria",
+            "ingest.granularity.split-law",
+            "params"
+          ]
+        },
+        "value": {
+          "R": 1000,
+          "K": 6
+        },
+        "owner": "skill/engine/criteria.json#ingest.criteria[ingest.granularity.split-law].params",
+        "preregistered": false,
+        "preregisteredCriterion": null,
+        "samples": 0,
+        "conclusion": "insufficient-data（未校准）",
+        "recheck": "J2",
+        "calibrator": null,
+        "rollback": "改注册表 → 重跑 gen-criteria"
+      }
+    ]
   },
   "ledger": "audit/ledger.jsonl",
   "surface": {

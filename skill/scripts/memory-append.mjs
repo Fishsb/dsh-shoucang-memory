@@ -157,7 +157,13 @@ const LIMITS = { 'MEMORY.md': 5000, 'USER.md': 3000, 'AGENT.md': 3000, ...CAP_EN
 if (isMain) {
   const chars = content.replace(/\s+/g, '').length;
   const limit = LIMITS[norm] ?? LIMITS['MEMORY.md'];
-  if (chars > limit) { console.error(`exit=1 追加后超容量 ${chars}/${limit}（不写，需合并/下沉）`); process.exit(1); }
+  /* 2026-09-16 **用户判定：容量不是硬限** —— 「直接全部失败或者拒绝」不符合意图，**提醒就可以了**。
+   * 旧行为：超限即 `exit 1` **不写**。新默认：**提醒后照写**（写入不因容量被阻断）。
+   * ⚠ 严格模式 `SHOUCANG_CAP_STRICT=1` 保留旧行为（能力不删、可回退）。 */
+  if (chars > limit) {
+    if (process.env.SHOUCANG_CAP_STRICT === '1') { console.error(`exit=1 追加后超容量 ${chars}/${limit}（strict：不写，需合并/下沉）`); process.exit(1); }
+    console.warn(`⚠️ 超容量（未阻断）追加后 ${chars}/${limit} 字符 —— 已写入；建议合并精简或下沉 notes/`);
+  }
 }
 
 // 2026-09-11 修复（D3）：原为直接 writeFile 覆盖——进程在「文件被截断后、新内容未落完」之间被打断

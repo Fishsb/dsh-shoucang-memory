@@ -15,6 +15,9 @@
 //
 // 不依赖真实环境：全部 IO 依赖经 ctx 注入为 mock；auditFile 指向不存在路径（初始化读它有 try 兜底）。
 import { createDeepSleep } from '../lib/deepsleep.js'
+import { readFileSync, readdirSync } from 'node:fs'
+import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 let pass = 0, fail = 0
 const ok = (c, msg) => { if (c) { pass++; console.log(`  ✅ ${msg}`) } else { fail++; console.log(`  ❌ ${msg}`) } }
@@ -101,6 +104,29 @@ const ds2 = createDeepSleep(makeCtx())
 ds2.noteEvent('sid-other', false)
 ok(ds2.sessions.size === 1 && !ds.sessions.has('sid-other'),
   '⑥ 两个实例状态隔离（未被提升为模块级共享可变状态）')
+
+// ⑦ 触发阈值回退的**单一来源**（2026-09-15 P0.1 扩面订正 · 护栏）
+//   判因（实测）：全仓曾有 **8 处**硬编码 `|| 10800000`（3h）兜底，而生效缺省是注册表 2700000（45min）
+//   ⇒ "同一个默认两个来源"，且因 zod 有 default 那 8 处是**死代码**、注释又都说 3h。
+//   ⚠ 首轮只报 4 处：检索用了**大小写敏感**的 `idleMs`，漏掉 `deepSleepIdleMs` 的 4 处
+//     （`deepsleep.ts` ×2 · `distill-hooks.ts` ×2）——「模式派生集合先核对」的典型踩坑。
+//   本断言：**可执行代码**里不得再出现该字面量（注释/说明性文本豁免——它们正在记录这段历史）。
+{
+  const srcDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'src')
+  const offenders = []
+  for (const f of readdirSync(srcDir)) {
+    if (!f.endsWith('.ts') || f.endsWith('.generated.ts')) continue
+    const lines = readFileSync(join(srcDir, f), 'utf8').split(/\r?\n/)
+    lines.forEach((l, i) => {
+      const t = l.trim()
+      if (!t.includes('10800000')) return
+      if (t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) return // 注释=历史记录，豁免
+      offenders.push(`${f}:${i + 1}`)
+    })
+  }
+  ok(offenders.length === 0,
+    `⑦ 触发阈值回退单一来源：可执行代码无硬编码 10800000${offenders.length ? `（违规 ${offenders.join(', ')}）` : ''}`)
+}
 
 console.log(`\n结果: ${pass} PASS / ${fail} FAIL`)
 process.exit(fail ? 1 : 0)

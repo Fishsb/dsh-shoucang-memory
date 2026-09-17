@@ -1,3 +1,28 @@
+/** 注入缓存的**失效判定**（纯函数 · 2026-09-16 用户指令「新会话注入一次 + 每次上下文压缩后一次」）。
+ *  返回 `''` = **命中缓存（逐字复用）**；否则返回重建原因，供审计与 `/inject/stats` 读数。
+ *
+ *  **为什么需要它**：实测旧实现**每轮重建**（`/inject/stats calls=535`，而主会话仅 34 步）。
+ *  四条失效条件（全部可观测，无猜测）：
+ *    ① `prev` 缺失 ⇒ `new`（新会话，或插件热重载后首次）；
+ *    ② `sid` 变化 ⇒ `session-changed`；
+ *    ③ **事件条数回落**，或**首 seq 前跳** ⇒ `compacted`（历史被压缩重写；宿主 `SessionStartSource` 含 `'compact'`）；
+ *    ④ **记忆库戳变化** ⇒ `lib-changed`（睡眠/蒸馏刚写了库 ⇒ 必须让新内容可见）。
+ *  ⚠ **顺序有意义**：压缩判定**先于**库戳判定 —— 压缩是"上下文丢了"（必须重建），库变是"内容变了"（可稍后）。
+ *  ⚠ **技术边界（勿误传）**：命中缓存**不代表省 token** —— system prompt 每步仍会发给模型；
+ *    它省的是「每轮重建（读盘+选行+消重）」并保证文本**逐字稳定**（⇒ 提供商 prompt 缓存可命中）。 */
+export declare function injectCacheReason(prev: {
+    sid: string;
+    evLen: number;
+    firstSeq: number;
+    lib: string;
+    q: string;
+} | undefined, now: {
+    sid: string;
+    evLen: number;
+    firstSeq: number;
+    lib: string;
+    q: string;
+}): '' | 'new' | 'session-changed' | 'compacted' | 'lib-changed' | 'query-changed';
 export interface DynamicSelectDeps {
     /** 基线池（panel 侧已做分层过滤的 P/always 行） */
     allMem: readonly string[];

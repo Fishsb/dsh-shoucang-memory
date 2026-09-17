@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // transcript-cwd-probe.mjs — 转录 cwd 探针（2026-09-10）：读会话转录首行 session 记录的 cwd
 // 背景：resolveWorkspace 目录名 decode 有歧义（盘符冒号被压成 -，目录内连字符无法区分），
-//       转录首行 {"type":"session",...,"cwd":"D:\\..."} 是权威无歧义工作区源。
+//       转录首行 {"type":"session",...,"cwd":"<drive>:\\..."} 是权威无歧义工作区源。
 // 用法: node transcript-cwd-probe.mjs <session.jsonl|.zstd 路径>
 // 退出码: 0=输出 cwd（stdout） 1=无 cwd/失败
 import { decodeTranscript } from './archive-lib.mjs';

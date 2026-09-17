@@ -2,6 +2,13 @@
 AGENTS.md
 CLAUDE.md
 HANDOVER.md
+# 2026-09-17 加固（圆桌会审 I2）：根目录画像/索引三件**曾已入库、且不在任何隐私门覆盖面**
+#   （git check-ignore 对三者均无命中；check-public-tree 的 FORBIDDEN 亦未列）。三件当前仅 3 行外壳、
+#   无个人数据，但本仓根一旦被登记为守藏 root，画像/索引行就会被写进这里并**静默上公开仓**。
+#   根部解决：gitignore 挡住 + FORBIDDEN 同步收录 + `git rm --cached`（三处同改，缺一处仍复发）。
+/MEMORY.md
+/USER.md
+/AGENT.md
 
 # 依赖与构建产物（注意：lib/ 构建产物按 dsh 插件仓惯例提交入库，不在此列）
 node_modules/
@@ -12,7 +19,7 @@ __pycache__/
 # 本地环境
 .env
 *.local
-# 本机面板实例配置（登记 D:\FF\shoucang 为守藏 root 时生成；含本机可调值，不入公开仓）
+# 本机面板实例配置（登记本机工作区为守藏 root 时生成；含本机可调值，不入公开仓）
 shoucang.config.yaml
 
 # ---- 瞬态数据 ----
@@ -51,19 +58,19 @@ src-client/.vendor-css.generated.js
 *.bak-*
 *.pre-u1
 
-# ��� /root/bootstrap ������ָ��ֿ���������ɵ���Ǽ�׮��2026-09-13 ʵ�⣩
+# 面板 /root/bootstrap 若被误指向仓库根，会生成单库骨架桩（2026-09-13 实测）
 /whitelist.json
 
-# ��� /root/bootstrap ������ָ��ֿ���������ɵ���Ǽ�׮��2026-09-13 ʵ�⣩
+# 面板 /root/bootstrap 若被误指向仓库根，会生成单库骨架桩（2026-09-13 实测）
 /memory-whitelist-spec.md
 
-# ��� /root/bootstrap ������ָ��ֿ���������ɵ���Ǽ�׮��2026-09-13 ʵ�⣩
+# 面板 /root/bootstrap 若被误指向仓库根，会生成单库骨架桩（2026-09-13 实测）
 /task-protocols.md
 
-# ��� /root/bootstrap ������ָ��ֿ���������ɵ���Ǽ�׮��2026-09-13 ʵ�⣩
+# 面板 /root/bootstrap 若被误指向仓库根，会生成单库骨架桩（2026-09-13 实测）
 /human-execution-loop.md
 
-# ��� /root/bootstrap ������ָ��ֿ���������ɵ���Ǽ�׮��2026-09-13 ʵ�⣩
+# 面板 /root/bootstrap 若被误指向仓库根，会生成单库骨架桩（2026-09-13 实测）
 /notes/
 
 # 过程性 UI 比对截图（319 件 / 27 MB，可重生成；2026-09-15 移出仓库，本地保留）
@@ -74,3 +81,12 @@ deliverables/v9-compare/
 #   ⇒ 图片无法被隐私门扫到，入库风险高于收益。复核方法与逐图结论见
 #   docs/specs/UI1-acceptance-record.md §3″（人工视觉复核）
 deliverables/ui1-shots/
+
+# .roundtable/ —— 圆桌会议插件运行时数据（会议记录里 kbPath 是用户开会时选的**本机绝对路径**）
+#   实测 git ls-files .roundtable = 0（未跟踪）⇒ 永不入库；同批已补进本文件与 SKIP_DIRS（2026-09-16）
+.roundtable/
+
+# AgentTeams 团队状态 —— 建团队时把工作区**绝对路径**写进计划文本（如“只读全项目检查本机工作区”）。
+#   2026-09-17 实测：建团队前 check-hardcode 全绿，建团队后立刻报 2 处 ⇒ 同批已补进 SKIP_DIRS，
+#   否则「未被跟踪」只是巧合，git add -A 就会带进去（与上方 .roundtable/ 同一条判据）。
+.agent-teams/

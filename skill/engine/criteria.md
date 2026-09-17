@@ -15,37 +15,60 @@
 
 ## L1 · 摄取域（会话 → 库）（domain=`ingest`）
 
-| 判据 id | 强制 | 内容 | 参数 |
-|---|---|---|---|
-| `ingest.route.r1` | soft | R1 泛化方向指引 → memory | `{"route":"memory"}` |
-| `ingest.route.r2` | soft | R2 跨项目细粒度条文 → memory(notes/tools|lessons) | `{"route":"memory"}` |
-| `ingest.route.r3` | soft | R3 项目专属事实 → project（直写工作区） | `{"route":"project","target":"<workspace>/docs/devref/shoucang/"}` |
-| `ingest.route.r4` | soft | R4 其余 → discard | `{"route":"discard"}` |
-| `ingest.route.q0` | soft | Q0 已有归属 → 不存 | `{}` |
-| `ingest.route.q1` | soft | Q1 下周用不上 → 不存 | `{}` |
-| `ingest.route.q2` | soft | Q2 归谁（用户/agent/环境） | `{"targets":["notes","USER.md","AGENT.md"]}` |
-| `ingest.route.q3` | soft | Q3 能合并 → replace 否则 add | `{}` |
-| `ingest.route.rules-not-stored` | soft | 规则类不入库（SOUL 死支已删） | `{"reason":"rules-not-stored"}` |
-| `ingest.placement.notes-kind` | hard | 落点须在 notes 白名单内 | `{"notes":["env","tools","flows","lessons","release","user","agent"]}` |
-| `ingest.placement.main-index` | hard | 主索引写入仅三主档 | `{"indexTargets":["MEMORY.md","USER.md","AGENT.md"]}` |
-| `ingest.granularity.split-law` | hard | 子树正文 > R 或同级条目 > K → 裂 ###（§8.1 分裂律） | `{"R":1000,"K":6}` |
-| `ingest.dedup.exact` | hard | 同 标签+主题 精确重复 → 拒收 | `{"enabled":true}` |
-| `ingest.dedup.bigram` | hard | 主题 bigram 重叠 ≥ 阈值 → 近似重复拒收 | `{"threshold":0.66,"minTokens":2}` |
-| `ingest.format.index-line` | hard | 索引行四要素格式（spec §8） | `{"topicMax":12,"summaryMax":30,"pathSummaryMax":40,"banDate":true,"requirePointer":true,"requireMiddleDot":true,"forbidArrowInPath":true,"note":"**实测根因（2026-09-11）**：写门曾硬编码 30/40 而 prompt 未携带该约束 ⇒ 深睡产出普遍超标被逐条拦掉（attempted=3 → all-rejected，概况 31/38/36 字）。现：门读投影 + 生成器把约束派生进两个判据段。"}` |
+| 判据 id | 强制 | 裁决机制 | 内容 | 参数 |
+|---|---|---|---|---|
+| `ingest.route.r1` | soft | `llm` | R1 泛化方向指引 → memory | `{"route":"memory"}` |
+| `ingest.route.r2` | soft | `llm` | R2 跨项目细粒度条文 → memory(notes/tools|lessons) | `{"route":"memory"}` |
+| `ingest.route.r3` | soft | `llm` | R3 项目专属事实 → project（直写工作区） | `{"route":"project","target":"<workspace>/docs/devref/shoucang/"}` |
+| `ingest.route.r4` | soft | `llm` | R4 其余 → discard | `{"route":"discard"}` |
+| `ingest.route.q0` | soft | `vector` | Q0 已有归属 → 不存 | `{}` |
+| `ingest.route.q1` | soft | `llm` | Q1 下周用不上 → 不存 | `{}` |
+| `ingest.route.q2` | soft | `llm` | Q2 归谁（用户/agent/环境） | `{"targets":["notes","USER.md","AGENT.md"]}` |
+| `ingest.route.q3` | soft | `vector` | Q3 能合并 → replace 否则 add | `{}` |
+| `ingest.route.rules-not-stored` | soft | `deterministic` | 规则类不入库（SOUL 死支已删） | `{"reason":"rules-not-stored"}` |
+| `ingest.placement.notes-kind` | hard | `deterministic` | 落点须在 notes 白名单内 | `{"notes":["env","tools","flows","lessons","release","user","agent"]}` |
+| `ingest.placement.main-index` | hard | `deterministic` | 主索引写入仅三主档 | `{"indexTargets":["MEMORY.md","USER.md","AGENT.md"]}` |
+| `ingest.granularity.split-law` | hard | `deterministic` | 子树正文 > R 或同级条目 > K → 裂 ###（§8.1 分裂律） | `{"R":1000,"K":6}` |
+| `ingest.dedup.exact` | hard | `deterministic` | 同 标签+主题 精确重复 → 拒收 | `{"enabled":true}` |
+| `ingest.dedup.bigram` | hard | `deterministic` | 主题 bigram 重叠 ≥ 阈值 → 近似重复拒收 | `{"threshold":0.66,"minTokens":2}` |
+| `ingest.format.index-line` | hard | `deterministic` | 索引行四要素格式（spec §8） | `{"topicMax":12,"summaryMax":30,"pathSummaryMax":40,"banDate":true,"requirePointer":true,"requireMiddleDot":true,"forbidArrowInPath":true,"note":"**实测根因（2026-09-11）**：写门曾硬编码 30/40 而 prompt 未携带该约束 ⇒ 深睡产出普遍超标被逐条拦掉（attempted=3 → all-rejected，概况 31/38/36 字）。现：门读投影 + 生成器把约束派生进两个判据段。"}` |
 
 ## L1 · 巩固域（库 → 库）（domain=`consolidate`）
 
-| 判据 id | 强制 | 内容 | 参数 |
-|---|---|---|---|
-| `consolidate.support.principle` | soft | 原则：同主题 ≥3 条痕迹（或当日反复命中） | `{"minTraces":3}` |
-| `consolidate.support.path` | soft | 路径：同型 ≥2 次且只从成功任务归纳 | `{"minOccur":2,"crossSessionMin":2,"successOnly":true}` |
-| `consolidate.promote.premise` | soft | 涉及隐含前提 → 必须写出，否则降级 notes | `{"requirePremiseWhenDependent":true}` |
-| `consolidate.cross-workspace-redline` | soft | 跨工作区红线：项目专名/路径/版本号不提炼 | `{"forbidProjectNames":true}` |
-| `consolidate.reshape.split-law` | hard | treeOps split：正文 > R 且 ≥2 语义正交子面 | `{"R":1000,"K":6,"partsMax":6,"minParts":2}` |
-| `consolidate.demote.archive` | hard | 遗忘：cold 且 ≥90 天 + 三守卫；禁直删；画像节禁归档 | `{"coldDays":90,"guards":["leaf","cold-or-retired","not-stub"],"profileFilesForbidden":true,"maxPerRun":3,"allowDelete":false}` |
-| `consolidate.cross.crossTopic` | hard | REM 相：crossTopic 源指针须覆盖 ≥2 个不同 § | `{"minSections":2}` |
-| `consolidate.replay.cross-day` | soft | 跨日二次激活：近 7 日再现 → 可扩容/提纯 | `{"windowDays":7}` |
-| `consolidate.pointer.update-only` | hard | pointerOps 只允许原地 update（禁增删索引行） | `{"allow":["update"],"forbid":["add","delete"]}` |
+| 判据 id | 强制 | 裁决机制 | 内容 | 参数 |
+|---|---|---|---|---|
+| `consolidate.support.principle` | soft | `vector` | 原则：同主题 ≥3 条痕迹（或当日反复命中） | `{"minTraces":3}` |
+| `consolidate.support.path` | soft | `vector` | 路径：同型 ≥2 次且只从成功任务归纳 | `{"minOccur":2,"crossSessionMin":2,"successOnly":true}` |
+| `consolidate.promote.premise` | soft | `llm` | 涉及隐含前提 → 必须写出，否则降级 notes | `{"requirePremiseWhenDependent":true}` |
+| `consolidate.cross-workspace-redline` | soft | `deterministic` | 跨工作区红线：项目专名/路径/版本号不提炼 | `{"forbidProjectNames":true}` |
+| `consolidate.reshape.split-law` | hard | `llm` | treeOps split：正文 > R 且 ≥2 语义正交子面 | `{"R":1000,"K":6,"partsMax":6,"minParts":2}` |
+| `consolidate.demote.archive` | hard | `deterministic` | 遗忘：cold 且 ≥90 天 + 三守卫；禁直删；画像节禁归档 | `{"coldDays":90,"guards":["leaf","cold-or-retired","not-stub"],"profileFilesForbidden":true,"maxPerRun":3,"allowDelete":false}` |
+| `consolidate.cross.crossTopic` | hard | `deterministic` | REM 相：crossTopic 源指针须覆盖 ≥2 个不同 § | `{"minSections":2}` |
+| `consolidate.replay.cross-day` | soft | `vector` | 跨日二次激活：近 7 日再现 → 可扩容/提纯 | `{"windowDays":7}` |
+| `consolidate.pointer.update-only` | hard | `deterministic` | pointerOps 只允许原地 update（禁增删索引行） | `{"allow":["update"],"forbid":["add","delete"]}` |
+
+## 阈值登记（J0 · 2026-09-15 · 阈值登记制）
+
+> 阈值登记制（J0 · 2026-09-15 · 依据 docs/judge-layering-plan-2026-09-15.md §4.2）。**规则**：任何影响「接受/拒绝/归类/取舍」判断的数值阈值都必须登记在此，且登记项必须含 `preregisteredCriterion` + `samples` + `conclusion` + `recheck`。机检 scripts/check-threshold-registry.mjs（未登记 ⇒ 红；登记了但缺预注册或样本数 ⇒ 红）。**范围界定**：不含格式门（归 ingest.format.index-line 的 params）、容量/预算（归 gate.caps / surface.*）、工程常量（超时/重试/熔断）。**样板**：mcl.familiarThreshold 是全仓**唯一**有完整预注册校准记录的阈值。⚠ **暴露出的真问题**：13 项里 **12 项 samples=0 / 未预注册** —— 其中 activity.statusDays 已**实证失真**（假冷 26 条，见 skill/scripts/harvest-access.mjs:6）。
+
+| 阈值 id | 值 | 归属 | 预注册 | 样本 | 结论 | 复检触发 |
+|---|---|---|---|---|---|---|
+| `trigger.materialChunkChars` | `null` | `skill/engine/criteria.json#trigger.materialChunkChars` | ❌ | 0 | **insufficient-data（维持关闭 = null）** —— S-P1c 分片**纯切分器已落地**（`deepsleep-core#splitByCap`：段边界即语义边界、永不切开单段、`cap<=0` 与改造前逐字等价），run 侧接线待做。阈值不可校准：截至 2026-09-15 仅 **1 个真实纪元**，单纪元材料分布未成形。⚠ **水位口径**：采取「**全片落地才推进**」而非方案册原写的「按片推进」—— 单一时间戳水位**表达不了片级进度**，片级推进会**永久排除失败片的材料**（正是 G-16/G-19 两次修掉的静默丢料）；片级进度改由 **ledger 留痕可见**，失败即整纪元回滚重试（写侧去重保证幂等） | 纪元累计 ≥10 个 ⇒ 取单纪元材料量分位定 cap（与 `trigger.contentMinChars` 同批校准） |
+| `trigger.contentMinChars` | `null` | `skill/engine/criteria.json#trigger.contentMinChars` | ❌ | 0 | 🚫 **已停用（维持关闭 = null）· 口径经真机证伪** —— S-P1b 机制（第二触发维）代码仍在，但**度量口径不成立**：真机实测审计行 `materialBytes=0` 而 `materialChars=46692`（**差 4.6 万字符**）⇒ `windowMaterialBytes`（数 pending/+candidates/ 里 mtime>since 的 .md 字节）**不是深睡材料的来源**（材料由 `gatherDeepSleepTraces` 按 `since` 从 notes 命中/运行统计/待回收裁决等处**聚合**）。**根因是架构性的**：本系统材料模型是**窗口式**的 ⇒ 「材料量」与「窗口长度」**单调同源** ⇒ 内容维**不是独立轴**；按旧口径取阈会得到**永不触发的假阈值**。⇒ 代码已加**守卫**：`contentMinChars > 0` 时**告警并按关闭处理**（`contentMinEffective = 0`），宁可功能关着也不给假旋钮；`test-epoch-watermark` ④ 守该接线（变异绕过守卫 ⇒ 15/1 红）。⚠ 要真正启用，须先把度量换成**与材料同源**的口径（候选：触发层复用 `gatherDeepSleepTraces` 取 trace 字符数；或改用「上一纪元实测 `materialChars`」作前瞻代理），再解除守卫 | **口径定案后**才谈校准；纪元累计 ≥10 个（校准器已就位） |
+| `mcl.familiarThreshold` | 0.55 | `skill/engine/criteria.json#surface.mcl.familiarThreshold` | ✅ | 2154 | 维持 0.55（实测覆盖率 27.5%，距目标 0.0pp；降 0.54 会过冲至 39.1%） | 近期带 missReason 样本 N≥300（现 120） |
+| `trigger.idleMs` | 2700000 | `skill/engine/criteria.json#trigger.idleMs` | ❌ | 0 | insufficient-data —— 值已生效（2026-09-15 P0.1 实证：运行态探针 idleMs=2700000）但**从未校准**；原注释误称 3h 已订正 | P1 双维水位落地时按预注册判据校准（需真实纪元材料量/触发间隔分布） |
+| `ingest.dedup.bigram.threshold` | 0.66 | `skill/engine/criteria.json#ingest.criteria[ingest.dedup.bigram].params.threshold` | ❌ | 0 | insufficient-data（未校准） | J2 |
+| `tree.indexSemanticSim` | 0.9 | `src/deepsleep-tree.ts:142` | ❌ | 0 | insufficient-data（未校准） | J2 |
+| `tree.sectionMergeSim` | 0.95 | `src/deepsleep-tree.ts:271` | ❌ | 0 | insufficient-data（未校准） | J2 |
+| `inject.crossFormDedupSim` | 0.8 | `src/crossform-dedup.ts` | ❌ | 0 | S-P4e（2026-09-16）**注入侧跨形态消重**：细粒度叙事行若与某粗粒度行语义相似 ≥ 此值，则**注入时不再重复注入**该细行（粗行已涵盖其教训面）。**为何不做物理收敛**：两轮真机实测表明「让模型判同一性」在本模型上不可行（含语义 0.809 的候选，**0 提案**，且 out 顶层键里无 convergeOps）⇒ 改在**消费侧**用确定性向量阈值消重：**收益相同**（省注入预算），但**误判代价从「丢库内容」降为「少注入一行」**（库文件零改动 ⇒ 无需回滚）。口径与 write.semanticDupSim **同值但不同位**：那条管写侧「是否算重复写」，本条管消费侧「是否已被粗行涵盖」——**用途不同故各自登记，不共享魔数**。**失败开放**：向量不可用 ⇒ 空集 ⇒ 注入面逐字节回基线 | 注入面观测 N≥10 轮后复核；若被消重行在某轮被真实消费（access-real 命中）⇒ 说明误消，须上调 |
+| `write.semanticDupSim` | 0.8 | `src/distill-write.ts:263` | ❌ | 0 | insufficient-data（未校准） | J2 |
+| `write.cardSimilar` | 0.42 | `src/distill-write.ts:343,401` | ❌ | 0 | insufficient-data（未校准） | J2 |
+| `activity.interferenceBand` | `[0.5,0.66]` | `src/activity.ts:245` | ❌ | 0 | insufficient-data（未校准；且为**双阈值硬编码**，无任何来源说明） | J2 |
+| `mcl.fastGate` | `{"minHits":2,"ratio":0.6}` | `src/mcl.ts:368` | ❌ | 0 | insufficient-data（未校准） | J2 |
+| `activity.statusDays` | `{"warm":14,"cold":44,"archive":90}` | `src/activity.ts:82-85,184-196` | ✅ | 46 | **insufficient-data（维持现值）** —— 2026-09-15 J2 实测（scripts/activity-calibrate.mjs）：真实天距 p50=2.1 / p75=2.4 / p90=5.0 / p95=5.3 / **max=6.2 天** ⇒ 分布**完全未覆盖** 14/44/90 任一阈值区间 ⇒ **不可校准**（按仓内纪律写 insufficient-data，**不猜方向**）。另：**假冷率复测 = 1/9 = 11.1%**，而历史登记为 **26/49 = 53%** ⇒ harvest-access 接线已消除大部分失真，J4（U2）的紧迫性**显著下降**（须以复测值为准） | 样本翻倍 或 库龄 ≥90 天（届时分布才可能覆盖 warm 区间） |
+| `activity.hotHits` | 23 | `src/activity.ts:85,196` | ✅ | 46 | **已调整：5 → 23**。2026-09-15 J2 实测：真实 hits30 p50=**9** / p75=23 / p90=34 / max=58 ⇒ 原阈值 5 **低于 p50** ⇒ 「hot 候选」含半数以上条目，判据意图（识别**高频**小节）**已失去区分度**。按预注册判据取 p75=23。四处默认位点已同步（activity.ts / scheduler.ts / panel-config.ts / deepsleep-run.ts） | 样本翻倍时重跑 scripts/activity-calibrate.mjs |
+| `consolidate.demote.coldDays` | 90 | `skill/engine/criteria.json#consolidate.criteria[consolidate.demote.archive].params.coldDays` | ✅ | 46 | **insufficient-data（维持现值）** —— 依赖 activity.statusDays，而该族分布未覆盖阈值区间（真实天距 max=6.2 天 ≪ 90）⇒ 本轮不可校准。附带实证：判冷的上游已由 harvest 接线修正到假冷 11.1%（原 53%） | 与 activity.statusDays 同步（样本翻倍 或 库龄 ≥90 天） |
+| `ingest.granularity.splitLaw` | `{"R":1000,"K":6}` | `skill/engine/criteria.json#ingest.criteria[ingest.granularity.split-law].params` | ❌ | 0 | insufficient-data（未校准） | J2 |
 
 ## 载体契约（v2.2 · layer / form / inject）
 

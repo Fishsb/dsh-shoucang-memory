@@ -21,8 +21,8 @@ import { dshHome, knowledgeRoot, profileCarrierSet, indexRowInLayer, scanIndexRo
 import { selectDynamicLines } from './dynamic-select.js'
 import { assembleSupply, budgetOf, clampLines, renderSupplyText, type SupplyBudget } from './supply-assembly.js'
 import { MEMORY_PLAYBOOK_LINES, playbookEnabled } from './injection-playbook.js'
-import { adaptiveTopN, createRingSupplyApi } from './ring-supply.js'
-import { cuesOf, type SituationCtx } from './situation-key.js'
+import { cuesOf, taskCueOf, type SituationCtx } from './situation-key.js'
+import { situationLinesOf, knownTaskCuesOf } from './situation-supply.js'
 import { loadStore } from './record-shadow.js'
 
 export interface RootEntry { id: string; name: string; path: string }
@@ -352,21 +352,12 @@ export function createHotMemory(d: HotMemoryDeps): HotMemory {
 const emptySupplyUsage = (): SupplyUsage => ({ at: 0, chars: 0, budgetTotal: 0, overBudget: false, kept: { stable: 0, dynamic: 0, oneshot: 0, situation: 0 }, dropped: [], cues: [], situationEnabled: false })
 
 /**
- * P3（2026-09-14）：**情境槽候选** —— 读 Record 影子库里的**环记录**，按情境键选出候选行。
- * 只在预算 > 0 时才读盘（缺省 `budgetChars=0` ⇒ **零开销、零行为变化**）。
- * 零抛出：情境层拿不到就当空（**绝不打断装配**——记忆是增强，不是主路径）。
- * 依赖方向：panel-shared(L5) → record-shadow(L2) / ring-supply，高依赖低，无环。
+ * P3（2026-09-14）：**情境槽候选** —— 已迁至 `situation-supply.ts`（2026-09-17）。
+ *
+ * 迁因：本模块受 `check-module-growth` **大模块冻结棘轮**约束（有效行数 547 / 基线 547，顶格零余量），
+ *   而本轮要在 `sitCtx` 补第二个键（`task`）⇒ 加一行即撞顶。先抽叶子逻辑腾空间，再改。
+ *   `situationLinesOf` 的实现与语义**逐字未变**，只是搬家（依赖方向 L5→L2，无环）。
  */
-function situationLinesOf(memRoot: string, cues: readonly string[], at: string, budget: number): string[] {
-  if (budget <= 0 || !cues.length) return []
-  try {
-    const { records } = loadStore(memRoot)
-    if (!records || !records.length) return []
-    const s = (SURFACE.injection as unknown as { situation?: { ringOrder?: string[]; topN?: number; adaptive?: boolean } }).situation
-    const api = createRingSupplyApi({ rings: (s?.ringOrder ?? []) as never, topN: adaptiveTopN(records, s?.topN, s?.adaptive !== false) })
-    return api.lines(records, cues, at)
-  } catch { return [] }
-}
 
 /**
  * P0a/P3（2026-09-14）：**读侧装配的影子记账**（纯函数、零 I/O）。
@@ -631,7 +622,7 @@ function buildHotMemoryText(d: HotMemoryDeps, cache: HotMemoryCache, query = '')
   const sitCfg = (SURFACE.injection as unknown as { situation?: { enabled?: boolean; budgetChars?: number; cueDims?: string[] } }).situation
   // 主开关与额度**都honored**（两个都读，避免"放进来却不可控"的假可控——仓内 storeMode 的先例注解）
   const sitBudget = (sitCfg?.enabled ?? false) ? Math.max(0, Number(sitCfg?.budgetChars ?? 0) || 0) : 0
-  const sitCtx: SituationCtx = { scope: (() => { try { const p = d.root.activeRootOf()?.path; return p ? `workspace:${p}` : '' } catch { return '' } })() }
+  const sitCtx: SituationCtx = { scope: (() => { try { const p = d.root.activeRootOf()?.path; return p ? `workspace:${p}` : '' } catch { return '' } })(), task: taskCueOf(q, knownTaskCuesOf(memRoot)) }
   const sitCues = cuesOf(sitCtx, sitCfg?.cueDims)
   const sitLines = situationLinesOf(memRoot, sitCues, new Date(now).toISOString(), sitBudget)
   const shadow = supplyUsageMeta(

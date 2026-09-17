@@ -77,7 +77,7 @@ const locateTranscript = async (d: LlmDeps, sid: string): Promise<string | null>
 const resolveWorkspace = async (d: LlmDeps, sid: string): Promise<string | null> => {
   // 反解带瞬态容错：转录定位可能晚于会话 end 落盘 / 探针单次抖动 → 仅「定位失败」重试 3 次（1.5s 退避）；
   // 路径已定位但无 workspace 归属属永久无归属，重试无意义，直接返回 null 走 writeDispatch 降级链。
-  // 2026-09-10 实锤修复：目录名 decode 有歧义（盘符冒号压成 '-' 且目录内连字符无法区分，D:\FF\shoucang → D-FF-shoucang
+  // 2026-09-10 实锤修复：目录名 decode 有歧义（盘符冒号压成 '-' 且目录内连字符无法区分，<盘符>:\<a>\<b> → <盘符>-<a>-<b>
   // 无法还原冒号 → 校验失败 → project 卡全降级 pending 死循环）——改为优先读转录首行 cwd（权威无歧义），目录 decode 仅兜底。
   for (let attempt = 1; attempt <= 3; attempt++) {
     let file: string | null = null

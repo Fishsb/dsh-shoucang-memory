@@ -14,6 +14,9 @@ import type { Context } from 'cordis'
 import { knowledgeRoot, memoryLibRoot, isRealUserEvent } from './targets.js'
 import { clearVecCache, vecStats } from './vec.js'
 import { contractFor } from './panel-contract.js'
+// S-P4e（2026-09-16）注入侧跨形态消重（薄引用缝：异步预热 + 同步逐字过滤）
+import { warmInjectDedup, filterInjectedText, dedupState } from './crossform-dedup.js'
+import { injectCacheReason } from './dynamic-select.js'
 import { isLocalBase, parseView, probeLocalEmbed, readBody, sendJson } from './panel-shared.js'
 import type { HotMemory, InjectMeta, PanelLogger, RootAccess, RouteFn, SuiteConfigAccess } from './panel-shared.js'
 
@@ -376,7 +379,13 @@ function injectPreviewRoute(d: InjectDeps, req: IncomingMessage, res: ServerResp
 }
 
 function injectStatsRoute(d: InjectDeps, _req: IncomingMessage, res: ServerResponse): void {
-  sendJson(res, 200, { calls: d.injectMeta.calls, lastAt: d.injectMeta.lastAt ? new Date(d.injectMeta.lastAt).toISOString() : null, root: d.root.activeRootOf()?.path ?? null, supplyUsage: d.hot.supplyUsage() })
+  /* 2026-09-16：暴露**注入缓存**读数（用户指令「新会话一次 + 压缩后一次」的可验证面）——
+   *   `rebuilt` = 重建次数（应为「新会话 + 压缩 + 库变」的合计）· `reused` = 逐字复用次数（应随步数增长）
+   *   · `lastReason` ∈ {new, session-changed, compacted, lib-changed} ⇒ 一眼看出为何重建。 */
+  const m = d.injectMeta as { calls: number; rebuilt?: number; reused?: number; lastReason?: string; lastQ?: string; bySid?: Map<string, unknown> }
+  const bySid = m.bySid ? [...m.bySid.values()].sort((a, b) => (b as { at: number }).at - (a as { at: number }).at).slice(0, 8) : []
+  const preSteps = (d.injectMeta as unknown as { preSteps?: unknown[] }).preSteps || []
+  sendJson(res, 200, { calls: d.injectMeta.calls, lastAt: d.injectMeta.lastAt ? new Date(d.injectMeta.lastAt).toISOString() : null, root: d.root.activeRootOf()?.path ?? null, supplyUsage: d.hot.supplyUsage(), cache: { rebuilt: m.rebuilt || 0, reused: m.reused || 0, lastReason: m.lastReason || null, lastQ: m.lastQ || null, bySid }, preStep: preSteps.slice(-12) })
 }
 
 /** systemPrompt 注入挂点（每轮渲染，指针缓存 30s）；systemPrompt 不可用时降级告警。 */
@@ -410,13 +419,134 @@ function mountHotMemoryInjection(ctx: Context, d: InjectDeps): void {
       } catch { /* 取不到=空 query */ }
       return ''
     }
+    // S-P4e（2026-09-16）**注入侧跨形态消重**：预热一次（fire-and-forget，不阻塞注入；失败不抛；
+    //   内部 `warming` 闸保证幂等）。接线点刻意选在**未冻结的调用方**——`panel-shared` 受大模块冻结棘轮约束。
+    void warmInjectDedup(memoryLibRoot())
+    /* 注入缓存（2026-09-16 **用户指令**）：**新会话注入一次 + 每次上下文压缩后再注入一次**，其余轮次**逐字复用**。
+     *   判因（实测）：旧实现每轮重建 —— `/inject/stats calls=535`，而主会话仅 34 步 ⇒ 34 次重建（读盘+选行+消重）。
+     *   **失效条件四条，全部可观测**：
+     *     ① 无记忆 ⇒ 新会话（或插件热重载后首次）；
+     *     ② `sessionId` 变化 ⇒ 换了会话；
+     *     ③ **事件条数回落 / 首 seq 前跳** ⇒ 历史被**压缩**重写（宿主 `SessionStartSource` 含 `'compact'`）；
+     *     ④ **记忆库戳变化**（三索引 size+mtimeMs，节流 5s）⇒ 睡眠/蒸馏刚写了库。
+     *   ⚠ **技术真相（必须留痕，勿误传）**：system prompt 的内容**每步仍会发给模型**（API 语义无法"只发一次"）；
+     *     本缓存省的是「**每轮重建**」并保证文本**逐字稳定**（⇒ 提供商 prompt 缓存可命中），**不等于省 token**。
+     *     要真正做到"只发一次"须改走**会话消息**通道（`agent/pre-step` 可追加消息），风险与前提见 `docs/OPEN-ITEMS.md`。 */
+    type InjectMemo = { text: string; sid: string; evLen: number; firstSeq: number; lib: string; q: string }
+    const injectMemo = new WeakMap<object, InjectMemo>()
+    const meta = d.injectMeta as { calls: number; lastAt: number; rebuilt?: number; reused?: number; lastReason?: string; lastQ?: string }
+    /* 2026-09-16 **按会话读数**（取代全局单值）：全局 `lastQ/lastReason` 会被**别的会话**（圆桌会议节点 /
+     *   深睡子代理）重建覆盖 ⇒ 据此判"主会话 q 异常"属**口径错误**（实测踩过，见 OPEN-ITEMS §0b）。
+     *   ⇒ 按 `sid` 记 `{qLen, qHash, reason, rebuilt, reused}`，**不再回抄用户正文**（隐私面同时收窄）。
+     *   `qHash` = djb2（确定性、无 crypto 依赖）⇒ **只验"是否同一段文本"，不泄露内容**。 */
+    type SidStat = { sid: string; qLen: number; qHash: string; reason: string; rebuilt: number; reused: number; at: number }
+    const perSid = new Map<string, SidStat>()
+    ;(meta as unknown as { bySid?: Map<string, SidStat> }).bySid = perSid
+    const qHashOf = (s: string): string => {
+      let h = 5381
+      for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0
+      return h.toString(16).padStart(8, '0')
+    }
+    const bump = (key: string, q: string, reason: string): void => {
+      const cur = perSid.get(key) || { sid: key, qLen: q.length, qHash: qHashOf(q), reason: '', rebuilt: 0, reused: 0, at: 0 }
+      cur.qLen = q.length
+      cur.qHash = qHashOf(q)
+      if (reason) { cur.reason = reason; cur.rebuilt++ } else cur.reused++
+      cur.at = Date.now()
+      perSid.set(key, cur)
+      if (perSid.size > 12) { const oldest = [...perSid.values()].sort((a, b) => a.at - b.at)[0]; if (oldest) perSid.delete(oldest.sid) }
+    }
+    let libStamp = ''
+    let libAt = 0
+    const libNow = (): string => {
+      const t = Date.now()
+      if (t - libAt < 5000) return libStamp
+      libAt = t
+      try {
+        const root = memoryLibRoot()
+        let s = ''
+        for (const f of ['AGENT.md', 'USER.md', 'MEMORY.md']) {
+          try { const st = statSync(join(root, f)); s += `${st.size}:${st.mtimeMs};` } catch { s += '-;' }
+        }
+        libStamp = s
+      } catch { /* 库不可读 ⇒ 沿用旧戳（失败开放） */ }
+      return libStamp
+    }
     d.disposers.push(sp.context({
       name: 'shoucang-hot-memory',
       order: 88, // mneme: user-settings=85 / memory=90 —— 守藏热记忆在其间
-      text: (context?: unknown) => { d.injectMeta.calls++; d.injectMeta.lastAt = Date.now(); return d.hot.build(taskTextOf(context)) },
+      // 注入前按"已被粗粒度行涵盖"的细粒度行做**逐字**过滤。
+      //   **失败开放**：预热未完成/向量不可用 ⇒ skip 空 ⇒ 注入面**逐字节回基线**
+      //   （消重是优化，绝不能因向量不可用而少注入内容）。
+      text: (context?: unknown) => {
+        meta.calls++
+        meta.lastAt = Date.now()
+        const holder = (context as { agent?: object })?.agent
+        const evs = (context as { agent?: { session?: { snapshotEvents?: () => unknown[] } } })?.agent?.session?.snapshotEvents?.()
+        const arr = Array.isArray(evs) ? evs : []
+        const sid = String((context as { agent?: { session?: { id?: unknown } } })?.agent?.session?.id ?? '')
+        const firstSeq = Number((arr[0] as { seq?: unknown })?.seq ?? -1)
+        const lib = libNow()
+        const q = taskTextOf(context)
+        /* 只记**指纹**（长度 + djb2 哈希），不回抄用户正文 —— 见上方 `perSid` 抬头。 */
+        meta.lastQ = q ? `${q.length}:${qHashOf(q)}` : '(空)'
+        const sidKey = sid ? sid.slice(-8) : '(anon)'
+        const hit = holder ? injectMemo.get(holder) : undefined
+        const reason = injectCacheReason(hit, { sid, evLen: arr.length, firstSeq, lib, q })
+        if (hit && !reason) { meta.reused = (meta.reused || 0) + 1; bump(sidKey, q, ''); return hit.text }
+        const text = filterInjectedText(d.hot.build(q), dedupState().skip)
+        if (holder) injectMemo.set(holder, { text, sid, evLen: arr.length, firstSeq, lib, q })
+        meta.rebuilt = (meta.rebuilt || 0) + 1
+        meta.lastReason = reason || 'new'
+        bump(sidKey, q, reason || 'new')
+        return text
+      },
     }))
-    d.logger.info?.('[shoucang] R1 热记忆注入挂点已注册 (systemPrompt.context: shoucang-hot-memory)')
-  } else {
+    /* 2026-09-16 **只读观测**：`agent/pre-step` 探针（用户指示「先出只读观测，再落刀」）。
+     *   目的：判定「把注入从 system prompt 搬进**会话消息**（宿主自己用 `runtimeContext` 就是这么做的）」
+     *   是否安全 —— 需要**实测**三件事，而不是读码推断：
+     *     ① 每步 `messages` 的**增/减**（`evLen` 是增还是回落 ⇒ 能否识别"压缩后首步"）；
+     *     ② 步与步之间 `firstSeq` 是否**前跳**（历史被重写）；
+     *     ③ 宿主自带的 runtime context **是否已在** `messages` 里（若在，说明"追加消息"这条路宿主自己就走通了）。
+     *   ⚠ **绝不改变行为**：本监听器**永远原样 `return next()`**；出任何异常也**吞掉再放行**
+     *     （观测件把某一步搞失败，比不观测更糟）。读数经 `/inject/stats` 的 `preStep` 字段暴露。 */
+    type PreStepStat = { sid: string; step: number; n: number; firstSeq: number; lastSeq: number; delta: number; hasCtx: boolean; isFirst: boolean; at: number }
+    const preSteps: PreStepStat[] = []
+    ;(d.injectMeta as unknown as { preSteps?: PreStepStat[] }).preSteps = preSteps
+    const hook = ctx as unknown as { on?: (name: string, fn: (...a: any[]) => unknown) => () => void }
+    if (typeof hook.on === 'function') {
+      try {
+        d.disposers.push(hook.on('agent/pre-step', async (payload: unknown, next: () => unknown) => {
+          try {
+            const p = payload as { agent?: { session?: { id?: unknown } }; messages?: unknown[]; turn?: unknown; step?: unknown }
+            const msgs = Array.isArray(p?.messages) ? p.messages : []
+            const seqs = msgs.map((m) => Number((m as { seq?: unknown })?.seq ?? -1)).filter((n) => n >= 0)
+            const firstSeq = seqs.length ? Math.min(...seqs) : -1
+            const lastSeq = seqs.length ? Math.max(...seqs) : -1
+            const prev = preSteps.filter((x) => x.sid === String(p?.agent?.session?.id ?? '')).slice(-1)[0]
+            preSteps.push({
+              sid: String(p?.agent?.session?.id ?? '').slice(-8),
+              step: Number(p?.step ?? -1),
+              n: msgs.length,
+              firstSeq,
+              lastSeq,
+              delta: prev ? msgs.length - prev.n : 0,
+              // 宿主是否已把 runtime context 作为消息塞进来（判"追加消息"这条路是否已被宿主自己走通）
+              hasCtx: msgs.some((m) => {
+                const c = (m as { content?: unknown }).content
+                const t = Array.isArray(c) ? c.map((b) => String((b as { text?: unknown })?.text ?? '')).join('') : ''
+                return t.includes('Current runtime context') || t.includes('【认知环')
+              }),
+              isFirst: !prev,
+              at: Date.now(),
+            })
+            if (preSteps.length > 60) preSteps.splice(0, preSteps.length - 60)
+          } catch { /* 观测失败绝不影响这一步 */ }
+          return await next()
+        }))
+        d.logger.info?.('[shoucang] pre-step 只读观测已挂（不改行为）')
+      } catch (e) { d.logger.warn?.('[shoucang] pre-step 观测挂载失败：' + String((e as Error)?.message || e)) }
+    }  } else {
     d.logger.warn?.('[shoucang] systemPrompt 能力不可用，R1 热记忆注入未注册')
   }
 }

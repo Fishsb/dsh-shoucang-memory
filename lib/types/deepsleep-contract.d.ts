@@ -95,7 +95,7 @@ export interface SleepHousekeep {
     bankSnapshot(label: string): Promise<void>;
     embedCfgOf(): EmbedCfg;
 }
-/** ⑦ 状态机自持的可变状态（2 字段；由 createDeepSleep 构造后注入 run 编排器） */
+/** ⑦ 状态机自持的可变状态（3 字段；由 createDeepSleep 构造后注入 run 编排器） */
 export interface SleepState {
     /** ⚠ 装箱成对象：runDeepSleep 会写它，标量经解构传递是**快照**，写不回闭包 */
     streak: {
@@ -103,6 +103,20 @@ export interface SleepState {
     };
     /** 痕迹窗口起点（必须在推进 lastDeepSleepAt **之前**取值，否则窗口恒空） */
     traceSince(): number;
+    /**
+     * S-P1a（2026-09-15）**本纪元标识**（`epoch-<起时刻 ms>`，见 `deepsleep-core#epochIdOf`）。
+     * 同样是**装箱**：触发点（machine）写、编排器（run）读，解构标量写不回去。
+     * `v === null` = 尚无纪元（启动后、首次触发前）。
+     * `since` = 该纪元的**窗口起点**（S-P1d 起止暴露用）。
+     *   ⚠ **必须在此存下来**：`lastDeepSleepAt` 在触发瞬间就被推到 `now`，之后再调 `traceSince()`
+     *   拿到的是**新窗口**起点而非本纪元起点 —— 若靠 `traceSince()` 现取，面板显示的"纪元起点"
+     *   会随水位推进而漂移（读数与审计 `epochSince` 不一致）。
+     */
+    epoch: {
+        v: string | null;
+        since: number | null;
+        pendingChunk: number | null;
+    };
 }
 /**
  * 组装入口（7 字段）。distill.ts 的 registerDistill 是唯一构造方。

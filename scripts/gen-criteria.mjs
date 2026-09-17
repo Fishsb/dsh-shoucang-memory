@@ -47,6 +47,12 @@ const buildTs = () => {
     lines.push(`export const ${name} = ${JSON.stringify(val, null, 2)} as const`)
     lines.push('')
   }
+  // J0（2026-09-15）**阈值登记制投影**：TS 面只带**紧凑行**（id/value/owner/preregistered/samples）——
+  //   完整版（预注册判据/结论/复检触发/回滚）进 `criteria.md`（人读）与 `criteria-gate.json`（脚本面），
+  //   依据 [flow] 教训准入路径「契约进包有成本」：长 note 不进 TS。
+  lines.push('export interface ThresholdEntry { id: string; value: unknown; owner: string; preregistered: boolean; samples: number }')
+  lines.push(`export const THRESHOLDS: { note: string; entries: ThresholdEntry[] } = ${JSON.stringify({ note: '阈值登记制（J0·2026-09-15）：任何影响「接受/拒绝/归类/取舍」判断的数值阈值都必须登记；机检 scripts/check-threshold-registry.mjs。', entries: ((reg.thresholds && reg.thresholds.entries) || []).map((e) => ({ id: e.id, value: e.value, owner: e.owner, preregistered: !!e.preregistered, samples: Number(e.samples) || 0 })) }, null, 2)}`)
+  lines.push('')
   // 2026-09-14（P0a）：接线申报 —— 供 audit-architecture.mjs 判定「扇入 0 必须申报」
   // ⚠ 不用裸 `as const`：注册表 `pending` 现在是**空数组**（零豁免），裸断言会让消费方拿到
   //   `readonly []` ⇒ 元素类型退化为 `never`，`pending.some((p) => p.name)` 直接编译不过
@@ -54,7 +60,7 @@ const buildTs = () => {
   //   **投影的类型不该随数据内容变化** —— 故显式标注稳定类型，空表与满表同形。
   lines.push('export const WIRING: { note: string; why: string; entryOk: readonly string[]; typeOnlyOk: readonly string[]; pending: ReadonlyArray<{ name: string; until: string; reason?: string }>; pendingNote?: string } = ' + JSON.stringify(reg.wiring, null, 2))
   lines.push('')
-  lines.push(`export const CRITERIA_ROWS = ${JSON.stringify([...reg.ingest.criteria, ...reg.consolidate.criteria].map((c) => ({ id: c.id, domain: c.id.split('.')[0], kind: c.kind, text: c.text, params: c.params })), null, 2)} as const`)
+  lines.push(`export const CRITERIA_ROWS = ${JSON.stringify([...reg.ingest.criteria, ...reg.consolidate.criteria].map((c) => ({ id: c.id, domain: c.id.split('.')[0], kind: c.kind, judgeKind: c.judgeKind, text: c.text, params: c.params })), null, 2)} as const`)
   lines.push('')
   // S0（2026-09-14）：内容类型契约投影 —— 供 src/content-types.ts 消费（含 25 类型 + 4 结构性；
   //   md 投影自持长 note，TS 投影只带短 note 以控包体（依据 [flow] 教训准入路径「契约进包有成本」）。
@@ -94,11 +100,22 @@ const buildMd = () => {
   for (const [key, dom] of [['ingest', reg.ingest], ['consolidate', reg.consolidate]]) {
     o.push(`## L1 · ${dom.label}（domain=\`${dom.domain}\`）`)
     o.push('')
-    o.push('| 判据 id | 强制 | 内容 | 参数 |')
-    o.push('|---|---|---|---|')
-    for (const c of dom.criteria) o.push(`| \`${c.id}\` | ${c.kind} | ${c.text} | \`${JSON.stringify(c.params)}\` |`)
+    o.push('| 判据 id | 强制 | 裁决机制 | 内容 | 参数 |')
+    o.push('|---|---|---|---|---|')
+    for (const c of dom.criteria) o.push(`| \`${c.id}\` | ${c.kind} | \`${c.judgeKind || '⚠未声明'}\` | ${c.text} | \`${JSON.stringify(c.params)}\` |`)
     o.push('')
   }
+  o.push('## 阈值登记（J0 · 2026-09-15 · 阈值登记制）')
+  o.push('')
+  if (reg.thresholds && reg.thresholds.note) o.push(`> ${reg.thresholds.note}`)
+  o.push('')
+  o.push('| 阈值 id | 值 | 归属 | 预注册 | 样本 | 结论 | 复检触发 |')
+  o.push('|---|---|---|---|---|---|---|')
+  for (const e of (reg.thresholds && reg.thresholds.entries) || []) {
+    const v = typeof e.value === 'object' ? '`' + JSON.stringify(e.value) + '`' : `${e.value}`
+    o.push(`| \`${e.id}\` | ${v} | \`${e.owner}\` | ${e.preregistered ? '✅' : '❌'} | ${e.samples} | ${e.conclusion || '—'} | ${e.recheck || '—'} |`)
+  }
+  o.push('')
   o.push('## 载体契约（v2.2 · layer / form / inject）')
   o.push('')
   o.push('| 标签 | 层 | 形式 | 可注入性 |')
@@ -195,6 +212,7 @@ const buildGate = () => JSON.stringify({
   score: reg.surface.score,
   maturation: reg.maturation,
   trigger: reg.trigger,
+  thresholds: reg.thresholds,
   ledger: reg.judgement.ledger,
   surface: reg.surface,
   health: reg.health,

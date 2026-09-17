@@ -117,9 +117,23 @@ for (const f of srcFiles) {
 // 例外白名单：由**别的构建链**产出的模块（`client` ← `src-client/` 经 `npm run build:client`）。
 // 判 FAIL 而非 INFO：孤儿模块一定可删，且它与"陈旧符号"不同——后者可能是生成器产物，前者不可能。
 const GEN_ONLY = new Set(['client'])
-const libTopJs = readdirSync(LIB).filter((f) => f.endsWith('.js'))
+/** 递归收集 lib 下的**全部**模块产物。
+ *  2026-09-17 修（M1 · 圆桌会审 P0）：原实现只看 `lib` 顶层 `.js` —— 实测扫描面仅 70/209 件
+ *  ⇒ `lib/types/*.d.ts`（如已改名的 `inject-dedup.d.ts`）与 `.js.map` **无源也不判**，门照样绿。
+ *  `.js.map` 不单列（存废随同名 `.js`）；`lib/types/X.d.ts` 归到基名 `X`。 */
+function libModules (dir, rel = '') {
+  const out = []
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const r = rel ? rel + '/' + e.name : e.name
+    if (e.isDirectory()) { out.push(...libModules(dir + '/' + e.name, r)); continue }
+    if (e.name.endsWith('.js.map')) continue
+    if (e.name.endsWith('.js')) out.push({ base: r.replace(/^types\//, '').replace(/\.js$/, ''), file: r })
+    else if (e.name.endsWith('.d.ts')) out.push({ base: r.replace(/^types\//, '').replace(/\.d\.ts$/, ''), file: r })
+  }
+  return out
+}
 const srcBases = new Set(srcFiles.map((f) => f.replace(/\.ts$/, '')))
-const orphans = libTopJs.map((f) => f.replace(/\.js$/, '')).filter((b) => !srcBases.has(b) && !GEN_ONLY.has(b)).sort()
+const orphans = libModules(LIB).filter((m) => !srcBases.has(m.base) && !GEN_ONLY.has(m.base)).map((m) => m.file).sort()
 
 // 自证（archi 2026-09-12）：作用域为空 ⇒ "一致"是空集上的真命题 ⇒ 假绿。0 模块必须判 FAIL。
 if (rows.length === 0) {
@@ -143,7 +157,7 @@ else {
     for (const n of r.notes) console.log(`     ⚠ ${n}`)
     if (r.hasStar) console.log(`     ⚠ 含 export *（通配再导出，本门不展开解析）`)
   }
-  for (const o of orphans) console.log(`\n  ❌ 孤儿模块 lib/${o}.js —— src/${o}.ts 不存在（tsc 不删产物；已删源文件须手工清 lib/${o}.js + .js.map + types/${o}.d.ts）`)
+  for (const o of orphans) console.log(`\n  ❌ 孤儿产物 lib/${o} —— 对应 src/${o.replace(/^types\//, '').replace(/\.(d\.ts|js)$/, '')}.ts 不存在（tsc 不删产物；已删源文件须手工清其 lib 产物）`)
   console.log(`\n  汇总：❌ 漂移 ${failRows.length} 个模块 · ⚠ 陈旧产物 ${staleRows.length} 个 · ❌ 孤儿模块 ${orphans.length} 个 · ✅ ${rows.length - failRows.length} 个一致`)
 }
 if (failRows.length || orphans.length) {

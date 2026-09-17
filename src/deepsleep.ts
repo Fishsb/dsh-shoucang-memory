@@ -11,6 +11,7 @@
 import { readFileSync } from 'node:fs'
 import type { SessRec, SessState, DeepSleepStatus } from './deepsleep-core.js'
 import { deepSleepReplayable } from './deepsleep-core.js'
+import { idleMsOf } from './deepsleep-core.js'
 import { probeSession, type ProbeDeps } from './deepsleep-probe.js'
 import { runDeepSleep, type RunDeps } from './deepsleep-run.js'
 import { deepSleepCheck, getDeepSleepStatus, noteEvent, replayWatermark, runDeepSleepNow, type MachineDeps, type SleepMachine } from './deepsleep-machine.js'
@@ -37,7 +38,7 @@ export function createDeepSleep(C: DeepSleepCtx) {
    */
   const traceSince = (): number => Number(m.lastDeepSleepAt) || 0
   /** 连续「未消化」轮数（G-19 策略 C）：每轮 failed 累加、任一轮 done 归零。仅内存态（重启从 0 起算）。 */
-  const state: SleepState = { streak: { v: 0 }, traceSince }
+  const state: SleepState = { streak: { v: 0 }, traceSince, epoch: { v: null, since: null, pendingChunk: null } }
 
   // ── 依赖按领域窄传：每个实现函数只拿自己那 3–7 个 ──
   const probeDeps: ProbeDeps = {
@@ -103,9 +104,9 @@ export function createDeepSleep(C: DeepSleepCtx) {
     runDeepSleepNow: () => runDeepSleepNow(dep, m),
     getConfig: () => ({
       enableDeepSleep: !!cfg.config.enableDeepSleep,
-      deepSleepIdleMs: Number(cfg.config.deepSleepIdleMs) || 10800000,
+      deepSleepIdleMs: idleMsOf(cfg.config),
       deepSleepProbe: !!cfg.config.deepSleepProbe,
-      deepSleepProbeAfterMs: Number(cfg.config.deepSleepProbeAfterMs) || (Number(cfg.config.deepSleepIdleMs) || 10800000),
+      deepSleepProbeAfterMs: Number(cfg.config.deepSleepProbeAfterMs) || idleMsOf(cfg.config),
       deepSleepProbeWindowMs: Number(cfg.config.deepSleepProbeWindowMs) || 60000,
     }),
   }

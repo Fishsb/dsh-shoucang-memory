@@ -25,12 +25,17 @@ export interface SleepMaterials {
   pendingDecisions: string
   hotCtx: string
   interCtx: string
+  /** S-P2c（2026-09-16）**本纪元工具使用**（第 12 段材料，来自 `audit/tool-usage.jsonl`）。
+   *  与"经历"其余各段互补：这里回答的是「当天用了**哪些工具**、各用了几次」——
+   *  人类睡眠重构的原料是「经历 × 用到的工具知识」的结合，此段即"工具"那一维的入口。
+   *  ⚠ 只含 工具名/次数/会话短码/日期，**不含参数原文**（隐私红线由 `check-journal-privacy` 守）。 */
+  toolUsage: string
   /** S3-3/S3-4（2026-09-14）材料段**条数**：审计可见化用 —— 让"本轮给了几条候选"可查
    *  （此前审计只有消费结果 `forgetArchived`/`forgetKept`，没有输入量）。 */
-  counts: { split: number; forget: number; replay: number; hot: number; inter: number; pending: number }
+  counts: { split: number; forget: number; replay: number; hot: number; inter: number; pending: number; tools: number }
 }
 
-export function gatherMaterials(root: string): SleepMaterials {
+export function gatherMaterials(root: string, sinceMs?: number): SleepMaterials {
   const currentPrinciples = (() => { try { return readFileSync(join(root, 'AGENT.md'), 'utf8') } catch { return '' } })()
   const currentList = currentPrinciples.split(/\r?\n/).map((l) => l.trim()).filter((l) => /^\[(原则|路径)\]/.test(l)).join('\n') || '（暂无条目）'
   // 双画像巩固材料：现行 USER/AGENT 画像全文（行格式门禁的 replace 依据）
@@ -214,12 +219,34 @@ export function gatherMaterials(root: string): SleepMaterials {
     if (!t || t === '（无）' || t === '（暂无条目）' || t === '（无 MEMORY.md）') return 0
     return t.split('\n').filter((l) => { const x = l.trim(); return !!x && !x.startsWith('##') && x !== '---' }).length
   }
+  /* S-P2c（2026-09-16）**本纪元工具使用**（第 12 段）。数据源 = `audit/tool-usage.jsonl`
+   *  （由 `skill/scripts/harvest-access.mjs` 在同一遍转录遍历里聚合，**只含工具名/次数/短码/日期**）。
+   * ⚠ **窗口粒度 = 日**：日志的 `t` 是 `YYYY-MM-DD`（采集层为控体积与隐私只留日期），
+   *   故此处按"日期 ≥ 窗口起点所在日"过滤 —— **比其它段的毫秒窗口粗**。这是已知取舍，
+   *   若要精确到分钟，须改采集层的时间字段形态（连带改隐私门的 `t` 形态判据）。 */
+  const toolUsage = (() => {
+    try {
+      const sinceDay = sinceMs ? new Date(Number(sinceMs)).toISOString().slice(0, 10) : ''
+      const raw = readFileSync(join(root, 'audit', 'tool-usage.jsonl'), 'utf8')
+      const rows: Array<{ t: string; sid: string; tool: string; n: number }> = []
+      for (const l of raw.split(/\r?\n/)) {
+        const s = l.trim(); if (!s) continue
+        try { const o = JSON.parse(s); if (o && o.tool) rows.push(o) } catch { /* 坏行跳过（材料装配绝不因单行失败） */ }
+      }
+      const inWin = rows.filter((r) => !sinceDay || String(r.t) >= sinceDay)
+      if (!inWin.length) return ''
+      // 按工具汇总（跨会话），次数降序 —— 给模型的是"用了什么、多常用"，不是流水
+      const byTool = new Map<string, number>()
+      for (const r of inWin) byTool.set(r.tool, (byTool.get(r.tool) || 0) + (Number(r.n) || 0))
+      return [...byTool.entries()].sort((a, b) => b[1] - a[1]).map(([t, n]) => `- ${t} × ${n}`).join('\n')
+    } catch { return '' } // 日志缺席/不可读 ⇒ 空段（既有行为不变）
+  })()
   return {
-    currentPrinciples, currentList, currentProfiles, currentMemIndex, currentTreeSections, splitCandidates, forgetCandidates, replayRecent, hotCtx, interCtx, pendingDecisions,
+    currentPrinciples, currentList, currentProfiles, currentMemIndex, currentTreeSections, splitCandidates, forgetCandidates, replayRecent, hotCtx, interCtx, pendingDecisions, toolUsage,
     // S3-3/S3-4（2026-09-14）：让"本轮给了多少条候选"进审计 —— 与消费结果配对后，才能区分
     //   「没候选可消费」（输入 0）与「有候选但代理没消费」（输入 >0 而产出 0）—— 两者此前**表现完全相同**。
     // 2026-09-15（H-1）：`pending` 同理 —— 它一进审计，「outcomes 恒 0」就能立刻区分
     //   「没有待回收裁决」与「有 49 条却没回收」。
-    counts: { split: countOf(splitCandidates), forget: countOf(forgetCandidates), replay: countOf(replayRecent), hot: countOf(hotCtx), inter: countOf(interCtx), pending: countOf(pendingDecisions) },
+    counts: { split: countOf(splitCandidates), forget: countOf(forgetCandidates), replay: countOf(replayRecent), hot: countOf(hotCtx), inter: countOf(interCtx), pending: countOf(pendingDecisions), tools: countOf(toolUsage) },
   }
 }

@@ -110,7 +110,8 @@ const gateBase = (p) => {
 const g1 = gateBase(path.join(t2, 'gate1.txt'));
 run('门禁-正常', 'node', [gate, 'MEMORY.md', g1], [0]);
 
-// 5) 门禁-超容量 → exit 1
+// 5) 门禁-超容量 → **默认 exit 0（提醒后放行）**；严格模式见 方案C 的 strict 用例
+//    2026-09-16 用户判定：容量不是硬限 ⇒ 期望由 1 改 0（提醒即可，不阻断写入）
 // 追加量按实际基座推导：原固定 '内容'×1000=2,000 字在容量 5,000 下**不再必然越线**
 //（2026-09-11 实测基座 2,951 + 2,026 = 4,977 < 5,000 ⇒ 落成格式错 exit 4，用例假红）。
 const g2 = path.join(t2, 'gate2.txt');
@@ -120,7 +121,7 @@ fs.copyFileSync(g1, g2);
   const over = CAP['MEMORY.md'] - baseChars2 + 200; // 保证越过容量线 200 字（含追加行前缀）
   fs.appendFileSync(g2, '\n§\n' + '[env] 超量（2026-09-01）[agent]：' + '内容'.repeat(Math.ceil(Math.max(0, over) / 2)));
 }
-run('门禁-超容量', 'node', [gate, 'MEMORY.md', g2], [1]);
+run('门禁-超容量（默认放行）', 'node', [gate, 'MEMORY.md', g2], [0]);
 
 // 6) 门禁-悬空指针 → exit 2
 const g3 = path.join(t2, 'gate3.txt');
@@ -431,9 +432,16 @@ try {
   const r2 = (() => { try { execFileSync('node', [ap, target, '不存在的小节xyz', 'x'], { cwd: te, env: { ...process.env, MEMORY_ROOT: te }, stdio: 'pipe' }); return 0; } catch (e) { return e.status; } })();
   const r3 = (() => { try { execFileSync('node', [ap, 'docs/evil.md', 'x', 'y'], { cwd: te, env: { ...process.env, MEMORY_ROOT: te }, stdio: 'pipe' }); return 0; } catch (e) { return e.status; } })();
   const okErr = r2 === 2 && r3 === 2;
-  const okGate = (() => { try { execFileSync('node', [ap, 'MEMORY.md', 'x', '--new', '[env] ' + '超限填充内容'.repeat(1000) + ' → notes/env.md §x'], { cwd: te, env: { ...process.env, MEMORY_ROOT: te }, stdio: 'pipe' }); return 0; } catch (e) { return e.status; } })() === 1;
+  /* 2026-09-16 **用户判定：容量不是硬限**（「直接全部失败或者拒绝」不符意图，**提醒就可以**）。
+   * ⇒ 默认：超限**提醒后照写**（exit 0）；严格模式 `SHOUCANG_CAP_STRICT=1` **保留旧行为**（exit 1）。
+   * 两条都测 —— 只测放宽会把"能力还在不在"这点丢掉。 */
+  const capArgs = ['MEMORY.md', 'x', '--new', '[env] ' + '超限填充内容'.repeat(1000) + ' → notes/env.md §x'];
+  const capRun = (extraEnv) => (() => { try { execFileSync('node', [ap, ...capArgs], { cwd: te, env: { ...process.env, MEMORY_ROOT: te, ...extraEnv }, stdio: 'pipe' }); return 0; } catch (e) { return e.status; } })();
+  const capSoft = capRun({});
+  const capStrict = capRun({ SHOUCANG_CAP_STRICT: '1' });
+  const okGate = capSoft === 0 && capStrict === 1;
   if (okAppend && okErr && okGate) pass++; else fail++;
-  console.log(`${okAppend && okErr && okGate ? '✅' : '❌'} 方案C-memory-append（追加/无锚exit2/白名单exit2/主文档超限exit1）`);
+  console.log(`${okAppend && okErr && okGate ? '✅' : '❌'} 方案C-memory-append（追加/无锚exit2/白名单exit2/**主文档超限默认放行exit${capSoft}·strict仍拒exit${capStrict}**）`);
   fs.rmSync(te, { recursive: true, force: true });
 } catch (e) { fail++; console.log('❌ 方案C-memory-append（异常: ' + failMsg(e) + '）'); }
 
@@ -462,7 +470,7 @@ try {
   run('原则门-正常', 'node', [gate, 'AGENT.md', p1], [0]);
   const p2 = path.join(tg, 'p2.txt');
   fs.writeFileSync(p2, ('[原则] 超限填充 · 原则填充内容超限'.repeat(200) + ' → notes/lessons.md §x') + '\n');
-  run('原则门-超容量', 'node', [gate, 'AGENT.md', p2], [1]);
+  run('原则门-超容量（默认放行）', 'node', [gate, 'AGENT.md', p2], [0]);
   const p3 = path.join(tg, 'p3.txt');
   fs.writeFileSync(p3, '[经验] 缺概况段与指针行\n');
   run('原则门-格式违规', 'node', [gate, 'AGENT.md', p3], [4]);

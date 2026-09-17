@@ -135,6 +135,10 @@ const FIX = `var FIX = {
    * 取值让"停滞 2h"落在判定线(1h)与阈值(3h)之间 ⇒ 三节点样式（done/当前/未达）一张图全可见。 */
   '/deepsleep': { active:true, enabled:true, running:0, ended:14, probing:7, suspect:6, stalled:5, idleMs:10800000,
     probeAfterMs:3600000, lastActivityAt:Date.now()-7200000, lastDeepSleepAt:Date.now()-86400000,
+    // S-P1d（2026-09-15）夹具必须镜像真实契约：/deepsleep 现带 currentEpoch + epochSince（纪元起止）。
+    // 本项是被【出图】抓出来的：先只改了客户端，重出图后那一行没出现 —— 根因就是夹具缺字段。
+    // 教训：契约加字段时出图夹具必须同步，否则渲染级证据会对新面系统性失明。
+    currentEpoch: 'epoch-1789504353992', epochSince: Date.now()-86400000,
     nextEligibleAt:Date.now()+3600000,
     /* 会话列表：缺它「最近会话」卡整块不出（原型有该卡，出图必须能核对形态） */
     /* 2026-09-14 会话行名改三块（工作区+会话栏标题+编码）：夹具须带 workspace/title，否则新路径零覆盖；
@@ -185,6 +189,21 @@ setTimeout(function () {
       /* 手写按钮（回滚后的被测对象）：取首个可见 .sc-btn 的高度 */
       var hb = qsa('.sc-btn').filter(function (b) { return b.getBoundingClientRect().height > 0 })[0];
       out.handBtn = { count: qsa('.sc-btn').length, h: hb ? Math.round(hb.getBoundingClientRect().height) : -1 };
+      /* S-P1d（2026-09-15）**纪元行的 DOM 几何** —— 用户指正后加的判据：
+       *   面板内容区有**滑动导轨**（内部滚动容器）⇒ **纯像素截图对视口折叠线以下系统性失明**，
+       *   「图里没有」≠「没渲染」。故必须用 **DOM 几何**独立判一次：元素在不在、rect 是否非零、
+       *   它在**滚动容器内容区**的什么位置（相对 viewEl 的 top）。
+       *   本探针不依赖看得见与否，因此对折叠免疫。 */
+      out.epochRow = (function () {
+        var hit = null;
+        qsa('.sc-desc, .sc-card-sub, .sc-kpi-sub').forEach(function (e) {
+          if (!hit && (e.textContent || '').indexOf('epoch-') >= 0) hit = e;
+        });
+        if (!hit) return { found: false };
+        var rr = R(hit);
+        var vt = out.viewEl ? out.viewEl.t : 0;
+        return { found: true, text: (hit.textContent || '').slice(0, 90), rect: rr, relTop: rr.t - vt, visibleInViewport: rr.t >= 0 && rr.t < innerHeight };
+      })();
       var wb = qsa('wa-button');
       /* 组件按钮的标签色必须可读（视觉复核抓到过"蓝字压紫底"）：取 shadow DOM 内标签的计算色，
        * 用"取数字"而非正则解析 —— 该探针整体是模板字符串，正则转义易踩坑；并整体 try/catch 防拖垮全件。 */
@@ -298,6 +317,14 @@ setTimeout(function () {
 
 /** 截图模式（S3 起）：与断言用同一 harness 出图 —— UI 结论必须视觉实证，且不另起一套夹具 */
 function shoot (w, h, view, out, tab) {
+  /* ⚠⚠ 2026-09-16 **根因实修（本仓"渲染级证据"整环失效的真因）**：
+   *   Chrome 的 `--screenshot=<相对路径>` **静默不写文件**（实测：相对 `deliverables\ui1-shots\rel.png`
+   *   与正斜杠写法**都不生成**；改成绝对路径立刻写出 1116 B）。而本函数此前把 CLI 给的 `dir`
+   *   （相对路径）直接交给 Chrome ⇒ **每一张图都从未被写出**；叠加"用 `existsSync` 判成功"，
+   *   于是**永远显示旧图的 `(94 KB)`、汇总永远 `12/12 张有效`** ⇒ 门禁全绿而**出图通道全程失效**。
+   *   ⇒ 唯一修法：**交给 Chrome 前一律 `resolve()` 成绝对路径**。
+   *   教训（值得记入纪律）：**"文件存在"不能作为"本次动作成功"的判据** —— 二者在"有历史残留"时不可分。 */
+  out = resolve(out)
   const tmp = mkdtempSync(join(tmpdir(), 'sc-shot-'))
   const f = join(tmp, 'shot.html')
   const client = readFileSync(CLIENT, 'utf8')
@@ -324,13 +351,22 @@ setTimeout(function () {
 }, 350);
 </script></body></html>`
   writeFileSync(f, html, 'utf8')
+  /* ⚠ 2026-09-16 实修（本轮踩到）：**先删目标文件**。
+   *   原实现用 `existsSync(out)` 判"出图成功"，而 `catch` 又吞掉 Chrome 的非零退出 ⇒
+   *   **一旦目标文件是上次残留，"本次失败"与"本次成功"完全不可区分** ——
+   *   实测因此连看两轮旧图、据旧图误判"纪元行未渲染"（真相反：DOM 几何 h=19px 在视口内）。
+   *   先删之后，`existsSync(out)` 才真正等价于"**本次写出**"。 */
+  rmSync(out, { force: true })
   try {
     execFileSync(CHROME, ['--headless=new', '--disable-gpu', '--hide-scrollbars', '--force-device-scale-factor=1',
       '--user-data-dir=' + join(tmp, 'cp'), '--virtual-time-budget=6000', '--window-size=' + w + ',' + h,
       '--screenshot=' + out, 'file:///' + f], { stdio: 'ignore', timeout: 120000 })
-  } catch (e) { /* Chrome 截图偶发非零退出，文件可能已生成 */ }
+  } catch (e) { /* Chrome 截图偶发非零退出，文件可能已生成（**故下面按文件实况判，不按退出码**） */ }
   rmSync(tmp, { recursive: true, force: true })
-  console.log('shot ' + view + ' → ' + out + (existsSync(out) ? ' (' + Math.round(statSync(out).size / 1024) + ' KB)' : ' ✗'))
+  const shotSize = existsSync(out) ? statSync(out).size : 0
+  const shotOk = shotSize > 2048
+  console.log('shot ' + view + ' → ' + out + (shotOk ? ' (' + Math.round(shotSize / 1024) + ' KB)' : ' ✗（**本次未写出**：Chrome 失败或产物过小 ' + shotSize + 'B）'))
+  return shotOk
 }
 
 /* ── 整页长图（--full-shots <dir>）：逐页核对必须看整页，不是首屏 ──
@@ -441,9 +477,17 @@ function skeletonOf (view, proto) {
   return { html: '', lines: skNumber(b, '1', lines).slice(1) }
 }
 
+/* 整页长图的最小有效字节数（与 `--shots` 段同源：**同一文件不得三套标准**） */
+const SHOT_MIN_BYTES = 5000
+
 function fullShot (view, out, proto) {
   /* 截图必须用**绝对路径**：Chrome 对相对路径按自己的 cwd 解析，文件会静默落到别处（表现为「✗」） */
   out = resolve(out)
+  /* ⚠ 2026-09-17 实修（M2 · 圆桌会审 P0）：**先删目标文件** —— 与 `run()` 的 `:359` 同一条判据。
+   *   原 `fullShot` 没有这一步，且失败只打印普通 console.log（**不调 bad()**）⇒
+   *   「本次失败」与「捡到上次残留」不可区分，且**截图全缺也 exit 0**（实测）。
+   *   现改为返回 verdict，由 `--full-shots` 段计入 `fail` 计数。 */
+  rmSync(out, { force: true })
   const tmp = mkdtempSync(join(tmpdir(), 'sc-full-'))
   const f = join(tmp, 'full.html')
   writeFileSync(f, pageHtml(view, proto, heightProbe(proto ? '#newFrame .page.on' : '#scpanl-modal')), 'utf8')
@@ -465,12 +509,15 @@ function fullShot (view, out, proto) {
   if (!h || h < 400) {
     rmSync(tmp, { recursive: true, force: true })
     console.log('full ' + (proto ? '原型' : '面板') + ' ' + view + ' ✗ 取不到高度（h=' + h + ' · ' + why + '）')
-    return
+    return { ok: false, size: 0, reason: 'h<400' }
   }
   try { chrome(String(h + 24)) } catch (e) { /* 截图偶发非零退出，文件可能已生成 */ }
   rmSync(tmp, { recursive: true, force: true })
+  const size = existsSync(out) ? statSync(out).size : 0
+  const okShot = size >= SHOT_MIN_BYTES
   console.log('full ' + (proto ? '原型' : '面板') + ' ' + view + ' → ' + out +
-    (existsSync(out) ? ' (' + h + 'px · ' + Math.round(statSync(out).size / 1024) + ' KB)' : ' ✗'))
+    (okShot ? ' (' + h + 'px · ' + Math.round(size / 1024) + ' KB)' : ' ✗（本次未写出或过小 ' + size + 'B）'))
+  return { ok: okShot, size }
 }
 
 function run (w, h, view) {
@@ -578,6 +625,17 @@ VIEWS.slice(1).forEach((v) => {
   const g = run(1280, 860, v)
   if (!g) return bad(v + '：取不到几何数据')
   g.scroll && g.scroll.sh > 40 ? ok(v + ' 渲染非空（scrollHeight ' + g.scroll.sh + '）') : bad(v + ' 渲染为空')
+  /* S-P1d（2026-09-15）**深度睡眠页 · 纪元行的渲染级几何判据**（用户指正后立）：
+   *   **面板内容区有滑动导轨（内部滚动容器）** ⇒ **纯像素截图对视口折叠线以下系统性失明**，
+   *   「图里没有」≠「没渲染」（本仓已两次栽在"判据看不见"上：H-5/H-16 是看代码对位置失明）。
+   *   ⇒ 渲染类判据一律 **图证 + DOM 几何** 双判据：此处查 `out.epochRow`（探针见 PROBE 的 S-P1d 段），
+   *     只看"元素在不在 DOM、rect 是否非零" —— **与折叠、滚动位置、是否在截图内全都无关**。 */
+  if (v === '深度睡眠') {
+    const er = g.epochRow || {}
+    er.found && er.rect && er.rect.h > 0
+      ? ok('S-P1d 纪元行已渲染（DOM 几何 h=' + er.rect.h + 'px · 相对内容区 top=' + er.relTop + 'px · 视口内=' + er.visibleInViewport + '）')
+      : bad('S-P1d 纪元行**未渲染**（DOM 里没有含 epoch- 文本的节点）—— 数据面已有字段却到不了 UI')
+  }
   /* S3：组件库 Tab —— 结构齐备 + 同时只显示一个面板 + web component 已注册 */
   /* S3：设置页的表单控件必须已由组件库承载且**值已绑定**（不是空壳） */
   if (v === '设置') {
@@ -752,7 +810,20 @@ if (process.argv.includes('--shots')) {
    * 门禁全绿也照样错；只有出图肉眼比对才看得见。 */
   shoot(1280, 860, '画像', join(dir, 'shot-persona.png'))
   shoot(1280, 860, '插件集合', join(dir, 'shot-suite.png'))
+  /* S-P1d 判据（2026-09-15 · 用户指正后立）**深度睡眠页 · 纪元行的 DOM 几何断言**。
+   *   ⚠ 为什么挂在这里而不是上面的冒烟循环：实测该循环的 `VIEWS.slice(1)` **不含「深度睡眠」**
+   *     （我先把断言写在那里，跑完日志里**一条 S-P1d 都没有** ⇒ 断言根本没执行 ⇒ 典型的"以为覆盖了"）。
+   *   **面板内容区有滑动导轨（内部滚动容器）** ⇒ **纯像素截图对视口折叠线以下系统性失明**，
+   *     「图里没有」≠「没渲染」。故渲染类判据一律 **图证 + DOM 几何** 双判据：
+   *     此处 `run()` 重取该视图探针，只看"元素在不在 DOM、rect 是否非零" —— 与折叠/滚动/截图无关。 */
   shoot(1280, 860, '深度睡眠', join(dir, 'shot-sleep.png'))
+  {
+    const gs = run(1280, 860, '深度睡眠')
+    const er = (gs && gs.epochRow) || {}
+    er.found && er.rect && er.rect.h > 0
+      ? ok('S-P1d 纪元行已渲染（DOM 几何 h=' + er.rect.h + 'px · 相对内容区 top=' + er.relTop + 'px · 视口内=' + er.visibleInViewport + ' · text=' + String(er.text || '').slice(0, 46) + '）')
+      : bad('S-P1d 纪元行**未渲染**（DOM 里没有含 epoch- 文本的节点）—— 数据面已有字段却到不了 UI')
+  }
   /* 架构页（2026-09-13 架构重构后新增）——**加视图必须同时进视觉验收**：
    *   本轮实证：新视图曾因图标 key 缺失让**整页白屏**，而出图集里没有它 ⇒ 差点漏判。
    *   该页是 5 Tab（内容环/记录与图/观测/装配/认知环旋钮）+ 通用事实表的复合结构，
@@ -771,7 +842,7 @@ if (process.argv.includes('--shots')) {
     'shot-persona', 'shot-suite', 'shot-sleep', 'shot-arch', 'shot-arch-asm', 'shot-arch-mcl']
   const missing = SHOTS.filter((n) => {
     const p = join(dir, n + '.png')
-    return !existsSync(p) || statSync(p).size < 5000
+    return !existsSync(p) || statSync(p).size < SHOT_MIN_BYTES
   })
   console.log(`\n出图汇总：${SHOTS.length - missing.length}/${SHOTS.length} 张有效（目录 ${dir}）`)
   if (missing.length) {
@@ -802,10 +873,15 @@ if (process.argv.includes('--full-shots')) {
   const dir = process.argv[process.argv.indexOf('--full-shots') + 1] || tmpdir()
   /* Chrome 不会自建目录：目标目录不存在时截图静默不落盘（表现为「→ out ✗」，极易误判为渲染失败） */
   mkdirSync(dir, { recursive: true })
+  let missing = 0
   for (const v of Object.keys(VIEW_PAGE)) {
-    fullShot(v, join(dir, 'panel-' + VIEW_PAGE[v] + '.png'), false)
-    fullShot(v, join(dir, 'proto-' + VIEW_PAGE[v] + '.png'), true)
+    const a = fullShot(v, join(dir, 'panel-' + VIEW_PAGE[v] + '.png'), false)
+    const b = fullShot(v, join(dir, 'proto-' + VIEW_PAGE[v] + '.png'), true)
+    if (!a.ok) missing++
+    if (!b.ok) missing++
   }
+  /* 缺件必须进入 fail 计数（2026-09-17 修 M2）：原实现只打印 ✗、退出码仍为 0 ⇒「门绿而图缺」 */
+  if (missing) bad(`整页长图缺件 ${missing} 张（输出目录 ${dir}）—— ✗ 必须影响退出码，不得只印字样`)
 }
 
 /* wa-icon 可渲染性（P2 前置门禁）：数据已在 PROBE 的 out.waIcon 里。

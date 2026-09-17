@@ -173,6 +173,18 @@ function renderDeepSleep(view) {
         if (i < 2) sm.appendChild(el('div', 'sc-sm-seg' + (idx < stage ? ' done' : '')));
       });
       smCard.body.appendChild(sm);
+      /* S-P1d（2026-09-15）**当前纪元起止** —— AC-R0.5 要求面板可见「本纪元 id + 窗口区间」。
+       *   数据源 = `/deepsleep` 既有字段（`currentEpoch` / `epochSince` / `lastDeepSleepAt`），
+       *   **零新端点、零新采集**（沿用 S3-6「状态标签直接由实例既有字段派生」的口径）。
+       *   ⚠ 为什么区间起点要后端专门存：水位在触发瞬间被推到 now，事后现取 `traceSince()` 会得到
+       *     **新窗口**起点 ⇒ 面板读数会与审计 `epochSince` 不一致（后端已按此实现并有判据锁住）。
+       *   纪元 id 一并显示是为了**与审计行对上**（`audit.deep-sleep` 同带该字段），便于按纪元追溯。 */
+      if (r.currentEpoch) {
+        var epFrom = r.epochSince ? dsFmtTime(r.epochSince) : '（起点未知）';
+        var epTo = r.lastDeepSleepAt ? dsFmtTime(r.lastDeepSleepAt) : '进行中';
+        smCard.body.appendChild(el('div', 'sc-desc',
+          '当前纪元 ' + r.currentEpoch + ' · 窗口 ' + epFrom + ' → ' + epTo));
+      }
       var water = el('div', 'sc-prog');
       var wbar = document.createElement('wa-progress-bar');
       wbar.className = 'sc-prog-bar';

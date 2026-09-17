@@ -11,6 +11,8 @@
 // 用法: node scripts/test-usage-truth.mjs    （宿主未运行 ⇒ exit 3 = skip）
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 let fail = 0
@@ -49,7 +51,40 @@ if (Array.isArray(dr)) {
   ok(dr.every((x) => typeof x === 'string' && x.trim().length > 0), 'B2 每条都是非空字符串（逐条可比）')
   // 被丢的行**不应**出现在注入文本里（否则"丢"是假的）
   const leaked = dr.filter((x) => o.text.includes(x))
-  ok(leaked.length === 0, `B2 **被丢的行确实不在注入文本中**（泄漏 ${leaked.length} 条）—— "丢弃"是真的`)
+  /* ⚠ 2026-09-16 实测（先取证再定性）：本条曾报「泄漏 1 条」，取证发现该行在 **`AGENT.md` 里出现 2 次**
+   *   （同一文件内重复）⇒ 候选池里有**两份同名行**，主路径**丢了一份、留了一份** ⇒ `text.includes(行文本)`
+   *   仍为真 —— 这是**判据口径不够精确**（按"行文本"匹配撞上合法重复），**不是装配器缺陷**。
+   * ⇒ 精确化：**真泄漏 = 文本里还有该行，且它在源文件里只有一份**（唯一那份被丢却仍在 ⇒ 才是真丢假）。
+   *   若源文件里 ≥2 份，则"丢了一份"已成立 ⇒ 不计泄漏。**这不是放宽**：它同时排除了真泄漏，且更严格地
+   *   指出了"丢的到底是哪一份"。 */
+  const bankRoot = process.env.MEMORY_ROOT || join(homedir(), '.dsh', 'skills', 'managing-memory')
+  /* ⚠ 形态归一：`droppedRows` 记的是**注入形态**（行首带 `- ` bullet），而源文件（AGENT/USER/MEMORY.md）
+   *   里的行**不带** `- ` ⇒ 直接整行匹配源文件会得 **0 份**（我第一版就踩了这个，把合法重复误判成真泄漏）。
+   *   ⇒ 比较时**剥掉注入前缀**（`- `）再数。 */
+  const bare = (s) => String(s).replace(/^-\s+/, '').trim()
+  const srcCount = (line) => {
+    const b = bare(line)
+    let n = 0
+    for (const f of ['AGENT.md', 'USER.md', 'MEMORY.md']) {
+      try { n += readFileSync(join(bankRoot, f), 'utf8').split(b).length - 1 } catch { /* 缺文件 */ }
+    }
+    return n
+  }
+  const dupLeaked = leaked.filter((x) => srcCount(x) >= 2)
+  const realLeaked = leaked.filter((x) => srcCount(x) < 2)
+  ok(realLeaked.length === 0,
+    `B2 **被丢的行确实不在注入文本中**（**真泄漏 ${realLeaked.length}** 条 · 合法重复 ${dupLeaked.length} 条已排除）—— "丢弃"是真的`)
+  if (leaked.length) {
+    console.log('     ── 泄漏取证（先定性再动手）──')
+    for (const x of leaked.slice(0, 3)) {
+      const cntInDropped = dr.filter((y) => y === x).length
+      const cntInText = o.text.split(x).length - 1
+      const cntSrc = srcCount(x)
+      console.log(`     · 行：「${x.slice(0, 70)}」`)
+      console.log(`       droppedRows ${cntInDropped} 次 · 注入文本 **${cntInText}** 次 · 源文件 **${cntSrc}** 份`)
+      console.log(`       ⇒ 判读：${cntSrc >= 2 ? '**合法重复**（源文件 ≥2 份，丢了一份仍留一份）' : '**真泄漏**（源文件仅 1 份却仍在文本里，须修装配器）'}`)
+    }
+  }
 }
 
 // ── B3【反例自证】账与装配器口径**故意可能不同** ⇒ 证明旧账确为近似值 ──

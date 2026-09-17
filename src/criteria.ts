@@ -36,7 +36,7 @@ export function paramOf<T = unknown>(criteriaId: string, key: string, fallback: 
 }
 
 /** 项目专名/本机路径/版本号等"单项目专属"信号（跨工作区红线的确定性代理） */
-const PROJECT_SPECIFIC = /(?:[A-Za-z]:[\\/]|D:\\FF|shoucang|project-nav|prompt-enhancer|\bv?\d+\.\d+\.\d+\b)/
+const PROJECT_SPECIFIC = /(?:[A-Za-z]:[\\/]|shoucang|project-nav|prompt-enhancer|\bv?\d+\.\d+\.\d+\b)/
 
 export interface L0Input {
   /** 待判文本（候选/条目正文；可为空=只按统计判） */

@@ -57,3 +57,23 @@ export declare function cueOverlap(a: readonly string[], b: readonly string[]): 
 export declare function createSituationKeyApi(d?: SituationKeyDeps): SituationKeyApi;
 /** 供调用方做**零依赖**取维度用的常量（与注册表 `cueDims` 缺省值一致；注册表可覆盖） */
 export declare const DEFAULT_CUE_DIMS: readonly CueDim[];
+/**
+ * **任务键派生**（2026-09-17 · 情境轴去留裁决的**收益点**）。
+ *
+ * 判因（真机实测）：本维此前**读侧恒不产出**（`panel-shared#sitCtx` 只填 `scope`），
+ *   而写侧已有 **46 个真实 `task=` 键、253 条**（`build` 37 / `disk-cleanup` 31 …）——
+ *   **写进去的键结构上不参与匹配**（实测 213/375 环记录带 `task` 却零命中）。
+ *   裁决会实测：补上本键后注入集**整体换血**（A∩B=2，10/12 行变化）⇒ 该轴能区分任务。
+ *
+ * ⚠ **不做正则从 query 硬抽**（裁决会否掉了这条路，有实测）：
+ *   · 中文查询（用户主用法）抽 `[a-z0-9]+` ⇒ **恒空**（只捞到盘符字母）
+ *   · 英文查询 ⇒ **过匹配 37%**（`cleanup` 一词同时命中 `cleanup` 与 `disk-cleanup`）
+ *   ⇒ 改为**对候选词表做受控匹配**：调用方传入写侧已存在的键集合，本函数只在其中挑。
+ *
+ * 匹配规则（**确定性、零 I/O、零抛出**）：
+ *   ① 大小写归一（写侧存在 `S3-acceptance` 与 `s3-acceptance` 混用）
+ *   ② query 中**整词**命中键（按 `-` / `/` 切分后逐段比对，避免 `cleanup` 命中 `cleanup-safety`）
+ *   ③ 多个命中时取**最长键**（更具体者优先：`disk-cleanup` 胜过 `cleanup`）
+ *   ④ 无命中 ⇒ 返回 `''`（**承认缺席**——DimMem 的 "empty fields are allowed"；不硬造自由值）
+ */
+export declare function taskCueOf(query: string, known?: readonly string[]): string;

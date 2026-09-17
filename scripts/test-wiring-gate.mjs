@@ -151,6 +151,14 @@ const RULES = [
     asserts: [
       [/const prevDeepSleepAt = m.lastDeepSleepAt/g, 1, '本轮开始前先快照基准水位（回滚的落点）'],
       [/if \(r === 'failed'\) \{ m.lastDeepSleepAt = prevDeepSleepAt;/g, 1, '落点①：.then 内判 failed ⇒ 回滚到基准，而非推进到 now'],
+      /* 2026-09-16 **补一类失效：函数被调用但副作用没发生（"接线 ≠ 抵达"）**。
+       *   实测事故：抽取 `emitDeepSleepAudit`（把审计字段对象搬进函数体）时写成**只 `return` 对象**、
+       *   却**从不调用 `audit(...)`** ⇒ 名字叫 emit 却不 emit；**typecheck 不会报**（忽略返回值合法）
+       *   ⇒ 全阶段痕迹照走（`audit-done` 都写了），但 **`audit.deep-sleep` 行一行不落**，
+       *     表现为"深睡跑完了却不落审计"，排查了三轮才定位。
+       *   ⇒ 判据：调用点必须是 **`audit(emitDeepSleepAudit(`**（返回值被真正交给落账），
+       *     且函数体内**必须出现 `return {`**（否则才是"改了结构没改语义"之外的另一种错）。 */
+      [/audit\(emitDeepSleepAudit\(/g, 1, '**emit 必须真的 emit**：抽取后的调用点须为 `audit(emitDeepSleepAudit(…)`（守住"只 return 不落账"这类静默失效）'],
       // ⚠ 根因留痕（archi 2026-09-12 要求，不要只绕开不留因）：
       //   早前写的是 `/\}\.catch\(\(e\) => \{.../`，**恒 0 命中 ⇒ 假红**。原因不是换行/缩进，是
       //   漏了一个 `)`：源码原文是 `}).catch((e) => {`（`}` 与 `.catch` 之间还有一个 `)`），

@@ -1,4 +1,88 @@
 /**
+ * 触发阈值回退的**单一来源**（2026-09-15 P0.1 实证修复 · 同日扩面订正）。
+ *
+ * 缺陷（实测）：全仓曾有 **8 处**硬编码 `|| 10800000`（3h）兜底，而真正生效的缺省来自
+ *   `scheduler.ts` 的 zod `.default(TRIGGER.idleMs)` = **2700000（45min）** —— 同一个默认**两个来源**。
+ *   且 zod 有 default ⇒ 配置**永不为 falsy** ⇒ 那 8 处兜底是**死代码**，连注释（多处"缺省 3h"）一并过期。
+ * ⚠ **计数订正**：首轮只报了 4 处（`deepsleep-machine.ts`）—— 根因是检索用了**大小写敏感**的 `idleMs`，
+ *   而 `deepSleepIdleMs` 的大写 `I` 不匹配 ⇒ **漏检 4 处**（`deepsleep.ts` ×2 · `distill-hooks.ts` ×2）。
+ *   仓内原则「**模式派生集合先核对**」正是防这个：命中集必须显式列举，不能靠一次通配就下结论。
+ * 修法（根部解决，**不改行为**）：回退一律引用注册表 ⇒ 默认值只有一处定义。
+ *   放在本件（deepsleep-core）因它位于依赖链底部：machine / deepsleep / distill-hooks 三处都能 import。
+ *   ⚠ 时间维的具体值将在 P1 双维水位里按预注册判据重新校准，本步**只统一来源、不动数值**。
+ */
+export declare const idleMsOf: (c: {
+    deepSleepIdleMs?: unknown;
+}) => number;
+/**
+ * **睡眠纪元标识**（S-P1a · 2026-09-15）：`epoch-<起时刻 ms>`。
+ *
+ * 语义（`docs/sleep-granularity-plan-2026-09-15.md` §5）：**纪元 = 上次睡眠成功 → 本次睡眠成功**的区间，
+ *   **既是触发单位，也是度量单位**（R1 以它为样本）。
+ *
+ * ⚠ **对方案册的一处偏离（已记录）**：册中原写 `epoch-<单调序号>-<起时刻>`。实施时改为**仅用起时刻**——
+ *   理由：单调序号在**重启后必须回放重建**（否则序号会回退），而回放本身要再引入一份状态与审计依赖；
+ *   毫秒级起时刻**已唯一且天然有序**（同一毫秒不可能触发两次 —— 触发路径有 `m.deepSleepRunning` 并发闸 + 10min 巡检间隔）。
+ *   ⇒ 用一个自带序的 id 换掉一份需要回放维护的计数器，属"**拒绝冗余**"取向。
+ *
+ * **命名避开 `epoch`**：该词已被 `supply-ledger.ts` 占用（per-session 去重窗口轮次）——
+ *   仓内有 `audit-impl-drift` 专抓同名不同义（先例：`rewriteRowPointers` 被强制改名）。
+ */
+export declare const epochIdOf: (startedAt: number) => string;
+/**
+ * 纪元 id 的形状判据（**单一实现**：生成与校验共用，防两处正则漂移）。
+ * ⚠ 收窄记录（2026-09-15 自纠）：初版写 `/^epoch-\d{10,}$/`（要求 ≥10 位）—— 但 `epochIdOf(1)`
+ *   会产出 `epoch-1` ⇒ **生成器能产出自己校验不过的 id**，"单一实现"当场破功。
+ *   放宽为 `\d+`：**凡生成器产出者必过校验**（真实调用传 `Date.now()`，自然 13 位）。
+ */
+export declare const EPOCH_ID_RE: RegExp;
+/**
+ * **双维触发决策表**（S-P1b · 2026-09-15）——`time` / `content` / `none`。
+ *
+ * 为什么抽成纯函数：与 `planDeepSleepVerdict` 同一理由 —— 判定若长在 `deepSleepCheck` 体内，
+ *   单测无法驱动（触发还要求 `hottest > lastDeepSleepAt`，那需要把机器内部水位倒回过去），
+ *   ⇒ 判据只能靠读代码断言。抽出来后**决策表本身可被穷举用例驱动**。
+ *
+ * 语义：**两维取 OR**。
+ *   · 时间维到 ⇒ `time`（原行为，不变）
+ *   · 时间维未到、但 `contentMin > 0` 且材料达标 ⇒ `content`（S-P1b 新增）
+ *   · 否则 ⇒ `none`
+ * ⚠ **等价性**：`contentMin <= 0` 时本表**恒等于**改造前的 `now - hottest >= idleMs` 判定
+ *   （`content` 分支不可达）⇒ **缺省零行为变化**（这也是回归保护的判据）。
+ */
+export type TriggerDim = 'time' | 'content' | 'none';
+export declare const planTriggerDim: (sinceHottestMs: number, idleMs: number, contentBytes: number, contentMin: number) => TriggerDim;
+/**
+ * **材料分片**（S-P1c · 2026-09-15）：把已按"面"分好的材料段贪心装进 ≤ `capChars` 的片里。
+ *
+ * 三条已决口径（**偏离方案册处在此声明**）：
+ *  ① **段边界即语义边界**：材料本就按面装配（当天痕迹 / 现行清单 / 树节清单 / 遗忘候选 …），
+ *     故"按**语义**切分"由**结构**天然满足，**不需要**再算相邻相似度低谷去求分界——
+ *     方案册 AC-V.2 写的是"边界落在相似度低谷"，那是**没有现成分段**时的做法；此处有，故不额外引入 embedding。
+ *  ② **永不切开单段**：一段是一件事，切开会让两片都判不准。单段超上限时**独占一片**（无法再语义细分）。
+ *  ③ `capChars <= 0` ⇒ **单片段**，与改造前**逐字等价**（回归保护）。
+ *
+ * 返回 `string[][]`（片 → 该片的段数组），**保持段序**（顺序即材料优先级，不得打乱）。
+ */
+export declare function splitByCap(segments: readonly string[], capChars: number): string[][];
+/**
+ * **窗口内待消化材料量（字节）** —— S-P1b 内容水位（第二触发维）的度量。
+ *
+ * 口径（**显式声明，避免"看起来像"**）：`pending/` + `candidates/` 下 `.md` 文件中
+ *   **mtime > since** 者的大小之和。它是"该被消化多少"的**代理**，不等于最终喂给模型的材料字符数
+ *   （后者由 `gatherDeepSleepTraces` 分段装配、受各段预算裁剪）——故**阈值须按本口径校准**，
+ *   不得与"材料字符数"混用（两口径不可比是仓内已登记的坑：`count-memory-lines` 首版口径之误）。
+ *
+ * 为什么在触发层用**文件统计**而不是真跑一遍采集：触发判据每 10min 被巡检调用一次，
+ *   必须在**零 LLM、低 IO** 下可算（真采集要读文件内容并分段）。
+ *
+ * 失败一律收敛为 0（目录缺席/权限异常）⇒ 内容维视为"未达阈"，**退回纯时间维**，绝不影响既有行为。
+ */
+export declare function windowMaterialBytes(dirs: {
+    pendDir: string;
+    candidateDir: string;
+}, since: number): number;
+/**
  * 会话活跃状态机（Session Activity FSM）——深度睡眠「是否算停滞」的唯一判据源。
  *
  * 状态迁移：
@@ -29,6 +113,18 @@ export type DeepSleepPhase = 'disabled' | 'running' | 'probing' | 'active' | 'el
 export interface DeepSleepStatus {
     /** S3-6：当前阶段（派生见 `deepsleep-machine#getDeepSleepStatus`） */
     phase: DeepSleepPhase;
+    /**
+     * S-P1a（2026-09-15）**本纪元标识**（`epoch-<起时刻 ms>`；无纪元 ⇒ `null`）。
+     * 面板可据此把「本轮深睡」与审计行对上（审计 `kind='deep-sleep'` 同带该字段）。
+     */
+    currentEpoch: string | null;
+    /**
+     * S-P1d（2026-09-15）**本纪元窗口起点**（ms；无纪元 ⇒ `null`）。
+     * 与 `currentEpoch` 配对给出**起止区间**（止 = `lastDeepSleepAt`）—— AC-R0.5 的"当前纪元起止"。
+     * ⚠ 该值在触发瞬间被**存进纪元箱**，不是每次现取 `traceSince()`：水位随即被推到 `now`，
+     *   现取会拿到**新窗口**起点，使面板读数与审计 `epochSince` 不一致。
+     */
+    epochSince: number | null;
     enabled: boolean;
     idleMs: number;
     probeAfterMs: number;
@@ -70,6 +166,7 @@ export interface SessRec {
         deltaBytes: number;
         alive: boolean;
         active: boolean;
+        viaChildren?: boolean;
     };
     probeResult?: 'long-run' | 'stall' | 'suspect' | 'conflict' | 'exit' | 'no-transcript' | 'error';
 }

@@ -44,7 +44,7 @@ ok(promoteVerdict('path', { occurrences: 2, sessions: 2, success: true }).ok ===
 ok(promoteVerdict('principle', { traces: 9, dependsOnPremise: true, premiseWritten: false }).ok === false, '⑤premise 硬门生效')
 ok(demoteVerdict({ file: 'user.md', leaf: true, status: 'cold', daysSinceHit: 999 }).ok === false, '⑤画像节禁归档守卫生效')
 // 夹具运行时构造（**有意不写字面机器路径**：零硬编码红线 scripts/check-hardcode.mjs 会扫源码字面量）
-const DRIVE = String.fromCharCode(68) + ':' + String.fromCharCode(92) // 'D:\\'
+const DRIVE = String.fromCharCode(68) + ':' + String.fromCharCode(92) // '<drive>:\\'
 const projSample = DRIVE + 'proj' + String.fromCharCode(92) + 'shoucang 的私有路径'
 ok(evaluateL0({ text: projSample, traces: 3, days30: 2 }).reuse === 'session-only', '⑤L0：项目专名/本机路径 → 仅本会话')
 

@@ -27,6 +27,27 @@ export function probeSession(d: ProbeDeps, rec: SessRec): void {
   const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
   const agentAlive = (): boolean => { try { return !!ctx.agents.get(rec.sid) } catch { return false } }
   const agentActive = (): boolean => { try { const a = ctx.agents.get(rec.sid); const s = a && a.status; return !!s && s !== 'idle' } catch { return false } }
+  /* 2026-09-16 **本会话是否有活跃子代理** —— 判据同 `distill-parent.ts:44 / #hasActiveSubagents` 的
+   *   **live 枚举通道**（此处只取无状态子集，**不引入跨域 `childSeen`**，避免探针依赖蒸馏状态）。
+   *   判因（读码 + 实测）：深睡父会话 **await 子代理**期间**本就不写自己的转录** ⇒ 只看父转录，
+   *   "正常等待"必然满足「连续 `confirm` 轮无增长」⇒ **stall 是系统性的**（实测 32 条 stall 的
+   *   `idleMin` 全为 58–66 分钟，含**仅触发数分钟**的新会话 ⇒ 基准陈旧，读数亦误导）。
+   *   ⚠ **不放宽护栏**：要求**正向证据** —— 存在 `origin==='subagent'`、**归属本会话**、且 `status!=='idle'`
+   *     的子代理；三者缺一即不认（存在但空闲 = 不算在跑；归属别人 = 与本会话无关）。 */
+  const hasLiveSubagent = (): boolean => {
+    try {
+      const list = (ctx.agents && typeof ctx.agents.list === 'function') ? (ctx.agents.list() || []) : []
+      for (const a of list) {
+        const h = a && a.session && a.session.header
+        if (!h || h.origin !== 'subagent') continue
+        const p = h.parentSession || (a.options && (a.options.parentSession || a.options.parentId)) || a.parentSession || a.parentId
+        if (p !== rec.sid) continue
+        const live = ctx.agents.get(a.id)
+        if (live && live.status && live.status !== 'idle') return true
+      }
+      return false
+    } catch { return false }
+  }
   void (async () => {
     try {
       // ① 定位转录（失败重试 retries 次；期间若来新事件则中止）
@@ -83,6 +104,22 @@ export function probeSession(d: ProbeDeps, rec: SessRec): void {
         rec.lastEndAt = rec.lastEventAt
         log(`deep sleep probe: ${short} ${samples} 轮无增长且会话已消失（二次确认）→ 异常退出（正常睡眠）`)
         audit({ kind: 'deep-sleep-probe', sid: short, result: 'exit', rounds, samples, note: '会话已退出（二次确认）' })
+        return
+      }
+      /* ③′ 2026-09-16 **父转录无增长但子代理在跑** ⇒ 判正常长任务（不睡）。
+       *   ⚠ **必须排在 `active` 冲突分支之前**：子代理活跃是**正向进展证据**（比"状态说活跃但没输出"的
+       *   证据冲突更强），先判它可避免把"父会话等子代理"记成 conflict 噪声。
+       *   依据见 `hasLiveSubagent` 抬头；并**顺手刷新 `lastEventAt`** —— 它原先**只在"确认长任务"分支刷新**
+       *   （原第 67 行），故 `idleMin` 实为「距上次**确认长任务**的分钟数」而非「距上次输出」⇒ 审计读数误导
+       *   （实测全为 58–66 分钟）。此处一并修正该基准。 */
+      if (hasLiveSubagent()) {
+        rec.probeResult = 'long-run'
+        rec.state = 'running'
+        rec.lastEventAt = Date.now()
+        rec.stallRound = 0
+        rec.probeEvidence = { rounds, samples, deltaBytes: 0, alive: true, active: false, viaChildren: true }
+        log(`deep sleep probe: ${short} 父转录无增长但**子代理仍在跑** → 判正常长任务（不睡）`)
+        audit({ kind: 'deep-sleep-probe', sid: short, result: 'long-run', rounds, samples, viaChildren: true, note: '父会话等待子代理（子代理活跃）' })
         return
       }
       if (active) {

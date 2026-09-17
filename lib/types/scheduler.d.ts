@@ -81,6 +81,8 @@ export interface Config {
     activityColdDays: number;
     activityArchiveDays: number;
     activityHotHits: number;
+    deepSleepContentMinChars: number;
+    deepSleepMaterialChunkChars: number;
     recallColdFactorPercent: number;
     mclEnabled: boolean;
     mclFamiliarThreshold: number;

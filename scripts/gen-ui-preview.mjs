@@ -165,7 +165,7 @@ const inner = `<!DOCTYPE html>
             <div class="sc-kv-row"><span class="sc-kv-k">MCL 状态</span><span class="sc-kv-v">slow</span></div>
             <div class="sc-kv-row"><span class="sc-kv-k">熟悉度</span><span class="sc-kv-v">0.72</span></div>
             <div class="sc-kv-row"><span class="sc-kv-k">向量档</span><span class="sc-kv-v">318 行</span></div>
-            <div class="sc-kv-row"><span class="sc-kv-k">当前根</span><span class="sc-kv-v">D:/FF/shoucang</span></div>
+            <div class="sc-kv-row"><span class="sc-kv-k">当前根</span><span class="sc-kv-v">&lt;repo-root&gt;</span></div>
           </div>
 
           <div class="sc-h2">操作</div>

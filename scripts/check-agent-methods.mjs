@@ -21,7 +21,7 @@
  * 用法：node scripts/check-agent-methods.mjs [--selftest]
  * 退出码：0 通过 / 1 违规 / 3 用法错 / 1（selftest 失败）
  */
-import { readdirSync, readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs'
+import { readdirSync, readFileSync, mkdtempSync, writeFileSync, rmSync, statSync } from 'node:fs'
 import { join, dirname, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { tmpdir } from 'node:os'
@@ -124,8 +124,15 @@ if (SELFTEST) {
   }
 }
 
-const files = sourceFiles(join(root, 'src'))
-if (!files.length) { console.error('❌ 未找到 src/*.ts'); process.exit(3) }
+/* 空作用域拆两态（2026-09-17 修 M3）：**目录不存在**＝无法判定(exit 3)；
+ *  **目录存在但 0 模块**＝作用域为空，必须判 FAIL(exit 1) ——
+ *  原实现两态都退 3，与自家标准相反（`check-srcmap.mjs:124-128` 明写「0 模块必须判 FAIL」）。 */
+const srcDir = join(root, 'src')
+let srcExists = false
+try { srcExists = statSync(srcDir).isDirectory() } catch { srcExists = false }
+if (!srcExists) { console.error(`⏭ src/ 不存在（${srcDir}）⇒ 无法判定，exit 3`); process.exit(3) }
+const files = sourceFiles(srcDir)
+if (!files.length) { console.error(`❌ src/ 存在但 0 个 .ts 模块（${srcDir}）⇒ 作用域为空，"无问题"是空集上的真命题`); process.exit(1) }
 const bound = collectBoundHandles(files)
 if (bound.size < 20) {
   // 自证：绑定句柄名收集器若因重构换了写法而失效，本件会静默变成"永远绿" ⇒ 必须自检

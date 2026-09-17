@@ -339,9 +339,143 @@ export const TRIGGER = {
   "probeAfterMs": 2700000,
   "probeWindowMs": 60000,
   "newTracesMin": 1,
+  "contentMinChars": null,
+  "materialChunkChars": null,
   "manual": true,
-  "note": "触发数据化（v2.1 §2.4 · B 档接线后为 runtime）：idleMs=全部根会话停滞阈值（缺省 3h）；probeAfterMs/probeWindowMs=卡住探测；newTracesMin=窗口内最少新痕迹数；manual=面板「立即归纳一次」。**改这里即改行为**（scheduler zod 缺省直接读本块）。"
+  "note": "触发数据化（v2.1 §2.4 · B 档接线后为 runtime）：idleMs=全部根会话停滞阈值；probeAfterMs/probeWindowMs=卡住探测；newTracesMin=窗口内最少新痕迹数；manual=面板「立即归纳一次」。**改这里即改行为**（scheduler zod 缺省直接读本块）。⚠ **2026-09-15 P0.1 实证订正**：本块原注释称「缺省 3h」，但**实际生效值是本块的 2700000ms（45min）**——`scheduler.ts` 的 zod `.default(TRIGGER.idleMs)` 取本块值，而**全仓 8 处** `|| 10800000`（3h）兜底因 zod 有 default 而是**死代码**（⚠ 首轮只报 4 处：检索用了大小写敏感的 `idleMs`，漏掉 `deepSleepIdleMs` 那 4 处 —— `deepsleep.ts` ×2 / `distill-hooks.ts` ×2 ⇒ 「模式派生集合先核对」的典型踩坑）。已修：**8 处全部**统一改引本块（**单一来源已下沉 `deepsleep-core#idleMsOf`**）+ 注释订正 + 护栏 `test-deepsleep-wiring` ⑦（可执行代码不得再出现该字面量），**数值未动**（P0 不改行为）。**数值本身待 P1 双维水位按预注册判据校准**。"
 } as const
+
+export interface ThresholdEntry { id: string; value: unknown; owner: string; preregistered: boolean; samples: number }
+export const THRESHOLDS: { note: string; entries: ThresholdEntry[] } = {
+  "note": "阈值登记制（J0·2026-09-15）：任何影响「接受/拒绝/归类/取舍」判断的数值阈值都必须登记；机检 scripts/check-threshold-registry.mjs。",
+  "entries": [
+    {
+      "id": "trigger.materialChunkChars",
+      "value": null,
+      "owner": "skill/engine/criteria.json#trigger.materialChunkChars",
+      "preregistered": false,
+      "samples": 0
+    },
+    {
+      "id": "trigger.contentMinChars",
+      "value": null,
+      "owner": "skill/engine/criteria.json#trigger.contentMinChars",
+      "preregistered": false,
+      "samples": 0
+    },
+    {
+      "id": "mcl.familiarThreshold",
+      "value": 0.55,
+      "owner": "skill/engine/criteria.json#surface.mcl.familiarThreshold",
+      "preregistered": true,
+      "samples": 2154
+    },
+    {
+      "id": "trigger.idleMs",
+      "value": 2700000,
+      "owner": "skill/engine/criteria.json#trigger.idleMs",
+      "preregistered": false,
+      "samples": 0
+    },
+    {
+      "id": "ingest.dedup.bigram.threshold",
+      "value": 0.66,
+      "owner": "skill/engine/criteria.json#ingest.criteria[ingest.dedup.bigram].params.threshold",
+      "preregistered": false,
+      "samples": 0
+    },
+    {
+      "id": "tree.indexSemanticSim",
+      "value": 0.9,
+      "owner": "src/deepsleep-tree.ts:142",
+      "preregistered": false,
+      "samples": 0
+    },
+    {
+      "id": "tree.sectionMergeSim",
+      "value": 0.95,
+      "owner": "src/deepsleep-tree.ts:271",
+      "preregistered": false,
+      "samples": 0
+    },
+    {
+      "id": "inject.crossFormDedupSim",
+      "value": 0.8,
+      "owner": "src/crossform-dedup.ts",
+      "preregistered": false,
+      "samples": 0
+    },
+    {
+      "id": "write.semanticDupSim",
+      "value": 0.8,
+      "owner": "src/distill-write.ts:263",
+      "preregistered": false,
+      "samples": 0
+    },
+    {
+      "id": "write.cardSimilar",
+      "value": 0.42,
+      "owner": "src/distill-write.ts:343,401",
+      "preregistered": false,
+      "samples": 0
+    },
+    {
+      "id": "activity.interferenceBand",
+      "value": [
+        0.5,
+        0.66
+      ],
+      "owner": "src/activity.ts:245",
+      "preregistered": false,
+      "samples": 0
+    },
+    {
+      "id": "mcl.fastGate",
+      "value": {
+        "minHits": 2,
+        "ratio": 0.6
+      },
+      "owner": "src/mcl.ts:368",
+      "preregistered": false,
+      "samples": 0
+    },
+    {
+      "id": "activity.statusDays",
+      "value": {
+        "warm": 14,
+        "cold": 44,
+        "archive": 90
+      },
+      "owner": "src/activity.ts:82-85,184-196",
+      "preregistered": true,
+      "samples": 46
+    },
+    {
+      "id": "activity.hotHits",
+      "value": 23,
+      "owner": "src/activity.ts:85,196",
+      "preregistered": true,
+      "samples": 46
+    },
+    {
+      "id": "consolidate.demote.coldDays",
+      "value": 90,
+      "owner": "skill/engine/criteria.json#consolidate.criteria[consolidate.demote.archive].params.coldDays",
+      "preregistered": true,
+      "samples": 46
+    },
+    {
+      "id": "ingest.granularity.splitLaw",
+      "value": {
+        "R": 1000,
+        "K": 6
+      },
+      "owner": "skill/engine/criteria.json#ingest.criteria[ingest.granularity.split-law].params",
+      "preregistered": false,
+      "samples": 0
+    }
+  ]
+}
 
 export const WIRING: { note: string; why: string; entryOk: readonly string[]; typeOnlyOk: readonly string[]; pending: ReadonlyArray<{ name: string; until: string; reason?: string }>; pendingNote?: string } = {
   "note": "接线申报（2026-09-14 · 治「结构合法但运行时缺席」）。判据：`src/` 内扇入 0 的模块 = 没有运行时消费者，必须显式申报；落地后不删即 FAIL（棘轮）。判定实现在 scripts/audit-architecture.mjs（`--gate` 时生效，check-runner 已在跑该模式）。**只看 src/ 运行时消费者**：scripts/ 下的离线工具与单测一律不算（否则离线工具会让门白立）。",
@@ -362,6 +496,7 @@ export const CRITERIA_ROWS = [
     "id": "ingest.route.r1",
     "domain": "ingest",
     "kind": "soft",
+    "judgeKind": "llm",
     "text": "R1 泛化方向指引 → memory",
     "params": {
       "route": "memory"
@@ -371,6 +506,7 @@ export const CRITERIA_ROWS = [
     "id": "ingest.route.r2",
     "domain": "ingest",
     "kind": "soft",
+    "judgeKind": "llm",
     "text": "R2 跨项目细粒度条文 → memory(notes/tools|lessons)",
     "params": {
       "route": "memory"
@@ -380,6 +516,7 @@ export const CRITERIA_ROWS = [
     "id": "ingest.route.r3",
     "domain": "ingest",
     "kind": "soft",
+    "judgeKind": "llm",
     "text": "R3 项目专属事实 → project（直写工作区）",
     "params": {
       "route": "project",
@@ -390,6 +527,7 @@ export const CRITERIA_ROWS = [
     "id": "ingest.route.r4",
     "domain": "ingest",
     "kind": "soft",
+    "judgeKind": "llm",
     "text": "R4 其余 → discard",
     "params": {
       "route": "discard"
@@ -399,6 +537,7 @@ export const CRITERIA_ROWS = [
     "id": "ingest.route.q0",
     "domain": "ingest",
     "kind": "soft",
+    "judgeKind": "vector",
     "text": "Q0 已有归属 → 不存",
     "params": {}
   },
@@ -406,6 +545,7 @@ export const CRITERIA_ROWS = [
     "id": "ingest.route.q1",
     "domain": "ingest",
     "kind": "soft",
+    "judgeKind": "llm",
     "text": "Q1 下周用不上 → 不存",
     "params": {}
   },
@@ -413,6 +553,7 @@ export const CRITERIA_ROWS = [
     "id": "ingest.route.q2",
     "domain": "ingest",
     "kind": "soft",
+    "judgeKind": "llm",
     "text": "Q2 归谁（用户/agent/环境）",
     "params": {
       "targets": [
@@ -426,6 +567,7 @@ export const CRITERIA_ROWS = [
     "id": "ingest.route.q3",
     "domain": "ingest",
     "kind": "soft",
+    "judgeKind": "vector",
     "text": "Q3 能合并 → replace 否则 add",
     "params": {}
   },
@@ -433,6 +575,7 @@ export const CRITERIA_ROWS = [
     "id": "ingest.route.rules-not-stored",
     "domain": "ingest",
     "kind": "soft",
+    "judgeKind": "deterministic",
     "text": "规则类不入库（SOUL 死支已删）",
     "params": {
       "reason": "rules-not-stored"
@@ -442,6 +585,7 @@ export const CRITERIA_ROWS = [
     "id": "ingest.placement.notes-kind",
     "domain": "ingest",
     "kind": "hard",
+    "judgeKind": "deterministic",
     "text": "落点须在 notes 白名单内",
     "params": {
       "notes": [
@@ -459,6 +603,7 @@ export const CRITERIA_ROWS = [
     "id": "ingest.placement.main-index",
     "domain": "ingest",
     "kind": "hard",
+    "judgeKind": "deterministic",
     "text": "主索引写入仅三主档",
     "params": {
       "indexTargets": [
@@ -472,6 +617,7 @@ export const CRITERIA_ROWS = [
     "id": "ingest.granularity.split-law",
     "domain": "ingest",
     "kind": "hard",
+    "judgeKind": "deterministic",
     "text": "子树正文 > R 或同级条目 > K → 裂 ###（§8.1 分裂律）",
     "params": {
       "R": 1000,
@@ -482,6 +628,7 @@ export const CRITERIA_ROWS = [
     "id": "ingest.dedup.exact",
     "domain": "ingest",
     "kind": "hard",
+    "judgeKind": "deterministic",
     "text": "同 标签+主题 精确重复 → 拒收",
     "params": {
       "enabled": true
@@ -491,6 +638,7 @@ export const CRITERIA_ROWS = [
     "id": "ingest.dedup.bigram",
     "domain": "ingest",
     "kind": "hard",
+    "judgeKind": "deterministic",
     "text": "主题 bigram 重叠 ≥ 阈值 → 近似重复拒收",
     "params": {
       "threshold": 0.66,
@@ -501,6 +649,7 @@ export const CRITERIA_ROWS = [
     "id": "ingest.format.index-line",
     "domain": "ingest",
     "kind": "hard",
+    "judgeKind": "deterministic",
     "text": "索引行四要素格式（spec §8）",
     "params": {
       "topicMax": 12,
@@ -517,6 +666,7 @@ export const CRITERIA_ROWS = [
     "id": "consolidate.support.principle",
     "domain": "consolidate",
     "kind": "soft",
+    "judgeKind": "vector",
     "text": "原则：同主题 ≥3 条痕迹（或当日反复命中）",
     "params": {
       "minTraces": 3
@@ -526,6 +676,7 @@ export const CRITERIA_ROWS = [
     "id": "consolidate.support.path",
     "domain": "consolidate",
     "kind": "soft",
+    "judgeKind": "vector",
     "text": "路径：同型 ≥2 次且只从成功任务归纳",
     "params": {
       "minOccur": 2,
@@ -537,6 +688,7 @@ export const CRITERIA_ROWS = [
     "id": "consolidate.promote.premise",
     "domain": "consolidate",
     "kind": "soft",
+    "judgeKind": "llm",
     "text": "涉及隐含前提 → 必须写出，否则降级 notes",
     "params": {
       "requirePremiseWhenDependent": true
@@ -546,6 +698,7 @@ export const CRITERIA_ROWS = [
     "id": "consolidate.cross-workspace-redline",
     "domain": "consolidate",
     "kind": "soft",
+    "judgeKind": "deterministic",
     "text": "跨工作区红线：项目专名/路径/版本号不提炼",
     "params": {
       "forbidProjectNames": true
@@ -555,6 +708,7 @@ export const CRITERIA_ROWS = [
     "id": "consolidate.reshape.split-law",
     "domain": "consolidate",
     "kind": "hard",
+    "judgeKind": "llm",
     "text": "treeOps split：正文 > R 且 ≥2 语义正交子面",
     "params": {
       "R": 1000,
@@ -567,6 +721,7 @@ export const CRITERIA_ROWS = [
     "id": "consolidate.demote.archive",
     "domain": "consolidate",
     "kind": "hard",
+    "judgeKind": "deterministic",
     "text": "遗忘：cold 且 ≥90 天 + 三守卫；禁直删；画像节禁归档",
     "params": {
       "coldDays": 90,
@@ -584,6 +739,7 @@ export const CRITERIA_ROWS = [
     "id": "consolidate.cross.crossTopic",
     "domain": "consolidate",
     "kind": "hard",
+    "judgeKind": "deterministic",
     "text": "REM 相：crossTopic 源指针须覆盖 ≥2 个不同 §",
     "params": {
       "minSections": 2
@@ -593,6 +749,7 @@ export const CRITERIA_ROWS = [
     "id": "consolidate.replay.cross-day",
     "domain": "consolidate",
     "kind": "soft",
+    "judgeKind": "vector",
     "text": "跨日二次激活：近 7 日再现 → 可扩容/提纯",
     "params": {
       "windowDays": 7
@@ -602,6 +759,7 @@ export const CRITERIA_ROWS = [
     "id": "consolidate.pointer.update-only",
     "domain": "consolidate",
     "kind": "hard",
+    "judgeKind": "deterministic",
     "text": "pointerOps 只允许原地 update（禁增删索引行）",
     "params": {
       "allow": [

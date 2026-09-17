@@ -76,10 +76,10 @@ export interface Config {
   // ═══ 深度睡眠归纳（v16：习得原则并入 agent 画像 AGENT.md；2026-09-08 拍板机制，2026-09-09 拍板定位）═══
   enableDeepSleep: boolean // 深度睡眠巡检开关（停滞 ≥deepSleepIdleMs 自动归纳 [原则] 行入 AGENT.md）
   enableRemPass?: boolean // REM 相（认知对照 P2）：深睡同 pass 内做跨主题联想（crossTopic，须 ≥2 不同 § 主题）；缺省关
-  deepSleepIdleMs: number // 停滞判定：无任何根会话活动持续此毫秒数才触发（缺省 3 小时）
+  deepSleepIdleMs: number // 停滞判定：无任何根会话活动持续此毫秒数才触发（缺省读注册表 TRIGGER.idleMs = 2700000ms 即 45min；⚠ 2026-09-15 P0.1 实证订正：原注释误称 3 小时）
   // ═══ 会话活跃状态机（2026-09-08 重构）：区分「正常长任务 / 卡住 / 异常退出」═══
   deepSleepProbe: boolean // 输出增长探测开关（running 无事件超时后，采样 transcript 确认真活跃）
-  deepSleepProbeAfterMs: number // running 状态无事件多久发起探测（缺省 3 小时，同 idleMs）
+  deepSleepProbeAfterMs: number // running 状态无事件多久发起探测（缺省同 idleMs = 2700000ms 即 45min；⚠ 同上订正）
   deepSleepProbeWindowMs: number // 探测采样间隔（缺省 60 秒）
   // 探测可靠性加固（2026-09-08）：防一次采样错判把长任务睡掉
   deepSleepProbeSamples: number // 每轮采样次数（缺省 3；任一次检出增长即判长任务）
@@ -119,7 +119,9 @@ export interface Config {
   activityWarmDays: number // active→warm 无命中天数（缺省 14）
   activityColdDays: number // warm→cold 无命中天数（缺省 44 = warm+30）
   activityArchiveDays: number // cold 且最近命中超过该天数 → 遗忘候选（缺省 90）
-  activityHotHits: number // 近 30 天命中 ≥ 此值 → 加深候选 B（缺省 5）
+  activityHotHits: number // 近 30 天命中 ≥ 此值 → 加深候选 B（缺省 23 = 分布上四分位）
+  deepSleepContentMinChars: number // S-P1b 内容水位：待消化材料字节 ≥ 此值 ⇒ 可睡（0=关闭）
+  deepSleepMaterialChunkChars: number // S-P1c 材料分片上限（字符；0=关闭 ⇒ 单片段）
   recallColdFactorPercent: number // 召回时 cold/retired 小节降权系数（%，→ /100；缺省 35）
   // ═══ ACT-029 认知环（MCL）双通道（2026-09-11）：熟悉度分流 + 慢通道薄材料 + 有界再引导 ═══
   mclEnabled: boolean // 认知环总开关（缺省开；一键回滚 = false）
@@ -172,7 +174,7 @@ export const Config: any = z.object({
   storeMode: z.union([z.const('md'), z.const('dual')]).default('md').description("P4 存储解耦：'md'（缺省，现状零变化）| 'dual'（双写期：md 写入后镜像进 <库根>/.records/records.jsonl 并逐字节对账）。'record' 档（md 降为纯投影）**尚未实现** ⇒ 本键不接受该值（防死开关）"),
   enableDeepSleep: z.boolean().default(true).description('深度睡眠归纳：全部会话停滞 ≥deepSleepIdleMs 自动提炼习得原则写入 agent 画像 AGENT.md（[原则] 行），同 pass 反思双通道维护 USER 画像'),
   enableRemPass: z.boolean().default(false).description('REM 相（认知对照 P2）：深睡同 pass 内额外做**跨主题联想**（crossTopic 通道，产出须覆盖 ≥2 个不同 § 主题才被宿主接收）；缺省关'),
-  deepSleepIdleMs: z.number().min(600000).default(TRIGGER.idleMs).description('停滞判定阈值（毫秒）：无任何会话活动持续满此时长触发深度睡眠归纳（缺省 3 小时）'),
+  deepSleepIdleMs: z.number().min(600000).default(TRIGGER.idleMs).description('停滞判定阈值（毫秒）：无任何会话活动持续满此时长触发深度睡眠归纳（缺省读注册表 TRIGGER.idleMs = 2700000ms 即 45min；⚠ 2026-09-15 P0.1 实证订正：此处原描述误称 3 小时）'),
   deepSleepProbe: z.boolean().default(true).description('输出增长探测：会话 running 但长时间无事件时，采样转录文件两次确认是长任务还是卡住'),
   deepSleepProbeAfterMs: z.number().min(600000).default(TRIGGER.probeAfterMs).description('running 状态无事件持续此毫秒数后发起探测（缺省 3 小时）'),
   deepSleepProbeWindowMs: z.number().min(5000).default(TRIGGER.probeWindowMs).description('探测采样间隔（毫秒，缺省 60 秒）'),
@@ -197,7 +199,16 @@ export const Config: any = z.object({
   activityWarmDays: z.number().min(1).max(120).default(14).description('活性降级：active→warm 无命中天数（缺省 14）'),
   activityColdDays: z.number().min(2).max(365).default(44).description('遗忘冷降：warm→cold 无命中天数（缺省 44 = warm+30）'),
   activityArchiveDays: z.number().min(30).max(730).default(90).description('遗忘候选：cold 且最近命中超过该天数 → 候选清单（缺省 90）'),
-  activityHotHits: z.number().min(1).max(50).default(5).description('加深候选：近 30 天命中 ≥ 此值 → 加深候选 B（缺省 5）'),
+  activityHotHits: z.number().min(1).max(50).default(23).description('加深候选：近 30 天命中 ≥ 此值 → 加深候选 B（缺省 23 = 分布上四分位；2026-09-15 J2 校准，原 5 低于 p50 无区分度）'),
+  // S-P1b（2026-09-15）**内容水位**（第二触发维，与时间维 `deepSleepIdleMs` 取 OR）：
+  //   窗口内待消化材料（pending/ + candidates/ 中 mtime > since 的 .md 字节和）≥ 此值 ⇒ **不等时间到也可睡**。
+  //   `0` = 关闭（缺省）⇒ **零行为变化**。阈值本身 `insufficient-data`（纪元仅 1 个样本，分布未成形）⇒ 不拍脑袋。
+  deepSleepContentMinChars: z.number().min(0).max(100000000).default(Number(TRIGGER.contentMinChars) || 0).description('内容水位：待消化材料字节 ≥ 此值 ⇒ 可睡（0=关闭；缺省读注册表 TRIGGER.contentMinChars；⚠ 2026-09-16 该口径已被真机证伪 ⇒ 代码内守卫**一律按关闭**处理，见 OPEN-ITEMS S-P1b″）'),
+  // S-P1c-multi（2026-09-16）**材料分片上上限**：材料段经 `splitByCap` 装片，>此值即切多片、**按片多轮跑**。
+  //   `0` = 关闭（缺省）⇒ 单片段、行为与改造前逐字等价。
+  //   ⚠ 本轮补此通道的原因：字段此前只被 `runDeepSleep` 读 `config.materialChunkChars`，**却没进 zod schema**
+  //   ⇒ 生产里永远是 `undefined` ⇒ **多轮执行不可达**（"接线了但开不了"）。属"声明 runtime 却无配置通道"这类缺口。
+  deepSleepMaterialChunkChars: z.number().min(0).max(100000000).default(Number(TRIGGER.materialChunkChars) || 0).description('材料分片上限（字符）：>此值即切多片并按片多轮跑（0=关闭；缺省读注册表 TRIGGER.materialChunkChars）'),
   recallColdFactorPercent: z.number().min(5).max(95).default(SURFACE.recall.coldFactorPercent).description('召回降权：cold/retired 小节融合召回降权系数（百分比，→ /100；缺省 35）'),
   // ═══ U3（ADR-122 UI · B5 能力对齐）：这两个键 panel 一直在读（readSuiteConfig().injectRelevance/injectFreshSlots），
   //     但 scheduler 侧从未声明 ⇒ 面板无法调、写回也保不住。此处转正（值域与 panel 消费语义一致）。 ═══
@@ -628,6 +639,11 @@ function distillOptionsOf(config: Config) {
   deepSleepProbe: config.deepSleepProbe,
   deepSleepProbeAfterMs: config.deepSleepProbeAfterMs,
   deepSleepProbeWindowMs: config.deepSleepProbeWindowMs,
+  // ⚠ 2026-09-16 补：这两个键**此前只在 zod schema 里、没进本映射** ⇒ 白名单不报警（schema 认得），
+  //   但下游 `config` 里**永远是 undefined** ⇒ 功能"接线了却开不了"（实测：置 cap=30000 后仍 `chunk=0/1`）。
+  //   教训：**schema 有 ≠ 运行时 config 有** —— 本件是"显式映射"形态，新增键必须**两处都加**。
+  deepSleepContentMinChars: config.deepSleepContentMinChars,
+  deepSleepMaterialChunkChars: config.deepSleepMaterialChunkChars,
   deepSleepProbeSamples: config.deepSleepProbeSamples,
   deepSleepProbeConfirm: config.deepSleepProbeConfirm,
   deepSleepProbeRetries: config.deepSleepProbeRetries,

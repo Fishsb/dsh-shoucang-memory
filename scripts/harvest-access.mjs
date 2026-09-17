@@ -35,6 +35,49 @@ const bank = argOf('--bank',
 const auditDir = join(bank, 'audit');
 const outFile = join(auditDir, 'access-real.jsonl');
 const wmFile = join(auditDir, 'access-real-watermark.json');
+/* S-P2（2026-09-16）**纪元日志第二源：工具使用**（同一遍转录遍历，零额外 IO）。
+ * 为什么复用本件而不新建遍历器（仓规则 5「不从零造轮子」）：本循环**已经**在解析 `tool/call` 事件，
+ *   再写第二个转录遍历器 = 重复 IO + 两份水位须各自维护（漂移源）。
+ * ⚠ **隐私红线（本册最易踩的一条）**：转录里的工具参数**必然带项目路径与专名**。
+ *   ⇒ 本件**只落** `{ t, sid, tool, n }`（时间 / 会话短码 / 工具名 / 次数），
+ *     **绝不落** arguments 原文、路径、命令、文件内容。落点：`audit/tool-usage.jsonl`。
+ *   同水位（同一遍处理同一 seq 区间）⇒ 幂等语义与 access-real 一致。 */
+const toolOut = join(auditDir, 'tool-usage.jsonl');
+const toolAgg = new Map(); // `${sid}|${tool}` → { t, sid, tool, n }
+
+/* J5/U3（2026-09-16）**收益信号取证：注入材料之后模型实际做了什么**（同一遍遍历，零额外 IO）。
+ * 判因（实测）：`compliant` 恒 false（1061/1061）⇒ 合规率 0.0% ⇒ 收益判据**信号源已死**
+ *   （`nextZeroGain` 永远递增、`switchSource` 82.8% 恒真）。要修信号，就得取证
+ *   「注入之后模型做了什么」——而这**必须从转录取**（台账只记到"注入了多少材料"为止）。
+ * 连接键 = **时间**：台账 `phase:'compliance'` 行的 `at` × 转录事件的 `time`（同一 sid）。
+ * ⚠ **隐私面不扩大**：只落**工具名序列**（ASCII 标识符，与 tool-usage 同级），
+ *   **不落 arguments、不落 topics 原文**（topics 来自用户提问内容 —— 落它等于把查询内容写进日志）。
+ * ⚠ **幂等**：与本件同款水位文件按 sid 记"已处理到的注入时刻"，重复运行不重发。 */
+const yieldOut = join(auditDir, 'yield-rounds.jsonl');
+const yieldWmFile = join(auditDir, 'yield-watermark.json');
+const YIELD_NEXT_N = Number(process.env.SHOUCANG_YIELD_NEXT_N) || 3;
+const ledgerPath = process.env.SHOUCANG_LEDGER || join(homedir(), '.dsh', 'suite', 'knowledge', 'audit', 'ledger.jsonl');
+const injectionsBySid = new Map(); // shortSid → [{ atMs, atISO, materialChars, sim }]
+try {
+  const { readFileSync } = await import('node:fs');
+  for (const l of readFileSync(ledgerPath, 'utf8').split(/\r?\n/)) {
+    const t = l.trim(); if (!t) continue;
+    let o; try { o = JSON.parse(t); } catch { continue; }
+    if (o?.phase !== 'compliance') continue;
+    const short = String(o.sid || '').slice(0, 8);
+    if (!short) continue;
+    const atMs = Date.parse(String(o.at || ''));
+    if (!Number.isFinite(atMs)) continue;
+    const arr = injectionsBySid.get(short) || [];
+    // ⚠ **不取 topics**（含查询内容 ⇒ 隐私面）；只取数字与时刻
+    arr.push({ atMs, atISO: new Date(atMs).toISOString(), materialChars: Number(o.materialChars) || 0, sim: Number(o.sim) || 0 });
+    injectionsBySid.set(short, arr);
+  }
+} catch { /* 台账不可读 ⇒ 无注入记录（不影响本件既有两条产线） */ }
+let yieldWm = {};
+try { yieldWm = JSON.parse(await readFile(yieldWmFile, 'utf8')); } catch { yieldWm = {}; }
+const yieldRows = [];
+const sessionCalls = new Map(); // shortSid → [{ t, n }]
 
 const FILE_RE = /notes[\\/]{1,2}([A-Za-z0-9_.-]+\.md)/g;
 const SECT_RE = /§\s*([^\s"'\\,;)]+)/g;
@@ -102,6 +145,22 @@ for (const p of files) {
     if (seq <= from) continue;
     if (o?.type !== 'tool/call') continue;
     const name = o?.data?.name || '';
+    // S-P2：**先记工具使用聚合**（在任何过滤之前 —— 要的是"当天用了什么工具"，与是否读到库无关）。
+    //   只累加计数，**不碰 arguments**（隐私红线）。
+    if (name) {
+      const shortSid = sid.startsWith('session-') ? sid.slice(8, 16) : sid.slice(0, 8);
+      const k = `${shortSid}|${name}`;
+      const cur = toolAgg.get(k);
+      if (cur) cur.n += 1;
+      else toolAgg.set(k, { t: new Date(Number(o?.time) || Date.now()).toISOString().slice(0, 10), sid: shortSid, tool: String(name).slice(0, 40), n: 1 });
+    }
+    // J5/U3：把本会话的**工具调用时刻**记下来（后面与"注入时刻"按时间连接）—— 只记名与时刻
+    if (name) {
+      const shortSid0 = sid.startsWith('session-') ? sid.slice(8, 16) : sid.slice(0, 8);
+      const arr0 = sessionCalls.get(shortSid0) || [];
+      arr0.push({ t: Number(o?.time) || 0, n: String(name).slice(0, 40) });
+      sessionCalls.set(shortSid0, arr0);
+    }
     if (!/^(read|grep|glob|pwsh)$/.test(name)) continue;
     const args = String(o?.data?.arguments || '');
     // arguments 是 JSON 串：路径分隔符为**双反斜杠**，比较前须归一转义（同 recall-eval 的教训）。
@@ -148,8 +207,40 @@ if (!DRY && records.length) {
   const { appendFileSync } = await import('node:fs');
   appendFileSync(outFile, body, 'utf8');
 }
+if (!DRY && toolAgg.size) {
+  await mkdir(auditDir, { recursive: true });
+  const { appendFileSync } = await import('node:fs');
+  const rows = [...toolAgg.values()].sort((a, b) => (a.sid + a.tool).localeCompare(b.sid + b.tool));
+  appendFileSync(toolOut, rows.map((r) => JSON.stringify(r)).join('\n') + '\n', 'utf8');
+}
+/* J5/U3：把「注入时刻 × 之后的工具名序列」连接成收益取证行（**幂等**：水位记已处理到的注入时刻）。 */
+{
+  for (const [shortSid, injs] of injectionsBySid) {
+    const done = Number(yieldWm[shortSid]?.atMs ?? 0);
+    const todo = injs.filter((x) => x.atMs > done).sort((a, b) => a.atMs - b.atMs);
+    if (!todo.length) continue;
+    const calls = (sessionCalls.get(shortSid) || []).slice().sort((a, b) => a.t - b.t);
+    let maxAt = done;
+    for (const inj of todo) {
+      const after = calls.filter((c) => c.t >= inj.atMs).slice(0, YIELD_NEXT_N);
+      yieldRows.push({ sid: shortSid, at: inj.atISO, materialChars: inj.materialChars, sim: inj.sim, nextTools: after.map((c) => c.n), idleSteps: after.length });
+      if (inj.atMs > maxAt) maxAt = inj.atMs;
+    }
+    yieldWm[shortSid] = { atMs: maxAt, at: new Date().toISOString() };
+  }
+}
+if (!DRY && yieldRows.length) {
+  await mkdir(auditDir, { recursive: true });
+  const { appendFileSync } = await import('node:fs');
+  appendFileSync(yieldOut, yieldRows.map((r) => JSON.stringify(r)).join('\n') + '\n', 'utf8');
+}
+if (!DRY && Object.keys(yieldWm).length) {
+  await mkdir(dirname(yieldWmFile), { recursive: true });
+  await writeFile(yieldWmFile, JSON.stringify(yieldWm, null, 2), 'utf8');
+}
 if (!DRY) {
   await mkdir(dirname(wmFile), { recursive: true });
   await writeFile(wmFile, JSON.stringify(wm, null, 2), 'utf8');
 }
 console.log(`harvest-access: ${DRY ? '[dry] ' : ''}会话 ${scanned} · 新记录 ${records.length} · 统计小节 ${allSections.size} 个 · 落盘 ${DRY ? '(未写)' : outFile}`);
+if (VERBOSE || toolAgg.size) console.log(`harvest-access · 工具使用聚合：${toolAgg.size} 组（工具名+会话短码+次数；**不含参数原文**）→ ${DRY ? '(未写)' : toolOut}`);

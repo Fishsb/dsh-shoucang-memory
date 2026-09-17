@@ -134,6 +134,29 @@ const stableOf = (t) => { const i = t.indexOf('[守藏·热记忆]'); const j = 
   ok(stableOf(t3).includes('CCCC'), 'S6：调 invalidate() 后稳定面**必须重算**（CCCC 出现）')
 }
 
+/* ── S7（2026-09-16 用户指令）：**事件驱动失效**取代 30s 定时失效 ───────────────────────────
+ * 用户要求：「新会话注入一次 + 每次上下文压缩后注入一次」。
+ * ⚠ 与既有 30s `cacheKey` 的关系：**外层**（本组判据）先判，命中则**内层 30s 缓存整段不跑**
+ *   ⇒ 等效于把"30 秒一重建"提升为"**事件驱动**"；内层保留为兜底（本件 S1–S6 继续守它）。
+ * ⚠ **关键取舍（必须留痕）**：`q`（本步任务文本）**仍参与失效** —— 动态面按 query 选行，
+ *   冻住 query 等于**杀掉按需召回**。`q` 取自"最近一条真实用户消息" ⇒ **同一回合内多步 q 不变**
+ *   ⇒ 省的是「同回合内每步重建」，保的是「跨回合按需」。 */
+{
+  const { injectCacheReason } = await import(pathToFileURL(join(repoRoot, 'lib', 'dynamic-select.js')).href)
+  const base = { sid: 'a', evLen: 40, firstSeq: 5, lib: 'L1', q: '问题一' }
+  ok(injectCacheReason(undefined, base) === 'new', 'S7：无前值 ⇒ `new`（新会话）')
+  ok(injectCacheReason(base, { ...base }) === '', 'S7：**全等 ⇒ 命中**（逐字复用，不重建）')
+  ok(injectCacheReason(base, { ...base, evLen: 41 }) === '', 'S7：**同回合内事件增长 ⇒ 仍命中**（这是省掉"每步重建"的核心；把它当失效就退回旧行为）')
+  ok(injectCacheReason(base, { ...base, q: '问题二' }) === 'query-changed', 'S7：**q 变化 ⇒ 重建**（跨回合保留按需召回，勿冻住 query）')
+  ok(injectCacheReason(base, { ...base, evLen: 12 }) === 'compacted', 'S7：**事件条数回落 ⇒ `compacted`**（压缩后必须重注入）')
+  ok(injectCacheReason(base, { ...base, firstSeq: 30 }) === 'compacted', 'S7：**首 seq 前跳 ⇒ `compacted`**（旧事件被摘要掉）')
+  ok(injectCacheReason({ ...base, firstSeq: -1 }, { ...base, firstSeq: 3 }) === '', 'S7：firstSeq 未知(-1) ⇒ **不误判压缩**（失败开放）')
+  ok(injectCacheReason(base, { ...base, sid: 'b' }) === 'session-changed', 'S7：换会话 ⇒ `session-changed`')
+  ok(injectCacheReason(base, { ...base, lib: 'L2' }) === 'lib-changed', 'S7：库戳变化 ⇒ `lib-changed`（睡眠/蒸馏写入 => 新内容可见）')
+  ok(injectCacheReason(base, { sid: 'b', q: 'x', evLen: 1, firstSeq: 99, lib: 'L2' }) === 'session-changed', 'S7 优先级：换会话优先于其余一切')
+  ok(injectCacheReason(base, { ...base, q: 'x', evLen: 1 }) === 'query-changed', 'S7 优先级：q 变化优先于压缩判定（同回合内换 query 罕见，但口径须确定）')
+}
+
 if (fails.length) {
   console.log(`❌ FAIL（${fails.length} 条）`)
   fails.forEach((x) => console.log('  ❌ ' + x))

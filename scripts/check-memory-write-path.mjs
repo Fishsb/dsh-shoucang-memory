@@ -72,7 +72,12 @@ console.log(`扫描范围: ${srcDir}`)
 console.log(`typescript: ${rel(resolve(tsPath))}`)
 console.log(`模块清单（${files.length}）:`)
 for (const f of files) console.log(`  · ${rel(f)}`)
-if (!files.length) { console.log(`\n⏭ 跳过：范围内无 .ts 模块（exit 3）`); process.exit(3) }
+/* 空作用域拆两态（2026-09-17 修 M3）：目录**不存在**＝无法判定(3)；目录**存在但 0 模块**＝作用域为空判 FAIL(1) */
+if (!files.length) {
+  if (!existsSync(srcDir)) { console.log(`\n⏭ 跳过：src/ 不存在（${srcDir}）（exit 3）`); process.exit(3) }
+  console.error(`\n❌ src/ 存在但 0 个 .ts 模块（${srcDir}）⇒ 作用域为空，不得判"通过"`)
+  process.exit(1)
+}
 
 // ── ② 建 program + checker ────────────────────────────────────────────────
 const program = ts.createProgram(files, {

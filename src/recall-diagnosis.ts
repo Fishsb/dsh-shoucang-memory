@@ -88,3 +88,125 @@ export function adviseFromMissCounts(
   }
   return { advice: 'lower-threshold', total, miss, recallLayer, thresholdLayer, why: `阈值层 ${thresholdLayer} ≥ 召回层 ${recallLayer} ⇒ 瓶颈在熟悉度门限，可调 \`mclFamiliarThreshold\`` }
 }
+
+/* ══ J3 / U1（2026-09-16）**归因与方向交 LLM，并与细校准对账** ══════════════════════
+ * 判因（方案册 §3.1 实证）：上面的 `adviseFromMissCounts` 用**计数大小**定方向，它给出
+ *   `lower-threshold`，而 2154 条样本的**细校准结论是「维持 0.55 不改」**（降 0.54 会过冲 11.6pp）
+ *   ⇒ **两者方向相反，一致率实测 = 0**。根因不是阈值，而是"**方向由计数决定、不看语义**"。
+ * 改法（遵"候选生成交确定性/向量，模糊判断交模型"）：**保留上面的确定性计数**（第一层筛选，零成本），
+ *   把**归因与方向**交 LLM —— 输入含 计数分布 + 未命中样本（查询 + 候选行 + sim）+ **注册表的细校准结论**，
+ *   要求 LLM **与之对账**后给方向与理由；判据 = **一致率**。
+ * ⚠ **本件当前只实现"请求构造 + 严格解析 + 一致率"三件纯函数**；
+ *   **LLM 真实调用点尚未接线** ⇒ 按阈值/判据登记纪律与 [原则] 契约须描述现状：
+ *   **不给任何 criteria 打上"由模型判定"的机制标记**（那需要真实调用点，否则就是方案册 §4.1 要防的"假旋钮"）。
+ *   ⇒ 调用点是下一轮的活，此处**不假装已具备**。
+ *   ⚠ 注：此处**刻意不抄那两个字面标记** —— 上一版在注释里写了它，导致测试件里"不得出现该标记"的断言
+ *     **命中了注释自身**而误报红（同族教训：注释与判据同形文本 ⇒ 断言从注释里误匹配）。 */
+export type AttributionVerdict = 'maintain' | 'lower' | 'raise' | 'fix-recall' | 'enable-embed' | 'insufficient'
+
+/** 确定性计数的方向 → 归因词表（**仅用于对账比较**，不用于替代 LLM 判断）。 */
+export function directionOfAdvice(a: RecallAdvice): AttributionVerdict {
+  if (a === 'lower-threshold') return 'lower'
+  if (a === 'fix-recall') return 'fix-recall'
+  if (a === 'enable-embed') return 'enable-embed'
+  return 'insufficient'
+}
+
+export interface AttributionSample {
+  /** 该步的查询（可为空串，空查询本身是重要线索）。 */
+  q: string
+  /** 召回到的候选行（截断后的展示文本）。 */
+  rows: readonly string[]
+  /** 熟悉度（绝对余弦）。 */
+  sim: number
+}
+
+/**
+ * 构造归因请求（**纯函数**，只拼文本，不发请求）。
+ * ⚠ **必须带上注册表的细校准结论** —— 否则 LLM 无从"对账"，只会另给一个方向，
+ *   一致率又会是 0（那正是本项要解决的问题，不是要重复的错误）。
+ */
+export function buildAttributionRequest(
+  counts: Readonly<Partial<Record<RecallMissReason, number>>>,
+  samples: readonly AttributionSample[],
+  calibration: { id: string; value: number; conclusion: string },
+): string {
+  const c = (k: RecallMissReason): number => Math.max(0, Number(counts[k]) || 0)
+  const total = c('ok') + c('recall-empty') + c('no-highconf') + c('below-threshold') + c('embed-off')
+  const miss = total - c('ok')
+  const lines: string[] = []
+  lines.push('你是召回质量归因器。下面是**确定性计数**（只作线索，不作结论）与若干未命中样本。')
+  lines.push(`计数：总 ${total} · 未命中 ${miss} · recall-empty ${c('recall-empty')} · no-highconf ${c('no-highconf')} · below-threshold ${c('below-threshold')} · embed-off ${c('embed-off')}`)
+  lines.push('')
+  lines.push('样本（查询 / 命中行 / 熟悉度）：')
+  for (const s of samples.slice(0, 20)) {
+    lines.push(`- q=「${(s.q || '(空查询)').slice(0, 80)}」 sim=${s.sim.toFixed(3)} rows=${s.rows.length}`)
+    for (const r of s.rows.slice(0, 3)) lines.push(`    · ${r.slice(0, 100)}`)
+  }
+  lines.push('')
+  lines.push('**已有的细校准结论（必须与之对账，不要另起炉灶）**：')
+  lines.push(`- ${calibration.id} = ${calibration.value}；结论：${calibration.conclusion}`)
+  lines.push('')
+  lines.push('请判断：这批未命中的**主因**是什么？在该校准结论之下，**该不该改阈值**？')
+  lines.push('只输出一行 JSON：{"verdict":"maintain|lower|raise|fix-recall|enable-embed|insufficient","reason":"≤60字"}')
+  lines.push('其中 maintain = 维持现阈值（问题不在阈值）；lower/raise = 建议调低/调高；其余 = 根因不在阈值层。')
+  return lines.join('\n')
+}
+
+const VERDICTS: readonly AttributionVerdict[] = ['maintain', 'lower', 'raise', 'fix-recall', 'enable-embed', 'insufficient']
+
+/**
+ * 严格解析归因输出。**格式不符即返回 `null`** —— 不猜、不兜底、不静默通过
+ *   （仓内教训：解析失败若兜底成默认值，下游会把"没解析出来"当成"判了 maintain"）。
+ */
+export function parseAttribution(text: string): { verdict: AttributionVerdict; reason: string } | null {
+  const m = /\{[\s\S]*?\}/.exec(String(text || ''))
+  if (!m) return null
+  let o: { verdict?: unknown; reason?: unknown }
+  try { o = JSON.parse(m[0]) } catch { return null }
+  const v = String(o?.verdict || '')
+  if (!(VERDICTS as readonly string[]).includes(v)) return null
+  return { verdict: v as AttributionVerdict, reason: String(o?.reason || '').slice(0, 120) }
+}
+
+/** 一致率统计（**判据本体**：LLM 归因与细校准结论的一致率）。 */
+export function agreementRate(items: readonly { verdict: AttributionVerdict | null; calibration: AttributionVerdict }[]): { n: number; agree: number; rate: number | null; unknown: number } {
+  const n = items.length
+  if (!n) return { n: 0, agree: 0, rate: null, unknown: 0 }
+  const unknown = items.filter((x) => x.verdict === null).length
+  const judged = items.filter((x) => x.verdict !== null)
+  const agree = judged.filter((x) => x.verdict === x.calibration).length
+  // **未判不计入分母**（否则"没解析出来"会稀释一致率，把失败伪装成"部分一致"）
+  return { n, agree, rate: judged.length ? agree / judged.length : null, unknown }
+}
+
+/**
+ * 从**注册表 note** 推细校准结论（**纯函数**：只吃字符串，不读文件 —— 本件保持零 IO）。
+ * 调用方用 `criteria.generated#SURFACE.mcl.note` 传入（生成物 ⇒ 零 IO、单一事实源）。
+ * ⚠ 判据是**保守的**：认不出就返回 `insufficient`（**不猜** "maintain"）——
+ *   猜错会让"一致率"虚高，正好掩盖本项要暴露的问题。
+ */
+export function calibrationVerdictOf(note: string): AttributionVerdict {
+  const t = String(note || '')
+  if (!t) return 'insufficient'
+  if (/维持不改|维持\s*\d/.test(t)) return 'maintain'
+  if (/建议?降|调低|下调/.test(t)) return 'lower'
+  if (/建议?升|调高|上调/.test(t)) return 'raise'
+  return 'insufficient'
+}
+
+/** 从 mcl-step 审计行抽归因样本（**纯函数**：只做映射，不读文件）。
+ *  ⚠ **实测限制（如实记）**：`mcl-step` 审计行**不记 query 原文**（只记 `hit`/`topics`/`sim`/`rowsN`）
+ *    ⇒ 归因请求里的"查询"只能由 `topics` 近似，必要时为空。要真正带上 query，
+ *      须在 `mcl.ts` 的审计行里加字段（与仓内「输入量须可见化」同族）—— 属后续项，**此处不假装有**。 */
+export function samplesFromMclRows(rows: readonly Record<string, unknown>[], limit = 20): AttributionSample[] {
+  const out: AttributionSample[] = []
+  for (const r of rows) {
+    if (String(r?.missReason || 'ok') === 'ok') continue
+    const topics = Array.isArray(r?.topics) ? (r.topics as unknown[]).map(String) : []
+    const hit = String(r?.hit || '')
+    out.push({ q: topics.join(' / '), rows: hit ? [hit] : [], sim: Number(r?.sim) || 0 })
+    if (out.length >= limit) break
+  }
+  return out
+}

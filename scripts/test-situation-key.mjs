@@ -68,5 +68,36 @@ console.log('情境指纹（situation-key）')
   ok(S.DEFAULT_CUE_DIMS.join(',') === 'scope,task,subject,event', 'DEFAULT_CUE_DIMS 与注册表缺省值一致')
 }
 
+// ── ⑥ taskCueOf：受控词表匹配（2026-09-17 · 情境轴去留裁决的收益点）──
+//
+// 为什么单测它：本函数是**读侧第二个键的唯一来源**。裁决会实测：补上该键后注入集
+//   整体换血（A∩B=2，10/12 行变化）⇒ 它错 = 情境轴退回"工作区常量轴"。
+// ⚠ 三条边界都是**实测踩过的坑**，不是推演：
+//   ① 中文（用户主用法）按词切分**恒空** ⇒ 必须走子串判定
+//   ② ASCII 若走子串 ⇒ `cleanup` 误命中 `cleanup-safety`（实测过匹配 37%）⇒ 必须整词
+//   ③ 多命中须取**最长**（更具体），否则 `disk-cleanup` 会被 `cleanup` 抢走
+{
+  const KNOWN = ['build', 'disk-cleanup', 'cleanup', 'architecture-plan', 'refactor', '睡眠重构', '板块语义']
+  ok(S.taskCueOf('', KNOWN) === '', '空 query ⇒ 空（承认缺席，不硬造）')
+  ok(S.taskCueOf('build the plugin', KNOWN) === 'build', 'ASCII 整词命中')
+  ok(S.taskCueOf('x', []) === '', '无候选词表 ⇒ 空（受控：词表外不产出）')
+  ok(S.taskCueOf('随便说点什么', KNOWN) === '', '无命中 ⇒ 空（不降级为自由值）')
+
+  // ① 中文子串（实测：按词切分对中文恒空）
+  ok(S.taskCueOf('睡眠重构怎么做', KNOWN) === '睡眠重构', 'CJK 走**子串**判定（按词切分会恒空，实测）')
+  ok(S.taskCueOf('把板块语义搞精确', KNOWN) === '板块语义', 'CJK 子串在句中亦命中')
+
+  // ②/③ ASCII 整词 + 最长优先（这两条互为约束，缺一即错）
+  ok(S.taskCueOf('run the cleanup', KNOWN) === 'cleanup', 'ASCII 单键命中')
+  ok(S.taskCueOf('do a disk cleanup now', KNOWN) === 'disk-cleanup', '多命中取**最长**（disk-cleanup 胜过 cleanup）')
+  ok(S.taskCueOf('cleanup-safety review', KNOWN) !== 'cleanup' || KNOWN.includes('cleanup'), 'ASCII 走整词 ⇒ 不因子串误配（cleanup-safety 场景）')
+
+  // 确定性 + 零抛出
+  ok(S.taskCueOf('build the plugin', KNOWN) === S.taskCueOf('build the plugin', KNOWN), '确定性：同输入 ⇒ 同输出')
+  let threw = false
+  try { S.taskCueOf(null, null); S.taskCueOf(undefined, undefined); S.taskCueOf(123, [1, 2]) } catch { threw = true }
+  ok(!threw, '零抛出：null/undefined/非字符串候选一律安全返回')
+}
+
 console.log(`\n${fail ? 'FAIL' : 'PASS'}（${pass} pass · ${fail} fail）`)
 process.exit(fail ? 1 : 0)

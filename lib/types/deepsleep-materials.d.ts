@@ -12,6 +12,11 @@ export interface SleepMaterials {
     pendingDecisions: string;
     hotCtx: string;
     interCtx: string;
+    /** S-P2c（2026-09-16）**本纪元工具使用**（第 12 段材料，来自 `audit/tool-usage.jsonl`）。
+     *  与"经历"其余各段互补：这里回答的是「当天用了**哪些工具**、各用了几次」——
+     *  人类睡眠重构的原料是「经历 × 用到的工具知识」的结合，此段即"工具"那一维的入口。
+     *  ⚠ 只含 工具名/次数/会话短码/日期，**不含参数原文**（隐私红线由 `check-journal-privacy` 守）。 */
+    toolUsage: string;
     /** S3-3/S3-4（2026-09-14）材料段**条数**：审计可见化用 —— 让"本轮给了几条候选"可查
      *  （此前审计只有消费结果 `forgetArchived`/`forgetKept`，没有输入量）。 */
     counts: {
@@ -21,6 +26,7 @@ export interface SleepMaterials {
         hot: number;
         inter: number;
         pending: number;
+        tools: number;
     };
 }
-export declare function gatherMaterials(root: string): SleepMaterials;
+export declare function gatherMaterials(root: string, sinceMs?: number): SleepMaterials;

@@ -35,7 +35,8 @@ const read = (p) => { try { return readFileSync(join(root, p), 'utf8') } catch {
  */
 const REACH = [
   { module: 'injection-playbook', symbol: 'MEMORY_PLAYBOOK_LINES', reaches: 'full', path: 'panel-shared#buildHotMemoryText → sl（stable 段）' },
-  { module: 'ring-supply', symbol: 'createRingSupplyApi', reaches: 'full', path: 'panel-shared#situationLinesOf（**经调用间接抵达**）→ situationBlock → finalText' },
+  { module: 'ring-supply', symbol: 'createRingSupplyApi', reaches: 'full', path: 'situation-supply#situationLinesOf（2026-09-17 自 panel-shared 抽出）→ panel-shared#buildHotMemoryText → situationBlock → finalText', note: '抽出式重构的**预期信号**：本符号不再字面出现在 panel-shared.ts，故判据 ③ 翻红。抵达链一字未改（panel-shared import situationLinesOf，后者调本符号）。此处如实改表即消解；**正面断言的价值正在于此**——若为省事把它降为 partial，就等于放弃了对该链的机器守护' },
+  { module: 'situation-supply', symbol: 'situationLinesOf', reaches: 'full', path: 'panel-shared#buildHotMemoryText → situationBlock → finalText', note: '2026-09-17 新增：情境槽读侧供给（自 panel-shared 抽出）。它是 `createRingSupplyApi` 的**唯一**调用方，二者共同构成"环记录 → 注入面"的完整链' },
   { module: 'supply-assembly', symbol: 'budgetOf', reaches: 'partial', path: 'panel-shared#buildHotMemoryText → 三层额度（**决定裁多少**，不产生文本）', note: 'S4-1：口径统一的单一实现；它影响的是"哪些行进得来"，不是"文本长什么样"' },
   { module: 'supply-assembly', symbol: 'assembleSupply', reaches: 'partial', path: 'supplyUsageMeta → usage（**仅诊断**）+ blocks.situation（注入）', note: '核心输出 kept/dropped/blocks.stable|dynamic|oneshot **不进注入面** —— 本件存在理由即此（原被记为"已接线"）' },
   { module: 'situation-key', symbol: 'cuesOf', reaches: 'partial', path: '提供情境线索（**输入**），自身不产生注入文本' },
@@ -61,8 +62,30 @@ const missingMod = REACH.filter((r) => !existsSync(join(root, 'src', `${r.module
 ok(missingMod.length === 0, `② 申报的模块都在 src/（缺：${missingMod.join(', ') || '无'}）`)
 
 const fulls = REACH.filter((r) => r.reaches === 'full')
-const notInFile = fulls.filter((r) => !shared.includes(r.symbol)).map((r) => `${r.module}#${r.symbol}`)
-ok(notInFile.length === 0, `③ 申报 full 者，符号确实出现在**注入面构造文件**（panel-shared.ts）内（缺：${notInFile.join(', ') || '无'}）`)
+/**
+ * **判据 ③ 的扫描面 = 注入面构造文件 + 其直接依赖**（2026-09-17 修订）。
+ *
+ * 判因：原先只读 `panel-shared.ts` 一个文件，于是**任何"抽出式重构"都会假红** ——
+ *   实测本轮把 `situationLinesOf` 抽到 `situation-supply.ts` 后，
+ *   `ring-supply#createRingSupplyApi` 不再字面出现在 panel-shared，
+ *   而抵达链**一字未改**（panel-shared import situationLinesOf → 后者调本符号）。
+ *   ⇒ 门禁若坚持"只认一个文件"，就会**惩罚正确的模块化**，逼人把申报降级为 partial（= 放弃守护）。
+ *
+ * 修订后的语义**不放松守护力**：符号仍须出现在"注入面构造可达的近邻"里；
+ *   放宽的只是"跨一层模块边界"这一形式。**离注入面更远的模块仍会红**（它们确实不构成抵达）。
+ */
+const depFiles = (() => {
+  const out = ['src/panel-shared.ts']
+  // 取 panel-shared 的 import 列表，把 `./x.js` 解析为 `src/x.ts`
+  for (const m of shared.matchAll(/^import\s[^'"]*from\s+'\.\/([^'"]+)\.js'/gm)) {
+    const f = join('src', `${m[1]}.ts`)
+    if (existsSync(join(root, f))) out.push(f)
+  }
+  return out
+})()
+const sharedPlusDeps = depFiles.map((f) => read(f)).join('\n')
+const notInFile = fulls.filter((r) => !sharedPlusDeps.includes(r.symbol)).map((r) => `${r.module}#${r.symbol}`)
+ok(notInFile.length === 0, `③ 申报 full 者，符号出现在**注入面构造文件及其直接依赖**内（${depFiles.length} 件；缺：${notInFile.join(', ') || '无'}）`)
 // 直接 vs 间接：不在 `buildHotMemoryText` 直体内者为"经调用间接抵达"—— **可见化**，不判失败
 //   （例：`createRingSupplyApi` 在 `situationLinesOf` 内被调用，而后者被本函数调用）
 const indirect = fulls.filter((r) => !body.includes(r.symbol)).map((r) => `${r.module}#${r.symbol}`)
@@ -111,6 +134,35 @@ if (unusedKeys.length) console.log(`   · 产出但未被 userInput 引用（可
 const declaresOutcomes = /outcomes/.test(coreSrc.slice(coreSrc.indexOf('P5'), coreSrc.indexOf('P5') + 400))
 ok(!declaresOutcomes || (produced.has('pendingDecisions') && used.has('pendingDecisions')),
   `⑥ 通道锁：prompt 声明的 P5 \`outcomes\` 通道**有材料背书且已拼接**（材料段=${produced.has('pendingDecisions')} · 拼接=${used.has('pendingDecisions')}）`)
+
+/* ══ ⑦⑧ **纪元日志（工具使用）抵达面**（S-P2c · 2026-09-16）══════════════
+ * 判因：`harvest-access` 已把"当天用了哪些工具"落进 `audit/tool-usage.jsonl`（S-P2a），
+ *   但**采集到 ≠ 抵达**：日志若从不进 `gatherMaterials`、或进了却未拼进 `userInput`，
+ *   模型永远看不到工具维 ⇒ 那条产线等于没接（与 H-1「判据在、通道无」同族）。
+ * ⑤⑥ 已守"用了但没产出"与 outcomes 通道锁；⑦⑧ 把同一纪律**扩到工具维**。 */
+const producedTool = produced.has('toolUsage')
+const usedTool = used.has('toolUsage')
+ok(producedTool && usedTool,
+  `⑦ 工具维抵达：材料段 \`toolUsage\` 产出=${producedTool} · 拼进 userInput=${usedTool}（任一为假 ⇒ 采集到的工具维到不了模型）`)
+const declaresTools = /工具使用/.test(coreSrc) || /toolUsage/.test(coreSrc)
+ok(declaresTools,
+  '⑧ 通道锁：深睡 prompt 声明了工具维的处理策略（材料给了却无策略 = 模型不知道拿它做什么）')
+/* ⑩ **跨粒度收敛通道锁**（S-P4b · 2026-09-16）：
+ *   宿主侧校验器 `applyConvergeOps` 落地并接线（S-P4a）**不等于**该通道可达 ——
+ *   若 prompt 从不声明它，**没有任何模型会产出 convergeOps** ⇒ 应用面为空（与 H-1「判据在、通道无」同族）。
+ *   ⇒ 本断言同时要求：**prompt 声明** 且 **宿主接线**（任一为假 ⇒ 通道不可达）。 */
+const declaresConverge = /convergeOps/.test(coreSrc)
+const runCallsConverge = /applyConvergeOps\s*\(/.test(runSrc)
+ok(declaresConverge && runCallsConverge,
+  `⑩ 通道锁：跨粒度收敛 —— prompt 声明=${declaresConverge} · 宿主接线=${runCallsConverge}（任一为假 ⇒ 该通道应用面为空）`)
+/* ⑪ **收敛候选抵达**（S-P4c′ · 2026-09-16）：真机实测发现 —— 光声明通道不够：
+ *   要求模型**自己从全量材料里找**"同一知识的两版"⇒ 首发 **一条未提**（`otherTried:0`）。
+ *   仓内既有分工是「**候选生成交向量，模糊判断交模型**」⇒ 宿主必须**预筛候选并下发**。
+ *   ⇒ 本断言要求 `convergeCandidates` **被调用**且其产出确实**进入 userInput**（拼成材料段）。 */
+const runBuildsCandidates = /convergeCandidates\s*\(/.test(runSrc)
+const segsPushCandidates = /segs\.push\([^)]*跨粒度收敛候选/.test(runSrc) || /跨粒度收敛候选[\s\S]{0,400}segs\.push/.test(runSrc)
+ok(runBuildsCandidates && segsPushCandidates,
+  `⑪ 候选抵达：宿主预筛候选=${runBuildsCandidates} · 产出入 userInput=${segsPushCandidates}（缺 ⇒ 又把"找候选"推给模型，首发实测必空手）`)
 
 console.log('')
 console.log('📋 抵达面申报（**不静默**：partial/none 逐条写明理由）：')
