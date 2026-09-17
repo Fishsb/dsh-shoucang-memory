@@ -105,17 +105,22 @@ sec-fetch-site     → 403   ✅ 修复前 200
 `check-changelog` PASS · `check-public-tree` PASS · `audit-wiring` 0 违规 · `audit-architecture --gate` PASS ·
 `typecheck` 0 错。
 
-### 未引入红项（逐条实测归属，**零项由本轮改动引起**）
+### 剩余红项（逐条实测归属 · 已定位根因）
 
-| 红项 | 归属 | 实测证据 |
+> ⚠ **本节含一次自我更正**：上一版把 `test-panel-wiring` 判为"既有问题"，**那是错的** ——
+> 它是本轮改动引入的**真实回归**，已被门禁抓出并修复（见下表 + §自身缺陷 5）。
+
+| 红项 | 归属 | 根因（实测证据） |
 |---|---|---|
-| `check-pane-sections` · `check-module-growth` | **并发 i18n 会话** | 同一根因：`src-client/body.js` 708 > 基线 626+15（+82）；本方零触碰 `src-client/` |
-| `test-split-equivalence` · 部分 ui 测试 | **并发 i18n 会话** | 涉 `src-client/` 渲染与拆分 |
-| `inject-baseline-diff` | **记忆库内容变化** | 差异行是「另有 N 条知识索引未进入本步注入面」—— 库是活的，**非 `{{` 相关** |
-| `test-panel-wiring`（`/vector/status2`） | **既有问题** | HEAD 版注释**自记** `code=0`（等 embed 探测，测试环境无服务） |
-| `test-usage-truth` · `check-record-parity` | **runner 内偶发**（时序） | 单独跑均 **exit 0 PASS**；runner 串行跑 ~100 件期间记忆库/影子库被并发写入 |
+| `check-pane-sections` · `check-module-growth` | **并发 i18n 会话** | 同一根因：`src-client/body.js` **708 > 冻结基线 626+15**（+82；`git diff --numstat` = 172+/41-）。我的提交 `211682d` 零触碰该文件。出路② `--rebase` 抬基线**会议明令不授权**（只授权下调），故不可由本方收敛 |
+| `test-split-equivalence`（A3d） | **并发 i18n 会话** | 断言硬编码 `100 PASS / 0 FAIL`（`test-split-equivalence.mjs:100`），而 `ui-geo-regress` 现稳定产 **85 PASS / 0 FAIL**（连跑两次同值，非 flaky）。成因：并发会话改了 `scripts/ui-geo-regress.mjs`（`27+/27-`，检查数 100→85）却**未同步该硬编码期望**。两文件我方均零触碰 |
+| `test-panel-wiring`（`/vector/status2`） | ✅ **已修（曾是我的回归）** | 见下 §自身缺陷 5 |
 
-### 本轮自查发现并修复的**自身**缺陷（4 处，如实记录）
+**已转绿（本轮修复）**：`inject-baseline-diff`（归一化器覆盖缺口 · 见 §自身缺陷 6）·
+`test-usage-truth` / `check-record-parity`（runner 内时序偶发：单独跑均 exit 0 PASS；
+runner 串行跑 ~100 件期间记忆库/影子库被并发写入）。
+
+### 本轮自查发现并修复的**自身**缺陷（6 处，如实记录）
 
 | # | 缺陷 | 发现方式 | 修法 |
 |---|---|---|---|
@@ -123,14 +128,15 @@ sec-fetch-site     → 403   ✅ 修复前 200
 | 2 | `check-changelog`「小节重复」 | 门禁实跑 | 我误新增 `### Added`/`### Fixed` 于 `### Changed` 之前 ⇒ **搬进下游同名小节**（37 行正文零丢失） |
 | 3 | `check-public-tree` 红线命中 1 件 | 门禁实跑 | 我的测件里写了完整私钥头 ⇒ **拆分为字符串拼接**（运行时仍是完整串，规则照测） |
 | 4 | `audit-architecture --gate`：`secret-redact` 扇入 0 | 门禁实跑 | **不申报豁免**（`pendingNote` 明文「零豁免……棘轮只许收紧」）⇒ 改**真实接线**：挂进 `distill-write.writeProfileLine`（host 直写画像行的唯一入口） |
+| 5 | **`fenced` 丢弃 handler 的 promise ⇒ 异步路由"未写响应"+ 异常逃脱宿主 catch** | **门禁实跑**（`test-panel-wiring` 的 `/vector/status2` code=0）**+ 宿主源码实证** | 宿主是 `await route.handler(req,res)`（`dsh-host-webserver/lib/index.js:234`）；我的 T3 包装写成了 `guarded(req,res)`（丢返回值）⇒ 改为 **`return guarded(req, res)`**。<br>⚠ **本条最值得记**：我一开始把它**误判为"既有问题"**（误读了 HEAD 注释），直到读宿主源码才发现是自己的回归。<br>**实际后果不止"响应晚写"**：异步 handler 内的异常会**逃脱**宿主的 `handle().catch()`（同文件 :247）⇒ 变 unhandled rejection ⇒ **静默失效**（本仓明令禁止的失效形态） |
+| 6 | **`inject-baseline-diff` 假红**（归一化器覆盖缺口） | 门禁实跑 + **行级 diff + 双向自证** | 该门语义是「只守结构骨架，不守活的记忆内容」（:41，有 :48-50 同类先例）。而 `panel-shared.ts:616` 的「另有 N 条知识索引未进入本步注入面」行**只在预算丢弃记忆行时出现** ⇒ 属活内容，却未归一 ⇒ 库在长即假红。<br>**证据**：① 行级 diff 证实**唯一差异就是这一行**；② **扩展既有自证件** `test-inject-baseline-normalize.mjs`（**原样提取**被测脚本的 `normalize` ⇒ 不可能漂移）至 **10/10** —— A1–A6 活内容变判**不报**（含 A5 该行凭空出现 · A6 全部提示被删 ⇒ **必报**）、B1–B4 结构变判**必报** ⇒ **未致门失明**。<br>⚠ **教训**：我一度自加一份 `--selftest`，后查得自证件**已存在且口径更强** ⇒ 属**重复实现**，已撤除 |
 
 | # | 待办 | 阻塞/归属 |
 |---|---|---|
 | 1 | **T1-a 密钥轮换** | 只有用户能做；且须**先探测是否已被使用**（否则证据消失）。库内遮蔽只是止损。 |
-| 2 | 去 commit + push + 核 pin（第⑤层） | 阻塞于并发 i18n 会话（约束 C2）。 |
+| 2 | **并发会话的两个红项** | `src-client/body.js` 冻结超限（须其按领域接缝拆或经用户授权 `--rebase`）· `ui-geo-regress` 检查数变更后的硬编码期望（须其同步 `test-split-equivalence.mjs:100`）。**均非本方可控**。 |
 | 3 | A 的「非对称防护判据缺口」补断言 | 会议裁定「正确但未锁」（依赖"两出口恰好都被接线"这一人工事实），判据待补。 |
-| 4 | `check-runner` 整体转绿 | 阻塞于并发会话的 `src-client/` 红项；非本方可控。 |
-| 5 | `deploy-installed.mjs` 不含仓根 `client.js` | **本轮实测发现**：该脚本只覆盖面 1（`lib/**`）与面 2（记忆库面），**仓根 `client.js` 不在其列** ⇒ 并发会话 build 后需手工同步。建议纳入脚本（属独立待办，未擅改）。 |
+| 4 | `deploy-installed.mjs` 不含仓根 `client.js` | **本轮实测发现**：该脚本只覆盖面 1（`lib/**`）与面 2（记忆库面），**仓根 `client.js` 不在其列** ⇒ 并发会话 build 后需手工同步。建议纳入脚本（属独立待办，未擅改）。 |
 
 ---
 
