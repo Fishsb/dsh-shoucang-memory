@@ -13,6 +13,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { SURFACE, TRIGGER } from './criteria.generated.js'
 import { dshHome, knowledgeRoot, memoryLibRoot } from './targets.js'
 import { runProcAsync } from './proc-async.js'
+import { readLedgerVolumes } from './ledger-compact.js'
 import type { DeepSleepApi, MclHandle, SchedulerApi } from './composition.js'
 import { contractFor } from './panel-contract.js'
 import { readBody, sendJson } from './panel-shared.js'
@@ -300,7 +301,15 @@ function criteriaRoute(d: ObserveDeps, _req: IncomingMessage, res: ServerRespons
       // v2.1 M2：统一台账 audit/ledger.jsonl 优先（decision.* + write.*），旧 judgement-ledger.jsonl 兼容
       const unified = join(knowledgeRoot(), 'audit', 'ledger.jsonl')
       const legacy = join(knowledgeRoot(), 'audit', 'judgement-ledger.jsonl')
-      const lines = readFileSync(existsSync(unified) ? unified : legacy, 'utf8').split(/\r?\n/).filter(Boolean)
+      /* D-M5：台账可能已**按体积轮转**（`ledger.jsonl` + `.1/.2/.3`）⇒ 行数与末行都必须**跨档**取。
+       *   不改的后果是具体的：轮转一发生，下面 `rows` 会**静默变小**（前端"台账 N 行"骤降，
+       *   看着像数据丢了），而 `lastAt` 也可能取到空。 */
+      /* ⚠ 不能以 `existsSync(unified)` 作守卫：轮转期间主档可能是"刚被重建的空档"或"尚未重建"，
+       *   而历史在 `.1/.2/.3` 里 ⇒ 必须以**跨档读的结果**判空，否则会错误回退到 legacy（读成另一份数据）。 */
+      const unifiedLines = readLedgerVolumes(unified)
+      const lines = unifiedLines.length
+        ? unifiedLines
+        : (existsSync(legacy) ? readFileSync(legacy, 'utf8').split(/\r?\n/).filter(Boolean) : [])
       ledgerRows = lines.length
       const last = lines[lines.length - 1]
       if (last) lastAt = Date.parse((JSON.parse(last) as { at?: string }).at || '') || 0

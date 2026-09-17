@@ -5,6 +5,25 @@
 ## [Unreleased]
 
 ### Changed
+- **D 板块收口 · M5 台账体积轮转（2026-09-17）** —— 目标 ④ 的最后一项，**也是风险最高的一项**
+  （读取侧不同批改就会"看起来丢数据"）。
+  ① **机制**：`ledger-compact.ts` 新增 `rotateBySize`（`<file>` → `.1` → `.2` → `.3`，只留 3 份）与
+  `readLedgerVolumes`（**跨档按时间序**）。阈值 `8MB ≈ 13 天`（实测 ledger ≈**608 KB/天**）× 3 份
+  ≈ **39 天窗口**；**硬依据**：`panel-memory#growthOf` **按月**统计 ⇒ 必须保住**当前月 + 上月**。
+  与 `compactFile`（按 type 裁 episode）互补：那件管"某类事件不留太久"，本件管"文件不无限长大"。
+  ② **读取侧同批改（本项要害）**：`audit-source.ts` 由"单读主档"改为**跨档按时间序合并** ——
+  不改就是该文件头注记着的那次事故重演（单读主档 ⇒ 水位回放**命中 0 轮**）；`panel-observe.ts` 的台账行数
+  由 `readFileSync(主档).length` 改为**跨档求和**（否则轮转一发生，前端"台账 N 行"会**静默骤降**，像数据丢了）。
+  ③ **测试（已按 AGENTS 规则 6 登记进 `check-runner` 的 CHECKS）**：新增
+  `scripts/test-ledger-rotation.mjs`（**7 PASS / 0 FAIL**），含**反例自证**：只读主档得 **0 行** < 跨档 **15 行**
+  ⇒ 证明"读侧不跨档就是丢数据，不是没数据"。**它当场抓出两个真问题并已修**：㈠ 轮转后主档被 rename 走、
+  下次 append 前**主档不存在**，而多处读取以 `existsSync(主档)` 为守卫 ⇒ 会被读成"无台账" ⇒
+  改为轮转后**立刻重建空主档**；㈡ `panel-observe` 在该瞬态下会**错误回退到 legacy**（读成另一份数据）⇒
+  改为以**跨档读的结果**判空。
+  ④ **`mcl.ts` 补 `lastStepAt` 清理**：原清 `state/taskText/taskTextAt/ready` 四张 Map，**漏了 `lastStepAt`**
+  （它每轮 pre-step 写入、全库无清零点 ⇒ 长跑进程按会话数线性增长）。
+  验证：typecheck 零错 · build ✅ · 门禁 **121 pass / 1 fail**（唯一为记忆库活体基线；**+1 = 新测试已被跑到**）·
+  `check-module-growth` **可变全局 0/0** · 副本 sha1 一致 · 热重载 ✅ · `/criteria` 台账行数 **9223** 与主档实测一致。
 - **D 板块收口 · I4 同步子进程异步化 + 自检互斥（2026-09-17）**：
   ① **根因**：四处 `execFileSync` **在同步 HTTP handler 里独占宿主唯一事件循环** —— `panel-observe` 的
   `/selfcheck/run`（**上限 180s**）、`/reconcile`（30s）、`/maturation/scan`（30s），以及

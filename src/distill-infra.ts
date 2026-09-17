@@ -5,7 +5,7 @@
 //   对外只暴露 createInfraApi(d) —— 返回绑定后的句柄，调用方零感知。
 import { appendFileSync, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { compactFile } from './ledger-compact.js'
+import { compactFile, rotateBySize } from './ledger-compact.js'
 import { CRITERIA_VERSION } from './criteria.generated.js'
 import { envelopeEvent as envelope } from './event-envelope.js'
 import type { DistillState } from './distill-state.js'
@@ -46,6 +46,12 @@ export type InfraApi = ReturnType<typeof createInfraApi>
  * 现全部收敛；`check-observability` 断言源码中不再出现原始写法。
  */
 
+/** 台账**体积轮转**阈值（D-M5 · 2026-09-17）。实测 ledger ≈**608 KB/天**（3,499,167 B / 5.56 天）
+ *  ⇒ 8 MB ≈ **13 天**；保留 3 份（`LEDGER_VOLUMES`）⇒ 窗口 ≈ **39 天**。
+ *  硬依据：`panel-memory.ts#growthOf` **按月**统计 —— 必须保住**当前月 + 上月**，故 3 份是下限而非拍脑袋。
+ *  与 `compactFile`（按 type 裁 episode）互补：那件管"某类事件不留太久"，本件管"文件不无限长大"。 */
+const LEDGER_CAP_BYTES = 8 * 1024 * 1024
+
 /** 写失败上报（2026-09-17 · D-Silent）。**绝不抛** —— 可见化不得反过来中断主流程。 */
 const fail = (d: InfraDeps, kind: string, e: unknown): void => {
   try { d.onWriteFail?.(kind, e) } catch { /* 上报失败无害 */ }
@@ -57,6 +63,9 @@ const ledger = (d: InfraDeps, o: Record<string, unknown>): void => {
     const dom = String((o as { domain?: string }).domain || '')
     const type = String((o as { type?: string }).type || (dom === 'consolidate' ? 'decision.consolidate' : dom === 'ingest' ? 'decision.ingest' : 'event'))
     appendFileSync(d.ledgerFile, envelope({ criteriaVersion: CRITERIA_VERSION, ...o, type }, type), 'utf8')
+    /* D-M5 体积轮转：append 后 stat 一次 —— 台账写入**不是热路径**，代价可忽略（换来"文件不无限长大"）。
+     *   ⚠ 读取侧已**同批**改为跨档（`audit-source.ts` / `panel-observe.ts`）—— 只改这里必"看起来丢数据"。 */
+    rotateBySize(d.ledgerFile, LEDGER_CAP_BYTES)
   } catch (e) { fail(d, 'ledger', e) } // 台账失败不再静默：不影响主流程，但**必须留痕**
 }
 

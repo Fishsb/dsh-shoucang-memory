@@ -306,6 +306,10 @@ const CHECKS = [
   //   **正向测试天然看不见**。故本件判据一律落在**输出**上，并含结构断言（签名层 + 介质集）。
   ['scripts/test-inject-cache.mjs'],
   ['scripts/test-atomic-write.mjs'],
+  // D-M5（2026-09-17 登记）：台账体积轮转 + 跨档读的行为测试，含反例自证（**只读主档 ⇒ 行数显著变少**）。
+  //   必须登记：轮转的失效模式是**静默**的（写侧轮转、读侧没跨档 ⇒ 看起来像"数据丢了"），
+  //   而门禁不读台账 ⇒ 只有本件能验它（AGENTS 规则 6：未登记 = 等于没写）。
+  ['scripts/test-ledger-rotation.mjs'],
   ['scripts/test-wiring-gate.mjs'],
   ['scripts/test-wiring-gate-ast.mjs'],
   // 绑定句柄调用形态（2026-09-14 立，实锤后补）：`create*Api` 的绑定句柄只能经依赖面调用，

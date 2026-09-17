@@ -202,7 +202,7 @@ function pushTrace(counters: { trace?: string[] } | undefined, tag: string, sid:
  * ⇒ 那一步读不到任务文本，而判定被 `step !== 1` 挡住 ⇒ **整轮不判定**（见 §68 的时序轨迹）。
  */
 function captureTaskText(
-  d: { state: Map<string, SessMcl>; taskText: Map<string, string>; taskTextAt: Map<string, number>; ready: Set<string>; ledger: { newTask(sid: string): void }; counters?: { trace?: string[] } },
+  d: { state: Map<string, SessMcl>; taskText: Map<string, string>; taskTextAt: Map<string, number>; lastStepAt: Map<string, number>; ready: Set<string>; ledger: { newTask(sid: string): void }; counters?: { trace?: string[] } },
   session: any,
   event: any,
 ): void {
@@ -216,7 +216,8 @@ function captureTaskText(
       .filter((b: any) => b && b.type === 'text' && typeof b.text === 'string').map((b: any) => b.text).join('').trim()
     if (text.length < 6) return
     // P1 硬上界（原先 state/taskText/ready 三张 Map 除 state 外从无清理 ⇒ 长跑进程按会话数线性增长）
-    if (d.state.size > 256) { d.state.clear(); d.taskText.clear(); d.taskTextAt.clear(); d.ready.clear() }
+    // D-M5（2026-09-17）：原清理**漏了 `lastStepAt`**（:572 每轮 pre-step 写入、全库无清零点）⇒ 一并清。
+    if (d.state.size > 256) { d.state.clear(); d.taskText.clear(); d.taskTextAt.clear(); d.ready.clear(); d.lastStepAt.clear() }
     d.taskText.set(sid, text)
     // **消息到达时刻**（2026-09-13 · 修判定门竞态）：判定时机改为"消息到达后的第一个 pre-step"，
     //   故必须记下到达时间。实测：子代理会话的 `cap` 可能落在当轮 step 1 的 pre-step **之后**
@@ -375,7 +376,7 @@ export function registerMcl(
   // 任务文本捕获（主通道）：实现已提到**模块级** `captureTaskText`（仓内约定：实现函数在模块级，依赖显式窄传）
   //   —— 提出来同时把装配函数行数压回 I1 棘轮（≤120 行）以内。
   ctx.on('session/event', (session: any, event: any) => {
-    captureTaskText({ state, taskText, taskTextAt, ready, ledger, counters }, session, event)
+    captureTaskText({ state, taskText, taskTextAt, lastStepAt, ready, ledger, counters }, session, event)
     // ★2026-09-13 §70 **层二修复**：**消息到达即判定**。
     //   为什么必须在这里判：块在**请求装配**时渲染，**早于本步 pre-step** ⇒ 若材料只在 pre-step 里写，
     //   块永远晚一步、实际取不到（真机实测 `injected=436 viaSystem=1` 而 `sysBlockNonEmpty=0`）。

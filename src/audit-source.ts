@@ -21,6 +21,7 @@
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { readLedgerVolumes } from './ledger-compact.js'
 
 /** 双源读蒸馏审计行（坏行跳过、不可读=空，**零抛出**）。 */
 export function readDistillAudit(legacyFile: string): Array<Record<string, unknown>> {
@@ -56,6 +57,14 @@ function readDistillAuditRows(legacyFile: string): Array<{ line: string; o: Reco
     } catch { /* 不可读=空 */ }
   }
   push(legacyFile, () => true) // 历史批次
-  push(join(dirname(legacyFile), 'ledger.jsonl'), (o) => String(o.type || '').startsWith('audit.')) // 现行（统一台账）
+  /* 台账侧**跨档读**（D-M5 · 2026-09-17）：台账按体积轮转后，最新数据在主档、历史在 `.1/.2/.3`
+   *   ⇒ 必须**按时间序合并各档**。**这正是不改不行的原因**：单读主档时，轮转一发生，
+   *   水位回放就会拿不到旧值 ⇒ 水位置 `Date.now()` ⇒ **命中 0 轮**（本文件头注的实测事故即此类）。 */
+  for (const l of readLedgerVolumes(join(dirname(legacyFile), 'ledger.jsonl'))) {
+    try {
+      const o = JSON.parse(l) as Record<string, unknown>
+      if (String(o.type || '').startsWith('audit.')) out.push({ line: l, o })
+    } catch { /* 坏行跳过：解析失败不得让整段审计不可用 */ }
+  }
   return out
 }
