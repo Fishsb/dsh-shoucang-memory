@@ -45,7 +45,10 @@ L4 交互（DSH Web GUI）
 | **M10 自省** | `assistant_capabilities` | 能力面查询 | 只读，无 token |
 
 > **载体归属口径（2026-09-12 根治 A–D 后；2026-09-14 P1 订正）**：
-> `src/` 共 **73 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> `src/` 共 **74 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> **2026-09-17 新增 `file-stat-cache.ts`** ⇒ 73 → 74：D-I5 按 `(mtimeMs,size)` 失效的文件读取缓存 +
+> 真字节级尾读。**缓存键＝生产者标识 + 路径**（不能只用路径：`statSize` 与 `nonEmptyLineCount`
+> 同路径不同物，首版因此把**字节数当行数**返回 —— 本轮实测抓到的真 bug，已修并留证）。
 > **2026-09-17 新增 `situation-supply.ts`** ⇒ 72 → 73：情境槽读侧供给（`situationLinesOf` 自
 > `panel-shared` 抽出 + 受控词表 `knownTaskCuesOf`）。抽出动因同 `injection-playbook`：
 > `panel-shared.ts` 受大模块冻结棘轮约束（当时基线 547 / **顶格零余量**），而情境轴补第二个键

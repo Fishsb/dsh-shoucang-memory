@@ -240,8 +240,10 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
   // ── 领域模块装配（阶段 C）：依赖**按领域窄传**，实现在 distill-*.ts ──
   const st = newDistillState()
 
-  const infra = createInfraApi({
+  const infra: ReturnType<typeof createInfraApi> = createInfraApi({
     logFile, auditFile, ledgerFile, episodeFile, stubDir, kRoot, EPISODE_CAP, LEDGER_FILE,
+    // 写失败可见化（D-Silent）：落点 infra.log 写的是另一文件、不互相递归；显式类型防 TS7022（自身初始化器内引用）
+    onWriteFail: (kind, e) => infra.log('[write-fail] ' + kind + ': ' + String((e as Error)?.message || e).slice(0, 160)),
   })
   const embed = createEmbedApi({ config })
 

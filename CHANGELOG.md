@@ -5,6 +5,28 @@
 ## [Unreleased]
 
 ### Changed
+- **D 板块落地 · I5 热路径缓存 + D-Silent 写失败可见化（2026-09-17）**：
+  ① **I5（根因级）**：新增 `src/file-stat-cache.ts` —— 按 `(mtimeMs,size)` **双元组**失效的文件读取缓存
+  （LRU ≤32）+ **真字节级尾读**（`openSync`+末尾 ≤256KB 回读；**刻意不复用** `panel-memory#readJsonlTail`，
+  那件本身也是全量读，是伪优化）。三处调用点改走缓存：`/vector/status2`（原**每次请求全量读 10,411,213 B**
+  只为取一个行数，而前端 `panes-toggles.js:435` **每 30s** 轮询一次）、`/memory/overview` 的向量简态、
+  `/mcl/status` 的 `mclAuditRecent`（原全量读 3,499,167 B 台账 + 逐行 `JSON.parse` 后**只取末 10 行**）。
+  **实测（HTTP 探针，非自述）**：`readStats.bytesRead` 首次 10,411,213 B、其后连续 3 次调用**保持不变**
+  （hits 0→2→4→6）⇒ 读取量**不随请求次数线性增长**；行数 `799` 经独立复算核对一致；
+  `/mcl/status` **99ms → 7ms**、`/memory/overview` **283ms → 145ms**、`/vector/status2` **238ms → ~130ms**。
+  ⚠ **本轮实测抓到的真 bug（已修并留证）**：首版缓存**只用路径作键** ⇒ `statSize()` 存的**字节数**被
+  `nonEmptyLineCount()` 命中后**当成行数返回**（探针读到 `cache.lines` = 10411213）。**缓存键必须带
+  生产者标识**（`kind + '\0' + path`）。这正是"键相同不代表物相同"的实例。
+  ② **D-Silent（5 处有后果的静默）**：`distill-infra.ts` 的台账/回合集/存根三处写入 catch 由**全静默**改为
+  可选回调 `onWriteFail`（**绝不抛**：可见化不得反过来中断主流程；未接线时行为与改前**完全一致**），
+  在 `distill.ts` 接到 `infra.log`（落点是另一文件，不互相递归）；`panel-inject.ts#snapshotBank` 的
+  库快照失败由空回调改为 `logger.warn`（best-effort 语义不变，失败不再沉默）。
+  ⚠ 其余 ~190 处空 catch **明确不动**（多为存在性探测/legacy 兼容读，统一改 warn 会在正常缺文件时刷屏
+  淹没真告警）；**不新增"禁止空 catch"形式门禁**。
+  验证：typecheck 零错 · build ✅ · 全量门禁 **120 pass / 1 fail**（唯一失败仍为 `inject-baseline-diff`
+  的记忆库活体差异，与本次改动无关）· `check-arch-sync` **PASS**（模块 73 → **74**，AGENTS.md 与
+  ARCHITECTURE.md 同步）· `audit-wiring` **I1 归零**（新增行曾使 `registerDistill` 达 **122 行 > 120 上限**，
+  已把注释收成单行）· `audit-fnspan` PASS · 副本 sha1 逐件一致 · 热重载 ✅（fiber active，清缓存 74 模块）。
 - **圆桌会审整改 · 体检 → 方案 → 落地（2026-09-17）**：两轮圆桌（体检 4 专家 + 方案 4 专家 + 横切验收），
   按 P0/P1 序落地，**每步留"先红"证据**。
   ① **硬面 13 件本机路径字面量清理**（甲组 9 + 乙组 4 件 5 处，含 `transcript-cwd-probe.mjs` **双副本同改**）：

@@ -18,6 +18,7 @@ import { contractFor } from './panel-contract.js'
 import { warmInjectDedup, filterInjectedText, dedupState } from './crossform-dedup.js'
 import { injectCacheReason } from './dynamic-select.js'
 import { isLocalBase, parseView, probeLocalEmbed, readBody, sendJson } from './panel-shared.js'
+import { fileReadStats, nonEmptyLineCount, statSize } from './file-stat-cache.js'
 import type { HotMemory, InjectMeta, PanelLogger, RootAccess, RouteFn, SuiteConfigAccess } from './panel-shared.js'
 
 export interface InjectDeps {
@@ -78,14 +79,21 @@ const gateWrite = (target: string, tmpPath: string): Promise<{ ok: boolean; reas
   })
 
 /** v2（ADR-122）：面板写入后的库 git 快照（best-effort；不动写门语义，失败静默） */
-const snapshotBank = (): void => {
+const snapshotBank = (d?: InjectDeps): void => {
   try {
     const script = join(memoryLibRoot(), 'scripts', 'bank-git.mjs')
     if (!existsSync(script)) return
     execFile('node', [script, '--message', `memory: panel-write @ ${new Date().toISOString().slice(0, 19)}`],
       { env: { ...process.env, MEMORY_ROOT: memoryLibRoot() }, windowsHide: true, timeout: 20000 },
-      () => { /* 静默 */ })
-  } catch { /* 静默 */ }
+      (err) => {
+        /* 2026-09-17 修（D-Silent）：原为空回调 ⇒ 快照失败**零痕迹**，使用者会以为面板写入已入库。
+         *   语义不变（仍 best-effort、仍不抛），但失败不再沉默。 */
+        if (!err) return
+        try { d?.logger.warn?.('[shoucang] bank 快照失败（面板写入未入记忆库 git）：' + String(err.message || err).slice(0, 160)) } catch { /* */ }
+      })
+  } catch (e) {
+    try { d?.logger.warn?.('[shoucang] bank 快照启动失败：' + String((e as Error)?.message || e).slice(0, 160)) } catch { /* */ }
+  }
 }
 
 const readMemFile = (file: string): { text: string | null; abs: string } => {
@@ -130,11 +138,19 @@ try {
     provider = p2.provider
     localOk = p2.ok
   } else if (running.enabled) provider = 'cloud'
-  // 缓存统计
+  /* 缓存统计 —— 2026-09-17（D-I5）：原为**每次请求全量同步读** ~10MB（`readFileSync().split().filter().length`）
+   *   只为取一个行数，而前端 `panes-toggles.js:435` **每 30s** 轮询一次 ⇒ 走 (mtimeMs,size) 失效的缓存，
+   *   文件未变时零重读；尺寸同样走缓存的 stat。 */
   let cacheLines = 0, cacheKB = 0
-  try { const f = join(knowledgeRoot(), '.vector-cache.jsonl'); if (existsSync(f)) { const st = statSync(f); cacheKB = Math.round(st.size / 1024); cacheLines = readFileSync(f, 'utf8').split('\n').filter((l) => l.trim()).length } } catch { /* 无缓存 */ }
+  try {
+    const f = join(knowledgeRoot(), '.vector-cache.jsonl')
+    if (existsSync(f)) {
+      cacheKB = Math.round(Math.max(0, statSize(f)) / 1024)
+      cacheLines = Math.max(0, nonEmptyLineCount(f))
+    }
+  } catch { /* 无缓存 */ }
   const stats = { queries: vecStats.queries, lastMode: vecStats.lastMode, lastMs: vecStats.lastMs, lastAt: vecStats.lastAt, lastQuery: vecStats.lastQuery, lastHit: vecStats.lastHit }
-  sendJson(res, 200, { ok: true, running, persisted: p, provider, localOk, cache: { lines: cacheLines, kb: cacheKB }, stats })
+  sendJson(res, 200, { ok: true, running, persisted: p, provider, localOk, cache: { lines: cacheLines, kb: cacheKB }, stats, readStats: { ...fileReadStats } })
 } catch (e) { sendJson(res, 500, { error: String(e) }) }
 }
 
@@ -262,7 +278,7 @@ try {
   const r = await writeMemViaGate(rel, folded.join('\n'))
   if (!r.ok) return sendJson(res, 400, { error: r.reason, detail: (r.out || '').slice(0, 300) })
   d.hot.invalidate()
-  snapshotBank() // v2：库 git 快照（面板写后；best-effort）
+  snapshotBank(d) // v2：库 git 快照（面板写后；best-effort；失败可见化 D-Silent）
   return sendJson(res, 200, { ok: true })
 } catch (e) { sendJson(res, 500, { error: String(e) }) }
 }
@@ -285,7 +301,7 @@ try {
   const r = await writeMemViaGate(file, lines.join('\n'))
   if (!r.ok) return sendJson(res, 400, { error: r.reason, detail: (r.out || '').slice(0, 300) })
   d.hot.invalidate()
-  snapshotBank() // v2：库 git 快照（面板写后；best-effort）
+  snapshotBank(d) // v2：库 git 快照（面板写后；best-effort；失败可见化 D-Silent）
   return sendJson(res, 200, { ok: true })
 } catch (e) { sendJson(res, 500, { error: String(e) }) }
 }
@@ -306,7 +322,7 @@ try {
   const r = await writeMemViaGate(file, kept.join('\n'))
   if (!r.ok) return sendJson(res, 400, { error: r.reason, detail: (r.out || '').slice(0, 300) })
   d.hot.invalidate()
-  snapshotBank() // v2：库 git 快照（面板写后；best-effort）
+  snapshotBank(d) // v2：库 git 快照（面板写后；best-effort；失败可见化 D-Silent）
   return sendJson(res, 200, { ok: true })
 } catch (e) { sendJson(res, 500, { error: String(e) }) }
 }

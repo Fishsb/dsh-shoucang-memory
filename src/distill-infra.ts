@@ -19,6 +19,10 @@ export interface InfraDeps {
   kRoot: string
   EPISODE_CAP: number
   LEDGER_FILE: string
+  /** 写失败可见化（2026-09-17 · D-Silent）。原三处写入 catch **全静默** ⇒ 台账/回合集/存根写失败零痕迹，
+   *  使用者会以为"已记录"。此处**刻意可选且不抛**：可见化不得反过来中断主流程（与既有"台账 best-effort"
+   *  纪律一致）；未接线时行为与改前**完全一致**（零回归）。 */
+  onWriteFail?: (kind: string, e: unknown) => void
 }
 
 /** 去掉首个参数（依赖 d）后的参数元组 —— 用于生成**保类型**的绑定句柄。 */
@@ -42,13 +46,18 @@ export type InfraApi = ReturnType<typeof createInfraApi>
  * 现全部收敛；`check-observability` 断言源码中不再出现原始写法。
  */
 
+/** 写失败上报（2026-09-17 · D-Silent）。**绝不抛** —— 可见化不得反过来中断主流程。 */
+const fail = (d: InfraDeps, kind: string, e: unknown): void => {
+  try { d.onWriteFail?.(kind, e) } catch { /* 上报失败无害 */ }
+}
+
 const ledger = (d: InfraDeps, o: Record<string, unknown>): void => {
   try {
     mkdirSync(dirname(d.ledgerFile), { recursive: true })
     const dom = String((o as { domain?: string }).domain || '')
     const type = String((o as { type?: string }).type || (dom === 'consolidate' ? 'decision.consolidate' : dom === 'ingest' ? 'decision.ingest' : 'event'))
     appendFileSync(d.ledgerFile, envelope({ criteriaVersion: CRITERIA_VERSION, ...o, type }, type), 'utf8')
-  } catch { /* 台账失败静默（不影响主流程） */ }
+  } catch (e) { fail(d, 'ledger', e) } // 台账失败不再静默：不影响主流程，但**必须留痕**
 }
 
 const recordEpisode = (d: InfraDeps, o: Record<string, unknown>): void => {
@@ -60,7 +69,7 @@ const recordEpisode = (d: InfraDeps, o: Record<string, unknown>): void => {
     mkdirSync(dirname(d.episodeFile), { recursive: true })
     appendFileSync(d.episodeFile, envelope(o, 'episode'), 'utf8')
     compactFile(d.episodeFile, 'episode', d.EPISODE_CAP, 8) // 超 EPISODE_CAP+8 才重写（低频、原子替换、失败静默）
-  } catch { /* 记录失败静默 */ }
+  } catch (e) { fail(d, 'episode', e) } // 回合集写失败留痕（原静默）
 }
 
 const log = (d: InfraDeps, msg: string): void => { try { mkdirSync(dirname(d.logFile), { recursive: true }); appendFileSync(d.logFile, '[' + new Date().toISOString() + '] ' + msg + '\n') } catch { /* 静默 */ } }
@@ -81,5 +90,5 @@ const recordStub = (d: InfraDeps, o: Record<string, unknown>): void => {
     //   并进共享台账后那段裁剪会**截断整个 ledger**，须先有"按 type 裁剪"机制，故不在本轮并）。
     mkdirSync(dirname(d.ledgerFile), { recursive: true })
     appendFileSync(d.ledgerFile, envelope(o, 'stub'), 'utf8')
-  } catch { /* 存根失败静默 */ }
+  } catch (e) { fail(d, 'stub', e) } // 存根写失败留痕（原静默）
 }

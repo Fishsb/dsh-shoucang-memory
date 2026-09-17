@@ -19,6 +19,7 @@ import { readBody, sendJson } from './panel-shared.js'
 import type { PanelLogger, RouteFn, SuiteConfigAccess } from './panel-shared.js'
 import { RECORD_DIR, loadStore } from './record-shadow.js'
 import { readDistillAuditText } from './audit-source.js'
+import { readTailLines } from './file-stat-cache.js'
 import { associationCensus } from './association-ring.js'
 import { scorecardOf } from './decision-ring.js'
 import { factCensus } from './fact-ring.js'
@@ -157,7 +158,9 @@ function mclAuditRecent(root: string, n = 10): unknown[] {
     try {
       const f = join(root, 'audit', file)
       if (!existsSync(f)) return
-      for (const l of readFileSync(f, 'utf8').split(/\r?\n/).filter(Boolean)) {
+      /* 2026-09-17（D-I5）：原为**全量同步读 + 逐行 parse**（台账实测 3,499,167 B），而调用方只要**最近 10 条**
+       *   ⇒ 改真字节级尾读（末尾 ≤256KB 窗口，缓存）。窗口以前的历史行不在此列 —— 对"最近 N 条"语义等价。 */
+      for (const l of readTailLines(f, 400)) {
         try { const o = JSON.parse(l); if (keep(o)) out.push(o) } catch { /* 坏行跳过 */ }
       }
     } catch { /* 不可读=空 */ }

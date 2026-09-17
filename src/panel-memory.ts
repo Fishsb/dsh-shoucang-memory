@@ -9,6 +9,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { dshHome, knowledgeRoot } from './targets.js'
 import { MATURATION } from './criteria.generated.js'
 import { vecStats } from './vec.js'
+import { nonEmptyLineCount } from './file-stat-cache.js'
 import { readDistillAuditText } from './audit-source.js'
 import { isLocalBase, sendJson, statMtime } from './panel-shared.js'
 import type { PanelLogger, RouteFn, SuiteConfigAccess } from './panel-shared.js'
@@ -270,7 +271,8 @@ function memoryOverviewRoute(d: MemoryDeps, _req: IncomingMessage, res: ServerRe
         const baseUrl = String((p as { embedBaseUrl?: unknown }).embedBaseUrl || 'http://127.0.0.1:11434/v1')
         let provider = enabled ? 'cloud' : 'off'
         let cacheLines = 0
-        try { const f = join(knowledgeRoot(), '.vector-cache.jsonl'); if (existsSync(f)) cacheLines = readFileSync(f, 'utf8').split('\n').filter((l) => l.trim()).length } catch { /* */ }
+        /* 2026-09-17（D-I5）：同 `/vector/status2` —— 原为全量读 10MB 取行数，改走 (mtimeMs,size) 缓存。 */
+        try { const f = join(knowledgeRoot(), '.vector-cache.jsonl'); if (existsSync(f)) cacheLines = Math.max(0, nonEmptyLineCount(f)) } catch { /* */ }
         if (enabled && isLocalBase(baseUrl)) provider = vecStats.queries ? (vecStats.lastMode === 'fusion' ? 'fusion' : 'lexical') : 'gpu-ready'
         return { enabled, provider, cacheLines }
       } catch { return { enabled: false, provider: 'off', cacheLines: 0 } }
