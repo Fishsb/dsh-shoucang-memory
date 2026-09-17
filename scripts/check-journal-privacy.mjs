@@ -45,7 +45,7 @@ export const sensitiveHits = (text) => (String(text || '').match(new RegExp(RE_S
 
 if (argv.includes('--selftest')) {
   // ⚠ 合成样本**不得出现盘符字面量**：本仓有 `check-hardcode`（零硬编码本机路径红线），
-  //   源码里写 `X:\…` 会被它判红（实测踩到一次）。⇒ 用**拼接**构造，源码面保持干净。
+  //   源码里写盘符路径（「字母 + 冒号 + 反斜杠」形态）会被它判红（实测踩到一次）。⇒ 用**拼接**构造，源码面保持干净。
   const FAKE_DRIVE = 'D'.concat(':', '\\', 'FF', '\\', 'x')
   const FAKE_DRIVE_DIR = 'D'.concat(':', '\\', 'FF', '\\', 'shoucang')
   const cases = [

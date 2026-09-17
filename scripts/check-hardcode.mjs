@@ -60,7 +60,10 @@ const EXCLUDE_DIRS = new Set([".git", "node_modules", ".index_cache", ".kb", "__
 const BINARY_EXT = /\.(png|jpe?g|gif|webp|ico|bmp|zip|gz|tgz|zst|7z|rar|woff2?|ttf|otf|eot|pdf|mp4|webm|mp3|exe|dll|so|dylib|bin|sqlite|db)$/i;
 const SKIP_FILES = /^LICENSE$/i;
 
-const PATH_RE = /(?<![A-Za-z0-9+.-])[A-Za-z]:[\\/]{1,2}[A-Za-z0-9_.\-]/g;
+/** 判据用**宽口径**（与验收判据一致）：斜杠后可跟 0–20 个 `[A-Za-z0-9_.\-]`。
+ *  2026-09-17 定稿：**裸盘符形态（`<字母>:\\` 后面什么都不跟）同样算命中** ——
+ *  乙组 4 件就是这种形态，留它就是"盘符枚举措豁免"，而**例外即 I3 病根**（见头注）。 */
+const PATH_RE = /(?<![A-Za-z0-9+.-])[A-Za-z]:[\\/]{1,2}[A-Za-z0-9_.\-]{0,20}/g;
 const URL_SPAN = /[A-Za-z][A-Za-z0-9+.\-]*:\/\/\S*/g;
 
 function insideUrl(line, idx) {
