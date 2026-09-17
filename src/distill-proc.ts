@@ -2,8 +2,9 @@
 //
 // 为什么单独成件：distill-llm.ts 需要 runNode / textOf，而它们原本定义在 distill.ts ⇒
 //   直接 import 会形成 distill → distill-llm → distill 的**环**（本项目零环是硬性质，不能破）。
-//   本件零 import（除 node 内置），是所有蒸馏子模块的进程调用汇聚点。
+//   本件只 import node 内置与 `proc-async`（后者零 src 依赖 ⇒ **不成环**）；是所有蒸馏子模块的进程调用汇聚点。
 import { spawn } from 'node:child_process'
+import { makeCappedSink } from './proc-async.js'
 
 // ── 异步进程调用（禁 spawnSync 红线）──
 export type RunResult = { status: number | null; out: string; err: string }
@@ -17,7 +18,7 @@ export type RunResult = { status: number | null; out: string; err: string }
 const OUT_CAP = 8 * 1024 * 1024
 export function runNode(nodeBin: string, scriptPath: string, args: string[], opts?: { cwd?: string; env?: Record<string, string>; timeout?: number }): Promise<RunResult> {
   return new Promise((resolve) => {
-    let out = '', err = '', killed = false, overflow = false
+    let out = '', err = '', killed = false
     const child = spawn(nodeBin || 'node', [scriptPath, ...args], {
       cwd: opts?.cwd, windowsHide: true,
       // 2026-09-10 实锤修复：宿主 process.env 含 NODE_OPTIONS（inspector --inspect=9445），子进程继承后
@@ -25,18 +26,16 @@ export function runNode(nodeBin: string, scriptPath: string, args: string[], opt
       // 统一清空 NODE_OPTIONS（子脚本无需 inspector），彻底消除该干扰。
       env: { ...process.env, NODE_OPTIONS: '', ...(opts?.env || {}) },
     })
-    const push = (buf: string, chunk: unknown): string => {
-      if (overflow) return buf
-      const s = buf + String(chunk)
-      if (s.length > OUT_CAP) { overflow = true; try { child.kill() } catch { /* */ } return s.slice(0, OUT_CAP) }
-      return s
-    }
+    /* 封顶走 `proc-async#makeCappedSink`（**单一实现**，三处共用）：M4 的判据"输出被真正截断"
+     * 由 `scripts/test-proc-cap.mjs` 用**真 20MB 缓冲**直接验纯逻辑 —— 沙箱下靠真 spawn 验不了（见该件头注）。 */
+    const sink = makeCappedSink(OUT_CAP, () => { try { child.kill() } catch { /* */ } })
     const to = setTimeout(() => { killed = true; try { child.kill() } catch { /* */ } }, opts?.timeout ?? 60000)
-    child.stdout?.on('data', (d) => { out = push(out, d) })
-    child.stderr?.on('data', (d) => { err = push(err, d) })
+    child.stdout?.on('data', (d) => { out = sink.push(out, d) })
+    child.stderr?.on('data', (d) => { err = sink.push(err, d) })
     child.on('error', (e) => { clearTimeout(to); resolve({ status: null, out: '', err: String(e).slice(0, 200) }) })
     child.on('close', (code) => {
       clearTimeout(to)
+      const overflow = sink.overflowed()
       const note = (overflow ? `\n[output truncated at ${OUT_CAP} bytes]` : '') + (killed ? '\n[timed out]' : '')
       resolve({ status: killed || overflow ? null : code, out, err: err + note })
     })

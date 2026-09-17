@@ -5,6 +5,31 @@
 ## [Unreleased]
 
 ### Changed
+- **收口三件"没做的"（2026-09-17）**：
+  ① **profile pin 四处对齐（含 integrity 重算，不跑 `pnpm install`）**：此前"三处不一致"的根因不是缺一次 install，
+     而是 **lock 里还留着旧 tarball 的 `integrity`** —— 只换 URL 里的 SHA 会让 lock 自相矛盾（声明新 URL 却保留旧哈希
+     ⇒ 下次 install 校验失败）。做法：下载新 tarball **实算 sha512** 替换 `integrity`（**方法自证**：旧 tarball 实算值
+     与 lock 里记录的**逐字符相同**），同步 **4 份文件**（`package.json` / `pnpm-lock.yaml` /
+     `node_modules/.pnpm/lock.yaml` / `node_modules/.modules.yaml`；前两者本就逐字节相同，改一份再覆盖）。
+     结果：`check-version-pin` **PASS（三处一致 @ 706b686f）**，且 pin 指向的提交里 7 个模块产物**全在**。
+     ⚠ **为什么不跑 `pnpm install`**：宿主正加载该插件（有活动句柄）、且本仓 AGENTS.md 记着它会触发宿主批量删除保护、
+     实测曾把 8 个包搬进 `.ignored` 半途把环境弄坏 ⇒ **纯文本 + 实算哈希**达到同样一致性且可回滚（4 份原件已备份到
+     `~/.dsh/backup/profile-pin-sync-20260917/`）。**未跑 install ≠ 未对齐：一致性已由机检实证。**
+  ② **M4 的运行时证据补上（换路子，而非放弃）**：沙箱下 node 的**异步**管道 stdout **不回传**（实测显式 `stdio:'pipe'`
+     亦然），"真起一个吐 20MB 的子进程"在本环境**测不了**。故把封顶逻辑抽成纯函数 **`proc-async#makeCappedSink`**
+     （`distill-proc` / `treeops` / `proc-async` **三处共用一份实现** —— 此前是三份同型副本，而 M4 的成因之一
+     恰恰是"抄的时候把无效选项一起抄过去了"），新增 `scripts/test-proc-cap.mjs`（已登记 CHECKS）：
+     **6 PASS / 0 FAIL**，用**真 20MB 缓冲**断言"长度恰为 cap / 回调只触发一次 / 超限后 chunk 全丢"，
+     含**反例自证**（cap 放大到 64MB ⇒ 不触发、长度 20MB ⇒ 证明截断确由 cap 决定）。
+  ③ **vec-cache 去重 + 上限（M5 的后半段 —— 上一轮我漏报了这一半）**：`.vector-cache.jsonl` 原为
+     **append-only、无任何上限**，实测 **9.88 MB / 799 行 / 唯一键仅 454 ⇒ 死行 345（43%）**。
+     新增 `vec.ts#planVecCompaction`（纯函数）+ `compactVecCache`（原子替换 + `.bak-compact-<ts>` 备份）+
+     `saveLine` 后按 32MB 阈值自动触发。**等价性有证明、不是权衡**：`loadCache` 按行序 `Map.set` ⇒ 同键后写覆盖先写
+     ⇒ "保留每键最后一次"与压缩前**内存态逐键相同**（`scripts/test-vec-cache-compact.mjs` 直接断言，含
+     **first-wins 反例自证**：误实现会在 2 个键上分叉 ⇒ 该判据必红）。**并对真实缓存执行了一次性压缩**：
+     10,357,478 B → **5,911,243 B（省 4.24 MB）**、799 → 454 行，`/vector/status2` 复核 `cache.lines = 454` ✓。
+  验证：typecheck 零错 · build ✅ · 门禁 **123 pass / 1 fail**（+2 = 两件新测试均通过；唯一失败仍为记忆库活体基线）·
+  `check-deploy-sync` **0 不一致** · 副本 sha1 一致 · 热重载 ✅ · 端点全 200。
 - **D 板块收口 · M5 台账体积轮转（2026-09-17）** —— 目标 ④ 的最后一项，**也是风险最高的一项**
   （读取侧不同批改就会"看起来丢数据"）。
   ① **机制**：`ledger-compact.ts` 新增 `rotateBySize`（`<file>` → `.1` → `.2` → `.3`，只留 3 份）与

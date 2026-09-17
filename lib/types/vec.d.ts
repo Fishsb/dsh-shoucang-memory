@@ -29,6 +29,23 @@ export declare function clearVecCache(): {
     reason?: string;
 };
 /**
+ * 缓存**压缩决策**（纯函数 · 可单测 · 与 `ledger-compact#planCompaction` 同范式）。
+ *
+ * **为什么"保留每个键的最后一次写入"是等价、而不是权衡取舍**：
+ *   `loadCache` 按**行序** `Map.set` ⇒ 同键后写覆盖先写 ⇒ 内存态本来就只认最后一次。
+ *   故压缩后重新 `loadCache` 得到的映射**逐键相同**（`scripts/test-vec-cache-compact.mjs` 直接断言；
+ *   反例是"保留第一次"—— 那会让内容不同的键变值，测试即红）。
+ *
+ * 超限处理：按**行号**（= 写入先后）保留最新的，从最旧的开始丢，直到装进 `capBytes`。
+ * 返回保持**原文件行序**（`loadCache` 是 last-wins，序不影响等价性；保持序便于人读与对拍）。
+ */
+export declare function planVecCompaction(lines: string[], capBytes: number): string[];
+/**
+ * 对缓存文件执行压缩（**原子替换** + `.bak-compact-<ts>` 备份，与 `ledger-compact` 同纪律；**零抛出**）。
+ * @returns `'compacted'` | `'noop'`（未超限）| `'missing'`
+ */
+export declare function compactVecCache(capBytes?: number): 'compacted' | 'noop' | 'missing';
+/**
  * 通用语义相似（v6 向量政策第二批 2026-09-10）：任意两段文本的向量余弦（dense 决策信号）。
  * 未启用/失败 → null（调用方自行词法/阈值兜底，闭环不中断）。嵌入不落缓存（单次使用）。
  */

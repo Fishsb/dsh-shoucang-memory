@@ -10,7 +10,7 @@
  *  - 融合策略（v2/ADR-122）：缺省 **RRF 排名融合**（k=60，`EmbedCfg.fusionKind`），可回退 'weighted'；阈值口径另论（绝对余弦）。
  *  - 零硬编码路径；缓存落 <knowledgeRoot>/.vector-cache.jsonl；provider 不可用自动降级词法，闭环不中断。
  */
-import { readFileSync, existsSync, mkdirSync, appendFileSync, writeFileSync, unlinkSync } from 'node:fs'
+import { readFileSync, existsSync, mkdirSync, appendFileSync, writeFileSync, unlinkSync, statSync, copyFileSync, renameSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { knowledgeRoot, recallIndex, scanIndexRows, sectionKeyOf, dedupeBySection, type RecallRow } from './targets.js'
 import { importanceOf, layeredScore } from './criteria.js'
@@ -129,6 +129,63 @@ const lineHash = (s: string): number => {
   return h
 }
 
+/** 缓存体积上限（D-M5 后半段 · 2026-09-17）。实测该库缓存 **9.88 MB / 799 行 / 454 唯一键**
+ *  ⇒ **345 行是死行（43%）**，压缩后 **5.61 MB**。上限取 32 MB（≈5.7× 压缩后体积），超限才动手；
+ *  仍装不下则按"最近写入优先"截断 —— 缓存是**纯优化**，丢了只是下次重嵌，不影响正确性。 */
+const CACHE_CAP_BYTES = 32 * 1024 * 1024
+
+/** 缓存行的**逻辑键**（与 `loadCache` 的 `cacheKey` 同口径：file + hash + model + baseUrl）。 */
+const vecCacheKeyOf = (o: { file?: unknown; hash?: unknown; model?: unknown; baseUrl?: unknown }): string =>
+  `${o.file}|${o.hash}|${o.model}|${o.baseUrl}`
+
+/**
+ * 缓存**压缩决策**（纯函数 · 可单测 · 与 `ledger-compact#planCompaction` 同范式）。
+ *
+ * **为什么"保留每个键的最后一次写入"是等价、而不是权衡取舍**：
+ *   `loadCache` 按**行序** `Map.set` ⇒ 同键后写覆盖先写 ⇒ 内存态本来就只认最后一次。
+ *   故压缩后重新 `loadCache` 得到的映射**逐键相同**（`scripts/test-vec-cache-compact.mjs` 直接断言；
+ *   反例是"保留第一次"—— 那会让内容不同的键变值，测试即红）。
+ *
+ * 超限处理：按**行号**（= 写入先后）保留最新的，从最旧的开始丢，直到装进 `capBytes`。
+ * 返回保持**原文件行序**（`loadCache` 是 last-wins，序不影响等价性；保持序便于人读与对拍）。
+ */
+export function planVecCompaction(lines: string[], capBytes: number): string[] {
+  const last = new Map<string, { idx: number; line: string }>()
+  lines.forEach((l, idx) => {
+    if (!l.trim()) return
+    try {
+      const o = JSON.parse(l) as { file?: unknown; hash?: unknown; model?: unknown; baseUrl?: unknown }
+      last.set(vecCacheKeyOf(o), { idx, line: l })
+    } catch { /* 坏行丢弃 —— `loadCache` 同样跳过它（解析失败进不了内存态） */ }
+  })
+  let kept = [...last.values()].sort((a, b) => a.idx - b.idx).map((x) => x.line)
+  let total = kept.reduce((n, l) => n + l.length + 1, 0)
+  let drop = 0
+  while (total > capBytes && drop < kept.length) { total -= kept[drop].length + 1; drop++ }
+  if (drop > 0) kept = kept.slice(drop)
+  return kept
+}
+
+/**
+ * 对缓存文件执行压缩（**原子替换** + `.bak-compact-<ts>` 备份，与 `ledger-compact` 同纪律；**零抛出**）。
+ * @returns `'compacted'` | `'noop'`（未超限）| `'missing'`
+ */
+export function compactVecCache(capBytes = CACHE_CAP_BYTES): 'compacted' | 'noop' | 'missing' {
+  try {
+    const f = CACHE_FILE()
+    if (!existsSync(f)) return 'missing'
+    if (statSync(f).size <= capBytes) return 'noop'
+    const lines = readFileSync(f, 'utf8').split('\n')
+    const kept = planVecCompaction(lines, capBytes)
+    const ts = new Date().toISOString().replace(/[:.]/g, '-')
+    copyFileSync(f, `${f}.bak-compact-${ts}`) // 先备份（可回滚）
+    const tmp = `${f}.tmp-${ts}`
+    writeFileSync(tmp, kept.join('\n') + (kept.length ? '\n' : ''), 'utf8')
+    renameSync(tmp, f) // 同目录 rename = 原子替换
+    return 'compacted'
+  } catch { return 'noop' }
+}
+
 function loadCache(): void {
   if (memCache.size) return
   try {
@@ -152,6 +209,8 @@ function saveLine(file: string, line: string, hash: number, vec: number[], model
     mkdirSync(dirname(f), { recursive: true })
     appendFileSync(f, JSON.stringify({ file, line, hash, vec, model, baseUrl }) + '\n', 'utf8')
     memCache.set(cacheKey(file, hash, model, baseUrl), { file, line, hash, vec, model, baseUrl })
+    /* D-M5：写完 stat 一次，超上限即压缩（低频 —— 写入只发生在"新行被嵌入"时；压缩本身更低频） */
+    try { if (statSync(f).size > CACHE_CAP_BYTES) compactVecCache() } catch { /* 压缩失败无害：下轮再试 */ }
   } catch { /* 写缓存失败=下次重嵌，无害 */ }
 }
 

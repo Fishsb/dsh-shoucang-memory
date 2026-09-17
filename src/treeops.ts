@@ -35,6 +35,7 @@ import { spawn } from 'node:child_process'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { envelopeEvent as envelope } from './event-envelope.js'
+import { makeCappedSink } from './proc-async.js'
 
 export interface TreeOp {
   action: 'rename' | 'merge' | 'split'
@@ -66,11 +67,11 @@ export interface TreeOpsResult {
 // ── 子进程 gate 运行（与 distill.ts runNode 同构；nodeBin=process.execPath，无 PATH 依赖）──
 type RunResult = { status: number | null; out: string; err: string }
 /** 子进程输出上限（与 `distill-proc.ts` 的 `OUT_CAP` 同值）。
- *  刻意不跨模块 import：`treeops` 与 `distill-proc` 各自零依赖，跨引会新增一条模块边（分层门禁面）。 */
+ *  封顶逻辑**不自建副本**：走 `proc-async#makeCappedSink`（零 src 依赖 ⇒ 不成环；三处共用一份实现）。 */
 const OUT_CAP = 8 * 1024 * 1024
 function runNodeBin(args: string[], opts?: { cwd?: string; env?: Record<string, string>; timeout?: number }): Promise<RunResult> {
   return new Promise((resolve) => {
-    let out = '', err = '', killed = false, overflow = false
+    let out = '', err = '', killed = false
     // 子进程剥离 --inspect/--debug 类 NODE_OPTIONS（宿主调试端口二次占用会干扰 gate 判定/误杀子进程）
     const env: Record<string, string | undefined> = { ...process.env }
     env.NODE_OPTIONS = (process.env.NODE_OPTIONS || '').split(/\s+/)
@@ -81,19 +82,15 @@ function runNodeBin(args: string[], opts?: { cwd?: string; env?: Record<string, 
     })
     /* 2026-09-17 修（M4）：删掉无效的 `maxBuffer`（只属 exec/execFile/SpawnSyncOptions，**不属 async
      *   SpawnOptions** —— 原写法配 `as any` 掩盖了类型不匹配，实测该选项对 spawn 零效果），
-     *   改为按字节计数封顶；超限即记标记并 kill。 */
-    const push = (buf: string, chunk: unknown): string => {
-      if (overflow) return buf
-      const s = buf + String(chunk)
-      if (s.length > OUT_CAP) { overflow = true; try { child.kill() } catch { /* */ } return s.slice(0, OUT_CAP) }
-      return s
-    }
+     *   改为按字节计数封顶；超限即记标记并 kill。实现在 `proc-async#makeCappedSink`（单一实现）。 */
+    const sink = makeCappedSink(OUT_CAP, () => { try { child.kill() } catch { /* */ } })
     const to = setTimeout(() => { killed = true; try { child.kill() } catch { /* */ } }, opts?.timeout ?? 60000)
-    child.stdout?.on('data', (d) => { out = push(out, d) })
-    child.stderr?.on('data', (d) => { err = push(err, d) })
+    child.stdout?.on('data', (d) => { out = sink.push(out, d) })
+    child.stderr?.on('data', (d) => { err = sink.push(err, d) })
     child.on('error', (e) => { clearTimeout(to); resolve({ status: null, out: '', err: String(e).slice(0, 200) }) })
     child.on('close', (code) => {
       clearTimeout(to)
+      const overflow = sink.overflowed()
       const note = (overflow ? `\n[output truncated at ${OUT_CAP} bytes]` : '') + (killed ? '\n[timed out]' : '')
       resolve({ status: killed || overflow ? null : code, out, err: err + note })
     })

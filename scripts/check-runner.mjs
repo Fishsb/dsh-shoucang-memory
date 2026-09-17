@@ -310,6 +310,13 @@ const CHECKS = [
   //   必须登记：轮转的失效模式是**静默**的（写侧轮转、读侧没跨档 ⇒ 看起来像"数据丢了"），
   //   而门禁不读台账 ⇒ 只有本件能验它（AGENTS 规则 6：未登记 = 等于没写）。
   ['scripts/test-ledger-rotation.mjs'],
+  // M4（2026-09-17 登记）：子进程输出封顶的**纯逻辑**行为测试。为什么不是真 spawn：pwsh 沙箱下 node 的
+  //   异步管道 stdout 不回传（实测显式 stdio:'pipe' 亦然）⇒ 真 20MB 子进程**测不了**（沙箱边界非缺陷）。
+  //   抽成纯函数后用真 20MB 缓冲直接验，含反例自证（cap 放大 ⇒ 不触发）。
+  ['scripts/test-proc-cap.mjs'],
+  // D-M5 后半段（2026-09-17 登记）：向量缓存压缩的**等价性**测试 —— 判据是"压缩前后内存态逐键相同"
+  //   （`loadCache` 是 last-wins），并含 first-wins 反例自证。缓存是纯优化，丢了只重嵌，故等价即可证。
+  ['scripts/test-vec-cache-compact.mjs'],
   ['scripts/test-wiring-gate.mjs'],
   ['scripts/test-wiring-gate-ast.mjs'],
   // 绑定句柄调用形态（2026-09-14 立，实锤后补）：`create*Api` 的绑定句柄只能经依赖面调用，
