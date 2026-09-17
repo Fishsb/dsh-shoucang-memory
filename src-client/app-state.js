@@ -58,4 +58,31 @@ export const appState = {
   sidebarTries: 0,
   /** 插槽注册返回的 React 句柄 */
   slotReact: null,
+
+  /* ── 接缝②（2026-09-17 阶段 3）：以下 7 个字段原为「**注入但无声明行**」──
+   *  它们是 `body.js` 注入、被 pane 消费的跨模块句柄，却不在本容器声明。
+   *  实测（施工期）：app-state 声明 20 / body.js 注入 24 ⇒ **7 个无声明行**。
+   *  后果：契约面**不完整** —— 读者按本文件无法知道存在这些句柄，且拼错字段名
+   *  （消费 `appState.xxx` 而无人注入）**静默为 undefined**，无任何门禁判它错。
+   *  现补齐声明；并新增 `scripts/check-appstate-contract.mjs` 做**四方对账**
+   *  （声明 / body 注入 / pane 写 / 全仓消费）—— 任一方出现契约外字段即红。 */
+  /** 视图切换器（`show()`）——pane 需按视图名跳转。 */
+  show: null,
+  /** 开关变更处理器集合（`switchKeys`）——设置/参数页写配置后按 key 派发。 */
+  switchKeys: null,
+  /** 配置行折叠器（`makeToggle`）——设置页与参数页共用的开关行构造。 */
+  makeToggle: null,
+  /** 控件元数据徽标构造器（`metaBadges`）——设置行「作用域/生效态」徽标。 */
+  metaBadges: null,
+  /** 视图行过滤器（`filterViewRows`）——页首搜索框消费。 */
+  filterViewRows: null,
+  /** 折叠延迟入队（`deferFold`）——渲染期延后折叠，避免强制重排。 */
+  deferFold: null,
+  /** 折叠队列冲刷（`flushFolds`）——与 `deferFold`/`foldQueue` 配套。 */
+  flushFolds: null,
+
+  /** 小节正文渲染器（`renderNoteSections`）—— **为破环而注入**（2026-09-17 阶段 5）：
+   *  `panes-memory.js` 原直接 import 它，与 `panes-memory-detail.js` 构成双向环；
+   *  改由 `body.js` 注入 ⇒ 依赖单向（detail → memory）。 */
+  renderNoteSections: null,
 }

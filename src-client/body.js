@@ -27,6 +27,15 @@ import { renderViewToggles } from './panes-toggles.js'
 import { CSS } from './styles.js'
 import { Bus, Cfg, Fold, Log, Prog, Store, setLogStatusSink } from './state.js'
 import { ICONS, el, svg } from './dom.js'
+/* i18n（2026-09-17）：运行时 + 词表。zh 态 tr() 不查表、直接返回第二参 ⇒ 零回归是结构性的。 */
+import { attachLocale, lang, tr } from './i18n.js'
+import { tagLabel } from './tag-label.js'
+/* 接缝③（2026-09-17 阶段 4）：词表注册**按目录自动发现** —— 原先这里手写 5 份 import + 5 路合并，
+ *  漏改一行的后果是**静默回落成中文**（不是报错）。实测因此漏了 3 份 / 700 键、英文态 7/9 视图仍中文。
+ *  现只 import 生成物；新增词表文件**无须改本文件**即生效（生成物新鲜度由 check-i18n-registered 判）。 */
+import { EN as DICT_EN } from './i18n-dict-index.generated.js'
+import { VIEWS, navLabelById, navGroupByKey, relabelChrome } from './i18n-nav.js'
+import { CTRL_META, ctrlScopeText, ctrlEffectText, switchKeys } from './i18n-ctrl.js'
 
 (function () {
   'use strict';
@@ -71,12 +80,12 @@ import { ICONS, el, svg } from './dom.js'
         var c = contractOf(path);
         /* 用 Derive.has 而非 `!x.length` 裸判空（仓内反模式锁 D7e：x 缺失时裸判空会直接抛错） */
         if (!c || !Derive.has(c.required)) return null;
-        if (!body || typeof body !== 'object') return { error: 'preflight_missing_body', detail: path + ' 需要请求体（必填：' + c.required.join(', ') + '）' };
+        if (!body || typeof body !== 'object') return { error: 'preflight_missing_body', detail: path + tr(" 需要请求体（必填：") + c.required.join(', ') + '）' };
         var miss = c.required.filter(function (k) {
           var v = body[k];
           return v === undefined || v === null || v === '';
         });
-        return miss.length ? { error: 'preflight_missing_field', detail: '缺少必填字段：' + miss.join(', ') } : null;
+        return miss.length ? { error: 'preflight_missing_field', detail: tr("缺少必填字段：") + miss.join(', ') } : null;
       }
       function api(path, opts) {
         var o = opts || {};
@@ -86,14 +95,14 @@ import { ICONS, el, svg } from './dom.js'
         if (pre) {
           var pe = new Error(pre.detail);
           pe.__ctx = ctx; pe.preflight = pre.error;
-          Log.warn('契约预检未通过：' + pre.detail + '（本地拦截，未发出请求）', ctx);
+          Log.warn(tr('契约预检未通过：') + pre.detail + tr('（本地拦截，未发出请求）'), ctx);
           return Promise.reject(pe);
         }
         /* C1：慢请求自动反馈——超过 1.5s 未返回则在状态栏显示「执行中…」，
            覆盖全部旧调用点（旧代码看不到进度，"点了没反应"）。
            用 setStatusText 而非 status：不写日志，且结束时清空，避免与业务 status() 互相覆盖。 */
         var busyShown = false;
-        var busyTimer = setTimeout(function () { busyShown = true; setStatusText('执行中… ' + path, 'info'); }, 1500);
+        var busyTimer = setTimeout(function () { busyShown = true; setStatusText(tr("执行中… ") + path, 'info'); }, 1500);
         function endBusy() { clearTimeout(busyTimer); if (busyShown) { busyShown = false; setStatusText('', 'info'); } }
         return fetch(BASE + path, Object.assign({ headers: { 'content-type': 'application/json' } }, o))
           .then(function (r) {
@@ -176,56 +185,38 @@ import { ICONS, el, svg } from './dom.js'
         var ctx = { method: (o.method || 'GET'), path: path, params: o.body || null };
         if (label) Prog.start(path, label);
         return api(path, o).then(function (r) {
-          if (label) Prog.done(path, true, '完成 ' + Math.round((Date.now() - t0) / 100) / 10 + 's');
+          if (label) Prog.done(path, true, tr("完成 ") + Math.round((Date.now() - t0) / 100) / 10 + 's');
           Log.info((o.method || 'GET') + ' ' + path + ' ✓ ' + (Date.now() - t0) + 'ms', ctx);
           return r;
         }).catch(function (e) {
-          if (label) Prog.done(path, false, '失败');
+          if (label) Prog.done(path, false, tr("失败"));
           throw Object.assign(new Error(e && e.message ? e.message : String(e)), { __ctx: ctx });
         });
       }
 
       /* ---------- 页面：开关 ---------- */
 
-      var SWITCH_KEYS = [
-        ['injection.hot_memory', '注入热记忆总闸 hot_memory', '关=不注入 agent/用户画像与知识索引任何指针行'],
-        // 2026-09-10 审查收敛：archive/lifecycle/merge/scheduler 组开关是 v15 单库化前旧 Python 链路的
-        // 遗留控件，其消费端（_meta/*.py）已不随包分发——保留只会误导用户"改了有效"。已移除。
-        // 2026-09-11 同类遗漏：boards.memory 是「只写不读」死开关（parseView 解析进 out.boards 后全仓零读取点，
-        // 注入总闸只读 level/hot_memory/persona），且旧文案宣称其「注入总闸的父开关」= 假依赖。同批移除。
-      ];
-
-      /* ── U1（ADR-122 UI 优化）：作用域/生效态徽章 + 折叠 —— 全部为**增量**补节点/补类，
-       *    不改既有 sc-* 语义；回滚=还原 client.js（备份 client.js.pre-u1）。 ── */
-      // 控件元数据：写哪（作用域）+ 何时生效（生效态）。缺省 = 全局注入 / 即时。
-      var CTRL_META = {
-        'injection.hot_memory': { scope: '全局注入', effect: '即时' },
-        'injection.level': { scope: '全局注入', effect: '即时' },
-        'injection.persona': { scope: '全局注入', effect: '即时' },
-        'injection.cap_agent': { scope: '写门容量', effect: '即时' },
-        'injection.cap_user': { scope: '写门容量', effect: '即时' },
-        'injection.cap_memory': { scope: '写门容量', effect: '即时' },
-        recallColdFactorPercent: { scope: '召回融合', effect: '即时' },
-        enableDeepSleep: { scope: '调度', effect: '需重载' },
-        // U3（B5 能力对齐）：新增控件的作用域与生效态
-        injectRelevance: { scope: '注入选行', effect: '即时' },
-        injectFreshSlots: { scope: '注入选行', effect: '即时' },
-        recallFusion: { scope: '召回融合', effect: '需重载' },
-        bankGit: { scope: '库版本化', effect: '需重载' },
-        mclEnabled: { scope: '认知环', effect: '需重载' },
-        mclFamiliarThreshold: { scope: '认知环', effect: '需重载' },
-        mclMaxNudges: { scope: '认知环', effect: '需重载' },
-        mclBudgetChars: { scope: '认知环', effect: '需重载' },
-        mclTopK: { scope: '认知环', effect: '需重载' },
-        mclAudit: { scope: '认知环', effect: '需重载' },
-      };
-      function metaBadges(key) {
-        var m = CTRL_META[key] || { scope: '全局注入', effect: '即时' };
-        var box = el('div', 'sc-ctrl-meta');
-        box.appendChild(el('span', 'sc-chip', m.scope));
-        box.appendChild(el('span', 'sc-chip' + (m.effect === '需重载' ? ' warn' : ''), m.effect));
-        return box;
-      }
+      /* 控件元数据域（面板开关表 + 作用域/生效态分派）已外提到 `i18n-ctrl.js`（2026-09-17）：
+       *   · 冻结棘轮：body.js 实测 651 > 基线 626+15；「控件元数据」是内聚真接缝（数据表 + 两个
+       *     「键 → 文案」分派 + 开关清单的单一归属），拆出后本文件只留消费点。
+       *   · 且这些表**必须在读取期**才调 `tr()`（装配期取不到词表 ⇒ 值冻死为中文，R4 机检守）。
+       *   ⚠ 别在本文件重新定义 CTRL_META / ctrlScopeText / ctrlEffectText / switchKeys。 */
+function metaBadges(key) {
+  var m = CTRL_META[key] || { scope: 'global', effect: 'live' };
+  var box = el('div', 'sc-ctrl-meta');
+  /* 接缝①（2026-09-17 阶段 2d）：每行两枚徽标 → 一枚。
+   *  判因（minimal 以「不做会怎样 / 能否用既有能力替代」四问得出，主持人采纳）：
+   *    · 作用域（全局注入 / 写门容量 / 召回融合 / 调度…）在同一小节内逐行重复，
+   *      且该信息已由所在 Tab 与小节标题给出语境 ⇒ 逐行显示是冗余重复；
+   *    · 生效态（即时 / 需重载）是逐行不同的行动信息（要不要重载）⇒ 必须保留。
+   *  ⚠ 但不丢信息：作用域移入 title（悬停可达）—— 与本仓对「标签原始键」同一手法：
+   *    可见面只留变化的那一枚，恒定/上下文信息走 title。 */
+  var sc = ctrlScopeText(m.scope);
+  var eff = ctrlEffectText(m.effect) || String(m.effect || '');
+  box.title = sc && eff ? sc + ' · ' + eff : (sc || eff);
+  if (eff) box.appendChild(el('span', 'sc-chip' + (m.effect === 'reload' ? ' warn' : ''), eff));
+  return box;
+}
       /** 折叠：把哨兵 mark 之后的所有兄弟节点收进可折叠体（零逐组改动 ⇒ 易回滚）
        *  状态改由 Fold 统一持有（旧实现是闭包里一个局部 open，重绘即丢、多处各写各的）。
        *  @param label 展开按钮文案；@param openDefault 是否默认展开；@param key 稳定键（防残留） */
@@ -261,7 +252,7 @@ import { ICONS, el, svg } from './dom.js'
           } catch (e) {
             // 收口失败也必须把哨兵摘掉，避免空 div 残留
             if (t.mark && t.mark.parentNode) t.mark.parentNode.removeChild(t.mark);
-            Log.warn('折叠收口失败：' + (e && e.message ? e.message : e));
+            Log.warn(tr('折叠收口失败：') + (e && e.message ? e.message : e));
           }
         });
         return q.length;
@@ -418,8 +409,8 @@ import { ICONS, el, svg } from './dom.js'
         f.appendChild(el('span', 'sc-src', ep));
         f.appendChild(el('span', 'sc-spacer'));
         f.appendChild(UI.button(btn, run, {
-          primary: true, async: true, busyText: o.busyText || '执行中…',
-          confirm: o.confirm, okText: o.okText || (title + ' 已发起')
+          primary: true, async: true, busyText: o.busyText || tr("执行中…"),
+          confirm: o.confirm, okText: o.okText || (title + tr(" 已发起"))
         }));
         c.appendChild(f);
         return c;
@@ -437,18 +428,12 @@ import { ICONS, el, svg } from './dom.js'
       /** 架构视图主体（异常由 `renderViewArch` 统一兜底；快照确定性见下方各注释） */
       
 
-      /* 8 视图按语义 4 组（P1）：总览 / 记忆 / 运行 / 配置；「配置原文」下沉到 设置 · 高级，不再占一级入口 */
-      var VIEWS = [
-        ['overview', '运行总览', 'overview', '总览'],
-        ['memory', '记忆库', 'memory', '记忆'],
-        ['persona', '画像', 'persona', '记忆'],
-        ['suite', '插件集合', 'suite', '运行'],
-        ['deepsleep', '深度睡眠', 'sleep', '运行'],
-        ['observe', '运行观测', 'observe', '运行'],
-        ['arch', '架构', 'arch', '运行'],
-        ['toggles', '参数', 'toggles', '配置'],
-        ['settings', '设置', 'settings', '配置']
-      ];
+      /* 导航文案层已外提到 i18n-nav.js（2026-09-17）：
+       *   · 冻结棘轮：body.js 实测 708 > 基线 626+15；「导航文案」是内聚真接缝（视图表 +
+       *     标签映射 + 语言切换补丁的单一归属），拆出后本文件只留消费点。
+       *   · 单一实现：panes-settings.js 的「启动时视图」下拉曾直读元组索引 1 当标签，
+       *     该位改为词表键后便吐裸键（zh 态红线违反）⇒ 现统一走 navLabelById()。
+       *   ⚠ 别在本文件重新定义 VIEWS/navLabelById/navGroupByKey/relabelChrome。 */
 
       /* ---------- 运行观测视图（C1 进度 / C2 日志 / C3 错误定位 / C4 指标） ---------- */
       
@@ -517,7 +502,7 @@ import { ICONS, el, svg } from './dom.js'
           var vv = null;
           for (var i = 0; i < VIEWS.length; i++) { if (VIEWS[i][0] === name) { vv = VIEWS[i]; break; } }
           refs.view.setAttribute('role', 'region');
-          if (vv) refs.view.setAttribute('aria-label', vv[1] + '（' + vv[3] + '）');
+          if (vv) refs.view.setAttribute('aria-label', navLabelById(vv[0]) + '（' + navGroupByKey(vv[3]) + '）');
         }
         refs.navItems.forEach(function (it) { it.el.classList.toggle('active', it.name === name); });
         refs.view.textContent = '';
@@ -539,9 +524,9 @@ import { ICONS, el, svg } from './dom.js'
         } else if (name === 'toggles') {
           api('/config').then(function (r) {
             // P2：注入配置全局可用（无 root 也能调——global 来自 scheduler.json）
-            if (!r.global) { status(r.error === 'no-active-root' ? '未激活根目录——请到「配置原文」页根目录区添加。' : (r.error || '')); return; }
-            if (!r.parsed) status('注入参数已全局可用（scheduler.json）；root 未登记——「记忆板块显示」开关待登记后可用。');
-            else status('已加载 ' + (r.file || ''));
+            if (!r.global) { status(r.error === 'no-active-root' ? tr("未激活根目录——请到「配置原文」页根目录区添加。") : (r.error || '')); return; }
+            if (!r.parsed) status(tr("注入参数已全局可用（scheduler.json）；root 未登记——「记忆板块显示」开关待登记后可用。"));
+            else status(tr("已加载 ") + (r.file || ''));
             renderViewToggles(refs.view, r.parsed || {}, r.global);
           }).catch(fail);
         } else if (name === 'deepsleep') {
@@ -592,7 +577,7 @@ import { ICONS, el, svg } from './dom.js'
             e.preventDefault();
             Cfg.set('showLogs', !Cfg.get('showLogs', true));
             applyLogPanel();
-            status('日志面板已' + (Cfg.get('showLogs') ? '显示' : '隐藏'), 'info');
+            status(tr("日志面板已") + (Cfg.get('showLogs') ? tr("显示") : tr("隐藏")), 'info');
             return;
           }
           if (e.key === 'Escape') {
@@ -617,25 +602,31 @@ import { ICONS, el, svg } from './dom.js'
         // D6：语义化——对话框角色 + 无障碍标签（读屏可识别，原缺失）
         modal.setAttribute('role', 'dialog');
         modal.setAttribute('aria-modal', 'true');
-        modal.setAttribute('aria-label', '守藏记忆面板');
+        modal.setAttribute('aria-label', tr("守藏记忆面板"));
 
         // 左导航（Obsidian settings 侧栏；分组=记忆/运行/配置，2026-09-09 布局重排对齐宿主排版）
         var nav = el('div', 'sc-nav');
-        nav.appendChild(el('div', 'sc-nav-title', '守藏 SHOUCANG'));
+        nav.appendChild(el('div', 'sc-nav-title', tr('守藏 SHOUCANG')));
         refs.navItems = [];
         var lastGroup = null;
         VIEWS.forEach(function (v) {
           if (v[3] && v[3] !== lastGroup) {
-            nav.appendChild(el('div', 'sc-nav-group', v[3]));
+            nav.appendChild(el('div', 'sc-nav-group', navGroupByKey(v[3])));
             lastGroup = v[3];
           }
           var item = el('div', 'sc-nav-item');
+          /* P0（i18n 前置，2026-09-17）：**稳定视图锚点**。
+           *  判因：渲染回归探针原先按**可见中文名**定位导航项（`textContent === '运行总览'`），
+           *  语言一换即找不到按钮 ⇒ 该视图几何断言静默不跑、脚本仍退 0（假绿）。
+           *  `data-view` 取**视图 id**（v[0]，语言无关），探针改按该属性选择。 */
+          item.setAttribute('data-view', v[0]);
           item.appendChild(svg(ICONS[v[2]]));
-          item.appendChild(el('span', null, v[1]));
+          var label = navLabelById(v[0]);
+          item.appendChild(el('span', null, label));
           // D6：导航项可聚焦、可被读屏识别
           item.setAttribute('role', 'button');
           item.setAttribute('tabindex', '0');
-          item.setAttribute('aria-label', v[1]);
+          item.setAttribute('aria-label', label);
           item.onclick = function () { show(v[0]); };
           item.onkeydown = function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); show(v[0]); } };
           refs.navItems.push({ name: v[0], el: item });
@@ -648,7 +639,7 @@ import { ICONS, el, svg } from './dom.js'
         var health = el('div', 'sc-nav-health');
         var fdot = el('span', 'sc-dot ok');
         health.appendChild(fdot);
-        health.appendChild(el('b', null, '记忆库'));
+        health.appendChild(el('b', null, tr("记忆库")));
         var fstate = el('span', null, '—');
         health.appendChild(fstate);
         foot.appendChild(health);
@@ -666,8 +657,8 @@ import { ICONS, el, svg } from './dom.js'
            sticky right:0 + margin-left:auto ⇒ 横向 tab 滚动时始终吸在右侧。 */
         var navClose = el('button', 'sc-nav-close', '✕');
         navClose.type = 'button';
-        navClose.title = '关闭面板';
-        navClose.setAttribute('aria-label', '关闭面板');
+        navClose.title = tr("关闭面板");
+        navClose.setAttribute('aria-label', tr("关闭面板"));
         navClose.onclick = function () { closePanel(); };
         nav.appendChild(navClose);
         modal.appendChild(nav);
@@ -733,7 +724,7 @@ import { ICONS, el, svg } from './dom.js'
             var vstyle = el('style'); vstyle.id = 'scpanl-vendor-css'; vstyle.textContent = window.__SC_VENDOR_CSS__;
             rootEl.appendChild(vstyle);
           }
-        } catch (e) { Log.warn('组件库主题注入失败：' + (e && e.message)); }
+        } catch (e) { Log.warn(tr('组件库主题注入失败：') + (e && e.message)); }
         var styleHost = el('style'); styleHost.textContent = CSS; rootEl.appendChild(styleHost);
         var mask = el('div'); mask.id = 'scpanl-mask';
         mask.onclick = function (ev) { if (ev.target === mask) mask.classList.remove('open'); };
@@ -744,8 +735,8 @@ import { ICONS, el, svg } from './dom.js'
       // 兜底：找不到侧栏 footArea 时，左下角固定入口
       function mountFallbackEntry() {
         if (document.getElementById('scpanl-btn')) return;
-        var btn = el('button'); btn.id = 'scpanl-btn'; btn.title = '守藏面板';
-        var ic = el('img', 'sc-ic-lg'); ic.src = SC_ICON; ic.alt = '守';
+        var btn = el('button'); btn.id = 'scpanl-btn'; btn.title = tr("守藏面板");
+        var ic = el('img', 'sc-ic-lg'); ic.src = SC_ICON; ic.alt = tr("守");
         btn.appendChild(ic);
         btn.dataset.fallback = '1';
         btn.classList.add('sc-fab'); // U2.5b：内联 → 类（令牌化；样式只在 CSS）
@@ -767,18 +758,22 @@ import { ICONS, el, svg } from './dom.js'
           return false;
         }
         // 2026-09-10 审查：入口与 DSH 设置样式完全一致——克隆宿主设置按钮（同款类/结构，随宿主主题自动适配）
+        /* P0（i18n 前置，2026-09-17）：**删掉按文案匹配的兜底**。
+         *  旧实现 `[...buttons].find(b => b.textContent.trim() === '设置')` 拿**可见文案**当锚点，
+         *  宿主切成英文（"Settings"）后恒失配 ⇒ 静默退回 DOM 直插手写按钮（风格与宿主不一致），
+         *  且**不报错**。现只用**结构锚点**（triggerRow 内的 button）；取不到就老实走回退路径。 */
         var btn = null;
         var settingsBtn = null;
-        try { settingsBtn = document.querySelector('[class*="triggerRow"] button') || [...document.querySelectorAll('button')].find(function (b) { return (b.textContent || '').trim() === '设置'; }); } catch (e) { settingsBtn = null; }
+        try { settingsBtn = document.querySelector('[class*="triggerRow"] button'); } catch (e) { settingsBtn = null; }
         if (settingsBtn && settingsBtn.cloneNode) {
           try {
             btn = settingsBtn.cloneNode(true); // 克隆按钮（保留宿主类 VOzbGW_trigger + 内部 slot 结构）
             btn.id = 'scpanl-btn';
             btn.removeAttribute('aria-haspopup'); btn.removeAttribute('aria-expanded');
-            btn.title = '守藏面板';
+            btn.title = tr("守藏面板");
             // 换内部 label 文本（span.UQsH_q_triggerLabel 或 data-slot 容器）
             var lab = btn.querySelector('span, [data-slot] span');
-            if (lab) lab.textContent = '守藏';
+            if (lab) lab.textContent = tr("守藏");
             // 图标（2026-09-10 审查三）：保留宿主克隆 svg 原样（与设置图标 100% 同质、清晰随主题）。
             // 说明：曾尝试 PNG/自绘 path 替代——PNG 96px 缩小有锯齿、手写 path 不可靠易变形；
             // 为保证"与设置完全一致且清晰"，暂用宿主同款图标（视觉协调优先，后续可换验证过的同规格矢量）。
@@ -787,11 +782,11 @@ import { ICONS, el, svg } from './dom.js'
         }
         if (!btn) {
           // 回退：无设置按钮可克隆时用 sc-trigger（保持可用）
-          btn = el('button'); btn.id = 'scpanl-btn'; btn.type = 'button'; btn.title = '守藏面板';
+          btn = el('button'); btn.id = 'scpanl-btn'; btn.type = 'button'; btn.title = tr("守藏面板");
           btn.className = 'sc-trigger';
-          var icF = el('img', 'sc-ic-sm'); icF.src = SC_ICON; icF.alt = '守';
+          var icF = el('img', 'sc-ic-sm'); icF.src = SC_ICON; icF.alt = tr("守");
           btn.appendChild(icF);
-          btn.appendChild(el('span', 'sc-trigger-label', '守藏'));
+          btn.appendChild(el('span', 'sc-trigger-label', tr("守藏")));
           btn.onclick = openPanel;
         }
         // 2026-09-10 审查二：守藏与设置**上下两行**——克隆按钮包进独立 triggerRow（同款宿主类），
@@ -850,7 +845,7 @@ import { ICONS, el, svg } from './dom.js'
           else if (key === 'refreshMs') restartPolling();
           else if (key === 'skin') { syncTheme(); refreshCurrentView(); }
           else if (key === 'startView' || key === 'logLevel' || key === 'overviewMode' || key === 'maxRows') { /* 下次渲染生效 */ }
-        } catch (e) { Log.warn('设置生效失败（' + key + '）：' + (e && e.message)); }
+        } catch (e) { Log.warn(tr('设置生效失败（') + key + '）：' + (e && e.message)); }
       }
       function ShoucangSettingsSection() {
         var h = appState.slotReact.createElement;
@@ -884,23 +879,45 @@ import { ICONS, el, svg } from './dom.js'
           });
         }
         return h('div', { className: 'sc-host-settings' },
-          h('div', { className: 'setting-item-desc' }, '守藏面板的界面偏好（与面板内「设置」页同源，改后立即生效；保存在浏览器 localStorage）。'),
-          row('density', '显示密度', '紧凑模式隐藏描述、压缩行高',
-            sel('density', [{ value: 'comfortable', label: '舒适' }, { value: 'compact', label: '紧凑' }], 'comfortable')),
-          row('navWidth', '导航宽度', '面板左导航像素宽度（140–320）', num('navWidth', 216, 140, 320)),
-          row('refreshMs', '轮询间隔', '毫秒；0 = 关闭轮询', num('refreshMs', 60000, 0, 3600000, 1000)),
-          row('showLogs', '显示日志面板', '状态栏上方常驻日志（关闭即折叠成一行）', tgl('showLogs', false)),
-          row('skin', '界面皮肤', 'v9 = 方案调色板（默认）；宿生 = 跟随 DSH 主题令牌',
-            sel('skin', [{ value: 'v9', label: 'v9 方案皮肤' }, { value: 'host', label: '宿主原生皮肤' }], 'v9')),
-          row('startView', '启动时视图', '打开面板默认落地页（深链 > 上次视图 > 此项）',
-            sel('startView', VIEWS.map(function (v) { return { value: v[0], label: v[1] } }), 'overview')),
-          row('openPanel', '打开面板', '宿主设置里也能直接唤起守藏面板',
-            h('button', { type: 'button', className: 'sc-btn sc-btn-primary', onClick: function () { openPanel(); } }, '打开守藏面板'))
+          h('div', { className: 'setting-item-desc' }, tr("守藏面板的界面偏好（与面板内「设置」页同源，改后立即生效；保存在浏览器 localStorage）。")),
+          row('density', tr("显示密度"), tr("紧凑模式隐藏描述、压缩行高"),
+            sel('density', [{ value: 'comfortable', label: tr("舒适") }, { value: 'compact', label: tr("紧凑") }], 'comfortable')),
+          row('navWidth', tr("导航宽度"), tr("面板左导航像素宽度（140–320）"), num('navWidth', 216, 140, 320)),
+          row('refreshMs', tr("轮询间隔"), tr("毫秒；0 = 关闭轮询"), num('refreshMs', 60000, 0, 3600000, 1000)),
+          row('showLogs', tr("显示日志面板"), tr("状态栏上方常驻日志（关闭即折叠成一行）"), tgl('showLogs', false)),
+          row('skin', tr("界面皮肤"), tr("v9 = 方案调色板（默认）；宿生 = 跟随 DSH 主题令牌"),
+            sel('skin', [{ value: 'v9', label: tr("v9 方案皮肤") }, { value: 'host', label: tr("宿主原生皮肤") }], 'v9')),
+          row('startView', tr("启动时视图"), tr("打开面板默认落地页（深链 > 上次视图 > 此项）"),
+            sel('startView', VIEWS.map(function (v) { return { value: v[0], label: navLabelById(v[0]) } }), 'overview')),
+          row('openPanel', tr("打开面板"), tr("宿主设置里也能直接唤起守藏面板"),
+            h('button', { type: 'button', className: 'sc-btn sc-btn-primary', onClick: function () { openPanel(); } }, tr("打开守藏面板")))
         );
       }
 
       function apply(ctx) {
         mount(); // root + mask + CSS（幂等）
+        /* i18n 接入（2026-09-17 · v2.1 §4.4）。
+         * ⚠ **就绪判据必须是 appState，不能用 DOM 存在性**：
+         *   `mount()`（本行上方）**同步**建好 `#scpanl-root` 与 `refs.view`，而 `appState` 的句柄
+         *   注入在 **factory 末尾**（见文件尾「共享句柄注入的正确位置」注释，该坑踩过两次：
+         *   `appState.api is not a function` ⇒ 参数页 3 个 tab 静默空掉）。
+         *   故「容器在、句柄未注入」是一个**真实窗口**，只有 appState 判据能识别它。
+         * ⚠ 未就绪时**只记语言、不触发渲染**：`show()` 内 `refs.navItems.forEach` 无守卫，
+         *   此时调用会 TypeError 并冒进宿主订阅链。 */
+        attachLocale(ctx, {
+          /* 词表由 `i18n-dict-index.generated.js` 合并（按目录生成）—— 新增词表文件无须改本行。 */
+      en: DICT_EN,
+        }, {
+          effect: function (fn) { if (ctx && typeof ctx.effect === 'function') ctx.effect(fn, 'shoucang: locale'); },
+          onChange: function () {
+            var ready = !!(appState && appState.refreshView && appState.switchKeys);
+            if (!ready) return;                    // 未就绪：不渲染（语言已记在 i18n 运行时内）
+            try {
+              relabelChrome();                     // 导航/外壳文案（一次性构建，重渲染刷不到）
+              appState.refreshView();               // 当前视图整体重渲染
+            } catch (e) { /* 语言切换失败不得冒进宿主链 */ }
+          }
+        });
         // 2026-09-10：窗口重新聚焦时刷新当前视图——面板停留期间后台数据（蒸馏/深睡/记忆写入）变化，
         // 切回窗口即取最新；仅面板打开时生效 + 1.5s 防抖（轻量替代全局轮询）。
         if (!window.__scFocusBound) {
@@ -947,15 +964,15 @@ import { ICONS, el, svg } from './dom.js'
                 if (!reactEl || typeof reactEl.createElement !== 'function') return null;
                 return reactEl.createElement(
                   'button',
-                  { type: 'button', title: '守藏面板', className: 'sc-trigger', onClick: function () { open(); } },
-                  reactEl.createElement('img', { src: SC_ICON, alt: '守', style: { width: 22, height: 22, display: 'block', pointerEvents: 'none' } }),
-                  reactEl.createElement('span', { className: 'sc-trigger-label' }, '守藏')
+                  { type: 'button', title: tr('守藏面板'), className: 'sc-trigger', onClick: function () { open(); } },
+                  reactEl.createElement('img', { src: SC_ICON, alt: tr("守"), style: { width: 22, height: 22, display: 'block', pointerEvents: 'none' } }),
+                  reactEl.createElement('span', { className: 'sc-trigger-label' }, tr('守藏'))
                 );
               };
               return ctx.slots.register({
                 name: 'sidebar.footer.action',
                 id: 'shoucang-panel-toggle',
-                label: function () { return '守藏面板'; }
+                label: function () { return tr('守藏面板'); }
               }, ShoucangToggle);
             });
           }, 'shoucang-panel: footer action');
@@ -966,16 +983,16 @@ import { ICONS, el, svg } from './dom.js'
                 name: 'settings.section',
                 id: 'shoucang',
                 order: 60,
-                label: function () { return '守藏'; }
+                label: function () { return tr('守藏'); }
               }, ShoucangSettingsSection);
             });
           }, 'shoucang-panel: settings section');
         }
         // S2：互斥——插槽可用时**不再**挂 DOM 直插入口（否则侧栏出现两个入口，0.1.2 的老问题）
         if (SLOT_OK) {
-          Log.info('侧栏入口：已注册宿主插槽 sidebar.footer.action（不挂 DOM 直插入口）');
+          Log.info(tr('侧栏入口：已注册宿主插槽 sidebar.footer.action（不挂 DOM 直插入口）'));
         } else {
-          Log.info('侧栏入口：宿主插槽不可用（' + (reactEl ? 'slots 服务缺失' : "require('react') 不可用") + '），回退 DOM 直插');
+          Log.info(tr('侧栏入口：宿主插槽不可用（') + (reactEl ? tr("slots 服务缺失") : tr("require('react') 不可用")) + tr('），回退 DOM 直插'));
           if (!document.getElementById('scpanl-btn')) mountSidebarEntry();
         }
         return function () {
@@ -1001,8 +1018,9 @@ import { ICONS, el, svg } from './dom.js'
       appState.refreshView = refreshCurrentView;
       appState.refs = refs;
       appState.flushFolds = flushFolds;
-      appState.switchKeys = SWITCH_KEYS;
+      appState.switchKeys = switchKeys;
       appState.metaBadges = metaBadges;
+appState.renderNoteSections = renderNoteSections; // 阶段 5 破环：声明见 app-state.js
       appState.makeToggle = makeToggle;
       appState.show = show;
       appState.apiCtx = apiCtx;

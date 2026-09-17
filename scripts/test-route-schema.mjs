@@ -27,6 +27,12 @@ function req (body) {
   const r = Readable.from([Buffer.from(JSON.stringify(body ?? {}), 'utf8')])
   r.method = 'POST'
   r.url = '/api/shoucang-panel/x'
+  /* T3（2026-09-17 圆桌会议）：**夹具须带 Host 头**——真实 HTTP/1.1 请求必带 Host，
+   *   而 `createRouteBinder` 现已在单点挂**来源栅栏**（`panel-guard.ts`，判据与宿主
+   *   `isTrustedApiRequest` 逐条对齐：无 Host ⇒ 拒）。裸 mock 无 Host 会被判 403，
+   *   那是**夹具不真实**而非产品缺陷 ⇒ 在此补 loopback Host，使夹具与真实请求同形。
+   *   ⚠ 不要为此放宽生产判据（放宽＝真的削弱防护，且与宿主口径分叉）。 */
+  r.headers = { host: '127.0.0.1:3080' }
   return r
 }
 async function call (route, body) {

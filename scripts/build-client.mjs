@@ -26,6 +26,8 @@ mkdirSync(dirname(out), { recursive: true })
  * 客户端要 import 它 ⇒ 必须先于打包生成；其源是 lib/panel-contract.js（host 构建产物）
  * ⇒ 故本步隐含要求先 npm run build:host（npm run build 已是 host → client 顺序）。 */
 execFileSync(process.execPath, [join(root, 'scripts', 'gen-panel-contract.mjs')], { stdio: 'inherit' })
+/* 接缝③：词表索引**由目录生成**（新增词表文件无须改手写清单）——见 gen-i18n-dict-index.mjs 头注 */
+execFileSync(process.execPath, [join(root, 'scripts', 'gen-i18n-dict-index.mjs')], { stdio: 'inherit' })
 
 /* ── 阶段 0b：展平第三方组件库的主题令牌层（S3） ──
  * 判因（真机取证）：只 import 组件、不引入其**主题令牌层**时，`--wa-color-*` 全部未定义 ⇒

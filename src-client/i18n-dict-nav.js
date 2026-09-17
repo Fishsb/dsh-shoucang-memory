@@ -1,0 +1,85 @@
+/**
+ * i18n-dict-nav — 导航 / 面板外壳 / 共享件（body · ui-kit · derive）（英文词表）（2026-09-17）
+ *
+ * **形态：原文即键** —— 键 = 中文原文（`tr("记忆库")` 的单参形态），值 = 英文。
+ *   四份词表在运行期由 body.js 用 Object.assign 合成一张表；分域只为可维护性。
+ *   键集完整性由 `scripts/check-i18n-keys.mjs` 断言 A（双向键集一致）守。
+ *
+ * ⚠ 本文件由 `scripts/i18n-merge-dicts.mjs` 生成/更新，但**可以手工增补**——
+ *   手工条目请保持同样的「键 = 中文原文」形态，否则断言 A 会红。
+ *
+ * @module dsh-shoucang-memory/client/i18n-dict-nav
+ */
+
+/** 词表：中文原文 → 英文。 */
+export var EN = {
+  ' 需要请求体（必填：': ' requires a request body (required: ',
+  '缺少必填字段：': 'Missing required field(s): ',
+  '执行中… ': 'Running… ',
+  '完成 ': ' completed ',
+  '完成': 'Done',
+  '已加载 ': 'Loaded ',
+  ' 已发起': ' started',
+  'slots 服务缺失': 'slots service missing',
+  '守': 'SC',
+  '显示': 'Show',
+  '隐藏': 'Hide',
+  '日志面板已': 'Log panel ',
+  '打开面板': 'Open panel',
+  '打开守藏面板': 'Open the Shoucang panel',
+  '宿主设置里也能直接唤起守藏面板': 'You can also open the Shoucang panel directly from host settings',
+  '打开面板默认落地页（深链 > 上次视图 > 此项）': 'Default landing page when the panel opens (deep link > last view > this)',
+  '守藏面板的界面偏好（与面板内「设置」页同源，改后立即生效；保存在浏览器 localStorage）。': 'UI preferences for the Shoucang panel (same source as the in-panel Settings page; take effect immediately; stored in browser localStorage).',
+  '紧凑模式隐藏描述、压缩行高': 'Compact mode hides descriptions and reduces row height',
+  '面板左导航像素宽度（140–320）': 'Panel left-nav width in pixels (140-320)',
+  '毫秒；0 = 关闭轮询': 'milliseconds; 0 = disable polling',
+  '状态栏上方常驻日志（关闭即折叠成一行）': 'Persistent log above the status bar (turning it off collapses it to one line)',
+  'v9 = 方案调色板（默认）；宿生 = 跟随 DSH 主题令牌': 'v9 = scheme palette (default); host = follow DSH theme tokens',
+  '未激活根目录——请到「配置原文」页根目录区添加。': 'No active root — add one in the Roots section of the Raw config page.',
+  '注入参数已全局可用（scheduler.json）；root 未登记——「记忆板块显示」开关待登记后可用。': 'Injection parameters are globally available (scheduler.json); no root registered — the memory-section switch becomes available after registration.',
+  '注入热记忆总闸 hot_memory': 'Hot-memory injection master switch hot_memory',
+  '关=不注入 agent/用户画像与知识索引任何指针行': 'off = inject no pointer lines from agent/user profiles or the knowledge index',
+  '全局注入': 'Global injection',
+  '写门容量': 'Write-gate capacity',
+  '召回融合': 'Recall fusion',
+  '调度': 'Scheduling',
+  '注入选行': 'Injection row selection',
+  '库版本化': 'Library versioning',
+  '认知环': 'Cognition loop',
+  '契约预检未通过：': 'Contract precheck failed: ',
+  '（本地拦截，未发出请求）': ' (blocked locally; request not sent)',
+  '需重载': 'Reload required',
+  '即时': 'Instant',
+  '折叠收口失败：': 'Collapse failed: ',
+  '组件库主题注入失败：': 'Component-library theme injection failed: ',
+  '设置生效失败（': 'Failed to apply setting (',
+  '侧栏入口：已注册宿主插槽 sidebar.footer.action（不挂 DOM 直插入口）': 'Sidebar entry: registered host slot sidebar.footer.action (no direct DOM entry)',
+  '侧栏入口：宿主插槽不可用（': 'Sidebar entry: host slot unavailable (',
+  'require(\'react\') 不可用': 'require(\'react\') unavailable',
+  '），回退 DOM 直插': '); falling back to direct DOM insertion',
+  '关': 'Off',
+  '参数': 'Parameters',
+  '守藏': 'Shoucang',
+  '守藏 SHOUCANG': 'Shoucang',
+  '守藏记忆面板': 'Shoucang memory panel',
+  '守藏面板': 'Shoucang panel',
+  '展开': 'Expand',
+  '已重新取数': 'Data reloaded',
+  '总览': 'Overview',
+  '插件集合': 'Plugins',
+  '收起 ▴': 'Collapse ▴',
+  '架构': 'Architecture',
+  '深度睡眠': 'Deep sleep',
+  '画像': 'Profiles',
+  '记忆': 'Memory',
+  '记忆库': 'Memory bank',
+  '设置': 'Settings',
+  '过滤': 'Filter',
+  '过滤…': 'Filtering…',
+  '运行': 'Runtime',
+  '运行总览': 'Overview',
+  '运行观测': 'Observability',
+  '配置': 'Configuration',
+  '重新取数并重绘本页': 'Reload data and redraw this page',
+  '（无内容）': '(no content)',
+}

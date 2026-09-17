@@ -1,3 +1,4 @@
+import { lang, tr } from './i18n.js'
 /**
  * derive.js — 判据/格式化派生（自 `body.js` 抽出 · UI1/U1 · 2026-09-15）
  *
@@ -58,7 +59,7 @@ var Derive = (function () {
    * 注意不做 'off' 兜底：原判据 `p === 'off' || p === 'unreachable'` 在 p 缺失时为 false
    * （记忆板块 §7 传的是裸 `data.vector.provider`），兜底会把「未上报」误判成「已关闭」。 */
     providerDown: function (p) { return hasOwn2.call(VEC_DOWN, String(p)); },
-    vecLabel: function (p) { return pick(VEC_LABEL, s(p, 'off'), '关'); },
+    vecLabel: function (p) { return pick(VEC_LABEL, s(p, 'off'), tr("关")); },
     capKind: function (pct) {
       var n = Number(pct) || 0;
       return n >= CAP_PCT.stalled ? 'stalled' : n >= CAP_PCT.suspect ? 'suspect' : 'ended';

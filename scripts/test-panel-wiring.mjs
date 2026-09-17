@@ -85,7 +85,12 @@ const fakeRes = () => {
  *  （`dsh-host-webserver:245`），本仓已有多条 async handler；本轮 `/vector/status2` 与
  *  `/reconcile` `/maturation/scan` `/selfcheck/run` 由同步改为异步 ⇒ **同步调用拿不到响应**
  *  （实测 code=0）。这里对齐宿主语义，不是放宽断言。 */
-const call = async (sub, req = { method: 'GET' }) => {
+/* T3（2026-09-17 圆桌会议）：夹具**须带 Host 头** —— 真实 HTTP/1.1 请求必带 Host，
+ *  而 `createRouteBinder` 已在单点挂**来源栅栏**（`panel-guard.ts`，判据与宿主
+ *  `isTrustedApiRequest` 逐条对齐：无 Host ⇒ 拒，`dsh-client-connection/lib/index.js:203`）。
+ *  裸 `{method:'GET'}` 会被判 403，那是**夹具不真实**而非产品缺陷 ⇒ 此处补 loopback Host。
+ *  ⚠ 不要为此放宽生产判据（放宽＝真的削弱防护，且与宿主口径分叉）。 */
+const call = async (sub, req = { method: 'GET', headers: { host: '127.0.0.1:3080' } }) => {
   const h = ctx.routes.get(PRE + sub)
   if (!h) return null
   const res = fakeRes()

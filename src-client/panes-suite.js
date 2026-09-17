@@ -12,12 +12,13 @@ import { Derive, fmtTime } from './derive.js'
 import { appState } from './app-state.js'
 import { ovCRow, ovPill } from './panes-overview.js'
 import { renderCognitionReport } from './panes-memory-detail.js'
+import { lang, tr } from './i18n.js'
 
 function renderSuite(view, data) {
   view.textContent = '';
-  UI.pageHead('插件集合', 'suite 装配矩阵由 targets.ts 的 suiteAssemblyMatrix() 单一实现；面板与 scheduler 共用。', {
+  UI.pageHead(tr("插件集合"), tr("suite 装配矩阵由 targets.ts 的 suiteAssemblyMatrix() 单一实现；面板与 scheduler 共用。"), {
     routes: ['/suite'], routesInline: true,
-    actions: [UI.button('重新装配', function () { appState.refreshView(); appState.statusFn('已按注入器 registry + profiles 重新核装配'); }, { title: '重取装配矩阵（/suite）' })]
+    actions: [UI.button(tr("重新装配"), function () { appState.refreshView(); appState.statusFn(tr("已按注入器 registry + profiles 重新核装配")); }, { title: tr("重取装配矩阵（/suite）") })]
   });
   var members = (data && data.members) || [];
   var grid = el('div', 'sc-pgrid');
@@ -53,48 +54,48 @@ function renderSuite(view, data) {
   var add = el('div', 'sc-pcard is-add');
   var aph = el('div', 'ph');
   var aic = el('span', 'ic'); aic.appendChild(svg(ICONS.suite)); aph.appendChild(aic);
-  aph.appendChild(el('b', null, '添加目标库'));
+  aph.appendChild(el('b', null, tr("添加目标库")));
   add.appendChild(aph);
-  add.appendChild(el('div', 'pd', '需在白名单内登记（target-registry / members 配置）'));
+  add.appendChild(el('div', 'pd', tr("需在白名单内登记（target-registry / members 配置）")));
   grid.appendChild(add);
   view.appendChild(grid);
 
   /* 装配矩阵卡：行 = 目标库容量注册表（数据取自 /memory/overview 的 indexes，真实字段；不造数） */
-  var mtx = UI.card('suite 装配矩阵', { sub: '单一实现：targets.ts · suiteAssemblyMatrix()', right: [el('span', 'sc-src', 'GET /suite')] });
+  var mtx = UI.card(tr("suite 装配矩阵"), { sub: tr("单一实现：targets.ts · suiteAssemblyMatrix()"), right: [el('span', 'sc-src', 'GET /suite')] });
   view.appendChild(mtx.box);
   var tbl = el('table', 'sc-table');
   var thead = el('thead'); var htr = el('tr');
-  ['目标库', '容量', '已用', '装配内容', '状态'].forEach(function (h) { htr.appendChild(el('th', null, h)); });
+  [tr("目标库"), tr("容量"), tr("已用"), tr("装配内容"), tr("状态")].forEach(function (h) { htr.appendChild(el('th', null, h)); });
   thead.appendChild(htr); tbl.appendChild(thead);
   var tbody = el('tbody'); tbl.appendChild(tbody);
   mtx.body.appendChild(tbl);
-  var CONTENT = { 'MEMORY.md': '原则 + 路径', 'USER.md': '画像 + 偏好', 'AGENT.md': '经验 + 反例' };
+  var CONTENT = { 'MEMORY.md': tr("原则 + 路径"), 'USER.md': tr("画像 + 偏好"), 'AGENT.md': tr("经验 + 反例") };
   var pill = function (ok, text) { return el('span', 'pill' + (ok ? ' ok' : ' warn'), text); };
   /* 追加一行（v9 的 notes/ · archive/：**无容量门** ⇒ 容量列写"不限"，已用列带"条"） */
   var addRow = function (name, used, content, ok) {
     var tr = el('tr');
     tr.appendChild(el('td', 'tgt', name));
-    tr.appendChild(el('td', 'num', '不限'));
+    tr.appendChild(el('td', 'num', tr("不限")));
     tr.appendChild(el('td', 'num', used));
     tr.appendChild(el('td', null, content));
-    var td = el('td'); td.appendChild(pill(ok !== false, ok === false ? '水位偏高' : '正常'));
+    var td = el('td'); td.appendChild(pill(ok !== false, ok === false ? tr("水位偏高") : tr("正常")));
     tr.appendChild(td);
     tbody.appendChild(tr);
   };
   var fill = function (idx) {
     tbody.textContent = '';
-    if (!Derive.has(idx)) { tbody.appendChild(el('tr', null, '（无容量注册表数据）')); return; }
+    if (!Derive.has(idx)) { tbody.appendChild(el('tr', null, tr("（无容量注册表数据）"))); return; }
     idx.forEach(function (f) {
       var pct = f.cap ? Math.round((f.chars || 0) / f.cap * 100) : null;
       var kind = pct === null ? 'ended' : Derive.capKind(pct);
       var tr = el('tr');
       /* v9 的"目标库"列是**去 .md 后缀**的名字（MEMORY / USER / AGENT） */
       tr.appendChild(el('td', 'tgt', String(f.name || '').replace(/\.md$/i, '')));
-      tr.appendChild(el('td', 'num', f.cap ? Derive.num(f.cap) : '不限'));
+      tr.appendChild(el('td', 'num', f.cap ? Derive.num(f.cap) : tr("不限")));
       tr.appendChild(el('td', 'num', Derive.num(f.chars || 0)));
       tr.appendChild(el('td', null, CONTENT[f.name] || '—'));
       var td = el('td');
-      td.appendChild(pill(kind === 'ended', kind === 'ended' ? '正常' : (kind === 'stalled' ? '超阈' : '水位偏高')));
+      td.appendChild(pill(kind === 'ended', kind === 'ended' ? tr("正常") : (kind === 'stalled' ? tr("超阈") : tr("水位偏高"))));
       tr.appendChild(td);
       tbody.appendChild(tr);
     });
@@ -107,19 +108,19 @@ function renderSuite(view, data) {
     fill((r && r.indexes) || null);
     /* notes/ 行：v9 表格有这一行（无容量门 ⇒「不限 / N 条 / 便签」）；真实文件数取自 notes 清单 */
     var n = Derive.count(r && r.notes);
-    if (n) addRow('notes/', n + ' 条', '便签', true);
+    if (n) addRow('notes/', n + tr(" 条"), tr("便签"), true);
   }).catch(function () { });
   /* archive/ 行：已用数取自 /cognition/report 的真实归档清单；端点不可用 ⇒ 不出行（宁缺勿造） */
   appState.api('/cognition/report').then(function (r) {
     var ar = (r && r.archive) || [];
     if (!r || !r.ok || !Derive.has(ar)) return;
-    addRow('archive/', ar.length + ' 条', '归档', true);
+    addRow('archive/', ar.length + tr(" 条"), tr("归档"), true);
   }).catch(function () { });
 }
 
 function renderDeepSleep(view) {
   view.textContent = '';
-  UI.pageHead('深度睡眠 · 会话状态机', '全部根会话停滞 ≥ 阈值后自动回想当天记忆、提炼原则层 PRINCIPLES.md。状态机区分「正常长任务 / 卡住 / 异常退出」：仅长任务正在推进才拦睡，其余正常睡。', { routes: ['/deepsleep', '/deepsleep/trigger', '/deepsleep/config'] });
+  UI.pageHead(tr("深度睡眠 · 会话状态机"), tr("全部根会话停滞 ≥ 阈值后自动回想当天记忆、提炼原则层 PRINCIPLES.md。状态机区分「正常长任务 / 卡住 / 异常退出」：仅长任务正在推进才拦睡，其余正常睡。"), { routes: ['/deepsleep', '/deepsleep/trigger', '/deepsleep/config'] });
   var smSlot = el('div'); view.appendChild(smSlot); // v9 顺序（原型第 1 张卡）：状态机占位（异步回填）
   var distSlot = el('div'); view.appendChild(distSlot); // v9 顺序：分布卡占位（异步回填，见 /deepsleep 回调）
   /* v9 顺序：回执（原型第 3 块）与下轮材料预估（第 4 块右）由 /cognition/report 异步回填 ——
@@ -130,7 +131,7 @@ function renderDeepSleep(view) {
    * 账本对账迁到运行观测页「关键指标」Tab（唯一未被原型覆盖的真实功能，不丢）。 */
   appState.api('/deepsleep').then(function (r) {
     if (!r.active) {
-      view.appendChild(el('div', 'sc-desc', '深度睡眠归纳器当前未激活（蒸馏器 enableDistill 未启用或尚未就绪）。'));
+      view.appendChild(el('div', 'sc-desc', tr("深度睡眠归纳器当前未激活（蒸馏器 enableDistill 未启用或尚未就绪）。")));
       return;
     }
     /* v9：会话徽章行**移除** —— 原型深睡页无此块，五态计数已由下方「睡眠状态分布」卡的图例
@@ -168,7 +169,7 @@ function renderDeepSleep(view) {
         var cir = el('div', 'sc-sm-circle');
         cir.appendChild(svg(n[1]));
         node.appendChild(cir);
-        node.appendChild(el('div', 'sc-sm-label', idx === stage ? n[0] + ' · 当前' : n[0]));
+        node.appendChild(el('div', 'sc-sm-label', idx === stage ? n[0] + tr(" · 当前") : n[0]));
         sm.appendChild(node);
         if (i < 2) sm.appendChild(el('div', 'sc-sm-seg' + (idx < stage ? ' done' : '')));
       });
@@ -209,26 +210,32 @@ function renderDeepSleep(view) {
       var distCard = UI.card('睡眠状态分布', {
         sub: 'idle ' + idleMin + ' 分钟 · 下次可睡 ' + (r.nextEligibleAt ? dsFmtTime(r.nextEligibleAt) : '—'),
         right: [el('span', 'sc-src', 'GET /deepsleep'), UI.button('立即进入深睡', function () {
-          appState.statusFn('深度睡眠归纳中…');
+          appState.statusFn(tr("深度睡眠归纳中…"));
           return appState.api('/deepsleep/trigger', { method: 'POST', body: '{}' })
-            .then(function (rr) { appState.statusFn(rr.ok ? '✓ 已触发归纳（见日志）' : '⚠ 触发失败：' + (rr.error || '')); });
+            .then(function (rr) { appState.statusFn(rr.ok ? tr("✓ 已触发归纳（见日志）") : tr("⚠ 触发失败：") + (rr.error || '')); });
         }, { primary: true, async: true, busyText: '归纳中…', okText: '已触发归纳', confirm: '立即触发一次深度睡眠归纳？将调用归纳子代理回顾当天记忆痕迹。' })]
       });
       distSlot.appendChild(distCard.box);
       /* 2026-09-14（用户拍板）：分布按**用户可见状态**聚合（待蒸馏 / 停滞），
        * 与「最近会话」卡的 pill **同源同词**（`DS_STATE_TEXT`）——不再把状态机内部五态术语摆到界面上。
        * 内部五态的细节仍在会话行的 sub（探针结论）里可查；CSS 复用既有类（不加新样式）。 */
-      var byLabel = {};
-      segs.forEach(function (s) { var k = DS_STATE_TEXT[s[0]] || s[0]; byLabel[k] = (byLabel[k] || 0) + Number(s[1] || 0); });
-      var merged = Object.keys(byLabel).map(function (k) { return [k, byLabel[k]]; });
+      /* i18n（2026-09-17）：**改为按状态键聚合**，不再拿翻译后的文案当聚合键与比较对象。
+       * 判因（i18n-blindspot 探出）：原实现 `s[0] === tr("停滞")` 拿 `tr()` 结果做比较 ——
+       *   切英文后 `tr()` 返回英文，而聚合键是中文标签 ⇒ 比较恒 false ⇒ 色条/圆点**永远显示
+       *   running 色**（静默失效，界面上看不出错）。该形态 `check-i18n-scan` 的 AST 判据
+       *   **天然看不见**（比较边是函数调用而非字面量）⇒ 由 `i18n-blindspot.mjs` 专司捕获。
+       * 现按**状态键**比较（`dsStateKind`/`dsStateLabel`），与语言完全解耦。 */
+      var byState = {};
+      segs.forEach(function (s) { byState[s[0]] = (byState[s[0]] || 0) + Number(s[1] || 0); });
+      var merged = Object.keys(byState).map(function (k) { return [k, byState[k]]; });
       var bar = el('div', 'sc-dseg');
-      merged.forEach(function (s) { if (Number(s[1]) > 0) { var i = el('i', s[0] === '停滞' ? 'stalled' : 'running'); i.style.flex = String(s[1]); bar.appendChild(i); } });
+      merged.forEach(function (s) { if (Number(s[1]) > 0) { var i = el('i', dsStateKind(s[0])); i.style.flex = String(s[1]); bar.appendChild(i); } });
       distCard.body.appendChild(bar);
       var legend = el('div', 'sc-dlegend');
       merged.forEach(function (s) {
         var it = el('span', 'sc-dlegend-i');
-        it.appendChild(el('i', 'sc-segdot ' + (s[0] === '停滞' ? 'stalled' : 'running')));
-        it.appendChild(el('span', null, s[0] + ' ' + String(s[1] || 0)));
+        it.appendChild(el('i', 'sc-segdot ' + dsStateKind(s[0])));
+        it.appendChild(el('span', null, dsStateLabel(s[0]) + ' ' + String(s[1] || 0)));
         legend.appendChild(it);
       });
       distCard.body.appendChild(legend);
@@ -240,12 +247,12 @@ function renderDeepSleep(view) {
     renderCognitionReport(cogSlot, 'sleep');
     /* ── v2.2 睡眠期自检裁决（宿主义务：子代理只归纳，检测在其完成后由宿主执行） ──
      * v9 形态：执行位在**卡头右侧**（路由 chip + 按钮「运行自检」），面板此前把按钮放在卡尾。 */
-    var scRun = UI.button('运行自检', function () {
+    var scRun = UI.button(tr("运行自检"), function () {
       return appState.api('/selfcheck/run', { method: 'POST', body: '{}' })
-        .then(function (rr) { appState.statusFn('✓ 自检完成：' + (rr.verdict || '?')); renderDeepSleep(view); });
-    }, { async: true, busyText: '自检中…', okText: '自检完成' });
-    var scWrap = UI.card('睡眠期自检（判据门 / 载体门 / 分层 / 成熟度 / 影子 / 对账）', {
-      sub: '上次结果读 selfcheck-latest.json（GET）；执行走 POST',
+        .then(function (rr) { appState.statusFn(tr("✓ 自检完成：") + (rr.verdict || '?')); renderDeepSleep(view); });
+    }, { async: true, busyText: tr("自检中…"), okText: tr("自检完成") });
+    var scWrap = UI.card(tr("睡眠期自检（判据门 / 载体门 / 分层 / 成熟度 / 影子 / 对账）"), {
+      sub: tr("上次结果读 selfcheck-latest.json（GET）；执行走 POST"),
       right: [el('span', 'sc-src', 'GET /selfcheck · POST /selfcheck/run'), scRun]
     });
     view.appendChild(scWrap.box);
@@ -257,26 +264,26 @@ function renderDeepSleep(view) {
       if (sub) c.appendChild(el('div', 'sc-mem-stat-sub', sub));
       return c;
     };
-    scBox.appendChild(scCard('自检', '…', '读取中'));
+    scBox.appendChild(scCard(tr("自检"), '…', tr("读取中")));
     scWrap.body.appendChild(scBox);
     appState.api('/selfcheck').then(function (s) {
       scBox.textContent = '';
       if (!s || !s.active) {
-        scBox.appendChild(scCard('自检', '尚未跑过', (s && s.error) || '定时器/深睡后会自动执行'));
+        scBox.appendChild(scCard(tr("自检"), tr("尚未跑过"), (s && s.error) || tr("定时器/深睡后会自动执行")));
       } else {
         var v = String(s.verdict || '?');
         var sm = s.summary || {};
         var ck = sm.checks || {};
-        scBox.appendChild(scCard('裁决', v === 'ok' ? '✅ ok' : v === 'adjust' ? '🔧 adjust' : '⚠ warn', '于 ' + fmtTime(s.at)));
-        scBox.appendChild(scCard('六项检测', Object.keys(ck).map(function (k) { return (ck[k] === 'pass' ? '✅' : ck[k] === 'skipped' ? '⏭' : '❌') + k; }).join(' '), '影子 flipReady=' + sm.flipScoreWeights + ' · 成熟度就绪=' + sm.maturationReady + ' · 闭合=' + (sm.closureOk === null ? 'n/a' : sm.closureOk)));
-        scBox.appendChild(scCard('白名单调整', (Derive.has(s.adjustments) ? s.adjustments.map(function (a) { return a.id; }).join(' · ') : '无'), '仅窄动作且可回滚；改 α/gate/判据 一律只建议'));
+        scBox.appendChild(scCard(tr("裁决"), v === 'ok' ? '✅ ok' : v === 'adjust' ? '🔧 adjust' : '⚠ warn', tr("于 ") + fmtTime(s.at)));
+        scBox.appendChild(scCard(tr("六项检测"), Object.keys(ck).map(function (k) { return (ck[k] === 'pass' ? '✅' : ck[k] === 'skipped' ? '⏭' : '❌') + k; }).join(' '), tr("影子 flipReady=") + sm.flipScoreWeights + tr(" · 成熟度就绪=") + sm.maturationReady + tr(" · 闭合=") + (sm.closureOk === null ? 'n/a' : sm.closureOk)));
+        scBox.appendChild(scCard(tr("白名单调整"), (Derive.has(s.adjustments) ? s.adjustments.map(function (a) { return a.id; }).join(' · ') : tr("无")), tr("仅窄动作且可回滚；改 α/gate/判据 一律只建议")));
       }
-    }).catch(function () { scBox.textContent = ''; scBox.appendChild(scCard('自检', '读取失败', '/selfcheck')); });
+    }).catch(function () { scBox.textContent = ''; scBox.appendChild(scCard(tr("自检"), tr("读取失败"), '/selfcheck')); });
     /* v9：会话明细 → **「最近会话」卡**（原型该块是 card：hd 标题 + sub，bd 内若干 `.row`：
      * 左状态 pill + 描述）。原型的行尾有「查看」按钮 —— 面板**没有**会话详情视图 ⇒ 不放该按钮
      * （与归档区同一处置：不做「看得见点不动」的控件）。 */
     if (Derive.has(r.sessions)) {
-      var sessCard = UI.card('最近会话', { sub: r.sessions.length + ' 条在册' });
+      var sessCard = UI.card(tr("最近会话"), { sub: r.sessions.length + tr(" 条在册") });
       view.appendChild(sessCard.box);
       r.sessions.forEach(function (s) {
         /* 状态进 **pill**（彩色，最显眼）；时间与探针细节进 **sub**。 */
@@ -289,34 +296,34 @@ function renderDeepSleep(view) {
         var ttl = String(s.title || '');
         if (ttl.length > 14) ttl = ttl.slice(0, 14) + '…';
         var nm = [s.workspace, ttl, s.sid].filter(function (x) { return !!x; }).join(' · ');
-        sessCard.body.appendChild(ovCRow(nm, sub, [ovPill(DS_STATE_TEXT[s.state] || s.state, pk)]));
+        sessCard.body.appendChild(ovCRow(nm, sub, [ovPill(dsStateLabel(s.state), pk)]));
       });
     }
     // 卡住告警（T2）
     var hasStall = r.stalled > 0 || (r.sessions || []).some(function (s) { return s.probeResult === 'stall'; });
     if (hasStall) {
-      view.appendChild(el('div', 'sc-ds-alert', '⚠ 检测到疑似卡住的会话（无输出增长但会话仍在）：已正常计入停滞并安排睡眠，但建议你确认该任务是否真的卡住——必要时手动重启该会话。'));
+      view.appendChild(el('div', 'sc-ds-alert', tr("⚠ 检测到疑似卡住的会话（无输出增长但会话仍在）：已正常计入停滞并安排睡眠，但建议你确认该任务是否真的卡住——必要时手动重启该会话。")));
     }
     /* v9：原「控制」小节（立即归纳一次 / 暂停到明天）与「阈值」小节**移除** ——
      *   触发按钮已并入「睡眠状态分布」卡头右侧（原型把执行位放在该卡）；
      *   4 项阈值（enableDeepSleep / 停滞阈值 / 探测延迟 / 采样间隔）迁到**设置页 › 高级**
      *   （与「配置原文」同处：都是"改后需重载插件"的后端配置），深睡页不再有第二处配置入口。 */
   }).catch(function (e) {
-    view.appendChild(el('div', 'sc-desc', '加载失败：' + (e && e.message ? e.message : e)));
+    view.appendChild(el('div', 'sc-desc', tr("加载失败：") + (e && e.message ? e.message : e)));
   });
 }
 
 function dsFmtAgo(ts) {
   if (!ts) return '—';
   var s = Math.max(0, Math.floor((Date.now() - ts) / 1000));
-  if (s < 60) return s + ' 秒';
-  var m = Math.floor(s / 60); if (m < 60) return m + ' 分钟';
-  var h = Math.floor(m / 60); if (h < 24) return h + ' 小时 ' + (m % 60) + ' 分';
-  return Math.floor(h / 24) + ' 天 ' + (h % 24) + ' 小时';
+  if (s < 60) return s + tr(" 秒");
+  var m = Math.floor(s / 60); if (m < 60) return m + tr(" 分钟");
+  var h = Math.floor(m / 60); if (h < 24) return h + tr(" 小时 ") + (m % 60) + tr(" 分");
+  return Math.floor(h / 24) + tr(" 天 ") + (h % 24) + tr(" 小时");
 }
 
 function dsFmtTime(ts) {
-  if (!ts) return '从未';
+  if (!ts) return tr("从未");
   try { return new Date(ts).toLocaleString('zh-CN', { hour12: false }); } catch (e) { return String(ts); }
 }
 
@@ -330,6 +337,17 @@ function dsFmtTime(ts) {
  *   （会话还活着/未决 ⇒ 内容迟早要被蒸馏；`ended` 即「任务完成、等待蒸馏」）。
  *   旧标签是状态机内部术语（活跃/已结束/探测中/待复核/疑似卡住），**对使用者不可读**，
  *   且把「阻塞睡眠」这类内部机制暴露到界面上——用户实测被它误导（以为「没睡」）。 */
+/** 深睡状态键 → CSS 类别。**按状态键判定，与语言解耦**（原实现拿 tr() 结果比较 ⇒ 静默失效）。 */
+function dsStateKind (state) { return state === 'stalled' ? 'stalled' : 'running'; }
+
+/** 深睡状态键 → 显示文案（显式 tr 分派：AST 可见，zh 态回中文原文，en 态查词表）。
+ *  ⚠ 不要写成 `tr(DS_STATE_TEXT[state])` —— 动态取键会让 `check-i18n-keys` 断言 A
+ *    看不到调用点，词表侧反被判**死键**而误红。 */
+function dsStateLabel (state) {
+  if (state === 'stalled') return tr('停滞');
+  return tr('待蒸馏');
+}
+
 var DS_STATE_TEXT = { running: '待蒸馏', ended: '待蒸馏', probing: '待蒸馏', suspect: '待蒸馏', stalled: '停滞' };
 
 /* 探针细节（次要信息，附在时间后面）：去掉「阻塞睡眠」等内部机制措辞，只留人话。 */

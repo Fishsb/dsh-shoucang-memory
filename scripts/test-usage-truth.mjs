@@ -98,10 +98,20 @@ if (Array.isArray(dr)) {
 
 // ── B4：真实值随查询变化（不是把常量写进账）──
 {
+  /* ⚠ 判据强化（2026-09-17 实测）：原判据只比 `kept.dynamic` / `kept.stable` 两个**计数**字段，
+   *  而这两个数由**配额决定**（实测跨 5 个不同查询恒为 8 / 39）⇒ 判据**失去区分力**，
+   *  无论账是否真是算出来的都会红。
+   *  实测同一对查询（`深睡蒸馏` vs 空）的账在 **4 个字段**上确实不同 ——
+   *  `chars`(4180 vs 4151) / `dropped` / `droppedRows` / `assemblerText` ⇒ 账**确实是算出来的**。
+   *  故改为比**整账**（排除时间戳 `at`）：既保住原意「账是算出来的，不是常量」，
+   *  又不再被配额掩盖（配额恒定不等于账恒定）。 */
   const o2 = await (await fetch(url(''), { signal: AbortSignal.timeout(8000) })).json()
   const u2 = o2.supplyUsage
-  ok(u2.kept.dynamic !== u.kept.dynamic || u2.kept.stable !== u.kept.stable,
-    `B4 换查询后账**随之变化**（dynamic ${u2.kept.dynamic} vs ${u.kept.dynamic}）—— 账是算出来的，不是常量`)
+  const strip = (x) => { const c = Object.assign({}, x); delete c.at; return JSON.stringify(c) }
+  const diffs = Object.keys(u).filter((k) => k !== 'at' && JSON.stringify(u[k]) !== JSON.stringify(u2[k]))
+  ok(strip(u) !== strip(u2),
+    `B4 换查询后账**随之变化**（差异字段 ${diffs.length} 个：${diffs.slice(0, 4).join(', ')}）—— 账是算出来的，不是常量`)
+  ok(diffs.length > 0, `B4b 至少一个账字段随查询变化（实测 ${diffs.length} 个）`)
 }
 
 console.log(fail ? `\nFAIL（${fail} 项）` : '\nPASS（账 == 真实裁切断言全过）')

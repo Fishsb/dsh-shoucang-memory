@@ -10,23 +10,24 @@ import { UI } from './ui-kit.js'
 import { el } from './dom.js'
 import { Derive, fmtTime } from './derive.js'
 import { appState } from './app-state.js'
+import { lang, tr } from './i18n.js'
 
 function renderViewRoots(view, rootListWrap) {
   view.textContent = '';
-  UI.pageHead('守藏根目录', '指向含 shoucang.config.yaml 的工作区目录。该目录本身即为 Obsidian 兼容 vault（Markdown + frontmatter + [[双链]]），可用 Obsidian 直接打开。', { routes: ['/roots', '/get_root', '/root/bootstrap'] });
+  UI.pageHead(tr("守藏根目录"), tr("指向含 shoucang.config.yaml 的工作区目录。该目录本身即为 Obsidian 兼容 vault（Markdown + frontmatter + [[双链]]），可用 Obsidian 直接打开。"), { routes: ['/roots', '/get_root', '/root/bootstrap'] });
 
   var listWrap = el('div'); rootListWrap(listWrap);
   view.appendChild(listWrap);
   var addItem = el('div', 'setting-item');
   var info = el('div', 'setting-item-info');
-  info.appendChild(el('div', 'setting-item-name', '添加根目录'));
-  info.appendChild(el('div', 'setting-item-desc', '绝对路径，须包含 shoucang.config.yaml'));
-  var input = el('input', 'sc-input'); input.placeholder = '请输入 vault 的绝对路径';
-  var btn = el('button', 'sc-btn', '添加并启用');
+  info.appendChild(el('div', 'setting-item-name', tr("添加根目录")));
+  info.appendChild(el('div', 'setting-item-desc', tr("绝对路径，须包含 shoucang.config.yaml")));
+  var input = el('input', 'sc-input'); input.placeholder = tr("请输入 vault 的绝对路径");
+  var btn = el('button', 'sc-btn', tr("添加并启用"));
   btn.onclick = function () {
     var p = input.value.trim(); if (!p) return;
     appState.api('/set_root', { method: 'POST', body: JSON.stringify({ path: p }) })
-      .then(function () { input.value = ''; appState.statusFn('✓ 根目录已启用'); appState.refreshView(); })
+      .then(function () { input.value = ''; appState.statusFn(tr("✓ 根目录已启用")); appState.refreshView(); })
       .catch(appState.failFn);
   };
   addItem.appendChild(info); addItem.appendChild(input); addItem.appendChild(btn);
@@ -36,7 +37,7 @@ function renderViewRoots(view, rootListWrap) {
     listWrap.textContent = '';
     if (!Derive.has(r.roots)) {
       var empty = el('div', 'setting-item');
-      empty.appendChild(el('div', 'setting-item-desc', '尚未登记任何根目录——在上方输入路径添加。'));
+      empty.appendChild(el('div', 'setting-item-desc', tr("尚未登记任何根目录——在上方输入路径添加。")));
       listWrap.appendChild(empty);
       return; // 空态必须收口：原实现缺 return，紧接着 r.roots.forEach 在 /roots 未返回对象时必抛
     }
@@ -46,11 +47,11 @@ function renderViewRoots(view, rootListWrap) {
       item.appendChild(dot.cloneNode ? dot : dot);
       item.appendChild(el('span', 'sc-rootname', root.name));
       item.appendChild(el('span', 'sc-rootpath', root.path)).title = root.path;
-      var useBtn = el('button', 'sc-btn subtle', root.id === r.active ? '当前' : '启用');
+      var useBtn = el('button', 'sc-btn subtle', root.id === r.active ? tr("当前") : tr("启用"));
       if (root.id === r.active) useBtn.disabled = true;
       else useBtn.onclick = function () {
         appState.api('/set_root', { method: 'POST', body: JSON.stringify({ path: root.path }) })
-          .then(function () { appState.statusFn('✓ 已启用 ' + root.name); appState.refreshView(); })
+          .then(function () { appState.statusFn(tr("✓ 已启用 ") + root.name); appState.refreshView(); })
           .catch(appState.failFn);
       };
       item.appendChild(useBtn);
@@ -62,25 +63,25 @@ function renderViewRoots(view, rootListWrap) {
 
 function renderViewYaml(view, ta, saveRow) {
   view.textContent = '';
-  UI.pageHead('配置原文', '直接编辑 shoucang.config.yaml 全文。保存时原文件自动备份为 .bak-时间戳。', { routes: ['/config', '/save'] });
+  UI.pageHead(tr("配置原文"), tr("直接编辑 shoucang.config.yaml 全文。保存时原文件自动备份为 .bak-时间戳。"), { routes: ['/config', '/save'] });
   ta.id = 'sc-yaml'; ta.spellcheck = false;
   view.appendChild(ta);
   saveRow.className = 'setting-item';
   var spacer = el('div', 'setting-item-info');
   saveRow.appendChild(spacer);
-  saveRow.appendChild(saveRow._btn = el('button', 'sc-btn', '保存'));
+  saveRow.appendChild(saveRow._btn = el('button', 'sc-btn', tr("保存")));
   view.appendChild(saveRow);
   /* U2（B9）：最近改动 5 条 —— 读库 git reflog + 配置 mtime（按需端点，零新增常驻注入） */
-  view.appendChild(el('div', 'sc-mem-group-title', '最近改动（5 条）'));
+  view.appendChild(el('div', 'sc-mem-group-title', tr("最近改动（5 条）")));
   var recentBox = el('div', 'sc-recent');
-  recentBox.appendChild(el('div', 'sc-recent-row', '读取中…'));
+  recentBox.appendChild(el('div', 'sc-recent-row', tr("读取中…")));
   view.appendChild(recentBox);
   appState.api('/config/recent').then(function (r) {
     recentBox.textContent = '';
-    var cfg = r && r.configMtime ? ('配置文件改动：' + fmtTime(r.configMtime)) : '配置文件尚无记录';
+    var cfg = r && r.configMtime ? (tr("配置文件改动：") + fmtTime(r.configMtime)) : tr("配置文件尚无记录");
     recentBox.appendChild(el('div', 'sc-recent-row', cfg));
     var items = (r && r.recent) || [];
-    if (!Derive.has(items)) { recentBox.appendChild(el('div', 'sc-recent-row', '记忆库尚无 git 快照（写入一次即出现）')); return; }
+    if (!Derive.has(items)) { recentBox.appendChild(el('div', 'sc-recent-row', tr("记忆库尚无 git 快照（写入一次即出现）"))); return; }
     items.forEach(function (it) {
       var row = el('div', 'sc-recent-row');
       row.appendChild(el('span', 'sc-recent-at', it.at ? fmtTime(it.at) : '-'));
@@ -88,7 +89,7 @@ function renderViewYaml(view, ta, saveRow) {
       row.title = it.msg || '';
       recentBox.appendChild(row);
     });
-  }).catch(function () { recentBox.textContent = ''; recentBox.appendChild(el('div', 'sc-recent-row', '读取失败（/config/recent）')); });
+  }).catch(function () { recentBox.textContent = ''; recentBox.appendChild(el('div', 'sc-recent-row', tr("读取失败（/config/recent）"))); });
 }
 
 function renderConfigRaw(host) {
@@ -104,13 +105,13 @@ function renderConfigRaw(host) {
   if (saveRow._btn) {
     saveRow._btn.onclick = function () {
       appState.api('/save', { method: 'POST', body: JSON.stringify({ text: ta.value }) })
-        .then(function () { appState.statusFn('✓ 已保存，原文件已备份为 .bak-*'); })
+        .then(function () { appState.statusFn(tr("✓ 已保存，原文件已备份为 .bak-*")); })
         .catch(appState.failFn);
     };
   }
   appState.api('/config').then(function (r) {
     ta.value = r.text || '';
-    if (!r.text) appState.statusFn(r.error === 'no-active-root' ? '未激活根目录——请在「高级 · 根目录」区添加。' : (r.error || ''));
+    if (!r.text) appState.statusFn(r.error === 'no-active-root' ? tr("未激活根目录——请在「高级 · 根目录」区添加。") : (r.error || ''));
   }).catch(appState.failFn);
 }
 
