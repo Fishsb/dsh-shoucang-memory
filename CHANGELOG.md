@@ -5,6 +5,32 @@
 ## [Unreleased]
 
 ### Changed
+- **D 板块收口 · I4 同步子进程异步化 + 自检互斥（2026-09-17）**：
+  ① **根因**：四处 `execFileSync` **在同步 HTTP handler 里独占宿主唯一事件循环** —— `panel-observe` 的
+  `/selfcheck/run`（**上限 180s**）、`/reconcile`（30s）、`/maturation/scan`（30s），以及
+  `panel-shared#probeLocalEmbed`（12s，由 `/vector/status2` **每 30s 轮询**触发）。新增
+  **`src/proc-async.ts`** 把「异步子进程调用」抽成**单一实现**（沿用同仓先例 `panel-inject.ts:63`），
+  四处改走它 + 对应 route 改 async handler。
+  **实测（真并发，非自述）**：自检进行中同时探 `/suite` **16ms** · `/mcl/status` **58ms** ·
+  `/vector/status2` **150ms** · `/memory/overview` **236ms** —— 原实现会被阻塞最长 180s。
+  ② **互斥（async 化必须带的副作用防护）**：原同步实现天然串行；改异步后并发会**争写同一个 `--out` 文件**
+  ⇒ 新增 `selfcheckRunning` 标志，第二次起**拒绝而非排队**（排队会让前端"点了没反应"）。
+  **实测**：三路近同时 `POST /selfcheck/run` ⇒ **A `1125ms` 真跑（`verdict=ok`）· B/C 各 `82ms` 返回
+  `already-running`** —— 恰好一条执行、两条被拒。
+  ③ **超时按关系式落值（先测后定，不拍数字）**：`sleep-selfcheck.mjs` 的 **6** 个子检查实测**全串行 1125 ms**；
+  原 `t_inner = 120000` ⇒ 内层最坏 720s **大于**外层 180s（关系式不成立、外层会先杀）。按
+  `6×t_inner + 启动 + 余量 ≤ t_outer` 落 **t_inner = 25000**（`6×25000 + 30000 = 180000`，对实测 22× 余量），
+  外层保持 180000 ⇒ **前端文案无需改**；改后复跑自检 **1056 ms / 6-6 / 0 skipped / verdict=ok**。
+  ④ **两处如实记录（勿当完成）**：**M4 的运行时截断证据仍未取得**（本会话 pwsh 沙箱下 `spawn` 管道
+  stdout 不回传，属沙箱边界）；本模块的**首版功能测试曾产生一次假绿** —— `System.Net.Http.HttpClient`
+  类型未加载使 `$t1` 为 `$null`，而 `-not $null.IsCompleted` 恰好算出 `True`，于是"看起来"通过了；
+  改用**独立 pwsh 后台进程**重测后才是真证据。**假绿不会自己暴露，只有换通道重测才会。**
+  ⑤ **本轮自伤并已修的两处（如实记）**：**模块级 `let selfcheckRunning`** 被 `check-module-growth` 判为
+  **可变全局**（棘轮基线 0、只许降）⇒ 改为 `registerObserveRoutes` **闭包内按实例持有**（不引入模块级可变绑定）；
+  **`test-panel-wiring` 的 `call()` 同步调 handler** ⇒ 异步 handler 下拿不到响应（实测 `code=0`）⇒ 改为
+  **`await`**（对齐宿主 `await route.handler` 语义，**不是放宽断言**）。
+  验证：typecheck 零错 · build ✅ · 模块 74 → **75**（`AGENTS.md`/`ARCHITECTURE.md` 同步、`check-arch-sync`
+  PASS）· `check-deploy-sync` **0 不一致**（`sleep-selfcheck.mjs` 已同步库内）· 副本 sha1 一致 · 热重载 ✅。
 - **D 板块落地 · I5 热路径缓存 + D-Silent 写失败可见化（2026-09-17）**：
   ① **I5（根因级）**：新增 `src/file-stat-cache.ts` —— 按 `(mtimeMs,size)` **双元组**失效的文件读取缓存
   （LRU ≤32）+ **真字节级尾读**（`openSync`+末尾 ≤256KB 回读；**刻意不复用** `panel-memory#readJsonlTail`，

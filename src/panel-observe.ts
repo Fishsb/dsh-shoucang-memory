@@ -7,12 +7,12 @@
  * 依赖窄传：3 个（route / suite / logger）。
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs'
-import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { SURFACE, TRIGGER } from './criteria.generated.js'
 import { dshHome, knowledgeRoot, memoryLibRoot } from './targets.js'
+import { runProcAsync } from './proc-async.js'
 import type { DeepSleepApi, MclHandle, SchedulerApi } from './composition.js'
 import { contractFor } from './panel-contract.js'
 import { readBody, sendJson } from './panel-shared.js'
@@ -84,15 +84,30 @@ const validateDistillConfig = (c: Record<string, unknown>): string | null => {
 }
 
 // v2.2：睡眠期自检视图 —— GET 读最近一次裁决；POST /selfcheck/run 立即跑一次（**手动触发**，解"想不起来"）
-const runSelfCheckNow = (d: ObserveDeps): Record<string, unknown> => {
+/** 自检互斥（D-I4）。**为什么 async 化后必须有它**：原同步实现天然串行；改异步后并发两次会
+ *  **争写同一个 `--out` 文件**（后者的产物覆盖前者、且两份 JSON 可能交错）⇒ 第二次直接**拒绝、不排队**
+ *  （排队会让前端"点了没反应"，拒绝能立刻给出可读原因）。
+ *  ⚠ 状态**刻意不落模块级 `let`**：`check-module-growth` 把「模块级可重赋绑定」判为**可变全局**
+ *  （棘轮基线 0，只许降）⇒ 由 `registerObserveRoutes` 的**闭包按实例持有**，见下方注册处。 */
+type SelfcheckLock = { running: boolean }
+
+const runSelfCheckNow = async (d: ObserveDeps, lock: SelfcheckLock): Promise<Record<string, unknown>> => {
   const script = join(memoryLibRoot(), 'scripts', 'sleep-selfcheck.mjs')
   if (!existsSync(script)) return { active: false, error: 'sleep-selfcheck.mjs 未部署' }
-  const out = join(knowledgeRoot(), 'audit', 'selfcheck-latest.json')
-  const args = ['--out', out, '--trigger', 'manual']
-  const repo = String(d.suite.read().selfCheckRepo || '')
-  if (repo) args.push('--repo', repo)
-  execFileSync('node', [script, ...args], { stdio: 'ignore', timeout: 180000, windowsHide: true })
-  return { active: true, ...(JSON.parse(readFileSync(out, 'utf8')) as Record<string, unknown>) }
+  if (lock.running) return { active: false, error: 'already-running', note: '上一次自检仍在跑（并发被拒绝，不排队）' }
+  lock.running = true
+  try {
+    const out = join(knowledgeRoot(), 'audit', 'selfcheck-latest.json')
+    const args = ['--out', out, '--trigger', 'manual']
+    const repo = String(d.suite.read().selfCheckRepo || '')
+    if (repo) args.push('--repo', repo)
+    /* D-I4：原为 `execFileSync`（**同步阻塞宿主唯一事件循环，上限 180s**）且 `stdio:'ignore'`（丢光子进程 stderr）。
+     *   改异步后不阻塞、且不丢 stderr。**超时值沿用 180s 不动**：新值须先测内层 6 项串行真实耗时，
+     *   按 `6×t_inner + 启动 + 余量 ≤ t_outer` 落值，并与 `src-client` 的文案**同批**改（未测前不拍数字）。 */
+    const r = await runProcAsync('node', [script, ...args], { timeoutMs: 180000 })
+    if (!r.ok) return { active: false, error: (r.timedOut ? '自检超时（180s）' : '自检失败') + (r.err ? '：' + r.err.trim().slice(0, 200) : '') }
+    return { active: true, ...(JSON.parse(readFileSync(out, 'utf8')) as Record<string, unknown>) }
+  } catch (e) { return { active: false, error: String(e).slice(0, 200) } } finally { lock.running = false }
 }
 
 /**
@@ -182,12 +197,13 @@ function mclStatusRoute(d: ObserveDeps, _req: IncomingMessage, res: ServerRespon
   } catch (e) { sendJson(res, 500, { error: String(e) }) }
 }
 
-function reconcileRoute(d: ObserveDeps, _req: IncomingMessage, res: ServerResponse): void {
+async function reconcileRoute(d: ObserveDeps, _req: IncomingMessage, res: ServerResponse): Promise<void> {
   try {
     const script = join(memoryLibRoot(), 'scripts', 'memory-reconcile.mjs')
     if (!existsSync(script)) return sendJson(res, 200, { active: false, error: 'memory-reconcile.mjs 未部署（跑 npm run build 后同步 skill/scripts）' })
     const tmp = join(knowledgeRoot(), 'audit', '.reconcile-tmp.json')
-    execFileSync('node', [script, '--json', '--out', tmp], { stdio: 'ignore', timeout: 30000, windowsHide: true })
+    const r = await runProcAsync('node', [script, '--json', '--out', tmp], { timeoutMs: 30000 }) // D-I4：原 execFileSync 同步阻塞宿主 30s
+    if (!r.ok) return sendJson(res, 200, { active: false, error: (r.timedOut ? 'reconcile 超时（30s）' : 'reconcile 失败') + (r.err ? '：' + r.err.trim().slice(0, 200) : '') })
     const out = JSON.parse(readFileSync(tmp, 'utf8'))
     sendJson(res, 200, { active: true, ...out })
   } catch (e) { sendJson(res, 200, { active: false, error: String(e).slice(0, 200) }) }
@@ -197,12 +213,13 @@ function reconcileRoute(d: ObserveDeps, _req: IncomingMessage, res: ServerRespon
  * 成熟度扫描在插件运行时无对应能力（实现是库内 scripts/maturation-scan.mjs），而 v9 原型总览页
  * 「快捷操作」卡有该按钮 ⇒ 端点化（沿用 reconcile 的「跑脚本 + 读 --out JSON」模式，30s 超时、失败降级为
  * 200 + active:false，不让前端拿到 500）。扫描本身**只写台账**（audit/maturation.jsonl），不改记忆内容。 */
-function maturationScanRoute(d: ObserveDeps, _req: IncomingMessage, res: ServerResponse): void {
+async function maturationScanRoute(d: ObserveDeps, _req: IncomingMessage, res: ServerResponse): Promise<void> {
   try {
     const script = join(memoryLibRoot(), 'scripts', 'maturation-scan.mjs')
     if (!existsSync(script)) return sendJson(res, 200, { active: false, error: 'maturation-scan.mjs 未部署（库内 scripts/ 缺失）' })
     const tmp = join(knowledgeRoot(), 'audit', '.maturation-tmp.json')
-    execFileSync('node', [script, '--json', '--out', tmp], { stdio: 'ignore', timeout: 30000, windowsHide: true })
+    const r = await runProcAsync('node', [script, '--json', '--out', tmp], { timeoutMs: 30000 }) // D-I4：原 execFileSync 同步阻塞宿主 30s
+    if (!r.ok) return sendJson(res, 200, { active: false, error: (r.timedOut ? 'maturation 超时（30s）' : 'maturation 失败') + (r.err ? '：' + r.err.trim().slice(0, 200) : '') })
     const out = JSON.parse(readFileSync(tmp, 'utf8')) as Record<string, unknown>
     sendJson(res, 200, { active: true, ...out })
   } catch (e) { sendJson(res, 200, { active: false, error: String(e).slice(0, 200) }) }
@@ -216,8 +233,8 @@ function selfcheckRoute(d: ObserveDeps, _req: IncomingMessage, res: ServerRespon
   } catch (e) { sendJson(res, 500, { error: String(e) }) }
 }
 
-function selfcheckRunRoute(d: ObserveDeps, _req: IncomingMessage, res: ServerResponse): void {
-  try { sendJson(res, 200, runSelfCheckNow(d, )) } catch (e) { sendJson(res, 500, { error: String(e).slice(0, 200) }) }
+async function selfcheckRunRoute(d: ObserveDeps, lock: SelfcheckLock, _req: IncomingMessage, res: ServerResponse): Promise<void> {
+  try { sendJson(res, 200, await runSelfCheckNow(d, lock)) } catch (e) { sendJson(res, 500, { error: String(e).slice(0, 200) }) }
 }
 
 function configRecentRoute(d: ObserveDeps, _req: IncomingMessage, res: ServerResponse): void {
@@ -537,10 +554,12 @@ export function registerObserveRoutes(d: ObserveDeps): void {
   d.route('/suite', (req, res) => suiteRoute(d, req, res))
   d.route('/rings', (req, res) => ringsRoute(d, req, res))
   d.route('/mcl/status', (req, res) => mclStatusRoute(d, req, res))
-  d.route('/reconcile', (req, res) => reconcileRoute(d, req, res))
-  d.route('/maturation/scan', (req, res) => maturationScanRoute(d, req, res))
+  d.route('/reconcile', async (req, res) => reconcileRoute(d, req, res))
+  d.route('/maturation/scan', async (req, res) => maturationScanRoute(d, req, res))
   d.route('/selfcheck', (req, res) => selfcheckRoute(d, req, res))
-  d.route('/selfcheck/run', (req, res) => selfcheckRunRoute(d, req, res))
+  /* 互斥锁**按实例**持有（闭包内局部 const），不落模块级可变全局 —— 见 `runSelfCheckNow` 上方说明 */
+  const selfcheckLock: SelfcheckLock = { running: false }
+  d.route('/selfcheck/run', async (req, res) => selfcheckRunRoute(d, selfcheckLock, req, res))
   d.route('/config/recent', (req, res) => configRecentRoute(d, req, res))
   d.route('/criteria', (req, res) => criteriaRoute(d, req, res))
   d.route('/content-types', (req, res) => contentTypesRoute(d, req, res))

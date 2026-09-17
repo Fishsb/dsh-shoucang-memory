@@ -33,7 +33,13 @@ const run = (scriptDir, script, args) => {
   //   自检 JSON 只落 `exit≠0` ⇒ 每晚红但不可诊断。现：cwd=仓根（脚本目录的父级）+ 捕获输出尾部作 detail。
   const cwd = dirname(scriptDir)
   try {
-    execFileSync('node', [p, ...args], { cwd, timeout: 120000, windowsHide: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+    /* D-I4 超时关系式（2026-09-17 定稿）：`6 × t_inner + 启动 + 余量 ≤ t_outer`。
+     *   本件有 **6** 个子检查（见下方 ② 段的 criteria/carriers/layering/maturation/shadow/reconcile）。
+     *   ⚠ 原 t_inner = 120000 ⇒ 内层最坏 **720s 大于**外层 180s（`panel-observe#runSelfCheckNow`）
+     *   ⇒ 外层会先杀、关系式不成立。**实测**（真机 `POST /selfcheck/run`）：全 6 项串行 **1125 ms**、6/6 pass。
+     *   按关系式落值 `6×25000 + 30000 = 180000` ⇒ t_inner = **25000**（对实测值 22× 余量），外层保持 180000
+     *   ⇒ 前端文案（`panes-overview`「超时上限 180s」）**无需改**。 */
+    execFileSync('node', [p, ...args], { cwd, timeout: 25000, windowsHide: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
     return { ok: true }
   } catch (e) {
     const code = Number(e.status ?? -1)

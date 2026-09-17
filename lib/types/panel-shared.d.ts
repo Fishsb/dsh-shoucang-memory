@@ -162,8 +162,8 @@ export declare function flipBool(text: string, dottedKey: string): string | null
 /** 设置标量（枚举/数值/布尔）：YAML 栈定位 dottedKey 行，替换值、保留注释与缩进 */
 export declare function setKey(text: string, dottedKey: string, rawValue: string): string | null;
 export declare const isLocalBase: (baseUrl: string) => boolean;
-export declare const probeLocalEmbed: (baseUrl: string) => {
+export declare const probeLocalEmbed: (baseUrl: string) => Promise<{
     ok: boolean;
     provider: string;
-};
+}>;
 export {};

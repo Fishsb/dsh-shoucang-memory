@@ -126,7 +126,7 @@ const effectiveEmbed = (p: Record<string, unknown>): { enabled: boolean; baseUrl
   apiKeyEnv: String((p as { embedApiKeyEnv?: unknown }).embedApiKeyEnv || 'EMBED_API_KEY'),
 })
 
-function vectorStatus2Route(d: InjectDeps, _req: IncomingMessage, res: ServerResponse): void {
+async function vectorStatus2Route(d: InjectDeps, _req: IncomingMessage, res: ServerResponse): Promise<void> {
 try {
   const p = d.suite.read() as Record<string, unknown>
   const running = effectiveEmbed(p) // 缺省语义见上方单一实现
@@ -134,7 +134,7 @@ try {
   let provider = 'off', localOk = false
   const local = isLocalBase(running.baseUrl)
   if (running.enabled && local) {
-    const p2 = probeLocalEmbed(running.baseUrl)
+    const p2 = await probeLocalEmbed(running.baseUrl) // D-I4：原同步探测阻塞宿主 12s；改异步后不阻塞（契约不变：仍是同一次请求内返回）
     provider = p2.provider
     localOk = p2.ok
   } else if (running.enabled) provider = 'cloud'
@@ -346,7 +346,7 @@ try {
 }
 
 function registerVectorRoutes(d: InjectDeps): void {
-  d.route('/vector/status2', (req, res) => vectorStatus2Route(d, req, res))
+  d.route('/vector/status2', async (req, res) => vectorStatus2Route(d, req, res))
   d.route('/embed/config', async (req, res) => embedConfigRoute(d, req, res), contractFor('/embed/config'))
   d.route('/embed/test', async (req, res) => embedTestRoute(d, req, res), contractFor('/embed/test'))
   d.route('/vector/cache/clear', (req, res) => vectorCacheClearRoute(d, req, res), contractFor('/vector/cache/clear'))

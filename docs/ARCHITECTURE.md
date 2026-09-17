@@ -45,7 +45,9 @@ L4 交互（DSH Web GUI）
 | **M10 自省** | `assistant_capabilities` | 能力面查询 | 只读，无 token |
 
 > **载体归属口径（2026-09-12 根治 A–D 后；2026-09-14 P1 订正）**：
-> `src/` 共 **74 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> `src/` 共 **75 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> **2026-09-17 新增 `proc-async.ts`** ⇒ 74 → 75：D-I4 把「异步子进程调用」抽成**单一实现** —— 原先四处
+> `execFileSync` 在**同步 HTTP handler** 里独占宿主唯一事件循环（上限 180s / 30s / 30s / 12s）。
 > **2026-09-17 新增 `file-stat-cache.ts`** ⇒ 73 → 74：D-I5 按 `(mtimeMs,size)` 失效的文件读取缓存 +
 > 真字节级尾读。**缓存键＝生产者标识 + 路径**（不能只用路径：`statSize` 与 `nonEmptyLineCount`
 > 同路径不同物，首版因此把**字节数当行数**返回 —— 本轮实测抓到的真 bug，已修并留证）。

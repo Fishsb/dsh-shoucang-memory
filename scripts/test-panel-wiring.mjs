@@ -81,20 +81,24 @@ const fakeRes = () => {
   const r = { code: 0, body: '', writeHead(c) { r.code = c }, end(b) { r.body = String(b) } }
   return r
 }
-const call = (sub, req = { method: 'GET' }) => {
+/* ⚠ 2026-09-17（D-I4）：`call` 必须 **await** —— 宿主对 handler 是 `await route.handler(req,res)`
+ *  （`dsh-host-webserver:245`），本仓已有多条 async handler；本轮 `/vector/status2` 与
+ *  `/reconcile` `/maturation/scan` `/selfcheck/run` 由同步改为异步 ⇒ **同步调用拿不到响应**
+ *  （实测 code=0）。这里对齐宿主语义，不是放宽断言。 */
+const call = async (sub, req = { method: 'GET' }) => {
   const h = ctx.routes.get(PRE + sub)
   if (!h) return null
   const res = fakeRes()
-  try { h(req, res) } catch (e) { res.body = '__THREW__' + String(e?.message || e) }
+  try { await h(req, res) } catch (e) { res.body = '__THREW__' + String(e?.message || e) }
   return res
 }
 for (const sub of ['/roots', '/criteria', '/deepsleep', '/mcl/status', '/vector/status2']) {
-  const r = call(sub)
+  const r = await call(sub)
   const okRes = r && r.code === 200 && !String(r.body).startsWith('__THREW__')
   ok(okRes, `⑤ ${sub} 响应 200 且未抛（code=${r?.code}）`)
 }
 // /roots 的返回体必须能解析成 JSON（前端直接 JSON.parse）
-const rootsRes = call('/roots')
+const rootsRes = await call('/roots')
 let parsed = null
 try { parsed = JSON.parse(rootsRes.body) } catch { /* 留空 ⇒ 断言失败 */ }
 ok(parsed && typeof parsed === 'object', `⑥ /roots 返回合法 JSON（${String(rootsRes.body).slice(0, 60)}）`)
