@@ -96,11 +96,11 @@ export declare const SURFACE_PARAMS: {
             readonly adaptiveNote: "S4-5（2026-09-14）：`true` ⇒ 情境槽 `topN` 由**活体环记录数**派生（clamp(ceil(√N),3,12)，实测 N=105 ⇒ 11）；`false` ⇒ 回退固定 `topN`。判因：固定 3 而库内环记录 105 条 ⇒ 命中率天花板 ≈3%，\"库越大经历面越稀释\"。";
         };
         readonly process: {
-            readonly enabled: false;
+            readonly enabled: true;
             readonly carrierTag: readonly ["路径"];
             readonly topN: 3;
             readonly budgetChars: 300;
-            readonly note: "S4-3（2026-09-14）**中层 process 槽**：任务级供给 —— 按标签取 `[路径]` 行（**不走内容相关性竞争**）。判因：人类三层结构里**中层是唯一没有专用通路的层**（`[路径]` 现经 R 层 gated 相关性召回，与其它内容争同一预算；且实测库内 `[路径]` 仅 5 条）。缺省 `enabled:false` ⇒ **零行为变化**。⚠ **运行时实现被前置重构阻塞**（登记 S4-findings 的 L5）：`panel-shared.ts` 受 `check-module-growth` **大模块冻结棘轮**约束（基线 831 / 上限 846），接入需先做「**动态面选行领域拆分**」—— 把该模块 :582-622 那段（预热缓存 ∪ 相关性 ∪ 新鲜槽 ∪ 基线补位）抽成独立模块（净减约 35 行），才腾得出接入空间。**那一步是本领的前置，不是可选项。**";
+            readonly note: "S4-3（2026-09-14）**中层 process 槽**：任务级供给 —— 按标签取 `[路径]` 行（**不走内容相关性竞争**）。判因：人类三层结构里**中层是唯一没有专用通路的层**（`[路径]` 现经 R 层 gated 相关性召回，与其它内容争同一预算；且实测库内 `[路径]` 仅 5 条）。★2026-09-18 **启用**（原 enabled:false）：按域路由方案 P0-b —— task 路由 = 打开本槽（零新代码）。⚠ 原 note 称「运行时实现被前置重构阻塞（panel-shared 大模块冻结棘轮）」**该判断已过期**：实测 `src/dynamic-select.ts` 已有 `selectProcessLines`(:80-95) 且 `panel-shared.ts:551-553` 已有 `process`/`processRows` 消费点（S4-3 的动态面选行领域拆分已完成）⇒ 启用即生效，无需前置。额度语义：本槽行 **不吃 dynamic cap**（`dynamic-select.ts:145-154` 额外占位）⇒ 总额不再无界的前提是封顶只在 `budgetOf`（见 surface.injection.note）。";
         };
     };
     readonly score: {

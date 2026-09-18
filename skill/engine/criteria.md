@@ -90,7 +90,7 @@
 | `tool` | E | index | gated |
 | `flow` | E | index | gated |
 | `lesson` | E | index | gated |
-| `环境` | P | index | always |
+| `环境` | E | index | gated |
 | `硬件` | P | index | always |
 
 | 渲染器 | 实现 |

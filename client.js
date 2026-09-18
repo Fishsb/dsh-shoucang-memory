@@ -7689,6 +7689,12 @@
         tr("\u672C\u6B21\u4F1A\u8BDD ") + Derive.num(s4.calls || 0) + tr(" \u6B21") + (s4.lastAt ? tr(" \xB7 \u6700\u8FD1 ") + ovAgo(s4.lastAt) : "") + (s4.root ? " \xB7 root=" + s4.root : ""),
         [ovPill(Derive.num(s4.calls || 0))]
       ));
+      var sc = s4.stableChannel || null;
+      if (sc) {
+        var okMounted = sc.mounted === true;
+        var scDetail = okMounted ? tr("\u5DF2\u6302 section \xB7 \u8282\u70B90\u8C41\u514D") + " \xB7 " + Derive.num(sc.calls || 0) + tr(" \u6B21") + (sc.lastLen > 0 ? " \xB7 " + Derive.num(sc.lastLen) + tr(" \u5B57\u7B26") : "") : sc.mountErr ? String(sc.mountErr).slice(0, 60) : tr("\u672A\u6302\u8F7D \u21D2 \u968F context \u6CE8\u5165\uFF08\u53EF\u538B\u533A\uFF09");
+        sysBox.appendChild(ovCRow(tr("\u6052\u5B9A\u9762\u901A\u9053"), scDetail, [ovPill(okMounted ? tr("\u8C41\u514D") : tr("\u53EF\u538B"), okMounted ? "ok" : "warn")]));
+      }
       sysBox.appendChild(ovCRow(
         tr("\u5D4C\u5165\u670D\u52A1"),
         "provider=" + String(v2.provider || "off") + " \xB7 " + Derive.num(v2.rows || 0) + tr(" \u884C"),
@@ -12281,6 +12287,11 @@
     "\u6839\u76EE\u5F55\u5F15\u5BFC": "Root bootstrap",
     "\u6839\u76EE\u5F55\u5F15\u5BFC\u5B8C\u6210": "Root bootstrap complete",
     "\u6CE8\u5165\u7EDF\u8BA1": "Injection stats",
+    "\u6052\u5B9A\u9762\u901A\u9053": "Stable-face channel",
+    "\u5DF2\u6302 section \xB7 \u8282\u70B90\u8C41\u514D": "section mounted \xB7 node 0 exempt",
+    "\u672A\u6302\u8F7D \u21D2 \u968F context \u6CE8\u5165\uFF08\u53EF\u538B\u533A\uFF09": "not mounted \u21D2 injects via context (compressible)",
+    "\u8C41\u514D": "Exempt",
+    "\u53EF\u538B": "Compressible",
     "\u6D45\u7761": "Light sleep",
     "\u6D4B\u8BD5\u4E2D\u2026": "Testing\u2026",
     "\u6D4B\u8BD5\u4E2D\u2026 ": "Testing\u2026 ",

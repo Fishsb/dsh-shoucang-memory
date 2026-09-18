@@ -6,7 +6,31 @@
 
 
 ### Changed
-- **收口三件"没做的"（2026-09-17）**：
+- **`[环境]` 标签漂移归一（P0-a，2026-09-18）**：`layer:P` + `inject:always` → **`layer:E` + `inject:gated`**。
+  实测：注册表 note 称「USER 侧：用户环境构成」，但 MEMORY.md **64 条**挂此标签、其中**约 8 成与 `[env]`
+  同指 `notes/env.md`** ⇒ 同一信息源两种待遇；且 `P⇒always` 使这 64 条挤占恒定预算
+  （恒定面实测需求 6263 字符 vs `budgetOf(4000)` 分配 3200）⇒ 归一为与 `[env]` 同待遇。
+- **`process` 槽启用（P0-b，2026-09-18）**：`surface.injection.process.enabled` `false → true`
+  （task 路由 = 打开既有槽，**零新代码**）。原 note 称「运行时实现被前置重构阻塞」**该判断已过期**：
+  `dynamic-select#selectProcessLines` 与 `panel-shared` 的 `process`/`processRows` 消费点均已落地。
+- **`AGENTS.md` / `docs/ARCHITECTURE.md` 模块数 78 → 79**（新增 `hot-stable.ts`，由 `check-arch-sync` 机检）。
+- **按域路由 P1：恒定面单独挂 `systemPrompt.section`（落 surface 节点 0 ⇒ 压缩豁免）（2026-09-18）**：
+  判因（实测）——守藏原注入走 `systemPrompt.context` ⇒ 落 `user/message`（**可压区**，实测节点索引 3），
+  而 `section` ⇒ 落 **节点 0**（`compaction-basic/lib/index.js:393-398`：节点 0 是 system/message 时
+  `firstIdx` 从 1 起 ⇒ 物理豁免）；**5/5 会话实测节点 0 不含守藏热记忆**。
+  做法：`HotMemory` 加 `buildStable()`（恒定面）与 `buildDynamic(query)`（动态面，剔除 stable 防**双注入**）；
+  `panel-inject` 把恒定面挂 `section`、动态面留 `context`；`section` 不可用时**自动回落**完整形态（零回归）。
+  ⚠ **必须以接收者形式调用**（`sp.section(...)`）——该方法是类方法、内部用 `this.layers`/`this.ctx`，
+  解构后调用会丢 `this` ⇒ `Cannot read properties of undefined (reading 'layers')`（实测踩过）。
+  出口复用 `guardContextText` 转义 `{{`（`dsh-system-prompt:155-167` 遇未注册变量**硬抛错、会话不可恢复**）。
+  恒定面构造**按领域接缝**抽至新模块 `src/hot-stable.ts`（`panel-shared` 受大模块冻结棘轮约束，
+  `buildStable()` 内联即撞顶 553 FAIL）；抽出后 `panel-shared` 由 547 **净减至 523**，棘轮基线随之下调 537→522。
+  新增 **通道健康位**（`/inject/stats` 的 `stableChannel`：`mounted/calls/lastLen/mountErr/lastErr`）——
+  防「注入通道整体失效被两层 catch 全吞而看起来正常」的假成功。
+- **按域路由 P2 前置：`recall` 位置式兜底池口径修正（2026-09-18）**：`dynamic-select` 的 `memBase` 原用
+  `allMem`（**只含 `inject=always` 行**）作池；归一 `[环境]`（P/always → E/gated）后 MEMORY.md 的 always 池
+  **恒空** ⇒ 空 query 时丢位置式兜底（实测 `test-inject-cache` 三条断言红）。池改用**全量索引行**
+  （与下方 `rest` 补位一直在用的池同口径）——位置式兜底的语义本就是"全量候选的前 N 行"，与 `inject` 层无关。
   ① **profile pin 四处对齐（含 integrity 重算，不跑 `pnpm install`）**：此前"三处不一致"的根因不是缺一次 install，
      而是 **lock 里还留着旧 tarball 的 `integrity`** —— 只换 URL 里的 SHA 会让 lock 自相矛盾（声明新 URL 却保留旧哈希
      ⇒ 下次 install 校验失败）。做法：下载新 tarball **实算 sha512** 替换 `integrity`（**方法自证**：旧 tarball 实算值
