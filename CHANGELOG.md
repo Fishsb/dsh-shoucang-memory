@@ -5,6 +5,22 @@
 ## [Unreleased]
 
 ### Changed
+- **S2S3 册二 · 打开出口：精要层释放接线（2026-09-19，用户指令「目标模式全部落地」）**：
+  · **两前置**（会审写死的次序：先净减、再加线）：
+    ① **`runDeepSleep` 净减 399 → 369 行**（`audit-fnspan` 实测；DEBT_BASE=0 ⇒ 加线前必须先腾出空间）——
+      把「晨起摘要 delta 写入」**逐字**抽为模块级 `writeDawnDelta`（行为零变化；册四后它仍是**注入兜底源**的写入侧）；
+    ② `reviewReleaseSemanticsBatched` 返回值补 **`approvedRows`（全量批准行文本）+ 同一份 plan 的 `ops`**
+      —— 原先只回 `sample`（前 5 条截断）与 `hashes`，调用方拿不到可执行清单 ⇒ 出口接不上（恒定零释放）。
+  · **接线本身（三重 fail-closed）**：`deepsleep-run` 现 import 并调用 `applyRelease`——
+    ① **默认关闭**：只有显式 `SHOUCANG_RELEASE_AUTO=1` 才执行（语义门自己的 `over-permissive` 警报明写
+      "不得据此接线自动执行" ⇒ 不能默认开）；② `executable` 由**语义门**给出（空交集 / over-permissive ⇒ 零释放），
+      调用方不得自行推断；③ `applyRelease` 内部再按**当下库状态**逐条复核（不接受陈旧计划）。
+    归档走既有链路 `applyForgetOps`（叶子节 / cold / 非重复 stub 三守卫 + 归档可回滚 + **绝不直删**）。
+    释放**不计入** G-19 landed 判据（全库计划计入会让失败轮误判 landed ⇒ 水位推进 ⇒ 静默丢料）。
+  · **判据**：新增 `scripts/test-release-wiring.mjs`（入 `CHECKS`，**155 件**）——静态接线点 5 项 + 行为 4 分支
+    （空清单零释放 / 批准清单不含该行零释放 / **显式批准 ⇒ 真归档 1 条**（证明出口不是恒零）/ 库状态变 ⇒ 复核拦下）。
+    **先红留证**：改造前 A1–A4 四条红（无 import / 无调用 / 无开关 / 无 `executable` 门）。
+  · 记录：`docs/specs/S2S3-book2-record.md`；特性探针 55 → **57 项**。
 - **S2S3 册四 · 睡眠汇报 + 问题统计 + UI（2026-09-19，用户指令「目标模式全部落地」）**：
   · **第一段 · 汇报与标记**：新增 `src/sleep-report.ts` —— 每轮深睡落**人读汇报** `<bank>/reports/sleep/<date>.md`
     （固定五段：区间 / 提存 / 压缩 / 问题标记 / 统计；**同日多轮追加不覆盖** = 用户口径「像日历一样一直有、不会删除」）+
