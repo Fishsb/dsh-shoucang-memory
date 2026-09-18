@@ -66,6 +66,12 @@ const FEATURES = [
  *   双时间戳 · P2b 材料块）**全都查不到**——而"文件 sha 一致 ≠ 装上去的那份带着本轮能力"正是本件的立件理由。
  */
 const HOST_FEATURES = [
+  // 册一至册四（2026-09-19 · docs/distill-admission-plan.md）——「装上去的那份带着本轮能力」的正式证明：
+  //   文件 sha 一致 **≠** 特性齐全（本件立件理由），故四册各留一条**词组级**标记（非通用词）。
+  ['册一 蒸馏输入面白名单 + 段身份 segKey', 'lib/distill-chunks.js', 'MATERIAL_EVENT_TYPES'],
+  ['册三 失败三态水位判据（planSegmentWatermark）', 'lib/deepsleep-core.js', 'planSegmentWatermark'],
+  ['册四 重试计数随水位流落盘（segKey/attempt）', 'lib/distill-watermark.js', 'segKey: run.segKey'],
+  ['册二 准入判定单一实现（planIngestAdmission）', 'lib/ingest-admission.js', 'planIngestAdmission'],
   ['五环注册表（kind→环唯一声明 + RING_KPI）', 'lib/rings.js', 'RING_OF_KIND'],
   ['决策环（后果回收 scorecardOf）', 'lib/decision-ring.js', 'scorecardOf'],
   ['关系环（双向兑现率 trustOf）', 'lib/relation-ring.js', 'trustOf'],
