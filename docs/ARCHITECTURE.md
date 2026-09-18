@@ -45,7 +45,11 @@ L4 交互（DSH Web GUI）
 | **M10 自省** | `assistant_capabilities` | 能力面查询 | 只读，无 token |
 
 > **载体归属口径（2026-09-12 根治 A–D 后；2026-09-14 P1 订正）**：
-> `src/` 共 **86 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> `src/` 共 **87 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> **2026-09-19 新增 `sleep-report.ts`** ⇒ 86 → 87：S2S3 册四/册二第二段「睡眠汇报 + 问题标记 + 影响账」——
+> 同日多轮**追加不覆盖**（日历式永不删除）· `audit/sleep-reports.jsonl` 每轮一行且**影响账并入该流**
+> （会审裁定不另开 `audit/impact/`）· 标记**只标不处置**且 `suspect-recall`（召回面）与 `suspect-quality`（记忆面）
+> 分开计数 · `injected` 显式记 `unknown`（步级遥测无法按条目归属，**不拿代理指标冒充判据**）。
 > **2026-09-19 新增 `session-review.ts`** ⇒ 85 → 86：S2S3 册一「L2 会话级复盘」——
 > **append-only 校正提案流**（`<bank>/audit/session-review/proposals-<sid>.jsonl`，**执行权留 S3**：
 > L2 若直接改库就撞 S2 的「只增不改历史」硬不变量）· **三态审计**（`not-triggered`/`skipped-by-threshold`/`reviewed`）

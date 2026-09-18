@@ -99,6 +99,7 @@ const HOST_FEATURES = [
   ['S2S3 册一·L2 会话复盘内核（session-review）', 'lib/session-review.js', 'runSessionReview'],
   ['S2S3 册一·L2 复盘运行时接线（hooks 同节拍）', 'lib/distill-hooks.js', 'session review'],
   ['S2S3 册二·S3 三通道停产（s3Produce 缺省 false）', 'lib/deepsleep-apply.js', 'produce-off'],
+  ['S2S3 册四·睡眠汇报 + 影响账（sleep-report）', 'lib/sleep-report.js', 'writeSleepReportFromLedger'],
   ['S1R 材料侧输入量可见化（sectionRefDropped）', 'lib/deepsleep-materials.js', 'droppedMissing'],
   ['S1R 材料侧歧义保留（ambiguousKept）', 'lib/deepsleep-materials.js', 'ambiguousKept'],
   ['S1R 深睡审计带小节寻址计数', 'lib/deepsleep-run.js', 'sectionRefDropped'],
