@@ -397,6 +397,7 @@ calls=2 → bySid: sid=6b89a084 · qLen=2 · qHash=005c4d6f · lastReason=new ·
 | **S2S3-册一** | **L2 会话级复盘（新增子链，属 S2）** | 不存在：跨轮无该会话累积视野（`distill-agent.ts:184-197` 只有同轮一行式清单） | 审计 `kind=session-review` · 幂等复跑 | ① 双维触发（静默 ≥30min / 新增 ≥8 条）**恰好一次** ② 材料覆盖全会话（骨架 ≤80 轮 + 锚点 ≤12 段）③ 可校正 L1（revise/merge/demote，**限本会话**，归档可回滚） | 册零后 |
 | **S2S3-册二** | **S3 转"审查 + 压缩"（不产出）** | 现状：`principles` added **65**（49 轮）· `forgetArchived **4**/391` · `treeOps 0` · `pointerOps 0` · `release` 候选 **2254 未消费** · AGENT.md **263%** | 审计 `kind=deep-sleep` 通道计数 · `audit/impact/<day>.jsonl` | ① 影响账条数 == 当日产出条数（未裁决 0）② `principles.added == 0` ③ 压缩 > 0 且**方向可读**（指针仍可解析）④ 细节只归档不直删（可回滚） | 册一后 |
 | **S2S3-册三** | 层间交接机检 + 三层只读投影 | 无 | 新机检件（入 `CHECKS`）+ 夹具先红 | ① L2 必消费 L1 清单（含失败）② S3 必对当日产出裁决 ③ 注入面逐字节不变 | 册二后 |
+| **S2S3-册四** | **睡眠汇报（日历式留存）+ 问题统计 + UI** | 现只有会被覆盖的 `delta.md`；`unused/counter` 问题**零落点** | `reports/sleep/<date>.md` · `audit/sleep-reports.jsonl` · `audit/sleep-issues.jsonl` · `/sleep/reports` · `/sleep/issues` | ① 每轮一份、**同日多轮不覆盖** ② 五段齐（区间/提存/压缩/**问题标记**/统计）③ **只标记不处置**（`unused/counter` **不触发** archive，仍留原位）④ 统计分得清 `suspect-recall`（召回面）vs `suspect-quality`（记忆面）⑤ UI 双轨判据（图证 + DOM 几何） | 册二后（与册三可并行） |
 | **S2S3-Q3** | **"影响"如何裁定（口径门）** | 现有遥测可判"是否注入/真读/回收/冷热"（确定性）；"是否帮上忙"是**代理指标** | — | **只用确定性证据裁定归档**；代理指标**仅作排序**，不得单独触发 archive | 与册二同批定案 |
 
 **待用户拍板 4 项**（详见方案册 §5）：Q1 画像"生长"归属（建议归 **L2**）· Q2 校正时间窗（建议**仅本会话**）· Q3 影响裁定口径（建议**确定性为主、代理仅排序**）· Q4 阈值（建议**复用既有登记**，不新增手感数）。
