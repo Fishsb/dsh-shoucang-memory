@@ -12,7 +12,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { spawn } from 'node:child_process'
-import { resolveTarget, knowledgeRoot } from './targets.js'
+import { resolveTarget, knowledgeRoot, dshHome } from './targets.js'
 import { applyTreeOps } from './treeops.js'
 import { applyForgetOps } from './forgetops.js'
 import { activityAggregate } from './activity.js'
@@ -299,7 +299,7 @@ function writeDawnDelta(env: { kRoot: string; root: string; M: any; log: (s: str
 }
 
 /* 册二「打开出口」② **精要层释放的执行侧接线**（2026-09-19）—— 三重 fail-closed：
- *   ① **默认关闭**：只有显式设 `SHOUCANG_RELEASE_AUTO=1` 才执行（与 `SHOUCANG_REM_PASS` 同族的显式开关；
+ *   ① **默认关闭**：需显式开启（持久配置 `releaseAuto:true` 或 env `SHOUCANG_RELEASE_AUTO=1`；
  *      **不设 = 零写入**）——理由是语义门自己的读数：`over-permissive` 警报明写"不得据此接线自动执行"；
  *   ② `relReview.executable` 由**语义门**给出（空交集 / over-permissive ⇒ false）——调用方**不得自行推断**；
  *   ③ `applyRelease` 内部的第二道门：逐条按**当下库状态**重新复核，且"不在批准清单 ⇒ 不释放"。
@@ -307,13 +307,26 @@ function writeDawnDelta(env: { kRoot: string; root: string; M: any; log: (s: str
  *  ⚠ 与产线停产（`s3Produce`）**无关**：那是"不新增知识"，本动作是**维护性压缩**（细节归档、方向节点保留）。
  *  ⚠ **不进 `otherChannels`（G-19 landed 判据）**：释放 op 来自**全库计划**而非本轮材料 ⇒ 计入会让
  *    "本轮材料全被拒收"的轮次被误判 landed ⇒ 水位推进 ⇒ 静默丢料（正是 G-19 修过的那类）。 */
-function releaseAutoOn(): boolean { return process.env.SHOUCANG_RELEASE_AUTO === '1' }
+/** 自动执行开关（二选一即可，**默认关闭**；实时读取 ⇒ 改完即生效，不必重载）：
+ *   ① 持久配置 `~/.dsh/suite/scheduler.json` 的 `releaseAuto` / `proposalApply`
+ *      （**面板 /deepsleep/config 同一通道** ⇒ 用户可在 UI 改；schema 亦有同名键做缺省与白名单）；
+ *   ② 进程 env `SHOUCANG_RELEASE_AUTO=1` / `SHOUCANG_PROPOSAL_APPLY=1`（部署侧临时开启）。
+ *  ⚠ 读不到 / 非法值一律 `false`（fail-closed：宁可零释放，也不误改用户库）。 */
+function liveAutoSwitch(key: 'releaseAuto' | 'proposalApply', envName: string): boolean {
+    if (process.env[envName] === '1') return true
+    try {
+        const s = JSON.parse(readFileSync(join(dshHome(), 'suite', 'scheduler.json'), 'utf8')) as Record<string, unknown>
+        return s[key] === true
+    }
+    catch { return false }
+}
+function releaseAutoOn(): boolean { return liveAutoSwitch('releaseAuto', 'SHOUCANG_RELEASE_AUTO') }
 async function runRelease(env: { root: string; relReview: any; log: (s: string) => void; audit: (o: any) => void }): Promise<any> {
     const { root, relReview, log, audit } = env
     const zero = { released: 0, skipped: 0, reasons: [] as string[], ran: false, executed: false }
     if (!relReview || !Array.isArray(relReview.ops) || !relReview.ops.length) return { ...zero, reasons: ['无释放提案（候选为空 / 字面判据未过）'] }
     if (!relReview.executable) return { ...zero, reasons: [`语义门未放行（交集 ${Number(relReview.approved) || 0} 条 · 空集或 over-permissive 警报）⇒ **零释放**`] }
-    if (!releaseAutoOn()) return { ...zero, reasons: ['release 自动执行**默认关闭**（设 SHOUCANG_RELEASE_AUTO=1 才执行）⇒ 本轮零写入'] }
+    if (!releaseAutoOn()) return { ...zero, reasons: ['release 自动执行**默认关闭**（开启：scheduler.json 的 `releaseAuto:true` 或 env `SHOUCANG_RELEASE_AUTO=1`）⇒ 本轮零写入'] }
     const r = await applyRelease(root, relReview.ops, relReview.approvedRows, (ops) => applyForgetOps(root, ops as any, { audit, log }), { maxPerRun: RELEASE_MAX_PER_RUN })
     audit({ kind: 'essence-release', ops: relReview.ops.length, released: r.released, skipped: r.skipped, note: String(r.reasons.slice(-1)[0] || '').slice(0, 160) })
     log(`deep sleep: 精要层释放 → 归档 ${r.released} · 跳过 ${r.skipped}`)
@@ -667,9 +680,9 @@ export async function runDeepSleep(d: RunDeps, sinceArg?: number): Promise<'done
              *  （**归档数**，不是 `pv.release` 那个 graded-release 布尔 —— 两者语义完全不同，勿混）。 */
             const relRes = await runRelease({ root: resolved.root, relReview, log, audit })
             /* 册二「执行 L2 提案」（G3 的执行面）：**只由 S3 消费**册一的提案流；同样**默认关闭**
-             *  （`SHOUCANG_PROPOSAL_APPLY=1`）——执行面一旦默认开就在生产上改写用户库。
+             *  （持久配置 `proposalApply:true` 或 env `SHOUCANG_PROPOSAL_APPLY=1`）——执行面默认开就在生产上改写用户库。
              *  判据与不变量（逐字行级校正 / 先留档再改 / 幂等 / 逐条裁决）见 `proposal-apply.ts` 抬头。 */
-            const propRes = applySessionProposals({ bankRoot: resolved.root, log, audit, enabled: process.env.SHOUCANG_PROPOSAL_APPLY === '1' })
+            const propRes = applySessionProposals({ bankRoot: resolved.root, log, audit, enabled: liveAutoSwitch('proposalApply', 'SHOUCANG_PROPOSAL_APPLY') })
             const otherChannels = {
                 tried: profileTried + ptrRes.skipped + treeRes.skipped + forgetRes.skipped + outcTried + epiTried + conv.skipped + conv.applied,
                 done: profileAdded + ptrRes.updated + treeRes.applied + forgetRes.archived + ringRes.outcomes + ringRes.episodes + conv.applied,

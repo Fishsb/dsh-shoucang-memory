@@ -45,6 +45,13 @@ if (!R || typeof R.applyRelease !== 'function') {
   const oc = (src.match(/const otherChannels = \{[\s\S]*?\n\s*\}/) || [''])[0]
   !oc.includes('relRes') ? ok('A5 释放**不进** G-19 landed 判据（`otherChannels` 无 `relRes`）——全库计划计入会让失败轮误判 landed')
     : bad('A5 `relRes` 计进 otherChannels ⇒ 水位误推进、材料静默丢弃')
+  // ★C（2026-09-19 用户授权「全部做」）：开关**双通道**（持久配置 ∪ env）+ schema 同名键（面板通道）
+  src.includes('liveAutoSwitch') && src.includes("'releaseAuto'") && src.includes('scheduler.json')
+    ? ok('A3b 开关双通道：持久配置 `scheduler.json#releaseAuto` ∪ env（**实时读取** ⇒ 改完即生效、不必重载）')
+    : bad('A3b 只认 env ⇒ 面板通道开不了（用户只能到部署侧改环境变量）')
+  readFileSync(join(ROOT, 'src', 'scheduler.ts'), 'utf8').includes('releaseAuto: z.boolean().default(false)')
+    ? ok('A3c schema 含 `releaseAuto`（面板 `/deepsleep/config` 白名单由 schema 派生 ⇒ UI 可读可写）')
+    : bad('A3c schema 无该键 ⇒ 面板通道读不到/写不了')
 }
 
 /* ── B 行为：fail-closed 三分支（真调 `applyRelease`）── */

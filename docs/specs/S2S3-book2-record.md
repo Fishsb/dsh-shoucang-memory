@@ -38,8 +38,9 @@
 
 ## 4. 落地差异与残留（**不谎报**）
 
-1. **接线 ≠ 已启用**：生产上仍为**零释放**（默认关闭）。开启方式：设 `SHOUCANG_RELEASE_AUTO=1`（**用户显式动作**）。
-   理由已述（语义门过松警报）；开启后一旦语义门报 `over-permissive`，仍会**自动回到零释放**。
+1. **接线 ≠ 已启用**（本册交付时的状态）：生产上为零释放（默认关闭）；**2026-09-19 用户答「全部做」后已启用**（见 §5）。
+   开启通道两条（同一判据，实时读取 ⇒ 改完即生效）：持久配置 `scheduler.json#releaseAuto` / env `SHOUCANG_RELEASE_AUTO=1`。
+   启用后一旦语义门报 `over-permissive`，仍会**自动回到零释放**（第②重不受开关影响）。
 2. **单轮上限 3**（`RELEASE_MAX_PER_RUN`）；被跳过项在 `kind=essence-release` 审计行的 `note` 与深睡日志行可见。
 3. **口径提醒**：验收取数用 `kind=essence-release` 的 `released`（= `applyForgetOps.archived`，**归档数**）；
    **不是** `pv.release`（那是 graded-release 的放行布尔，语义完全不同，勿混）。
@@ -50,3 +51,14 @@
      启用 = 显式 `SHOUCANG_PROPOSAL_APPLY=1`（生产现状为零写入）。
    · **压缩执行**（按裁决的可回滚压缩）**仍为待办**：它依赖真实轮次的 `convergeOps`/`forgetOps` 裁决数据
      （本代理已裁定 §5-U5「可归档压缩、不删除」）；`release` 出口已接线（默认关闭），是同一族动作的执行面。
+
+## 5. 用户授权后的收口（2026-09-19 · 用户答「全部做」）
+
+| 项 | 动作（代理执行） | 复验证据 |
+|---|---|---|
+| **A 抬注入基线** | `node scripts/inject-baseline-diff.mjs --write` 重立 `_memory/audit/inject-baseline-pre-R0.json`（**仅 `_memory/`，不入公开树**） | 复验 `✅ PASS：3 个 case 逐字节一致`（此前 3/3 红；成因 = 块顺序漂移，**早于本册**） |
+| **B 重指真库孤儿指针** | 经**唯一写入原语** `section-rewrite#editFileUnderLock`（库锁 + 唯一 tmp + 原子 rename + 写后回读）把 `MEMORY.md` 末段那行由 `§npm 失效与残留 shim 修复/junction 装配漂移` 改为 `§npm 失效与残留 shim 修复`；再 `mirrorAll(['MEMORY.md'])` 重镜像 + 库内 git 提交留回滚点 | 命中数=1 才改（否则拒改）· 改后指针 `exists` · `admitIndexRow.ok=true` · `check-section-refs` = **0/0/0/0 PASS** · `check-record-parity` = 镜像 5083/5083 **分歧 0** · `bank-git: committed（5 项）` |
+| **C 启用两个自动执行开关** | 开关改**双通道**：`deepsleep-run#liveAutoSwitch` 逐轮**实时读** `scheduler.json`（同 `liveFailPolicy` 同法）∪ env；`scheduler.ts` 加 `releaseAuto`/`proposalApply` 两键（面板通道可见可写）；持久值置 `true` | 判据 `test-release-wiring` **A3b/A3c**（双通道 + schema 键）+ `test-proposal-apply` A3；读回 `persisted.releaseAuto=True` / `persisted.proposalApply=True` |
+
+⚠ **口径**：C 的**执行**发生在**下一轮真实深睡**（本轮无轮次可跑）；判定代码每轮实时读配置，**无需重载**。
+开关打开后仍受各自门禁约束：release 需 `executable`（空集 / over-permissive ⇒ 零释放）；提案执行需**逐字唯一命中**。

@@ -5,6 +5,16 @@
 ## [Unreleased]
 
 ### Changed
+- **用户授权「全部做」后的三项收口（2026-09-19）**：
+  · **A 抬注入基线**：重立 `_memory/audit/inject-baseline-pre-R0.json`（`inject-baseline-diff --write`，仅落 `_memory/`、不入公开树）
+    ⇒ 该项由 3/3 红转 **PASS（3 case 逐字节一致）**。
+  · **B 重指真库孤儿指针**：经**唯一写入原语**（库锁 + 唯一 tmp + 原子 rename + 写后回读）把 `MEMORY.md` 末段那行
+    由 `§npm 失效与残留 shim 修复/junction 装配漂移` 改为 `§npm 失效与残留 shim 修复`；重镜像 + 库内 git 提交（回滚点）
+    ⇒ `check-section-refs` 由 `路径部分悬空 1` 转 **0/0/0/0 PASS**，`check-record-parity` 分歧 0。
+  · **C 启用两个自动执行开关**：`releaseAuto` / `proposalApply` 改为**双通道**（持久配置 `scheduler.json` ∪ env，
+    `deepsleep-run#liveAutoSwitch` **逐轮实时读取** ⇒ 改完即生效）+ `scheduler.ts` 加同名两键（面板通道）；
+    持久值已置 `true`。**门禁不放宽**：release 仍需语义门 `executable`（空集 / over-permissive ⇒ 零释放），
+    提案执行仍需**逐字唯一命中** + 先留档再改 + 幂等。特性探针 62 → **63 项**。
 - **S2S3 册四 · 真机暴露的两个缺陷当场修复（2026-09-19）**：首轮真睡眠汇报落盘后，**真机**暴露两处"夹具全绿也漏"的缺陷
   （属本仓「夹具绿 ≠ 真数据绿」同族），已修并各留**先红**证据：
   · **影响账读错根**：`access-real.jsonl` / `activity.jsonl` 在**库内** `<bank>/audit/`，而实现读的是 `kRoot/audit/`

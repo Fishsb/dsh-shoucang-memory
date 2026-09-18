@@ -102,6 +102,7 @@ const HOST_FEATURES = [
   ['S2S3 册二·精要层释放**接线**（默认关闭 · fail-closed）', 'lib/deepsleep-run.js', 'SHOUCANG_RELEASE_AUTO'],
   ['S2S3 册二·语义门可执行性判据（executable）', 'lib/deepsleep-run.js', 'essence-release'],
   ['S2S3 册四·睡眠汇报 + 影响账（sleep-report）', 'lib/sleep-report.js', 'writeSleepReportFromLedger'],
+  ['S2S3 册二·自动执行开关双通道（持久配置 ∪ env）', 'lib/deepsleep-run.js', 'liveAutoSwitch'],
   ['S2S3 册二·L2 提案执行面（默认关闭 · 先留档再改）', 'lib/proposal-apply.js', 'applySessionProposals'],
   ['S2S3 册二·提案幂等账（applied.jsonl）', 'lib/proposal-apply.js', 'applied.jsonl'],
   ['S2S3 册四·注入源改派生（latestDerivation 单一实现）', 'lib/sleep-report.js', 'latestDerivation'],
