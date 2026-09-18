@@ -8,6 +8,10 @@ import { COMMIT_FAILED_GATE, commitPrinciples, deepSleepLanded } from './deepsle
 import { acquireBankLock, releaseBankLock } from './bank-lock.js'
 import { gatedWriteFile, atomicWriteFile } from './section-rewrite.js'
 
+/** 停产挡位的 gate 名（**判据用**：`gate` 字段出现它 = 本轮"跑了但按口径不产出"，而不是"没跑"）。
+ *  S2S3 册二（2026-09-19）：用户口径「S3 睡眠不产出」的落点。 */
+export const PRODUCE_OFF_GATE = 'produce-off'
+
 /** 原则与指针写入的全部依赖：配置 + 日志 + 画像头 + 根 + 子进程执行器 + 容量门 + 文本提取。 */
 export interface ApplyDeps {
   config: any
@@ -21,6 +25,14 @@ export interface ApplyDeps {
 
 export async function applyPrinciples(d: ApplyDeps, memRoot: string, out: any): Promise<{ attempted: number; added: number; replaced: number; skipped: number; gate: string; gateExit: number; rejectedLines: string[] }> {
   const { config, log, PROFILE_HEADER, kRoot, runNode, capEnv, textOf } = d
+  // ── S2S3 册二（2026-09-19）：**原则通道停产**（用户口径「S3 睡眠不产出」）────────────────
+  //   判据用形态：`gate='produce-off'` + `attempted=N` + `added=0/replaced=0` ⇒ 台账上能分辨
+  //   「按口径不产出」与「根本没跑」（本册最怕的假绿就是把前者读成后者）。
+  //   停产只关**产出**；维护动作（压缩/归档/指针/树/遗忘）不经过本函数，不受影响。
+  if (config.s3Produce === false) {
+    const n = Array.isArray(out?.principles) ? out.principles.length : 0
+    return { attempted: n, added: 0, replaced: 0, skipped: n, gate: PRODUCE_OFF_GATE, gateExit: 0, rejectedLines: [] }
+  }
   const principlesPath = join(memRoot, 'AGENT.md')
 // S2S3 册零：试算 tmp 的**唯一名**（本函数作用域内稳定，供 gateText 写、commitPrinciples 改名）。
 const principlesTmp = `${principlesPath}.tmp-${process.pid}-${Date.now().toString(36)}`
