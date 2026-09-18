@@ -99,6 +99,8 @@ const HOST_FEATURES = [
   ['S2S3 册一·L2 会话复盘内核（session-review）', 'lib/session-review.js', 'runSessionReview'],
   ['S2S3 册一·L2 复盘运行时接线（hooks 同节拍）', 'lib/distill-hooks.js', 'session review'],
   ['S2S3 册二·S3 三通道停产（s3Produce 缺省 false）', 'lib/deepsleep-apply.js', 'produce-off'],
+  ['S2S3 册二·精要层释放**接线**（默认关闭 · fail-closed）', 'lib/deepsleep-run.js', 'SHOUCANG_RELEASE_AUTO'],
+  ['S2S3 册二·语义门可执行性判据（executable）', 'lib/deepsleep-run.js', 'essence-release'],
   ['S2S3 册四·睡眠汇报 + 影响账（sleep-report）', 'lib/sleep-report.js', 'writeSleepReportFromLedger'],
   ['S2S3 册四·注入源改派生（latestDerivation 单一实现）', 'lib/sleep-report.js', 'latestDerivation'],
   ['S2S3 册四·只读路由 睡眠汇报 + 问题统计', 'lib/panel-observe.js', '/sleep/issues'],
