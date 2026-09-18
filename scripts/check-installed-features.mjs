@@ -94,6 +94,8 @@ const HOST_FEATURES = [
   ['S1R 小节寻址三态裁决（section-ref）', 'lib/section-ref.js', 'resolveFromTitles'],
   ['S1R 索引行准入单一强制点（admitIndexRow）', 'lib/section-ref.js', 'admitIndexRow'],
   ['S1R 一行多指针提取（pointersOfRow）', 'lib/section-ref.js', 'pointersOfRow'],
+  ['S2S3 册零·库级单写者锁（bank-lock）', 'lib/bank-lock.js', 'acquireBankLock'],
+  ['S2S3 册零·唯一写入原语（section-rewrite）', 'lib/section-rewrite.js', 'atomicWriteFile'],
   ['S1R 材料侧输入量可见化（sectionRefDropped）', 'lib/deepsleep-materials.js', 'droppedMissing'],
   ['S1R 材料侧歧义保留（ambiguousKept）', 'lib/deepsleep-materials.js', 'ambiguousKept'],
   ['S1R 深睡审计带小节寻址计数', 'lib/deepsleep-run.js', 'sectionRefDropped'],
