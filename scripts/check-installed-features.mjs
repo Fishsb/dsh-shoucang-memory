@@ -80,7 +80,15 @@ const HOST_FEATURES = [
   ['P2b 开关（materialInSystem）', 'lib/mcl.js', 'materialInSystem'],
   ['P4 存储解耦开关（storeMode）', 'lib/scheduler.js', 'storeMode'],
   ['五环端点处理器（ringsRoute）', 'lib/panel-observe.js', 'ringsRoute'],
-  ['组合句柄盒消费（scheduler.current）', 'lib/panel-observe.js', 'scheduler.current']
+  ['组合句柄盒消费（scheduler.current）', 'lib/panel-observe.js', 'scheduler.current'],
+  /* ★IR1（2026-09-18）**本轮能力标记**：册一/册二/册三/册四各一枚 —— 判据是"**装上去的那份**带着本轮能力"，
+   *   文件级 sha 一致 **≠** 特性齐全（本件立件理由）。每枚对应一个**新增模块的出口符号**。 */
+  ['IR1 册一 动态面相关性（relevance-supply）', 'lib/relevance-supply.js', 'selectRelevantLines'],
+  ['IR1 册一 注入侧预热（preheatWarmRecall）', 'lib/relevance-supply.js', 'preheatWarmRecall'],
+  ['IR1 册二 cue 键唯一实现（cue-space）', 'lib/cue-space.js', 'normalizeCueKey'],
+  ['IR1 册三 六槽出账（supplyMetaOf）', 'lib/supply-assembly.js', 'supplyMetaOf'],
+  ['IR1 册四 供给戳 + 层归因（supply-stamp）', 'lib/supply-stamp.js', 'layerOfReason'],
+  ['IR1 册四 二级上游戳在缓存键上（libStampOf）', 'lib/panel-shared.js', 'libStampOf'],
 ]
 
 const cache = new Map()

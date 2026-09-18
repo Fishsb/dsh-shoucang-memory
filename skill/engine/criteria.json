@@ -498,10 +498,13 @@
         "budgetChars": 300,
         "cueDims": [
           "scope",
-          "task",
-          "subject",
-          "event"
+          "task"
         ],
+        "cueDimRules": {
+          "scope": "路径归一：`\\`→`/` · 去尾斜杠 · 折叠重复斜杠 · **不改大小写**（POSIX 敏感）",
+          "task": "kebab：小写 · 空白/下划线→`-` · 折叠 `-` · 去首尾 `-`（CJK 原样保留）"
+        },
+        "cueDimNote": "★IR1 册二（2026-09-18）**契约描述现状**：声明维 = **读侧真会产出**的维（`panel-shared#sitCtx` 只填 `scope` + `task`）。原声明的 `subject`/`event` **已删** —— 实测**两侧皆不产**（写侧存量 0 条、读侧无产出点），留着就是「声明了却永不匹配」的假契约（与「契约须描述现状」同族）。值规则**单一实现**在 `src/cue-space.ts#CUE_VALUE_RULES`（本表只声明文案，防两处漂移）。**收编路径**：若模型反复写某未声明维（`cue.rejected` 审计会带键名），把它**显式登记**进本表 + 在 `cue-space` 加值规则 + 在读侧补产出点，再由 `check-cue-space`（B5 双向）守。",
         "ringOrder": [
           "relation",
           "decision",

@@ -82,8 +82,12 @@ const seg = (n) => 'x'.repeat(n)
   const src = readFileSync(run, 'utf8')
   ok(/materialChunkChars/.test(src), '⑤ run 侧消费 `materialChunkChars`（否则 `check-field-usage` 会拦"声明 runtime 却无消费点"）')
   ok(/splitByCap\s*\(/.test(src), '⑤ run 侧调用 `splitByCap`（切分器真被接线，不是只写了个纯函数）')
-  // 防"静默把计划当执行"：多片时必须显式告警且**不截断**
-  ok(/多轮执行尚未接线|wired:\s*false/.test(src), '⑤ 多片时显式留痕（不得把"计划了 N 片"静默当成"跑了 N 片"）')
+  // 防"静默把计划当执行"：多片时必须**显式留痕**。
+  //  ★2026-09-18 更新（IR1 附册 F1）：原判据找 `多轮执行尚未接线` 字样 —— 那是**计划态**的产物，而
+  //    S-P1c-multi 早已接线 ⇒ 旧字样本身成了"自述与实况相反"的漂移源。现判据改为**接线证据在场**：
+  //    ledger 行必须带 `wired`（true/false 皆可，**字段必须在**）与 `hasMore` ⇒ "计划了 N 片"与
+  //    "跑了 N 片"在读数上**可分辨**（这才是原判据真正要守的东西）。
+  ok(/wired:\s*(true|false)/.test(src) && /hasMore/.test(src), '⑤ 多片时显式留痕（`wired` + `hasMore` 在场 ⇒ 计划/执行可分辨）')
   ok(!/segs\.slice\(0,\s*chunkCap\)|userInput\.slice\(0,\s*chunkCap\)/.test(src), '⑤ **不截断**材料（未见按 cap 截断的写法）')
 }
 

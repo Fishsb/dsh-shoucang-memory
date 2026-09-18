@@ -160,13 +160,13 @@ console.log('环记录情境供给（ring-supply）')
   const iso = (ms) => new Date(ms).toISOString().slice(0, 10)
   const soon = mk({ id: 'due-soon', text: '临近到期', meta: { due: iso(atMs + 3 * day) } })
   const far = mk({ id: 'due-far', text: '远期', meta: { due: iso(atMs + 30 * day) } })
-  const hit = mk({ id: 'hit', text: '命中线索', meta: { cues: 'x' } })
+  const hit = mk({ id: 'hit', text: '命中线索', meta: { cues: 'scope=x' } }) // IR1 册二：键必须是 `dim=value` 形态（裸串归一即丢弃）
 
   const out = R.ringCandidates([far, soon], [], { at: AT })
   ok(out[0].id === 'due-soon' && out[0].why === 'due', '⑩ 临近到期者进 `due` 组（why="due"）')
   ok(out[1].why === 'fallback', '⑩ 远期者仍为兜底组')
 
-  const out2 = R.ringCandidates([far, soon, hit], ['x'], { at: AT })
+  const out2 = R.ringCandidates([far, soon, hit], ['scope=x'], { at: AT })
   ok(out2.map((x) => x.why).join(',') === 'cue,due,fallback', `⑩ 组序 = 情境命中 → due → 兜底（实际 ${out2.map((x) => x.why).join(',')}）`)
 
   ok(R.dueSoon({ due: iso(atMs) }, AT) === true, '⑩ 恰在 at 当天 ⇒ dueSoon true（已到期）')

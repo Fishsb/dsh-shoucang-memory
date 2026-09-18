@@ -13,24 +13,20 @@
 //
 // 纯函数、零 IO、零依赖、零抛出 —— 可独立断言。
 //
-// 🔴🔴 **J5/U3 前置实测（2026-09-16 · 常备探针 `scripts/yield-signal-probe.mjs`）—— 三条事实，
-//   读本件前必看**（否则会在**死信号**上继续叠加升级）：
-//   ① **信号源已死**：`phase:'compliance'` 行 **1061** 条，`compliant=true` **0** 条 ⇒ 合规率 **0.0%**
-//      ⇒ `nextZeroGain` 永远只走"递增"分支、**不可能归零**（`zeroGain` 实测冲到 **246**）。
-//   ② **判据恒真**：`switchSource=true` **878/1061 = 82.8%** ⇒ "换向信号"是**恒真噪声**
-//      （恒真 = 没有判别力，正是仓内最忌的「假旋钮」）。
-//   ③ **无人消费**：`switchSource`/`zeroGain` **只写进审计，`src/` 内没有消费者** ⇒ **没有行为后果**
-//      （与本件抬头"不产生任何行为后果"的自述一致 —— 至今仍如此）。
-//   ⇒ **正确顺序 = 先修信号源，再谈判定机制**：在死信号上把判定交 LLM（本册 §3.3 的写法）
-//     **毫无意义** —— 喂进去的仍是"未引用"这一条恒真事实。修信号源须取证
-//     「**注入材料之后模型实际做了什么**」（可从转录顺带采集，同 S-P2 工具维的做法）。
+// ★接线状态（**F1 修复 · 2026-09-18**）：**一律以调用点为准，本注释不单独宣称**（仓内纪律：自述不得当证据）。
+//   实测调用点 = `deepsleep-run.ts#judgeYieldRounds`（读 `audit/yield-rounds.jsonl` → 确定性先筛 → 子代理判
+//   → 严格解析 → 语义换向判定 + 与计数法对账），审计字段 `yieldJudged` 有真机行。
+//   登记口 = 注册表 `criteria.json#wiring.pending`（为空 ⇒ 无待接项），由 `scripts/check-claim-alignment.mjs`
+//   守「注释自称 ↔ 调用图」一致。⚠ 旧注释曾把本件写成"没有行为后果"，而实况**早已接线** —— 正是本册要消灭的漂移。
 
 /** 连续未引用多少次即认为「该来源线索已变弱」（对齐人类"线索变弱即换向"；缺省 2） */
 export const SWITCH_THRESHOLD = 2
 
-/** 折一次收益：合规 ⇒ **归零**（来源仍有效）；不合规 ⇒ 递增（线索在变弱） */
-export function nextZeroGain(prev: number | undefined, compliant: boolean): number {
-  return compliant ? 0 : Math.max(0, Number(prev) || 0) + 1
+/** 折一次收益：**回引**（`topicEcho`，旧称 compliant）⇒ 归零；未回引 ⇒ 递增（线索在变弱）。
+ *  ⚠ 参数 2026-09-18 更名：该布尔测的是**上一步回复是否回引了材料主题词**（词面代理，实测 true=0/3119），
+ *  不是"材料被用上了"。真实收益信号见 `audit/yield-rounds.jsonl`（J5/U3-修信号）。 */
+export function nextZeroGain(prev: number | undefined, topicEcho: boolean): number {
+  return topicEcho ? 0 : Math.max(0, Number(prev) || 0) + 1
 }
 
 /** 是否已达换向阈值（`switchSource` 信号；调用方据此改变检索来源，而非继续灌同一批材料） */
@@ -38,12 +34,11 @@ export function shouldSwitchSource(zeroGain: number | undefined, threshold = SWI
   return (Number(zeroGain) || 0) >= Math.max(1, threshold)
 }
 
-/** 收益读数（供诊断聚合；纯函数、含分母口径——合规率**必须有分母**，仓内曾因只在失败分支落账而无分母） */
-export function yieldOf(rows: ReadonlyArray<{ compliant?: boolean }>): { total: number; compliant: number; rate: number | null } {
-  const total = rows.length
-  const compliant = rows.filter((r) => r.compliant === true).length
-  return { total, compliant, rate: total ? Math.round((compliant / total) * 1000) / 10 : null }
-}
+/* ══ F2 处置（IR1 附册 · 2026-09-18）：旧 `yieldOf(rows)` 读数**已删除** ══════════════════
+ * 它把审计里的 `compliant` 折成"合规率"，而该字段实测 **true = 0 / 3119**（恒 false 的假信号）；
+ * 留着它等于继续发布一个"看起来在测量、实际测不出任何东西"的指标（验收册 F2：字段**要么真、要么无**）。
+ * 现状：审计只发布诚实命名的 `topicEcho`（上一步是否回引材料主题词）；**真实收益读数**在
+ * `audit/yield-rounds.jsonl`（注入之后的实际动作），由 `deepsleep-run#judgeYieldRounds` 消费。 */
 
 /* ══ J5 / U3（2026-09-16）**收益判定交 LLM，并与确定性计数分层** ═════════════════════════
  * 判因（方案册 §3.3）：上面 `shouldSwitchSource` 把「**这次检索是否产生实质进展**」——

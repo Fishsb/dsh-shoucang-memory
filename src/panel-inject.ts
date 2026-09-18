@@ -21,6 +21,8 @@ import { warmInjectDedup, filterInjectedText, dedupState } from './crossform-ded
 //   ⚠ 只在**真注入出口**加，`/inject/preview` 保持原文（观测面 ≠ 真注入面，混同即假绿）。
 import { guardContextText } from './inject-guard.js'
 import { injectCacheReason } from './dynamic-select.js'
+import { preheatWarmRecall } from './relevance-supply.js'
+import { layerOfReason, libStampOf } from './supply-stamp.js'
 import { isLocalBase, parseView, probeLocalEmbed, readBody, sendJson } from './panel-shared.js'
 import { fileReadStats, nonEmptyLineCount, statSize } from './file-stat-cache.js'
 import type { HotMemory, InjectMeta, PanelLogger, RootAccess, RouteFn, SuiteConfigAccess } from './panel-shared.js'
@@ -391,9 +393,26 @@ const scnoteReply = (raw: string): { kind: 'success' | 'error'; text: string } =
   }
 }
 
-function injectPreviewRoute(d: InjectDeps, req: IncomingMessage, res: ServerResponse): void {
+/* IR1 册一（2026-09-18）：**注入侧相关性预热**。注入回调是**同步**的 ⇒ 桥（`warm-recall.json`）是它唯一的
+ *   向量通路；而旧实现里桥只由 `mcl.ts` 在 **MCL 慢通道判定的回合**写 ⇒ 多数回合无桥、动态面退位置式基线。
+ *   本函数把预热的**唯一入口**收在一处（预览端点与 `agent/pre-step` 都调它），embed 配置与 `/embed/config`
+ *   同源（`effectiveEmbed`）⇒ 三处不会各写一份缺省。失败一律**不阻断**（注入面自行记账降级原因）。 */
+const preheatFor = async (d: InjectDeps, q: string): Promise<string> => {
+  const query = String(q || '').trim()
+  if (!query) return 'no-query'
+  try {
+    const p = d.suite.read() as Record<string, unknown>
+    const r = await preheatWarmRecall({ q: query, root: memoryLibRoot(), embed: effectiveEmbed(p) })
+    return r.ok ? 'warmed' : r.reason
+  } catch { return 'error' /* 预热失败 ⇒ 注入面走词法/位置式并记账（A3） */ }
+}
+
+async function injectPreviewRoute(d: InjectDeps, req: IncomingMessage, res: ServerResponse): Promise<void> {
   let q = ''
   try { q = new URL(req.url ?? '/', 'http://127.0.0.1').searchParams.get('q') ?? '' } catch { q = '' }
+  /* IR1 册一：预览端点与真注入面**读同一座桥** ⇒ 此处按需预热，A1/A2/A4 才可**可重复测量**
+   *   （否则预览只能看到"桥恰好装了别的会话 query"的偶然结果）。预热失败不改变响应形状。 */
+  await preheatFor(d, q)
   // P0a：预览顺带回带影子记账 —— 这是 B5「每步真实字符数」的实测出口（此前只有测算值无实测对照）
   sendJson(res, 200, { text: d.hot.build(q), q, supplyUsage: d.hot.supplyUsage() })
 }
@@ -402,10 +421,16 @@ function injectStatsRoute(d: InjectDeps, _req: IncomingMessage, res: ServerRespo
   /* 2026-09-16：暴露**注入缓存**读数（用户指令「新会话一次 + 压缩后一次」的可验证面）——
    *   `rebuilt` = 重建次数（应为「新会话 + 压缩 + 库变」的合计）· `reused` = 逐字复用次数（应随步数增长）
    *   · `lastReason` ∈ {new, session-changed, compacted, lib-changed} ⇒ 一眼看出为何重建。 */
-  const m = d.injectMeta as { calls: number; rebuilt?: number; reused?: number; lastReason?: string; lastQ?: string; bySid?: Map<string, unknown> }
+  const m = d.injectMeta as { calls: number; rebuilt?: number; reused?: number; lastReason?: string; lastQ?: string; bySid?: Map<string, unknown>; byLayer?: Record<string, number> }
   const bySid = m.bySid ? [...m.bySid.values()].sort((a, b) => (b as { at: number }).at - (a as { at: number }).at).slice(0, 8) : []
   const preSteps = (d.injectMeta as unknown as { preSteps?: unknown[] }).preSteps || []
-  sendJson(res, 200, { calls: d.injectMeta.calls, lastAt: d.injectMeta.lastAt ? new Date(d.injectMeta.lastAt).toISOString() : null, root: d.root.activeRootOf()?.path ?? null, supplyUsage: d.hot.supplyUsage(), cache: { rebuilt: m.rebuilt || 0, reused: m.reused || 0, lastReason: m.lastReason || null, lastQ: m.lastQ || null, bySid }, preStep: preSteps.slice(-12),
+  sendJson(res, 200, { calls: d.injectMeta.calls, lastAt: d.injectMeta.lastAt ? new Date(d.injectMeta.lastAt).toISOString() : null, root: d.root.activeRootOf()?.path ?? null, supplyUsage: d.hot.supplyUsage(), cache: { rebuilt: m.rebuilt || 0, reused: m.reused || 0, lastReason: m.lastReason || null, lastQ: m.lastQ || null, bySid,
+    // IR1 册四（D2）：**层归因**（`session` / `context` / `query` / `event` / `ttl`）—— 只报最外层 reason
+    //   时，"压缩重建"与"上游落盘重建"在读数上**不可分辨**（G4 要的正是这个分辨力）。
+    byLayer: m.byLayer || {} },
+    // IR1 册五 E5（2026-09-18）：**跨形态消重的读数**（预热状态 + 跳过条数 + 原因）—— 没有它，
+    //   "消重接在配额之前"这件事在运行态**不可见**（旧实现只能在离线探针里看）。
+    dedup: (() => { try { const s = dedupState(); return { note: s.note, skip: s.skip.length, warmedAt: s.warmedAt || null, reasons: s.reasons.length } } catch { return null } })(),
     // P2（2026-09-18）**通道健康位**：`mounted`=section 是否挂上 · `calls/lastLen`=每步真实求值读数 ·
     //   `lastErr`=被 catch 吞掉的失败（含"空串"）。有它才能区分「生效」与「静默失效」（edge E3+E8）。
     stableChannel: (d.injectMeta as unknown as { stableHealth?: unknown }).stableHealth ?? null })
@@ -455,7 +480,6 @@ function mountHotMemoryInjection(ctx: Context, d: InjectDeps): void {
      *   ⚠ **技术真相（必须留痕，勿误传）**：system prompt 的内容**每步仍会发给模型**（API 语义无法"只发一次"）；
      *     本缓存省的是「**每轮重建**」并保证文本**逐字稳定**（⇒ 提供商 prompt 缓存可命中），**不等于省 token**。
      *     要真正做到"只发一次"须改走**会话消息**通道（`agent/pre-step` 可追加消息），风险与前提见 `docs/OPEN-ITEMS.md`。 */
-    type InjectMemo = { text: string; sid: string; evLen: number; firstSeq: number; lib: string; q: string }
     const injectMemo = new WeakMap<object, InjectMemo>()
     const meta = d.injectMeta as { calls: number; lastAt: number; rebuilt?: number; reused?: number; lastReason?: string; lastQ?: string }
     /* 2026-09-16 **按会话读数**（取代全局单值）：全局 `lastQ/lastReason` 会被**别的会话**（圆桌会议节点 /
@@ -463,6 +487,8 @@ function mountHotMemoryInjection(ctx: Context, d: InjectDeps): void {
      *   ⇒ 按 `sid` 记 `{qLen, qHash, reason, rebuilt, reused}`，**不再回抄用户正文**（隐私面同时收窄）。
      *   `qHash` = djb2（确定性、无 crypto 依赖）⇒ **只验"是否同一段文本"，不泄露内容**。 */
     type SidStat = { sid: string; qLen: number; qHash: string; reason: string; rebuilt: number; reused: number; at: number }
+    /* IR1 册四（2026-09-18）：注入判据的 memo 现在带**两级上游戳**（库戳 `lib` + 介质戳 `media`）。 */
+    type InjectMemo = { text: string; sid: string; evLen: number; firstSeq: number; lib: string; media?: string; q: string }
     const perSid = new Map<string, SidStat>()
     ;(meta as unknown as { bySid?: Map<string, SidStat> }).bySid = perSid
     const qHashOf = (s: string): string => {
@@ -479,22 +505,22 @@ function mountHotMemoryInjection(ctx: Context, d: InjectDeps): void {
       perSid.set(key, cur)
       if (perSid.size > 12) { const oldest = [...perSid.values()].sort((a, b) => a.at - b.at)[0]; if (oldest) perSid.delete(oldest.sid) }
     }
-    let libStamp = ''
+    /* ★IR1 册四（2026-09-18）：**上游戳改成单一实现**（`supply-stamp#libStampOf` = 库戳 ∪ 介质戳）。
+     *   旧实现只签**三索引**（`size:mtimeMs`），而 `activity.jsonl` / `delta.md` 两条介质**不在外层判据里**
+     *   ⇒ 运行时"改了介质却不重建"（内层 30s TTL 之外看不见）。现两级都进判据，读数按层归因。 */
+    const stampNow = (): { lib: string; media: string } => { const s = libStampOf(); return { lib: s.lib, media: s.media } }
+    let libStamp: { lib: string; media: string } = { lib: '', media: '' }
     let libAt = 0
-    const libNow = (): string => {
+    const libNow = (): { lib: string; media: string } => {
       const t = Date.now()
-      if (t - libAt < 5000) return libStamp
+      if (t - libAt < 5000) return libStamp // 与 `supply-stamp` 内部节流同档（双保险：此处零 statSync）
       libAt = t
-      try {
-        const root = memoryLibRoot()
-        let s = ''
-        for (const f of ['AGENT.md', 'USER.md', 'MEMORY.md']) {
-          try { const st = statSync(join(root, f)); s += `${st.size}:${st.mtimeMs};` } catch { s += '-;' }
-        }
-        libStamp = s
-      } catch { /* 库不可读 ⇒ 沿用旧戳（失败开放） */ }
+      try { libStamp = stampNow() } catch { /* 库不可读 ⇒ 沿用旧戳（失败开放） */ }
       return libStamp
     }
+    /** **层归因**（G4）：各层各重建过多少次 —— `/inject/stats.cache.byLayer` 的读数源 */
+    const byLayer: Record<string, number> = {}
+    ;(meta as unknown as { byLayer?: Record<string, number> }).byLayer = byLayer
     /* ★2026-09-18（按域路由 P1）**恒定面单独挂 section** —— 落 surface 节点 0 ⇒ 压缩豁免。
      *
      * 判因（实测）：守藏原注入走 `systemPrompt.context` ⇒ 落 `user/message`（**可压区**，实测节点索引 3）；
@@ -562,18 +588,20 @@ function mountHotMemoryInjection(ctx: Context, d: InjectDeps): void {
         const arr = Array.isArray(evs) ? evs : []
         const sid = String((context as { agent?: { session?: { id?: unknown } } })?.agent?.session?.id ?? '')
         const firstSeq = Number((arr[0] as { seq?: unknown })?.seq ?? -1)
-        const lib = libNow()
+        const lib = libNow() // IR1 册四：`{lib, media}` 两级上游戳（单一实现 `supply-stamp#libStampOf`）
         const q = taskTextOf(context)
         /* 只记**指纹**（长度 + djb2 哈希），不回抄用户正文 —— 见上方 `perSid` 抬头。 */
         meta.lastQ = q ? `${q.length}:${qHashOf(q)}` : '(空)'
         const sidKey = sid ? sid.slice(-8) : '(anon)'
         const hit = holder ? injectMemo.get(holder) : undefined
-        const reason = injectCacheReason(hit, { sid, evLen: arr.length, firstSeq, lib, q })
+        const reason = injectCacheReason(hit, { sid, evLen: arr.length, firstSeq, lib: lib.lib, media: lib.media, q })
         if (hit && !reason) { meta.reused = (meta.reused || 0) + 1; bump(sidKey, q, ''); return hit.text }
         const text = guardContextText(filterInjectedText(stableMounted ? d.hot.buildDynamic(q) : d.hot.build(q), dedupState().skip))
-        if (holder) injectMemo.set(holder, { text, sid, evLen: arr.length, firstSeq, lib, q })
+        if (holder) injectMemo.set(holder, { text, sid, evLen: arr.length, firstSeq, lib: lib.lib, media: lib.media, q })
         meta.rebuilt = (meta.rebuilt || 0) + 1
         meta.lastReason = reason || 'new'
+        // IR1 册四（D2）**层归因计数**：`/inject/stats.cache.byLayer` —— 分清"压缩重建"与"上游落盘重建"
+        byLayer[layerOfReason(reason || 'new')] = (byLayer[layerOfReason(reason || 'new')] || 0) + 1
         bump(sidKey, q, reason || 'new')
         return text
       },
@@ -586,7 +614,7 @@ function mountHotMemoryInjection(ctx: Context, d: InjectDeps): void {
      *     ③ 宿主自带的 runtime context **是否已在** `messages` 里（若在，说明"追加消息"这条路宿主自己就走通了）。
      *   ⚠ **绝不改变行为**：本监听器**永远原样 `return next()`**；出任何异常也**吞掉再放行**
      *     （观测件把某一步搞失败，比不观测更糟）。读数经 `/inject/stats` 的 `preStep` 字段暴露。 */
-    type PreStepStat = { sid: string; step: number; n: number; firstSeq: number; lastSeq: number; delta: number; hasCtx: boolean; isFirst: boolean; at: number }
+    type PreStepStat = { sid: string; step: number; n: number; firstSeq: number; lastSeq: number; delta: number; hasCtx: boolean; isFirst: boolean; warm: string; at: number }
     const preSteps: PreStepStat[] = []
     ;(d.injectMeta as unknown as { preSteps?: PreStepStat[] }).preSteps = preSteps
     const hook = ctx as unknown as { on?: (name: string, fn: (...a: any[]) => unknown) => () => void }
@@ -600,6 +628,10 @@ function mountHotMemoryInjection(ctx: Context, d: InjectDeps): void {
             const firstSeq = seqs.length ? Math.min(...seqs) : -1
             const lastSeq = seqs.length ? Math.max(...seqs) : -1
             const prev = preSteps.filter((x) => x.sid === String(p?.agent?.session?.id ?? '')).slice(-1)[0]
+            /* IR1 册一（2026-09-18）**预热挂点**：注入回调是同步的 ⇒ 桥是它唯一的向量通路。
+             *   此处与注入面用**同一个 `taskTextOf`** 取任务文本 ⇒ 桥的键与读侧必然同键（不是"多半能对上"）。
+             *   桥已新鲜 ⇒ `skip-fresh`（零嵌入开销、不阻塞该步）；失败/超时 ⇒ 注入面转词法并**记账**。 */
+            const warm = await preheatFor(d, taskTextOf(payload))
             preSteps.push({
               sid: String(p?.agent?.session?.id ?? '').slice(-8),
               step: Number(p?.step ?? -1),
@@ -614,6 +646,7 @@ function mountHotMemoryInjection(ctx: Context, d: InjectDeps): void {
                 return t.includes('Current runtime context') || t.includes('【认知环')
               }),
               isFirst: !prev,
+              warm,
               at: Date.now(),
             })
             if (preSteps.length > 60) preSteps.splice(0, preSteps.length - 60)

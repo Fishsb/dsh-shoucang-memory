@@ -15,14 +15,17 @@ export declare function injectCacheReason(prev: {
     evLen: number;
     firstSeq: number;
     lib: string;
+    media?: string;
     q: string;
 } | undefined, now: {
     sid: string;
     evLen: number;
     firstSeq: number;
     lib: string;
+    media?: string;
     q: string;
-}): '' | 'new' | 'session-changed' | 'compacted' | 'lib-changed' | 'query-changed';
+}): '' | 'new' | 'session-changed' | 'compacted' | 'lib-changed' | 'media-changed' | 'query-changed';
+import { type RelevanceTrace } from './relevance-supply.js';
 export interface DynamicSelectDeps {
     /** 基线池（panel 侧已做分层过滤的 P/always 行） */
     allMem: readonly string[];
@@ -49,6 +52,8 @@ export interface DynamicSelectDeps {
      *   （本项首版即踩此坑，由"开启后仍无 `[路径]`"的实测当场暴露）。
      */
     processRows?: readonly string[];
+    /** IR1 册一：**恒定面已持有的行**（`agentLines ∪ userLines`）——相关性面不得重复取它们（见 `relevance-supply#RelevanceDeps.exclude`） */
+    exclude?: readonly string[];
 }
 /**
  * S4-3（2026-09-14）**中层 `process` 槽选行**：按**标签**取 `[路径]` 行（**不走内容相关性竞争**）。
@@ -65,9 +70,19 @@ export declare function selectProcessLines(allIndexRows: readonly string[], opts
     topN?: number;
 }): string[];
 /**
- * 动态面选行（**逐行为与抽取前等价** —— 只搬位置，未改判据、未改顺序）。
+ * 动态面选行（**IR1 册一后**：相关性面已交 `relevance-supply`，本件只留"补齐与合并"）。
  *
- * 三通道叠加的顺序是**判据而非巧合**：相关性 → 新鲜度 → 基线补齐；
+ * 通道序是**判据而非巧合**：相关性 → 新鲜度 → 基线补齐；
  *   `picked` 为空时**保持基线**（`return memBase`），与抽取前的 `if (picked.length)` 等价。
+ *
+ * ★2026-09-18（IR1 册一）：原「桥读取 + `recallIndex` + `file==='MEMORY.md'` 过滤 + 域内 top1」整段
+ *   已迁至 `relevance-supply#selectRelevantLines`（**按域路由/领域接缝拆**，非按行数硬切）。
+ *   迁因是**缺陷**而非整洁：单文件过滤把 `AGENT.md` 的命中**全丢** ⇒ 真命中词与乱码词注入面 63/63 行相同。
+ *   本件保留：`process` 槽合并 · 冷热降权 · 新鲜度槽 · 存量补位 —— 它们与"相关性打分"无关。
+ *   返回值加 `trace`（相关性通道来源 + 失败原因 + 零命中标志），供注入面**如实记账/注明**。
  */
-export declare function selectDynamicLines(dep: DynamicSelectDeps): string[];
+export declare function selectDynamicLines(dep: DynamicSelectDeps): {
+    lines: string[];
+    trace: RelevanceTrace;
+    proc: string[];
+};

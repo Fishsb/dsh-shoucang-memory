@@ -165,7 +165,7 @@ const baseCfg = { enabled: true, familiarThreshold: 0.65, maxNudges: 1, budgetCh
   ok(step?.viaSystem === undefined && step?.injected > 0, 'G3 回落后审计无 viaSystem（如实反映去向）')
 }
 
-// ── 场景 H：**合规步也落账**（2026-09-13 补：原实现只在"不合规"分支写行 ⇒ 合规率不可测）──
+// ── 场景 H：**回引步也落账**（2026-09-13 补：原实现只在"未回引"分支写行 ⇒ 该率不可测）──
 {
   const audit = []
   const { ctx, emit, fire } = mkCtx()
@@ -180,9 +180,9 @@ const baseCfg = { enabled: true, familiarThreshold: 0.65, maxNudges: 1, budgetCh
     const d2 = { kind: 'allow', messages: [userMsg('指针 分裂 结构 怎么搭树'), asstMsg(material)] }
     const out2 = await fire('agent/pre-step', { agent: { id: sid, session: { header: {} } }, messages: d2.messages, step: 2 }, async () => d2)
     ok(out2?.messages?.length === 2, 'H1 引用了材料 ⇒ 不再引导（messages 2 → 2）')
-    const comp = audit.filter((r) => r.kind === 'mcl-step' && r.compliant === true)
-    ok(comp.length === 1, 'H2 **合规步也落账**（compliant:true 有行——原实现只有 false 行 ⇒ 合规率没有分母）')
-    ok(comp[0]?.nudge === 0 && Array.isArray(comp[0]?.topics), 'H3 合规行字段齐（nudge=0 + topics：前后对比所需字段）')
+    const comp = audit.filter((r) => r.kind === 'mcl-step' && r.topicEcho === true)
+    ok(comp.length === 1, 'H2 **回引步也落账**（topicEcho:true 有行——原实现只有 false 行 ⇒ 该率没有分母）')
+    ok(comp[0]?.nudge === 0 && Array.isArray(comp[0]?.topics), 'H3 回引行字段齐（nudge=0 + topics：前后对比所需字段）')
   } else {
     console.log('⚠️  H1-H3 跳过：库内该 query 未召回材料（合规判定需主题词作判据）')
   }

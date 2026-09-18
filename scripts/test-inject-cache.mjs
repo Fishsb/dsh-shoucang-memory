@@ -99,16 +99,21 @@ const stableOf = (t) => { const i = t.indexOf('[守藏·热记忆]'); const j = 
     'S3：改**无关介质**尺寸 ⇒ 稳定面**逐字节不变**（未被无关介质打穿）')
 }
 
-// ── S4：结构断言 —— `warm-recall.json` **不在**任何缓存键里，且稳定面键不含签名 ──
+// ── S4：结构断言 —— `warm-recall.json` **不在失效键里**，且稳定面键不含上游戳 ──
+//   ★IR1 册四（2026-09-18）：上游戳的**实现在 `supply-stamp.ts`**（单一实现）⇒ 本组断言**重新指向**
+//   新落点，**语义逐条不变**（"整段键含上游戳 / 稳定面键不含 / 键包含 activity+delta / 键不含 warm"）。
 {
   const src = readFileSync(join(repoRoot, 'src', 'panel-shared.ts'), 'utf8')
+  const stampSrc = readFileSync(join(repoRoot, 'src', 'supply-stamp.ts'), 'utf8')
   const cacheKeyLine = (src.match(/const cacheKey = .*/) || [''])[0]
   const stableKeyLine = (src.match(/const stableKey = .*/) || [''])[0]
-  const stampBlock = (src.match(/const upstreamStampOf[\s\S]*?\n\}/) || [''])[0]
-  ok(cacheKeyLine.includes('upstreamStampOf'), `S4：cacheKey 已接入签名（${cacheKeyLine.trim().slice(0, 60)}…）`)
-  ok(!stableKeyLine.includes('upstreamStampOf'), 'S4：stableKey **已去除**签名（无关介质不再打穿稳定面）')
-  ok(stampBlock.includes('activity.jsonl') && stampBlock.includes('delta.md'), 'S4：签名含 activity.jsonl + delta.md')
-  ok(!stampBlock.includes('warm-recall'), 'S4：签名**不含** warm-recall.json（查询域绑定，签它会为别的 query 的写入失效本 query）')
+  const keyFn = (stampSrc.match(/export function stampKeyOf[\s\S]*?\n\}/) || [''])[0]
+  const libFn = (stampSrc.match(/export function libStampOf[\s\S]*?\n\}/) || [''])[0]
+  ok(cacheKeyLine.includes('libStampOf'), `S4：cacheKey 已接入**单一上游戳**（${cacheKeyLine.trim().slice(0, 70)}…）`)
+  ok(!stableKeyLine.includes('libStampOf'), 'S4：stableKey **不含**上游戳（无关介质不再打穿稳定面）')
+  ok(libFn.includes('activity.jsonl') && libFn.includes('delta.md'), 'S4：戳含 activity.jsonl + delta.md（两条介质）')
+  ok(keyFn.includes('s.lib') && keyFn.includes('s.media') && !keyFn.includes('warm'),
+    'S4：失效键 = 库戳 + 介质戳，**不含 warm**（查询域绑定，签它会为别的 query 的写入失效本 query）')
 }
 
 // ── S5：零抛出 —— 三条介质全缺 ⇒ 不抛且仍产出 ──
@@ -158,6 +163,41 @@ const stableOf = (t) => { const i = t.indexOf('[守藏·热记忆]'); const j = 
   ok(injectCacheReason(base, { ...base, lib: 'L2' }) === 'lib-changed', 'S7：库戳变化 ⇒ `lib-changed`（睡眠/蒸馏写入 => 新内容可见）')
   ok(injectCacheReason(base, { sid: 'b', q: 'x', evLen: 1, firstSeq: 99, lib: 'L2' }) === 'session-changed', 'S7 优先级：换会话优先于其余一切')
   ok(injectCacheReason(base, { ...base, q: 'x', evLen: 1 }) === 'query-changed', 'S7 优先级：q 变化优先于压缩判定（同回合内换 query 罕见，但口径须确定）')
+}
+
+/* ── S8（IR1 册四 · 2026-09-18）：**三条介质各触发一次重建** + **层归因** + **"省的是重建不是 token"** ──
+ * 病灶（实测）：外层判据只签**库戳（三索引）**，两条介质（`activity.jsonl` / `delta.md`）只在内层键里
+ *   ⇒ 运行时"改了介质却不重建"（内层 30s TTL 之外看不见）；且 `/inject/stats` 只报**最外层** reason
+ *   ⇒ "哪一层失效"说不出来。本组把三介质 + 五层归因钉住。 */
+{
+  const { injectCacheReason: injectCacheReasonB } = await import(pathToFileURL(join(repoRoot, 'lib', 'dynamic-select.js')).href)
+  // D1-a：改**库（MEMORY.md）** ⇒ 同一 query 紧接重调即变（旧实现：内层键不含库戳 ⇒ 此处必红）
+  const f = fixture()
+  const hot = await hotIn(f.home)
+  const t1 = hot.build('')
+  ok(!t1.includes('探针C'), 'S8 控制组：改库前文本不含新行（探针C）')
+  appendFileSync(join(f.mem, 'MEMORY.md'), '[原则] 探针C · z → notes/env.md §qc\n', 'utf8')
+  const t2 = hot.build('')
+  ok(t2.includes('探针C'), 'S8/D1 改**库**（MEMORY.md）⇒ 同 query 重调即重建（库戳进键）')
+
+  // D1-b（三介质清单显式化）：库 / activity / delta 三条都在失效键的实现里
+  const stampSrc = readFileSync(join(repoRoot, 'src', 'supply-stamp.ts'), 'utf8')
+  ok(['AGENT.md', 'USER.md', 'MEMORY.md'].every((x) => stampSrc.includes(x)), 'S8/D1 库戳含三索引（AGENT/USER/MEMORY）')
+  ok(stampSrc.includes('activity.jsonl') && stampSrc.includes('delta.md'), 'S8/D1 介质戳含 activity + delta ⇒ **3 条介质全覆盖**（旧实现只签 2 条）')
+
+  // D2：层归因 —— reason → 层映射**穷举**（新 reason 未登记即红），且 media 变化可分辨
+  const { layerOfReason } = await import(pathToFileURL(join(repoRoot, 'lib', 'supply-stamp.js')).href)
+  const MAP = { '': 'none', new: 'session', 'session-changed': 'session', compacted: 'context', 'query-changed': 'query', 'lib-changed': 'event', 'media-changed': 'event' }
+  for (const [r, layer] of Object.entries(MAP)) ok(layerOfReason(r) === layer, `S8/D2 层归因：reason=${r || '(空)'} ⇒ ${layer}（实得 ${layerOfReason(r)}）`)
+  const base8 = { sid: 'a', evLen: 40, firstSeq: 5, lib: 'L1', media: 'M1', q: '问题一' }
+  ok(injectCacheReasonB(base8, { ...base8 }) === '', 'S8/D2 两级戳全等 ⇒ 命中（不误伤）')
+  ok(injectCacheReasonB(base8, { ...base8, media: 'M2' }) === 'media-changed', 'S8/D2 **介质戳变化 ⇒ `media-changed`**（与库戳变化可分辨）')
+  ok(injectCacheReasonB(base8, { ...base8, lib: 'L2' }) === 'lib-changed', 'S8/D2 库戳变化 ⇒ `lib-changed`')
+
+  // D3：缓存**省的是重建、不是 token**（头注如实；不得改称"省 token"）
+  const injSrc = readFileSync(join(repoRoot, 'src', 'panel-inject.ts'), 'utf8')
+  ok(/不代表省 token|不等于省 token/.test(injSrc), 'S8/D3 头注如实：命中缓存**不代表省 token**（system prompt 每步仍发）')
+  ok(!/缓存[^。\n]{0,12}省\s*token/.test(injSrc.replace(/不代表省 token|不等于省 token/g, '')), 'S8/D3 反例：不得出现"缓存省 token"的正面表述')
 }
 
 if (fails.length) {

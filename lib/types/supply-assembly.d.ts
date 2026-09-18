@@ -35,6 +35,12 @@ export interface SupplyBudget {
      * 改权重解决不了，只能分槽。
      */
     situation: number;
+    /**
+     * **中层 `process` 槽（IR1 册三 · 2026-09-18 补账）**：任务级供给（`[路径]` 行）。
+     * ⚠ **额度语义与其它槽不同**：它 `cap + proc.length` **外接追加**、**不吃 dynamic 额度**（零挤占是设计，不改）；
+     *   本字段只为**出账**（"这一槽供了几行"）——缺省 0，不影响任何切割行为。
+     */
+    process?: number;
 }
 /** 缺省 = 方案档 §13 #3 的注入硬顶（恒定 1,000 / 变动 600 / 一次性 200）；联想与情境槽缺省关 */
 export declare const DEFAULT_BUDGET: SupplyBudget;
@@ -82,7 +88,8 @@ export interface SupplyInputs {
     situation?: string[];
 }
 export interface DroppedRow {
-    slot: 'stable' | 'dynamic' | 'oneshot' | 'serendipity' | 'situation';
+    /** 槽名（IR1 册三起含 `core` / `process` —— 六槽全出账，`process` 只补账不改额度） */
+    slot: 'core' | 'stable' | 'dynamic' | 'oneshot' | 'process' | 'serendipity' | 'situation';
     line: string;
     why: string;
 }
@@ -107,6 +114,38 @@ export interface SupplyResult {
     };
 }
 export declare function budgetTotalOf(b: SupplyBudget): number;
+export type SupplySlot = 'core' | 'stable' | 'dynamic' | 'oneshot' | 'process' | 'serendipity' | 'situation';
+/** 主路径的真实裁切结果（每槽：**保留行** / 被丢行 / 该槽的丢弃原因） */
+export interface SlotOutcome {
+    kept: readonly string[];
+    droppedRows?: readonly string[];
+    /** 该槽**为何**被限量（缺省自动措辞）——`process` 槽零挤占，不带此字段 */
+    why?: string;
+}
+export interface SupplySlotsMeta {
+    chars: number;
+    budgetTotal: number;
+    overBudget: boolean;
+    serendipityEnabled: boolean;
+    situationEnabled: boolean;
+    kept: Record<SupplySlot, number>;
+    /** 逐槽明细（IR1 册三 C3：**六槽全出账**，含 `process`） */
+    slots: Record<SupplySlot, {
+        kept: number;
+        chars: number;
+        dropped: number;
+    }>;
+    dropped: DroppedRow[];
+}
+/**
+ * **账：由真实裁切直出**（纯函数、零 I/O、零重算）。
+ * 入参 = 每槽**实际**保留的行与被丢的行（主路径产出）⇒ 账与文本**同源**，不可能漂移。
+ * 不变式：`kept + dropped == 候选数`（由调用方保证；`test-usage-truth` 逐条核）。
+ */
+export declare function supplyMetaOf(outcomes: Partial<Record<SupplySlot, SlotOutcome>>, budget: SupplyBudget, opts?: {
+    budgetTotal?: number;
+    cues?: readonly string[];
+}): SupplySlotsMeta;
 export interface CandidateDropped {
     id: string;
     text: string;
@@ -147,6 +186,15 @@ export declare const DEFAULT_CORE_TAGS: readonly string[];
 export declare function buildCandidates(records: readonly MemRecord[], opts: CandidateOpts): Candidates;
 /** 把一条越界联想渲染成一行（人读可辨：两侧小节 + 跨度） */
 export declare function serendipityLine(p: SerendipityPair): string;
+/**
+ * **按槽限额取行**（对外出口；IR1 册三起供主路径直接调用 —— 语义与 `assembleSupply` 内**同一实现**：
+ *   「超出即跳过、后续更短的行仍有机会」，与 `clampLines` 的「停-在首超」**不同且不可互换**）。
+ * 主路径的情境槽用它 ⇒ 切割语义仍属装配域（单一实现），而整段文本**逐字节不变**。
+ */
+export declare function takeSlotLines(lines: readonly string[], limit: number, slot?: DroppedRow['slot']): {
+    kept: string[];
+    dropped: DroppedRow[];
+};
 /**
  * 装配（纯函数、确定性）：同输入必同输出。
  * 顺序即优先级：`core`（必进）→ `stable` → `dynamic` → `oneshot`；`serendipity` **独立成槽**。

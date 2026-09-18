@@ -27,7 +27,9 @@ for (const l of readFileSync(ledger, 'utf8').split(/\r?\n/)) {
   try { const o = JSON.parse(t); if (o?.phase === 'compliance') rows.push(o) } catch { /* 坏行跳过（报告态） */ }
 }
 const total = rows.length
-const yes = rows.filter((r) => r.compliant === true).length
+// 键名 2026-09-18 由 `compliant` 更名为 `topicEcho`（IR1 附册 F2：诚实命名 —— 它测的是"回引材料主题词"）：
+//   历史行只有旧键、新行只有新键 ⇒ 两者都数（本探针是**跨代报告**，不是判据）。
+const yes = rows.filter((r) => r.topicEcho === true || r.compliant === true).length
 const switchTrue = rows.filter((r) => r.switchSource === true).length
 const zgs = rows.map((r) => Number(r.zeroGain) || 0)
 const maxZg = zgs.length ? Math.max(...zgs) : 0
@@ -44,7 +46,7 @@ if (argv.includes('--json')) { console.log(JSON.stringify(out, null, 2)); proces
 
 console.log('检索收益信号健康度（报告态 · 只读）')
 console.log(`台账 ${ledger}`)
-console.log(`compliance 行 **${total}** · compliant=true **${yes}** ⇒ 合规率 **${out.complianceRate}%** · 带材料 ${withMat}`)
+console.log(`compliance 行 **${total}** · 回引（topicEcho，旧称 compliant）=true **${yes}** ⇒ 回引率 **${out.complianceRate}%** · 带材料 ${withMat}`)
 console.log(`switchSource=true **${switchTrue}** / ${total} ⇒ **${out.switchRate}%** · zeroGain 最大 **${maxZg}**`)
 console.log('')
 if (out.verdict === 'signal-dead') {

@@ -72,7 +72,12 @@ export declare const SURFACE: {
         readonly situation: {
             readonly enabled: true;
             readonly budgetChars: 300;
-            readonly cueDims: readonly ["scope", "task", "subject", "event"];
+            readonly cueDims: readonly ["scope", "task"];
+            readonly cueDimRules: {
+                readonly scope: "路径归一：`\\`→`/` · 去尾斜杠 · 折叠重复斜杠 · **不改大小写**（POSIX 敏感）";
+                readonly task: "kebab：小写 · 空白/下划线→`-` · 折叠 `-` · 去首尾 `-`（CJK 原样保留）";
+            };
+            readonly cueDimNote: "★IR1 册二（2026-09-18）**契约描述现状**：声明维 = **读侧真会产出**的维（`panel-shared#sitCtx` 只填 `scope` + `task`）。原声明的 `subject`/`event` **已删** —— 实测**两侧皆不产**（写侧存量 0 条、读侧无产出点），留着就是「声明了却永不匹配」的假契约（与「契约须描述现状」同族）。值规则**单一实现**在 `src/cue-space.ts#CUE_VALUE_RULES`（本表只声明文案，防两处漂移）。**收编路径**：若模型反复写某未声明维（`cue.rejected` 审计会带键名），把它**显式登记**进本表 + 在 `cue-space` 加值规则 + 在读侧补产出点，再由 `check-cue-space`（B5 双向）守。";
             readonly ringOrder: readonly ["relation", "decision", "association", "fact", "value"];
             readonly topN: 3;
             readonly note: "**情境层（第三槽）**：环记录（`file=''`，无 md 投影）不进内容相关性面，而由**情境键匹配**（cue-driven）供给——依据是编码特异性（提取取决于「编码情境↔提取线索」匹配，非内容相似度）与前瞻记忆多进程框架（承诺/意图须线索驱动，纯战略监控在高负荷下系统性失败）。enabled=false 且 budgetChars=0 ⇒ **缺省零行为变化**（照抄 serendipity 槽先例）。cueDims 是**唯一维度声明处**（situation-key.ts 按它迭代，不另立名单）；ringOrder 按**环**排序（commitment 与 relation 同属 relation 环；episode 属 fact 环——故不按 kind 排，避免把两个语义层混进一张表）。**2026-09-14 P7 订正**：原先把 `value` 环排除在外，理由是「走图式层」——但图式层走的是 **md 投影行**，而 `valence` 记录是 `file=''` 的**环记录** ⇒ 实测它**两条路都不可达**（既不在恒定面、也不在 ringOrder）。现把 `value` 补进 ringOrder **末位**：只有 `file=''` 的 value 环记录（即 valence；`persona`/`principle`/`preference` 皆带 md 投影或不产出）能进，故不会挤占。**同时放弃原计划的 `alphaVal` 打分项**：`layeredScore` 的打分对象是**索引行**，索引行**没有 valence 信号**（valence 只存在于环记录 meta）⇒ 加它只能是恒 0 的**假旋钮**（仓内警示的「假可控」）。valence 的正确定位是**情境召回**，不是相关性权重。";
