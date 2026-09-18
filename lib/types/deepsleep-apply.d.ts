@@ -1,3 +1,6 @@
+/** 停产挡位的 gate 名（**判据用**：`gate` 字段出现它 = 本轮"跑了但按口径不产出"，而不是"没跑"）。
+ *  S2S3 册二（2026-09-19）：用户口径「S3 睡眠不产出」的落点。 */
+export declare const PRODUCE_OFF_GATE = "produce-off";
 /** 原则与指针写入的全部依赖：配置 + 日志 + 画像头 + 根 + 子进程执行器 + 容量门 + 文本提取。 */
 export interface ApplyDeps {
     config: any;

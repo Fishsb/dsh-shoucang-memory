@@ -691,6 +691,9 @@ const CHECKS = [
   //     库内零写入 · 失败不前移水位 · 状态落自有流。
   ['scripts/check-session-review-scope.mjs'],
   ['scripts/test-session-review.mjs'],
+  //   `test-s3-produce-off`：**S3 三通道停产**（册二）—— 停产 ⇒ 原则通道零产出 + gate='produce-off'
+  //     （"不产出"与"没跑"可分辨）；画像通道同挂开关（结构性断言，防"只关一半"）；schema 缺省 false。
+  ['scripts/test-s3-produce-off.mjs'],
 ]
 /* ── 已登记在册的自证（i18n · 2026-09-17 · v2.1 验收③）─────────────────────────
  * 判因：验收口径里写「须看到两个新件在册」，若靠**人眼确认**即为文本纪律
