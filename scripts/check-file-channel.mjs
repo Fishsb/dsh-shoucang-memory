@@ -45,24 +45,32 @@ const CHANNELS = [
     writers: ['activity.ts'],
     // 2026-09-14 阶段 4：`treeops.ts` 的读侧随「主动遗忘」一块迁出 ⇒ 改登记 `forgetops.ts`。
     //   这正是本门方向二的价值——**拆模块时自动提醒"这条通道的读侧变了"**，不靠人记。
-    readers: ['panel-shared.ts', 'vec.ts', 'deepsleep-materials.ts', 'panel-observe.ts', 'forgetops.ts'],
+    readers: ['panel-shared.ts', 'vec.ts', 'deepsleep-materials.ts', 'panel-observe.ts', 'forgetops.ts', 'supply-stamp.ts'],
     mentions: [],
   },
   {
     id: 'warm-recall',
     token: 'warm-recall.json',
-    what: 'MCL 异步预热的召回结果 → 注入面同步读取（120s + recallKeyOf 校验）',
-    writers: ['mcl.ts'],
-    // L5（2026-09-14）：动态面选行抽取至 `dynamic-select.ts` ⇒ 读侧随之迁移（通道本身未变）
-    readers: ['dynamic-select.ts'],
-    mentions: [],
+    what: '异步预热的融合召回结果 → 注入面同步读取（120s + recallKeyOf 校验）；IR1 册一起由**注入侧自预热**',
+    // IR1 册一（2026-09-18）：**写侧增加 `relevance-supply.ts`** —— 预热不再只由 MCL 慢通道回合触发
+    //   （实测多数回合无桥 ⇒ 动态面退位置式基线）；注入侧在 `agent/pre-step` 与 `/inject/preview`
+    //   用**同一实现**按需预热。两个写者写**同一个键**（`recallKeyOf(q)`）⇒ 语义上互为补充，不是两套缓存。
+    writers: ['mcl.ts', 'relevance-supply.ts'],
+    // L5（2026-09-14）：动态面选行抽取至 `dynamic-select.ts`；IR1 册一（2026-09-18）：相关性面再迁至
+    //   `relevance-supply.ts`（桥读取 + 分层配额 + 降级记账）⇒ 读侧随之迁移（通道本身未变）。
+    readers: ['relevance-supply.ts'],
+    mentions: [
+      // IR1 册四（2026-09-18）：`supply-stamp` 只**stat** 该文件（取 `size:mtimeMs` 作**观测字段**），
+      //   且该字段**不进失效键**（签它会「为 query B 的写入失效 query A 的缓存」而 A 输出不变）。
+      { mod: 'supply-stamp.ts', why: '只取观测戳（warm 字段），**不参与缓存失效键** —— 见 `stampKeyOf`' },
+    ],
   },
   {
     id: 'delta',
     token: 'delta.md',
     what: '深睡晨起摘要（行级 diff，≤3 行，48h 有效；永非事实源）',
     writers: ['deepsleep-run.ts'],
-    readers: ['panel-shared.ts', 'panel-memory.ts'],
+    readers: ['panel-shared.ts', 'panel-memory.ts', 'supply-stamp.ts'],
     mentions: [],
   },
   {

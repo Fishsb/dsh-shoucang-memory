@@ -9,9 +9,9 @@
 //   三通道叠加 = **相关性**（MCL 预热融合召回 ∪ 词法召回）∪ **新鲜度槽** ∪ **位置式基线补齐**，
 //   并在基线/补位排序中贯穿**冷热降权**（cold 后置、`hits30` 高者先占槽）。
 //
-// **边界**：本件**只选行** —— 不渲染、不裁切（裁切归 `clampLines`）、不记账（归 `supply-assembly`）。
-//   纯读：只读 `MEMORY.md` 与 `activity.jsonl`；路径由调用方派生（本件零硬编码路径）。
-import { existsSync, readFileSync } from 'node:fs'
+// **边界**：本件**只选行 + 合并** —— 不渲染、不裁切（裁切归 `clampLines`）、不记预算账（归 `supply-assembly`）。
+//   纯读：只读 `MEMORY.md` 与 `activity.jsonl`（相关性面交 `relevance-supply`）；路径由调用方派生（零硬编码）。
+import { readFileSync } from 'node:fs'
 
 /** 注入缓存的**失效判定**（纯函数 · 2026-09-16 用户指令「新会话注入一次 + 每次上下文压缩后一次」）。
  *  返回 `''` = **命中缓存（逐字复用）**；否则返回重建原因，供审计与 `/inject/stats` 读数。
@@ -26,9 +26,9 @@ import { existsSync, readFileSync } from 'node:fs'
  *  ⚠ **技术边界（勿误传）**：命中缓存**不代表省 token** —— system prompt 每步仍会发给模型；
  *    它省的是「每轮重建（读盘+选行+消重）」并保证文本**逐字稳定**（⇒ 提供商 prompt 缓存可命中）。 */
 export function injectCacheReason(
-  prev: { sid: string; evLen: number; firstSeq: number; lib: string; q: string } | undefined,
-  now: { sid: string; evLen: number; firstSeq: number; lib: string; q: string },
-): '' | 'new' | 'session-changed' | 'compacted' | 'lib-changed' | 'query-changed' {
+  prev: { sid: string; evLen: number; firstSeq: number; lib: string; media?: string; q: string } | undefined,
+  now: { sid: string; evLen: number; firstSeq: number; lib: string; media?: string; q: string },
+): '' | 'new' | 'session-changed' | 'compacted' | 'lib-changed' | 'media-changed' | 'query-changed' {
   if (!prev) return 'new'
   if (prev.sid !== now.sid) return 'session-changed'
   /* ⚠ `q`（本步任务文本）**必须参与失效** —— 既有实现（`panel-shared` 顶部 30s `cacheKey = memRoot|q`）
@@ -38,11 +38,16 @@ export function injectCacheReason(
   if (prev.q !== now.q) return 'query-changed'
   if (now.evLen < prev.evLen) return 'compacted'
   if (prev.firstSeq >= 0 && now.firstSeq > prev.firstSeq) return 'compacted'
+  /* ★IR1 册四（2026-09-18）**上游事件戳分两级**（库 / 介质）—— 实测旧实现只签**库戳**（三索引），
+   *   而 `activity.jsonl`（冷热状态）与 `delta.md`（晨起摘要）是**另外两条介质**：
+   *   它们在**外层**判据里不可见 ⇒ 运行时"改了介质却不重建"（内层 30s TTL 之外看不到）。
+   *   现两级都进判据（同一结构化戳，见 `supply-stamp#libStampOf`），读数上也可分辨是谁变的。 */
   if (prev.lib !== now.lib) return 'lib-changed'
+  if (String(prev.media ?? '') !== String(now.media ?? '')) return 'media-changed'
   return ''
 }
 import { join } from 'node:path'
-import { knowledgeRoot, recallIndex, recallKeyOf } from './targets.js'
+import { emptyTrace, selectRelevantLines, type RelevanceTrace } from './relevance-supply.js'
 
 export interface DynamicSelectDeps {
   /** 基线池（panel 侧已做分层过滤的 P/always 行） */
@@ -66,6 +71,8 @@ export interface DynamicSelectDeps {
    *   （本项首版即踩此坑，由"开启后仍无 `[路径]`"的实测当场暴露）。
    */
   processRows?: readonly string[]
+  /** IR1 册一：**恒定面已持有的行**（`agentLines ∪ userLines`）——相关性面不得重复取它们（见 `relevance-supply#RelevanceDeps.exclude`） */
+  exclude?: readonly string[]
 }
 
 /**
@@ -95,12 +102,18 @@ export function selectProcessLines(
 }
 
 /**
- * 动态面选行（**逐行为与抽取前等价** —— 只搬位置，未改判据、未改顺序）。
+ * 动态面选行（**IR1 册一后**：相关性面已交 `relevance-supply`，本件只留"补齐与合并"）。
  *
- * 三通道叠加的顺序是**判据而非巧合**：相关性 → 新鲜度 → 基线补齐；
+ * 通道序是**判据而非巧合**：相关性 → 新鲜度 → 基线补齐；
  *   `picked` 为空时**保持基线**（`return memBase`），与抽取前的 `if (picked.length)` 等价。
+ *
+ * ★2026-09-18（IR1 册一）：原「桥读取 + `recallIndex` + `file==='MEMORY.md'` 过滤 + 域内 top1」整段
+ *   已迁至 `relevance-supply#selectRelevantLines`（**按域路由/领域接缝拆**，非按行数硬切）。
+ *   迁因是**缺陷**而非整洁：单文件过滤把 `AGENT.md` 的命中**全丢** ⇒ 真命中词与乱码词注入面 63/63 行相同。
+ *   本件保留：`process` 槽合并 · 冷热降权 · 新鲜度槽 · 存量补位 —— 它们与"相关性打分"无关。
+ *   返回值加 `trace`（相关性通道来源 + 失败原因 + 零命中标志），供注入面**如实记账/注明**。
  */
-export function selectDynamicLines(dep: DynamicSelectDeps): string[] {
+export function selectDynamicLines(dep: DynamicSelectDeps): { lines: string[]; trace: RelevanceTrace; proc: string[] } {
   const { allMem, cap, q, memRoot, activityFile, readSuite } = dep
   // v8（认知对照 P1「降权贯穿三通道」+「复习-强化」）注入侧的冷热感知 + 命中次权重。
   //   R6 审查项：**回退分支也要生效**——否则 `injectRelevance=false` 或空 query 时「降权贯穿三通道」实际只剩两通道。
@@ -143,14 +156,19 @@ export function selectDynamicLines(dep: DynamicSelectDeps): string[] {
    *     与 `rest` 补位**（两者本就以全量行为池、且只在**有查询**或**相关性子通道**里生效）。
    *   ⚠ 关键区别：`memBase` 是**空 query 的兜底**，而 `allMemFill` 全程参与 —— 前者必须记层，
    *     后者是"新鲜度保证槽"（本就设计为不按相关性、按位置取最近 N 条）。 */
+  /* IR1 册一（2026-09-18）：**恒定面已持有的行**在**此处统一剔除**（含兜底池与新鲜度池）——
+   *   理由见 `RelevanceDeps.exclude`：同一行不得两处注入（实测重复 2 行），且被恒定面裁掉的行
+   *   不得"从动态面复活"（否则"哪一槽丢了什么"不可核）。 */
+  const dropSet = new Set((dep.exclude ?? []).map((s) => String(s).trim()).filter(Boolean))
   const memBase = [...allMem]
+    .filter((l) => !dropSet.has(String(l).trim()))
     .sort((a, b) => (rowWeight(a).cold ? 1 : 0) - (rowWeight(b).cold ? 1 : 0))
     .slice(0, cap)
   const relOn = readSuite().injectRelevance !== false
   const allMemFill = (() => {
     try {
-      return readFileSync(join(memRoot, 'MEMORY.md'), 'utf8').split(/\r?\n/).map((l) => l.trim()).filter(Boolean).filter((l) => /^\[/.test(l))
-    } catch { return [...allMem] }
+      return readFileSync(join(memRoot, 'MEMORY.md'), 'utf8').split(/\r?\n/).map((l) => l.trim()).filter(Boolean).filter((l) => /^\[/.test(l)).filter((l) => !dropSet.has(l))
+    } catch { return [...allMem].filter((l) => !dropSet.has(String(l).trim())) }
   })()
   // 合并：`process` 行**前置**且**额外占位**（不吃 dynamic 的 cap ⇒ 这就是它的"独立额度"简化实现）
   const merge = (base: string[]): string[] => {
@@ -162,31 +180,13 @@ export function selectDynamicLines(dep: DynamicSelectDeps): string[] {
     }
     return out
   }
-  if (!q || !relOn) return merge(memBase)
+  if (!q || !relOn) return { lines: merge(memBase), trace: emptyTrace(), proc }
   const fresh = Math.max(0, Math.min(Number(readSuite().injectFreshSlots) || 2, cap))
-  const picked: string[] = []
-  // R1（2026-09-13 · 质量评估）：优先用 MCL **预热的本轮融合召回**（dense 0.7 + lexical 0.3）。
-  //   动机（实测）：真实自然语言提问在纯词法地板上 **0 命中** ⇒ 知识索引只剩 P 层基线；而 MCL 的
-  //   async pre-step 已经用 `recallRanked` 算过同一 query（含向量档），复用它 = **零新增嵌入开销**。
-  //   键不匹配 / 过期（>120s）⇒ 自动退回词法通道，语义不变。
-  try {
-    const wf = join(knowledgeRoot(), 'audit', 'warm-recall.json')
-    if (existsSync(wf)) {
-      const w = JSON.parse(readFileSync(wf, 'utf8')) as { at?: number; key?: string; rows?: Array<{ line?: string; file?: string }> }
-      if (w?.key === recallKeyOf(q) && Number(w.at) > 0 && Date.now() - Number(w.at) < 120000) {
-        for (const x of w.rows || []) {
-          const ln = String(x?.line || '').trim()
-          if (ln && String(x?.file || 'MEMORY.md') === 'MEMORY.md' && !picked.includes(ln)) picked.push(ln)
-        }
-      }
-    }
-  } catch { /* 预热缓存不可用 ⇒ 保持词法通道 */ }
-  try {
-    // 相关性通道**不限层**：它本身就是契约指定的 gated 渲染器（`gated:index` → recallIndex/recallRanked
-    //   「按任务型/相关性选择」）。故 R/E 行可在此**按需**出现（且受 cap 约束）。
-    const { rows } = recallIndex(memRoot, q, cap, 'all')
-    for (const r of rows) if (r.file === 'MEMORY.md' && !picked.includes(r.line)) picked.push(r.line)
-  } catch { /* 召回异常=保持位置式回退 */ }
+  /* 相关性面（IR1 册一）：**桥（向量融合预热）→ 词法 → 位置式**三档降级，每次降级都记账。
+   * 旧实现在此处做两件事、两件都错：① 桥行按 `file==='MEMORY.md'` 过滤（AGENT.md 命中全丢）；
+   * ② 词法路同样过滤 ⇒ 实测 `"深睡蒸馏"` 8–10 行命中**全部被丢掉**、自然语言中文查询 0 行。 */
+  const rel = selectRelevantLines({ memRoot, q, cap, exclude: dep.exclude })
+  const picked: string[] = [...rel.picked]
   /* ★2026-09-18（按域路由 P2-b）**域内 top1 保底** —— 消除「小域永远垫底」。
    *
    * 判因（实测）：动态面在**单一全局序**里竞争 —— 7 个 gated 域共 256 行候选，而 cap 只放得下约 12 行，
@@ -221,5 +221,5 @@ export function selectDynamicLines(dep: DynamicSelectDeps): string[] {
     return B.hits30 - A.hits30
   })
   for (const l of rest) { if (picked.length >= cap) break; picked.push(l) }
-  return merge(picked.length ? picked.slice(0, cap) : memBase)
+  return { lines: merge(picked.length ? picked.slice(0, cap) : memBase), trace: rel.trace, proc }
 }

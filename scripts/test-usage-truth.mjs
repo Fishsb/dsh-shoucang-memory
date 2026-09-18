@@ -35,14 +35,32 @@ const u = o.supplyUsage
 const lines = String(o.text).split('\n')
 const dash = lines.filter((l) => l.startsWith('- ')).length
 const STABLE_TITLES = lines.filter((l) => /^(agent 画像|用户画像)（/.test(l)).length
+/* IR1 册三（2026-09-18）**逐槽口径**：`slots` 是账的**逐槽明细**（六槽全出账，含 `process`）。
+ *   `stable` 区 = 「知识索引（」标记**之前**的一切（段序 oneshot→stable→dynamic）⇒ 该区里的 `- ` 行
+ *   就是恒定面的记忆行（块标题等非 `- ` 行不计）。 */
+const dynLine = lines.findIndex((l) => l.startsWith('知识索引（'))
+const stableDash = lines.slice(0, dynLine < 0 ? lines.length : dynLine).filter((l) => l.startsWith('- ')).length
+const S = u.slots || {}
+const slotKept = (k) => Number(S[k]?.kept ?? 0)
 
-console.log('S4R/R2 账 == 真实裁切')
+console.log('S4R/R2 账 == 真实裁切（IR1 册三：六槽逐槽出账 + 真实结果直出）')
 
-// ── B1：kept 与注入文本**互核**（含块标题的口径修正）──
+// ── B1：kept 与注入文本**互核**（逐槽相加 == 文本 `- ` 行数）──
 ok(typeof u.kept?.stable === 'number' && typeof u.kept?.dynamic === 'number', 'B1 `kept` 提供 stable/dynamic 行数')
 ok(STABLE_TITLES === 2, `B1 注入文本含 ${STABLE_TITLES} 个画像块标题（口径修正的依据）`)
-ok(dash === u.kept.stable + u.kept.dynamic - STABLE_TITLES,
-  `B1 \`kept\` 与注入文本**互核**：\`- \` 行 ${dash} == kept.stable ${u.kept.stable} + kept.dynamic ${u.kept.dynamic} − 标题 ${STABLE_TITLES}`)
+ok(dash === stableDash + slotKept('dynamic') + slotKept('process'),
+  `B1 **逐槽相加 == 文本 \`- \` 行数**：stable ${stableDash} + dynamic ${slotKept('dynamic')} + process ${slotKept('process')} == ${dash}`)
+ok(u.kept.stable === slotKept('stable') && u.kept.stable > stableDash,
+  `B1/C6 \`kept.stable\`（${u.kept.stable}）**不含块标题行**，且 = 恒定面**记忆行 + 保留的说明行**（明细 ${stableDash} 条 \`- \` 行 + ${u.kept.stable - stableDash} 条说明行）`)
+
+// ── C3：**六槽** `kept/dropped` 全有读数（含 `process`）──
+{
+  const need = ['core', 'stable', 'dynamic', 'oneshot', 'process', 'serendipity', 'situation']
+  const miss = need.filter((k) => !S[k] || typeof S[k].kept !== 'number' || typeof S[k].dropped !== 'number' || typeof S[k].chars !== 'number')
+  ok(miss.length === 0, `C3 六槽逐槽出账（缺：${miss.join(',') || '无'}）—— 旧读数只有 4 槽、process 槽无账`)
+  ok(slotKept('process') >= 1 && slotKept('process') <= 3, `C3 \`process\` 槽真供上了行（${slotKept('process')} 条 · 注册表 topN=3）`)
+  ok(slotKept('dynamic') <= 10, `C4 \`process\` **零挤占**：动态面仍在自己的 cap 内（dynamic ${slotKept('dynamic')} ≤ 10；process 是外接追加）`)
+}
 
 // ── B2：droppedRows 是**真实被丢内容**（逐条可比），不是计数 ──
 const dr = u.droppedRows

@@ -28,7 +28,7 @@ import { loadStore, saveStoreRecords, recordStorePath, RECORD_DIR } from './reco
 import { eventsFromDiff, parseEvents, serializeEvents, RING_EVENT_FILE } from './ring-events.js'
 import { openDecision, collectOutcome, recordValence } from './decision-ring.js'
 import { assertRelation, openCommitment } from './relation-ring.js'
-import { serializeCues } from './ring-supply.js'
+import { serializeCues, cueSetOf } from './cue-space.js'
 import { makeRecord, stampRecord, fingerprint } from './record-store.js'
 import type { MemRecord } from './record-store.js'
 
@@ -59,44 +59,22 @@ export interface RingCommitResult {
 const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '')
 
 /**
- * **cue 键归一化**（2026-09-17 · 情境轴去留裁决的**唯一与裁决无关**的改动）。
+ * **cue 键落库**（IR1 册二 · 2026-09-18：写侧私有归一已收敛到 `cue-space.ts`）。
  *
- * 判因（真机实测）：读侧 `panel-shared#sitCtx` 产出 `scope=workspace:<activeRootOf().path>`，
- *   而 `ring-supply#cueOverlap` 的匹配判据是**字符串全等**（`situation-key.ts:76`），非前缀、非归一。
- *   库内同一工作区因此裂成多片：`<盘符>:\<a>\<b>`=153 / `<盘符>:/<a>/<b>`=33 / `shoucang`=54
- *   ⇒ **读侧只对得上其中一片，其余永久不可达**（静默失配，不是"没数据"）。
+ * 旧实现（本件私有 `normalizeCue`）只归一 `scope`，且**只在写侧**做；读侧 `situation-key#cuesOf`
+ *   组装键时不过同一归一 ⇒ 匹配判据（字符串全等）把它劈成两半：实测 正斜杠 267 / 反斜杠 152，
+ *   新写入记录命中 **0/119**。现改为**调用唯一实现**（读写同源），并在写侧加**维校验硬门**：
+ *   未声明维（注册表 `cueDims` 之外）⇒ **拒收** + 审计 `cue.rejected`（旧行为：37 条静默写入）。
  *
- * 归一规则（**只做确定性、可逆性无损的三件事**）：
- *   ① 分隔符统一：`\` → `/`（Windows 与 POSIX 写法等价）
- *   ② 去尾斜杠（`<盘符>:/<a>/` 与 `<盘符>:/<a>` 等价）
- *   ③ 折叠重复斜杠（`<盘符>://<a>` → `<盘符>:/<a>`）
- *   ⚠ **不做**：大小写折叠（POSIX 路径大小写敏感，Windows 盘符不敏感 ⇒ 折叠会**引入**新错配）、
- *     别名归一（`<盘符>:\<别名>\<a>` 是否等于 `<盘符>:\<a>` **无确定性依据，须人裁决** — 见裁决会 §Q2-c）。
- *
- * 边界：**只归一 `scope=` 键的取值部分**，其余维（`task=` 等）**原样透传** ——
- *   它们的受控词表问题属另一议题，此处不越界。
- * 零抛出：任何异常路径返回原值（记忆写入**不得**因归一化失败而中断）。
+ * 零抛出：任何异常路径返回空串（记忆写入**不得**因 cue 处理失败而中断）。
  */
-const normalizeCue = (k: string): string => {
-  try {
-    const s = String(k)
-    const eq = s.indexOf('=')
-    if (eq <= 0) return s
-    const dim = s.slice(0, eq)
-    if (dim !== 'scope') return s
-    const v = s.slice(eq + 1).replace(/\\/g, '/').replace(/\/{2,}/g, '/').replace(/\/+$/, '')
-    return v ? `${dim}=${v}` : s
-  } catch {
-    return k
-  }
-}
-
-/** 单条输出来源的 cues → 序列化串（读侧 `ring-supply#parseCues` 同源，往返无损）
- *  ⚠ 归一化在**写侧**做（此处）：读侧兜底会**掩盖**库里已有的脏键，下次还是脏的。 */
-const cuesOfItem = (it: unknown): string => {
+const cuesOfItem = (it: unknown, audit?: (o: Record<string, unknown>) => void): string => {
   const raw = (it as { cues?: unknown } | null)?.cues
-  const arr = Array.isArray(raw) ? raw.map((x) => String(x)) : typeof raw === 'string' ? [raw] : []
-  return serializeCues(arr.map(normalizeCue))
+  const { keys, rejected } = cueSetOf(raw)
+  if (rejected.length && audit) {
+    try { audit({ kind: 'cue.rejected', count: rejected.length, keys: rejected.map((r) => r.key).slice(0, 8), reasons: [...new Set(rejected.map((r) => r.reason))].slice(0, 4) }) } catch { /* 审计失败不影响落库 */ }
+  }
+  return serializeCues(keys)
 }
 
 /** 通道计数（供 `enqueued` 统计与审计；**不落库**，纯读） */
@@ -149,7 +127,7 @@ export function commitRingChannels(d: RingCommitDeps, root: string, out: unknown
         rationale: str((it as { rationale?: unknown })?.rationale),
         alternatives: str((it as { alternatives?: unknown })?.alternatives),
         evidence: str((it as { evidence?: unknown })?.evidence),
-        cues: cuesOfItem(it),
+        cues: cuesOfItem(it, d.audit),
         at,
       })
       records = r.records
@@ -167,7 +145,7 @@ export function commitRingChannels(d: RingCommitDeps, root: string, out: unknown
         direction: dir === 'owed-to-me' ? 'owed-to-me' : 'owed-by-me',
         due: str((it as { due?: unknown })?.due),
         evidence: str((it as { evidence?: unknown })?.evidence),
-        cues: cuesOfItem(it),
+        cues: cuesOfItem(it, d.audit),
         at,
       })
       records = r.records
@@ -179,7 +157,7 @@ export function commitRingChannels(d: RingCommitDeps, root: string, out: unknown
       const note = str((it as { note?: unknown })?.note)
       if (!who || !note) continue
       const lv = Number((it as { level?: unknown })?.level)
-      const r = assertRelation(records, { who, note, ...(Number.isFinite(lv) ? { level: lv } : {}), evidence: str((it as { evidence?: unknown })?.evidence), cues: cuesOfItem(it), at })
+      const r = assertRelation(records, { who, note, ...(Number.isFinite(lv) ? { level: lv } : {}), evidence: str((it as { evidence?: unknown })?.evidence), cues: cuesOfItem(it, d.audit), at })
       records = r.records
       res.relations++
     }
@@ -188,7 +166,7 @@ export function commitRingChannels(d: RingCommitDeps, root: string, out: unknown
       const trigger = str((it as { trigger?: unknown })?.trigger)
       const v = Number((it as { valence?: unknown })?.valence)
       if (!trigger || !Number.isFinite(v)) continue
-      const r = recordValence(records, { trigger, valence: v, evidence: str((it as { evidence?: unknown })?.evidence), cues: cuesOfItem(it), at })
+      const r = recordValence(records, { trigger, valence: v, evidence: str((it as { evidence?: unknown })?.evidence), cues: cuesOfItem(it, d.audit), at })
       records = r.records
       res.valences++
     }
@@ -229,7 +207,7 @@ export function commitRingChannels(d: RingCommitDeps, root: string, out: unknown
         text,
         source: str((it as { evidence?: unknown })?.evidence),
         pointer: str((it as { pointer?: unknown })?.pointer),
-        meta: { title, ...(cuesOfItem(it) ? { cues: cuesOfItem(it) } : {}) },
+        meta: { title, ...(cuesOfItem(it, d.audit) ? { cues: cuesOfItem(it, d.audit) } : {}) },
       }), at)
       const i = records.findIndex((r) => r.id === id)
       if (i < 0) records = [...records, rec]

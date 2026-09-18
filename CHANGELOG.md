@@ -4,8 +4,26 @@
 
 ## [Unreleased]
 
-
 ### Changed
+- **IR1 注入召回链落地（2026-09-18，用户指令"目标模式全部落地"）**：按 `docs/specs/IR1-injection-recall-plan.md`（v3）
+  的依赖序 P0 → P0′ → P1 → P2 → P3 全部施工，**终态判据 G1–G6 逐条转绿**（记录见 `docs/specs/IR1-acceptance-record.md`）。
+  · **册一 相关性重建**：新增 `src/relevance-supply.ts`（分层配额 `memory-index/agent-principles/profile` + 桥读取 +
+  **降级记账** + 注入侧预热）。修掉真缺陷：旧实现按 `file==='MEMORY.md'` 单点过滤 ⇒ `AGENT.md` 命中**全丢**
+  （实测真命中词 vs 乱码词注入面 **63/63 行相同**）⇒ 现 **11/17**、命中行真取回；零命中在注入面**如实注明**。
+  · **册二 cue 键空间**：新增 `src/cue-space.ts`（归一/校验/解析/序列化**唯一实现**，读写同源）。
+  修掉"正反斜杠劈半"（新记录命中 **0/119** ⇒ 归一后读侧键 ∩ 新记录键 = **73**）；存量 `meta.cues` 归一
+  **221 条/400 键**（`scripts/migrate-cue-keys.mjs`，带备份 + 幂等 + 只改 cues 的自证）；未声明维**拒收 + 审计**。
+  · **册三 装配单出口**：删影子复算（`supplyUsageMeta`）⇒ 账由**真实裁切直出**（`supplyMetaOf`），**六槽逐槽出账**
+  （含此前无账的 `process`）；`kept.stable` **不再含块标题行**。
+  · **册四 缓存失效单一判据**：新增 `src/supply-stamp.ts`（库戳 ∪ 介质戳 ∪ 观测 warm 戳 + 层归因
+  `session/context/query/event/ttl`）⇒ `/inject/stats.cache.byLayer` 与 `dedup` 读数上线；**两条介质**
+  （activity/delta）从"只在内层键"提到外层判据。
+  · **册五 域路由**：冻结名单 **6 → 3**（panel-shared 510/mcl 434/treeops 596 落到 600 阈值下 ⇒ 基线退役，**非放宽**）；
+  **S-P4e′ 收益点落地**：跨形态消重从"注入后过滤"移到**配额结算之前** ⇒ 重复不再入注入面且**省下的槽位被别的叙事行接手**
+  （真机：skip 1 条 ⇒ 注入面 0 条 · 画像行仍 6 条）。
+  · **附册 自述对齐**：新增 `scripts/check-claim-alignment.mjs`；三处"已接线却自称未接线"的注释订正；
+  `compliant`（恒 false，3119:0）**更名 `topicEcho`** 并删掉读数 `yieldOf`（F2：字段要么真、要么无）。
+  · **新增机检**：`check-relevance-live` · `test-relevance-fallback` · `check-cue-space` · `check-claim-alignment`（均已登记 `CHECKS`）。
 - **P2/P3 视觉复核修正（2026-09-18，用户要求"自己视觉复核，注意 UI 滑轨"）**：
   ① **UI 降级态文案改人话**（`panes-overview`）：原实现降级时**直接吐原始英文报错**
      （实测图满行 `Cannot read properties of undefined (reading layers)`）⇒ 中文界面突兀且丢掉"这意味着什么"。

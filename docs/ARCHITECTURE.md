@@ -45,7 +45,17 @@ L4 交互（DSH Web GUI）
 | **M10 自省** | `assistant_capabilities` | 能力面查询 | 只读，无 token |
 
 > **载体归属口径（2026-09-12 根治 A–D 后；2026-09-14 P1 订正）**：
-> `src/` 共 **79 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> `src/` 共 **82 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> **2026-09-18 新增 `supply-stamp.ts`** ⇒ 81 → 82：IR1 册四「缓存失效单一判据」——库戳 ∪ 介质戳 ∪
+> 观测用 warm 戳 + 层归因（`session/context/query/event/ttl`）；旧状是**四套口径各自为政**，
+> 且两层介质（activity/delta）只在内层键里 ⇒ 运行时"改了介质却不重建"。
+> **2026-09-18 新增 `cue-space.ts`** ⇒ 80 → 81：IR1 册二「cue 键空间统一」——归一 / 校验 / 解析 / 序列化
+> 的**唯一实现**（旧状：写侧私有归一 + 读侧无同源 ⇒ 同一工作区劈成正反斜杠两种拼写，实测新记录命中
+> **0/119**；收敛后读侧键 ∩ 新记录键 = **73**）。
+> **2026-09-18 新增 `relevance-supply.ts`** ⇒ 79 → 80：IR1 册一「动态面相关性重建」——分层配额选行
+> （memory-index / agent-principles / profile）+ 桥读取 + **降级记账** + 注入侧预热；
+> 抽出动因是**缺陷**而非整洁（旧实现按 `file==='MEMORY.md'` 单点过滤 ⇒ AGENT.md 命中全丢 ⇒
+> 实测真命中词 vs 乱码词注入面 63/63 行相同），抽出后 `dynamic-select.ts` 只留补齐与合并。
 > **2026-09-18 新增 `hot-stable.ts`** ⇒ 78 → 79：按域路由 P1「恒定面单独出口」，**按领域接缝**自
 > `panel-shared.ts` 抽出恒定面构造（双画像块 + 块内配额 + 留痕 + 缓存判定）——抽出动因是该模块受
 > `check-module-growth` 大模块冻结棘轮约束（基线 537 + 容差 15），`buildStable()` 内联即撞顶（实测 553 FAIL）；

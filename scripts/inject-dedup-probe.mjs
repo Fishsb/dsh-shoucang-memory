@@ -66,12 +66,13 @@ if (preview) {
     '④ **关闭（skip 空）⇒ 逐字节回基线**（Buffer 级相等）')
 }
 
-// ① 不重复注入：skip 行确实在基线里、过滤后消失
+/* ① **消重已在装配内部生效**（IR1 册五 E5 · 2026-09-18 判据改写）。
+ *   旧状（S-P4e 首测）：消重接在**注入文本后过滤**（预算结算**之后**）⇒ skip 行**在**基线里，
+ *     过滤后才消失，而腾出的额度**没人用**（实测省 0 字符/0 行）——那时判据是"skip 行在基线里"。
+ *   现态：消重进了 `panel-shared#readCarrier` 的**配额结算之前** ⇒ skip 行**根本不出现在**注入面，
+ *     槽位由**别的叙事行**接手 ⇒ 判据必须反过来：**skip 行不在基线里** 且 **画像配额仍被填满**。
+ *   ⚠ 这正是"判据随口径更新"的实例：旧判据在新态下恒红，而它红得**没有信息量**（不是回归）。 */
 if (preview && dedup.skip.length) {
-  /* ⚠⚠ **2026-09-16 真机首测的当头一击**：skip=1（0.809 那条）却 `0/1 在基线里` ⇒ 省 0 字符。
-   *   根因怀疑：**注入面按预算选行，可能根本不含画像叙事行** ⇒ 那么"库内跨形态冗余"与
-   *   "注入面重复"**不是同一集合**，注入侧消重的收益为 0。⇒ 本节**必须**报告
-   *   「38 条细行里有几条真进了注入面」——这是该路线成立与否的**前提事实**，不是细节。 */
   const fineAll = []
   for (const f of FILES) {
     try {
@@ -82,16 +83,13 @@ if (preview && dedup.skip.length) {
     } catch { /* 缺文件 */ }
   }
   const fineInPreview = fineAll.filter((l) => preview.includes(l))
-  const coarseInPreview = fineInPreview.length
   console.log(`\n🔎 **前提事实**：库内无标签叙事行 ${fineAll.length} 条 ⇒ 其中**真进了注入面**的 ${fineInPreview.length} 条`)
-  console.log(`   （若此处为 0 或极小 ⇒ "注入侧消重"可去之物本就极少，**该路线收益趋零**，须另判）`)
-  void coarseInPreview
   const inPreview = dedup.skip.filter((s) => preview.includes(s))
-  const filtered = filterInjectedText(preview, dedup.skip)
-  const gone = dedup.skip.filter((s) => !filtered.includes(s))
-  console.log(`\n① 去重效果：基线 ${preview.length} 字符 → 去重后 ${filtered.length} 字符（省 ${preview.length - filtered.length} 字符 · ${preview.split('\n').length - filtered.split('\n').length} 行）`)
-  chk(inPreview.length > 0, `① skip 行**确实出现在基线里**（${inPreview.length}/${dedup.skip.length} 条 —— 否则"去重"是空转）`)
-  chk(gone.length === dedup.skip.length, `① 过滤后**全部消失**（${gone.length}/${dedup.skip.length}）`)
+  const profRows = preview.split('\n').filter((l) => /^-\s/.test(l) && /←\s*源:/.test(l))
+  console.log(`\n① 消重位置：skip ${dedup.skip.length} 条 ⇒ 注入面里仍有 ${inPreview.length} 条（E5 后应为 **0**）`)
+  console.log(`   画像行 ${profRows.length} 条（配额结算后仍被填满 ⇒ 省下的额度确实被别的叙事行用上）`)
+  chk(inPreview.length === 0, `① **skip 行不在注入面**（${inPreview.length}/${dedup.skip.length} 条仍在 —— 消重在**配额之前**生效，E5）`)
+  chk(profRows.length >= 6, `①′ **额度被用上**：画像行 ${profRows.length} 条 ≥ 6（旧状＝事后过滤 ⇒ 槽位空置、省 0 行）`)
   // ③ 可解释
   console.log('\n③ 逐条理由（被跳过 ← 覆盖它的粗行 · 相似度）：')
   for (const r of dedup.reasons.slice(0, 6)) console.log(`   · ${r.line.slice(0, 40)}…\n     ← ${r.by.slice(0, 52)}… ⟨${r.sim}⟩`)
@@ -99,8 +97,8 @@ if (preview && dedup.skip.length) {
 } else if (!dedup.skip.length) {
   console.log('\n① 本轮 skip 为空 —— 无重复可去（**合法结果**：说明当前阈值下无"粗行已涵盖"的细行）')
 } else {
-  console.log('\n① 预览不可达 ⇒ 无法核"基线里确实有那些行"（**如实记：未判**）')
+  console.log('\n① 预览不可达 ⇒ 无法核"skip 行是否已不在注入面"（**如实记：未判**）')
 }
 
-console.log(verdict ? '\nFAIL（见上）' : '\nPASS（真机四条：不重复注入 · 库 sha 不变 · 可解释 · 关闭即回基线）')
+console.log(verdict ? '\nFAIL（见上）' : '\nPASS（真机四条：重复不入注入面 · 额度被用上 · 可解释 · 关闭即回基线）')
 process.exit(verdict)

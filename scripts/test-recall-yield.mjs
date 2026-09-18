@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 // test-recall-yield.mjs — S4/D1「检索收益与停止准则」断言（2026-09-14 · S4 消费链条）
 //
-// 守什么：`nextZeroGain` / `shouldSwitchSource` / `yieldOf` 的**语义与边界** ——
-//   ① 合规**必须归零**（来源仍有效），否则长跑会把"曾经失败过"永久累积成"永远该换向"；
+// 守什么：`nextZeroGain` / `shouldSwitchSource` 的**语义与边界** ——
+//   ① **回引**（`topicEcho`，旧称 compliant）**必须归零**（来源仍有效），否则长跑会把"曾经失败过"永久累积成"永远该换向"；
 //   ② 阈值语义（达阈值即出信号），且缺省阈值与"线索变弱即换向"的人类判据对齐（2 次）；
-//   ③ 合规率**必须有分母**（仓内曾因"只在失败分支落账"导致 803 条全 false、合规率 0 且无分母）。
+//   ③ F2（IR1 附册 · 2026-09-18）：旧 `yieldOf` / `compliant` 读数**已删** —— 它读的字段实测恒 false
+//      （3119 行 false / true 0），留着等于继续发布一个"看着在测量、实际测不出东西"的指标。
 //
 // 判因：人类按**边际价值**停止检索（`human-task-loop` §1.3）；而本插件此前**没有任何停止判据** ——
 //   材料注入后引用与否只落审计，**不产生行为后果**（再引导 1 次即放行）。
@@ -18,7 +19,7 @@ let fail = 0
 const ok = (c, m) => { console.log(`${c ? '✅' : '❌'} ${m}`); if (!c) fail++ }
 
 const mod = await import(new URL('../lib/recall-yield.js', import.meta.url).href)
-const { nextZeroGain, shouldSwitchSource, yieldOf, SWITCH_THRESHOLD } = mod
+const { nextZeroGain, shouldSwitchSource, SWITCH_THRESHOLD } = mod
 if (typeof nextZeroGain !== 'function') {
   console.log('❌ lib/recall-yield.js 导出不齐（先 npm run build:host）')
   process.exit(1)
@@ -26,20 +27,20 @@ if (typeof nextZeroGain !== 'function') {
 
 console.log('S4/D1 检索收益与停止准则')
 
-// ── ① 折收益：合规归零 / 不合规递增 ──
-ok(nextZeroGain(undefined, false) === 1, '① 首次不合规 ⇒ 1')
-ok(nextZeroGain(1, false) === 2 && nextZeroGain(2, false) === 3, '① 连续不合规 ⇒ 递增')
-ok(nextZeroGain(5, true) === 0, '① **合规 ⇒ 归零**（来源仍有效）—— 若只递增，长跑会永久换向')
-ok(nextZeroGain(undefined, true) === 0 && nextZeroGain(0, false) === 1, '① 边界：undefined+合规 ⇒ 0；0+不合规 ⇒ 1')
+// ── ① 折收益：回引归零 / 未回引递增 ──
+ok(nextZeroGain(undefined, false) === 1, '① 首次未回引 ⇒ 1')
+ok(nextZeroGain(1, false) === 2 && nextZeroGain(2, false) === 3, '① 连续未回引 ⇒ 递增')
+ok(nextZeroGain(5, true) === 0, '① **回引 ⇒ 归零**（来源仍有效）—— 若只递增，长跑会永久换向')
+ok(nextZeroGain(undefined, true) === 0 && nextZeroGain(0, false) === 1, '① 边界：undefined+回引 ⇒ 0；0+未回引 ⇒ 1')
 
 // ── ② 阈值语义 ──
 ok(SWITCH_THRESHOLD === 2, `② 缺省阈值 = 2（对齐"线索变弱即换向"；实际 ${SWITCH_THRESHOLD}）`)
 ok(shouldSwitchSource(0) === false && shouldSwitchSource(1) === false, '② 未达阈值 ⇒ false')
 ok(shouldSwitchSource(2) === true && shouldSwitchSource(3) === true, '② 达/超阈值 ⇒ true')
 ok(shouldSwitchSource(undefined) === false, '② undefined ⇒ false（不抛）')
-ok(shouldSwitchSource(1, 1) === true, '② 阈值可注入（1 ⇒ 首次不合规即换向）')
+ok(shouldSwitchSource(1, 1) === true, '② 阈值可注入（1 ⇒ 首次未回引即换向）')
 
-// ── ③ 序列模拟：连续 3 次不合规 ⇒ 第 2 次起出信号 ──
+// ── ③ 序列模拟：连续 3 次未回引 ⇒ 第 2 次起出信号 ──
 {
   let z
   const seq = []
@@ -50,14 +51,9 @@ ok(shouldSwitchSource(1, 1) === true, '② 阈值可注入（1 ⇒ 首次不合�
   ok(z === 0 && shouldSwitchSource(z) === false, '③ **一次合规即复位** ⇒ 信号消失（不残留"该换向"状态）')
 }
 
-// ── ④ 合规率的分母口径 ──
+// ── ④ F2 处置（IR1 附册 · 2026-09-18）：旧 `yieldOf` 读数**已删**（它读的 `compliant` 恒 false）──
 {
-  const empty = yieldOf([])
-  ok(empty.total === 0 && empty.rate === null, '④ 空集 ⇒ rate=null（**不除零、不谎报 0%**）')
-  const half = yieldOf([{ compliant: true }, { compliant: false }])
-  ok(half.total === 2 && half.compliant === 1 && half.rate === 50, `④ 2 条 1 合规 ⇒ 50%（实际 ${half.rate}%）`)
-  const allNo = yieldOf([{ compliant: false }, {}, { compliant: undefined }])
-  ok(allNo.compliant === 0 && allNo.rate === 0 && allNo.total === 3, '④ **缺字段计入分母**（否则重演"只在失败分支落账 ⇒ 无分母"）')
+  ok(typeof mod.yieldOf === 'undefined', '④ 旧 `yieldOf` 已删除（恒 false 字段不得继续被发布成"合规率"）')
 }
 
 // ── ⑤ 反例自证：把"合规归零"改成"只递增"必须被抓 ──

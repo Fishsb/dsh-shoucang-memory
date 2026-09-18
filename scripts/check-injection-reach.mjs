@@ -38,7 +38,11 @@ const REACH = [
   { module: 'ring-supply', symbol: 'createRingSupplyApi', reaches: 'full', path: 'situation-supply#situationLinesOf（2026-09-17 自 panel-shared 抽出）→ panel-shared#buildHotMemoryText → situationBlock → finalText', note: '抽出式重构的**预期信号**：本符号不再字面出现在 panel-shared.ts，故判据 ③ 翻红。抵达链一字未改（panel-shared import situationLinesOf，后者调本符号）。此处如实改表即消解；**正面断言的价值正在于此**——若为省事把它降为 partial，就等于放弃了对该链的机器守护' },
   { module: 'situation-supply', symbol: 'situationLinesOf', reaches: 'full', path: 'panel-shared#buildHotMemoryText → situationBlock → finalText', note: '2026-09-17 新增：情境槽读侧供给（自 panel-shared 抽出）。它是 `createRingSupplyApi` 的**唯一**调用方，二者共同构成"环记录 → 注入面"的完整链' },
   { module: 'supply-assembly', symbol: 'budgetOf', reaches: 'partial', path: 'panel-shared#buildHotMemoryText → 三层额度（**决定裁多少**，不产生文本）', note: 'S4-1：口径统一的单一实现；它影响的是"哪些行进得来"，不是"文本长什么样"' },
-  { module: 'supply-assembly', symbol: 'assembleSupply', reaches: 'partial', path: 'supplyUsageMeta → usage（**仅诊断**）+ blocks.situation（注入）', note: '核心输出 kept/dropped/blocks.stable|dynamic|oneshot **不进注入面** —— 本件存在理由即此（原被记为"已接线"）' },
+  /* ★IR1 册三（2026-09-18）**申报表随实况更新**：影子装配退役 ⇒ `assembleSupply` 已不在注入链上
+   *   （它只服务离线预览 CLI）；取而代之的是 `supplyMetaOf`（账）+ `takeSlotLines`（情境槽切割语义）。 */
+  { module: 'supply-assembly', symbol: 'assembleSupply', reaches: 'none', path: '**已退出注入链**（旧：`supplyUsageMeta` 影子复算）；现仅服务离线 `scripts/supply-preview.mjs`', note: 'IR1 册三 C5：影子复算退役 —— 主路径不再有第二份装配。本表此前记它是 partial（"仅诊断"），那描述**已过期**' },
+  { module: 'supply-assembly', symbol: 'supplyMetaOf', reaches: 'partial', path: 'panel-shared#buildHotMemoryText → `cache.usage`（账：六槽逐槽出账，含 `process`）', note: 'IR1 册三：账由**真实裁切结果**直出（不再重算）⇒ 它决定 `/inject/preview` 与 `/inject/stats` 的读数，不产生注入文本' },
+  { module: 'supply-assembly', symbol: 'takeSlotLines', reaches: 'full', path: 'panel-shared#buildHotMemoryText → `sitTake.kept` → `finalText`（情境块）', note: 'IR1 册三：情境槽的切割语义与 `assembleSupply` 内部**同一实现**（单一实现），故它**直接决定注入文本的一段**' },
   { module: 'situation-key', symbol: 'cuesOf', reaches: 'partial', path: '提供情境线索（**输入**），自身不产生注入文本' },
   { module: 'vec', symbol: 'recallRanked', reaches: 'partial', path: '提供候选行（**输入**），经调用方渲染后才成文本' },
   { module: 'supply-ledger', symbol: 'rowFingerprint', reaches: 'none', path: '只决定"本会话是否已注入过"（**影响**注入，不产生文本）' },
@@ -91,9 +95,16 @@ ok(notInFile.length === 0, `③ 申报 full 者，符号出现在**注入面构�
 const indirect = fulls.filter((r) => !body.includes(r.symbol)).map((r) => `${r.module}#${r.symbol}`)
 if (indirect.length) console.log(`   · 其中**经调用间接抵达**（不在 buildHotMemoryText 直体内）：${indirect.join(', ')}`)
 
-// ④ 专项锁：注入文本只并入 `situation` 块（钉住 supply-assembly 的 partial 现状）
-const situationOnly = /const finalText = shadow\.situationBlock \? `\$\{text\}\\n\\n\$\{shadow\.situationBlock\}` : text/.test(shared)
-ok(situationOnly, '④ 注入文本**只并入 situation 块**（`supply-assembly` 的 partial 现状被钉住；"装配器接管主路径"会在此翻红）')
+/* ④ **装配单出口**（IR1 册三 · 2026-09-18 改写）：注入文本的**账**必须由真实裁切直出，
+ *   而不是"同批候选再装配一遍"。旧断言钉的是"只并入 situation 块"那个 partial 形态
+ *   （当时 `assembleSupply` 是**影子**）；现影子已退役 ⇒ 判据改为**两条正面断言**：
+ *   ① `panel-shared` **不得再出现** `assembleSupply(`（影子复算 ⇒ 必红）；
+ *   ② 账必须走 `supplyMetaOf(`（六槽逐槽出账，含 `process`），且情境块并入走 `takeSlotLines(`。
+ *   ⚠ 先红自证：把 `assembleSupply(` 写回 panel-shared（或删掉 `supplyMetaOf(`）⇒ 本组翻红。 */
+const noShadowAssembly = !/assembleSupply\(/.test(shared)
+ok(noShadowAssembly, '④ **主路径无第二份装配**：`panel-shared` 内无 `assembleSupply(`（影子复算已退役，C5）')
+const metaSingle = /supplyMetaOf\(/.test(shared) && /takeSlotLines\(/.test(shared)
+ok(metaSingle, '④′ 账走**单一实现**：`supplyMetaOf(`（六槽出账）+ `takeSlotLines(`（情境槽切割语义同源）')
 
 /* ══ ⑤⑥ **深睡 prompt 材料抵达面**（H-1 根因修 · 2026-09-15）══════════════
  * 判因（实测）：prompt 的 P5 段写着「**材料若给出待回收的裁决**…就填 `outcomes[]`」，

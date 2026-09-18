@@ -15,10 +15,10 @@
  */
 import type { MemRecord, RecordKind } from './record-store.js';
 import { type Ring } from './rings.js';
+import { CUES_SEP, parseCues, serializeCues } from './cue-space.js';
+export { CUES_SEP, parseCues, serializeCues };
 /** 环记录**必带** `file === ''`（= 无 md 投影）。这不是"缺失"，是设计意图，也是本件的选择基准。 */
 export declare const RING_RECORD_FILE = "";
-/** `meta.cues` 的分隔符：用**换行**（路径里可能含空格与 `|`，但不可能含换行）——单值 string 承载集合 */
-export declare const CUES_SEP = "\n";
 /**
  * S4-5（2026-09-14）**情境槽额度自适应**：由**活体环记录数**派生 `topN`。
  *
@@ -32,10 +32,6 @@ export declare const CUES_SEP = "\n";
  * 纯函数、零 IO、零抛出（与 `ringCandidates` 同纪律）。
  */
 export declare function adaptiveTopN(records: readonly MemRecord[], fixedTopN?: number, adaptive?: boolean): number;
-/** 从 `meta.cues` 还原键集合（单值 string 承载集合；空/缺失 ⇒ 空数组，走兜底序） */
-export declare function parseCues(raw: unknown): string[];
-/** 把键集合序列化进 `meta.cues`（写侧用；与 `parseCues` **同一分隔符常量**，防两处漂移） */
-export declare function serializeCues(cues: readonly string[]): string;
 /**
  * S4-4（2026-09-14）**到期前瞻**：`due` 是否「已到或临近」（`at` 起 `windowMs` 内）。
  *

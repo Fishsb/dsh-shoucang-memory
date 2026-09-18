@@ -39,6 +39,12 @@ export interface SupplyBudget {
    * 改权重解决不了，只能分槽。
    */
   situation: number
+  /**
+   * **中层 `process` 槽（IR1 册三 · 2026-09-18 补账）**：任务级供给（`[路径]` 行）。
+   * ⚠ **额度语义与其它槽不同**：它 `cap + proc.length` **外接追加**、**不吃 dynamic 额度**（零挤占是设计，不改）；
+   *   本字段只为**出账**（"这一槽供了几行"）——缺省 0，不影响任何切割行为。
+   */
+  process?: number
 }
 
 /** 缺省 = 方案档 §13 #3 的注入硬顶（恒定 1,000 / 变动 600 / 一次性 200）；联想与情境槽缺省关 */
@@ -105,7 +111,8 @@ export interface SupplyInputs {
 }
 
 export interface DroppedRow {
-  slot: 'stable' | 'dynamic' | 'oneshot' | 'serendipity' | 'situation'
+  /** 槽名（IR1 册三起含 `core` / `process` —— 六槽全出账，`process` 只补账不改额度） */
+  slot: 'core' | 'stable' | 'dynamic' | 'oneshot' | 'process' | 'serendipity' | 'situation'
   line: string
   why: string
 }
@@ -125,7 +132,91 @@ export interface SupplyResult {
 }
 
 export function budgetTotalOf(b: SupplyBudget): number {
-  return b.stable + b.dynamic + b.oneshot + b.serendipity + b.situation
+  return b.stable + b.dynamic + b.oneshot + b.serendipity + b.situation + (b.process ?? 0)
+}
+
+/* ══ IR1 册三（2026-09-18）**装配单出口 · 账由真实裁切直出** ══════════════════════════════
+ * 旧状（实测病灶 §2-3/§2-4）：主路径**两套装配** —— 自己切一遍（`clampLines` / `stableLinesOf` /
+ *   `situationLinesOf`），再把手写候选喂给 `assembleSupply` **影子复算一遍**，两笔账并列 ⇒
+ *   "账 == 真实裁切"只能靠**对拍**（实测虚报 6 vs 真实 1）；且 `kept` 只有 4 槽（**缺 `process`**）。
+ * 现口径：**主路径的真实裁切结果直接进这里出账**（不再有第二份装配/复算），六槽逐槽出
+ *   `{ kept, chars, dropped }`，丢弃行**带槽名 + 原因**（通道来源可分辨）。
+ *
+ * ⚠ **本件不切割**（不重排、不重算预算）—— 它是**记账**：切割语义仍属各领域（`hot-stable` 的块内配额、
+ *   `clampLines` 的停-在首超、`situation-supply` 的环优先级）。这条边界是**有意**的：
+ *   把三处切割搬进来需重做三种语义，而 C1（逐字节不变）是硬约束 ⇒ 收益（形式统一）不抵风险。
+ *   账的**唯一性**（本册要消灭的"两笔账"）在此已彻底解决：账就是真实结果本身。
+ */
+export type SupplySlot = 'core' | 'stable' | 'dynamic' | 'oneshot' | 'process' | 'serendipity' | 'situation'
+
+/** 主路径的真实裁切结果（每槽：**保留行** / 被丢行 / 该槽的丢弃原因） */
+export interface SlotOutcome {
+  kept: readonly string[]
+  droppedRows?: readonly string[]
+  /** 该槽**为何**被限量（缺省自动措辞）——`process` 槽零挤占，不带此字段 */
+  why?: string
+}
+
+export interface SupplySlotsMeta {
+  chars: number
+  budgetTotal: number
+  overBudget: boolean
+  serendipityEnabled: boolean
+  situationEnabled: boolean
+  kept: Record<SupplySlot, number>
+  /** 逐槽明细（IR1 册三 C3：**六槽全出账**，含 `process`） */
+  slots: Record<SupplySlot, { kept: number; chars: number; dropped: number }>
+  dropped: DroppedRow[]
+}
+
+const SLOT_WHY: Record<SupplySlot, string> = {
+  core: '核心必进（不计入预算判定）',
+  stable: '恒定面（P 层 always + 画像行）预算',
+  dynamic: '变动面预算',
+  oneshot: '一次性面预算',
+  process: '中层 process 槽（**外接追加，零挤占** —— 只补账，不参与限额）',
+  serendipity: '越界联想槽预算',
+  situation: '情境槽预算',
+}
+
+/**
+ * **账：由真实裁切直出**（纯函数、零 I/O、零重算）。
+ * 入参 = 每槽**实际**保留的行与被丢的行（主路径产出）⇒ 账与文本**同源**，不可能漂移。
+ * 不变式：`kept + dropped == 候选数`（由调用方保证；`test-usage-truth` 逐条核）。
+ */
+export function supplyMetaOf(
+  outcomes: Partial<Record<SupplySlot, SlotOutcome>>,
+  budget: SupplyBudget,
+  opts: { budgetTotal?: number; cues?: readonly string[] } = {},
+): SupplySlotsMeta {
+  const slots = {} as SupplySlotsMeta['slots']
+  const kept = {} as SupplySlotsMeta['kept']
+  const dropped: DroppedRow[] = []
+  let chars = 0
+  let stableChars = 0
+  for (const slot of ['core', 'stable', 'dynamic', 'oneshot', 'process', 'serendipity', 'situation'] as SupplySlot[]) {
+    const o = outcomes[slot]
+    const kLines = (o?.kept ?? []).map(String)
+    const kChars = kLines.reduce((n, s) => n + s.length + 1, 0)
+    chars += kChars
+    if (slot === 'stable' || slot === 'core') stableChars += kChars
+    const dRows = (o?.droppedRows ?? []).map(String)
+    for (const line of dRows) dropped.push({ slot, line, why: `${slot}：${o?.why ?? SLOT_WHY[slot]}` })
+    kept[slot] = kLines.length
+    slots[slot] = { kept: kLines.length, chars: kChars, dropped: dRows.length }
+  }
+  const budgetTotal = Number(opts.budgetTotal ?? budgetTotalOf(budget))
+  return {
+    chars,
+    budgetTotal,
+    // 溢出 = 超总预算，或恒定面自身超额度（与 `assembleSupply` 同式）
+    overBudget: chars > budgetTotal || stableChars > budget.stable,
+    serendipityEnabled: budget.serendipity > 0,
+    situationEnabled: budget.situation > 0,
+    kept,
+    slots,
+    dropped,
+  }
 }
 
 export interface CandidateDropped {
@@ -199,6 +290,17 @@ export function buildCandidates(records: readonly MemRecord[], opts: CandidateOp
 export function serendipityLine(p: SerendipityPair): string {
   const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n) + '…' : s)
   return `[联想] ${p.a.section} ⨯ ${p.b.section}（跨度 ${p.span}）｜${clip(p.a.text, 48)} ／ ${clip(p.b.text, 48)}`
+}
+
+/**
+ * **按槽限额取行**（对外出口；IR1 册三起供主路径直接调用 —— 语义与 `assembleSupply` 内**同一实现**：
+ *   「超出即跳过、后续更短的行仍有机会」，与 `clampLines` 的「停-在首超」**不同且不可互换**）。
+ * 主路径的情境槽用它 ⇒ 切割语义仍属装配域（单一实现），而整段文本**逐字节不变**。
+ */
+export function takeSlotLines(lines: readonly string[], limit: number, slot: DroppedRow['slot'] = 'situation'): { kept: string[]; dropped: DroppedRow[] } {
+  const dropped: DroppedRow[] = []
+  const { kept } = takeSlot(lines, limit, slot, dropped)
+  return { kept, dropped }
 }
 
 /**

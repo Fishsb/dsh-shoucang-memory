@@ -14,7 +14,11 @@
  *   · **只造钥匙，不做选择、不打分** —— 匹配判定是布尔集合运算；选行归 `ring-supply`，装配归 `supply-assembly`。
  *
  * 零硬编码机路径：键值一律从调用方给的上下文取；本件不认识任何盘符。
+ *
+ * ★IR1 册二（2026-09-18）：**键的归一/序列化/校验已收敛到 `cue-space.ts`**（唯一实现）。
+ *   本件只负责"取哪些维、值从哪来"，键形态一律过 `cue-space#cueKeyOf` —— 读写同源是本册的判据本体。
  */
+import { cueKeyOf, normalizeCueKey } from './cue-space.js'
 
 /** 情境维度的取值来源（**每一项都取自已有字段，零新采集通道**） */
 export interface SituationCtx {
@@ -64,26 +68,32 @@ export function cuesOf(ctx: SituationCtx, dims: readonly string[] = KNOWN_DIMS):
     if (!KNOWN_DIMS.includes(d as CueDim)) continue // 未知维度：跳过而非抛（零抛出纪律）
     const v = String((ctx as Record<string, unknown>)[d] ?? '').trim()
     if (!v) continue
-    const k = `${d}=${v}`
-    if (seen.has(k)) continue
+    // ★IR1 册二（2026-09-18）：键的组装**过唯一归一实现**（`cue-space#cueKeyOf`）。
+    //   旧实现在此处裸拼 `${d}=${v}` ⇒ 读侧产出 `scope=workspace:<盘符>\<a>`（反斜杠），
+    //   而写侧归一成正斜杠 ⇒ 匹配判据（字符串全等）把它劈成两半，实测新记录命中 0/119。
+    const k = cueKeyOf(d, v)
+    if (!k || seen.has(k)) continue
     seen.add(k)
     out.push(k)
   }
   return out
 }
 
-/** 交集（保留 **a 的顺序**，去重） —— 匹配判据的唯一实现 */
+/** 交集（保留 **a 的顺序**，去重） —— 匹配判据的唯一实现。
+ *  ★IR1 册二（2026-09-18）：**两侧都过唯一归一**（`cue-space#normalizeCueKey`）——
+ *    旧实现按**原样字符串全等**比较，只要调用方一侧漏了归一就永久失配（实测正是这样劈成两半的）。
+ *    归一放在**匹配入口**是最后一道兜底：任何调用方（含测试与外部脚本）漏归一都不会再制造静默失配。 */
 export function cueOverlap(a: readonly string[], b: readonly string[]): string[] {
   if (!a?.length || !b?.length) return []
-  const setB = new Set(b)
-  const out: string[] = []
-  const seen = new Set<string>()
-  for (const x of a) {
-    if (!setB.has(x) || seen.has(x)) continue
-    seen.add(x)
-    out.push(x)
+  const norm = (xs: readonly string[]): string[] => {
+    const out: string[] = []
+    for (const x of xs) { const k = normalizeCueKey(x); if (k && !out.includes(k)) out.push(k) }
+    return out
   }
-  return out
+  const na = norm(a)
+  const setB = new Set(norm(b))
+  if (!na.length || !setB.size) return []
+  return na.filter((x) => setB.has(x))
 }
 
 export function createSituationKeyApi(d: SituationKeyDeps = {}): SituationKeyApi {

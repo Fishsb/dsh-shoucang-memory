@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { type RelevanceTrace } from './relevance-supply.js';
 import { type StableStash } from './hot-stable.js';
 export interface RootEntry {
     id: string;
@@ -86,6 +87,15 @@ export interface SupplyUsage {
     /** S4R/R2（2026-09-14）：**真实被丢弃的行内容**（主路径 `clampLines` 产出，**逐条可比**）。
      *  有它才能核「账 == 真实裁切」—— B2 的判据要求**逐条**可比，不只是计数。 */
     droppedRows?: string[];
+    /** IR1 册一（2026-09-18）：**相关性通道的可用性读数**（来源 = 桥/词法/位置式 + 失败原因 + 零命中）。
+     *  有它才能分辨「按任务供给生效」与「退回位置式基线」——旧实现两者在读数上**完全同形**（静默）。 */
+    relevance?: RelevanceTrace;
+    /** IR1 册三（2026-09-18）：**逐槽明细**（六槽全出账，含 `process`）—— 账由真实裁切直出，非影子复算 */
+    slots?: Record<string, {
+        kept: number;
+        chars: number;
+        dropped: number;
+    }>;
 }
 export interface HotMemoryCache {
     key: string | null;
