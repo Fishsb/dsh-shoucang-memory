@@ -13,6 +13,7 @@
  *   · 无开关时**不动作**（`storeMode==='md'` 缺省）——开关由 scheduler Config 提供，此处不猜默认。
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs'
+import { atomicWriteFile } from './section-rewrite.js'
 import { join } from 'node:path'
 import { INDEX_FILES, inventoryOf, parseRecords, parseRecordStore, renderFile, serializeRecords, stampRecord } from './record-store.js'
 import type { Inventory, MemRecord } from './record-store.js'
@@ -115,9 +116,8 @@ function saveStore(root: string, records: readonly MemRecord[]): void {
   const dir = join(root, RECORD_DIR)
   mkdirSync(dir, { recursive: true })
   const f = recordStorePath(root)
-  const tmp = f + '.tmp'
-  writeFileSync(tmp, serializeRecords(records), 'utf8')
-  renameSync(tmp, f)
+  // S2S3 册零：改走**唯一写入原语**（唯一 tmp 名 + 回读校验）；原固定名 `f + '.tmp'` 并发互踩。
+  atomicWriteFile(f, serializeRecords(records))
 }
 
 /** 一个 md 文件 → Record 片（保留各自 eol ⇒ 可逐字节还原） */

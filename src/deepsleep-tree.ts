@@ -5,6 +5,7 @@
 import { appendFileSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { envelopeEvent as envelope } from './event-envelope.js'
+import { atomicWriteFile } from './section-rewrite.js'
 import { biContains, coreName } from './treeops.js'
 import { semanticSim } from './vec.js'
 
@@ -36,18 +37,9 @@ export async function consolidateTree(d: TreeDeps, memRoot: string): Promise<{ i
       archived++
     } catch { /* 归档失败静默：绝不影响 consolidation 主流程 */ }
   }
-  // 原子整文件重写（tmp + rename，与本文件既有落盘纪律一致）
-  const atomicWrite = (p: string, text: string): boolean => {
-    try {
-      const tmp = p + '.tmp'
-      writeFileSync(tmp, text, 'utf8')
-      renameSync(tmp, p)
-      return true
-    } catch {
-      try { unlinkSync(p + '.tmp') } catch { /* */ }
-      return false
-    }
-  }
+  // 整文件重写：**委托唯一写入原语**（S2S3 册零）。本文件原自带一份 `p + '.tmp'` 的局部实现——
+  //   固定 tmp 名并发互踩，且与宿主其它写者口径不一致；现只剩这一层薄绑定。
+  const atomicWrite = (p: string, text: string): boolean => atomicWriteFile(p, text).ok
   // 既有行整理口径：空行压缩 + 末尾单换行（与 applyPrinciples/applyPointerOps 一致）
   const finalize = (ls: string[]): string => ls.join('\n').replace(/\n{3,}/g, '\n\n').replace(/\s+$/, '\n')
   // 索引指针行：`[标签] …` 起始（标签内无空白，与全文件既有口径一致）
