@@ -125,14 +125,26 @@ const produced = (() => {
   const i = lines.findIndex((l) => /^\s*return \{/.test(l))
   if (i < 0) return new Set()
   const set = new Set()
+  /* S1R（2026-09-19）：原实现「遇到 `counts:` 即 break」⇒ **`counts` 之后新增的材料键看不见**
+   *   （实测把新增的 `sectionRef` 判成「引用了但没产出」= 假红）。现改为**按花括号深度解析顶层键**：
+   *   顶层逗号列表（`a, b, c`）与 `key: {…}` 两种写法都认，遇到 `{` 即止（内层键不污染产出集）。 */
+  let depth = 0
   for (let k = i; k < lines.length; k++) {
-    const t = lines[k].replace(/\/\/.*$/, '').trim()
-    if (k > i && /^counts\s*:/.test(t)) { set.add('counts'); break }
-    if (/^\}/.test(t)) break
-    for (const tok of t.replace(/^return\s*\{/, '').split(',')) {
-      const x = tok.trim()
-      if (/^[A-Za-z_$][\w$]*$/.test(x)) set.add(x)
+    let t = lines[k].replace(/\/\/.*$/, '')
+    if (k === i) t = t.replace(/^\s*return\s*\{/, '')
+    const trimmed = t.trim()
+    if (depth === 0) {
+      if (/^\}/.test(trimmed)) break
+      for (const tokRaw of t.split(',')) {
+        const tok = tokRaw.trim()
+        if (!tok) continue
+        const beforeBrace = tok.split('{')[0].trim().replace(/:\s*$/, '')
+        const m = tok.match(/^([A-Za-z_$][\w$]*)\s*:/) || (!tok.includes('{') ? tok.match(/^([A-Za-z_$][\w$]*)$/) : null)
+        if (m && /^[A-Za-z_$][\w$]*$/.test(beforeBrace || m[1])) set.add(m[1])
+        if (tok.includes('{')) break // 该 token 起进入嵌套对象 ⇒ 本行后续不再取顶层键
+      }
     }
+    for (const ch of t) { if (ch === '{') depth++; else if (ch === '}') depth--; if (depth < 0) break }
   }
   return set
 })()

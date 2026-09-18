@@ -34,7 +34,7 @@
 //
 // 运行行为：· 逐件运行并按其退出码归类；· 打印统一摘要（xfail 单独成段）；
 //   · 任一 fail ⇒ 自身 exit 1；全 pass/skip/**xfail** ⇒ exit 0（xfail 不判失败）。
-// 用法: node scripts/check-runner.mjs [--json]
+// 用法: node scripts/check-runner.mjs [--json] [--list] [--only <子串>[,<子串>...]] [--fast]
 import { writeFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -44,6 +44,36 @@ import { execFileSync } from 'node:child_process'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const AS_JSON = process.argv.includes('--json')
+/* 选择性运行（2026-09-18）：**只做显式点名**（`--only <子串>`，可重复、可逗号分隔）。
+ *   判因（实测）：全量 141 件串行 ~105s，而其中位数仅 0.13s —— 前 5 件占 63%。
+ *   agent 每新增一件检测件都必须登记进 CHECKS，而登记制要求跑全量 ⇒ 单次 ~2 分钟；
+ *   实测某会话 4 次全量合计 7.7 分钟 = 全部工具耗时的 88.6%（这是"会话卡住两分钟"的来源）。
+ *   **为什么不按 git diff 自动选件**：自动选件在「某件该跑没跑」时**不报错**，与假绿同型
+ *   （本仓 N1 教训：立了清单但没人执行）。显式点名则写错就当场暴露 —— 命中 0 件即 fail。
+ *   纪律：**不带 --only 时本段零副作用**，全量行为与改造前逐字节不变；
+ *   本开关只做子集预检，发版/CI 仍须跑不带 --only 的全量（唯一全量入口不动）。 */
+const ONLY = (() => {
+  const out = []
+  const av = process.argv.slice(2)
+  for (let i = 0; i < av.length; i++) {
+    if (av[i] === '--only' && av[i + 1] !== undefined) { out.push(...String(av[i + 1]).split(',')); i++ }
+    else if (av[i].startsWith('--only=')) out.push(...av[i].slice('--only='.length).split(','))
+  }
+  return [...new Set(out.map((s) => s.trim()).filter(Boolean))]
+})()
+const LIST_ONLY = process.argv.includes('--list')
+/* 快跑（2026-09-18）：`--fast` 跳过**在册声明 `{ slow: true }`** 的慢件。
+ *   判因（实测 142 件逐件计时，全量墙钟 123.2s）：
+ *     test-split-equivalence 43.6s · ui-geo-regress 17.7s · effective-directions 7.0s · check-client-syntax 5.8s
+ *     —— 4 件占 74.0s（60%），其余 138 件合计仅 49.2s。
+ *   **为什么不按实测耗时自动判定**：自动判定在「阈值附近的件」上结果不稳定，
+ *   同一份代码两次运行可能一件跑、一件不跑，与「拒绝按 diff 自动选件」是同一个病
+ *   （静默漏跑不报错）。此处一律**显式登记**：谁慢谁在 CHECKS 里写明 `{ slow: true }`，
+ *   清单本身可评审、可 diff、可审计。
+ *   **默认行为不变**：不带 --fast 时 143 件全跑（发版/合入口径不动）。
+ *   本仓无 CI 兜底，故**不采用「默认跳过」**——那会让「裸跑 = 全绿」这一被 57 处文档
+ *   引用的验收口径静默少跑 4 件（正是本仓最忌的假绿）。 */
+const FAST = process.argv.includes('--fast')
 // 参与 test 链的检测件/测试件（顺序=依赖顺序：判据→载体→字段→分层→行为测试→红线→部署面→变更日志）
 // 2026-09-11（测试清单收敛）：此前 `npm test` 的 && 链与 CHECKS 是**两份零重叠的清单**，
 //   新增测试件无处登记（既不在 CHECKS 也不在 npm test）⇒ 写了也可能永远不跑。
@@ -56,8 +86,11 @@ const AS_JSON = process.argv.includes('--json')
 //   新增件**必须**登记在此；登记了但文件不存在 ⇒ 判 FAIL（不是静默跳过）。
 // 每项格式：[相对仓根的脚本路径, ...argv, { 选项 }]。
 //   · argv 中的 '__ROOT__' 会替换为仓根绝对路径（供需要根路径的检测件使用）；
-//   · 末位的**选项对象**可选，目前唯一支持的选项是 `{ xfail: true }`——
-//     声明该件允许用 exit 4 表达「已知未修」；**未声明件退 4 一律判 fail**（理由见件头「exit 4 是已被占用的码位」）。
+//   · 末位的**选项对象**可选，支持两个选项（可同时出现）：
+//     - `{ xfail: true }` 声明该件允许用 exit 4 表达「已知未修」；
+//       **未声明件退 4 一律判 fail**（理由见件头「exit 4 是已被占用的码位」）。
+//     - `{ slow: true }` 声明该件为慢件（实测 >5s），`--fast` 时跳过。
+//       默认**不跳**；只有显式 `--fast` 才生效。新增慢件须在此显式登记（见件头判因）。
 const CHECKS = [
   ['scripts/check-criteria.mjs'],
   // J1（2026-09-15）**判据裁决机制（judgeKind）**：每条 criteria 必须声明
@@ -91,7 +124,7 @@ const CHECKS = [
   //   ⚠ **口径限制（实测发现，已在 OPEN-ITEMS 记录）**：本件的"重复"定义在**索引行内部**，
   //     而**精确重复早被写门唯一性硬门挡住** ⇒ 实测 **重复 = 0**。R2 的可压缩空间须改用
   //     **跨形态冗余**（索引行 ↔ 无标签叙事行）来量 —— 属下一轮口径扩展。
-  ['scripts/effective-directions.mjs'],
+  ['scripts/effective-directions.mjs', { slow: true }],
   // S-P4（2026-09-16）**跨粒度收敛（R2-A）**：**行为级**测真临时库写入（非源码文本断言）。
   //   六向：① **成对取证**（coarse/fine 都逐字 ⇒ applied；任一不逐字 ⇒ skipped）② 形态门（fine 无标签 /
   //   coarse 有标签 / 不同行）③ **配额 ≤3** ④ **归档可回滚**（`audit/converge/` 落整行原文 + 并入的粗行）
@@ -193,7 +226,7 @@ const CHECKS = [
   //   · check-client-syntax —— 解析可读性（两种模块形态都试：ESM 的 entry/vendor 与 IIFE+CJS 的 body）。
   ['scripts/check-ui-components.mjs'],
   ['scripts/check-ui-components.mjs', '--selftest'],
-  ['scripts/check-client-syntax.mjs'],
+  ['scripts/check-client-syntax.mjs', { slow: true }],
   // UI1/U2-B（2026-09-15）**分区块规模门**：U2「拆 7 个 pane 文件」的前提经三次实测证伪
   //   （首刀依赖 20 符号 · 应用层拖 5 符号 · refs 跨壳层与视图层 · factory 注册契约不可外移，
   //    外移实测致插件完全不加载：75 条渲染断言全挂且无页面错误）⇒ 改判据为
@@ -209,7 +242,7 @@ const CHECKS = [
   // UI1/U5-b（2026-09-15）**拆分等价性证据门**：U2 把 24 个 render 迁到 9 个 pane 后，
   //   事后无法取"拆分前"DOM ⇒ 改为**证明两个渲染门确实能抓到拆分破坏**（先红后绿可信度）。
   //   ⚠ 本件会临时改源码 + 重建产物（约 1-2 分钟），finally 中逐字节还原。
-  ['scripts/test-split-equivalence.mjs'],
+  ['scripts/test-split-equivalence.mjs', { slow: true }],
   // UI1 收尾（2026-09-15）**pane 自由标识符全量审计**：人工视觉复核抓出深睡页
   //   「加载失败: dsFmtTime is not defined」——而构建/几何门/契约门/A5 **四门全绿**。
   //   本件把每个 pane 的自由标识符按「内建/本文件已声明/已 import/pane 导出/服务/别处定义/全仓无定义」
@@ -422,6 +455,15 @@ const CHECKS = [
   //   ① 往返闸恒跑（md → Record → md 逐字节重现，切源前置条件）；② 影子库存在时对账；
   //   ③ storeMode=dual 而影子库缺席 ⇒ FAIL（不是跳过）——防"开关已启用却无影子库"的死开关。
   ['scripts/check-record-parity.mjs'],
+  // S1R（2026-09-19）小节寻址跨面**差分锁**：宿主侧 `src/section-ref.ts`（`lib/section-ref.js`）
+  //   与库工具链 `skill/scripts/section-ref.mjs` 必须**逐例同结论**（state/exact/fileExists/候选集）。
+  //   判因：该语义曾有**四份实现**（读侧取首个 / 写门集合去重 / matchSection 多命中⇒null / append 逐级取首个）
+  //   ⇒ 同一指针三种结论（实测 notes/env.md §插件注入）。含反例自证 3 组 + **历史分歧复现**（先红证据）。
+  ['scripts/check-section-ref-parity.mjs'],
+  // S1R（2026-09-19）小节寻址**真库巡检（棘轮）**：主档 `→ notes/x.md §y` 三态计数 + notes 同名小节重复，
+  //   均不得高于登记基线（只许降）。判因：此前唯一能报悬空的 `memory-reconcile.mjs` **不在 CHECKS 且恒 exit 0**
+  //   ⇒ 链路断了没有任何机制会翻红。含 `--selftest`（先红 + 阴性对照）。
+  ['scripts/check-section-refs.mjs'],
   // P4 直接单测：Record 模型 + 影子写/对账（含 CRLF/LF 混用、无尾换行、损坏影子库、反向证伪）
   ['scripts/test-record-store.mjs'],
   // G1 内容环（2026-09-13）：**每个 kind 必须登记生命周期归属**（新增类型不许默默加一类）+
@@ -509,7 +551,7 @@ const CHECKS = [
   // UI 几何回归（S1）：真机渲染下量「弹窗是否自适应 / 卡片是否换行 / KPI 是否被挤出首屏 / 日志是否折叠」。
   //   背景：CSS 门禁与结构断言都抓不到「写死尺寸把内容挤出可见区」——只有真渲染量几何才看得见（2026-09-13 实测）。
   //   无 Chrome/Edge 的机器退 4 ⇒ 由本件的 xfail 声明承接（不判失败）。
-  ['scripts/ui-geo-regress.mjs', { xfail: true }],
+  ['scripts/ui-geo-regress.mjs', { xfail: true, slow: true }],
   // 面板视图契约（P1-1 / P1-2 前置安全网 · 2026-09-13）：守 `body.js` 里两个渲染巨石
   //   `renderViewToggles`（原 615 行）与 `renderMemoryExpanded`（321 行）——两个页面都零单测，
   //   拆分前必须先固化结构清单、拆分后逐项比对：**清单不变 = 行为等价**。
@@ -655,8 +697,37 @@ const REQUIRED_CHECKS = [
     process.exit(1)
   }
 }
+/* 子集选择（2026-09-18）：ONLY 为空 ⇒ selected 就是 CHECKS 本体（全量，行为不变）。
+ *   显式点名命中 0 件 ⇒ **当场 fail 并列出可用件**，绝不静默跑 0 件当作通过
+ *   （"写了 --only 但没命中"若判 pass，就是假绿；这正是本开关不接受自动选件的原因）。 */
+let selected = ONLY.length === 0
+  ? CHECKS
+  : CHECKS.filter((entry) => ONLY.some((pat) => String(entry[0]).includes(pat)))
+if (LIST_ONLY) {
+  console.log(`CHECKS 共 ${CHECKS.length} 件：`)
+  for (const e of CHECKS) console.log('  ' + e[0] + (e.slice(1).length ? '  ' + JSON.stringify(e.slice(1)) : ''))
+  process.exit(0)
+}
+if (ONLY.length && selected.length === 0) {
+  console.error(`❌ --only 未命中任何检测件：${ONLY.join(' · ')}`)
+  console.error(`   （本清单共 ${CHECKS.length} 件；用 --list 查看可用件。交由点名即 fail，不静默通过。）`)
+  process.exit(1)
+}
+/* --fast：跳过在册 `{ slow: true }` 的件。跳过件**必须报数报名字**，
+ *   否则「快跑」与「漏跑」无从分辨（与 xfail 恒显示同一个理由：静默失效最可怕）。 */
+const skippedSlow = FAST ? selected.filter((e) => e.length > 1 && e[e.length - 1] && e[e.length - 1].slow) : []
+if (FAST) selected = selected.filter((e) => !(e.length > 1 && e[e.length - 1] && e[e.length - 1].slow))
+if (ONLY.length) {
+  console.log(`⚠ 选择性运行（--only ${ONLY.join(' · ')}）：${selected.length}/${CHECKS.length} 件 —— 子集预检，**不是**全量门禁`)
+  console.log('   发版/合入前必须跑不带 --only 的全量：node scripts/check-runner.mjs')
+}
+if (FAST) {
+  console.log(`⚡ 快跑（--fast）：跳过 ${skippedSlow.length} 件慢件 —— 快跑，**不是**全量门禁`)
+  for (const e of skippedSlow) console.log('   跳过 ' + e[0])
+  console.log('   发版/合入前必须跑不带 --fast 的全量：node scripts/check-runner.mjs')
+}
 const rows = []
-for (const entry of CHECKS) {
+for (const entry of selected) {
   const [file, ...rest] = entry
   // 末位若是**普通对象**即为选项（{ xfail: true }），不参与 argv——否则会被当成参数喂给检测件
   const last = rest[rest.length - 1]
@@ -693,7 +764,11 @@ else {
   const nSkip = rows.filter((r) => r.verdict === 'skip').length
   console.log('检测件统一运行（契约：0=pass · 3=skip · 4=xfail · 其他=fail）')
   for (const r of rows) console.log(`  ${GLYPH[r.verdict]} ${r.file.padEnd(36)} exit=${r.code} ${r.verdict}`)
-  console.log(`\n${failed.length ? 'FAIL' : 'PASS'}（${nPass} pass · ${xfailed.length} xfail · ${nSkip} skip${failed.length ? ` · ${failed.length} fail` : ''}）`)
+  /* 子集运行时摘要必须**自带标记**：否则一段绿字被当"全量通过"引用 —— 与假绿同型。 */
+  const scope = ONLY.length ? `（子集 ${rows.length}/${CHECKS.length} 件 · 非全量）`
+    : FAST ? `（快跑 ${rows.length}/${CHECKS.length} 件 · 跳过 ${skippedSlow.length} 慢件 · 非全量）`
+      : ''
+  console.log(`\n${failed.length ? 'FAIL' : 'PASS'}${scope}（${nPass} pass · ${xfailed.length} xfail · ${nSkip} skip${failed.length ? ` · ${failed.length} fail` : ''}）`)
   if (xfailed.length) console.log(`⚠ XFAIL 项（已知未修，不判失败但必须可见）：${xfailed.map((r) => r.file).join(', ')}`)
   if (failed.length) {
     console.log(`FAIL 项：${failed.map((r) => r.file).join(', ')}`)

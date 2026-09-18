@@ -131,6 +131,20 @@ npm run typecheck && npm run build
 npm test    # 单一入口：机检 + 行为测试全家桶（check-runner）
 ```
 
+改少量文件时不必等全量（143 件串行约 2 分钟）——按需选择：
+
+```sh
+node scripts/check-runner.mjs --list                      # 列出全部件（不执行）
+node scripts/check-runner.mjs --only check-judge-kind     # 只跑匹配该子串的件（约 0.2s）
+node scripts/check-runner.mjs --only a,b,c                # 逗号分隔多件
+node scripts/check-runner.mjs --fast                      # 跳过在册慢件（约 50s，默认 2 分钟）
+```
+
+`--only` 只认显式点名：写错子串、命中 0 件时会**直接报错退出**（不会静默跑 0 件当作通过），
+且子集摘要自带「非全量」标记。`--fast` 跳过 4 件在册慢件（实测 >5s，如 `test-split-equivalence`
+与 `ui-geo-regress`，合计约占全量 60%），跳过哪几件会**逐条打印**，摘要同样标注「非全量」。
+两者**默认都不生效**——**合入 / 发版前必须跑不带任何开关的全量 `npm test`。**
+
 架构总览见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)；蒸馏判据与隐私红线的机检均挂在 `npm test` 链上。
 
 ## 📚 文档

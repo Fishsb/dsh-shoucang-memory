@@ -90,16 +90,30 @@ for (const tgt of targets) {
   const instLib = join(tgt, 'lib')
   for (const [rel, src] of walk(repoLib)) planCopy(src, join(instLib, rel.split('/').join(sep)), `lib/${rel}`, true)
 }
-// ── 面 2：记忆库面（**只覆盖库内已存在者**，不往私人数据区新增）──
+/** 面2 **运行期必需件**白名单（**新增运行期依赖件时必须在此登记**）。
+ *  判因（2026-09-19 实测）：面2 缺省「只覆盖库内已存在者」⇒ **新件静默不部署**——
+ *  `skill/scripts/section-ref.mjs` 落地时库内不存在 ⇒ 库侧 `read_section.mjs` / `memory_write_gate.mjs`
+ *  的 `import './section-ref.mjs'` 在**运行期** ERR_MODULE_NOT_FOUND（仓内绿、装上去跑不了）。
+ *  故：白名单内**缺失即补建**（属部署完整性，不是往私人数据区塞新东西）；白名单外维持「只覆盖」。 */
+const FACE2_REQUIRED = new Set([
+  'section-ref.mjs', 'read_section.mjs', 'memory_write_gate.mjs', 'memory-append.mjs',
+  'memory_health_check.mjs', 'memory-reconcile.mjs', 'archive-lib.mjs', 'bank-git.mjs', 'harvest-access.mjs',
+  'vendor/fzstd.cjs',
+])
+// ── 面 2：记忆库面（**只覆盖库内已存在者** + 白名单缺失补建）──
 const bank = argOf('--bank') || process.env.MEMORY_ROOT || join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'skills', 'managing-memory')
 for (const [srcDir, bankDir] of [['scripts', 'scripts'], ['skill/scripts', 'scripts'], ['skill/engine', 'engine'], ['skill/docs', 'docs']]) {
   const d = join(root, srcDir)
   if (!existsSync(d)) continue
   for (const [rel, src] of walk(d)) {
-    if (!src.endsWith('.mjs') && !src.endsWith('.json') && !src.endsWith('.md')) continue // 与 check-deploy-sync 的 exts 对齐
-    planCopy(src, join(bank, bankDir, rel.split('/').join(sep)), `${srcDir}/${rel}`, false)
+    if (!src.endsWith('.mjs') && !src.endsWith('.json') && !src.endsWith('.md') && !src.endsWith('.cjs')) continue // 与 check-deploy-sync 的 exts 对齐（+.cjs：库侧 archive-lib 依赖 vendor/fzstd.cjs）
+    const required = FACE2_REQUIRED.has(rel.split('/').join('/'))
+    planCopy(src, join(bank, bankDir, rel.split('/').join(sep)), `${srcDir}/${rel}`, required)
   }
 }
+// ── 面2 完整性复核（白名单件必须真的在库内；缺失 ⇒ FAIL，不再靠人肉发现）──
+//   ⚠ 必须**在复制之后**求值（初版在计划期求值 ⇒ 刚补建的件仍被报"缺失"，自造假红）。
+const missingRequired = () => [...FACE2_REQUIRED].filter((rel) => !existsSync(join(bank, 'scripts', rel.split('/').join(sep))))
 
 // ── 删除传播（**仅安装面**；2026-09-14 补）──
 // 为什么必须补：本件原先**只复制差异、不传播删除** ⇒ 仓内删掉的文件会永远留在装副本里。
@@ -139,5 +153,11 @@ for (const p of plan) {
 let pruned = 0
 if (PRUNE) for (const o of orphans) { try { unlinkSync(o.dst); pruned++ } catch (e) { console.error(`  ❌ 剪枝失败 ${o.label}：${String(e.message).slice(0, 100)}`) } }
 console.log(`  已复制 ${copied}/${plan.length} 件${PRUNE ? ` · 已剪枝 ${pruned}/${orphans.length} 件` : ''}`)
+if (missingRequired().length) {
+  console.error(`  ❌ 面2 运行期必需件仍缺 ${missingRequired().length} 件：${missingRequired().join(', ')}`)
+  console.error('     ⇒ 库侧 import 会在运行期 ERR_MODULE_NOT_FOUND；请在 FACE2_REQUIRED 复核后补齐')
+  process.exit(1)
+}
+console.log(`  面2 运行期必需件 ${FACE2_REQUIRED.size} 件齐备`)
 console.log('\n下一步：① `node scripts/check-installed-sync.mjs --strict` 复核 ② 宿主热重载（dev_reload_package）')
 console.log('PASS（部署完成）')

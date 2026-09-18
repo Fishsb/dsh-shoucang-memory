@@ -3,7 +3,9 @@
 // 用法: node scripts/memory_write_gate.mjs <目标文件> <临时文件>
 //   目标文件: MEMORY.md | USER.md | AGENT.md | notes/<file>.md（可绝对路径或相对技能目录）
 // 容量红线只对主文档（MEMORY/USER/AGENT=会话注入面）生效；notes 等辅助文档按需读取，不设硬限（超 NOTES_WARN 仅提示）
-// exit 0=允许（附核对：容量数字/占比、指针清单） 1=主文档超容量（合并精简或下沉 notes/） 2=指针悬空/未注册（先建子文档或 INDEX 注册） 3=用法错误 5=内容级凭据（改写后再写入）
+// exit 0=允许（附核对：容量数字/占比、指针清单） 1=主文档超容量（strict 档；缺省容量只提醒不阻断） 2=指针悬空/未注册（先建子文档或 INDEX 注册） 3=用法错误 4=索引行格式违规 5=内容级凭据（改写后再写入）
+// ⚠ **判据序（S1R 2026-09-19 正交化）**：凭据 5 > 指针 2 > 格式 4 > strict 容量 1 > 容量告警 0
+//   —— 正确性判据先判且必报；容量分支**不得**成为吞掉正确性结论的早退分支（`SHOUCANG_GATE_LEGACY=1` 可回旧序）。
 //
 // ══ B 内容级凭据过滤（2026-09-17 **圆桌会议「守藏整体方案会审」册一产出**）═════════
 // 判因（**已发生事实**，非推测）：会议主持人实测 `~/.dsh/suite/knowledge/pending/
@@ -105,23 +107,12 @@ const tmpText = fs.readFileSync(tmp, 'utf8');
 const chars = tmpText.replace(/\s+/g, '').length;
 
 const issues = [];
-// notes 根与小节索引（v17 § 存在性校验共用；模块级避免作用域分裂）
+// S1R（2026-09-19）：§ 小节存在性判据**收敛到单一语义件** `section-ref.mjs`（三态：exists/ambiguous/missing）。
+//   本件原先自己实现「标题集去重 + 双向包含」，与读侧（取首个）、材料侧（多命中⇒null）口径分叉
+//   ⇒ 同一指针三种结论（实测 notes/env.md §插件注入：读侧能读、写门通过、材料侧判不存在）。
+//   ⚠ 单一实现声明：跨面同源由 `scripts/check-section-ref-parity.mjs`（差分锁）守。
+import { resolveSectionSpec, pointersOfRow } from './section-ref.mjs';
 const notesDir = join(skillDir, 'notes');
-const sectionIndexCache = {};
-const listSections = (stem) => {
-  if (sectionIndexCache[stem]) return sectionIndexCache[stem];
-  const f = join(notesDir, stem + '.md');
-  const out = new Set();
-  if (fs.existsSync(f)) {
-    const body = fs.readFileSync(f, 'utf8');
-    // ADR-015：小节枚举纳入 ### 子节（两级检索单元）⇒ §子节 指针可选，不再误判悬空
-    for (const m of body.matchAll(/^#{2,3}\s+(.+?)\s*$/gm)) {
-      out.add(String(m[1]).replace(/\s*（20\d{2}[-/]\d{1,2}[-/]\d{1,2}）\s*$/, '').trim());
-    }
-  }
-  sectionIndexCache[stem] = out;
-  return out;
-};
 
 // 指针核对：MEMORY.md / USER.md / AGENT.md 的拟写入内容会引用 notes/ 子文档（v16：PRINCIPLES.md 退役，习得原则并入 AGENT.md）
 // v17 补缺（2026-09-09 实态：深睡产物指向 notes/flows.md §深睡蒸馏 空壳小节仍 gate=pass——只校验了文件存在）：
@@ -196,17 +187,26 @@ if (base === 'MEMORY.md' || base === 'USER.md' || base === 'AGENT.md') {
     else if (/[:：]/.test(topic)) formatHints.push('主题含冒号复合（补充说明移概况或详情，不拦截）: ' + short);
     // § 小节存在性（2026-09-10 修「遮蔽缺口」：原先仅在 lineOk（行格式通过）时才检查，导致
     // 同一行既有格式违规又有悬空指针时，悬空指针被静默跳过、长期隐形——实测 MEMORY.md L45 即此例。
-    // 现改为**所有索引行都检查**，两类问题并报；exit 优先级仍是 1(容量) > 2(指针/小节) > 4(格式)。）
-    // 匹配口径=read_section.mjs 权威：title===kw || title.includes(kw) || kw.includes(title)（双向包含，§=关键词锚）
-    const pm = line.match(/notes\/([A-Za-z0-9_-]+)\.md\s*§(.+)$/);
-    if (pm) {
-      const titles = [...listSections(pm[1])];
-      // § 后可能并列多小节「§A/§B」或单小节名（可含空格/括号），逐个核对
-      for (const part of pm[2].split('/')) {
-        const kw = part.replace(/^§/, '').trim().toLowerCase();
-        if (!kw || /^[→（]/.test(kw)) continue;
-        const hit = titles.some((t) => { const tl = t.toLowerCase(); return tl === kw || tl.includes(kw) || kw.includes(tl); });
-        if (!hit) issues.push('指针悬空小节: notes/' + pm[1] + '.md §' + kw + ' 不存在（先建小节或修正指针）');
+    // 现改为**所有索引行都检查**，两类问题并报；exit 优先级：凭据 5 > 指针 2 > 格式 4 > 容量(告警/0)。
+    // S1R（2026-09-19）：判据实现委托 `section-ref.mjs`（三态：exists/ambiguous/missing），
+    //   且**行内指针的提取也交给单一实现**（`pointersOfRow` 状态机）——原先本件用
+    //   `/notes\/([\w-]+)\.md\s*§(.+)$/` 只取**行内最后一个**文件指针且把 `§A/notes/b.md §B`
+    //   拆成伪小节名（实测伪影：`tools.md §角色预设设计`/`§notes` 类误报）。
+    //   语义：`missing` ⇒ issues（exit 2）；`ambiguous`（同名多候选）⇒ **放行 + 提示消歧**，不再折成"不存在"。
+    for (const ptr of pointersOfRow(line)) {
+      const { agg, parts } = resolveSectionSpec(skillDir, ptr.file, ptr.spec);
+      if (agg === 'missing') {
+        const names = parts.filter((x) => x.res.state === 'missing').map((x) => x.name);
+        issues.push('指针悬空小节: notes/' + ptr.file + ' §' + names.join('/§') + ' 不存在（先建小节或修正指针）');
+      } else if (agg === 'partial') {
+        const names = parts.filter((x) => x.res.state === 'missing').map((x) => x.name);
+        formatHints.push('小节路径部分悬空（不拦截：读取回落父节）: notes/' + ptr.file + ' §' + ptr.spec + ' ⇒ 缺 ' + names.join('/'));
+      }
+      if (agg === 'ambiguous') {
+        for (const p of parts.filter((x) => x.res.state === 'ambiguous')) {
+          formatHints.push('同名小节歧义（不拦截，建议写「父/子」全路径消歧）: notes/' + ptr.file + ' §' + p.name
+            + ' ⇒ ' + p.res.cands.map((c) => c.title).join(' | '));
+        }
       }
     }
   }
@@ -231,30 +231,25 @@ const limit = LIMITS[base] ?? 3000;
 const pct = Math.round((chars / limit) * 100);
 const hint = formatHints.length ? ' | ' + formatHints.join(' | ') : '';
 const detail = ['容量: ' + chars + '/' + limit + ' 字符 (' + pct + '%)', ...issues];
-if (chars > limit) {
+const overCap = chars > limit;
+const capNote = overCap ? ` | ⚠️ 超容量 ${chars}/${limit} 字符 (${pct}%)（容量不阻断；此处只作并列信息）` : '';
+
+/* ══ S1R（2026-09-19）**正确性与容量正交**（D4）══════════════════════════════
+ * 判因（只读复查实测）：原实现的容量分支**先于**正确性判定且两支都 `process.exit(0)`
+ *   ⇒ 实测 MEMORY.md 520% / AGENT.md 250% 时，§指针判据**恒不执行**（同一文件双跑：
+ *   cap=5000 → exit 0 且不提指针；cap=999999 → exit 2 列出 56 条）。`:246` 的注释
+ *   「悬空指针 exit 2 不动」与实况相反。
+ * 现序：**凭据 5 > 指针 2 > 格式 4 > strict 容量 1 > 容量告警 0**——
+ *   正确性判据**必须先判且必须报**；容量仍按用户 2026-09-16 判定「提醒即可、不阻断」。
+ * 回退开关：`SHOUCANG_GATE_LEGACY=1` ⇒ 恢复旧序（容量分支先 return，吞掉正确性问题）。 */
+const LEGACY = process.env.SHOUCANG_GATE_LEGACY === '1';
+if (LEGACY && overCap) {
   const fmt = formatIssues.length ? ' | 另有格式违规: ' + formatIssues.join(' | ') : '';
-  /* 2026-09-16 **用户判定：容量不是硬限** —— 「直接全部失败或者拒绝」不符合意图，**提醒就可以了**。
-   * 旧行为：`exit 1` 硬拒。此后默认：`exit 0` 允许 + 醒目提醒。
-   * 🔴 **2026-09-16 二次修正（实测驱动）：软门放开后**无人自愈** —— 实测 AGENT.md 涨到 **8379/3000（279%）**、
-   *   MEMORY.md **6976/5000（140%）**，而设计容量才 3000/5000。根因：① 软门之后**没有替代机制**；
-   *   ② 深睡每轮追加原则行（本次会话实测 **36 轮**）。⇒ 纯提醒**不足以作为唯一机制**。
-   * **改法：分级**（保留用户意图，同时给刹车）——
-   *   · `≤100%` 允许；
-   *   · `100%–150%` **允许 + 醒目提醒**（用户意图保留：小幅超出不阻断写作）；
-   *   · `>150%` **拒写（exit 1）**：到这一步"提醒"已被证明无法自愈，**再放行就是无刹车**。
-   * ⚠ 严格模式 `SHOUCANG_CAP_STRICT=1` 仍为「**任意超限即拒**」（更严，保留可回退）。
-   * ⚠ 悬空指针（exit 2）**不动**：那是**正确性**问题，不是容量问题 —— 两类必须分开。 */
   if (process.env.SHOUCANG_CAP_STRICT === '1') {
     console.error('exit=1 超容量（strict）| ' + detail.join(' | ') + hint + fmt);
     process.exit(1);
   }
   if (pct > 150) {
-    /* ⚠ **2026-09-16 三次修正（实测驱动，收回我自己的"硬拒"）**：我一度在此处 `exit 1` 拒写，
-     *   但实测发现 **AGENT.md 已到 279%、且其内容 91 条原则全在小节区** ⇒ 硬拒会**挡掉深睡的全部写入**
-     *   ⇒ 睡眠产线**反复失败**（水位回滚）—— 这是**我引入的新风险**，不是修问题。
-     *   ⇒ **收回硬拒**：改为**不阻断 + 双口径告警**（顶层索引 / 小节内容分开报），
-     *     让问题**可见**（用户"看不到条目却在涨"的根因正是**不可见**），而**不在写入路径上拦**。
-     *   ⇒ 仍要"任意超限即拒"的可用 `SHOUCANG_CAP_STRICT=1`（能力不删，默认更保守）。 */
     console.log('exit=0 允许写入（**超 150%：强告警，但不阻断**）| '
       + `⚠️⚠️ 严重超容量 ${chars}/${limit} 字符 (${pct}%) —— **顶层索引 / 小节内容 两口径分开看**（见下）；`
       + '建议：把新行写进**顶层索引区**（本文件的语义区），内容下沉 `notes/`' + hint + fmt);
@@ -266,12 +261,26 @@ if (chars > limit) {
 }
 if (issues.length) {
   const fmt = formatIssues.length ? ' | 另有格式违规: ' + formatIssues.join(' | ') : '';
-  console.error('exit=2 ' + detail.join(' | ') + fmt);
+  console.error('exit=2 ' + detail.join(' | ') + capNote + fmt + hint);
   process.exit(2);
 }
 if (formatIssues.length) {
-  console.error('exit=4 索引行格式违规（spec §8 v13） | ' + formatIssues.join(' | ') + hint);
+  console.error('exit=4 索引行格式违规（spec §8 v13） | ' + formatIssues.join(' | ') + hint + capNote);
   process.exit(4);
+}
+if (overCap) {
+  /* 2026-09-16 用户判定：容量不是硬限（「直接拒绝不符合意图，提醒就可以」）。
+   *   · `≤100%` 允许；· `100%–150%` 允许 + 提醒；· `>150%` **强告警但仍不阻断**
+   *     （三次修正：一度改回 exit 1 硬拒，实测会挡掉深睡全部写入 ⇒ 收回；`SHOUCANG_CAP_STRICT=1` 保留严格档）。 */
+  if (process.env.SHOUCANG_CAP_STRICT === '1') {
+    console.error('exit=1 超容量（strict）| ' + detail.join(' | ') + hint);
+    process.exit(1);
+  }
+  const strong = pct > 150
+    ? `⚠️⚠️ 严重超容量 ${chars}/${limit} 字符 (${pct}%) —— **顶层索引 / 小节内容 两口径分开看**（见下）；建议：把新行写进**顶层索引区**（本文件的语义区），内容下沉 \`notes/\``
+    : `⚠️ 超容量 ${chars}/${limit} 字符 (${pct}%) —— 建议合并精简或下沉 notes/`;
+  console.log(`exit=0 允许写入（**${pct > 150 ? '超 150%：强告警，但不阻断' : '超容量仅提醒，不阻断'}**）| ` + strong + hint);
+  process.exit(0);
 }
 console.log('exit=0 允许写入 | ' + detail.join(' | ') + hint);
 process.exit(0);

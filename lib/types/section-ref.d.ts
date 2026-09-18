@@ -1,0 +1,92 @@
+export type SectionRefState = 'exists' | 'ambiguous' | 'missing';
+/** **spec 级**（`§父/子` 路径）四态：名字级只有三态；`partial` 是"路径部分可解析"（读侧回落父节）。
+ *  判因（2026-09-19 实测 51 组悬空）：**主模式是「父/子」指针里子节不存在**（子节从未创建/被改名），
+ *  而父节仍在且读侧可回落 ⇒ 若把 partial 当 missing 处理，生产链会**大面积误拒**（子节名是模型生成的深层锚）。 */
+export type SectionRefSpecState = SectionRefState | 'partial';
+export interface SectionRefCand {
+    /** 标题原文（未归一） */
+    title: string;
+    /** 归一核心名（小写、去空白、去行尾日期括号） */
+    core: string;
+    /** 标题层级（2 = `##`，3 = `###`） */
+    level: number;
+    /** 标题所在行号（0-based，相对 notes 文件） */
+    idx: number;
+    /** 是否与查询名精确相等（归一后） */
+    exact: boolean;
+}
+export interface SectionRefResult {
+    state: SectionRefState;
+    /** 命中集合里是否含精确命中（`exact` 优先用于展示与排序） */
+    exact: boolean;
+    /** 全部候选（`ambiguous` 时 >1；`exists` 时恰 1；`missing` 时空） */
+    cands: SectionRefCand[];
+    /** 目标 notes 文件是否存在（区别于「文件在、小节不在」） */
+    fileExists: boolean;
+    /** 无法解析时的原因（文件非法 / 名字为空）——供调用方如实呈现，不静默 */
+    reason?: string;
+}
+/** 归一：核心名 → 小写 → 去全部空白（两处实现同口径） */
+export declare const sectionCore: (s: unknown) => string;
+/** 单文件标题清单（`##`/`###` 两级；ADR-015 两级检索单元）；文件不可读 ⇒ null */
+export declare function sectionTitles(memRoot: string, file: string): {
+    title: string;
+    level: number;
+    idx: number;
+}[] | null;
+/**
+ * 单一小节名 → 三态。
+ * @param memRoot 记忆库根（其下须有 `notes/`）
+ * @param file    `env.md` 或 `notes/env.md`（`normalizeNotesFile` 容错）
+ * @param name    § 后的名字（可含括号日期；允许多级路径的**单段**）
+ */
+export declare function resolveSection(memRoot: string, file: string, name: unknown): SectionRefResult;
+/** 纯函数裁决（供差分锁在不落盘的前提下逐例比对） */
+export declare function resolveFromTitles(titles: {
+    title: string;
+    level: number;
+    idx: number;
+}[], name: unknown): SectionRefResult;
+/**
+ * `§A/§B`（同文件并列小节 / 父子路径）→ 逐部分三态 + **聚合四态**。
+ * 聚合：全部 exists ⇒ exists；**部分可解析 ⇒ `partial`**（读侧回落最深可解析段）；
+ *      无 missing 但有 ambiguous ⇒ ambiguous；**全不可解析 ⇒ missing**。
+ * ⚠ `partial` **只作用于准入策略**（放行 + 提示），不是"名字存在"——名字级判定始终三态。
+ */
+export declare function resolveSectionSpec(memRoot: string, file: string, spec: unknown): {
+    agg: SectionRefSpecState;
+    parts: {
+        name: string;
+        res: SectionRefResult;
+    }[];
+};
+/** 二值兼容门（与迁移前 `forgetops#sectionExists` 逐例同结论：只有 exists 为真） */
+export declare function sectionExistsRef(memRoot: string, file: string, section: unknown): boolean;
+/** 主档索引行里的 `→ notes/x.md §y` 引用（一行可含多个文件指针与 `§A/§B` 并列；不承担行格式校验） */
+export interface RowPointer {
+    file: string;
+    spec: string;
+}
+export declare function pointersOfRow(line: string): RowPointer[];
+/** 索引行准入（唯一强制点，S1R · D3）：`missing`（全不可解析）⇒ 不可写入；
+ *  `partial`（父节可回落）/ `ambiguous`（同名多候选）⇒ **放行 + 提示**。 */
+export interface RowAdmission {
+    ok: boolean;
+    missing: {
+        file: string;
+        spec: string;
+        name: string;
+    }[];
+    partial: {
+        file: string;
+        spec: string;
+        missing: string[];
+        resolved: string[];
+    }[];
+    ambiguous: {
+        file: string;
+        spec: string;
+        cands: string[];
+    }[];
+}
+export declare function admitIndexRow(memRoot: string, line: string): RowAdmission;

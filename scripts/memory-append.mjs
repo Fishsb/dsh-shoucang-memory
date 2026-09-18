@@ -9,6 +9,8 @@
 import { readFile, writeFile, copyFile, mkdir, rename, unlink, readdir, rm } from 'node:fs/promises';
 import { join, dirname, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
+// S1R（2026-09-19）：索引行准入复用**单一语义件**（与宿主侧 `src/section-ref.ts` 同口径，差分锁守）
+import { pointersOfRow, resolveSectionSpec } from './section-ref.mjs';
 
 const skillDir = process.env.MEMORY_ROOT ?? join(dirname(fileURLToPath(import.meta.url)), '..'); // 数据根（结构分离：开发经 MEMORY_ROOT 指向私人区；缺省=脚本上一级兼容生产副本）
 const [fileArg, sectionArg, ...rest] = process.argv.slice(2);
@@ -43,7 +45,10 @@ try {
   const keep = Number(process.env.SHOUCANG_BACKUP_KEEP ?? 30);
   if (keep > 0) {
     const auditDir = join(skillDir, 'audit');
-    const all = (await readdir(auditDir).catch(() => [])).filter((d) => /^backup-\d{12}$/.test(d)).sort();
+    // S1R（2026-09-19 · P3）：保留面从 `^backup-\d{12}$` 放宽为**全部 `backup-*`** ——
+    //   实测库内 45 个备份目录中 15 个是历史命名（`backup-split-*`/`backup-notes-*`/`backup-v21-*`…），
+    //   旧正则永不匹配 ⇒ 那些目录**永久留存**（保留策略形同对它们失效）。
+    const all = (await readdir(auditDir).catch(() => [])).filter((d) => /^backup-/.test(d)).sort();
     // 目录名即时间戳，字典序 == 时间序；只裁最旧的，本次刚写的永远保留
     for (const old of all.slice(0, Math.max(0, all.length - keep))) {
       await rm(join(auditDir, old), { recursive: true, force: true }).catch(() => {});
@@ -97,6 +102,47 @@ if (isNewIndexLine) {
   // 主文档新条目行：追加文件尾（在 trailing 空行前）
   if (!/^\[(env|tool|flow|lesson|身份|环境|硬件|偏好|习惯|使命|边界|经验|演化|教训)\]/.test(entryText)) {
     console.error(`新索引行标签非法: ${entryText.slice(0, 30)}`); process.exit(2);
+  }
+  // ══ S1R（2026-09-19 · D3/P1）**索引行准入（唯一强制点）** ══════════════════════════════
+  // 判因（只读复查实测）：本分支原先**只校验行首标签**，对行内 `→ notes/x.md §y` **零校验**；
+  //   而唯一做 §校验的 `memory_write_gate.mjs` **不在这条路上** ⇒ 蒸馏产线是**悬空指针的持续来源**
+  //   （先红实证：隔离库塞一条悬空指针 ⇒ 本件 exit 0 落盘；库 git 取证：`§ZCode 环境`/`§会话开头注入`
+  //   首现 2026-09-18，`§环境与通道` 等仍在新增）。
+  // 口径：**同一实现** `section-ref.mjs`（三态）—— `missing` ⇒ 拒（exit 2，与该件既有 exit 2 语义一致）；
+  //   `ambiguous`（同名多候选）⇒ 放行 + stderr 提示写「父/子」全路径消歧。
+  // 回退开关：`SHOUCANG_APPEND_SECTION_CHECK=0` ⇒ 恢复旧行为（只校标签）。
+  if (process.env.SHOUCANG_APPEND_SECTION_CHECK !== '0') {
+    const bad = []; const amb = []; const part = [];
+    let line2 = entryText;
+    for (const ptr of pointersOfRow(entryText)) {
+      const { agg, parts } = resolveSectionSpec(skillDir, ptr.file, ptr.spec);
+      if (agg === 'missing') {
+        for (const p of parts.filter((x) => x.res.state === 'missing')) bad.push(`notes/${ptr.file} §${p.name}`);
+      } else if (agg === 'partial') {
+        // **指针归一**（2026-09-19 定）：父节在、子节缺 ⇒ 把 spec 收敛到**可解析前缀**（读侧本来就会回落父节，
+        //   归一只是把它写实）。判因：实测 14 组存量属此类；若一律拒收，会把"模型的深层锚"整行挡掉（丢知识）。
+        const keep = [];
+        for (const p of parts.slice().reverse()) { if (p.res.state === 'missing') break; keep.unshift(p.name); }
+        const oldSpec = `notes/${ptr.file} §${ptr.spec}`;
+        const newSpec = `notes/${ptr.file} §${keep.join('/')}`;
+        if (keep.length && line2.includes(oldSpec)) {
+          line2 = line2.split(oldSpec).join(newSpec);
+          part.push(`${oldSpec} ⇒ ${newSpec}（子节缺，已归一为可解析路径）`);
+        } else {
+          part.push(`${oldSpec}（子节缺，读侧回落父节）`);
+        }
+      } else if (agg === 'ambiguous') {
+        for (const p of parts.filter((x) => x.res.state === 'ambiguous')) amb.push(`notes/${ptr.file} §${p.name}（${p.res.cands.length} 个同名候选）`);
+      }
+    }
+    if (bad.length) {
+      console.error(`指针悬空小节（索引行准入拒绝）: ${bad.join(' · ')}`);
+      console.error('  ⇒ 先建小节或修正指针后再写（本件不自动新建散落小节）；可用 `node section-ref.mjs <notes/x.md> "<小节名>"` 查候选。');
+      process.exit(2);
+    }
+    for (const a of amb) console.error(`⚠ 同名小节歧义（已放行，建议写「父/子」全路径消歧）: ${a}`);
+    for (const p of part) console.error(`⚠ 指针已归一/部分悬空: ${p}`);
+    if (line2 !== entryText) entryText = line2; // 归一后的行落盘（幂等：再写一次即 no-op）
   }
   content = raw.replace(/\s+$/, '\n') + entryText + '\n';
 } else {

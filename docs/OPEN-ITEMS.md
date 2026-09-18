@@ -372,4 +372,17 @@ calls=2 → bySid: sid=6b89a084 · qLen=2 · qHash=005c4d6f · lastReason=new ·
 
 ---
 
+## 10. S1R 小节寻址收口（2026-09-19 · **P0–P3 已全部落地**；下 3 项为**收口后新登记的遗留**）
+
+> 落地记录见 `docs/specs/S1R-section-ref-record.md`（G1–G8 逐条读数 + 落地差异 6 条）。
+> 下表只列**尚未做**的事项（已完成的四册不在此重复登记）。
+
+| # | 项 | 差什么 | 复验命令 | 判据 | 何时可做 |
+|---|---|---|---|---|---|
+| **S1R-F1** | **appends 缺锚 ⇒ 详情缺口未联动**（P1 只挡了"索引行"，没挡"详情缺失"） | 蒸馏 `appends` 因**顶层 `##` 锚不存在**被拒（`memory-append` exit 2），而对应 `newIndex` 行在 P1 之前仍写入 ⇒ 产生"有行无节"的孤儿指针（实测 9 处已降级为文件级） | `node scripts/check-section-refs.mjs`（现为 0，因已降级）· 审计 `audit.distill-run` 的 `fclass:"dispatch-failed"` / `failed:N` | ① append 失败 ⇒ **该主题的 newIndex 行不入库**（或按拍板口径**自动建顶层锚**）；② 新增一条机检：`dispatch-failed` 出现时不得有对应新索引行 | 随时（须先定"自动建锚 vs 放弃该行"口径） |
+| **S1R-F2** | **9 处指针已降级为文件级**：主题详情**从未落盘**（库内零命中，只在 `INDEX.md` 台账登记） | 若要恢复精度须**建节 + 补详情**（内容只能来自会话转录/审计，库内已无） | 处置记录（`S1R-section-ref-record.md` §2 降级档）· `node scripts/section-ref-reanchor.mjs --dry`（应为 no-op） | 建节后指针须重指且 `check-section-refs` 仍为 0 | 可选（不影响"悬空归零"达成） |
+| **S1R-F3** | **容量只报不拦**（MEMORY 520% / AGENT 250%） | 容量口径与实况差 5.2×/2.5×；写入侧不再拦（用户 2026-09-16 判定"提醒即可"） | `check-section-refs` 无关；`memory_write_gate` 的容量告警行 | 若改口径须**单独预注册 + 真实分布校准**（仓内阈值登记制） | 待拍板 |
+
+---
+
 _建立 2026-09-14 · 本表为待办唯一入口。_

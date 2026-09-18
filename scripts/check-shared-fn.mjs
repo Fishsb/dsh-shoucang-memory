@@ -32,6 +32,12 @@ const SHARED = [
   { name: 'biContains', home: 'treeops.ts' },
   { name: 'dayKey', home: 'activity.ts' },
   { name: 'sectionExists', home: 'forgetops.ts' },
+  // S1R（2026-09-19）：小节寻址语义的**唯一实现**（三态 exists/ambiguous/missing）。
+  //   ⚠ 跨面：库工具链 `skill/scripts/section-ref.mjs` 是**同语义的第二份物理实现**
+  //   （子进程活件零依赖、不得 import src/）——它**不在本件扫描面内**（本件只扫 `src/*.ts`），
+  //   其同口径由 **`scripts/check-section-ref-parity.mjs`（差分锁）** 守：同夹具逐例比对 state+候选集。
+  //   ⇒ 「看起来锁了其实没锁」的风险点在此显式声明，勿把本表当成跨面全覆盖。
+  { name: 'resolveSection', home: 'section-ref.ts' },
   { name: 'renderSupplyText', home: 'supply-assembly.ts' },
   { name: 'budgetOf', home: 'supply-assembly.ts' },
   { name: 'clampLines', home: 'supply-assembly.ts' },
