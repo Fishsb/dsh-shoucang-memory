@@ -4,7 +4,7 @@
 //   本阶段按领域切开：实现函数全部在**模块级**，依赖显式窄传（8 项）。
 //   对外只暴露 createInfraApi(d) —— 返回绑定后的句柄，调用方零感知。
 import { appendFileSync, mkdirSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { dirname, join } from 'node:path'
 import { compactFile, rotateBySize } from './ledger-compact.js'
 import { CRITERIA_VERSION } from './criteria.generated.js'
 import { envelopeEvent as envelope } from './event-envelope.js'
@@ -36,9 +36,24 @@ export function createInfraApi(d: InfraDeps) {
     sidShort: (...a: Tail<Parameters<typeof sidShort>>) => sidShort(d, ...a),
     audit: (...a: Tail<Parameters<typeof audit>>) => audit(d, ...a),
     recordStub: (...a: Tail<Parameters<typeof recordStub>>) => recordStub(d, ...a),
+    manifest: (...a: Tail<Parameters<typeof manifest>>) => manifest(d, ...a),
   }
 }
 export type InfraApi = ReturnType<typeof createInfraApi>
+
+/** S2S3 册零（2026-09-19）：**分段清单持久化**。
+ *  判因：清单原先只是**同轮内存字符串**（`distill-agent` 的 `manifest`，CAP=1500 丢最早行，轮结束即消失）
+ *  ⇒ L2 会话级复盘拿不到"本会话 L1 全部产出"，只能看到同轮后段。
+ *  落盘面 = `<kRoot>/audit/distill-manifest/<sid>.jsonl`（**每段一行**，append-only）；
+ *  它不是新事件 kind（不写台账），是**键控产物流**（须登记 `check-observability`）。
+ *  失败**不阻塞**主链路，但走 `fail()` 留痕（与 ledger/log 同纪律）。 */
+const manifest = (d: InfraDeps, sid: string, line: string): void => {
+  try {
+    const dir = join(dirname(d.ledgerFile), 'distill-manifest')
+    mkdirSync(dir, { recursive: true })
+    appendFileSync(join(dir, `${String(sid).replace(/^session-/, '')}.jsonl`), String(line).replace(/\s+$/, '') + '\n', 'utf8')
+  } catch (e) { fail(d, 'manifest', e) }
+}
 
 /**
  * 统一事件信封已抽到 `src/event-envelope.ts`（**单一实现** · 2026-09-13）。

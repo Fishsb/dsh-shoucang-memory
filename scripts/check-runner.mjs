@@ -678,6 +678,12 @@ const CHECKS = [
   //   `check-bank-lock-parity`：跨面差分锁 —— `.mjs` 孪生逐字节 + 与编译产物 `lib/bank-lock.js`
   //     的**行为差分**（10 项语义）+ 反例自证（env 无锁不认重入 / 拒写 / 接管留证）。
   ['scripts/check-bank-lock-parity.mjs'],
+  //   `test-distill-manifest`：**分段清单持久化**（册零）—— `manifest()` 逐段落 `<kRoot>/audit/distill-manifest/<sid>.jsonl`
+  //     （原先只在同轮内存里，轮结束即消失 ⇒ L2 复盘拿不到"本会话 L1 全产出"）；含"写失败不抛 + 经 onWriteFail 留痕"。
+  ['scripts/test-distill-manifest.mjs'],
+  //   `check-write-primitive`：**写入原语收敛棘轮** —— src 里"字面量固定 tmp 名"只许减不许增
+  //     （基线 10，残留清单写在件内注释；已收编文件必须为 0）。
+  ['scripts/check-write-primitive.mjs'],
 ]
 /* ── 已登记在册的自证（i18n · 2026-09-17 · v2.1 验收③）─────────────────────────
  * 判因：验收口径里写「须看到两个新件在册」，若靠**人眼确认**即为文本纪律

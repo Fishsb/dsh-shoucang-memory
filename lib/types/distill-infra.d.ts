@@ -21,8 +21,16 @@ export declare function createInfraApi(d: InfraDeps): {
     sidShort: (sid: string) => string;
     audit: (o: Record<string, unknown>) => void;
     recordStub: (o: Record<string, unknown>) => void;
+    manifest: (sid: string, line: string) => void;
 };
 export type InfraApi = ReturnType<typeof createInfraApi>;
+/** S2S3 册零（2026-09-19）：**分段清单持久化**。
+ *  判因：清单原先只是**同轮内存字符串**（`distill-agent` 的 `manifest`，CAP=1500 丢最早行，轮结束即消失）
+ *  ⇒ L2 会话级复盘拿不到"本会话 L1 全部产出"，只能看到同轮后段。
+ *  落盘面 = `<kRoot>/audit/distill-manifest/<sid>.jsonl`（**每段一行**，append-only）；
+ *  它不是新事件 kind（不写台账），是**键控产物流**（须登记 `check-observability`）。
+ *  失败**不阻塞**主链路，但走 `fail()` 留痕（与 ledger/log 同纪律）。 */
+declare const manifest: (d: InfraDeps, sid: string, line: string) => void;
 declare const ledger: (d: InfraDeps, o: Record<string, unknown>) => void;
 declare const recordEpisode: (d: InfraDeps, o: Record<string, unknown>) => void;
 declare const log: (d: InfraDeps, msg: string) => void;

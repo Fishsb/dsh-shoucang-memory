@@ -48,6 +48,10 @@ const STREAMS = [
   //   且它在**热路径**（每 10min × roots 全量读，D7 已记为性能隐患）⇒ 并入会放大那次读。
   //   ⇒ 归 **keyed**（键控日志），**不并入事件台账**——这是读语义的分别，不是为了凑目标数。
   ['distill-watermark.jsonl', 'keyed', '蒸馏水位（**键控**：读侧 `map.set(sessionId,o)` 取每键最后一条；热路径全量读）', 'suite'],
+  /* S2S3 册零（2026-09-19）**键控产物流**：`distill-manifest/<sid>.jsonl` —— 每段蒸馏一行（段末清单）。
+   *  为何不并入台账：① **键控**语义（按 sid 取该会话全部段）与事件族不同；② 它是**蒸馏的中间产物**，
+   *  给 L2 会话级复盘当材料（原先只在同轮内存、轮结束即消失）；③ 与上面 `distill-watermark` 同理由。 */
+  ['distill-manifest/<sid>.jsonl', 'keyed', '蒸馏分段清单持久化（每段一行；**L2 会话级复盘的材料来源**之一）', 'suite'],
   ['ledger.jsonl', 'event', '统一台账（judgement + write 回执 + 各域并入流；**DS4 主干**）', 'suite'],
   // ── 事件流 · **bank 域**（数据属库）—— 与 suite 台账分域，**不并入**
   ['access-real.jsonl', 'event', '真实访问流水（由**库内脚本** harvest-access 增采；活性/遗忘/回想强度的真实信号源）', 'bank'],
