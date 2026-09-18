@@ -69,6 +69,9 @@
 | `activity.hotHits` | 23 | `src/activity.ts:85,196` | ✅ | 46 | **已调整：5 → 23**。2026-09-15 J2 实测：真实 hits30 p50=**9** / p75=23 / p90=34 / max=58 ⇒ 原阈值 5 **低于 p50** ⇒ 「hot 候选」含半数以上条目，判据意图（识别**高频**小节）**已失去区分度**。按预注册判据取 p75=23。四处默认位点已同步（activity.ts / scheduler.ts / panel-config.ts / deepsleep-run.ts） | 样本翻倍时重跑 scripts/activity-calibrate.mjs |
 | `consolidate.demote.coldDays` | 90 | `skill/engine/criteria.json#consolidate.criteria[consolidate.demote.archive].params.coldDays` | ✅ | 46 | **insufficient-data（维持现值）** —— 依赖 activity.statusDays，而该族分布未覆盖阈值区间（真实天距 max=6.2 天 ≪ 90）⇒ 本轮不可校准。附带实证：判冷的上游已由 harvest 接线修正到假冷 11.1%（原 53%） | 与 activity.statusDays 同步（样本翻倍 或 库龄 ≥90 天） |
 | `ingest.granularity.splitLaw` | `{"R":1000,"K":6}` | `skill/engine/criteria.json#ingest.criteria[ingest.granularity.split-law].params` | ❌ | 0 | insufficient-data（未校准） | J2 |
+| `trigger.reviewIdleMs` | 1800000 | `skill/engine/criteria.json#trigger.reviewIdleMs` | ✅ | 352 | 保留 30min（无实测冲突） | node -e "…档 L 口径复算段中位…"（见 S2S3-book4-record §5 U4 行） |
+| `trigger.reviewMinNewEntries` | 3 | `skill/engine/criteria.json#trigger.reviewMinNewEntries` | ✅ | 352 | 3 条（略低于段中位 4 ⇒ 保证多数段可触发） | 对齐 `test-session-review` 的三态断言（not-triggered / skipped-by-threshold / reviewed） |
+| `trigger.reviewMinNewEvents` | 600 | `skill/engine/criteria.json#trigger.reviewMinNewEvents` | ✅ | 352 | 600 事件（与 3 条并列成对，任一满足即触发） | 同上 |
 
 ## 载体契约（v2.2 · layer / form / inject）
 

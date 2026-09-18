@@ -181,7 +181,11 @@
     "contentMinChars": null,
     "materialChunkChars": null,
     "manual": true,
-    "note": "触发数据化（v2.1 §2.4 · B 档接线后为 runtime）：idleMs=全部根会话停滞阈值；probeAfterMs/probeWindowMs=卡住探测；newTracesMin=窗口内最少新痕迹数；manual=面板「立即归纳一次」。**改这里即改行为**（scheduler zod 缺省直接读本块）。⚠ **2026-09-15 P0.1 实证订正**：本块原注释称「缺省 3h」，但**实际生效值是本块的 2700000ms（45min）**——`scheduler.ts` 的 zod `.default(TRIGGER.idleMs)` 取本块值，而**全仓 8 处** `|| 10800000`（3h）兜底因 zod 有 default 而是**死代码**（⚠ 首轮只报 4 处：检索用了大小写敏感的 `idleMs`，漏掉 `deepSleepIdleMs` 那 4 处 —— `deepsleep.ts` ×2 / `distill-hooks.ts` ×2 ⇒ 「模式派生集合先核对」的典型踩坑）。已修：**8 处全部**统一改引本块（**单一来源已下沉 `deepsleep-core#idleMsOf`**）+ 注释订正 + 护栏 `test-deepsleep-wiring` ⑦（可执行代码不得再出现该字面量），**数值未动**（P0 不改行为）。**数值本身待 P1 双维水位按预注册判据校准**。"
+    "note": "触发数据化（v2.1 §2.4 · B 档接线后为 runtime）：idleMs=全部根会话停滞阈值；probeAfterMs/probeWindowMs=卡住探测；newTracesMin=窗口内最少新痕迹数；manual=面板「立即归纳一次」。**改这里即改行为**（scheduler zod 缺省直接读本块）。⚠ **2026-09-15 P0.1 实证订正**：本块原注释称「缺省 3h」，但**实际生效值是本块的 2700000ms（45min）**——`scheduler.ts` 的 zod `.default(TRIGGER.idleMs)` 取本块值，而**全仓 8 处** `|| 10800000`（3h）兜底因 zod 有 default 而是**死代码**（⚠ 首轮只报 4 处：检索用了大小写敏感的 `idleMs`，漏掉 `deepSleepIdleMs` 那 4 处 —— `deepsleep.ts` ×2 / `distill-hooks.ts` ×2 ⇒ 「模式派生集合先核对」的典型踩坑）。已修：**8 处全部**统一改引本块（**单一来源已下沉 `deepsleep-core#idleMsOf`**）+ 注释订正 + 护栏 `test-deepsleep-wiring` ⑦（可执行代码不得再出现该字面量），**数值未动**（P0 不改行为）。**数值本身待 P1 双维水位按预注册判据校准**。",
+    "reviewIdleMs": 1800000,
+    "reviewMinNewEntries": 3,
+    "reviewMinNewEvents": 600,
+    "reviewNote": "L2 会话级复盘的**触发阈值**（S2S3 册一触发面 · 册四 U4 裁定 2026-09-19）：reviewIdleMs=空闲阈值；reviewMinNewEntries/reviewMinNewEvents=内容维下限。**实测依据**：蒸馏段中位仅 **4**（口径 = `kind=distill-run` 且 `stop` 存在，档 L 352 行 / 1108 段 ⇒ 段中位 4）⇒ 原 8/1200 会大面积漏触发，故内容维下调为 3/600（静默维保留 30min）。改这里即改行为（scheduler zod 缺省直接读本块；`session-review.ts` 只留注册表缺席时的兜底）。"
   },
   "thresholds": {
     "note": "阈值登记制（J0 · 2026-09-15 · 依据 docs/judge-layering-plan-2026-09-15.md §4.2）。**规则**：任何影响「接受/拒绝/归类/取舍」判断的数值阈值都必须登记在此，且登记项必须含 `preregisteredCriterion` + `samples` + `conclusion` + `recheck`。机检 scripts/check-threshold-registry.mjs（未登记 ⇒ 红；登记了但缺预注册或样本数 ⇒ 红）。**范围界定**：不含格式门（归 ingest.format.index-line 的 params）、容量/预算（归 gate.caps / surface.*）、工程常量（超时/重试/熔断）。**样板**：mcl.familiarThreshold 是全仓**唯一**有完整预注册校准记录的阈值。⚠ **暴露出的真问题**：13 项里 **12 项 samples=0 / 未预注册** —— 其中 activity.statusDays 已**实证失真**（假冷 26 条，见 skill/scripts/harvest-access.mjs:6）。",
@@ -477,6 +481,54 @@
         "recheck": "J2",
         "calibrator": null,
         "rollback": "改注册表 → 重跑 gen-criteria"
+      },
+      {
+        "id": "trigger.reviewIdleMs",
+        "probe": {
+          "registryPath": [
+            "trigger",
+            "reviewIdleMs"
+          ]
+        },
+        "value": 1800000,
+        "owner": "skill/engine/criteria.json#trigger.reviewIdleMs",
+        "preregistered": true,
+        "samples": 352,
+        "preregisteredCriterion": "U4 裁定（2026-09-19 · 用户授权代理自行裁定）：静默维保留 30min；依据 = 蒸馏段中位 4（口径串：`kind=distill-run` 且 `stop` 存在 · 档 L 352 行 / 1108 段 / 段中位 4）",
+        "conclusion": "保留 30min（无实测冲突）",
+        "recheck": "node -e \"…档 L 口径复算段中位…\"（见 S2S3-book4-record §5 U4 行）"
+      },
+      {
+        "id": "trigger.reviewMinNewEntries",
+        "probe": {
+          "registryPath": [
+            "trigger",
+            "reviewMinNewEntries"
+          ]
+        },
+        "value": 3,
+        "owner": "skill/engine/criteria.json#trigger.reviewMinNewEntries",
+        "preregistered": true,
+        "samples": 352,
+        "preregisteredCriterion": "U4 裁定（2026-09-19）：内容维按实测段中位 4 下调 ⇒ ≥3 条（原 8 条会漏掉大多数段）",
+        "conclusion": "3 条（略低于段中位 4 ⇒ 保证多数段可触发）",
+        "recheck": "对齐 `test-session-review` 的三态断言（not-triggered / skipped-by-threshold / reviewed）"
+      },
+      {
+        "id": "trigger.reviewMinNewEvents",
+        "probe": {
+          "registryPath": [
+            "trigger",
+            "reviewMinNewEvents"
+          ]
+        },
+        "value": 600,
+        "owner": "skill/engine/criteria.json#trigger.reviewMinNewEvents",
+        "preregistered": true,
+        "samples": 352,
+        "preregisteredCriterion": "U4 裁定（2026-09-19）：内容维事件数下限由 1200 下调至 600（同上依据）",
+        "conclusion": "600 事件（与 3 条并列成对，任一满足即触发）",
+        "recheck": "同上"
       }
     ]
   },

@@ -152,6 +152,13 @@ export const Config: any = z.object({
   //   要恢复产出须显式置 true（并在审计里会看到 produceOff 计数，便于分辨"停产"与"没跑"）。
   s3Produce: z.boolean().default(false).description('S3 睡眠是否允许产出（原则/画像通道）；缺省 false=只维护不产出（S2S3 册二）'),
   enableSessionReview: z.boolean().default(true).description('L2 会话级复盘（S2S3 册一）：空闲/结束后按内容维阈值产出会话级提案'),
+  /* L2 **触发阈值**（S2S3 册四 U4 裁定 · 2026-09-19）：三项**可调**且**登记在册**（G16）。
+   *  缺省值取自判据注册表 `criteria.json#trigger.review*`（单一事实源；schema 只是可调入口）；
+   *  实测依据：段中位仅 **4** ⇒ 原内容维阈值（8 条 / 1200 事件）会大面积漏触发 ⇒ 下调为 3 / 600。
+   *  ⚠ 改这里即改行为（`session-review.ts` 的 `REVIEW_DEFAULTS` 只作**注册表缺席时**的兜底）。 */
+  reviewIdleMs: z.number().min(60000).default(TRIGGER.reviewIdleMs).description('L2 复盘：会话空闲满此毫秒数才复盘（缺省 30 分钟）'),
+  reviewMinNewEntries: z.number().min(1).default(TRIGGER.reviewMinNewEntries).description('L2 复盘内容维：自上次复盘以来新增 L1 条目数下限（U4 裁定：3）'),
+  reviewMinNewEvents: z.number().min(1).default(TRIGGER.reviewMinNewEvents).description('L2 复盘内容维：新增事件数下限（U4 裁定：600）'),
   idleWakeMs: z.number().min(60000).default(600000).description('唤醒判定：turn 结束后空闲满此毫秒数才蒸馏（缺省 10 分钟）'),
   minTurnChars: z.number().min(0).default(200).description('本轮新增正文少于此字符数跳过蒸馏（水位仍推进）'),
   distillPrescan: z.boolean().default(true).description('预筛：无信号词且无 pending 候选则不唤醒 LLM 子代理'),

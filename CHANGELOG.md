@@ -5,6 +5,26 @@
 ## [Unreleased]
 
 ### Changed
+- **S2S3 册四 · 判据收口（2026-09-19，G10–G16 逐条转绿）**：按验收册 §1 的 G 判据把册四的**缺失项补成可机检**：
+  · **G11「报告永不删除」= 指纹账三断言**：新增 `<kRoot>/audit/sleep-report-ledger.jsonl`（每轮一行：
+    `{dateFile,sha256,bytes,lines,sections,firstSeenAt,at}`，**整文件**口径）——判据不是"文件存在"（追加式产物恒真），
+    而是 ① 账行数 == 轮数（只增）② **前缀哈希**：`sha256(当下文件[0..bytes)) == row.sha256`（拦覆盖/截断）
+    ③ 报告段数 == 汇报流轮数（逐值相等）④ `firstSeenAt` 同日多轮**不重置**。
+    ⚠ ② 的口径是**实测修正**：追加式文件的早期行不可能等于"整文件当下哈希"，只有前缀口径既为真又可判。
+  · **G13 双字段 + 两个分母**：问题标记行补 `unusedAtFirstObservation`（跨轮继承，"标了多久"可答）与
+    `stillUnused`（后续轮可写 false ⇒ "已恢复"与"从未被标"可分辨）；`/sleep/issues` 输出**两个分母各自带口径**
+    （`impactRows` 本窗条数 / `producedToday` 当日产出条数）；报告 §5 增加第二分母行（分母 0 ⇒ 记 0，不给"无意义的 0%"）。
+  · **G14 元素消失断言**：`ui-geo-regress` 增第 5 条断言 —— 旧卡来源标注 `/memory/overview · delta / weekDiff`
+    **不得再出现在总览页**（"新卡在"与"旧元素退役"是两条独立判据，只查前者会漏半改造）。
+  · **G12 反例夹具**：构造 `unused` ⇒ 写标记前后目标 notes 文件**逐字节不变**（"只标记不处置"的可机检写法）。
+  · **G16 阈值可调且三处一致**：L2 触发三阈值（`reviewIdleMs` / `reviewMinNewEntries` / `reviewMinNewEvents`，U4 裁定 3/600）
+    登记进 `criteria.json#trigger.review*` + `thresholds.entries`（19 项 · 探针命中）→ 生成投影 `TRIGGER` →
+    `scheduler.ts` 的 zod 缺省 `.default(TRIGGER.review*)` → 运行期经 `deps.thresholds` 真读；
+    判据 4 条（注册表 / 投影 / schema 缺省 / 真机改值三态随变）。
+  · **G15 措辞按实况改判**（验收册 §1 G15）：主源 = 报告派生（逐元素 == 报告段）· 兜底 = `delta.md.rows`（逐元素 + 48h 过期即弃）·
+    介质戳三条只许多签不许少签 —— **不跨源比等价**（行语义不同）。
+  · 判据增量：`test-sleep-report` 20 → **27**（指纹账 4 + G12 1 + G13 2）；`test-session-review` 13 → **17**（G16 4）；
+    `ui-geo-regress` 103 → **121** PASS（G14 ×3 视口 + 逐值断言）。特性探针 57 → **60 项**。
 - **S2S3 册二 · 打开出口：精要层释放接线（2026-09-19，用户指令「目标模式全部落地」）**：
   · **两前置**（会审写死的次序：先净减、再加线）：
     ① **`runDeepSleep` 净减 399 → 369 行**（`audit-fnspan` 实测；DEBT_BASE=0 ⇒ 加线前必须先腾出空间）——

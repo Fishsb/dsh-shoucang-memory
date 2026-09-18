@@ -272,6 +272,10 @@ export declare const TRIGGER: {
     readonly materialChunkChars: null;
     readonly manual: true;
     readonly note: "触发数据化（v2.1 §2.4 · B 档接线后为 runtime）：idleMs=全部根会话停滞阈值；probeAfterMs/probeWindowMs=卡住探测；newTracesMin=窗口内最少新痕迹数；manual=面板「立即归纳一次」。**改这里即改行为**（scheduler zod 缺省直接读本块）。⚠ **2026-09-15 P0.1 实证订正**：本块原注释称「缺省 3h」，但**实际生效值是本块的 2700000ms（45min）**——`scheduler.ts` 的 zod `.default(TRIGGER.idleMs)` 取本块值，而**全仓 8 处** `|| 10800000`（3h）兜底因 zod 有 default 而是**死代码**（⚠ 首轮只报 4 处：检索用了大小写敏感的 `idleMs`，漏掉 `deepSleepIdleMs` 那 4 处 —— `deepsleep.ts` ×2 / `distill-hooks.ts` ×2 ⇒ 「模式派生集合先核对」的典型踩坑）。已修：**8 处全部**统一改引本块（**单一来源已下沉 `deepsleep-core#idleMsOf`**）+ 注释订正 + 护栏 `test-deepsleep-wiring` ⑦（可执行代码不得再出现该字面量），**数值未动**（P0 不改行为）。**数值本身待 P1 双维水位按预注册判据校准**。";
+    readonly reviewIdleMs: 1800000;
+    readonly reviewMinNewEntries: 3;
+    readonly reviewMinNewEvents: 600;
+    readonly reviewNote: "L2 会话级复盘的**触发阈值**（S2S3 册一触发面 · 册四 U4 裁定 2026-09-19）：reviewIdleMs=空闲阈值；reviewMinNewEntries/reviewMinNewEvents=内容维下限。**实测依据**：蒸馏段中位仅 **4**（口径 = `kind=distill-run` 且 `stop` 存在，档 L 352 行 / 1108 段 ⇒ 段中位 4）⇒ 原 8/1200 会大面积漏触发，故内容维下调为 3/600（静默维保留 30min）。改这里即改行为（scheduler zod 缺省直接读本块；`session-review.ts` 只留注册表缺席时的兜底）。";
 };
 export interface ThresholdEntry {
     id: string;

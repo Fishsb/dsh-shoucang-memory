@@ -124,5 +124,37 @@ const NOW = Date.now()
   rmSync(env.kRoot, { recursive: true, force: true }); rmSync(env.bankRoot, { recursive: true, force: true })
 }
 
+/* ── G16（2026-09-19）：触发阈值**可调**且**三处一致**（注册表 / 生成投影 / schema 缺省）────────
+ *  判据（会审 v2）：① 注册表值与生成常量**深相等** ② schema 缺省取自注册表（文本级：`.default(TRIGGER.reviewX)`）
+ *  ③ **消费点真读配置**：把阈值经 `deps.thresholds` 注入后，判定结果随之改变（真机改值 ⇒ 读回新值）。
+ *  **先红**：改造前 `criteria.json` 无 `trigger.review*`、schema 无三键 ⇒ 前两条必红。 */
+{
+  const crit = JSON.parse(readFileSync(join(ROOT, 'skill', 'engine', 'criteria.json'), 'utf8'))
+  const gen = readFileSync(join(ROOT, 'src', 'criteria.generated.ts'), 'utf8')
+  const sch = readFileSync(join(ROOT, 'src', 'scheduler.ts'), 'utf8')
+  const keys = ['reviewIdleMs', 'reviewMinNewEntries', 'reviewMinNewEvents']
+  const regHit = keys.filter((k) => crit.trigger[k] !== undefined)
+  regHit.length === 3 ? ok(`G16① 注册表登记齐（criteria.json#trigger.${keys.join(' / ')} = ${keys.map((k) => crit.trigger[k]).join(' / ')}）`)
+    : bad(`G16① 注册表缺键：${keys.filter((k) => crit.trigger[k] === undefined).join(',')}`)
+  const genHit = keys.filter((k) => new RegExp(`"${k}":\\s*${crit.trigger[k]}`).test(gen))
+  genHit.length === 3 ? ok('G16② 生成投影含同值（criteria.generated.ts 的 TRIGGER 块 —— 单一事实源投影，非手抄）')
+    : bad(`G16② 生成投影缺/值不符：${keys.filter((k) => !genHit.includes(k)).join(',')}`)
+  const schHit = keys.filter((k) => sch.includes(`.default(TRIGGER.${k})`))
+  schHit.length === 3 ? ok('G16③ schema 缺省**取自注册表**（`.default(TRIGGER.review*)`，不是另抄常数）')
+    : bad(`G16③ schema 缺省未接注册表：${keys.filter((k) => !schHit.includes(k)).join(',')}`)
+  // ④ 真机改值 ⇒ 读回新值：同一输入在默认阈值下 `skipped-by-threshold`，注入更宽阈值后 `ready`
+  {
+    const env = mkEnv(); const d = mkDeps(env, [])
+    const input = { sid: SID, lastActivityMs: NOW - 40 * 60000, newEntries: 2, newEvents: 100, disposed: false }
+    const before = M.decideReview(d, input)
+    const after = M.decideReview({ ...d, thresholds: { minNewEntries: 2, minNewEvents: 100 } }, input)
+    const afterNarrow = M.decideReview({ ...d, thresholds: { idleMs: 99 * 3600e3 } }, input)
+    before.state === 'skipped-by-threshold' && after.state === 'ready' && afterNarrow.state === 'not-triggered'
+      ? ok('G16④ 阈值**真读配置**（默认 ⇒ skipped-by-threshold · 放宽 ⇒ ready · 收紧空闲 ⇒ not-triggered 三态随值变）')
+      : bad(`G16④ 阈值未生效：${before.state} / ${after.state} / ${afterNarrow.state}`)
+    rmSync(env.kRoot, { recursive: true, force: true }); rmSync(env.bankRoot, { recursive: true, force: true })
+  }
+}
+
 console.log(`\n结果: ${pass} PASS / ${fail} FAIL`)
 process.exit(fail ? 1 : 0)

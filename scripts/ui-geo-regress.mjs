@@ -273,6 +273,9 @@ setTimeout(function () {
           sub: sub ? (sub.textContent || '').trim() : null, src: src ? (src.textContent || '').trim() : null,
           rows: rows, rect: rr, relTop: rr.t - vt, visibleInViewport: rr.t >= 0 && rr.t < innerHeight };
       })();
+      /* G14 **元素消失**探针（页内取文本；断言在 Node 侧消费）：旧「晨起摘要」卡的来源标注退役后
+       *  不得再出现在页面上 —— 与"新卡在不在"是两条独立判据（只查新元素会漏"半改造"）。 */
+      out.dawnLiteralRetired = (document.body.innerText || '').indexOf('/memory/overview · delta') < 0;
       var wb = qsa('wa-button');
       /* 组件按钮的标签色必须可读（视觉复核抓到过"蓝字压紫底"）：取 shadow DOM 内标签的计算色，
        * 用"取数字"而非正则解析 —— 该探针整体是模板字符串，正则转义易踩坑；并整体 try/catch 防拖垮全件。 */
@@ -667,11 +670,18 @@ for (const [w, h] of VIEWPORTS) {
       sc.src === SLEEP_WANT.src ? ok('卡头来源标注 = 两条只读路由（' + sc.src + '）')
         : bad('来源标注不符：' + sc.src)
       sc.rows.length === 4 ? ok('卡内 4 行（提存 / 压缩 / 问题 / 最近几期）') : bad('卡内行数 ' + sc.rows.length + '（期望 4）')
+      /* G14 的**元素消失断言**（会审 v2 明确要求）：旧「晨起摘要」卡的来源标注文本
+       *   `/memory/overview · delta / weekDiff` 退役后**不得再出现在总览页任何位置**
+       *   —— 否则「卡改造了但旧元素仍在」这类半成品会静默通过（只查新元素时必然漏它）。
+       *   ⚠ 页内取值在探针里（`out.dawnLiteralRetired`）；此处只消费结果。 */
       const flat = sc.rows.join(' | ')
       const miss = SLEEP_WANT.tokens.filter((t) => flat.indexOf(t) < 0)
       miss.length === 0
         ? ok('四行数值**与端点逐值一致**（' + SLEEP_WANT.tokens.length + ' 个 token 全命中：' + SLEEP_WANT.tokens.join(' / ') + '）')
         : bad('卡上数值与端点不符，缺：' + JSON.stringify(miss) + ' ⇒ 实得「' + flat.slice(0, 200) + '」')
+      g.dawnLiteralRetired === true
+        ? ok('G14 消失断言：旧卡来源标注 `/memory/overview · delta / weekDiff` 已不在总览页（元素级退役，不是"新卡在"就算）')
+        : bad('G14：旧卡来源标注仍在页面上（半改造状态）—— `晨起摘要` 卡元素未真正退役')
     }
   }
   /* ③ 首屏容纳关键区块 */
