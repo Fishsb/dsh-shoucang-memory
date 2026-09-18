@@ -5,6 +5,17 @@
 ## [Unreleased]
 
 ### Changed
+- **S2S3 册二 · 执行 L2 提案（G3 执行面 · 2026-09-19）**：新增 `src/proposal-apply.ts` —— **L2 提案流的唯一消费者**
+  （执行权只在 S3，L2 侧永不改库 ⇒ 不撞 S2「只增不改历史」）：
+  · **逐字行级校正**：`revise` 的 `before` 必须在目标文件里**逐字唯一命中**才替换（命中 0 次 ⇒ 记「陈旧提案」；
+    命中多次 ⇒ 记「歧义」）——**不做模糊匹配**（模糊匹配 = 误改风险）；
+  · **先留档再改**：每次改写前落 `rollback/<opHash>.json`（含被改行原文）⇒「可还原」不是口头的；
+  · **幂等**：`applied.jsonl` 记 `(sid, opHash)`，复跑即 no-op；
+  · **逐条裁决可见**：越界路径（路径穿越）/ 未实现 op（`merge`/`demote`）/ 缺字段各自留理由，**绝不静默跳过**；
+  · **默认关闭**：只有 `SHOUCANG_PROPOSAL_APPLY=1` 才执行（与 release 同族：接线上线、启用须显式）。
+  · 判据：新增 `scripts/test-proposal-apply.mjs`（入 `CHECKS` · **156 件**）——静态接线 3 项 + 行为 6 分支；
+    **先红留证**：改造前 A1–A3 三条红（无 import / 无调用 / 无开关）。特性探针 60 → **62 项**；模块数 87 → **88**。
+  · 记录：`docs/specs/S2S3-book2-record.md` §4-4 由「待办」改为「已落地（默认关闭）」。
 - **S2S3 册四 · 判据收口（2026-09-19，G10–G16 逐条转绿）**：按验收册 §1 的 G 判据把册四的**缺失项补成可机检**：
   · **G11「报告永不删除」= 指纹账三断言**：新增 `<kRoot>/audit/sleep-report-ledger.jsonl`（每轮一行：
     `{dateFile,sha256,bytes,lines,sections,firstSeenAt,at}`，**整文件**口径）——判据不是"文件存在"（追加式产物恒真），

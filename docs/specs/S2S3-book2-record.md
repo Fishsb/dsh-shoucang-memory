@@ -43,5 +43,10 @@
 2. **单轮上限 3**（`RELEASE_MAX_PER_RUN`）；被跳过项在 `kind=essence-release` 审计行的 `note` 与深睡日志行可见。
 3. **口径提醒**：验收取数用 `kind=essence-release` 的 `released`（= `applyForgetOps.archived`，**归档数**）；
    **不是** `pv.release`（那是 graded-release 的放行布尔，语义完全不同，勿混）。
-4. **册二其余余项**：`压缩执行`（按裁决的可回滚压缩）与 `执行 L2 提案`（消费 `proposals-<sid>.jsonl`）仍为待办
-   —— 前者依赖 §5-U5 容量出口口径（本代理已裁定「可归档压缩、不删除」），后者依赖册一提案流的真实产出。
+4. **册二其余余项**：
+   · **执行 L2 提案 —— 已落地（默认关闭）**：新件 `src/proposal-apply.ts`（L2 提案流唯一消费者；逐字行级校正 +
+     **先留档再改**（`rollback/<opHash>.json`）+ 幂等账 `applied.jsonl` + 路径穿越/陈旧/歧义三拒；未实现的
+     `merge`/`demote` **逐条留理由**）。判据 = `scripts/test-proposal-apply.mjs`（静态 3 + 行为 6；**先红 A1–A3**）。
+     启用 = 显式 `SHOUCANG_PROPOSAL_APPLY=1`（生产现状为零写入）。
+   · **压缩执行**（按裁决的可回滚压缩）**仍为待办**：它依赖真实轮次的 `convergeOps`/`forgetOps` 裁决数据
+     （本代理已裁定 §5-U5「可归档压缩、不删除」）；`release` 出口已接线（默认关闭），是同一族动作的执行面。
