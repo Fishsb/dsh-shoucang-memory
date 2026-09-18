@@ -176,4 +176,3 @@
 
 | 待接线模块 | 到期条件 | 原因 |
 |---|---|---|
-| `session-review` | 册一接线段：在 distill 的 session/disposed（或空闲）钩子上接线并注入 review 回调；接线落地后必须删掉本条（棘轮只许收紧） | L2 会话级复盘的触发/材料/提案/审计四段已落地且判据齐（test-session-review 13 条 + check-session-review-scope 5 条），但「复盘」这一步要接 S2 的 LLM 通道（注入 review 回调）才产生真实提案；本批先落可测内核，接线放下一段，故按注册表要求显式申报而非沉默跳过。 |

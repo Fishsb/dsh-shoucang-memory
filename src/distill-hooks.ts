@@ -7,6 +7,8 @@ import { existsSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 // 触发阈值回退的单一来源（2026-09-15 P0.1 扩面订正）：本文件曾硬编码 2 处 `|| 10800000`（3h）。
 import { idleMsOf } from './deepsleep-core.js'
+import { memoryLibRoot } from './targets.js'
+import { decideReview, runSessionReview, buildMaterials, readReviewState, type ReviewDeps, type ReviewProposal } from './session-review.js'
 import type { InfraApi } from './distill-infra.js'
 import type { WriteApi } from './distill-write.js'
 import type { ParentApi } from './distill-parent.js'
@@ -25,6 +27,21 @@ export interface HooksDeps {
   sleep: { sessions: Map<string, any>; noteEvent(sid: string, isTurnEnd: boolean): void; deepSleepCheck(): void; DEEP_SLEEP_CHECK_MS: number; getDeepSleepStatus(): any }
   env: { ctx: any; config: any }
 
+}
+
+/** L2 复盘的**依赖/状态/材料**三件套（模块级构造 · 2026-09-19）。
+ *  为什么不写在装配层：装配 `registerDistill` 受 `audit-wiring` I1（≤120 行）管，加 12 行就地越线
+ *  （实测 130 ⇒ FAIL）。本函数的输入只有 `kRoot` 与 `infra`（`HooksDeps.io` 已带），
+ *  故放在本文件即可，装配层零改动——**依赖面更窄，且不新增接口字段**。 */
+const reviewApiOf = (io: { infra: InfraApi; kRoot: string }) => (sid: string) => {
+  const deps: ReviewDeps = {
+    kRoot: io.kRoot,
+    bankRoot: memoryLibRoot(),
+    now: () => Date.now(),
+    log: (m) => io.infra.log(m),
+    audit: (o) => io.infra.audit({ sid, ...o }),
+  }
+  return { deps, prev: readReviewState(deps, sid), materials: buildMaterials(deps, sid) }
 }
 
 /** 去掉首个参数（依赖 d）后的参数元组 —— 用于生成**保类型**的绑定句柄。 */
@@ -82,6 +99,60 @@ const sweepBacklog = async (dep: HooksDeps, ): Promise<void> => {
       } catch { /* 单会话扫尾失败静默 */ }
     }
   } catch { /* 扫尾零抛出 */ }
+}
+
+/**
+ * **L2 会话级复盘扫尾**（S2S3 册一 · 2026-09-19）：把 `session-review` 挂进运行时。
+ *
+ * 为什么挂在这里：L2 的触发是「**空闲 ≥30min** 或 disposed」+ 内容维（会审 U4 裁定），而本文件已有
+ *   10min 周期的扫尾定时器（与 `sweepBacklog` 同一节拍）——复用它的节拍，不新开定时器（不新增常驻开销）。
+ *
+ * 为什么 proposals 是**确定性摘要**（本批）：L2 的"语义校正"（revise/merge/demote）要靠 LLM 判断，
+ *   而 LLM 通道要按 S2 的分段蒸馏子进程形态接（下一次接线段）。本批先落**事实型主线**：
+ *   「本会话共 N 段 L1 产出 · 未落地 K 条（列出身份）」——它本身对 S3 有用（S3 据此知道哪些知识没进库），
+ *   且**零 LLM 成本**。语义版提案在同一回调里升级，形态不变（`ReviewProposal[]`）。
+ *
+ * 幂等由 `runSessionReview` 自己守（`(sid, reviewedSeq, opHash)` + 同水位 no-op）⇒ 本函数可被反复调用。
+ */
+const reviewSessions = async (dep: HooksDeps): Promise<void> => {
+  try {
+    if ((dep.env.config as { enableSessionReview?: boolean }).enableSessionReview === false) return
+    const reviewOf = reviewApiOf(dep.io)
+    const roots = (dep.env.ctx.agents && typeof dep.env.ctx.agents.roots === 'function') ? dep.env.ctx.agents.roots() : []
+    for (const a of roots) {
+      try {
+        if (!a || !a.id || !a.session || typeof a.session.snapshotEvents !== 'function') continue
+        const origin = a.session.header && a.session.header.origin
+        if (origin === 'subagent') continue
+        const sid = a.id
+        if (dep.dom.parent.hasActiveSubagents(sid)) continue // 子代理在跑 ⇒ 会话未完，L2 等它
+        const rec = dep.sleep.sessions.get(sid)
+        const lastActivityMs = Number(rec?.lastEndAt || 0)
+        const base = dep.dom.wm.resolveWatermark(sid, a) as (Record<string, unknown> | null)
+        const l1Seq = Number((base as { lastSeq?: number } | null)?.lastSeq || 0)
+        const evs: any[] = a.session.snapshotEvents()
+        let maxSeq = l1Seq
+        for (const e of evs) { const s = Number(e?.seq ?? 0); if (s > maxSeq) maxSeq = s }
+        const rd = reviewOf(sid)
+        const prevSeq = Number(rd.prev?.reviewedSeq || 0)
+        const newEvents = Math.max(0, maxSeq - Math.max(prevSeq, 0))
+        const m = rd.materials
+        const input = { sid, lastActivityMs, newEntries: m.counts.manifest, newEvents, disposed: false, reviewedSeq: maxSeq, fp: String((base as { fp?: string } | null)?.fp || '') }
+        const dec = decideReview(rd.deps, input)
+        if (dec.state !== 'ready') continue
+        const mainline: ReviewProposal = {
+          op: 'mainline',
+          after: `本会话 L1 产出 ${m.counts.manifest} 段 · 未落地 ${m.counts.failures} 条`
+            + (m.failures.length ? `（示例：${m.failures.slice(0, 3).join('；')}）` : ''),
+          why: 'L2 确定性摘要（v1 无 LLM）：给 S3 一份"哪些知识没进库"的可执行线索',
+        }
+        const r = await runSessionReview(rd.deps, input, async () => [mainline])
+        if (r.state === 'reviewed' && r.appended > 0) dep.io.infra.log(`session-review: ${dep.io.infra.sidShort(sid)} 复盘落 ${r.appended} 条提案（§${r.reviewedSeq}）`)
+      } catch (e) {
+        try { dep.io.infra.log(`session-review 单会话失败（不影响主链）：${String((e as Error)?.message || e).slice(0, 120)}`) } catch { /* */ }
+      }
+    }
+  } catch { /* 复盘扫尾零抛出 */ }
 }
 
 /**
@@ -231,4 +302,12 @@ ctx.effect(() => {
   const iv = setInterval(run, dep.sleep.DEEP_SLEEP_CHECK_MS)
   return () => { clearTimeout(t0); clearInterval(iv) }
 }, dep.io.SHORT + ': distill sweep')
+
+// S2S3 册一：**L2 会话级复盘**（与扫尾同节拍：启动 45s 首跑 + 每 10min 一次；不新开定时器）
+ctx.effect(() => {
+  const run = (): void => { try { void reviewSessions(dep) } catch { /* 复盘扫尾零抛出 */ } }
+  const t0 = setTimeout(run, 45000)
+  const iv = setInterval(run, dep.sleep.DEEP_SLEEP_CHECK_MS)
+  return () => { clearTimeout(t0); clearInterval(iv) }
+}, dep.io.SHORT + ': session review')
 }

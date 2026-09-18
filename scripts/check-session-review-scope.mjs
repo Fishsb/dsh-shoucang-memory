@@ -12,13 +12,14 @@
 //      `renameSync(` / `unlinkSync(` —— 只许 `appendFileSync`（append-only 提案流与状态流）
 //   ④ **反例自证**：往临时副本里注入一条禁止 import 与一次 `writeFileSync(` ⇒ 断言必须各自命中
 //      （否则本件是"恒真断言"）
-import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdtempSync, rmSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
-const SRC = join(ROOT, 'src', 'session-review.ts')
+const SRC_DIR = join(ROOT, 'src')
+const SRC = join(SRC_DIR, 'session-review.ts')
 const FORBIDDEN_IMPORTS = ['treeops', 'forgetops', 'sectionops', 'deepsleep-', 'panel-']
 const FORBIDDEN_WRITES = ['atomicWriteFile', 'editFileUnderLock', 'writeFileSync(', 'renameSync(', 'unlinkSync(']
 
@@ -42,6 +43,16 @@ else {
   const r = scan(text)
   r.badImports.length === 0 ? ok(`依赖白名单：未 import ${FORBIDDEN_IMPORTS.join(' / ')}`) : bad(`越界 import：${r.badImports.join(', ')}（L2 不得把重写者引进 S2）`)
   r.badWrites.length === 0 ? ok(`不持有写入原语：未出现 ${FORBIDDEN_WRITES.join(' / ')}`) : bad(`出现库内写入原语：${r.badWrites.join(', ')}`)
+  // ①b **接线断言**（2026-09-19 接线段补）：模块必须**真被运行时消费**——否则"落地"只是文件落地。
+  //   判据 = src 里存在**另一个**模块 import 它（架构门的扇入断言由 audit-architecture 判；这里给同一条留个就地证据）。
+  const consumers = []
+  for (const f of readdirSync(SRC_DIR).filter((x) => x.endsWith('.ts') && x !== 'session-review.ts' && !x.includes('.generated.'))) {
+    const t = stripComments(readFileSync(join(SRC_DIR, f), 'utf8'))
+    if (/from\s+'\.\/session-review\.js'/.test(t)) consumers.push(f)
+  }
+  consumers.length > 0
+    ? ok(`接线：运行时消费者 = ${consumers.join(', ')}（模块不是"只有单测在用"）`)
+    : bad('接线：src 内无模块 import session-review ⇒ 只有离线/单测在用（"落地"名不副实）')
 }
 
 // ④ 反例自证：扫描器必须能抓到违规
