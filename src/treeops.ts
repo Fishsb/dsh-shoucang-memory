@@ -36,6 +36,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, unlink
 import { join } from 'node:path'
 import { envelopeEvent as envelope } from './event-envelope.js'
 import { makeCappedSink } from './proc-async.js'
+import { atomicWriteFile } from './section-rewrite.js'
 
 export interface TreeOp {
   action: 'rename' | 'merge' | 'split'
@@ -156,18 +157,9 @@ export function normalizeNotesFile(f: unknown): string | null {
   return name
 }
 
-// ── 整文件原子写（tmp + rename；对齐记忆库落盘纪律）──
-export function atomicWrite(p: string, text: string): boolean {
-  const tmp = p + '.tmp'
-  try {
-    writeFileSync(tmp, text, 'utf8')
-    renameSync(tmp, p)
-    return true
-  } catch {
-    try { unlinkSync(tmp) } catch { /* */ }
-    return false
-  }
-}
+// ── 整文件原子写：**唯一实现已收敛到 `section-rewrite.ts`**（S2S3 册零 · 2026-09-19）──
+// 旧实现用固定 tmp 名（`p + '.tmp'`）⇒ 两写者并发互踩；现委托单一原语（唯一 tmp 名 + 写后回读校验）。
+export const atomicWrite = (p: string, text: string): boolean => atomicWriteFile(p, text).ok
 /** 既有行整理口径：空行压缩 + 末尾单换行（与 applyPrinciples/applyPointerOps/consolidateTree 一致） */
 export const finalize = (ls: string[]): string => ls.join('\n').replace(/\n{3,}/g, '\n\n').replace(/\s+$/, '\n')
 export const readLines = (p: string): string[] | null => {

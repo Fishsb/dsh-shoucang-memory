@@ -96,7 +96,7 @@ for (const tgt of targets) {
  *  的 `import './section-ref.mjs'` 在**运行期** ERR_MODULE_NOT_FOUND（仓内绿、装上去跑不了）。
  *  故：白名单内**缺失即补建**（属部署完整性，不是往私人数据区塞新东西）；白名单外维持「只覆盖」。 */
 const FACE2_REQUIRED = new Set([
-  'section-ref.mjs', 'read_section.mjs', 'memory_write_gate.mjs', 'memory-append.mjs',
+  'section-ref.mjs', 'bank-lock.mjs', 'read_section.mjs', 'memory_write_gate.mjs', 'memory-append.mjs',
   'memory_health_check.mjs', 'memory-reconcile.mjs', 'archive-lib.mjs', 'bank-git.mjs', 'harvest-access.mjs',
   'vendor/fzstd.cjs',
 ])

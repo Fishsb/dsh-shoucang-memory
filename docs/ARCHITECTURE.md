@@ -45,7 +45,12 @@ L4 交互（DSH Web GUI）
 | **M10 自省** | `assistant_capabilities` | 能力面查询 | 只读，无 token |
 
 > **载体归属口径（2026-09-12 根治 A–D 后；2026-09-14 P1 订正）**：
-> `src/` 共 **83 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> `src/` 共 **85 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> **2026-09-19 新增 `bank-lock.ts` / `section-rewrite.ts`** ⇒ 83 → 85：S2S3 册零「落盘一致性与单写者」——
+> **库级单写者锁**（`<bank>/.write-lock`，mkdir 原子取锁 / 进程内与跨进程（env）双重重入 / 陈旧接管留证 /
+> **拿不到即拒写** fail-closed）与**唯一写入原语**（唯一 tmp 名 + 原子 rename + 写后回读校验 + 带门禁写）；
+> 跨面零依赖孪生 `scripts/bank-lock.mjs` ≡ `skill/scripts/bank-lock.mjs` 由 `check-bank-lock-parity` 差分锁守，
+> 不变量与先红见 `scripts/test-bank-lock.mjs`（无锁形状丢更新 8/16 · 真路径 0 丢更新）。
 > **2026-09-19 新增 `section-ref.ts`** ⇒ 82 → 83：S1R「小节寻址单一语义」——三态
 > `exists/ambiguous/missing`（**歧义 ≠ 不存在**）+ 一行多指针提取 + 索引行准入；
 > 跨面同源（库工具链 `skill/scripts/section-ref.mjs`）由 `check-section-ref-parity` 差分锁守。

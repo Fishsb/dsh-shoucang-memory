@@ -10,6 +10,7 @@ import type { RouteTarget } from './targets.js'
 import { runNode, textOf } from './distill-proc.js'
 import type { RunResult } from './distill-proc.js'
 import { semanticSim } from './vec.js'
+import { admitIndexRow } from './section-ref.js'
 import { carrierFiles, mirrorAll, mirrorFile } from './record-shadow.js'
 import { commitRingChannels } from './ring-commit.js'
 // B（2026-09-17 圆桌会议册一）：内容级凭据准入**单一实现**（与 gate 内联表同源，改一处须同步）。
@@ -186,6 +187,15 @@ const registerIndexMeta = (dep: WriteDeps, root: string, targetFile: string, ind
 
 const writeDispatch = async (dep: WriteDeps, sid: string, out: any, route: string, workspace: string | null): Promise<{ added: number; rejected: number; failed: number; targetLib: string }> => {
   let added = 0, rejected = 0, failed = 0
+  // S2S3 册零（2026-09-19）：**失败明细**（条目身份，不只计数）。
+  //   判因：L2 会话级复盘要「本会话 L1 全部产出（含未落地）」；而原实现失败只 `failed++`，
+  //   审计行只有三个数 ⇒ L2 会以为"会话没这条知识"（实测 `write.ingest` 只有计数、无条目标识）。
+  //   故每处失败都记 `{k,target,section,tag,reason}`（上限 20 条，防审计行膨胀），随 `distill-run` 行落盘。
+  const failedItems: Array<Record<string, string>> = []
+  const markFailed = (k: string, target: string, section: string, reason: string, tag = ''): void => {
+    failed++
+    if (failedItems.length < 20) failedItems.push({ k, target: String(target || ''), section: String(section || ''), tag, reason: String(reason || '').slice(0, 80) })
+  }
   // ── P4（2026-09-14）：**环记录落库**（决策/承诺/关系/价态）──
   //   为什么放在路由分支**之前**：它们是「经历」，不因本次路由是 memory/project/discard 而失效
   //   （在某项目会话里答应用户的事，仍然是答应过的事）。此前五环的唯一生产者是 CLI
@@ -227,7 +237,8 @@ const writeDispatch = async (dep: WriteDeps, sid: string, out: any, route: strin
       const _sec = String(a.section || '').trim().replace(/^[§#]+\s*/, '').replace(/(\/)?\s*[§#]+\s*/g, '$1')
       if (!_sec) { failed++; continue }
       const r = await memAppend(dep, String(a.target), 'append', _base + _rc + _aw, _sec, resolved)
-      if (r.status === 0) added++; else { failed++; dep.infra.log(`distill 落点失败 ${a.target}§${a.section}: ${textOf(r).slice(0, 120)}`) }
+      if (r.status === 0) added++
+      else { markFailed('append', String(a.target), _sec, textOf(r)); dep.infra.log(`distill 落点失败 ${a.target}§${a.section}: ${textOf(r).slice(0, 120)}`) }
     }
     for (const ni of newIndex) {
       if (!ni || !ni.line) { failed++; continue }
@@ -280,19 +291,33 @@ const writeDispatch = async (dep: WriteDeps, sid: string, out: any, route: strin
           continue
         }
       }
+      // S2S3 册零（2026-09-19）：**索引行准入（孤儿预防）前置**。
+      //   仓库既有唯一强制点在 `memory-append --new`（S1R · D3）；宿主侧再前置一次，是为了让
+      //   「小节没落盘 ⇒ 该索引行**也不单独落盘**」成立（同写/同不写）——不然会出现"索引行在、
+      //   目标节不在"的孤儿指针（本册实测的病灶形状）。指针不可解析 ⇒ 拒写 + 明细入 failedItems。
+      const adm = admitIndexRow(resolved.root, nl)
+      if (!adm.ok) {
+        rejected++
+        const miss = adm.missing.map((x) => `${x.file}§${x.name}`).join(',')
+        dep.infra.audit({ sid, kind: 'gate-reject', target: t, reason: `dangling-pointer:${miss}` })
+        markFailed('index-dangling', t, miss, '指针目标节不存在（拒写，防孤儿）', mNew ? mNew[1] : '')
+        dep.infra.log(`distill 拒收: 索引行指针悬空（${miss}），不写入（同写/同不写）`)
+        continue
+      }
       const r = await memAppend(dep, t, 'new', nl, '-', resolved)
-      if (r.status === 0) { added++; registerIndexMeta(dep, resolved.root, t, nl, sid) } else { failed++; dep.infra.log(`distill 新索引失败: ${textOf(r).slice(0, 120)}`) }
+      if (r.status === 0) { added++; registerIndexMeta(dep, resolved.root, t, nl, sid) }
+      else { markFailed('index', t, '', textOf(r), mNew ? mNew[1] : ''); dep.infra.log(`distill 新索引失败: ${textOf(r).slice(0, 120)}`) }
     }
     mirrorShadow(dep, resolved.root, 'MEMORY.md') // P4 双写期：索引行落盘后镜像（缺省 md 档=不动作）
     // 双画像：Q2「归谁」的 USER/AGENT 通道（宿主直写，格式/容量/去重门禁）
     const profiles = (out && Array.isArray(out.profiles)) ? out.profiles : []
     const date = new Date().toISOString().slice(0, 10)
     for (const p of profiles) {
-      if (!p || !p.target || !p.section || !p.text) { failed++; continue }
+      if (!p || !p.target || !p.section || !p.text) { markFailed('profile-baditem', p?.target, p?.section, '字段缺失'); continue }
       const w = writeProfileLine(dep, resolved.root, String(p.target).trim(), String(p.section), `- ${String(p.text).trim()} ← 源: distill ${dep.infra.sidShort(sid)} ${date}`)
       if (w.st === 'added') added++
       else if (w.st === 'rejected') { rejected++; dep.infra.audit({ sid, kind: 'gate-reject', target: p.target, reason: `画像更新被拒（${w.why}）` }) }
-      else if (w.st === 'failed') failed++
+      else if (w.st === 'failed') markFailed('profile', String(p.target), String(p.section), '画像行落盘失败')
       // dedup：静默不计
     }
     // P4 双写期**覆盖修复**（2026-09-13）：**一趟写入结束统一镜像全部载体**。
@@ -304,7 +329,7 @@ const writeDispatch = async (dep: WriteDeps, sid: string, out: any, route: strin
     if (dep.config.storeMode === 'dual') {
       try { mirrorAll(resolved.root, new Date().toISOString(), carrierFiles(resolved.root)) } catch { /* 镜像失败不影响主流程 */ }
     }
-    dep.infra.audit({ sid, kind: 'distill-run', route, lib: resolved.library, wlSource: source, added, rejected, failed })
+    dep.infra.audit({ sid, kind: 'distill-run', route, lib: resolved.library, wlSource: source, added, rejected, failed, ...(failedItems.length ? { failedItems } : {}) })
     return { added, rejected, failed, targetLib: resolved.library }
   }
   if (route === 'project') {
