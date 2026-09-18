@@ -45,7 +45,10 @@ L4 交互（DSH Web GUI）
 | **M10 自省** | `assistant_capabilities` | 能力面查询 | 只读，无 token |
 
 > **载体归属口径（2026-09-12 根治 A–D 后；2026-09-14 P1 订正）**：
-> `src/` 共 **78 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> `src/` 共 **79 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> **2026-09-18 新增 `hot-stable.ts`** ⇒ 78 → 79：按域路由 P1「恒定面单独出口」，**按领域接缝**自
+> `panel-shared.ts` 抽出恒定面构造（双画像块 + 块内配额 + 留痕 + 缓存判定）——抽出动因是该模块受
+> `check-module-growth` 大模块冻结棘轮约束（基线 537 + 容差 15），`buildStable()` 内联即撞顶（实测 553 FAIL）；
 > **2026-09-17 新增 `secret-redact.ts`** ⇒ 77 → 78：内容级凭据过滤的**单一实现**（纯函数
 > `findSecrets` / `hasSecret` / `secretWarnings`，零 IO）。判因（**已发生事实**）：库内
 > `pending/flow-candidates/*.md` 实测含**明文 API 密钥**（用户原话"这是我的秘钥"），

@@ -53,12 +53,22 @@ for (const f of [panelJs, targetsJs]) {
 //    标签与 layer 取自注册表（单一事实源），此处内联快照以便断言。
 const REG_LAYERS = {
   原则: { layer: 'P', inject: 'always' }, // P · always  —— 应进注入面
-  环境: { layer: 'P', inject: 'always' }, // P · always
-  路径: { layer: 'R', inject: 'gated' },  // R · gated   —— 【应被门控，不应无差别注入】
+  环境: { layer: 'E', inject: 'gated' },  // E · gated   —— 【2026-09-18 归一：原 P/always ⇒ 标签漂移修复】
+  路径: { layer: 'R', inject: 'gated' },  // R · gated   —— 【应被门控；**但 process 槽启用后按任务型通道合法进面**】
   经验: { layer: 'E', inject: 'gated' },  // E · gated   —— 【同上】
   tool: { layer: 'E', inject: 'gated' },  // E · gated
   flow: { layer: 'E', inject: 'gated' },  // E · gated
 }
+/* ⚠ 2026-09-18 两处契约变更（本夹具随之更新，**判据意图不变**）：
+ *   ① `[环境]` 由 P/always 归一为 **E/gated**（按域路由 P0-a 标签漂移修复：64 条与 `[env]` 同指 notes/env.md，
+ *      且 P⇒always 使其挤占恒定预算）⇒ 它从"恒定面正资产"变为"gated 行"，A1/A2 的归属随之互换。
+ *   ② `[路径]` 在 **process 槽启用**（P0-b）后**合法进注入面**——它走 `surface.injection.process.carrierTag`
+ *      声明的**任务型门控通道**（`dynamic-select#selectProcessLines`，与 query 无关、topN=3），
+ *      这正是「task 路由」的定义。故 A2/A7/A8 的"泄漏"判据须**排除 process 槽声明的标签**，
+ *      否则会把合法通道误报为越层（原判据成立于 process 槽 enabled=false 的年代）。 */
+const PROC_TAGS = new Set((() => {
+  try { return JSON.parse(readFileSync(join(repoRoot, 'skill/engine/criteria.json'), 'utf8'))?.surface?.injection?.process?.carrierTag || [] } catch { return [] }
+})())
 const fixtureRoot = mkdtempSync(join(tmpdir(), 'sc-carrier-fixture-'))
 mkdirSync(join(fixtureRoot, 'notes'), { recursive: true })
 mkdirSync(join(fixtureRoot, 'audit'), { recursive: true })
@@ -118,9 +128,11 @@ for (const [t] of pTags) ok(idxSection.includes(`[${t}]`), `A1 P/always 标签 [
 //     有查询时 gated 行可**按需**出现（相关性通道即契约指定的 gated 渲染器），属应然行为，不在本断言范围。
 let gatedLeak = 0
 for (const [t] of gTags) {
-  const leaked = idxSection.includes(`[${t}]`)
+  // ⚠ 2026-09-18：process 槽（P0-b 已启用）声明的标签走**任务型通道**合法进面 ⇒ 不算"无差别注入"。
+  //   判据本意是拦「位置式基线不问 layer 一律铺开」，不是拦契约声明的专用槽。
+  const leaked = idxSection.includes(`[${t}]`) && !PROC_TAGS.has(t)
   if (leaked) gatedLeak++
-  ok(!leaked, `A2 gated 标签 [${t}]（layer=${REG_LAYERS[t].layer}）不应无差别注入 —— 泄漏=${leaked}`)
+  ok(!leaked, `A2 gated 标签 [${t}]（layer=${REG_LAYERS[t].layer}）不应无差别注入 —— 泄漏=${leaked}${PROC_TAGS.has(t) ? '（process 槽声明，已豁免）' : ''}`)
 }
 
 // A3：总括 —— 不得「所有 index 行不问 layer 一律返回」
@@ -193,8 +205,8 @@ const ctx2 = {
 mod2.applyPanel(ctx2, { state_path: join(fixture2, 'state.json') })
 const hook2 = hooks2.find((h) => h && h.name === 'shoucang-hot-memory')
 const idx2 = (String(hook2 ? hook2.text(undefined) || '' : '')).split('知识索引（MEMORY.md')[1] || ''
-const leak2 = gTags.filter(([t]) => idx2.includes(`[${t}]`)).map(([t]) => t)
-ok(leak2.length === 0, `A7-1 全 gated 夹具：无查询时恒定注入面 0 条 gated（实测泄漏 ${leak2.length}：${leak2.join(',') || '无'}）`)
+const leak2 = gTags.filter(([t]) => idx2.includes(`[${t}]`) && !PROC_TAGS.has(t)).map(([t]) => t)
+ok(leak2.length === 0, `A7-1 全 gated 夹具：无查询时恒定注入面 0 条 gated（实测泄漏 ${leak2.length}：${leak2.join(',') || '无'}）${PROC_TAGS.size ? '（process 槽声明的标签已豁免）' : ''}`)
 // A7-2 = 回归点：有查询时 gated 必须仍能经相关性通道现身（守卫 `&& allMem.length` 会让它恒为 0）
 const ctxQ2 = { agent: { session: { snapshotEvents: () => [{ type: 'user/message', data: { content: [{ text: '任务路径 工具经验 流程经验' }], source: { kind: 'user' } } }] } } }
 const idx2q = (String(hook2 ? hook2.text(ctxQ2) || '' : '')).split('知识索引（MEMORY.md')[1] || ''
@@ -211,7 +223,7 @@ ok(rows2q > 0 && rows2q <= 10, `A7-3 全 gated 夹具：回补的 gated 行受�
 const injectedBlock = { type: 'user/message', data: { content: [{ text: '【认知环·慢通道】任务路径 工具经验' }], source: { kind: 'plugin', plugin: 'shoucang-mcl' } } }
 const realUserMsg = { type: 'user/message', data: { content: [{ text: '流程经验 工具经验' }], source: { kind: 'user' } } }
 const idxOnlyPlugin = (String(hook2 ? hook2.text({ agent: { session: { snapshotEvents: () => [injectedBlock] } } }) || '' : '')).split('知识索引（MEMORY.md')[1] || ''
-const gatedOnlyPlugin = gTags.filter(([t]) => idxOnlyPlugin.includes(`[${t}]`)).map(([t]) => t)
+const gatedOnlyPlugin = gTags.filter(([t]) => idxOnlyPlugin.includes(`[${t}]`) && !PROC_TAGS.has(t)).map(([t]) => t)
 ok(gatedOnlyPlugin.length === 0, `A8 仅注入块（source.kind=plugin）不作召回 query（实测泄漏 ${gatedOnlyPlugin.length}：${gatedOnlyPlugin.join(',') || '无'}）`)
 const idxMixed = (String(hook2 ? hook2.text({ agent: { session: { snapshotEvents: () => [realUserMsg, injectedBlock] } } }) || '' : '')).split('知识索引（MEMORY.md')[1] || ''
 const gatedMixed = gTags.filter(([t]) => idxMixed.includes(`[${t}]`)).map(([t]) => t)

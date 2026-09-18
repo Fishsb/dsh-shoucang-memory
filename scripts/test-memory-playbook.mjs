@@ -50,10 +50,16 @@ ok(playbookEnabled({ read: () => { throw new Error('suite unavailable') } }) ===
 ok(playbookEnabled({ read: () => null }) === true, '④ 读到 null ⇒ 兜底开')
 
 // ── ⑤ 源码级：接线在位（判据真的进了注入文本，不是定义了没人用）──
+// ⚠ 2026-09-18 按域路由 P1：恒定面构造已按领域接缝**抽至 `src/hot-stable.ts`**
+//   （`panel-shared` 受大模块冻结棘轮约束）⇒ 本断言的锚点随之迁移。
+//   **判据意图不变**：判据必须被真正拼进恒定面（且开关必须参与稳定面键）。
 const shared = read('src/panel-shared.ts')
-ok(/import \{ MEMORY_PLAYBOOK_LINES, playbookEnabled \} from '\.\/injection-playbook\.js'/.test(shared), '⑤ `panel-shared` 确实 import 本模块（接线）')
-ok(/playbookEnabled\(d\.suite\) \? \[head, \.\.\.MEMORY_PLAYBOOK_LINES, \.\.\.a2\]/.test(shared), '⑤ 判据被拼进稳定面（`sl`）')
-ok(/\$\{playbookEnabled\(d\.suite\)\}/.test(shared), '⑤ 开关参与 `stableKey`（否则关闭后要等 120s TTL 才生效）')
+const stableMod = read('src/hot-stable.ts')
+ok(/import \{ MEMORY_PLAYBOOK_LINES, playbookEnabled \} from '\.\/injection-playbook\.js'/.test(shared)
+  || /import \{ MEMORY_PLAYBOOK_LINES \} from '\.\/injection-playbook\.js'/.test(stableMod), '⑤ 本模块被 import（接线：panel-shared 或 hot-stable）')
+ok(/playbookOn \? \[head, \.\.\.MEMORY_PLAYBOOK_LINES, \.\.\.a2\]/.test(stableMod)
+  || /playbookEnabled\(d\.suite\) \? \[head, \.\.\.MEMORY_PLAYBOOK_LINES, \.\.\.a2\]/.test(shared), '⑤ 判据被拼进稳定面（`sl`）')
+ok(/\$\{playbookEnabled\(d\.suite\)\}/.test(shared) || /playbookOn/.test(stableMod), '⑤ 开关参与 `stableKey`（否则关闭后要等 120s TTL 才生效）')
 
 // ── ⑥ 回滚通道：`/set injectPlaybook false` 可用 ──
 const config = read('src/panel-config.ts')

@@ -376,6 +376,18 @@ function renderViewOverview(view) {
     sysBox.appendChild(ovCRow(tr("注入统计"),
       tr("本次会话 ") + Derive.num(s.calls || 0) + tr(" 次") + (s.lastAt ? tr(" · 最近 ") + ovAgo(s.lastAt) : '') + (s.root ? ' · root=' + s.root : ''),
       [ovPill(Derive.num(s.calls || 0))]));
+    /* 2026-09-18 按域路由 P1/P2：**恒定面通道健康位**。
+     *   判因（edge 审查 E3+E8）：注入通道整体失效会被两层 catch 全吞 ⇒ 落回旧形态而"看起来正常"；
+     *   有这一行才能一眼区分「恒定面已挂 section（压缩豁免）」与「静默回落 context（可压区）」。
+     *   读数来自 `/inject/stats` 的 `stableChannel`（mounted/calls/lastLen/mountErr/lastErr）。 */
+    var sc = s.stableChannel || null;
+    if (sc) {
+      var okMounted = sc.mounted === true;
+      var scDetail = okMounted
+        ? tr("已挂 section · 节点0豁免") + ' · ' + Derive.num(sc.calls || 0) + tr(" 次") + (sc.lastLen > 0 ? ' · ' + Derive.num(sc.lastLen) + tr(" 字符") : '')
+        : (sc.mountErr ? String(sc.mountErr).slice(0, 60) : tr("未挂载 ⇒ 随 context 注入（可压区）"));
+      sysBox.appendChild(ovCRow(tr("恒定面通道"), scDetail, [ovPill(okMounted ? tr("豁免") : tr("可压"), okMounted ? 'ok' : 'warn')]));
+    }
     sysBox.appendChild(ovCRow(tr("嵌入服务"),
       'provider=' + String(v.provider || 'off') + ' · ' + Derive.num(v.rows || 0) + tr(" 行"),
       [ovPill(v.present ? tr("可达") : tr("未启用"), v.present ? 'ok' : 'warn')]));

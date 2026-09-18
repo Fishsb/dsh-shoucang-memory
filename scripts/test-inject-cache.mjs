@@ -37,7 +37,10 @@ function fixture() {
   //   用 `[原则]`/`[身份]` 属**索引行** ⇒ 画像块会**整块静默跳过**，断言会假红。
   writeFileSync(join(mem, 'AGENT.md'), '- [边界] AAAA ← 源: notes/x.md §y\n', 'utf8')
   writeFileSync(join(mem, 'USER.md'), '- [性格] probe ← 源: notes/u.md §z\n', 'utf8')
-  writeFileSync(join(mem, 'MEMORY.md'), '[环境] 探针A · x → notes/env.md §qa\n[环境] 探针B · y → notes/env.md §qb\n', 'utf8')
+  // ⚠ 2026-09-18 按域路由 P0-a：`[环境]` 已由 P/always 归一为 **E/gated**（标签漂移修复）⇒ 不能再当
+  //   「进动态面候选池」的标签（动态面池 = `readIdx('MEMORY.md')` = **只含 `inject=always` 的索引行**）。
+  //   改用 `[原则]`（现役 P/always/index），**断言意图不变**：MEMORY.md 的两行要能进动态面并按冷热排序。
+  writeFileSync(join(mem, 'MEMORY.md'), '[原则] 探针A · x → notes/env.md §qa\n[原则] 探针B · y → notes/env.md §qb\n', 'utf8')
   writeFileSync(join(mem, 'audit', 'activity.jsonl'), '{"f":"notes/env.md","s":"qa","status":"cold","hits30":0}\n', 'utf8')
   writeFileSync(join(kn, 'audit', 'warm-recall.json'), '{"at":0,"key":"","rows":[]}\n', 'utf8')
   writeFileSync(join(kn, 'delta.md'), '{"rows":[]}\n', 'utf8')

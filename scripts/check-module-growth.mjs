@@ -105,7 +105,9 @@ const FREEZE = {
   'src-client/styles.js': 726,
   'src/scheduler.ts': 611,
   'src/treeops.ts': 588,
-  'src/panel-shared.ts': 537,
+  // 2026-09-18 按域路由 P1：恒定面构造**按领域接缝**抽至 `src/hot-stable.ts`（新增 `buildStable()` 出口
+  //   内联会撞顶 553 > 537+15）⇒ panel-shared 由 547 净减至 522 ⇒ 按棘轮纪律**下调基线**到 522。
+  'src/panel-shared.ts': 522,
   'src/mcl.ts': 433,
 }
 

@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { type StableStash } from './hot-stable.js';
 export interface RootEntry {
     id: string;
     name: string;
@@ -101,9 +102,20 @@ export interface HotMemoryCache {
         stable: number;
         dropped: string[];
     };
+    /** P1（2026-09-18）：恒定面构造的 **query 无关参数**（主路径构建时写入；`buildStable()` 每步零副作用取用） */
+    sd?: StableStash;
 }
+/**
+ * 2026-09-18 按域路由 P1：新增 `buildStable()` —— **恒定面单独出口**。
+ *   恒定面（双画像索引行 + P 层画像行 + 三层判据常驻块）与 query **无关**（`readCarrier` 全文无 q 引用，实测）
+ *   ⇒ 可独立于动态面单独注入：它挂 `systemPrompt.section` 落 **节点 0（压缩豁免）**，
+ *   动态面（知识索引，依赖 query）仍走 `systemPrompt.context`（可压区，本就该按需可丢）。
+ *   接口写单行是**有意的**：本模块受大模块冻结棘轮约束（基线 537 + 容差 15），拆行即撞顶。
+ */
 export interface HotMemory {
     build(query?: string): string;
+    buildStable(): string;
+    buildDynamic(query?: string): string;
     invalidate(): void;
     supplyUsage(): SupplyUsage;
 }
