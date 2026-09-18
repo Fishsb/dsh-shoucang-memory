@@ -89,6 +89,14 @@ const HOST_FEATURES = [
   ['IR1 册三 六槽出账（supplyMetaOf）', 'lib/supply-assembly.js', 'supplyMetaOf'],
   ['IR1 册四 供给戳 + 层归因（supply-stamp）', 'lib/supply-stamp.js', 'layerOfReason'],
   ['IR1 册四 二级上游戳在缓存键上（libStampOf）', 'lib/panel-shared.js', 'libStampOf'],
+  /* ★S1R（2026-09-19）**本轮能力标记**：小节寻址单一语义（三态）+ 索引行准入 + 材料侧可见化。
+   *   判据同 IR1：**装上去的那份**必须带着本轮能力（文件级 sha 一致 ≠ 特性齐全）。 */
+  ['S1R 小节寻址三态裁决（section-ref）', 'lib/section-ref.js', 'resolveFromTitles'],
+  ['S1R 索引行准入单一强制点（admitIndexRow）', 'lib/section-ref.js', 'admitIndexRow'],
+  ['S1R 一行多指针提取（pointersOfRow）', 'lib/section-ref.js', 'pointersOfRow'],
+  ['S1R 材料侧输入量可见化（sectionRefDropped）', 'lib/deepsleep-materials.js', 'droppedMissing'],
+  ['S1R 材料侧歧义保留（ambiguousKept）', 'lib/deepsleep-materials.js', 'ambiguousKept'],
+  ['S1R 深睡审计带小节寻址计数', 'lib/deepsleep-run.js', 'sectionRefDropped'],
 ]
 
 const cache = new Map()

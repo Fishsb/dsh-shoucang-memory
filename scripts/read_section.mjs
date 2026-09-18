@@ -25,24 +25,49 @@ if (raw === null) {
 const lines = raw.split(/\r?\n/);
 // ADR-015：两级检索单元（## 大节 + ### 子节）。读取终点 = 下一个**同级或更高级**标题：
 // 读 ### 子节止于下一个 ##/###；读 ## 大节仍止于下一个 ##（保持既有行为，向后兼容）。
+// S1R（2026-09-19）：**标题解析与匹配口径收敛到 `section-ref.mjs`（单一语义）**——
+//   本件原先自己实现「双向包含 + 取首个命中」，与写门（集合去重）、材料侧（多命中⇒null）口径分叉
+//   ⇒ 同一指针三种结论。现由三态寻址统一：exists / ambiguous / missing。
+//   歧义处置（用户拍板 D-Q1a）：**返回首个候选正文 + 顶部横幅列出其余候选**（保可用性、不静默）；
+//   环境变量 `SHOUCANG_SECTION_STRICT=1` ⇒ 歧义即拒（exit 2，要求写父/子全路径消歧）。
+import { resolveSection, resolveSectionSpec } from './section-ref.mjs';
+
 const heads = [];
-lines.forEach((l, i) => { const m = l.match(/^(#{2,3})\s+(.*)$/); if (m) heads.push({ i, lvl: m[1].length, title: m[2] }); });
+lines.forEach((l, i) => { const m = l.match(/^(#{2,3})[ \t]+(.*)$/); if (m) heads.push({ i, lvl: m[1].length, title: m[2].trim() }); });
 
-const kw = String(sectionArg).trim().toLowerCase();
-let start = -1;
-for (const h of heads) {
-  const title = h.title.toLowerCase();
-  if (title === kw || title.includes(kw) || kw.includes(title)) { start = h.i; break; }
+// `§父/子` 路径：逐段解析，取**最深的可解析段**（段序越靠后越具体）；
+// 无路径分隔符时等价于单段（既有用法）。
+const specParts = String(sectionArg).split('/').map((s) => s.replace(/^§/, '').trim()).filter(Boolean);
+let resolved = null;
+for (let k = specParts.length - 1; k >= 0; k--) {
+  const r = resolveSection(skillDir, fileArg, specParts[k]);
+  if (r.state !== 'missing') { resolved = { name: specParts[k], res: r }; break; }
 }
+const strict = process.env.SHOUCANG_SECTION_STRICT === '1';
 
-if (start === -1) {
-  console.error(`小节「${sectionArg}」不存在。可用小节：`);
+if (!resolved) {
+  const full = resolveSectionSpec(skillDir, fileArg, sectionArg);
+  const why = full.parts.length && full.parts.every((p) => !p.res.fileExists) ? '（目标文件不存在）' : '';
+  console.error(`小节「${sectionArg}」不存在${why}。可用小节：`);
   for (const h of heads) console.error(`  - ${h.title}`);
   process.exit(1);
 }
+if (resolved.res.state === 'ambiguous' && strict) {
+  console.error(`小节「${resolved.name}」有 ${resolved.res.cands.length} 个同名候选（strict：拒读，请写父/子全路径消歧）：`);
+  for (const c of resolved.res.cands) console.error(`  - ${'#'.repeat(c.level)} ${c.title}`);
+  process.exit(2);
+}
 
-const hit = heads.find((h) => h.i === start);
-const end = (heads.find((h) => h.i > start && h.lvl <= hit.lvl) || { i: lines.length }).i;
+const start = resolved.res.cands[0].idx;
+const hitLvl = (lines[start].match(/^(#+)/) || ['', '##'])[1].length;
+const end = (heads.find((h) => h.i > start && h.lvl <= hitLvl) || { i: lines.length }).i;
+
+// 歧义横幅（非 strict）：显式列出其它候选，避免"读到哪个全凭运气"却看不出来
+if (resolved.res.state === 'ambiguous') {
+  const others = resolved.res.cands.slice(1);
+  console.error(`# ⚠ 「${resolved.name}」有 ${resolved.res.cands.length} 个同名/近似候选，本次返回第 1 个（${'#'.repeat(hitLvl)} ${lines[start].replace(/^#+[ \t]*/, '').trim()}）；`
+    + `其余：${others.map((c) => `${'#'.repeat(c.level)} ${c.title}`).join(' · ')}（要消歧请写「父/子」全路径）`);
+}
 // v8（认知对照 P1「降权贯穿三通道」）：冷节标记 —— 该 § 在 activity.jsonl 里为 cold 时**只加提示、不改内容**
 //   判因：v7 的 coldFactor 只作用于向量召回；grep/read_section 兜底路径与注入面此前**完全不感知冷热**，
 //   故「下调」实际只生效三分之一。此处补兜底通道的提示（内容仍完整返回，可读性不受损）。

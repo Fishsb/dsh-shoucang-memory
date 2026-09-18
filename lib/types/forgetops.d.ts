@@ -7,7 +7,9 @@ export interface ForgetOp {
     /** P2（审查项）：索引已不再引用的孤儿条目——仅标注入审计，不改变守卫判定 */
     orphan?: boolean;
 }
-/** 小节存在性（口径与 matchSection 同源，避免另立一套）：供材料侧剔除悬空候选（R2 审查项） */
+/** 小节存在性（**S1R 2026-09-19：口径收敛到单一实现 `section-ref`**）：
+ *  二值签名保持不变（`exists` 才为真 ⇒ 既有调用点逐例行为不变），
+ *  但「同名歧义」现在有独立三态可消费（`resolveSection(...).state === 'ambiguous'`），不再折成"不存在"。 */
 export declare function sectionExists(memRoot: string, file: string, section: string): boolean;
 export declare function applyForgetOps(memRoot: string, ops: ForgetOp[], hooksIn?: TreeOpsHooks): Promise<{
     archived: number;

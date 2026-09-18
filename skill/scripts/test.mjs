@@ -117,11 +117,24 @@ run('门禁-正常', 'node', [gate, 'MEMORY.md', g1], [0]);
 const g2 = path.join(t2, 'gate2.txt');
 fs.copyFileSync(g1, g2);
 {
+  // ⚠ S1R（2026-09-19）**正确性与容量正交**后，本用例必须**只触发容量**：
+  //   原夹具追加的行同时含格式违规（日期戳/无 `·`/无指针）⇒ 现在会 exit 4（改造前被容量分支吞掉）。
+  //   故夹具改为**格式合规 + 指针可解析**的行：`[env] 探针 · 概况 → notes/env.md §<真实小节>`。
+  const envAnchor = (fs.readFileSync(path.join(t2, 'notes', 'env.md'), 'utf8').match(/^## (.+?)（/m) || [null, 'DSH 环境'])[1];
   const baseChars2 = fs.readFileSync(g2, 'utf8').replace(/\s/g, '').length;
   const over = CAP['MEMORY.md'] - baseChars2 + 200; // 保证越过容量线 200 字（含追加行前缀）
-  fs.appendFileSync(g2, '\n§\n' + '[env] 超量（2026-09-01）[agent]：' + '内容'.repeat(Math.ceil(Math.max(0, over) / 2)));
+  // 追加：① 一条**格式合规且指针可解析**的索引行 ② 一段**非索引行**填充（只增容量、不进格式判据）
+  fs.appendFileSync(g2, '\n[env] 超量探针 · 仅验容量放行 → notes/env.md §' + envAnchor
+    + '\n' + '填充'.repeat(Math.ceil(Math.max(0, over) / 2)) + '\n');
 }
 run('门禁-超容量（默认放行）', 'node', [gate, 'MEMORY.md', g2], [0]);
+
+// 5b) S1R **正确性与容量正交**（先红用例）：超容量 + 悬空指针 ⇒ 必须报**指针问题**（非 0）
+//   改造前：容量分支先 return ⇒ exit 0 且不提指针（实测双跑 cap=5000 → 0 / cap=999999 → 2）。
+const g2b = path.join(t2, 'gate2b.txt');
+fs.copyFileSync(g1, g2b);
+fs.appendFileSync(g2b, '\n§\n[env] 超量悬空探针 · 指针不可解析 → notes/env.md §不存在的探针小节XYZ' + '内容'.repeat(1200));
+run('门禁-超容量+悬空指针（正确性优先）', 'node', [gate, 'MEMORY.md', g2b], [2]);
 
 // 6) 门禁-悬空指针 → exit 2
 const g3 = path.join(t2, 'gate3.txt');
@@ -435,13 +448,17 @@ try {
   /* 2026-09-16 **用户判定：容量不是硬限**（「直接全部失败或者拒绝」不符意图，**提醒就可以**）。
    * ⇒ 默认：超限**提醒后照写**（exit 0）；严格模式 `SHOUCANG_CAP_STRICT=1` **保留旧行为**（exit 1）。
    * 两条都测 —— 只测放宽会把"能力还在不在"这点丢掉。 */
-  const capArgs = ['MEMORY.md', 'x', '--new', '[env] ' + '超限填充内容'.repeat(1000) + ' → notes/env.md §x'];
+  const capArgs = ['MEMORY.md', 'x', '--new', '[env] ' + '超限填充内容'.repeat(1000) + ' · 仅验容量 → notes/env.md §DSH 环境'];
   const capRun = (extraEnv) => (() => { try { execFileSync('node', [ap, ...capArgs], { cwd: te, env: { ...process.env, MEMORY_ROOT: te, ...extraEnv }, stdio: 'pipe' }); return 0; } catch (e) { return e.status; } })();
   const capSoft = capRun({});
   const capStrict = capRun({ SHOUCANG_CAP_STRICT: '1' });
-  const okGate = capSoft === 0 && capStrict === 1;
+  /* S1R（2026-09-19 · P1）**索引行准入**：`--new` 落盘前校验 §小节 ⇒ 悬空指针 **exit 2**（改造前放行）。
+   *   这是"生产链不再产生悬空指针"的判据；与上一条（容量软/硬档）**各自独立**。 */
+  const pendArgs = ['MEMORY.md', 'x', '--new', '[env] 悬空准入探针 · 指针不可解析 → notes/env.md §不存在的探针小节XYZ'];
+  const pendRun = (() => { try { execFileSync('node', [ap, ...pendArgs], { cwd: te, env: { ...process.env, MEMORY_ROOT: te }, stdio: 'pipe' }); return 0; } catch (e) { return e.status; } })();
+  const okGate = capSoft === 0 && capStrict === 1 && pendRun === 2;
   if (okAppend && okErr && okGate) pass++; else fail++;
-  console.log(`${okAppend && okErr && okGate ? '✅' : '❌'} 方案C-memory-append（追加/无锚exit2/白名单exit2/**主文档超限默认放行exit${capSoft}·strict仍拒exit${capStrict}**）`);
+  console.log(`${okAppend && okErr && okGate ? '✅' : '❌'} 方案C-memory-append（追加/无锚exit2/白名单exit2/**主文档超限默认放行exit${capSoft}·strict仍拒exit${capStrict}**/**悬空索引行准入拒exit${pendRun}**）`);
   fs.rmSync(te, { recursive: true, force: true });
 } catch (e) { fail++; console.log('❌ 方案C-memory-append（异常: ' + failMsg(e) + '）'); }
 
@@ -469,7 +486,9 @@ try {
   fs.writeFileSync(p1, '[原则] 排障先看根因 · 先验证成本低再修改成本高 → notes/lessons.md §网络坑\n');
   run('原则门-正常', 'node', [gate, 'AGENT.md', p1], [0]);
   const p2 = path.join(tg, 'p2.txt');
-  fs.writeFileSync(p2, ('[原则] 超限填充 · 原则填充内容超限'.repeat(200) + ' → notes/lessons.md §x') + '\n');
+  // S1R（2026-09-19）：夹具改为**格式合规 + 指针可解析**，超容量只由**非索引行填充**提供
+  //   （原夹具把 `•` 概况撑到数千字 ⇒ 现在是格式违规 exit 4；旧行为靠容量分支吞掉）
+  fs.writeFileSync(p2, '[原则] 超限填充 · 仅验容量放行 → notes/lessons.md §网络坑\n' + '填充'.repeat(3000) + '\n');
   run('原则门-超容量（默认放行）', 'node', [gate, 'AGENT.md', p2], [0]);
   const p3 = path.join(tg, 'p3.txt');
   fs.writeFileSync(p3, '[经验] 缺概况段与指针行\n');

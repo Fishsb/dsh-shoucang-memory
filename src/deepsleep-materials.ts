@@ -6,7 +6,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 // 阶段 4（2026-09-14）：sectionExists 随「主动遗忘」一块迁至 forgetops（口径仍与 matchSection 同源）
-import { sectionExists } from './forgetops.js'
+import { resolveSection } from './section-ref.js'
 import { dayKey } from './activity.js'
 import { loadStore } from './record-shadow.js'
 import { openDecisions } from './decision-ring.js'
@@ -33,6 +33,10 @@ export interface SleepMaterials {
   /** S3-3/S3-4（2026-09-14）材料段**条数**：审计可见化用 —— 让"本轮给了几条候选"可查
    *  （此前审计只有消费结果 `forgetArchived`/`forgetKept`，没有输入量）。 */
   counts: { split: number; forget: number; replay: number; hot: number; inter: number; pending: number; tools: number }
+  /** S1R（2026-09-19 · G7）**小节寻址输入量可见化**：剔除不再静默。
+   *  此前 `if (!sectionExists(...)) continue` 静默剔除（实测冷候选 37 → 剔 10 条，零痕迹），
+   *  且 `sectionExists` 把「同名歧义」也算作"不存在"（`matchSection` 多命中⇒null）⇒ 真实可读的小节被丢弃。 */
+  sectionRef: { droppedMissing: number; ambiguousKept: number; ambiguous: string[]; missing: string[] }
 }
 
 export function gatherMaterials(root: string, sinceMs?: number): SleepMaterials {
@@ -99,9 +103,11 @@ export function gatherMaterials(root: string, sinceMs?: number): SleepMaterials 
   })()
   // v19（认知对照 P0「主动遗忘」）forgetOps 材料：cold 且 ≥90 天零命中的冷节——来源 audit/activity.jsonl
   //   （与 activity.ts 同源，不另立口径）；上限 top-10。此前该清单只写 audit/*.md 无人读 ⇒ 遗忘永不发生。
+  // S1R（2026-09-19 · G7）：小节寻址统计（「输入量须可见化」——剔除与歧义都必须留痕，不静默）
+  const sectionRef = { droppedMissing: 0, ambiguousKept: 0, ambiguous: [] as string[], missing: [] as string[] }
   const forgetCandidates = (() => {
     try {
-      const rows: Array<{ f: string; s: string; hits: number; days: number | 'never'; orphan: boolean }> = []
+      const rows: Array<{ f: string; s: string; hits: number; days: number | 'never'; orphan: boolean; amb: boolean }> = []
       // R1（审查项）：画像承载文件**不进候选**——画像行全量注入，其 cold 是机制性的，不是"没人用"
       const PROFILE = new Set(['user.md', 'agent.md'])
       // P2（审查项）：索引仍引用的 (file::§) 集合——用于标注**孤儿条目**（索引已删、正文仍在）
@@ -127,17 +133,23 @@ export function gatherMaterials(root: string, sinceMs?: number): SleepMaterials 
           const f = String(o.f || '').replace(/^notes\//, '')
           const s = String(o.s || '')
           if (PROFILE.has(f.toLowerCase())) continue
-          // R2（审查项）：剔除**悬空候选**（节不存在）——否则白占材料 top-10 名额（口径与 matchSection 同源）
-          if (!sectionExists(root, f, s)) continue
+          // R2（审查项）：剔除**悬空候选**（节不存在）——否则白占材料 top-10 名额。
+          // S1R（2026-09-19 · G7）：口径升级为**三态**（`section-ref`）+ **输入量可见化**：
+          //   · `missing`   ⇒ 剔除 **并计数**（不再静默）
+          //   · `ambiguous` ⇒ **保留**（小节真实存在且在读侧可读）并在材料里标注"同名歧义"
+          const ref = resolveSection(root, f, s)
+          if (ref.state === 'missing') { sectionRef.droppedMissing++; sectionRef.missing.push(`${f} §${s}`); continue }
+          const amb = ref.state === 'ambiguous'
+          if (amb) { sectionRef.ambiguousKept++; sectionRef.ambiguous.push(`${f} §${s}（${ref.cands.length} 个同名候选）`) }
           const orphan = !refs.has(`${f.replace(/\.md$/, '')}::${s.toLowerCase()}`)
-          rows.push({ f, s, hits: Number(o.hits || 0), days, orphan })
+          rows.push({ f, s, hits: Number(o.hits || 0), days, orphan, amb })
         } catch { /* 坏行跳过 */ }
       }
       const v = (d: number | 'never'): number => (d === 'never' ? Number.MAX_SAFE_INTEGER : d)
       rows.sort((a, b) => v(b.days) - v(a.days))
       const top = rows.slice(0, 10)
       return top.length
-        ? top.map((r) => `${r.f} §${r.s}（hits ${r.hits} · 距最后命中 ${r.days === 'never' ? '从未' : r.days + ' 天'}${r.orphan ? ' · **孤儿条目**：索引已不再引用，仅正文留存' : ''}）`).join('\n')
+        ? top.map((r) => `${r.f} §${r.s}（hits ${r.hits} · 距最后命中 ${r.days === 'never' ? '从未' : r.days + ' 天'}${r.orphan ? ' · **孤儿条目**：索引已不再引用，仅正文留存' : ''}${r.amb ? ' · **同名歧义**（该名有多个小节；索引宜写「父/子」全路径）' : ''}）`).join('\n')
         : '（无）'
     } catch { return '（无）' }
   })()
@@ -248,5 +260,7 @@ export function gatherMaterials(root: string, sinceMs?: number): SleepMaterials 
     // 2026-09-15（H-1）：`pending` 同理 —— 它一进审计，「outcomes 恒 0」就能立刻区分
     //   「没有待回收裁决」与「有 49 条却没回收」。
     counts: { split: countOf(splitCandidates), forget: countOf(forgetCandidates), replay: countOf(replayRecent), hot: countOf(hotCtx), inter: countOf(interCtx), pending: countOf(pendingDecisions), tools: countOf(toolUsage) },
+    // S1R（2026-09-19 · G7）：小节寻址输入量（剔除/歧义）—— 审计可见，不再静默
+    sectionRef: { droppedMissing: sectionRef.droppedMissing, ambiguousKept: sectionRef.ambiguousKept, ambiguous: sectionRef.ambiguous.slice(0, 8), missing: sectionRef.missing.slice(0, 8) },
   }
 }

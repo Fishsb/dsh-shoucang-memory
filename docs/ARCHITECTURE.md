@@ -45,7 +45,10 @@ L4 交互（DSH Web GUI）
 | **M10 自省** | `assistant_capabilities` | 能力面查询 | 只读，无 token |
 
 > **载体归属口径（2026-09-12 根治 A–D 后；2026-09-14 P1 订正）**：
-> `src/` 共 **82 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> `src/` 共 **83 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> **2026-09-19 新增 `section-ref.ts`** ⇒ 82 → 83：S1R「小节寻址单一语义」——三态
+> `exists/ambiguous/missing`（**歧义 ≠ 不存在**）+ 一行多指针提取 + 索引行准入；
+> 跨面同源（库工具链 `skill/scripts/section-ref.mjs`）由 `check-section-ref-parity` 差分锁守。
 > **2026-09-18 新增 `supply-stamp.ts`** ⇒ 81 → 82：IR1 册四「缓存失效单一判据」——库戳 ∪ 介质戳 ∪
 > 观测用 warm 戳 + 层归因（`session/context/query/event/ttl`）；旧状是**四套口径各自为政**，
 > 且两层介质（activity/delta）只在内层键里 ⇒ 运行时"改了介质却不重建"。

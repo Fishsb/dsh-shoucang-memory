@@ -28,5 +28,14 @@ export interface SleepMaterials {
         pending: number;
         tools: number;
     };
+    /** S1R（2026-09-19 · G7）**小节寻址输入量可见化**：剔除不再静默。
+     *  此前 `if (!sectionExists(...)) continue` 静默剔除（实测冷候选 37 → 剔 10 条，零痕迹），
+     *  且 `sectionExists` 把「同名歧义」也算作"不存在"（`matchSection` 多命中⇒null）⇒ 真实可读的小节被丢弃。 */
+    sectionRef: {
+        droppedMissing: number;
+        ambiguousKept: number;
+        ambiguous: string[];
+        missing: string[];
+    };
 }
 export declare function gatherMaterials(root: string, sinceMs?: number): SleepMaterials;

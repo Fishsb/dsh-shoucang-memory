@@ -22,6 +22,9 @@ import {
   coreName, normalizeNotesFile, readLines, matchSection, parseSections,
   atomicWrite, finalize, safeAudit, safeLog,
 } from './treeops.js'
+// ⚠ 命名：本件保留 `sectionExists`（`check-shared-fn.mjs#SHARED` 的 home）；单一语义实现在 `section-ref.ts`
+//   内名为 `sectionExistsRef` —— 同符号两处定义会被 A1 判红，故**不重名**。
+import { sectionExistsRef } from './section-ref.js'
 
 export interface ForgetOp {
   action: 'archive' | 'keep'
@@ -59,13 +62,11 @@ const PROFILE_FILES = new Set(['user.md', 'agent.md'])
 /** 单轮 archive 上限（防模型一次归档过多；keep 不受限）——R4 审查项 */
 const MAX_ARCHIVE_PER_RUN = 3
 
-/** 小节存在性（口径与 matchSection 同源，避免另立一套）：供材料侧剔除悬空候选（R2 审查项） */
+/** 小节存在性（**S1R 2026-09-19：口径收敛到单一实现 `section-ref`**）：
+ *  二值签名保持不变（`exists` 才为真 ⇒ 既有调用点逐例行为不变），
+ *  但「同名歧义」现在有独立三态可消费（`resolveSection(...).state === 'ambiguous'`），不再折成"不存在"。 */
 export function sectionExists(memRoot: string, file: string, section: string): boolean {
-  const f = normalizeNotesFile(file)
-  if (!f) return false
-  const lines = readLines(join(String(memRoot || ''), 'notes', f))
-  if (!lines) return false
-  return matchSection(parseSections(lines), String(section || '').trim()) !== null
+  return sectionExistsRef(memRoot, file, section)
 }
 
 /** 开一个 forgetOps 归档文件（每轮一个 jsonl，作为可回滚证据）；目录不可建时返回 err 由调用方收敛。 */

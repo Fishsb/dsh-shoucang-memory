@@ -5,6 +5,32 @@
 ## [Unreleased]
 
 ### Changed
+- **S1R 小节寻址收口（2026-09-19，用户指令「目标模式全部落地」）**：按 `docs/specs/S1R-section-ref-plan.md`
+  的依赖序 P0→P3 全部施工，**G1–G8 逐条转绿**（记录见 `docs/specs/S1R-section-ref-record.md`）。
+  · **P0 判据层**：新增 `src/section-ref.ts` + `skill/scripts/section-ref.mjs`（**跨面同语义**）——
+  `§小节名 → 小节` 由**四份实现**（读侧取首个 / 写门集合去重 / `matchSection` 多命中⇒null / append 逐级取首个）
+  收敛为**三态** `exists/ambiguous/missing`（**歧义 ≠ 不存在**）+ spec 级 `partial`；
+  `read_section` / `memory_write_gate` / `memory-append` / `memory-reconcile` **四处改为委托**；
+  行内多指针提取收敛为 `pointersOfRow` 状态机（修掉"只取最后一个指针 + 把 `/notes/x.md` 当小节名"的伪影）。
+  · **P0 正交化**：写门**正确性判据先于且独立于容量**（凭据 5 > 指针 2 > 格式 4 > 严格容量 1 > 容量告警 0）——
+  实测改造前 MEMORY.md 520%/AGENT.md 250% 时 **§指针判据恒不执行**（同一文件双跑 cap=5000→exit 0 不提指针、
+  cap=999999→exit 2 列 56 条）；回退开关 `SHOUCANG_GATE_LEGACY=1`。
+  · **P1 写入收口**：`memory-append --new` 落盘前做**索引行准入**（全不可解析 ⇒ exit 2；部分可解析 ⇒
+  **归一为可解析前缀**并提示）；回退开关 `SHOUCANG_APPEND_SECTION_CHECK=0`。
+  · **P2 存量**：真库 **missing 36→0 · partial 14→0 · ambiguous 32→0 · 同名小节 3→0**（58 处指针改写 + 5 处同名改名，
+  逐条留痕；执行器 `scripts/section-ref-reanchor.mjs`，临时区预演 + 整库备份 + 原子写 + 幂等）。
+  · **可见面**：新增两件在册机检 `check-section-ref-parity`（**跨面差分锁**：44 夹具 + 12 契约 + 3 反例 + 历史分歧复现）
+  与 `check-section-refs`（**真库棘轮** + `--selftest` 先红与阴性对照）；`check-shared-fn` 登记新共享件并**显式声明**
+  "跨面同源由差分锁守"。
+  · **G7 材料侧**：深睡材料三态化 —— `missing` 剔除**并计数**、`ambiguous` **保留并标注**（旧实现静默 `continue`，
+  实测冷候选 37 条里 10 条被无声丢弃）；审计新增 `sectionRefDropped`/`sectionRefAmbiguous` 等字段。
+  · **修掉三处"自述与实况相反"**：`memory_write_gate` 注释声称"悬空指针判据不动"（实为被容量分支短路）、
+  `check-injection-reach` ⑤ 材料键解析"遇 `counts:` 即止"（新增材料键判假红）、`deploy-installed` 面2
+  "只覆盖已存在者"（**新件静默不部署** ⇒ `section-ref.mjs` 首轮即踩到；现加运行期必需件白名单 + 缺件 FAIL）。
+  · **P3 卫生**：`.records/*.bak-*` 与 `backup-dedup-*` 出库并入 `.gitignore`（库内备份面 8 件出跟踪、文件留盘）；
+  备份保留面由 `^backup-\d{12}$` 放宽为 `^backup-`（实测 45 个备份目录里 15 个历史命名**永不参与裁剪**）。
+  · **门禁件数 143 → 145**；已安装副本特性标记 **47 → 53**；注入基线因 P2 指针改写**重立**（差异构成已逐条核对：
+  块序变化来自 IR1/域路由落地、装配件 git 未改）。
 - **IR1 注入召回链落地（2026-09-18，用户指令"目标模式全部落地"）**：按 `docs/specs/IR1-injection-recall-plan.md`（v3）
   的依赖序 P0 → P0′ → P1 → P2 → P3 全部施工，**终态判据 G1–G6 逐条转绿**（记录见 `docs/specs/IR1-acceptance-record.md`）。
   · **册一 相关性重建**：新增 `src/relevance-supply.ts`（分层配额 `memory-index/agent-principles/profile` + 桥读取 +
