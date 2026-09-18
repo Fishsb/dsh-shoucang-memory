@@ -178,6 +178,7 @@ export var EN = {
   '恒定面通道': 'Stable-face channel',
   '已挂 section · 节点0豁免': 'section mounted · node 0 exempt',
   '未挂载 ⇒ 随 context 注入（可压区）': 'not mounted ⇒ injects via context (compressible)',
+  ' · 原因：': ' · reason: ',
   '豁免': 'Exempt',
   '可压': 'Compressible',
   '浅睡': 'Light sleep',

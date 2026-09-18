@@ -149,7 +149,13 @@ const FIX = `var FIX = {
       /* 第四行 state:'stalled' —— **「停滞」标签的唯一视觉覆盖点**（前三行按映射都是「待蒸馏」，
        * 缺它则新标签的另一半在渲染回归里零覆盖）。 */
       { sid:'a0b1c2d3', workspace:'dsh-memory-archive', title:'核对归档指针与水位', state:'stalled', lastEndAt:Date.now()-172800000, lastEventAt:Date.now()-172800000 }] },
-  '/inject/stats': { calls:14, lastAt:Date.now()-60000, root:'./shoucang' },
+  /* 2026-09-18 按域路由 P2/P3：补 stableChannel（恒定面通道健康位）——
+   *   判因（实测）：新加的 UI 行以 if (sc) 为渲染条件，而夹具缺该字段 ⇒ 该行**从不渲染**
+   *   ⇒ "视觉验收"对本次新增的观测面**零覆盖**（真机有、图上没有，属夹具漂移）。
+   *   ⚠ 即用反引号会**提前闭合本模板串**（实测踩到：SyntaxError: Unexpected identifier）——
+   *     夹具位于模板字符串内，注释里一律用普通引号或裸名。 */
+  '/inject/stats': { calls:14, lastAt:Date.now()-60000, root:'./shoucang',
+    stableChannel: { mounted:true, hasSection:true, mountErr:'', calls:14, lastLen:2907, lastErr:'', at:Date.now()-60000 } },
   '/get_root': { root:'./shoucang', active:true }, '/vector/status2': { present:true, rows:3204, provider:'fusion' },
   '/config': { global:{}, parsed:{flags:{}}, text:'roots: []', file:'x.yaml' },
   /* suite 成员：夹具给 3 条（原型同款形态），否则成员卡网格恒为「仅添加卡」——
@@ -200,6 +206,26 @@ setTimeout(function () {
           if (!hit && (e.textContent || '').indexOf('epoch-') >= 0) hit = e;
         });
         if (!hit) return { found: false };
+        var rr = R(hit);
+        var vt = out.viewEl ? out.viewEl.t : 0;
+        return { found: true, text: (hit.textContent || '').slice(0, 90), rect: rr, relTop: rr.t - vt, visibleInViewport: rr.t >= 0 && rr.t < innerHeight };
+      })();
+      /* 2026-09-18 按域路由 P2/P3：**「恒定面通道」行的 DOM 几何**（同 S-P1d 口径 —— 对折叠免疫）。
+       *   判因（实测）：该行以 if(sc) 为渲染条件（sc = /inject/stats.stableChannel），
+       *   夹具缺字段时它**从不渲染**，而"首屏图里没有"看起来与"渲染了但在折叠线以下"完全一样
+       *   ⇒ 必须用 DOM 几何独立判一次（元素在不在 + rect 非零 + 在滚动内容区的相对位置）。
+       *   ⚠ 本段在模板字符串内，注释里**禁用反引号**（会提前闭合整串，实测踩到两次）。 */
+      out.stableRow = (function () {
+        var hit = null;
+        qsa('.sc-desc, .sc-card-sub, .sc-kpi-sub, .sc-row, .sc-crow').forEach(function (e) {
+          if (!hit && (e.textContent || '').indexOf('恒定面通道') >= 0) hit = e;
+        });
+        if (!hit) {
+          /* 兜底：整页文本级搜索（行容器类名可能与本选择器不同） */
+          var t = document.body.innerText || '';
+          if (t.indexOf('恒定面通道') >= 0) return { found: true, text: '(文本命中，容器类名未匹配)', rect: null, relTop: -1, visibleInViewport: false };
+          return { found: false };
+        }
         var rr = R(hit);
         var vt = out.viewEl ? out.viewEl.t : 0;
         return { found: true, text: (hit.textContent || '').slice(0, 90), rect: rr, relTop: rr.t - vt, visibleInViewport: rr.t >= 0 && rr.t < innerHeight };
@@ -570,6 +596,18 @@ for (const [w, h] of VIEWPORTS) {
     g.viewEl.b <= g.modal.b + 1 ? ok('内容区收口在弹窗内（不越界）') : bad('内容区越出弹窗底边')
     g.scroll && g.scroll.sh >= g.scroll.ch ? ok('内容区可滚动（scrollHeight ' + g.scroll.sh + ' ≥ clientHeight ' + g.scroll.ch + '）') : bad('内容区滚动度量异常')
   }
+  /* ②b 2026-09-18 按域路由 P2/P3：**「恒定面通道」行的渲染级几何判据**（图证 + DOM 几何双判据）。
+   *   判因：面板内容区有**滑动导轨**（内部滚动容器）⇒ 纯像素截图对视口折叠线以下**系统性失明**，
+   *   「图里没有」≠「没渲染」。此处查 out.stableRow（探针见 PROBE 段），只看"元素在不在 DOM、
+   *   rect 是否非零" —— 与折叠/滚动位置/是否在截图内全无关。
+   *   ⚠ 它同时是**夹具漂移的守卫**：夹具若漏 stableChannel，该行恒不渲染 ⇒ 本断言会红
+   *   （实测踩到过一次：夹具缺字段 ⇒ 视觉验收对本次新增的观测面零覆盖）。 */
+  {
+    const sr = g.stableRow || {}
+    sr.found && sr.rect && sr.rect.h > 0
+      ? ok('恒定面通道健康位行已渲染（DOM 几何 h=' + sr.rect.h + 'px · 相对内容区 top=' + sr.relTop + 'px · 视口内=' + sr.visibleInViewport + '）')
+      : bad('恒定面通道健康位行**未渲染**（DOM 里没有该文本节点）—— 夹具缺 stableChannel 或 UI 条件分支失效')
+  }
   /* ③ 首屏容纳关键区块 */
   const kpiVisible = g.kpis.filter((k) => k.barY > 0 && k.barY < (g.statusbar ? g.statusbar.t : g.vh)).length
   g.kpis.length === 4 ? ok('KPI 卡 4 张齐备') : bad('KPI 卡数量 ' + g.kpis.length + '（期望 4）')
@@ -636,8 +674,9 @@ VIEWS.slice(1).forEach((v) => {
       ? ok('S-P1d 纪元行已渲染（DOM 几何 h=' + er.rect.h + 'px · 相对内容区 top=' + er.relTop + 'px · 视口内=' + er.visibleInViewport + '）')
       : bad('S-P1d 纪元行**未渲染**（DOM 里没有含 epoch- 文本的节点）—— 数据面已有字段却到不了 UI')
   }
+  /* 2026-09-18 按域路由 P2/P3：**运行总览 · 「恒定面通道」行的渲染级几何判据**
+   *   （断言体在**上方 overview 段**，此处不重复 —— `VIEWS.slice(1)` 不含 overview）。 */
   /* S3：组件库 Tab —— 结构齐备 + 同时只显示一个面板 + web component 已注册 */
-  /* S3：设置页的表单控件必须已由组件库承载且**值已绑定**（不是空壳） */
   if (v === 'settings') {
     const fm = g.forms || {}
     fm.switches >= 1 ? ok('开关由组件库承载（wa-switch ×' + fm.switches + '）') : bad('开关未走组件库（' + fm.switches + '）')

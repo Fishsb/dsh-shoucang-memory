@@ -379,13 +379,20 @@ function renderViewOverview(view) {
     /* 2026-09-18 按域路由 P1/P2：**恒定面通道健康位**。
      *   判因（edge 审查 E3+E8）：注入通道整体失效会被两层 catch 全吞 ⇒ 落回旧形态而"看起来正常"；
      *   有这一行才能一眼区分「恒定面已挂 section（压缩豁免）」与「静默回落 context（可压区）」。
-     *   读数来自 `/inject/stats` 的 `stableChannel`（mounted/calls/lastLen/mountErr/lastErr）。 */
+     *   读数来自 `/inject/stats` 的 `stableChannel`（mounted/calls/lastLen/mountErr/lastErr）。
+     * v2（2026-09-18 视觉复核后改）：降级态原**直接吐原始英文报错**（实测图：满行 "Cannot read
+     *   properties of undefined (reading layers)"）⇒ 中文界面里突兀、且丢掉了"这意味着什么"。
+     *   改为**先人话、后技术细节**：`未挂载 ⇒ 走可压区（原因：<截断40>）`。 */
     var sc = s.stableChannel || null;
     if (sc) {
       var okMounted = sc.mounted === true;
+      /* 截断须**可见**（末位加省略号）：原实现裸 slice 会在词中间断（实测图 "...reading rea"），
+       * 看的人分不清"报错就这么短"还是"被切了"——留痕纪律同样适用于 UI 文本。 */
+      var trunc = function (t) { var s2 = String(t); return s2.length > 40 ? s2.slice(0, 40) + '…' : s2; };
+      var scReason = sc.mountErr ? trunc(sc.mountErr) : (sc.lastErr ? trunc(sc.lastErr) : '');
       var scDetail = okMounted
         ? tr("已挂 section · 节点0豁免") + ' · ' + Derive.num(sc.calls || 0) + tr(" 次") + (sc.lastLen > 0 ? ' · ' + Derive.num(sc.lastLen) + tr(" 字符") : '')
-        : (sc.mountErr ? String(sc.mountErr).slice(0, 60) : tr("未挂载 ⇒ 随 context 注入（可压区）"));
+        : tr("未挂载 ⇒ 随 context 注入（可压区）") + (scReason ? tr(" · 原因：") + scReason : '');
       sysBox.appendChild(ovCRow(tr("恒定面通道"), scDetail, [ovPill(okMounted ? tr("豁免") : tr("可压"), okMounted ? 'ok' : 'warn')]));
     }
     sysBox.appendChild(ovCRow(tr("嵌入服务"),

@@ -97,7 +97,12 @@ try {
   const out3 = run('scripts/test-panel-view-contract.mjs')
   const out4 = run('scripts/ui-geo-regress.mjs')
   ok(/PASS/.test(out3), 'A3c 还原后 `test-panel-view-contract` 回到 PASS')
-  ok(/100 PASS \/ 0 FAIL/.test(out4), 'A3d 还原后 `ui-geo-regress` 回到 100 PASS')
+  /* ⚠ 2026-09-18：原写死 `/100 PASS \/ 0 FAIL/` —— 每加一条几何断言就要来改这里（纯噪音，
+   *   实测因新增「恒定面通道」断言变 103 而红）。判据改为**语义化**：0 FAIL 且 PASS 数不低于基线 100。
+   *   （不断言精确值：本测试关心的是"还原后门**回绿**"，不是"断言总数恰好等于 100"。） */
+  const m4 = /(\d+) PASS \/ (\d+) FAIL/.exec(out4)
+  ok(m4 && Number(m4[2]) === 0 && Number(m4[1]) >= 100,
+    'A3d 还原后 ui-geo-regress 回到全绿（实得 ' + (m4 ? m4[1] + ' PASS / ' + m4[2] + ' FAIL' : '取不到计数') + '，要求 ≥100 PASS 且 0 FAIL）')
 } finally {
   if (!restored) { writeFileSync(TARGET, orig); build(); console.log('⚠ 异常路径：已强制还原') }
 }
