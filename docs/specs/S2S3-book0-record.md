@@ -32,7 +32,8 @@
 
 ## 3. 落地差异与残留（**不谎报**）
 
-1. **册零尚未 100% 完成**：写入原语残留 **4 处**固定 tmp（`deepsleep-apply.ts`×3 · `treeops.ts`×1，即 `rewriteOneIndex` 的 tmp+gate 路径，宜改走 `gatedWriteFile`）。棘轮已把"只许往下走"钉住（基线 10 → 4）。
+1. ~~册零尚未 100% 完成：写入原语残留 4 处固定 tmp~~ → **已收口（2026-09-19 · `56a6365`）**：最后 4 处清完，**src 内固定 tmp 名写法 = 0 处**，棘轮基线钉到 **0**（已收编 **10 件**必须为 0）。
+   收口要点：`deepsleep-apply.gateText` 的试算 tmp 不能走 `gatedWriteFile`（那个会**立即改名**，而试算要"多次试门禁、最后才提交"）⇒ 改**唯一名** `principlesTmp` + 显式清理；`treeops.rewriteOneIndex` 的 tmp+gate+rename 三条路径收敛为 `gatedWriteFile`（保持 `gate='fail'` 不写 / `'absent'` 自查后写 的原语义）。
 2. **`write.ingest` 条目载荷**：会审裁定的表述是"`write.ingest` +1 载荷字段"；实测失败发生在 `distill-write` 的三个写入循环里，而 `write.ingest`（`distill-agent.ts`）只有"本轮摄取裁决"，**拿不到条目身份**。故载荷落在 **`distill-run` 审计行的 `failedItems`**（失败发生地），并在 `write.ingest` 侧维持原语义。**这是对裁定表述的修正，不是省略**。
 3. **`delta.md` 文件退役**：按会审裁定**缓**（属用户取向项；见方案册 §5.2 U2），本册未动。
 4. **`inject-baseline-diff` 全量门禁唯一红**：**改动前即红**（基线首块 = 「守藏·热记忆 记忆库指针」，当前注入首块 = 「🧠 最近成长」；活体库漂移）。其输入不含 `docs/`、与本册无关；**抬基线属 R3 越棘轮动作，未动**。
