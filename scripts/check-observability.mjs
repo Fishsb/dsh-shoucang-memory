@@ -52,6 +52,12 @@ const STREAMS = [
    *  为何不并入台账：① **键控**语义（按 sid 取该会话全部段）与事件族不同；② 它是**蒸馏的中间产物**，
    *  给 L2 会话级复盘当材料（原先只在同轮内存、轮结束即消失）；③ 与上面 `distill-watermark` 同理由。 */
   ['distill-manifest/<sid>.jsonl', 'keyed', '蒸馏分段清单持久化（每段一行；**L2 会话级复盘的材料来源**之一）', 'suite'],
+  /* S2S3 册一（2026-09-19）**L2 复盘的流**：这两条刻意**不并入台账**——
+   *  ① `session-review-state.jsonl` 是**键控状态**（读侧"该 sid 末行生效"，与水位同族，故不能并入事件流）；
+   *  ② `proposals-<sid>.jsonl` 是**待执行提案**（append-only、由 S3 下一轮消费），落在**库内** `audit/session-review/`
+   *     ——它是"提案账"，语义是"还没执行的意图"，与"已发生的事实"（台账）分属两族。 */
+  ['session-review-state.jsonl', 'keyed', 'L2 复盘水位（键控：该 sid 末行生效；**不并入 distill-watermark**——那条流会被 L1 每段一写冲掉）', 'suite'],
+  ['proposals-<sid>.jsonl', 'keyed', 'L2 校正**提案流**（append-only，执行权留 S3；库内 `audit/session-review/`）', 'bank'],
   ['ledger.jsonl', 'event', '统一台账（judgement + write 回执 + 各域并入流；**DS4 主干**）', 'suite'],
   // ── 事件流 · **bank 域**（数据属库）—— 与 suite 台账分域，**不并入**
   ['access-real.jsonl', 'event', '真实访问流水（由**库内脚本** harvest-access 增采；活性/遗忘/回想强度的真实信号源）', 'bank'],

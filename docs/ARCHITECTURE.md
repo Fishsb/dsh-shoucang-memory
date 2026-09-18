@@ -45,7 +45,12 @@ L4 交互（DSH Web GUI）
 | **M10 自省** | `assistant_capabilities` | 能力面查询 | 只读，无 token |
 
 > **载体归属口径（2026-09-12 根治 A–D 后；2026-09-14 P1 订正）**：
-> `src/` 共 **85 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> `src/` 共 **86 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> **2026-09-19 新增 `session-review.ts`** ⇒ 85 → 86：S2S3 册一「L2 会话级复盘」——
+> **append-only 校正提案流**（`<bank>/audit/session-review/proposals-<sid>.jsonl`，**执行权留 S3**：
+> L2 若直接改库就撞 S2 的「只增不改历史」硬不变量）· **三态审计**（`not-triggered`/`skipped-by-threshold`/`reviewed`）
+> · 幂等键 `(sid, reviewedSeq, opHash)` · 依赖白名单（禁 `treeops`/`forgetops`/`sectionops`/`deepsleep-*`/`panel-*`，
+> 且不得持有写入原语）由 `check-session-review-scope` 机检、行为判据由 `test-session-review` 守。
 > **2026-09-19 新增 `bank-lock.ts` / `section-rewrite.ts`** ⇒ 83 → 85：S2S3 册零「落盘一致性与单写者」——
 > **库级单写者锁**（`<bank>/.write-lock`，mkdir 原子取锁 / 进程内与跨进程（env）双重重入 / 陈旧接管留证 /
 > **拿不到即拒写** fail-closed）与**唯一写入原语**（唯一 tmp 名 + 原子 rename + 写后回读校验 + 带门禁写）；

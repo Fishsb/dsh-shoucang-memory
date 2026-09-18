@@ -490,7 +490,13 @@ export const WIRING: { note: string; why: string; entryOk: readonly string[]; ty
   "typeOnlyOk": [
     "deepsleep-contract"
   ],
-  "pending": [],
+  "pending": [
+    {
+      "name": "session-review",
+      "until": "册一接线段：在 distill 的 session/disposed（或空闲）钩子上接线并注入 review 回调；接线落地后必须删掉本条（棘轮只许收紧）",
+      "reason": "L2 会话级复盘的触发/材料/提案/审计四段已落地且判据齐（test-session-review 13 条 + check-session-review-scope 5 条），但「复盘」这一步要接 S2 的 LLM 通道（注入 review 回调）才产生真实提案；本批先落可测内核，接线放下一段，故按注册表要求显式申报而非沉默跳过。"
+    }
+  ],
   "pendingNote": "**零豁免（2026-09-14 起）**：本表为空 ⇒ 任何模块只要 `src/` 扇入为 0 且不在 entryOk / typeOnlyOk，接线门**当场 FAIL**。这是接线门的**最紧状态**，也是本表存在的意义（棘轮只许收紧）；将来若确需豁免，必须在此显式加回并写明 `until`。"
 }
 

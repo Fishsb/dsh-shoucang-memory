@@ -684,6 +684,13 @@ const CHECKS = [
   //   `check-write-primitive`：**写入原语收敛棘轮** —— src 里"字面量固定 tmp 名"只许减不许增
   //     （基线 10，残留清单写在件内注释；已收编文件必须为 0）。
   ['scripts/check-write-primitive.mjs'],
+  // ── S2S3 册一（2026-09-19）：L2 会话级复盘 ────────────────────────────────
+  //   `check-session-review-scope`：**边界机检** —— 依赖白名单（禁 treeops/forgetops/sectionops/
+  //     deepsleep-*/panel-*）+ 不得持有写入原语（只许 appendFileSync）+ 反例自证。
+  //   `test-session-review`：三态审计可分辨 · 材料=清单流+失败明细 · 提案 append-only 幂等 ·
+  //     库内零写入 · 失败不前移水位 · 状态落自有流。
+  ['scripts/check-session-review-scope.mjs'],
+  ['scripts/test-session-review.mjs'],
 ]
 /* ── 已登记在册的自证（i18n · 2026-09-17 · v2.1 验收③）─────────────────────────
  * 判因：验收口径里写「须看到两个新件在册」，若靠**人眼确认**即为文本纪律
