@@ -9,6 +9,9 @@
 //   ② 检查方式：直接调 `lib/sleep-report.js` 的纯函数 + 在临时库上跑 `writeSleepRound` 后**读回文件**。
 //   ③ 阈值：两轮同日 ⇒ 文件包含两个 `## ` 段且第一段**逐字节未变**；issues 行数 = 标记数；impact 行数 = 窗口内条目数。
 //   ④ 失败退回：任一红 ⇒ 该册不得合入（"汇报被覆盖"= 用户口径的直接违背）。
+//   ★4 · **注入侧换源**（册四 ②「『最近成长』改派生」）：注入块 == 报告提存/压缩/统计段**逐元素**可机检
+//         （`latestDerivation` 与报告正文**同函数**）；失效键**同轮**把第二条介质由 `delta.md` 换成
+//         `sleep-reports.jsonl`（篡改汇报行 ⇒ `media` 变；只动 md 留存面 ⇒ 不变 —— 会审 §3.4 的"进键/声明"二选一）。
 //
 // **先红**：改造前无 `sleep-report.ts`（`reports/sleep/` 目录也不存在）⇒ 首跑即 FAIL。
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -110,6 +113,51 @@ writeFileSync(join(kRoot, 'audit', 'activity.jsonl'), [
     ? ok(`影响账**并入**同一流（${r1.stats.rows + r2.stats.rows} 条 impact 行）——册二裁定：不另开 audit/impact/`) : bad('影响账未并入')
   const der = M.derivationOf(mk(new Date(now).toISOString()), r1.stats)
   der.length >= 1 && der.length <= 3 ? ok(`「最近成长」派生 3 行内（${der.length} 行）——delta 退役后的注入源`) : bad('派生化异常')
+}
+
+// ── 4 · 注入侧换源（S2S3 册四 ②「『最近成长』改派生」）：**注入块 == 报告提存/压缩/统计段** ──
+//   判据（会审 §3.4/§4）：不是"文本非空"，而是**逐元素等价** + **失效键同轮换源**。
+//   **先红**：换源前无 `latestDerivation` 导出（本组直接抛/判红）；`media` 里也仍是 `delta.md`。
+{
+  let SS = null
+  try { SS = await import(new URL('../lib/supply-stamp.js', import.meta.url).href) } catch { /* 缺件 */ }
+  const der = M.latestDerivation({ kRoot })
+  const rows = readFileSync(M.sleepReportsStreamOf(kRoot), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)).filter((r) => r.kind === 'sleep-round')
+  const last = rows[rows.length - 1] || {}
+  // ① 逐元素等于「同一条 round 行 + **同一个** `derivationOf`」的输出 ⇒ 注入侧没有第二份复算副本
+  const expect = M.derivationOf({
+    at: String(last.at || ''), sinceMs: last.sinceMs, untilMs: last.untilMs, produceOff: last.produceOff === true,
+    produced: { added: last.added, replaced: last.replaced, profiles: last.profiles },
+    maintenance: { tree: last.tree, pointers: last.pointers, archived: last.archived, kept: last.kept },
+    materials: last.materials, impact: [],
+  }, last.stats)
+  der.length > 0 && JSON.stringify(der) === JSON.stringify(expect)
+    ? ok(`注入派生**逐元素等于**同函数输出（${der.length} 行：${der.join(' ／ ')}）`) : bad(`派生不一致：${JSON.stringify(der)} ≠ ${JSON.stringify(expect)}`)
+  // ② 每个元素里的**数值**必须能在**报告正文**里找到（注入块 == 报告提存/压缩/统计段）
+  const report = readFileSync(join(bankRoot, 'reports', 'sleep', '2026-09-19.md'), 'utf8')
+  const nums = der.flatMap((l) => String(l).match(/\d+/g) || [])
+  const missing = nums.filter((n) => !report.includes(n))
+  nums.length > 0 && missing.length === 0
+    ? ok(`派生行里 ${nums.length} 个数值**逐个可在报告正文命中**（${nums.join(',')}）——"注入块 == 报告段"可机检`)
+    : bad(`派生数值在报告里查不到：${JSON.stringify(missing)}`)
+  // ③ 失效键**同轮换源**：篡改汇报行 ⇒ `media` 必变；只动 md 留存面 ⇒ `media` 不变（已声明不参与 + 理由在 supply-stamp 头注）
+  const mediaOf = () => (SS ? SS.libStampOf(bankRoot, kRoot).media : '')
+  const m0 = mediaOf()
+  const raw = readFileSync(M.sleepReportsStreamOf(kRoot), 'utf8')
+  writeFileSync(M.sleepReportsStreamOf(kRoot), raw.replace(/"added":0/, '"added":7'), 'utf8')
+  const m1 = mediaOf()
+  m0 && m1 !== m0 ? ok(`篡改汇报行 ⇒ \`media\` 变化（${m0.split('|')[1] || ''} → ${m1.split('|')[1] || ''}）`) : bad(`汇报行改了但 media 未变（${m0} → ${m1}）`)
+  writeFileSync(join(bankRoot, 'reports', 'sleep', '2026-09-19.md'), report + '\n<!-- tamper -->\n', 'utf8')
+  const m2 = mediaOf()
+  m2 === m1 ? ok('只动 md 留存面 ⇒ `media` **不变**（append-only 人读面**不进失效键**：否则缓存每轮必失效）') : bad('md 留存面竟然进了失效键')
+  // ④ 失效键**同轮加源**：派生源（汇报流）进键；`delta.md` **留键**（未退役 + 兜底源）——
+  //    判据是"**不得少签**"：加的是派生源这条新介质，不是把旧介质抽掉（退役时才同轮移除）。
+  const mediaAll = SS ? SS.libStampOf(bankRoot, kRoot).media : ''
+  mediaAll.includes('audit/sleep-reports.jsonl') && mediaAll.includes('delta.md') && mediaAll.includes('activity.jsonl')
+    ? ok('失效键三条介质齐（activity + 睡眠汇报流〔派生源〕+ delta.md〔兜底源〕）')
+    : bad(`失效键介质不全：${mediaAll}`)
+  // ⑤ 反向判据：把「留存面 md」也签进去 = 缓存每轮必失效 ⇒ 明确**不在**键内（会审 §3.4 的二选一：声明不参与 + 记录理由）
+  mediaAll.includes('reports/sleep') ? bad('留存面 md 竟然进键（会让缓存每轮必失效）') : ok('留存面 md 不在键内（已声明 + 理由在 supply-stamp 头注）')
 }
 
 rmSync(kRoot, { recursive: true, force: true }); rmSync(bankRoot, { recursive: true, force: true })

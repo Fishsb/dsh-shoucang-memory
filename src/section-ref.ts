@@ -165,7 +165,12 @@ export function pointersOfRow(line: string): RowPointer[] {
 }
 
 /** 索引行准入（唯一强制点，S1R · D3）：`missing`（全不可解析）⇒ 不可写入；
- *  `partial`（父节可回落）/ `ambiguous`（同名多候选）⇒ **放行 + 提示**。 */
+ *  `partial`（父节可回落）/ `ambiguous`（同名多候选）⇒ **放行 + 提示**。
+ *  ⚠ **2026-09-19 收口（真库实测病灶）**：`partial` 里**末段缺失**的那一支 ⇒ **视同 missing，拒写**。
+ *   病灶形状（实测）：`§npm 失效与残留 shim 修复/junction 装配漂移` —— 父节在、子节**没落地**
+ *   （同批 append 失败，见同轮 `failedItems k=append`）⇒ 旧策略"partial 一律放行"把它写成
+ *   **孤儿指针**（真库 `check-section-refs` partial 0→1 翻红）。索引行与明细**同写 / 同不写**才是准入的本意；
+ *   **中段**缺失仍放行（读侧可回落最深可解析段）。孪生 `skill/scripts/section-ref.mjs` 同改（差分锁守）。 */
 export interface RowAdmission {
   ok: boolean
   missing: { file: string; spec: string; name: string }[]
@@ -188,6 +193,8 @@ export function admitIndexRow(memRoot: string, line: string): RowAdmission {
         missing: parts.filter((x) => x.res.state === 'missing').map((x) => x.name),
         resolved: parts.filter((x) => x.res.state !== 'missing').map((x) => x.name),
       })
+      const last = parts[parts.length - 1]
+      if (last && last.res.state === 'missing') missing.push({ file: p.file, spec: p.spec, name: last.name })
     } else if (agg === 'ambiguous') {
       const amb = parts.find((x) => x.res.state === 'ambiguous')
       ambiguous.push({ file: p.file, spec: p.spec, cands: (amb ? amb.res.cands : []).map((c) => c.title) })

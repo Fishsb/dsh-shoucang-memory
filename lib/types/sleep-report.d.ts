@@ -66,6 +66,15 @@ export declare function buildReportSection(i: SleepRoundInput, stats: Record<str
 }>): string;
 /** 「最近成长」派生（`delta.md` 退役后的**注入源**）：三行方向级摘要。 */
 export declare function derivationOf(i: SleepRoundInput, stats: Record<string, number>): string[];
+/** **注入侧唯一入口**：从末条 `sleep-round` 行**复算**「最近成长」三行。
+ *
+ *  与报告正文**同函数**（`derivationOf`）⇒ 判据「**注入块 == 报告提存/压缩/统计段**」可**逐元素机检**
+ *  （`scripts/test-sleep-report.mjs` 的 D 组；不是"文本非空"那种代理判据）。
+ *  ⚠ **不读** `reports/sleep/*.md`：注入失效键跟**派生源**（本流），留存面每轮 append 增长**不代表内容变**。
+ *  缺流/坏行/字段残缺 ⇒ `[]`（**失败开放**：报告缺失不得让注入中断或抛错）。 */
+export declare function latestDerivation(d: {
+    kRoot: string;
+}): string[];
 /** 从**台账末条 `deep-sleep` 行**装配本轮输入（**解耦**：不必把一轮的十几个字段穿过装配层，
  *  也避开 `runDeepSleep` 的函数跨度上限 399/400 —— 这是会审记下的"净减前置"约束下的务实解法）。 */
 export declare function roundInputFromLedger(d: {

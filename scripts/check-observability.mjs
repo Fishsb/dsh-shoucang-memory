@@ -58,6 +58,15 @@ const STREAMS = [
    *     ——它是"提案账"，语义是"还没执行的意图"，与"已发生的事实"（台账）分属两族。 */
   ['session-review-state.jsonl', 'keyed', 'L2 复盘水位（键控：该 sid 末行生效；**不并入 distill-watermark**——那条流会被 L1 每段一写冲掉）', 'suite'],
   ['proposals-<sid>.jsonl', 'keyed', 'L2 校正**提案流**（append-only，执行权留 S3；库内 `audit/session-review/`）', 'bank'],
+  /* S2S3 册四（2026-09-19）**睡眠产物的两条流**：为何**不并入台账**（登记要求的理由）——
+   *  ① `sleep-reports.jsonl` 读侧是**末条生效**（`sleep-report#latestDerivation` 取最后一条 `kind=sleep-round`
+   *     复算「最近成长」；面板 `/sleep/issues` 同取 `lastRound`）⇒ 键控语义，与「读侧逐条」的事件族不同；
+   *     它的**人读面**是 `reports/sleep/<date>.md`（append-only、永不删除），本流是它的机器可读孪生。
+   *  ② `sleep-issues.jsonl` 是**问题队列**（`state:'open'` + `handled:'not-handled'`，用户口径"只标记不处置"）：
+   *     同一 (file,section) 的后继行覆盖前行处置态（**只增不改历史行**）⇒ 同为键控族；
+   *     它是"待处置标记"，与台账里"已发生的事实"分族。 */
+  ['sleep-reports.jsonl', 'keyed', '睡眠汇报流（每轮一行 kind=sleep-round + 影响账并入 kind=impact）——**注入派生源**与面板只读面共读', 'suite'],
+  ['sleep-issues.jsonl', 'keyed', '睡眠问题队列（只标记不处置：state=open / handled=not-handled；只增不改历史行）', 'suite'],
   ['ledger.jsonl', 'event', '统一台账（judgement + write 回执 + 各域并入流；**DS4 主干**）', 'suite'],
   // ── 事件流 · **bank 域**（数据属库）—— 与 suite 台账分域，**不并入**
   ['access-real.jsonl', 'event', '真实访问流水（由**库内脚本** harvest-access 增采；活性/遗忘/回想强度的真实信号源）', 'bank'],

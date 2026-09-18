@@ -39,7 +39,7 @@ export function injectCacheReason(
   if (now.evLen < prev.evLen) return 'compacted'
   if (prev.firstSeq >= 0 && now.firstSeq > prev.firstSeq) return 'compacted'
   /* ★IR1 册四（2026-09-18）**上游事件戳分两级**（库 / 介质）—— 实测旧实现只签**库戳**（三索引），
-   *   而 `activity.jsonl`（冷热状态）与 `delta.md`（晨起摘要）是**另外两条介质**：
+   *   而 `activity.jsonl`（冷热状态）与 `sleep-reports.jsonl`（睡眠汇报 · 晨起摘要派生源）是**另外两条介质**：
    *   它们在**外层**判据里不可见 ⇒ 运行时"改了介质却不重建"（内层 30s TTL 之外看不到）。
    *   现两级都进判据（同一结构化戳，见 `supply-stamp#libStampOf`），读数上也可分辨是谁变的。 */
   if (prev.lib !== now.lib) return 'lib-changed'

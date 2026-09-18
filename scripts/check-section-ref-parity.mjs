@@ -161,6 +161,25 @@ for (const row of ROW_CASES) {
 }
 ok(rowDiff === 0, `索引行准入 ${ROW_CASES.length} 例（含一行两指针 / §A/§B 并列）两侧一致`)
 
+// ── A3 准入**收口**（2026-09-19 · 真库实测病灶）──────────────────────────────
+//   病灶形状（实证，见 `docs/OPEN-ITEMS.md` §11-d）：`§npm 失效与残留 shim 修复/junction 装配漂移`
+//   —— **父节在、子节没落地**（同批 append 失败，同轮 `failedItems k=append`），而旧策略
+//   「partial 一律放行」把它写成了**孤儿指针**（真库 `check-section-refs` partial 0→1 翻红）。
+//   ⚠ **先红**：收口前第一条断言为红（ok=true）；收口后 `missing` 里应带**末段名**（可诊断、不静默）。
+{
+  const ROW_LAST = '[env] 甲 · 说明 → notes/a.md §甲/不存在的节'
+  const ROW_MID = '[env] 甲 · 说明 → notes/a.md §不存在的节/乙'
+  const last = ts.admitIndexRow(TMP, ROW_LAST)
+  const lastM = mjs.admitIndexRow(TMP, ROW_LAST)
+  const mid = ts.admitIndexRow(TMP, ROW_MID)
+  ok(last.ok === false && last.missing.some((m) => m.name === '不存在的节'),
+    'A3 末段缺失 ⇒ **拒写**（末段名进 missing，可诊断）')
+  ok(lastM.ok === false, 'A3 孪生 `skill/scripts/section-ref.mjs` 同结论（末段缺失 ⇒ 拒写）')
+  ok(mid.ok === true && mid.partial.length === 1,
+    'A3 中段缺失 ⇒ **仍放行**（读侧可回落最深可解析段，partial 留痕）')
+  ok(JSON.stringify(last.partial).length > 2, 'A3 拒写时 partial 明细仍在（不静默丢诊断信息）')
+}
+
 // ── B 反例自证：注入实现级偏差 ⇒ 必须检出 ──
 const wrongHard = () => ({ state: 'missing', exact: false, cands: [], fileExists: true })
 ok(compare(ts.resolveSection, wrongHard, CASES).length > 0, '反例自证①：硬编码 missing ⇒ 差分锁检出')

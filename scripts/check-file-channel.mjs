@@ -45,7 +45,10 @@ const CHANNELS = [
     writers: ['activity.ts'],
     // 2026-09-14 阶段 4：`treeops.ts` 的读侧随「主动遗忘」一块迁出 ⇒ 改登记 `forgetops.ts`。
     //   这正是本门方向二的价值——**拆模块时自动提醒"这条通道的读侧变了"**，不靠人记。
-    readers: ['panel-shared.ts', 'vec.ts', 'deepsleep-materials.ts', 'panel-observe.ts', 'forgetops.ts', 'supply-stamp.ts'],
+    readers: ['panel-shared.ts', 'vec.ts', 'deepsleep-materials.ts', 'panel-observe.ts', 'forgetops.ts', 'supply-stamp.ts',
+      // S2S3 册四（2026-09-19）：影响账（`buildImpactRows`）按 (file,section) 折叠真实读/活性 ——
+      //   正是本门方向一的价值：新读侧一出现就提醒登记（此前它只在本门里红过，不靠人记）。
+      'sleep-report.ts'],
     mentions: [],
   },
   {

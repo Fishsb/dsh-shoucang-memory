@@ -38,31 +38,50 @@ function ovAgo(ts) {
   return Math.round(m / 1440) + tr(" 天前");
 }
 
+/* 睡眠汇报卡（S2S3 册四 · 2026-09-19 由「晨起摘要」改造而来）
+ *
+ * **为什么改**：用户口径「每一次睡眠要产出一个汇报（提存 + 压缩）· 汇报像日历一样一直有、不会删除且 UI 可见·
+ *   还要一个睡眠产出问题统计」。会审裁定：**占用晨起摘要卡的样式块**改造成"睡眠汇报/日报"卡，**不新增独立视图**。
+ *
+ * **数据源**（两条只读路由，均为本册新增；旧卡读 `/memory/overview` 的 `delta`）：
+ *   · `/sleep/reports` = 人读留存面 `<bank>/reports/sleep/<date>.md` 的**日历式列表**（同日多轮 = 多段）；
+ *   · `/sleep/issues`  = 问题队列分布 + **末轮 `sleep-round` 行**（数值与注入侧 `latestDerivation` **同源**）。
+ * ⇒ 卡上的每个数字都能在汇报正文里逐值对上（判据见 `scripts/test-sleep-report.mjs` 第 4 组）。
+ *
+ * ⚠ `delta.md` **未退役**（§5-U2 待用户拍板）：记忆详情页 §8 仍读 `/memory/overview.delta`，本卡不再依赖它。
+ * 只复用既有 `sc-*` 语义层（`ovCRow`/`ovPill`），**不引新组件**。 */
 function ovMorningCard() {
-  var card = UI.card(tr("晨起摘要"), { right: [el('span', 'sc-src', '/memory/overview · delta / weekDiff')] });
+  var card = UI.card(tr("睡眠汇报"), { sub: tr("读取中…"), right: [el('span', 'sc-src', '/sleep/reports · /sleep/issues')] });
   var box = el('div');
   box.appendChild(el('div', 'sc-desc', tr("读取中…")));
   card.body.appendChild(box);
-  appState.api('/memory/overview').then(function (d) {
-    var dl = (d || {}).delta || {}, wd = (d || {}).weekDiff || {};
+  Promise.all([
+    appState.api('/sleep/reports').catch(function () { return {}; }),
+    appState.api('/sleep/issues').catch(function () { return {}; })
+  ]).then(function (rs) {
+    var rep = rs[0] || {}, iss = rs[1] || {}, round = iss.lastRound || {}, st = round.stats || {};
+    var days = rep.days || [];
     var sub = card.head && card.head.querySelector('.sub');
-    if (sub) {
-      if (dl.present && dl.staleAt) {
-        var h = Math.round((Date.parse(dl.staleAt) - Date.now()) / 3600000);
-        sub.textContent = tr("delta · 剩余 ") + (h > 0 ? h + 'h' : tr("已过期")) + tr(" 有效");
-      } else sub.textContent = 'delta · weekDiff';
-    }
+    if (sub) sub.textContent = rep.present ? tr("共 ") + Derive.num(rep.count || 0) + tr(" 期 · 最近 ") + String((days[0] || {}).date || '') : tr("尚无汇报");
     box.textContent = '';
-    var rows = (dl.rows || []).slice(0, 2);
-    if (!Derive.has(rows)) box.appendChild(el('div', 'sc-desc', tr("本次无晨起摘要（delta.md 未生成或已过期）。")));
-    rows.forEach(function (t, i) {
-      box.appendChild(ovCRow(String(t), tr("来源：delta.md"), [
-        i === 0 ? ovPill('injections ' + Derive.num(dl.injections || 0), null, true) : ovPill('delta', 'info')
-      ]));
-    });
-    var n = Number(wd.deepAdded || 0);
-    box.appendChild(ovCRow(tr("近 7 天深睡新习得 ") + Derive.num(n) + tr(" 条"), 'weekDiff.deepAdded', [ovPill('+' + Derive.num(n), 'ok')]));
-  }).catch(function () { box.textContent = ''; box.appendChild(el('div', 'sc-desc', tr("晨起摘要读取失败（/memory/overview）。"))); });
+    if (!rep.present || !iss.lastRound) {
+      box.appendChild(el('div', 'sc-desc', tr("尚未产出睡眠汇报（深睡轮跑完才有）。")));
+      return;
+    }
+    var byTag = iss.byTag || {};
+    var produced = Number(round.added || 0) + Number(round.replaced || 0);
+    box.appendChild(ovCRow(tr("提存"),
+      tr("新增 ") + Derive.num(round.added || 0) + tr(" · 替换 ") + Derive.num(round.replaced || 0) + (round.produceOff ? tr(" · 本月停产（口径）") : ''),
+      [ovPill('+' + Derive.num(produced), 'ok')]));
+    box.appendChild(ovCRow(tr("压缩"),
+      tr("树 ") + Derive.num(round.tree || 0) + tr(" · 指针 ") + Derive.num(round.pointers || 0) + tr(" · 归档 ") + Derive.num(round.archived || 0),
+      [ovPill(tr("保留 ") + Derive.num(round.kept || 0), null, true)]));
+    box.appendChild(ovCRow(tr("问题"),
+      tr("未处理 ") + Derive.num(iss.issues || 0) + tr(" 条 · 召回面 ") + Derive.num(byTag['suspect-recall'] || 0) + tr(" / 记忆面 ") + Derive.num(byTag['suspect-quality'] || 0),
+      [ovPill(tr("分母 影响账 ") + Derive.num(st.rows || 0) + tr(" 条"))]));
+    var recent = days.slice(0, 3).map(function (d) { return String(d.date) + ' · ' + Derive.num(d.sections || 0) + tr(" 段"); });
+    box.appendChild(ovCRow(tr("最近几期"), recent.join('　·　') || '—', [ovPill(tr("可回看"), 'info')]));
+  }).catch(function () { box.textContent = ''; box.appendChild(el('div', 'sc-desc', tr("睡眠汇报读取失败（/sleep/reports）。"))); });
   return card.box;
 }
 
@@ -263,7 +282,7 @@ function renderViewOverview(view) {
   var sCard = UI.card(tr("系统状态"), { right: [el('span', 'sc-src', '/mcl/status · /inject/stats')] });
   /* v9 标准（原型 DOM）：两栏各是一个**列容器**，各自纵向堆 3 张卡 ——
    * 不能把 6 张卡平铺进 2 列 grid（那样会 1/2、3/4、5/6 交叉排，视觉顺序全错）。
-   * 左栏：本月成长 / 晨起摘要 / 最近动态 · 右栏：系统状态 / 判据与重排门 / 快捷操作。 */
+   * 左栏：本月成长 / **睡眠汇报**（册四改造，原「晨起摘要」）/ 最近动态 · 右栏：系统状态 / 判据与重排门 / 快捷操作。 */
   var colL = el('div'), colR = el('div');
   colL.appendChild(gCard.box);
   colL.appendChild(ovMorningCard());
