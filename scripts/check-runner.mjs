@@ -326,6 +326,31 @@ const CHECKS = [
   // 无未登记新路由 / 无重复注册 / 只读端点真能响应 200 / webServer 缺失时降级不抛。
   ['scripts/test-panel-wiring.mjs'],
   ['scripts/test-watermark-guard.mjs'],
+  // 册一（2026-09-19 · docs/distill-admission-plan.md）**蒸馏输入面与段身份**：
+  //   判因（真机实测）：`buildEventChunks` 让**无文本事件也推段 endSeq** ⇒ 蒸馏自己 spawn 的子代理
+  //   在父会话留下的 `subagent/catalog`（宿主 `dsh-subagent` 落）每轮把窗口右端 +1 ⇒ 重试键
+  //   `sid#endSeq` 每轮都变 ⇒ `MAX_DISPATCH_RETRY=3` 结构性失效（全日志「第 3/3 次」0 次）。
+  //   本件锁三件：① 材料白名单（且逐条 ⊆ 宿主 `isSurfaceEligibleType`，宿主不可达则显式 UNVERIFIED）；
+  //   ② 段边界只到最后一个**内容**事件（先红）；③ `segKey` 存在且对管理事件免疫、内容变化必变（反例自证）；
+  //   + 等价性（纯内容流段文本/段数/maxSeq 与改造前逐字节相同）。
+  ['scripts/check-distill-input-surface.mjs'],
+  // 册三（2026-09-19 · docs/distill-admission-plan.md）**失败三态与水位记账**：
+  //   判因：一个 `failed` 同时承载 I/O 异常 / 模型侧不合规 / 地址缺失 / 孤儿指针拒收，而水位闸是
+  //   `failed>0 ⇒ 不推` ⇒ 后三类都能**永久锁水位**（近 1h `distill-run` 30/30 带 failed>0）。
+  //   本件锁：① `planSegmentWatermark` 决策表（只有 undigested 扣水位；连败满上限 ⇒ 强制推进）；
+  //   ② `classifyMemFailure` 三态映射（未知保守落 undigested）；③ 接线与"无裸 failed++"；
+  //   ④ `needsAnchor` 落统一台账 `type=anchor-needed`（不新开观测流）。含反例自证声明。
+  ['scripts/check-failure-taxonomy.mjs'],
+  // 册四（2026-09-19）**守卫寿命**：重试计数与段身份随水位流落盘 ⇒ 新实例（= 热重载）回读不归零；
+  //   段身份不匹配 ⇒ 计数归零；旧行兼容（缺字段 ⇒ 0/''）；不传 run ⇒ 行内不出现新字段（零行为变化）。
+  //   判因：热重载实测 220 次（09-18 单日 28 次）清零内存计数 ⇒「连败 3 次强制推进」退化为无界重试。
+  ['scripts/test-guard-lifetime.mjs'],
+  // 册二（2026-09-19 · docs/distill-admission-plan.md）**准入判定单一实现**：
+  //   判因：「该不该现在蒸」原先散在三处、口径不一，且宽限期只看内存 `sleep.sessions`（热重载 220 次
+  //   ⇒ 每次重载 30 秒后必蒸，实测 5/5 配对）。本件锁：① `planIngestAdmission` 决策表（顺序即优先级：
+  //   无增量 → 熔断 → claim → 不在途 → 宽限 → 放行；手动只豁免宽限）；② `quiescenceOf` 三态证据链
+  //   （`unknown` 不是 busy）；③ `lastTurnEndMsOf`（宽限期的持久来源）；④ 三处调用点同源的符号级断言。
+  ['scripts/test-ingest-admission.mjs'],
   // 阶段 2（2026-09-14）**产线流程实例**单测：水位行**纯增量**扩展出 `runId`/`phase`/`attempt` 后，
   //   钉死三件不能靠"看着对"的事 ——
   //   ① **旧行兼容**：磁盘上 v18 之前的历史行没有新字段，必须能读且 `phase` 回落 `unknown`

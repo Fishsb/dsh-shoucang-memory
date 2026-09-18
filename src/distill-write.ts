@@ -185,16 +185,49 @@ const registerIndexMeta = (dep: WriteDeps, root: string, targetFile: string, ind
   } catch { /* 台账登记失败不阻断索引写入 */ }
 }
 
-const writeDispatch = async (dep: WriteDeps, sid: string, out: any, route: string, workspace: string | null): Promise<{ added: number; rejected: number; failed: number; targetLib: string }> => {
-  let added = 0, rejected = 0, failed = 0
+// ── 册三（2026-09-19）：**失败三态分类**（单一实现，纯函数可单测）──
+//   判因（真机实测）：一个 `failed` 原先同时承载四类东西，而水位规则是 `failed>0 ⇒ 不推`
+//   ⇒ 模型侧的"地址/格式不合规"与"需人工建锚"都能**永久锁住水位**（近 1h `distill-run` 30/30 带 failed>0）。
+//   三态：
+//     · `needsAnchor` —— 地址不存在，需人工建锚（内容已裁决，**不该**扣水位；进 `anchor-needed` 台账供认领）
+//     · `rejected`    —— 标签非法 / 指针悬空 / 去重拒收（内容已裁决，**不该**扣水位）
+//     · `undigested`  —— I/O / 原子写 / 子进程异常（**唯一**扣水位的一类，有界重试）
+//   ⚠ 未知一律落 `undigested`（保守：宁可重试一次，不可静默丢料）。
+export const classifyMemFailure = (text: string): { kind: 'needsAnchor' | 'rejected' | 'undigested'; marker: string } => {
+  const t = String(text || '')
+  if (/顶层小节|小节「[^」]*」不存在/.test(t)) return { kind: 'needsAnchor', marker: 'missing-section' }
+  if (/标签非法|指针悬空|指针目标节不存在|索引行重复|dangling-pointer|dup-index/.test(t)) return { kind: 'rejected', marker: 'content-format' }
+  return { kind: 'undigested', marker: 'io-or-unknown' }
+}
+
+const writeDispatch = async (dep: WriteDeps, sid: string, out: any, route: string, workspace: string | null): Promise<{ added: number; rejected: number; failed: number; undigested: number; needsAnchor: number; items: Array<Record<string, string>>; targetLib: string }> => {
+  let added = 0, rejected = 0, undigested = 0, needsAnchor = 0
   // S2S3 册零（2026-09-19）：**失败明细**（条目身份，不只计数）。
   //   判因：L2 会话级复盘要「本会话 L1 全部产出（含未落地）」；而原实现失败只 `failed++`，
   //   审计行只有三个数 ⇒ L2 会以为"会话没这条知识"（实测 `write.ingest` 只有计数、无条目标识）。
   //   故每处失败都记 `{k,target,section,tag,reason}`（上限 20 条，防审计行膨胀），随 `distill-run` 行落盘。
-  const failedItems: Array<Record<string, string>> = []
-  const markFailed = (k: string, target: string, section: string, reason: string, tag = ''): void => {
-    failed++
-    if (failedItems.length < 20) failedItems.push({ k, target: String(target || ''), section: String(section || ''), tag, reason: String(reason || '').slice(0, 80) })
+  //   册三：明细**按三态分流**（`items` 每条形如 `{k,target,section,tag,reason}`，kind 由 `k` 前缀区分）。
+  const items: Array<Record<string, string>> = []
+  const pushItem = (k: string, target: string, section: string, reason: string, tag = ''): void => {
+    if (items.length < 20) items.push({ k, target: String(target || ''), section: String(section || ''), tag, reason: String(reason || '').slice(0, 80) })
+  }
+  const markUndigested = (k: string, target: string, section: string, reason: string, tag = ''): void => { undigested++; pushItem(k, target, section, reason, tag) }
+  const markRejected = (k: string, target: string, section: string, reason: string, tag = ''): void => { rejected++; pushItem(k, target, section, reason, tag) }
+  const markAnchorNeeded = (k: string, target: string, section: string, reason: string, tag = ''): void => {
+    needsAnchor++
+    pushItem(k, target, section, reason, tag)
+    // 可消费队列：**不新开观测流**（`check-observability` 只许并入单一事件源）⇒ 落统一台账 `type=anchor-needed`
+    try {
+      dep.infra.ledger({ type: 'anchor-needed', domain: 'ingest', sid: sid.replace(/^session-/, '').slice(0, 8), target: String(target || ''), section: String(section || ''), reason: String(reason || '').slice(0, 120) })
+    } catch { /* 台账失败不阻断主链 */ }
+  }
+  /** 按 CLI 输出文本分类（唯一入口；未知 ⇒ undigested） */
+  const markByText = (k: string, target: string, section: string, text: string, tag = ''): void => {
+    const c = classifyMemFailure(text)
+    const detail = `${c.marker}: ${String(text || '').slice(0, 80)}`
+    if (c.kind === 'needsAnchor') markAnchorNeeded(k, target, section, detail, tag)
+    else if (c.kind === 'rejected') markRejected(k, target, section, detail, tag)
+    else markUndigested(k, target, section, String(text || '').slice(0, 80), tag)
   }
   // ── P4（2026-09-14）：**环记录落库**（决策/承诺/关系/价态）──
   //   为什么放在路由分支**之前**：它们是「经历」，不因本次路由是 memory/project/discard 而失效
@@ -215,7 +248,7 @@ const writeDispatch = async (dep: WriteDeps, sid: string, out: any, route: strin
     const resolved = resolveTarget()
     if (!resolved.present) {
       for (const _a of ((out && Array.isArray(out.appends)) ? out.appends : [])) { rejected++; dep.infra.audit({ sid, kind: 'gate-reject', reason: '记忆库缺席（部署残缺）', lib: resolved.library }) }
-      return { added, rejected, failed, targetLib: resolved.library }
+      return { added, rejected, failed: undigested, undigested, needsAnchor, items, targetLib: resolved.library }
     }
     const { wl, source } = loadWhitelist(resolved.root)
     const gate = (t?: string): boolean => {
@@ -226,7 +259,7 @@ const writeDispatch = async (dep: WriteDeps, sid: string, out: any, route: strin
     const appends = (out && Array.isArray(out.appends)) ? out.appends : []
     const newIndex = (out && Array.isArray(out.newIndex)) ? out.newIndex : []
     for (const a of appends) {
-      if (!a || !a.target || !a.section || !gate(a.target)) { if (a && (!a.target || !a.section)) failed++; continue }
+      if (!a || !a.target || !a.section || !gate(a.target)) { if (a && (!a.target || !a.section)) markRejected('append-baditem', a?.target, a?.section, '字段缺失（target/section 为空）'); continue }
       // v5：教训条目附 rootCause/avoidWhen → 追加「- 根因：…」「- 不适用：…」两行（WikiSkill 借鉴：WHY + 适用边界）
       const _base = String(a.text || '').trim()
       const _rc = typeof a.rootCause === 'string' && a.rootCause.trim() ? `\n- 根因：${a.rootCause.trim()}` : ''
@@ -235,13 +268,13 @@ const writeDispatch = async (dep: WriteDeps, sid: string, out: any, route: strin
       // 整条落点失败 dispatch-failed）：去前导 §、把路径间游离 § 规整为 /（保留 父/子 路径语义）
       // 2026-09-10 再实锤：模型还可能输出 '## 小节名'（带 markdown 标记，如 741dc51b 落点失败）→ 一并归一化
       const _sec = String(a.section || '').trim().replace(/^[§#]+\s*/, '').replace(/(\/)?\s*[§#]+\s*/g, '$1')
-      if (!_sec) { failed++; continue }
+      if (!_sec) { markRejected('append-empty-section', String(a.target), '', '小节名为空（归一化后）'); continue }
       const r = await memAppend(dep, String(a.target), 'append', _base + _rc + _aw, _sec, resolved)
       if (r.status === 0) added++
-      else { markFailed('append', String(a.target), _sec, textOf(r)); dep.infra.log(`distill 落点失败 ${a.target}§${a.section}: ${textOf(r).slice(0, 120)}`) }
+      else { markByText('append', String(a.target), _sec, textOf(r)); dep.infra.log(`distill 落点失败 ${a.target}§${a.section}: ${textOf(r).slice(0, 120)}`) }
     }
     for (const ni of newIndex) {
-      if (!ni || !ni.line) { failed++; continue }
+      if (!ni || !ni.line) { markRejected('index-baditem', ni?.target, '', '字段缺失（line 为空）'); continue }
       const t = String(ni.target || 'MEMORY.md')
       if (!gate(t)) continue
       const nl = String(ni.line).trim()
@@ -297,27 +330,28 @@ const writeDispatch = async (dep: WriteDeps, sid: string, out: any, route: strin
       //   目标节不在"的孤儿指针（本册实测的病灶形状）。指针不可解析 ⇒ 拒写 + 明细入 failedItems。
       const adm = admitIndexRow(resolved.root, nl)
       if (!adm.ok) {
-        rejected++
         const miss = adm.missing.map((x) => `${x.file}§${x.name}`).join(',')
         dep.infra.audit({ sid, kind: 'gate-reject', target: t, reason: `dangling-pointer:${miss}` })
-        markFailed('index-dangling', t, miss, '指针目标节不存在（拒写，防孤儿）', mNew ? mNew[1] : '')
+        // 册三：孤儿指针是**拒收**（内容已裁决），不是 I/O 失败 —— 旧码在此 `rejected++` 之外还记一次
+        //   `failed++`（册零引入）⇒ 「防孤儿」反成「永久扣水位」。现只计 rejected。
+        markRejected('index-dangling', t, miss, '指针目标节不存在（拒写，防孤儿）', mNew ? mNew[1] : '')
         dep.infra.log(`distill 拒收: 索引行指针悬空（${miss}），不写入（同写/同不写）`)
         continue
       }
       const r = await memAppend(dep, t, 'new', nl, '-', resolved)
       if (r.status === 0) { added++; registerIndexMeta(dep, resolved.root, t, nl, sid) }
-      else { markFailed('index', t, '', textOf(r), mNew ? mNew[1] : ''); dep.infra.log(`distill 新索引失败: ${textOf(r).slice(0, 120)}`) }
+      else { markByText('index', t, '', textOf(r), mNew ? mNew[1] : ''); dep.infra.log(`distill 新索引失败: ${textOf(r).slice(0, 120)}`) }
     }
     mirrorShadow(dep, resolved.root, 'MEMORY.md') // P4 双写期：索引行落盘后镜像（缺省 md 档=不动作）
     // 双画像：Q2「归谁」的 USER/AGENT 通道（宿主直写，格式/容量/去重门禁）
     const profiles = (out && Array.isArray(out.profiles)) ? out.profiles : []
     const date = new Date().toISOString().slice(0, 10)
     for (const p of profiles) {
-      if (!p || !p.target || !p.section || !p.text) { markFailed('profile-baditem', p?.target, p?.section, '字段缺失'); continue }
+      if (!p || !p.target || !p.section || !p.text) { markRejected('profile-baditem', p?.target, p?.section, '字段缺失'); continue }
       const w = writeProfileLine(dep, resolved.root, String(p.target).trim(), String(p.section), `- ${String(p.text).trim()} ← 源: distill ${dep.infra.sidShort(sid)} ${date}`)
       if (w.st === 'added') added++
       else if (w.st === 'rejected') { rejected++; dep.infra.audit({ sid, kind: 'gate-reject', target: p.target, reason: `画像更新被拒（${w.why}）` }) }
-      else if (w.st === 'failed') markFailed('profile', String(p.target), String(p.section), '画像行落盘失败')
+      else if (w.st === 'failed') markUndigested('profile', String(p.target), String(p.section), '画像行落盘失败')
       // dedup：静默不计
     }
     // P4 双写期**覆盖修复**（2026-09-13）：**一趟写入结束统一镜像全部载体**。
@@ -329,8 +363,8 @@ const writeDispatch = async (dep: WriteDeps, sid: string, out: any, route: strin
     if (dep.config.storeMode === 'dual') {
       try { mirrorAll(resolved.root, new Date().toISOString(), carrierFiles(resolved.root)) } catch { /* 镜像失败不影响主流程 */ }
     }
-    dep.infra.audit({ sid, kind: 'distill-run', route, lib: resolved.library, wlSource: source, added, rejected, failed, ...(failedItems.length ? { failedItems } : {}) })
-    return { added, rejected, failed, targetLib: resolved.library }
+    dep.infra.audit({ sid, kind: 'distill-run', route, lib: resolved.library, wlSource: source, added, rejected, failed: undigested, undigested, needsAnchor, ...(items.length ? { failedItems: items } : {}) })
+    return { added, rejected, failed: undigested, undigested, needsAnchor, items, targetLib: resolved.library }
   }
   if (route === 'project') {
     // 单库化（2026-09-08 用户拍板）：pmg 项目卡库已随治理插件移除，项目专属事实**直写项目工作区**
@@ -342,7 +376,7 @@ const writeDispatch = async (dep: WriteDeps, sid: string, out: any, route: strin
     const cards = (out && Array.isArray(out.projectCards)) ? out.projectCards : []
     if (!workspace) {
       for (const pc of cards) {
-        if (!pc || !pc.title || !pc.text) { failed++; continue }
+        if (!pc || !pc.title || !pc.text) { markRejected('card-baditem', pc?.title, '', '字段缺失（title/text 为空）'); continue }
         try {
           const slug = String(pc.title).replace(/[^\w\u4e00-\u9fa5]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24) || 'card'
           const date = new Date().toISOString().slice(0, 10)
@@ -353,9 +387,9 @@ const writeDispatch = async (dep: WriteDeps, sid: string, out: any, route: strin
           writeFileSync(deferFile, `# [project-defer] ${pc.title}\n\n- 卡类型：${pc.cardType || 'reference'}\n- 源会话：${sid}\n- 溯源：${pc.source || ''}\n- 状态：workspace 反解失败降级暂存，待蒸馏重裁决或人工认领\n\n${pc.text}\n`, 'utf8')
           rejected++ // 未入册（defer=暂存非入册）
           dep.infra.audit({ sid, kind: 'gate-reject', target: pc.title, reason: 'workspace 反解失败 → 降级 pending 待认领（不丢弃）' })
-        } catch (e3) { failed++; dep.infra.log(`distill project-defer 落盘失败: ${String((e3 as Error).message).slice(0, 120)}`) }
+        } catch (e3) { markUndigested('card-defer', pc?.title, '', String((e3 as Error).message).slice(0, 120)); dep.infra.log(`distill project-defer 落盘失败: ${String((e3 as Error).message).slice(0, 120)}`) }
       }
-      return { added, rejected, failed, targetLib: 'pending-defer' }
+      return { added, rejected, failed: undigested, undigested, needsAnchor, items, targetLib: 'pending-defer' }
     }
     const dir = join(workspace, 'docs', 'devref', 'shoucang')
     const cardTypes = ['how-to', 'reference', 'decision']
@@ -378,7 +412,7 @@ const writeDispatch = async (dep: WriteDeps, sid: string, out: any, route: strin
       return null
     }
     for (const pc of cards) {
-      if (!pc || !pc.title || !pc.text) { failed++; continue }
+      if (!pc || !pc.title || !pc.text) { markRejected('card-baditem', pc?.title, '', '字段缺失（title/text 为空）'); continue }
       const cardType = cardTypes.includes(String(pc.cardType || '')) ? String(pc.cardType) : 'reference'
       if (!cardTypes.includes(String(pc.cardType || ''))) { rejected++; dep.infra.audit({ sid, kind: 'gate-reject', target: pc.title, reason: `cardType=${pc.cardType} 不在 [${cardTypes.join(',')}]` }); continue }
       const dupOf = cardDupOf(String(pc.title))
@@ -389,12 +423,12 @@ const writeDispatch = async (dep: WriteDeps, sid: string, out: any, route: strin
         const fb = join(dir, `${date}-${cardType}-${slug}.md`)
         writeFileSync(fb, `# [项目事实] ${cardType} · ${pc.title}\n\n- 卡类型：${cardType}\n- 溯源：${pc.source || ''}\n- 源会话：${sid}\n- 工作区：${workspace}\n\n${pc.text}\n`, 'utf8')
         added++
-      } catch (e2) { failed++; dep.infra.log(`distill 项目事实直写失败: ${String((e2 as Error).message).slice(0, 120)}`) }
+      } catch (e2) { markUndigested('card', pc?.title, '', String((e2 as Error).message).slice(0, 120)); dep.infra.log(`distill 项目事实直写失败: ${String((e2 as Error).message).slice(0, 120)}`) }
     }
-    dep.infra.audit({ sid, kind: 'distill-run', route, lib: 'workspace', added, rejected, failed })
-    return { added, rejected, failed, targetLib: 'workspace' }
+    dep.infra.audit({ sid, kind: 'distill-run', route, lib: 'workspace', added, rejected, failed: undigested, undigested, needsAnchor, ...(items.length ? { failedItems: items } : {}) })
+    return { added, rejected, failed: undigested, undigested, needsAnchor, items, targetLib: 'workspace' }
   }
-  return { added, rejected, failed, targetLib: 'none' }
+  return { added, rejected, failed: undigested, undigested, needsAnchor, items, targetLib: 'none' }
 }
 
 // ── pending defer 卡直写（2026-09-10：project-defer 是「已裁决为项目卡」的降级暂存——workspace 恢复后
