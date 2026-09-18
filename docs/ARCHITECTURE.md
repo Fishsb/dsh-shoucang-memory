@@ -45,7 +45,7 @@ L4 交互（DSH Web GUI）
 | **M10 自省** | `assistant_capabilities` | 能力面查询 | 只读，无 token |
 
 > **载体归属口径（2026-09-12 根治 A–D 后；2026-09-14 P1 订正）**：
-> `src/` 共 **87 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> `src/` 共 **88 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
 > **2026-09-19 新增 `sleep-report.ts`** ⇒ 86 → 87：S2S3 册四/册二第二段「睡眠汇报 + 问题标记 + 影响账」——
 > 同日多轮**追加不覆盖**（日历式永不删除）· `audit/sleep-reports.jsonl` 每轮一行且**影响账并入该流**
 > （会审裁定不另开 `audit/impact/`）· 标记**只标不处置**且 `suspect-recall`（召回面）与 `suspect-quality`（记忆面）

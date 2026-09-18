@@ -32,7 +32,7 @@
 | **G0b** | **落盘一致性**（册零主判据）：并发夹具下**不得出现"索引行在而 notes 节不在"**；且**索引行与节要么同写、要么同不写** | 册零 | 并发夹具（蒸馏写 × 面板改写）**必须先红出该缺陷** | ❌ 现状：`sectionops.applyConvergeOps:92` 直写无 gate/锁（第 91 行自陈） |
 | **G1** | L1 落盘**不再产生孤儿**：append 失败 ⇒ 该主题**无新索引行** | 册零 | 真库 `check-section-refs`（须保持 0/0/0/0）+ 审计对账 | ✅ 现为 0（S1R 收口），须**保持** |
 | **G2** | L2 **存在且看全**：满足双维判据的会话**恰好 1 次**复盘（成功路径恰好一次 + 失败重试有上界），材料覆盖整个会话 | 册一 | `kind=session-review` 的 `reviewedSeq` + `formatVersion`/`fp` 双证 + 材料段计数；**三态**（`not-triggered`/`skipped-by-threshold`/`reviewed`） | ❌ 审计行 **0**；**先红成立** |
-| **G3** | L2 **提案可执行且可回滚**：提案经 S3 执行后留档、可还原；复跑幂等 no-op | 册一 | 提案流 `proposals-<sid>.jsonl`（append-only）+ 归档文件含原行原文 + 幂等复跑 | ❌ 无此能力（**且册零未完成前不得开工**） |
+| **G3** | L2 **提案可执行且可回滚**：提案经 S3 执行后留档、可还原；复跑幂等 no-op | 册一 | 提案流 `proposals-<sid>.jsonl`（append-only）+ 归档文件含原行原文 + 幂等复跑 | ✅ 已落地（2026-09-19）：提案流 `proposals-<sid>.jsonl` + **唯一消费者** `src/proposal-apply.ts`（逐字行级校正 + **先留档再改**（`rollback/<opHash>.json`）+ 幂等账 `applied.jsonl` + 三拒（路径穿越/陈旧/歧义））；判据 `test-proposal-apply`（静态 3 + 行为 6，**先红 A1–A3**）；**默认关闭**（`SHOUCANG_PROPOSAL_APPLY=1` 才执行） |
 | **G4** | L2 **不越界**：只对本会话产出的条目提提案；跨会话提案数 = 0 | 册一 | **v1 写法作废**（`outOfScopeTouched` 全仓 **0 命中** ⇒ 恒真）。**v2**：以"**逐字命中 L2 材料**"成对取证（先例 `sectionops.ts:73-75`）+ 构造跨会话条目必须被拒 | ❌ 字段不存在（**从零写起**） |
 | **G5** | S3 **影响账完整**：当日每条产出条目**都有裁决**，**两侧同口径只判差集为空** | 册二 | 载体 = **`added`**（`appends+newIndex+profiles`），轮次用 `sleepEpoch`；缺省**档 S**；账并入 `sleep-reports.jsonl` | ❌ 无影响账 |
 | **G6** | S3 **不产出**：**三通道**同时为 0 —— `added==0`（principles）**且** `replaced==0` **且** `profiles==0` | 册二 | `kind=deep-sleep`；**双断言成对**：① 运行性（本轮该行存在且 `at ≥ T0`）② 通道级零产出 | ❌ 现状 `added` **65**（49 轮） |

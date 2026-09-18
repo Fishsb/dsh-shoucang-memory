@@ -58,6 +58,10 @@ const STREAMS = [
    *     ——它是"提案账"，语义是"还没执行的意图"，与"已发生的事实"（台账）分属两族。 */
   ['session-review-state.jsonl', 'keyed', 'L2 复盘水位（键控：该 sid 末行生效；**不并入 distill-watermark**——那条流会被 L1 每段一写冲掉）', 'suite'],
   ['proposals-<sid>.jsonl', 'keyed', 'L2 校正**提案流**（append-only，执行权留 S3；库内 `audit/session-review/`）', 'bank'],
+  /* S2S3 册二「执行 L2 提案」（2026-09-19）：`applied.jsonl` 是**幂等账**——
+   *  读侧语义 = 按键（`opHash`）取"是否已执行"（`Set` 成员判据），与事件流"读侧逐条"不同族；
+   *  且它与提案流**同目录同生命周期**（提案 → 执行 → 记账），并入台账会把"哪条提案已执行"这一**键控状态**摊成事件。 */
+  ['applied.jsonl', 'keyed', 'L2 提案**执行幂等账**（`(sid,opHash)` 已执行集合；"复跑即 no-op"的判据载体）', 'bank'],
   /* S2S3 册四（2026-09-19）**睡眠产物的两条流**：为何**不并入台账**（登记要求的理由）——
    *  ① `sleep-reports.jsonl` 读侧是**末条生效**（`sleep-report#latestDerivation` 取最后一条 `kind=sleep-round`
    *     复算「最近成长」；面板 `/sleep/issues` 同取 `lastRound`）⇒ 键控语义，与「读侧逐条」的事件族不同；

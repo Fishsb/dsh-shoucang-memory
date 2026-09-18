@@ -26,6 +26,7 @@ import { commitRingChannels } from './ring-commit.js'
 import { gatherMaterials } from './deepsleep-materials.js'
 import { carrierFiles, mirrorAll } from './record-shadow.js'
 import { renderAssocBlock, supplyAssociations } from './association-supply.js'
+import { applySessionProposals } from './proposal-apply.js'
 import { DeepSleepCtx, SleepState } from './deepsleep-contract.js'
 import { applyConvergeOps } from './sectionops.js'
 import { convergeCandidates } from './converge-candidates.js'
@@ -665,11 +666,15 @@ export async function runDeepSleep(d: RunDeps, sinceArg?: number): Promise<'done
              *  口径（供验收取数）：`kind=essence-release` 审计行的 `released` = `applyForgetOps.archived`
              *  （**归档数**，不是 `pv.release` 那个 graded-release 布尔 —— 两者语义完全不同，勿混）。 */
             const relRes = await runRelease({ root: resolved.root, relReview, log, audit })
+            /* 册二「执行 L2 提案」（G3 的执行面）：**只由 S3 消费**册一的提案流；同样**默认关闭**
+             *  （`SHOUCANG_PROPOSAL_APPLY=1`）——执行面一旦默认开就在生产上改写用户库。
+             *  判据与不变量（逐字行级校正 / 先留档再改 / 幂等 / 逐条裁决）见 `proposal-apply.ts` 抬头。 */
+            const propRes = applySessionProposals({ bankRoot: resolved.root, log, audit, enabled: process.env.SHOUCANG_PROPOSAL_APPLY === '1' })
             const otherChannels = {
                 tried: profileTried + ptrRes.skipped + treeRes.skipped + forgetRes.skipped + outcTried + epiTried + conv.skipped + conv.applied,
                 done: profileAdded + ptrRes.updated + treeRes.applied + forgetRes.archived + ringRes.outcomes + ringRes.episodes + conv.applied,
             }
-            log(`deep sleep: stop=${stop} 原则 +${app.added}/替换 ${app.replaced}/跳过 ${app.skipped}（${app.gate}）画像 +${profileAdded} 指针更新 ${ptrRes.updated}/跳过 ${ptrRes.skipped}（${ptrRes.gate}）树 ops ${treeRes.applied}/跳过 ${treeRes.skipped}/归档 ${treeRes.archived} forget 归档 ${forgetRes.archived}/保留 ${forgetRes.kept}/跳过 ${forgetRes.skipped} 释放 ${relRes.released}（${relRes.ran ? '已执行' : relRes.reasons[0]}）后果回收 ${ringRes.outcomes}/${(out?.outcomes || []).length} 叙事 ${narRes.written} 正文/${ringRes.episodes} 记录（ring ${ringRes.ok ? 'ok' : (ringRes.reason || 'fail')}）`)
+            log(`deep sleep: stop=${stop} 原则 +${app.added}/替换 ${app.replaced}/跳过 ${app.skipped}（${app.gate}）画像 +${profileAdded} 指针更新 ${ptrRes.updated}/跳过 ${ptrRes.skipped}（${ptrRes.gate}）树 ops ${treeRes.applied}/跳过 ${treeRes.skipped}/归档 ${treeRes.archived} forget 归档 ${forgetRes.archived}/保留 ${forgetRes.kept}/跳过 ${forgetRes.skipped} 释放 ${relRes.released}（${relRes.ran ? '已执行' : relRes.reasons[0]}）L2 提案 ${propRes.applied}/${propRes.applied + propRes.skipped}（${propRes.ran ? (propRes.reasons[0] || '已执行') : propRes.reasons[0]}）后果回收 ${ringRes.outcomes}/${(out?.outcomes || []).length} 叙事 ${narRes.written} 正文/${ringRes.episodes} 记录（ring ${ringRes.ok ? 'ok' : (ringRes.reason || 'fail')}）`)
             // G-19 失败策略：本轮裁定**只算一次**，审计与下方返回值共用同一结果（防两处口径漂移——
             //   此前审计记 failed、真实返回 done 的相反 bug 正是两份判据各自演进所致）。
             const landedNow = deepSleepLanded(stop, out, app, otherChannels)
