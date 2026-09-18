@@ -328,7 +328,7 @@ Select-String "$env:USERPROFILE/.dsh/super-injector/shoucang-scheduler.log" -Pat
 | ① 仓内绿 | `npm run typecheck` · `npm run build`（host+client） | 均 exit 0 |
 | ② 部署同步 | `node scripts/deploy-installed.mjs` → `check-installed-sync.mjs --strict` | 复制 19/19 件 → **272/272 逐件 sha1 一致，漂移 0** |
 | ③ 运行态生效 | `dev_reload_package`（dsh-shoucang-memory） | 清缓存 88 模块 → 重建 1 fiber，`before: [active] → after: [active]` |
-| ④ 功能探针 | `node scripts/check-installed-features.mjs` | 报告态通过（本轮无新特性标记加项，见下"遗留"） |
+| ④ 功能探针 | `node scripts/check-installed-features.mjs` | ✅ **67 项标记齐全**（本轮 **+4**：`MATERIAL_EVENT_TYPES` / `planSegmentWatermark` / `segKey: run.segKey` / `planIngestAdmission` ⇒ 63 → 67；标记为**词组级**，非通用词） |
 | ⑤ 全量门禁 | `node scripts/check-runner.mjs` | ✅ `PASS（160 pass · 0 xfail · 0 skip）`；**4 件新件在册**：`check-distill-input-surface` · `check-failure-taxonomy` · `test-guard-lifetime` · `test-ingest-admission` |
 | ⑥ 模块计数门 | `check-arch-sync` | `AGENTS.md` / `docs/ARCHITECTURE.md` 同步为 **89 模块**，全绿（`AGENTS.md` 属本地档、不入公开树） |
 | ⑦ 云端 + pin | `git push origin master` → `git status -sb` → 核 profile `dependencies['dsh-shoucang-memory']` 的 `#<sha>` | 推送 `b83c506..f33b690`；远端 = 本地 = `f33b69094f37952abd69681b3ce62819071d48e4`；**pin 由 `#b83c506` 更新为 `#f33b690`**（纯文本，JSON 回读复验合法）—— 治「pin 不跟 ⇒ 宿主重物化退回旧代」的既有失效模式 |
@@ -336,7 +336,8 @@ Select-String "$env:USERPROFILE/.dsh/super-injector/shoucang-scheduler.log" -Pat
 
 ### 13.4 遗留（下一轮候选，未施工）
 
-1. **特性标记未加项**：`check-installed-features` 的标记表未新增本四册标记（该文件本轮由**另一会话**同时在改，属跨会话共享文件 ⇒ 按 R3-⑤ 未动）。⇒ 部署后"带着本轮能力"的证明目前靠**真机读数**（§13.2），下一轮可补标记。
+1. ~~**特性标记未加项**~~ **已完成**：四册各留一条词组级标记（`check-installed-features` 63 → **67 项**）；
+   原先未加项的原因是当时该文件正被**另一会话**改动（跨会话边界，R3-⑤），待其提交后本轮补齐。
 2. **`needsAnchor` 队列的消费方**：本轮只落台账 `type=anchor-needed`（可查、可认领），**未**自动建锚（方案 §3 明确"不自动建顶层散节"）。
 3. **指针供给三册（`docs/pointer-supply-plan.md`）**：与本方案 `§7` 的接口决策已生效（本册三先落）⇒ 其册二（写入事务化）现在可以接着上，且判据输入（失败三态）已就位。
 4. **未验证**：`dsh-client-auto-continue` 是否为自主轮次放大器——仍为开源假设，未归因。
