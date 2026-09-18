@@ -96,6 +96,7 @@ const HOST_FEATURES = [
   ['S1R 一行多指针提取（pointersOfRow）', 'lib/section-ref.js', 'pointersOfRow'],
   ['S2S3 册零·库级单写者锁（bank-lock）', 'lib/bank-lock.js', 'acquireBankLock'],
   ['S2S3 册零·唯一写入原语（section-rewrite）', 'lib/section-rewrite.js', 'atomicWriteFile'],
+  ['S2S3 册一·L2 会话复盘内核（session-review）', 'lib/session-review.js', 'runSessionReview'],
   ['S1R 材料侧输入量可见化（sectionRefDropped）', 'lib/deepsleep-materials.js', 'droppedMissing'],
   ['S1R 材料侧歧义保留（ambiguousKept）', 'lib/deepsleep-materials.js', 'ambiguousKept'],
   ['S1R 深睡审计带小节寻址计数', 'lib/deepsleep-run.js', 'sectionRefDropped'],
