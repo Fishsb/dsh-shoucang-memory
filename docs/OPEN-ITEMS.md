@@ -379,28 +379,33 @@ calls=2 → bySid: sid=6b89a084 · qLen=2 · qHash=005c4d6f · lastReason=new ·
 
 | # | 项 | 差什么 | 复验命令 | 判据 | 何时可做 |
 |---|---|---|---|---|---|
-| **S1R-F1** | **appends 缺锚 ⇒ 详情缺口未联动**（P1 只挡了"索引行"，没挡"详情缺失"） | 蒸馏 `appends` 因**顶层 `##` 锚不存在**被拒（`memory-append` exit 2），而对应 `newIndex` 行在 P1 之前仍写入 ⇒ 产生"有行无节"的孤儿指针（实测 9 处已降级为文件级） | `node scripts/check-section-refs.mjs`（现为 0，因已降级）· 审计 `audit.distill-run` 的 `fclass:"dispatch-failed"` / `failed:N` | ① append 失败 ⇒ **该主题的 newIndex 行不入库**（或按拍板口径**自动建顶层锚**）；② 新增一条机检：`dispatch-failed` 出现时不得有对应新索引行 | 随时（须先定"自动建锚 vs 放弃该行"口径） |
+| **S1R-F1** | **appends 缺锚 ⇒ 详情缺口未联动**（P1 只挡了"索引行"，没挡"详情缺失"） | 代码路径确在（`memory-append` exit 2 于顶层 `##` 锚缺失时），而对应 `newIndex` 行在 P1 之前仍写入 ⇒ 产生"有行无节"的孤儿指针（实测 9 处已降级为文件级）。<br>⚠ **2026-09-19 会审勘误**：审计里**零证据**支持"265 轮因此被拒"（账内「顶层」0 命中）⇒ 该病灶陈述**属未验证推断**；同族改由 **§11 册零**承接，判据改为**可先红的并发一致性夹具**（先红不出即不得开工） | `node scripts/check-section-refs.mjs`（现为 0，因已降级）· 审计 `audit.distill-run` 的 `fclass:"dispatch-failed"` / `failed:N` | ① append 失败 ⇒ **该主题的 newIndex 行不入库**（或按拍板口径**自动建顶层锚**）；② 新增一条机检：`dispatch-failed` 出现时不得有对应新索引行 | 随时（须先定"自动建锚 vs 放弃该行"口径） |
 | **S1R-F2** | **9 处指针已降级为文件级**：主题详情**从未落盘**（库内零命中，只在 `INDEX.md` 台账登记） | 若要恢复精度须**建节 + 补详情**（内容只能来自会话转录/审计，库内已无） | 处置记录（`S1R-section-ref-record.md` §2 降级档）· `node scripts/section-ref-reanchor.mjs --dry`（应为 no-op） | 建节后指针须重指且 `check-section-refs` 仍为 0 | 可选（不影响"悬空归零"达成） |
 | **S1R-F3** | **容量只报不拦**（MEMORY 520% / AGENT 250%） | 容量口径与实况差 5.2×/2.5×；写入侧不再拦（用户 2026-09-16 判定"提醒即可"） | `check-section-refs` 无关；`memory_write_gate` 的容量告警行 | 若改口径须**单独预注册 + 真实分布校准**（仓内阈值登记制） | 待拍板 |
 
 ---
 
-## 11. S2S3 三层供给链协调（2026-09-19 立 · **决策态，未施工**）
+## 11. S2S3 三层供给链协调（2026-09-19 立 · **决策态，未施工** · **v2 经圆桌会审修订**）
 
 > 由来：用户口径「L1 窗口级快速总结知识；**L2 会话级复盘要参考整个会话 + L1 产出，并能调整 L1 产出**；
 > **S3 睡眠不产出**，但需**审查当日每条记忆在会话实际中产生的影响**后做**裁剪压缩**（细节压缩、只留方向节点）」。
-> **成对方案/验收**：`docs/specs/S2S3-three-layer-plan.md` + `docs/specs/S2S3-three-layer-acceptance.md`。
+> **成对方案/验收**：`docs/specs/S2S3-three-layer-plan.md` + `docs/specs/S2S3-three-layer-acceptance.md`（**均为 v2**）。
+> **会审**：会议 `s2s3-三层供给链-落地方案会审`（7 专家 · orchestrated）——裁定 **维持五册**、**库级锁**、
+> **两新件（`section-rewrite.ts`/`bank-lock.ts`）并入册零**、**册一降为 append-only 提案流**、**分母钉死（禁用 205/693/407）**。
+> **计数纪律（会审立）**：计数类判据**禁写死数字**，须带**口径描述串**（数据源+kind+过滤+去重键+档位+采集时点），数字只作锚。
+> ⚠ **v1 四处事实已勘误**：`treeOps/pointerOps 0`（字段根本不存在，真值 `tree` 11 / `pointers` 26）· `converge 落地 0`（反例 `{tried 3, applied 3, archived 3}`）·
+> 「678 轮 / failed 1679」（时点快照 + 双写虚增；权威口径 **stop 352 行 / 173 键**）· 「每会话中位 14 轮 / 41% 分片」（段中位 **4** / 行中位 **7**；分片 **80.7%**）。
 
 | # | 项 | 差什么 | 复验命令 | 判据 | 何时可做 |
 |---|---|---|---|---|---|
-| **S2S3-册零** | **L1 落盘修复（前置）** | `dispatch-failed` **265 轮** / `failed **1679**`（append 缺顶层锚被拒，而行已写）⇒ 孤儿指针（= S1R-F1 同族） | 审计聚合（验收册 §4）· `node scripts/check-section-refs.mjs`（须 0） | ① append 失败 ⇒ 同主题**无新索引行** ② 失败清单**随行**进 L2 材料 | **随时**（册一/册二的前置） |
-| **S2S3-册一** | **L2 会话级复盘（新增子链，属 S2）** | 不存在：跨轮无该会话累积视野（`distill-agent.ts:184-197` 只有同轮一行式清单） | 审计 `kind=session-review` · 幂等复跑 | ① 双维触发（静默 ≥30min / 新增 ≥8 条）**恰好一次** ② 材料覆盖全会话（骨架 ≤80 轮 + 锚点 ≤12 段）③ 可校正 L1（revise/merge/demote，**限本会话**，归档可回滚） | 册零后 |
-| **S2S3-册二** | **S3 转"审查 + 压缩"（不产出）** | 现状：`principles` added **65**（49 轮）· `forgetArchived **4**/391` · `treeOps 0` · `pointerOps 0` · `release` 候选 **2254 未消费** · AGENT.md **263%** | 审计 `kind=deep-sleep` 通道计数 · `audit/impact/<day>.jsonl` | ① 影响账条数 == 当日产出条数（未裁决 0）② `principles.added == 0` ③ 压缩 > 0 且**方向可读**（指针仍可解析）④ 细节只归档不直删（可回滚） | 册一后 |
-| **S2S3-册三** | 层间交接机检 + 三层只读投影 | 无 | 新机检件（入 `CHECKS`）+ 夹具先红 | ① L2 必消费 L1 清单（含失败）② S3 必对当日产出裁决 ③ 注入面逐字节不变 | 册二后 |
-| **S2S3-册四** | **睡眠汇报（日历式留存）+ 问题统计 + UI** | 现只有会被覆盖的 `delta.md`（**已拍板退役**）；`unused/counter` 问题**零落点** | `reports/sleep/<date>.md` · `audit/sleep-reports.jsonl` · `audit/sleep-issues.jsonl` · `/sleep/reports` · `/sleep/issues` | ① 每轮一份、**同日多轮不覆盖** ② 五段齐（区间/提存/压缩/**问题标记**/统计）③ **只标记不处置**（`unused/counter` **不触发** archive，仍留原位）④ 统计分得清 `suspect-recall`（召回面）vs `suspect-quality`（记忆面）⑤ UI = **占用运行总览晨起摘要卡位**（不新增视图）⑥ `unused` 窗 **3 天可调**、配置键**三处齐全** ⑦ **注入面「🧠 最近成长」改由报告派生**（退役不得断注入源） | 册二后（与册三可并行） |
-| **S2S3-Q3** | **"影响"如何裁定（口径门）** | 现有遥测可判"是否注入/真读/回收/冷热"（确定性）；"是否帮上忙"是**代理指标** | — | **只用确定性证据裁定归档**；代理指标**仅作排序**，不得单独触发 archive | 与册二同批定案 |
+| **S2S3-册零** | **落盘一致性与单写者（前置项）** | ① 产出/维护共用落盘面而产权未划分（容量门超限**只告警不阻断** ⇒ 295% 是机制必然）② 失败**只累加计数无明细**（`write.ingest` 441 行**无条目标识**）③ **既存缺陷**：`sectionops.applyConvergeOps:92` **无 gate、无锁、直写非 tmp+rename**（第 91 行自陈） | 并发夹具（蒸馏写 × 面板改写）· `audit-fnspan --gate --debt 0` · `check-module-growth` · `check-shared-fn` | ① **先红**：并发夹具必须复现"索引行在而 notes 节不在"（**红不出 ⇒ 不得开工**）② 索引行与节同写/同不写 ③ 失败条目带身份（+1 字段）④ 新件 `section-rewrite.ts` + `bank-lock.ts`（**库级**锁），收编序 sectionops → applyPointerOps → writeMemViaGate | **随时**（册一/册二前置；**册零未完 ⇒ 册一不得开工**） |
+| **S2S3-册一** | **L2 会话级复盘（append-only 提案流）** | 不存在：跨轮无该会话累积视野；且 `distill-write.ts` **无 notes 改写通道**（S2 只增不改）⇒ 直改会撞硬不变量 | 审计 `kind=session-review`（含 `reviewedSeq` + `formatVersion`/`fp` **双证** + **三态**）· 提案流 `proposals-<sid>.jsonl` · 幂等键 `(sid, reviewedSeq, opHash)` | ① 成功路径**恰好一次** + 失败重试有上界 ② 材料覆盖全会话（骨架 ≤80 轮 + 锚点 ≤12 段）③ **只产提案、不直接改库**（执行权留 S3）④ import 白名单（禁 `treeops`/`forgetops`/`sectionops`/`deepsleep-*`/`panel-*`） | 册零后（**硬门**） |
+| **S2S3-册二** | **S3 转"审查 + 压缩"（不产出）** | 现状：`added` **65**（49 轮）· `forgetArchived 4/391` · `tree applied 17`/`pointers 26` · `release` 候选 **2254**（语义门已过 **834**）· 写门口径 AGENT.md **295%** | 审计 `kind=deep-sleep` **三通道**（`added`+`replaced`+`profiles`）· 影响账并入 `sleep-reports.jsonl` | ① 三通道同时为 0 **且**本轮运行过（**成对断言**）② 影响账两侧**同口径 + 差集为空**（载体 `added`，缺省**档 S**）③ 压缩 > 0 且方向可读（指针仍可解析）④ 细节只归档不直删 ⑤ `release` 接线**两前置**：`runDeepSleep` 净减（现 399/400）+ `approvedRows` 补出 | 册一后 |
+| **S2S3-册三** | **层间交接机检（独立册，不并入册四）** | 无 | `node scripts/check-runner.mjs --list` 含 `check-layer-handoff` 且全量 `fail==0` · 反例夹具 3 组 | ① L2 必消费 L1 清单（含失败明细）② S3 必对当日产出裁决 ③ 交接物字段缺失 ⇒ 红；**与册四共用同一审计读出口解析** | 册一后（**可与册二并行**） |
+| **S2S3-册四** | **睡眠汇报（日历式留存）+ 问题统计 + UI** | 现只有会被覆盖的 `delta.md`；`unused/counter` **零落点** | 指纹账 `audit/sleep-report-ledger.jsonl` · `reports/sleep/<date>.md` · `sleep-reports.jsonl` · `sleep-issues.jsonl` · 只读路由（白名单 `{/sleep/reports,/sleep/issues}`） | ① 每轮一份、同日多轮**追加不覆盖** ② 五段齐（区间/提存/压缩/**标记**/统计）+「未处理」明示 ③ **永不删除** = 指纹账三断言（行数单调 + sha256 全覆盖 + 逐值相等）④ **只标记不处置** ⑤ UI = **占用运行总览晨起摘要卡位**（落点 `src-client/panes-overview.js#ovMorningCard`）⑥ 「🧠 最近成长」改派生须**逐元素等价** + **介质戳**处理（`supply-stamp.ts:59`） | 册二后 |
+| **S2S3-新缺陷** | **同段重复蒸馏**（会审新发现，不在五册内但污染册二判据） | 同一 `sid+chunk+区间` 被蒸馏**最多 24 次**；42 键有重复行、179 重复行中 **105 条计数不同**（样例 `aborted(0) → completed(2) → completed(3)`）⇒ 每次重试都可能 `added>0` = 知识重复产出（档 L 1105 vs 档 S 574 的落差即其量化） | 验收册 §7-①（档 L / 档 S 对照） | 重蒸须可辨（同键多行须有终态语义）且不得重复计入产出 | 与册零同批评估 |
 
-**待用户拍板 4 项**（详见方案册 §5）：Q1 画像"生长"归属（建议归 **L2**）· Q2 校正时间窗（建议**仅本会话**）· Q3 影响裁定口径（建议**确定性为主、代理仅排序**）· Q4 阈值（建议**复用既有登记**，不新增手感数）。
+**待用户拍板 6 项**（详见方案册 §5.2；**机器判不了**的理由随行）：**U1** 画像"生长"最终归属（归因已成立：`[原则]` 79 行 = 69.3% 字符）· **U2** `delta.md` **文件**退役是否现在做（一处退役实测动 **12 个文件** + 介质戳重签 + `inject-baseline-diff` 必红）· **U3** `unused` 阈值与"压缩后方向可辨"抽样阈值（H-1 建议 n=20、≥18/20，无出处）· **U4** L2 触发阈值（实测段中位仅 4 ⇒ 现阈值可能大面积漏触发）· **U5** 容量出口口径（建议"可归档压缩、不删除"）· **U6** 睡眠报告容量上界（建议只读计数器 + 超线告警，不自动删除）。
 
 ---
 
