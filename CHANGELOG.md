@@ -5,6 +5,18 @@
 ## [Unreleased]
 
 ### Changed
+- **S2S3 册一 + 册二·第一段 + 册三（2026-09-19，用户指令「目标模式全部落地」）**：
+  · **L2 会话级复盘（册一）**：新增 `src/session-review.ts` —— **append-only 校正提案流**（`<bank>/audit/session-review/proposals-<sid>.jsonl`，
+    **执行权留 S3**：L2 直接改库会撞 S2「只增不改历史」硬不变量）；**三态审计**（未到点 / 内容不足 / 真跑，三者可分辨）；
+    幂等键 `(sid, reviewedSeq, opHash)` + 同水位 no-op；材料 = 蒸馏清单流 + **失败明细** + 骨架（由 S2 侧注入，本件不读会话原文）；
+    水位失败不前移、状态落自有流（不并入 `distill-watermark`）。**已接线**：与蒸馏扫尾同节拍（10min）跑，默认开
+    （`enableSessionReview:false` 可关）。边界由 `check-session-review-scope` 机检（依赖白名单 + 不得持有写入原语 + 接线断言）。
+  · **S3 三通道停产（册二·第一段）**：新增配置 `s3Produce`（**缺省 false = 停产**）——原则通道（add/replace）与画像通道（profileOps）
+    同时关闭；停产轮在台账上表现为 `gate='produce-off'` + `attempted=N` + `added=0`（**「不产出」与「没跑」可分辨**）。
+    维护动作（压缩/归档/指针/树/遗忘）不受影响；开关置 `true` 可恢复产出。
+  · **层间交接机检（册三）**：新增 `scripts/check-layer-handoff.mjs` —— L1→L2 交接（清单流 + 失败明细进材料）· 反例自证 + 按 sid 隔离 ·
+    提案带凭据 · L2→S3 交接**未接线时显式计 PENDING**（不当通过、也不静默跳过）。
+  · 登记：CHECKS **149 → 153**；模块数 85 → **86**；特性探针 49 → **52 项**。
 - **S2S3 册零（2026-09-19，用户指令「目标模式全部落地」）· 落盘一致性与单写者（第一批）**：
   · **库级单写者锁**：新增 `src/bank-lock.ts` + 零依赖孪生 `skill/scripts/bank-lock.mjs` ≡ `scripts/bank-lock.mjs`
     （`<bank>/.write-lock`，`mkdir` 原子取锁；**进程内重入表 + 跨进程 env 令牌**双重重入；陈旧锁**改名留证**接管；
