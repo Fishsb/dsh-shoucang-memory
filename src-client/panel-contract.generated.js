@@ -7,7 +7,7 @@ export const PANEL_CONTRACT = {
   "$comment": "生成物（npm run build:host && node scripts/gen-panel-contract.mjs）—— 勿手改；源 = src/panel-contract.ts",
   "plugin": "dsh-shoucang-memory",
   "prefix": "/api/shoucang-panel",
-  "routeCount": 42,
+  "routeCount": 44,
   "routes": [
     {
       "path": "/roots",
@@ -173,6 +173,18 @@ export const PANEL_CONTRACT = {
     {
       "path": "/criteria",
       "summary": "判据注册表 + 台账",
+      "required": [],
+      "fields": null
+    },
+    {
+      "path": "/sleep/reports",
+      "summary": "睡眠汇报列表（日历式留存：份数 · 段数 · 最近一份）",
+      "required": [],
+      "fields": null
+    },
+    {
+      "path": "/sleep/issues",
+      "summary": "睡眠问题统计（suspect-recall=召回面 / suspect-quality=记忆面）",
       "required": [],
       "fields": null
     },

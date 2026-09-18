@@ -141,6 +141,31 @@ export function derivationOf(i: SleepRoundInput, stats: Record<string, number>):
   return out.slice(0, 3)
 }
 
+/** **注入侧唯一入口**：从末条 `sleep-round` 行**复算**「最近成长」三行。
+ *
+ *  与报告正文**同函数**（`derivationOf`）⇒ 判据「**注入块 == 报告提存/压缩/统计段**」可**逐元素机检**
+ *  （`scripts/test-sleep-report.mjs` 的 D 组；不是"文本非空"那种代理判据）。
+ *  ⚠ **不读** `reports/sleep/*.md`：注入失效键跟**派生源**（本流），留存面每轮 append 增长**不代表内容变**。
+ *  缺流/坏行/字段残缺 ⇒ `[]`（**失败开放**：报告缺失不得让注入中断或抛错）。 */
+export function latestDerivation(d: { kRoot: string }): string[] {
+  const rows = parseRows(sleepReportsStreamOf(d.kRoot), 400)
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const r = rows[i]
+    if (r.kind !== 'sleep-round') continue
+    const num = (k: string): number => Number(r[k] || 0)
+    const input: SleepRoundInput = {
+      at: String(r.at || ''), sinceMs: num('sinceMs'), untilMs: num('untilMs'), produceOff: r.produceOff === true,
+      produced: { added: num('added'), replaced: num('replaced'), profiles: num('profiles') },
+      maintenance: { tree: num('tree'), pointers: num('pointers'), archived: num('archived'), kept: num('kept') },
+      materials: { segments: num('segments'), failures: num('failures') },
+      impact: [],
+    }
+    const st = (r.stats || {}) as Record<string, unknown>
+    return derivationOf(input, { unused: Number(st.unused || 0), suspectRecall: Number(st.suspectRecall || 0) })
+  }
+  return []
+}
+
 /** 从**台账末条 `deep-sleep` 行**装配本轮输入（**解耦**：不必把一轮的十几个字段穿过装配层，
  *  也避开 `runDeepSleep` 的函数跨度上限 399/400 —— 这是会审记下的"净减前置"约束下的务实解法）。 */
 export function roundInputFromLedger(d: { kRoot: string; untilMs?: number }, fallbackDate = new Date().toISOString()): SleepRoundInput | null {

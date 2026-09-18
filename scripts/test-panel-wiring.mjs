@@ -32,6 +32,8 @@ const ROUTES = [
   '/suite', '/mcl/status', '/reconcile', '/maturation/scan', '/selfcheck', '/selfcheck/run', '/config/recent',
   '/rings',
   '/criteria', '/content-types', '/cognition/report', '/llm/models',
+  // S2S3 册四（2026-09-19）：睡眠汇报的**两条只读面**（面板「睡眠汇报」卡读它们）
+  '/sleep/reports', '/sleep/issues',
   '/deepsleep', '/deepsleep/trigger', '/deepsleep/config', '/distill/run', '/distill/config',
   '/inject/preview', '/inject/stats', '/vector/status2', '/embed/config', '/embed/test', '/vector/cache/clear',
   // 架构观测与调节面（panel-arch · 2026-09-13 重构后新增）

@@ -407,6 +407,16 @@ calls=2 → bySid: sid=6b89a084 · qLen=2 · qHash=005c4d6f · lastReason=new ·
 
 **待用户拍板 6 项**（详见方案册 §5.2；**机器判不了**的理由随行）：**U1** 画像"生长"最终归属（归因已成立：`[原则]` 79 行 = 69.3% 字符）· **U2** `delta.md` **文件**退役是否现在做（一处退役实测动 **12 个文件** + 介质戳重签 + `inject-baseline-diff` 必红）· **U3** `unused` 阈值与"压缩后方向可辨"抽样阈值（H-1 建议 n=20、≥18/20，无出处）· **U4** L2 触发阈值（实测段中位仅 4 ⇒ 现阈值可能大面积漏触发）· **U5** 容量出口口径（建议"可归档压缩、不删除"）· **U6** 睡眠报告容量上界（建议只读计数器 + 超线告警，不自动删除）。
 
+**施工状态（2026-09-19）**：册零 · 册一 · 册二（第一段停产 + 第二段影响账/`release` 两前置待办）· 册三 · **册四** 均已落地；
+逐册证据见 `docs/specs/S2S3-book0-record.md` 与 `docs/specs/S2S3-book4-record.md`。**U1–U6 由代理自行裁定（用户授权"不要打扰我"）**，裁定与理由随册四记录。
+
+### 11-a 收口后新登记的遗留（2026-09-19 · 真库病灶 + 代码侧收口）
+
+| # | 项 | 差什么 | 复验命令 | 判据 | 何时可做 |
+|---|---|---|---|---|---|
+| **S2S3-R1** | **真库 1 处孤儿指针**（`MEMORY.md` 末段）：`[教训] junction 装配漂移 · … → notes/env.md §npm 失效与残留 shim 修复/junction 装配漂移`，而 `notes/env.md` 只有 `### npm 失效与残留 shim 修复`（**无**子节 `junction 装配漂移`）⇒ spec 级 `partial`（父在子缺）。<br>**成因链（实证，非推断）**：`2026-09-18T20:15:03Z` 的蒸馏轮 `kind=distill-run added=5 / failed=4` 且 `failedItems` 含 `k=append` —— **明细 append 失败，而同批索引行仍入库**；当时的准入策略对 `partial` 一律放行 | `node scripts/check-section-refs.mjs`（现状：`❌ 路径部分悬空 1 ≤ 基线 0` ⇒ 红） | 重指为可解析前缀（`§npm 失效与残留 shim 修复`）⇒ 该门归 0；**真源数据改动须用户拍板（R3-②）** | **待拍板** |
+| **S2S3-R2** | 同族**代码侧已收口**（防再生）：`admitIndexRow` 对 **末段缺失** 的 `partial` **视同 missing ⇒ 拒写**；中段缺失仍放行（读侧可回落）。孪生 `skill/scripts/section-ref.mjs` 同改（`check-section-ref-parity` 差分锁守） | `node scripts/check-section-ref-parity.mjs`（A3 四条：末段拒写 · 孪生同结论 · 中段放行 · partial 明细留痕） | **先红已留证**：收口前 A3 两条红（`ok=true`）；收口后四条全绿 | **已完成（2026-09-19）** |
+
 ---
 
 _建立 2026-09-14 · 本表为待办唯一入口。_

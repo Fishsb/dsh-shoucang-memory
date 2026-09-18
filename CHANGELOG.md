@@ -5,6 +5,39 @@
 ## [Unreleased]
 
 ### Changed
+- **S2S3 册四 · 睡眠汇报 + 问题统计 + UI（2026-09-19，用户指令「目标模式全部落地」）**：
+  · **第一段 · 汇报与标记**：新增 `src/sleep-report.ts` —— 每轮深睡落**人读汇报** `<bank>/reports/sleep/<date>.md`
+    （固定五段：区间 / 提存 / 压缩 / 问题标记 / 统计；**同日多轮追加不覆盖** = 用户口径「像日历一样一直有、不会删除」）+
+    机器可读 `<kRoot>/audit/sleep-reports.jsonl`（每轮一行 `kind=sleep-round`，**影响账并入同一流** —— 册二裁定不另开 `audit/impact/`）+
+    问题队列 `<kRoot>/audit/sleep-issues.jsonl`（**只标记不处置**：`handled:'not-handled'`；`suspect-recall`=召回面 /
+    `suspect-quality`=记忆面，按**指针可解析性**分开；`injected` 显式记 `unknown`，**不用代理指标冒充判据**）。
+    统计**分母带绝对值**（`unused` 率的分母 = 本窗影响账条数）；落盘失败**不阻断睡眠**但可见。
+  · **第二段 · 注入源改派生**：注入块「🧠 最近成长」不再读 `delta.md`（深睡行级 diff），改由
+    `sleep-report.ts#latestDerivation`（与**报告正文同函数** `derivationOf`）从末条 `sleep-round` 行复算 ⇒
+    判据「**注入块 == 报告提存/压缩/统计段**」**逐元素可机检**（`test-sleep-report` 第 4 组：3 行派生逐个对函数、
+    其中每个数值逐个在报告正文命中）。
+    **介质戳同轮加源**（`supply-stamp.ts`）：新增第三条介质 `audit/sleep-reports.jsonl`（`size:mtimeMs`）——
+    不加会留下「派生在变而缓存不失效」；旧介质 `delta.md` **留键**（它**未退役**且是兜底源，判据是"只许多签不许少签"），
+    并把它的口径一并收紧为 `size:mtimeMs`（原纯 size，实测：过期后**同尺寸改写**签不出来 ⇒ 缓存照供旧块）；
+    **只读留存面 `<date>.md` 故意不进键**（append-only 每轮增长 ≠ 派生内容变），理由记在 `supply-stamp.ts` 头注
+    （会审 §3.4 的"进键 / 声明不参与 + 记录理由"二选一）。
+  · **注入源不断（兜底）**：主源为空时（首轮睡眠未跑 / 本轮无可陈述变化）回落 `delta.md.rows`（逐元素相等 + 48h 过期即弃），
+    避免"换源后注入块静默消失"——判据见 `test-inject-cache` S2c；跨源**不做等价断言**（行语义不同）。
+  · **两条只读路由 + 总览卡改造**：`/sleep/reports`（日历式留存列表）+ `/sleep/issues`（问题分布 + 末轮数值）进契约表
+    （路由 42 → **44**）；「运行总览」的**晨起摘要卡改造为「睡眠汇报」卡**（今日提存 / 压缩 / 问题计数 + 最近几期可回看，
+    复用既有 `sc-*` 语义层、**不新增独立视图**、不引新组件）。
+  · `delta.md` 文件本身**未退役**（`docs/specs/S2S3-three-layer-plan.md` §5-U2 待用户拍板）：写入侧照旧，
+    读侧仅剩 `/memory/overview` 与记忆详情页 §8。
+  · 登记：词表 +21 键 / −8 死键（`check-i18n-keys`）；`i18n-parity` zh 基线**显式更新**
+    （新卡两条请求进面板全局日志 ⇒ 每视图 +1 条目，逐视图差异已核对为**仅日志/计数**）；特性探针 53 → **55 项**。
+  · 册四记录：`docs/specs/S2S3-book4-record.md`（交付物 8 件 · 判据表 · 先红 4 条实测 · 落地差异 6 条 · **U1–U6 自行裁定**）。
+- **S1R 准入收口（2026-09-19，真库病灶驱动 · 与 S2S3 册零同族）**：`admitIndexRow` 对 `partial` 中
+  **末段缺失**的指针 **视同 `missing` ⇒ 拒写**（中段缺失仍放行，读侧可回落最深可解析段）。
+  病灶实证：`MEMORY.md` 末段一行 `→ notes/env.md §npm 失效与残留 shim 修复/junction 装配漂移`，
+  而该子节**没落地**（同批蒸馏轮 `failedItems k=append`，`added=5 / failed=4`）—— 旧策略"partial 一律放行"
+  把它写成**孤儿指针**（真库 `check-section-refs` 由 0 翻红）。**先红留证**：`check-section-ref-parity` A3
+  收口前 **2 条红**（`ok=true`），收口后 4 条绿（含孪生 `skill/scripts/section-ref.mjs` 同结论）。
+  真库那一行**须用户拍板重指**（改真源数据 = R3；登记于 `docs/OPEN-ITEMS.md` §11-a）。
 - **S2S3 册一 + 册二·第一段 + 册三（2026-09-19，用户指令「目标模式全部落地」）**：
   · **L2 会话级复盘（册一）**：新增 `src/session-review.ts` —— **append-only 校正提案流**（`<bank>/audit/session-review/proposals-<sid>.jsonl`，
     **执行权留 S3**：L2 直接改库会撞 S2「只增不改历史」硬不变量）；**三态审计**（未到点 / 内容不足 / 真跑，三者可分辨）；

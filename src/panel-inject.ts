@@ -516,7 +516,7 @@ function mountHotMemoryInjection(ctx: Context, d: InjectDeps): void {
       if (perSid.size > 12) { const oldest = [...perSid.values()].sort((a, b) => a.at - b.at)[0]; if (oldest) perSid.delete(oldest.sid) }
     }
     /* ★IR1 册四（2026-09-18）：**上游戳改成单一实现**（`supply-stamp#libStampOf` = 库戳 ∪ 介质戳）。
-     *   旧实现只签**三索引**（`size:mtimeMs`），而 `activity.jsonl` / `delta.md` 两条介质**不在外层判据里**
+     *   旧实现只签**三索引**（`size:mtimeMs`），而 `activity.jsonl` / `sleep-reports.jsonl` 两条介质**不在外层判据里**
      *   ⇒ 运行时"改了介质却不重建"（内层 30s TTL 之外看不见）。现两级都进判据，读数按层归因。 */
     const stampNow = (): { lib: string; media: string } => { const s = libStampOf(); return { lib: s.lib, media: s.media } }
     let libStamp: { lib: string; media: string } = { lib: '', media: '' }

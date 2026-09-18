@@ -43,6 +43,8 @@ function fixture() {
   writeFileSync(join(mem, 'MEMORY.md'), '[原则] 探针A · x → notes/env.md §qa\n[原则] 探针B · y → notes/env.md §qb\n', 'utf8')
   writeFileSync(join(mem, 'audit', 'activity.jsonl'), '{"f":"notes/env.md","s":"qa","status":"cold","hits30":0}\n', 'utf8')
   writeFileSync(join(kn, 'audit', 'warm-recall.json'), '{"at":0,"key":"","rows":[]}\n', 'utf8')
+  // ⚠ 2026-09-19 换源后：`delta.md` **不再是注入源**（S2b 反向自证用它），夹具仍建（文件未退役，§5-U2）；
+  //   注入派生源 `audit/sleep-reports.jsonl` 由 S2 自己按需写（缺流 = 空块，正是不注入的缺省形态）。
   writeFileSync(join(kn, 'delta.md'), '{"rows":[]}\n', 'utf8')
   return { home, mem, kn }
 }
@@ -71,16 +73,50 @@ const stableOf = (t) => { const i = t.indexOf('[守藏·热记忆]'); const j = 
   ok(orderOf(t2) === 'A,B', `S1：改 activity.jsonl 后**同 query 重调即变**（B,A → ${orderOf(t2)}）`)
 }
 
-// ── S2：delta.md 同理（大小必须变，签名是尺寸口径）──
+// ── S2：注入派生源**换源后**同理（S2S3 册四 · 2026-09-19）──
+//   旧源 = `delta.md`（`rows[]` 原文进块）；新源 = `<kRoot>/audit/sleep-reports.jsonl` 的末条 `sleep-round`
+//   行 → `sleep-report#latestDerivation`（与报告正文**同函数**）⇒ 介质戳同轮换成该流（见 `supply-stamp.ts`）。
+//   ⚠ 口径仍是**尺寸+时戳**（本条沿用旧 S2 的"改介质必须立即变"意图，不改成内容哈希）。
 {
   const f = fixture()
   const hot = await hotIn(f.home)
-  writeFileSync(join(f.kn, 'delta.md'), '{"rows":["[路径] DELTA-ONE"]}\n', 'utf8')
+  const round = (added) => JSON.stringify({ kind: 'sleep-round', at: 'T', added, replaced: 0, profiles: 0, archived: 1, kept: 0, stats: { unused: 0, suspectRecall: 0 } }) + '\n'
+  writeFileSync(join(f.kn, 'audit', 'sleep-reports.jsonl'), round(5), 'utf8')
   const t1 = hot.build('s2')
-  ok(t1.includes('DELTA-ONE'), 'S2 控制组：delta 内容进入一次性块（DELTA-ONE）')
-  writeFileSync(join(f.kn, 'delta.md'), '{"rows":["[路径] DELTA-TWO-LONGER"]}\n', 'utf8')
+  ok(t1.includes('本轮提存 5 条'), 'S2 控制组：睡眠汇报派生进入一次性块（提存 5）')
+  writeFileSync(join(f.kn, 'audit', 'sleep-reports.jsonl'), round(19), 'utf8')
   const t2 = hot.build('s2')
-  ok(t2.includes('DELTA-TWO-LONGER'), `S2：改 delta.md 后**同 query 重调即变**（实得 ${t2.includes('DELTA-ONE') ? 'DELTA-ONE（旧值）' : 'DELTA-TWO-LONGER'}）`)
+  ok(t2.includes('本轮提存 19 条') && !t2.includes('本轮提存 5 条'),
+    `S2：换一条汇报（本步新落盘）后**同 query 重调即变**（实得 ${t2.includes('本轮提存 5 条') ? '5（旧值）' : t2.includes('本轮提存 19 条') ? '19' : '空'}）`)
+  // ★S2b **反向自证**（判别力）：主源（派生）非空时，`delta.md` **不得**再参与注入**文本**。
+  //   本断言在换源前为**红**（旧实现只读 delta 的 `rows[]`）⇒ 它证明的是"主源真的换了"，不是"没报错"。
+  writeFileSync(join(f.kn, 'delta.md'), '{"rows":["[路径] DELTA-REVERSAL-MARKER"]}\n', 'utf8')
+  const t3 = hot.build('s2')
+  ok(!t3.includes('DELTA-REVERSAL-MARKER'),
+    'S2b 反向自证：派生非空时改 delta.md **不进入**注入块（主源 = 睡眠汇报派生）')
+  ok(t3 === t2, 'S2b：改 delta.md 后注入文本**逐字节不变**（文本不取 delta；戳变只触发重算，输出相同）')
+}
+
+// ── S2c：**兜底源**（H-③「注入源不断」的落地判据 · S2S3 册四）──
+//   派生素材不存在（首轮睡眠未跑）时，块**不得静默消失** —— 回落 `delta.md` 的 `rows[]`，且**逐元素相等**
+//   （验收方案 §2.3 的原话：抓 delta.md.rows 的改前值，断言 rows 逐元素相等）。
+//   ⚠ 本断言在"换源但不留兜底"的实现上为**红**（块会变空）⇒ 它拦的正是"注入源断掉"这一类。
+{
+  const f = fixture()
+  const hot = await hotIn(f.home)
+  const rows = ['[原则] 兜底行一 · a → notes/env.md §x', '[路径] 兜底行二 · b → notes/flows.md §y']
+  writeFileSync(join(f.kn, 'delta.md'), JSON.stringify({ staleAt: new Date(Date.now() + 3600e3).toISOString(), rows }) + '\n', 'utf8')
+  const t = hot.build('s2c')
+  const lines = t.split('\n').map((l) => l.trim()).filter((l) => l.indexOf('兜底行') >= 0)
+  lines.length === rows.length && rows.every((r, i) => lines[i] === r)
+    ? ok(`S2c 兜底：无汇报素材时回落 delta.md（${rows.length} 行**逐元素相等**，块未消失）`)
+    : ok(false,`S2c 兜底失败：期望 ${JSON.stringify(rows)}，实得 ${JSON.stringify(lines)}`)
+  // 过期即弃仍成立（48h）—— 旧语义不得因换源而丢
+  writeFileSync(join(f.kn, 'delta.md'), JSON.stringify({ staleAt: new Date(Date.now() - 3600e3).toISOString(), rows }) + '\n', 'utf8')
+  const t2 = hot.build('s2c')
+  !t2.includes('兜底行')
+    ? ok('S2c 兜底：48h 过期即弃（旧语义保留）')
+    : ok(false,'S2c：过期 delta.md 仍被注入（旧语义丢失）')
 }
 
 // ── S3：**不再对稳定面签无关介质** —— 改无关介质不得触发稳定面重算（但整段必须已重算）──
@@ -101,7 +137,9 @@ const stableOf = (t) => { const i = t.indexOf('[守藏·热记忆]'); const j = 
 
 // ── S4：结构断言 —— `warm-recall.json` **不在失效键里**，且稳定面键不含上游戳 ──
 //   ★IR1 册四（2026-09-18）：上游戳的**实现在 `supply-stamp.ts`**（单一实现）⇒ 本组断言**重新指向**
-//   新落点，**语义逐条不变**（"整段键含上游戳 / 稳定面键不含 / 键包含 activity+delta / 键不含 warm"）。
+//   新落点，**语义逐条不变**（"整段键含上游戳 / 稳定面键不含 / 键包含 activity+派生源 / 键不含 warm"）。
+//   ★S2S3 册四（2026-09-19）**第二条介质换源**：`delta.md` → `audit/sleep-reports.jsonl`
+//   （理由与等价性见 `supply-stamp.ts` 头注；同时**必须**断言 delta.md 已**离开**该戳，否则换源半途）。
 {
   const src = readFileSync(join(repoRoot, 'src', 'panel-shared.ts'), 'utf8')
   const stampSrc = readFileSync(join(repoRoot, 'src', 'supply-stamp.ts'), 'utf8')
@@ -111,7 +149,8 @@ const stableOf = (t) => { const i = t.indexOf('[守藏·热记忆]'); const j = 
   const libFn = (stampSrc.match(/export function libStampOf[\s\S]*?\n\}/) || [''])[0]
   ok(cacheKeyLine.includes('libStampOf'), `S4：cacheKey 已接入**单一上游戳**（${cacheKeyLine.trim().slice(0, 70)}…）`)
   ok(!stableKeyLine.includes('libStampOf'), 'S4：stableKey **不含**上游戳（无关介质不再打穿稳定面）')
-  ok(libFn.includes('activity.jsonl') && libFn.includes('delta.md'), 'S4：戳含 activity.jsonl + delta.md（两条介质）')
+  ok(libFn.includes('activity.jsonl') && libFn.includes('audit/sleep-reports.jsonl') && libFn.includes('delta.md'),
+    'S4：戳含 activity.jsonl + audit/sleep-reports.jsonl（派生源）+ delta.md（**兜底源**）三条介质')
   ok(keyFn.includes('s.lib') && keyFn.includes('s.media') && !keyFn.includes('warm'),
     'S4：失效键 = 库戳 + 介质戳，**不含 warm**（查询域绑定，签它会为别的 query 的写入失效本 query）')
 }

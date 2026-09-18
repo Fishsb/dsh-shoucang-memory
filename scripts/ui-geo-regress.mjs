@@ -56,6 +56,16 @@ const VIEWPORTS = [[1024, 760], [1280, 860], [1600, 1000]]
  *   其余视图走本冒烟集。『架构』纳入本集；其版式对齐同族标准，逐页签内容由探针上报 + 出图集取证。 */
 const VIEWS = ['overview', 'memory', 'persona', 'toggles', 'settings', 'arch']
 
+/* S2S3 册四（2026-09-19）：**睡眠汇报卡**的期望值（与上面 FIX 同批数字 ⇒ 改夹具必改这里）。
+ *  判据意图：只判"卡在不在"会把"把 stats.rows 当 issues 渲染"这类错值整类放过去。 */
+const SLEEP_WANT = {
+  src: '/sleep/reports · /sleep/issues',
+  sub: '共 12 期 · 最近 2026-09-19',
+  tokens: ['提存', '新增 0', ' · 替换 0', '本月停产', '压缩', '树 4', ' · 指针 7', ' · 归档 3', '保留 26',
+    '问题', '未处理 5', '召回面 4', '记忆面 1', '分母 影响账 41', '最近几期',
+    '2026-09-19 · 3 段', '2026-09-18 · 2 段', '2026-09-17 · 1 段', '可回看']
+}
+
 /* ⚠⚠ **本模板字符串内禁止出现反引号** —— 一个反引号就会**提前终止模板串** ⇒
    SyntaxError: Unexpected identifier（已踩两次：2026-09-13 成熟度注释、归档区注释）。
    注释里引用字段名/类名**一律不加反引号**（下面模板串内的注释同样受此约束）。 */
@@ -128,6 +138,19 @@ const FIX = `var FIX = {
     keys:['mclEnabled','mclFamiliarThreshold','mclMaxNudges','mclBudgetChars','mclTopK','mclAudit','mclMaterialInSystem','enableRemPass'],
     limits:{ mclFamiliarThreshold:[0,1], mclMaxNudges:[0,3], mclBudgetChars:[120,4000], mclTopK:[1,5], defaults:{ familiarThreshold:0.58, maxNudges:1, budgetChars:600, topK:3 } } },
   /* health.notesWarn 供总览「判据与重排门」卡；ledger.rows / rerankGate / bankGit 同下。 */
+  /* S2S3 册四（2026-09-19）：**睡眠汇报卡**的两条只读路由 —— 缺任一条 ⇒ 卡回落"尚未产出"空态，
+     出图等于该卡没有视觉证据（与 stableChannel 同型假绿）。数值取形态真实的小值（脱敏，无本机路径）；
+     断言在下面 overview 段按 SLEEP_WANT 逐个对值 —— 只判"卡在不在"会把数值错渲染放过去。 */
+  '/sleep/reports': { present:true, count:12, days:[
+      { date:'2026-09-19', sections:3, bytes:2048, mtimeMs: Date.now()-3600000 },
+      { date:'2026-09-18', sections:2, bytes:1536, mtimeMs: Date.now()-86400000 },
+      { date:'2026-09-17', sections:1, bytes:900, mtimeMs: Date.now()-172800000 }],
+    latest:{ date:'2026-09-19', text:'## 2026-09-19T03:00:00.000Z · 第 2 段区间' } },
+  '/sleep/issues': { present:true, issues:5, byTag:{ 'suspect-recall':4, 'suspect-quality':1 }, denominator:12,
+    recent:[], lastRound:{ kind:'sleep-round', at:'2026-09-19T03:00:00.000Z', sinceMs: Date.now()-6*3600000, untilMs: Date.now(),
+      produceOff:true, added:0, replaced:0, profiles:0, tree:4, pointers:7, archived:3, kept:26,
+      materials:{ segments:2, failures:0 },
+      stats:{ rows:41, unused:5, unusedRate:0.122, suspectRecall:4, suspectQuality:1, injectedUnknown:41 } } },
   '/criteria': { active:true, version:'v2.2.0', ledger:{rows:1284}, bankGit:{commits:417},
     health:{ R:0.82, K:0.64, notesWarn:8000 }, rerankGate:{ready:true,indexRows:1204,threshold:200} },
   /* 深睡：补 active / lastActivityAt / probeAfterMs —— 端点见 r.active 为假时整块跳过渲染，
@@ -229,6 +252,26 @@ setTimeout(function () {
         var rr = R(hit);
         var vt = out.viewEl ? out.viewEl.t : 0;
         return { found: true, text: (hit.textContent || '').slice(0, 90), rect: rr, relTop: rr.t - vt, visibleInViewport: rr.t >= 0 && rr.t < innerHeight };
+      })();
+      /* S2S3 册四（2026-09-19）：**「睡眠汇报」卡**的 DOM 几何 + 文本探针。
+       *   判因同 S-P1d/stableRow：卡若掉到折叠线以下，"图里没有"与"没渲染"不可分辨；
+       *   且本卡 4 行**全部由两条只读路由驱动** ⇒ 夹具缺一条就静默落空态（假绿）。
+       *   这里只取"元素在不在 + rect 非零 + 行文本"，数值一致性由外层按 SLEEP_WANT 逐值断言。
+       *   ⚠ 本段在模板字符串内，注释里**禁用反引号**（会提前闭合整串）。 */
+      out.sleepCard = (function () {
+        var cards = qsa('.sc-card');
+        var card = null;
+        for (var i = 0; i < cards.length; i++) { if ((cards[i].textContent || '').indexOf('睡眠汇报') >= 0) { card = cards[i]; break; } }
+        if (!card) return { found: false };
+        var rows = [].slice.call(card.querySelectorAll('.sc-crow')).map(function (r) { return (r.textContent || '').replace(/\s+/g, ' ').trim(); });
+        var hd = card.querySelector('.sc-card-hd');
+        var sub = hd ? hd.querySelector('.sub') : null;
+        var src = hd ? hd.querySelector('.sc-src') : null;
+        var rr = R(card);
+        var vt = out.viewEl ? out.viewEl.t : 0;
+        return { found: true, head: hd ? (hd.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 120) : '',
+          sub: sub ? (sub.textContent || '').trim() : null, src: src ? (src.textContent || '').trim() : null,
+          rows: rows, rect: rr, relTop: rr.t - vt, visibleInViewport: rr.t >= 0 && rr.t < innerHeight };
       })();
       var wb = qsa('wa-button');
       /* 组件按钮的标签色必须可读（视觉复核抓到过"蓝字压紫底"）：取 shadow DOM 内标签的计算色，
@@ -607,6 +650,29 @@ for (const [w, h] of VIEWPORTS) {
     sr.found && sr.rect && sr.rect.h > 0
       ? ok('恒定面通道健康位行已渲染（DOM 几何 h=' + sr.rect.h + 'px · 相对内容区 top=' + sr.relTop + 'px · 视口内=' + sr.visibleInViewport + '）')
       : bad('恒定面通道健康位行**未渲染**（DOM 里没有该文本节点）—— 夹具缺 stableChannel 或 UI 条件分支失效')
+  }
+  /* ②c S2S3 册四：**睡眠汇报卡**（总览页第 2 张，由「晨起摘要」改造）—— 渲染级 + **逐值**判据。
+   *   只判"卡在"会把数值错渲染（例如把 stats.rows 当 issues 用）整类放过去 ⇒ 这里把夹具值逐个对到卡上。
+   *   期望值集中在 SLEEP_WANT（与上面 FIX 同批硬编码的**同一组数字**）⇒ 改夹具必改期望，不会静默漂移。 */
+  {
+    const sc = g.sleepCard || {}
+    if (!sc.found) bad('睡眠汇报卡**未渲染**（DOM 里找不到）—— 夹具缺 /sleep/reports 或 /sleep/issues，或卡片分支失效')
+    else {
+      sc.rect && sc.rect.h > 0
+        ? ok('睡眠汇报卡已渲染（DOM 几何 h=' + sc.rect.h + 'px · 相对内容区 top=' + sc.relTop + 'px · 视口内=' + sc.visibleInViewport + '）')
+        : bad('睡眠汇报卡 rect 为空（渲染了但零高度）')
+      const sub = String(sc.sub == null ? '' : sc.sub)
+      sub === SLEEP_WANT.sub ? ok('卡头副标题按端点回填（「' + sub + '」）')
+        : bad('副标题与端点不符：实得「' + sub + '」期望「' + SLEEP_WANT.sub + '」')
+      sc.src === SLEEP_WANT.src ? ok('卡头来源标注 = 两条只读路由（' + sc.src + '）')
+        : bad('来源标注不符：' + sc.src)
+      sc.rows.length === 4 ? ok('卡内 4 行（提存 / 压缩 / 问题 / 最近几期）') : bad('卡内行数 ' + sc.rows.length + '（期望 4）')
+      const flat = sc.rows.join(' | ')
+      const miss = SLEEP_WANT.tokens.filter((t) => flat.indexOf(t) < 0)
+      miss.length === 0
+        ? ok('四行数值**与端点逐值一致**（' + SLEEP_WANT.tokens.length + ' 个 token 全命中：' + SLEEP_WANT.tokens.join(' / ') + '）')
+        : bad('卡上数值与端点不符，缺：' + JSON.stringify(miss) + ' ⇒ 实得「' + flat.slice(0, 200) + '」')
+    }
   }
   /* ③ 首屏容纳关键区块 */
   const kpiVisible = g.kpis.filter((k) => k.barY > 0 && k.barY < (g.statusbar ? g.statusbar.t : g.vh)).length
