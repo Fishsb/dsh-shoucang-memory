@@ -329,8 +329,10 @@ Select-String "$env:USERPROFILE/.dsh/super-injector/shoucang-scheduler.log" -Pat
 | ② 部署同步 | `node scripts/deploy-installed.mjs` → `check-installed-sync.mjs --strict` | 复制 19/19 件 → **272/272 逐件 sha1 一致，漂移 0** |
 | ③ 运行态生效 | `dev_reload_package`（dsh-shoucang-memory） | 清缓存 88 模块 → 重建 1 fiber，`before: [active] → after: [active]` |
 | ④ 功能探针 | `node scripts/check-installed-features.mjs` | 报告态通过（本轮无新特性标记加项，见下"遗留"） |
-| ⑤ 全量门禁 | `node scripts/check-runner.mjs` | ✅ 全绿 160/160（4 件新件在册：`check-distill-input-surface` · `check-failure-taxonomy` · `test-guard-lifetime` · `test-ingest-admission`） |
-| ⑥ 模块计数门 | `check-arch-sync` | `AGENTS.md` / `docs/ARCHITECTURE.md` 同步为 **89 模块**，全绿 |
+| ⑤ 全量门禁 | `node scripts/check-runner.mjs` | ✅ `PASS（160 pass · 0 xfail · 0 skip）`；**4 件新件在册**：`check-distill-input-surface` · `check-failure-taxonomy` · `test-guard-lifetime` · `test-ingest-admission` |
+| ⑥ 模块计数门 | `check-arch-sync` | `AGENTS.md` / `docs/ARCHITECTURE.md` 同步为 **89 模块**，全绿（`AGENTS.md` 属本地档、不入公开树） |
+| ⑦ 云端 + pin | `git push origin master` → `git status -sb` → 核 profile `dependencies['dsh-shoucang-memory']` 的 `#<sha>` | 推送 `b83c506..f33b690`；远端 = 本地 = `f33b69094f37952abd69681b3ce62819071d48e4`；**pin 由 `#b83c506` 更新为 `#f33b690`**（纯文本，JSON 回读复验合法）—— 治「pin 不跟 ⇒ 宿主重物化退回旧代」的既有失效模式 |
+| ⑧ 推送前红线 | `check-hardcode` + `check-public-tree` | 硬面 **560 件零命中** · 公开树纯净门 **PASS** |
 
 ### 13.4 遗留（下一轮候选，未施工）
 
