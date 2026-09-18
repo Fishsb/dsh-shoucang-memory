@@ -18,13 +18,14 @@ import { fileURLToPath } from 'node:url'
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const SRC = join(ROOT, 'src')
 
-/** 残留基线（2026-09-19 实测 10 处）——**只许下调**；新增即红。
- *  残留清单（下一轮收编目标）：`deepsleep-apply.ts`×3 · `deepsleep-tree.ts`×2 · `distill-write.ts`×2 ·
- *  `activity.ts`×1 · `record-shadow.ts`×1 · `treeops.ts`×1（`rewriteOneIndex` 索引重写路径）。 */
-const BASELINE = 10
+/** 残留基线（2026-09-19 实测 4 处）——**只许下调**；新增即红。
+ *  残留清单（下一轮收编目标）：`deepsleep-apply.ts`×3（:78 principles tmp / :194 commitPrinciples / :251 另一处）
+ *  与 `treeops.ts`×1（`rewriteOneIndex` 的 tmp+gate 路径，宜改走原语 `gatedWriteFile`）。 */
+const BASELINE = 4
 /** 已收编文件（这些文件里**不允许**再出现固定 tmp 名）。 */
 const COLLECTED = [
   'sectionops.ts', 'panel-inject.ts', 'section-rewrite.ts', 'bank-lock.ts',
+  'activity.ts', 'record-shadow.ts', 'deepsleep-tree.ts', 'distill-write.ts',
 ]
 
 const stripComments = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')

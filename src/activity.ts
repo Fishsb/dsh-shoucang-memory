@@ -12,6 +12,7 @@
  * 派生数据 audit/activity.jsonl（机读、原子替换）；INDEX.md 人工表不动；零 LLM、零删除、绝不抛出。
  */
 import { readFileSync, writeFileSync, mkdirSync, renameSync, existsSync } from 'node:fs'
+import { atomicWriteFile } from './section-rewrite.js'
 import { join, dirname } from 'node:path'
 
 export interface ActivityHooks {
@@ -59,13 +60,13 @@ function loadRows(file: string): Map<string, ActivityRow> {
 function saveRows(file: string, rows: Map<string, ActivityRow>): void {
   try {
     mkdirSync(dirname(file), { recursive: true })
-    const tmp = file + '.tmp'
     const out = [...rows.values()]
       .sort((a, b) => a.key.localeCompare(b.key))
       .map((r) => JSON.stringify(r))
       .join('\n') + '\n'
-    writeFileSync(tmp, out, 'utf8')
-    renameSync(tmp, file) // 原子替换
+    // S2S3 册零：改走**唯一写入原语**（唯一 tmp 名 + 回读校验）。原写法 `file + '.tmp'` 是固定名，
+    //   与另一写者并发时互踩（一方 rename 走另一方半截的 tmp）。
+    atomicWriteFile(file, out)
   } catch { /* 落盘失败静默（派生数据可重建） */ }
 }
 
