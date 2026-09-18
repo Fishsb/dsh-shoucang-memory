@@ -70,7 +70,7 @@ export declare function firstSeenOf(kRoot: string, dateFile: string): string;
  *  数据源 = `access-real.jsonl`（真读埋点，字段 `t/f/s`）+ `activity.jsonl`（`hits/lastHit/status`）；
  *  两者都是**既有遥测**，本件不新建遥测。 */
 export declare function buildImpactRows(d: {
-    kRoot: string;
+    bankRoot: string;
     untilMs: number;
     sinceMs: number;
 }, limit?: number): ImpactRow[];

@@ -37,6 +37,7 @@ const kRoot = mkdtempSync(join(tmpdir(), 'sc-sleep-k-'))
 const bankRoot = mkdtempSync(join(tmpdir(), 'sc-sleep-b-'))
 mkdirSync(join(kRoot, 'audit'), { recursive: true })
 mkdirSync(join(bankRoot, 'notes'), { recursive: true })
+mkdirSync(join(bankRoot, 'audit'), { recursive: true })   // 遥测（access-real/activity）在**库内** audit/
 writeFileSync(join(bankRoot, 'notes', 'env.md'), '# env\n\n## 基准节\n- 有一条\n', 'utf8')
 // 为区分「召回面 vs 记忆面」：tools.md 里**正常存在**的节 ⇒ unused 应判 `suspect-recall`（指针没问题）；
 //   而 activity 里的「悬空节」在库里不存在 ⇒ 应判 `suspect-quality`（指针不可解析）。
@@ -45,12 +46,12 @@ writeFileSync(join(bankRoot, 'MEMORY.md'), '# MEMORY\n', 'utf8')
 
 // 影响账数据源（既有遥测的形态：access-real `t/f/s`；activity `key/f/s/hits/lastHit/status`）
 const now = Date.now()
-writeFileSync(join(kRoot, 'audit', 'access-real.jsonl'), [
+writeFileSync(join(bankRoot, 'audit', 'access-real.jsonl'), [
   JSON.stringify({ t: new Date(now - 1000).toISOString(), f: 'notes/env.md', s: '基准节' }),
   JSON.stringify({ t: new Date(now - 2000).toISOString(), f: 'notes/env.md', s: '基准节' }),
   JSON.stringify({ t: new Date(now - 3 * 3600 * 1000).toISOString(), f: 'notes/tools.md', s: '旧节' }),
 ].join('\n') + '\n', 'utf8')
-writeFileSync(join(kRoot, 'audit', 'activity.jsonl'), [
+writeFileSync(join(bankRoot, 'audit', 'activity.jsonl'), [
   JSON.stringify({ key: 'notes/env.md|基准节', f: 'notes/env.md', s: '基准节', hits: 5, lastHit: now - 1000, status: 'active', hits30: 5, days30: 1, salience: 2 }),
   JSON.stringify({ key: 'notes/tools.md|正常节', f: 'notes/tools.md', s: '正常节', hits: 0, lastHit: 0, status: 'cold' }),
   JSON.stringify({ key: 'notes/tools.md|悬空节', f: 'notes/tools.md', s: '悬空节', hits: 0, lastHit: 0, status: 'cold' }),
@@ -58,7 +59,7 @@ writeFileSync(join(kRoot, 'audit', 'activity.jsonl'), [
 
 // ── 1 · 影响账（确定性聚合 + 口径诚实）────────────────────────
 {
-  const rows = M.buildImpactRows({ kRoot, sinceMs: now - 3600 * 1000, untilMs: now })
+  const rows = M.buildImpactRows({ bankRoot, sinceMs: now - 3600 * 1000, untilMs: now })
   const env = rows.find((r) => r.section === '基准节')
   env && env.realReads === 2 && env.verdict === 'keep'
     ? ok('影响账：窗口内真读 2 次的条目 verdict=keep（确定性证据）') : bad(`影响账错：${JSON.stringify(env)}`)
@@ -72,7 +73,7 @@ writeFileSync(join(kRoot, 'audit', 'activity.jsonl'), [
 
 // ── 2 · 问题标记：召回面 / 记忆面分开 ─────────────────────────
 {
-  const rows = M.buildImpactRows({ kRoot, sinceMs: now - 3600 * 1000, untilMs: now })
+  const rows = M.buildImpactRows({ bankRoot, sinceMs: now - 3600 * 1000, untilMs: now })
   const issues = M.issueRowsOf(bankRoot, rows)
   const recall = issues.filter((i) => i.tag === 'suspect-recall')
   const quality = issues.filter((i) => i.tag === 'suspect-quality')
@@ -86,7 +87,7 @@ writeFileSync(join(kRoot, 'audit', 'activity.jsonl'), [
   {
     const before = {}
     for (const f of readdirSync(bankRoot + '/notes')) before[f] = readFileSync(join(bankRoot, 'notes', f))
-    const rows2 = M.buildImpactRows({ kRoot, sinceMs: now - 3600 * 1000, untilMs: now })
+    const rows2 = M.buildImpactRows({ bankRoot, sinceMs: now - 3600 * 1000, untilMs: now })
     M.issueRowsOf(bankRoot, rows2)   // 只产标记行（纯函数，不落盘）
     const changed = Object.keys(before).filter((f) => !readFileSync(join(bankRoot, 'notes', f)).equals(before[f]))
     changed.length === 0
@@ -106,7 +107,7 @@ writeFileSync(join(kRoot, 'audit', 'activity.jsonl'), [
     produceOff: true, produced: { added: 0, replaced: 0, profiles: 0 },
     maintenance: { tree: 1, pointers: 2, archived: 3, kept: 10 },
     materials: { segments: 2, failures: 1 },
-    impact: M.buildImpactRows({ kRoot, sinceMs: now - 3600 * 1000, untilMs: now }),
+    impact: M.buildImpactRows({ bankRoot, sinceMs: now - 3600 * 1000, untilMs: now }),
   })
   const date = '2026-09-19'
   const r1 = M.writeSleepRound({ kRoot, bankRoot, date }, mk(new Date(now - 60_000).toISOString()))
@@ -220,6 +221,34 @@ writeFileSync(join(kRoot, 'audit', 'activity.jsonl'), [
   lastRoundStats.producedToday === 0 && lastRoundStats.suspectPerProduced === 0
     ? ok('G13 第二分母：当日产出 0 ⇒ 分母记 0 且比例记 0（口径显式，不冒充"通过"）')
     : bad(`G13 第二分母异常：${JSON.stringify(lastRoundStats)}`)
+}
+
+// ── 6 · 尾读窗口口径（2026-09-19 · **实测缺陷**：台账尾窗太小 ⇒ 生产静默无汇报）────────────
+//   病灶：`readTailLines` 缺省只回读末端 **256KB**；真库台账 18.8k 行时「末条 deep-sleep」在 **2778 行**之前
+//   ⇒ `roundInputFromLedger` 看不见它 ⇒ 自检触发时**静默返回 no-deep-sleep-round**（看着像"没跑过深睡"）。
+//   **先红**：本组在旧实现（缺省 256KB）下第一条必红；修后（2MB 窗口）必须命中。
+{
+  const kRoot2 = mkdtempSync(join(tmpdir(), 'sc-sleep-tail-'))
+  const bankRoot2 = mkdtempSync(join(tmpdir(), 'sc-sleep-tail-b-'))
+  mkdirSync(join(kRoot2, 'audit'), { recursive: true })
+  mkdirSync(join(bankRoot2, 'notes'), { recursive: true })
+  const filler = JSON.stringify({ at: '2026-09-19T00:00:00.000Z', type: 'mcl-step', phase: 'inject', pad: 'x'.repeat(220) })
+  const deep = JSON.stringify({ at: '2026-09-19T01:00:00.000Z', kind: 'deep-sleep', gate: 'produce-off', epochSince: Date.parse('2026-09-19T00:00:00.000Z'), attempted: 2, rejected: 0, added: 0, replaced: 0, profiles: 0 })
+  // 2500 行填充（≈ 2500×260B ≈ 650KB > 256KB 缺省窗口，< 2MB 新窗口）
+  writeFileSync(join(kRoot2, 'audit', 'ledger.jsonl'), [deep, ...Array.from({ length: 2500 }, () => filler)].join('\n') + '\n', 'utf8')
+  const got = M.roundInputFromLedger({ kRoot: kRoot2 })
+  got && got.produceOff === true && got.materials.segments === 2
+    ? ok(`尾窗口径：deep-sleep 行距尾 2500 行（≈650KB > 缺省 256KB）仍被命中（produceOff=${got.produceOff} · segments=${got.materials.segments}）`)
+    : bad(`尾窗口径：2500 行距的 deep-sleep 行未被命中（${JSON.stringify(got)}）—— 生产上会静默无汇报`)
+  // 反向：真的一条都没有时，理由必须**带窗口口径**（否则"没跑过深睡"与"窗口太小"不可分辨）
+  const kRoot3 = mkdtempSync(join(tmpdir(), 'sc-sleep-tail3-'))
+  mkdirSync(join(kRoot3, 'audit'), { recursive: true })
+  writeFileSync(join(kRoot3, 'audit', 'ledger.jsonl'), filler + '\n', 'utf8')
+  const r = M.writeSleepReportFromLedger({ kRoot: kRoot3, bankRoot: bankRoot2, date: '2026-09-19' })
+  r.ok === false && /尾读窗口/.test(String(r.reason))
+    ? ok('失败理由可分辨：`no-deep-sleep-round` 附带**尾读窗口口径**（不再与"没跑过深睡"混淆）')
+    : bad(`失败理由缺口径：${JSON.stringify(r)}`)
+  for (const d of [kRoot2, kRoot3, bankRoot2]) rmSync(d, { recursive: true, force: true })
 }
 
 rmSync(kRoot, { recursive: true, force: true }); rmSync(bankRoot, { recursive: true, force: true })

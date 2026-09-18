@@ -52,10 +52,23 @@
 | ④ 功能探针 | `check-installed-features` | **55 项标记齐全**（新增：`latestDerivation` 单一实现 · `/sleep/issues` 只读路由） |
 | ⑤ 云端 + pin | push 后 `git status -sb` 无 ahead + profile `#<sha>` | 见提交与 pin（同批完成） |
 
-**真机行为证据（③ 之后的活体读数）**：`GET /inject/preview` 首块 = 「🧠 最近成长（上次深睡归纳，**带源指针可核验**）：…」
-⇒ 走的是 **delta 兜底分支**（真库尚无 `sleep-reports.jsonl`：首轮睡眠未跑）——
-这正证明**「注入源不断」在真机上生效**（换源后块未消失）；首轮睡眠落盘后自动切主源（派生），
-两条分支的判据分别是 `test-inject-cache` S2（主源）/ S2c（兜底）。
+**真机行为证据（③ 之后的活体读数）**：
+1. **注入源切换（主源生效）**：首轮真汇报落盘后，`GET /inject/preview` 首块从兜底（`delta.md` 行）**切到了主源**——
+   实测文本 = 「🧠 最近成长（上次深睡归纳 · **数值同睡眠汇报**）： 本轮提存 7 条（原则/画像） ／ 标出 18 条未被真读（疑似召回面 8 条）」
+   ⇒ 主源/兜底两条分支**都在真机上被观察到**（先兜底、后主源），不是只在测试里成立。
+2. **两条只读路由**：`GET /sleep/reports` → `{present:true, count:1, days:[{date:'2026-09-18', sections:3, bytes:8549}]}`；
+   `GET /sleep/issues` → `{issues:18, byTag:{...}, denominator:{impactRows:119, producedToday:7}, lastRound:{added:7,...}}`。
+3. **指纹账**：`sleep-report-ledger.jsonl` 逐轮追加（sha256/bytes/lines/sections/firstSeenAt）。
+4. **册三 D 档由 PENDING 转实断言**：`check-layer-handoff` = **9 PASS / 0 FAIL / 0 PENDING**（impact 行 119 条）。
+
+**真机暴露并当场修掉的两个缺陷**（夹具全绿也照样漏 —— 属"夹具绿 ≠ 真数据绿"同族）：
+| # | 缺陷 | 症状（真机） | 根因 | 修法 |
+|---|---|---|---|---|
+| 1 | **影响账读错根** | 汇报落盘但 §5「影响账 0 条」⇒ 册三 D 档「产出未获裁决」翻红 | `access-real.jsonl` / `activity.jsonl` 在**库内** `<bank>/audit/`，而实现读的是 `kRoot/audit/`（**夹具把两者放在 kRoot ⇒ 测试恒绿**） | 入参由 `kRoot` 改 `bankRoot`；**夹具同步放回库内**（夹具放错根 = 假绿） |
+| 2 | **台账尾窗太小** | 定时自检（trigger=timer）触发时静默 `no-deep-sleep-round`（看着像"没跑过深睡"） | `readTailLines` 缺省只回读末端 **256KB**；真库台账 18.8k 行时末条 `deep-sleep` 在 **2778 行**（≈800KB）之前 | 需要跨行距的调用点显式放大窗口（**2MB/4000 行**）；失败理由带上**窗口口径**；判据 = `test-sleep-report` 第 6 组（**先红 2 条**） |
+
+⚠ **口径注记**：2026-09-18 那一轮被**落了 3 段**（首段=修根前 0 行影响账 · 次段=定时自检所写 · 末段=修根后重发同一轮）。
+报告是 append-only ⇒ 三段都可查；**判据一律以末段为准**，前两段留作缺陷留证（不删）。
 
 ## 4. 落地差异与残留（**不谎报**）
 
@@ -74,6 +87,10 @@
    `skill/scripts/section-ref.mjs`（`core.autocrlf=true` 检出为 CRLF）在**同名件两面**下映射到**库内同一文件**
    ⇒ 任一次 `git stash`/`checkout` 刷新工作树行尾都会让三份再次漂移（本册收尾时已归一为 LF 并复核 86/86 一致）。
    根治须引入 `.gitattributes`（`*.mjs text eol=lf`）—— 属仓级改动，**不在本册范围**，登记备查。
+8. **观察（并发读写者）**：`check-record-parity`（影子库对账）在**蒸馏轮写入中途**会假红一次 ——
+   实测 21:3x 抓到 `notes/INDEX.md` md 34358B / store 34299B，**同一分钟再跑即 PASS**（镜像 5082/5082 · 分歧 0）。
+   成因 = 该闸对 md 与 store 的读取**不原子**，而库内确有并发写者（另一会话正在蒸馏）。
+   ⇒ 属"闸对并发写者不原子"，非数据缺陷；如需彻底消除，应改为「读两次 + 稳定即判」（后续批次）。
 
 ## 5. U1–U6 自行裁定（用户授权"不要打扰我"）
 
