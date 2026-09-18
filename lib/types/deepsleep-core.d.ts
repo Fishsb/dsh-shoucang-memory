@@ -273,6 +273,32 @@ export declare const planSkipWatermark: (hasUndigested: boolean, holdRounds: num
     reason: string;
     holdRounds: number;
 };
+/**
+ * 册三（2026-09-19）：**段级水位判据（失败三态 ⇒ 是否推进）**——单一实现，纯函数可单测。
+ *
+ * 判因（真机实测）：`writeDispatch` 原先只有一个 `failed` 计数，**同时**承载四类完全不同的东西——
+ *   ① I/O / 原子写 / 子进程异常（该重试）；② 模型给的地址/格式不合规（内容**已被裁决**，不该重试）；
+ *   ③ 地址不存在需人工建锚（该进队列，不该锁死）；④ 册零新增的「孤儿指针拒收」（同上）。
+ *   而水位规则是 `failed > 0 ⇒ 不推`（`distill-agent.ts` A1 分支）⇒ ②③④ 都能**永久锁住水位**：
+ *   实测近 1h `distill-run` **30/30 = 100%** 带 `failed>0`，同一段被反复重蒸（水位冻在 2 / 808 / 0）。
+ *
+ * 三态语义（**只有「未消化」能扣水位**）：
+ *   · `undigested === 0` ⇒ **推进**（内容已裁决；`needsAnchor`/`rejected` 只是"没落进去"，不是"没看"）
+ *   · `undigested > 0`   ⇒ 保留水位重试；同段累计满 `maxRetry` 次 ⇒ **强制推进**并落审计（有界，不是无界）
+ * 返回 `attempt` 为**本轮之后**的累计次数（由调用方持久化，见册四）。
+ */
+export interface SegmentOutcome {
+    added: number;
+    rejected: number;
+    undigested: number;
+    needsAnchor: number;
+}
+export declare const planSegmentWatermark: (outcome: SegmentOutcome, attempt: number, maxRetry: number) => {
+    advance: boolean;
+    forced: boolean;
+    attempt: number;
+    reason: string;
+};
 export interface DiscardWatermarkDeps {
     writeWatermark(sid: string, lastSeq: number, agent: any): void;
     audit(o: Record<string, unknown>): void;

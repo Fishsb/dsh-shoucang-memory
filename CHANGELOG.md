@@ -2273,6 +2273,24 @@
 - **panel client 迁移到 slot 契约（2026-09-05，解冻前置）**：client.js 注入声明加 `'slots'`，入口从直插侧栏 footArea DOM 改为注册 `sidebar.footer.action` 插槽按钮（无 slots 环境保留直插兜底）；host+client 已注入运行（ef85e372），构建产物 lib/ 重建
 
 ### Fixed
+- **蒸馏「重复蒸馏无挡板」根治（2026-09-19 · 四册全量落地，方案档 `docs/distill-admission-plan.md`）**：
+  真机实测：三个会话水位**冻结数小时**（`3a0b155d`=2 · `f25fad0c`=808 · `308db868`=0），
+  同一段被反复重蒸（近 1h `distill-run` **30/30 带 `failed>0`**；单会话一小时 **12–15 次** LLM 调用）。
+  根因两条，均已实证：
+  · **重试身份用移动坐标**：`sid#chunkEndSeq`，而窗口右端恰好被**蒸馏自己 spawn 的子代理记录**推动
+    （宿主 `dsh-subagent` 在父会话落 `subagent/catalog`，实测 `3a0b155d` 唯一 `turn/end`@100，其后 101–106 全是它）
+    ⇒ 防死循环闸「同段连败 3 次强制推进」**结构性失效**（全日志「第 3/3 次」**0 次**）。
+  · **`failed` 一名多义**：I/O 异常 / 模型侧格式不合规 / 地址缺失 / 孤儿指针拒收混成一个数，
+    而水位规则是 `failed>0 ⇒ 不推` ⇒ 后三类都能**永久锁死水位**。
+  四册修法（每册带在册机检 + 先红读数）：
+  **册一** 材料事件白名单 + 段身份改**内容指纹 `segKey`**（`distill-chunks`，边界二分为「扫描边界 / 材料边界」）→
+  **册三** `planSegmentWatermark` 失败三态（只有 `undigested` 扣水位；`needsAnchor` 落台账 `type=anchor-needed`）→
+  **册四** `attempt`/`segKey` 随**水位流**落盘 ⇒ 重试计数**跨热重载不归零**（热重载实测 220 次清零是旧路径）→
+  **册二** `planIngestAdmission` + `quiescenceOf` 把「该不该蒸」收成**单一实现**（扫尾/idle/手动三处共用；
+  宽限期来源从内存 `sleep.sessions` 换成**持久事实**，治「重载后 30 秒必蒸」5/5 配对）。
+  **真机验证**：部署+热重载后三会话全部收敛（`2→98` / `808→1131` / `0→339`），
+  审计行出现 `失败 0 / 拒收 4`（拒收不再锁水位）、新 fclass `needs-anchor`、水位行新字段 `attempt`/`segKey`。
+  新增 4 件在册机检：`check-distill-input-surface` / `check-failure-taxonomy` / `test-guard-lifetime` / `test-ingest-admission`。
 - **T3 来源栅栏丢弃 handler promise ⇒ 异步路由「未写响应」+ 异常逃脱宿主 catch（2026-09-17）**：
   宿主是 `await route.handler(req, res)`（`dsh-host-webserver/lib/index.js:234`），而首版 `fenced`
   包装写成 `guarded(req, res)`（**丢弃返回值**）⇒ ① 异步 handler 的响应在宿主 `await` 返回后才写

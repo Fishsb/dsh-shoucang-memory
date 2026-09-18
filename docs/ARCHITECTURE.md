@@ -45,7 +45,12 @@ L4 交互（DSH Web GUI）
 | **M10 自省** | `assistant_capabilities` | 能力面查询 | 只读，无 token |
 
 > **载体归属口径（2026-09-12 根治 A–D 后；2026-09-14 P1 订正）**：
-> `src/` 共 **88 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> `src/` 共 **89 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> **2026-09-19 新增 `ingest-admission.ts`** ⇒ 88 → 89：蒸馏**准入判定单一实现**
+> （`planIngestAdmission` 决策表「无增量 → 熔断 → claim → 不在途 → 宽限 → 放行」+ `quiescenceOf` 静默三态
+> 「子代理 / status / inbox」+ `lastTurnEndMsOf` 把宽限期来源从**内存态**换成**持久事实**）——
+> 判因：三处触发（扫尾 / idle 入口 / 手动入口）原先各一套口径，且宽限期只看内存 `sleep.sessions`
+> （热重载实测 **220 次** ⇒ 重载后 30 秒必蒸，5/5 配对）；本模块被三处共用，判据 `test-ingest-admission`。
 > **2026-09-19 新增 `sleep-report.ts`** ⇒ 86 → 87：S2S3 册四/册二第二段「睡眠汇报 + 问题标记 + 影响账」——
 > 同日多轮**追加不覆盖**（日历式永不删除）· `audit/sleep-reports.jsonl` 每轮一行且**影响账并入该流**
 > （会审裁定不另开 `audit/impact/`）· 标记**只标不处置**且 `suspect-recall`（召回面）与 `suspect-quality`（记忆面）

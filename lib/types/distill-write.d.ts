@@ -37,6 +37,9 @@ export declare function createWriteApi(dep: WriteDeps): {
         added: number;
         rejected: number;
         failed: number;
+        undigested: number;
+        needsAnchor: number;
+        items: Array<Record<string, string>>;
         targetLib: string;
     }>;
     flushDeferCards: () => Promise<{
@@ -53,3 +56,7 @@ export declare function createWriteApi(dep: WriteDeps): {
     releaseClaim: (sid: string) => void;
 };
 export type WriteApi = ReturnType<typeof createWriteApi>;
+export declare const classifyMemFailure: (text: string) => {
+    kind: "needsAnchor" | "rejected" | "undigested";
+    marker: string;
+};

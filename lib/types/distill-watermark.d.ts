@@ -22,15 +22,24 @@ export interface WmDeps {
 export interface RunState {
     /** 一次蒸馏 run 的标识（跨段共享；重启后由新 run 重新生成） */
     runId: string;
-    /** 当前阶段：`spawn` / `segment-done` / `forced` */
+    /** 当前阶段：`spawn` / `segment-done` / `forced` / `retry`（册四新增 `retry`=本轮段级失败待重试） */
     phase: string;
     attempt?: number;
+    /**
+     * 段身份（册一 · 内容指纹）——**册四**用它把「重试计数」绑到**同一段内容**上：
+     *   读侧只认 `segKey` 相同的行，内容变了即视为新段（计数归零），故热重载/重启后计数可**重建**。
+     */
+    segKey?: string;
 }
 export interface RunSnapshot {
     runId: string | null;
     phase: string;
     lastSeq: number;
     updatedAt: string;
+    /** 本轮（末行）重试计数；旧行无此字段 ⇒ 0 */
+    attempt: number;
+    /** 本轮（末行）段身份；旧行无此字段 ⇒ ''（读侧按"不匹配"处理，等价于计数归零） */
+    segKey: string;
 }
 /** 去掉首个参数（依赖 d）后的参数元组 —— 用于生成**保类型**的绑定句柄。 */
 type Tail<T> = T extends [unknown, ...infer R] ? R : never;

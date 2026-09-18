@@ -32,9 +32,14 @@ export interface WmDeps {
 export interface RunState {
   /** 一次蒸馏 run 的标识（跨段共享；重启后由新 run 重新生成） */
   runId: string
-  /** 当前阶段：`spawn` / `segment-done` / `forced` */
+  /** 当前阶段：`spawn` / `segment-done` / `forced` / `retry`（册四新增 `retry`=本轮段级失败待重试） */
   phase: string
   attempt?: number
+  /**
+   * 段身份（册一 · 内容指纹）——**册四**用它把「重试计数」绑到**同一段内容**上：
+   *   读侧只认 `segKey` 相同的行，内容变了即视为新段（计数归零），故热重载/重启后计数可**重建**。
+   */
+  segKey?: string
 }
 
 export interface RunSnapshot {
@@ -42,6 +47,10 @@ export interface RunSnapshot {
   phase: string
   lastSeq: number
   updatedAt: string
+  /** 本轮（末行）重试计数；旧行无此字段 ⇒ 0 */
+  attempt: number
+  /** 本轮（末行）段身份；旧行无此字段 ⇒ ''（读侧按"不匹配"处理，等价于计数归零） */
+  segKey: string
 }
 
 /** 去掉首个参数（依赖 d）后的参数元组 —— 用于生成**保类型**的绑定句柄。 */
@@ -88,6 +97,9 @@ const readRunState = (d: WmDeps, sid: string): RunSnapshot | null => {
     phase: typeof wm.phase === 'string' ? wm.phase : 'unknown',
     lastSeq: Number(wm.lastSeq) || 0,
     updatedAt: typeof wm.at === 'string' ? wm.at : '',
+    // 册四（2026-09-19）：重试计数与段身份回读（旧行缺字段 ⇒ 0 / ''，语义 = "无在途重试"）
+    attempt: Number(wm.attempt) || 0,
+    segKey: typeof wm.segKey === 'string' ? wm.segKey : '',
   }
 }
 
@@ -100,7 +112,8 @@ const writeWatermark = (d: WmDeps, sessionId: string, lastSeq: number, agent?: a
     appendFileSync(d.watermarkFile, JSON.stringify({
       sessionId, lastSeq, at: new Date().toISOString(),
       // 阶段 2：流程实例（**纯增量**；不传 run 时完全等同旧行，零行为变化）
-      ...(run ? { runId: run.runId, phase: run.phase, ...(run.attempt === undefined ? {} : { attempt: run.attempt }) } : {}),
+      // 册四：`segKey` 一并落盘 —— 重试计数与段身份**同寿**（读侧按 `segKey` 匹配重建计数，见 readRunState）
+      ...(run ? { runId: run.runId, phase: run.phase, ...(run.attempt === undefined ? {} : { attempt: run.attempt }), ...(run.segKey === undefined ? {} : { segKey: run.segKey }) } : {}),
       // DS4 形态统一（2026-09-13）：补判别字段 `type`，使本流具备与统一事件流合并的前提。
       // ⚠ **刻意不改** `sessionId` → `sid`：读侧 `readWatermarks` 与 G-20 双证守卫都按 `sessionId` 取键，
       //   为一次形态对齐去动**水位守卫**的读链，风险与收益不成比例。此处记下该偏离（合并时做字段映射即可）。
