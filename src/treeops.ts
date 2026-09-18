@@ -36,7 +36,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, unlink
 import { join } from 'node:path'
 import { envelopeEvent as envelope } from './event-envelope.js'
 import { makeCappedSink } from './proc-async.js'
-import { atomicWriteFile } from './section-rewrite.js'
+import { atomicWriteFile, gatedWriteFile } from './section-rewrite.js'
 
 export interface TreeOp {
   action: 'rename' | 'merge' | 'split'
@@ -699,27 +699,16 @@ async function rewriteOneIndex(ctx: Ctx, idxFile: string, notesFile: string, old
     return plan.blocked
   }
   const content = finalize(plan.out)
-  const tmp = p + '.tmp'
-  try {
-    writeFileSync(tmp, content, 'utf8')
-  } catch {
-    safeLog(hooks, `treeops: ${idxFile} tmp 写失败（放弃改写）`)
-    return plan.changedRows
-  }
-  const gate = await runIndexGate(memRoot, idxFile, tmp)
-  if (gate === 'fail') {
-    try { unlinkSync(tmp) } catch { /* */ }
-    // spec：gate exit≠0 → 放弃该索引文件改写并 skipped（文件保持原样；行内容仍可在归档/日志回溯）
-    safeLog(hooks, `treeops: ${idxFile} 索引改写被 memory_write_gate 拒（exit≠0），放弃该文件改写`)
+  // S2S3 册零：改走**带门禁的原子写原语**（唯一 tmp 名 + 回读校验）。原实现固定名 `p + '.tmp'`，
+  //   且 tmp 写失败 / 门禁拒 / rename 失败三条路径各写一遍清理，语义分散易漂。
+  const w = await gatedWriteFile(p, content, async (tmp) => {
+    const gate = await runIndexGate(memRoot, idxFile, tmp)
+    return { ok: gate !== 'fail', out: `gate=${gate}` }
+  })
+  if (!w.ok) {
+    // gate='fail'（门禁拒）与 'absent'（无 gate 脚本，自查后写）在 ok 上已区分；失败原因随 gate 字段可见
+    safeLog(hooks, `treeops: ${idxFile} 索引改写未落盘（${String(w.gate || '落盘异常')}）：放弃该文件改写`)
     return plan.changedRows + plan.blocked
   }
-  // gate='absent'（memRoot/scripts 无 gate 脚本）→ 仅自查后写入（v1 口径）
-  try {
-    renameSync(tmp, p)
-    return plan.blocked
-  } catch {
-    try { unlinkSync(tmp) } catch { /* */ }
-    safeLog(hooks, `treeops: ${idxFile} 原子落盘失败（放弃改写）`)
-    return plan.changedRows + plan.blocked
-  }
+  return plan.blocked
 }

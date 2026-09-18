@@ -18,14 +18,17 @@ import { fileURLToPath } from 'node:url'
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const SRC = join(ROOT, 'src')
 
-/** 残留基线（2026-09-19 实测 4 处）——**只许下调**；新增即红。
- *  残留清单（下一轮收编目标）：`deepsleep-apply.ts`×3（:78 principles tmp / :194 commitPrinciples / :251 另一处）
- *  与 `treeops.ts`×1（`rewriteOneIndex` 的 tmp+gate 路径，宜改走原语 `gatedWriteFile`）。 */
-const BASELINE = 4
+/** 残留基线（2026-09-19 收口后 **0 处**）——**只许下调**（已到底 ⇒ 新增即红）。
+ *  收编路径留痕：批次一等 sectionops/panel-inject/deepsleep-apply(pointerOps)/treeops.atomicWrite/distill-write 画像行；
+ *  批次三等 activity/record-shadow/deepsleep-tree/distill-write 索引元数据表；
+ *  批次四清掉 deepsleep-apply 的 gateText 试算 tmp（改**唯一名** `principlesTmp`，语义是"留待 commitPrinciples 改名"
+ *  ⇒ **不能**用 gatedWriteFile，那个会立即改名）与 narrative 落盘、treeops `rewriteOneIndex`（改走 `gatedWriteFile`）。 */
+const BASELINE = 0
 /** 已收编文件（这些文件里**不允许**再出现固定 tmp 名）。 */
 const COLLECTED = [
   'sectionops.ts', 'panel-inject.ts', 'section-rewrite.ts', 'bank-lock.ts',
   'activity.ts', 'record-shadow.ts', 'deepsleep-tree.ts', 'distill-write.ts',
+  'deepsleep-apply.ts', 'treeops.ts',
 ]
 
 const stripComments = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')

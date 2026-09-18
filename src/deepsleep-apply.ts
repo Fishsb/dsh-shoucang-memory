@@ -6,7 +6,7 @@ import { MATURATION } from './criteria.generated.js'
 import { maturationVerdict } from './criteria.js'
 import { COMMIT_FAILED_GATE, commitPrinciples, deepSleepLanded } from './deepsleep-core.js'
 import { acquireBankLock, releaseBankLock } from './bank-lock.js'
-import { gatedWriteFile } from './section-rewrite.js'
+import { gatedWriteFile, atomicWriteFile } from './section-rewrite.js'
 
 /** 原则与指针写入的全部依赖：配置 + 日志 + 画像头 + 根 + 子进程执行器 + 容量门 + 文本提取。 */
 export interface ApplyDeps {
@@ -22,6 +22,8 @@ export interface ApplyDeps {
 export async function applyPrinciples(d: ApplyDeps, memRoot: string, out: any): Promise<{ attempted: number; added: number; replaced: number; skipped: number; gate: string; gateExit: number; rejectedLines: string[] }> {
   const { config, log, PROFILE_HEADER, kRoot, runNode, capEnv, textOf } = d
   const principlesPath = join(memRoot, 'AGENT.md')
+// S2S3 册零：试算 tmp 的**唯一名**（本函数作用域内稳定，供 gateText 写、commitPrinciples 改名）。
+const principlesTmp = `${principlesPath}.tmp-${process.pid}-${Date.now().toString(36)}`
   const gateScript = join(memoryLibRoot(), 'scripts', 'memory_write_gate.mjs')
   if (!existsSync(gateScript)) return { attempted: 0, added: 0, replaced: 0, skipped: 0, gate: 'write_gate 未就位', gateExit: -1, rejectedLines: [] }
   let content = ''
@@ -75,14 +77,16 @@ export async function applyPrinciples(d: ApplyDeps, memRoot: string, out: any): 
     } catch { return { A: Number(MATURATION.A0 ?? 0.3), key } }
   }
   const gateText = async (body: string): Promise<{ ok: boolean; status: number; out: string }> => {
-    const tmpPath = principlesPath + '.tmp'
+    // S2S3 册零：**唯一 tmp 名**（原 `principlesPath + '.tmp'` 是固定名 ⇒ 并发写者互踩）。
+    //   注意语义：本函数是**试算门禁**（可被调用多次，108/115/120），tmp **留待** `commitPrinciples` 改名就位
+    //   ⇒ 不能走 `gatedWriteFile`（那个会立即改名），只能用唯一名 tmp + 显式清理。
     try {
-      writeFileSync(tmpPath, body, 'utf8')
-      const g = await runNode(config.nodeBin, gateScript, ['AGENT.md', tmpPath], { env: { MEMORY_ROOT: memRoot, ...capEnv() }, timeout: 20000 })
+      writeFileSync(principlesTmp, body, 'utf8')
+      const g = await runNode(config.nodeBin, gateScript, ['AGENT.md', principlesTmp], { env: { MEMORY_ROOT: memRoot, ...capEnv() }, timeout: 20000 })
       lastExit = Number(g.status ?? -1)
-      if (g.status !== 0) { try { unlinkSync(tmpPath) } catch { /* */ } }
+      if (g.status !== 0) { try { unlinkSync(principlesTmp) } catch { /* */ } }
       return { ok: g.status === 0, status: Number(g.status ?? -1), out: textOf(g) }
-    } catch (e) { try { unlinkSync(tmpPath) } catch { /* */ } return { ok: false, status: -1, out: String((e as Error).message) } }
+    } catch (e) { try { unlinkSync(principlesTmp) } catch { /* */ } return { ok: false, status: -1, out: String((e as Error).message) } }
   }
   const reasonOf = (status: number): string => status === 1 ? '超限=原则间合并（本轮跳过）' : status === 2 ? '指针悬空/未注册' : status === 4 ? '行格式违规' : status === -1 ? '门禁执行异常' : `gate exit=${status}`
   const usePerItem = config.perItemGate !== false
@@ -120,7 +124,7 @@ export async function applyPrinciples(d: ApplyDeps, memRoot: string, out: any): 
     if (acceptedItems[0]) rejectedLines.push(`[gate:final ${reasonOf(g2.status)}] ${acceptedItems[0].text}`)
     return { attempted, added: 0, replaced: 0, skipped: attempted, gate: reasonOf(g2.status), gateExit: lastExit, rejectedLines }
   }
-  if (g2.ok) return commitAccepted(principlesPath, acceptedItems, attempted, skipped, rejectedLines, log)
+  if (g2.ok) return commitAccepted(principlesPath, principlesTmp, acceptedItems, attempted, skipped, rejectedLines, log)
   return { attempted, added: 0, replaced: 0, skipped: attempted, gate: reasonOf(lastExit), gateExit: lastExit, rejectedLines }
 }
 
@@ -184,14 +188,14 @@ export async function applyPointerOps(d: ApplyDeps, memRoot: string, out: any): 
 
 /** 并集总门通过后的落盘与计数（自 applyPrinciples 抽出：该函数因此降到 120 行以内）。 */
 function commitAccepted(
-  principlesPath: string, acceptedItems: Array<{ kind: 'add' | 'replace'; idx: number; text: string; prev: string | null }>,
+  principlesPath: string, principlesTmp: string, acceptedItems: Array<{ kind: 'add' | 'replace'; idx: number; text: string; prev: string | null }>,
   attempted: number, skipped: number, rejectedLines: string[], log: (m: string) => void,
 ): { attempted: number; added: number; replaced: number; skipped: number; gate: string; gateExit: number; rejectedLines: string[] } {
 // G-16（2026-09-12）：rename 失败必须**报失败**——原写法空 catch 吞异常后仍按 added>0 返回，
 //   而 deepSleepLanded(:357) 判据只看 added/attempted（不读 gate），会把「没落盘」判成 landed:true
 //   ⇒ 审计记已消化、水位推进、下轮不再重蒸 ⇒ 这批痕迹**静默永久丢失**（崩溃型，比拒收型更隐蔽）。
 //   修法要点是 **added 归 0**（只改 gate 无效，见上）；replaced 一并归 0 免污染判据台账；失败留日志。
-const cm = commitPrinciples(principlesPath + '.tmp', principlesPath)
+const cm = commitPrinciples(principlesTmp, principlesPath)
 if (!cm.ok) {
   log(`deep sleep: 原则落盘失败（未写入，本轮判失败待重蒸）: ${cm.err}`)
   // 不往 rejectedLines 追加（Cody 2026-09-12 纠正，我采纳）：① 审计行已带 gate/gateExit/landed
@@ -248,9 +252,9 @@ export async function applyNarratives(d: ApplyDeps, memRoot: string, out: any): 
     titles.push(title)
   }
   try {
-    const tmp = p + '.tmp'
-    writeFileSync(tmp, content.replace(/\n{3,}/g, '\n\n'), 'utf8')
-    renameSync(tmp, p)
+    // S2S3 册零：改走**唯一写入原语**（唯一 tmp 名 + 回读校验）；原固定名 `p + '.tmp'` 并发互踩。
+    const w = atomicWriteFile(p, content.replace(/\n{3,}/g, '\n\n'))
+    if (!w.ok) throw new Error(String(w.error || '落盘失败'))
   } catch (e) {
     log(`deep sleep: narrative 落盘失败（本轮不计入 written）: ${String((e as Error)?.message || e).slice(0, 120)}`)
     return { written: 0, skipped: items.length, titles: [] }
