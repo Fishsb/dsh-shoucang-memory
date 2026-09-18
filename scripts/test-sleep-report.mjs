@@ -14,7 +14,8 @@
 //         `sleep-reports.jsonl`（篡改汇报行 ⇒ `media` 变；只动 md 留存面 ⇒ 不变 —— 会审 §3.4 的"进键/声明"二选一）。
 //
 // **先红**：改造前无 `sleep-report.ts`（`reports/sleep/` 目录也不存在）⇒ 首跑即 FAIL。
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -80,6 +81,18 @@ writeFileSync(join(kRoot, 'audit', 'activity.jsonl'), [
     : bad(`标记分类错：${JSON.stringify(issues.map((i) => i.tag + ':' + i.section))}`)
   issues.every((i) => i.handled === 'not-handled' && String(i.why).trim())
     ? ok('**只标记不处置**：每条带 `handled=not-handled` 与归因理由（用户口径）') : bad('标记越权处置或缺理由')
+  /* G12 反例夹具（会审 v2 明确要求）：构造 `unused` ⇒ **条目仍在原位**（标记不可动手）。
+   *  判据形式 = 写标记前后，目标 notes 文件**逐字节不变**（"仍在原位"的可机检写法）。 */
+  {
+    const before = {}
+    for (const f of readdirSync(bankRoot + '/notes')) before[f] = readFileSync(join(bankRoot, 'notes', f))
+    const rows2 = M.buildImpactRows({ kRoot, sinceMs: now - 3600 * 1000, untilMs: now })
+    M.issueRowsOf(bankRoot, rows2)   // 只产标记行（纯函数，不落盘）
+    const changed = Object.keys(before).filter((f) => !readFileSync(join(bankRoot, 'notes', f)).equals(before[f]))
+    changed.length === 0
+      ? ok(`G12 反例夹具：构造 ${rows2.filter((r) => r.verdict === 'unused-candidate').length} 条 unused ⇒ notes 文件**逐字节未动**（只有存在真实容量门的载体才允许被处置）`)
+      : bad(`G12：标记动作改动了 notes 文件（${changed.join(', ')}）—— 越权处置`)
+  }
   const stats = M.statsOf(rows, issues)
   stats.rows > 0 && typeof stats.unusedRate === 'number' && stats.injectedUnknown === rows.length
     ? ok(`统计带分母绝对值：rows=${stats.rows} · unused=${stats.unused} · 率=${stats.unusedRate} · unknown=${stats.injectedUnknown}`)
@@ -158,6 +171,55 @@ writeFileSync(join(kRoot, 'audit', 'activity.jsonl'), [
     : bad(`失效键介质不全：${mediaAll}`)
   // ⑤ 反向判据：把「留存面 md」也签进去 = 缓存每轮必失效 ⇒ 明确**不在**键内（会审 §3.4 的二选一：声明不参与 + 记录理由）
   mediaAll.includes('reports/sleep') ? bad('留存面 md 竟然进键（会让缓存每轮必失效）') : ok('留存面 md 不在键内（已声明 + 理由在 supply-stamp 头注）')
+}
+
+// ── 5 · G11「报告永不删除」指纹账三断言 + G13 双字段（2026-09-19 补）──────────────
+//   ⚠ 为什么不能只断言"文件存在"：追加式产物的"存在"永远为真 —— 覆盖写（内容变、行数不变）照样全绿。
+//   **先红**：改造前无 `sleep-report-ledger.jsonl`（账不存在 ⇒ 本组首条即红）。
+{
+  const ledgerFile = M.sleepLedgerStreamOf(kRoot)
+  const led = existsSync(ledgerFile) ? readFileSync(ledgerFile, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []
+  const roundRows = readFileSync(M.sleepReportsStreamOf(kRoot), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)).filter((r) => r.kind === 'sleep-round')
+  // ① 账行数单调不减且增量 == 轮数（本夹具 2 轮 ⇒ 2 行）
+  led.length === roundRows.length && led.length >= 2
+    ? ok(`指纹账①：行数 == 轮数（${led.length} 行，单调不减 —— 每轮必记且不重写旧行）`)
+    : bad(`指纹账①：账 ${led.length} 行 ≠ 轮 ${roundRows.length} 行`)
+  // ② 账内**每条**的 sha256 仍等于**当下文件的前缀哈希**（覆盖 100%）
+  //   ⚠ 口径（本次实测修正）：追加式文件的早期行**不可能**等于"整文件当下哈希"（后续轮会继续追加）
+  //     ⇒ 正确的可判据形式是 **前缀哈希**：`sha256(now[0..bytes)) == row.sha256` **且** `now.length ≥ bytes`
+  //     —— 它拦的正是"被覆盖 / 被截断"（一旦改写，前缀哈希立刻不等）。
+  const cur = readFileSync(join(bankRoot, 'reports', 'sleep', '2026-09-19.md'))
+  const curSha = createHash('sha256').update(cur).digest('hex')
+  const prefixOk = led.filter((r) => {
+    if (cur.length < r.bytes) return false
+    const pref = createHash('sha256').update(cur.subarray(0, r.bytes)).digest('hex')
+    if (pref !== r.sha256) return false
+    // 该行记录时必须**恰好**看到 `bytes` 长度（即它是那一轮的整文件）——叠加单调性，等价于"只增不覆盖"
+    return true
+  }).length
+  led.length > 0 && prefixOk === led.length
+    ? ok(`指纹账②：账内 ${prefixOk}/${led.length} 条的 sha256 == **当下文件前缀哈希**（覆盖 100% ⇒ 无覆盖/截断）`)
+    : bad(`指纹账②：仅 ${prefixOk}/${led.length} 条前缀哈希相等（疑被覆盖/截断；当下整文件 sha ${curSha.slice(0, 8)}）`)
+  // ③ 报告段数 == `sleep-reports.jsonl` 同轮值（逐值相等：段数 == 轮数）
+  const sectionsNow = (cur.toString('utf8').match(/^## /gm) || []).length
+  sectionsNow === roundRows.length && led[led.length - 1].sections === roundRows.length
+    ? ok(`指纹账③：报告段数 == 汇报流轮数（${sectionsNow} == ${roundRows.length}，账内同值 —— 逐值相等）`)
+    : bad(`指纹账③：段数 ${sectionsNow} / 账内 ${led[led.length - 1].sections} / 轮数 ${roundRows.length} 不相等`)
+  // ④ 首现时间**同日多轮不重置**（第二轮的 firstSeenAt == 第一轮）
+  led.length >= 2 && led[0].firstSeenAt === led[led.length - 1].firstSeenAt && !!led[0].firstSeenAt
+    ? ok(`指纹账④：同日多轮 \`firstSeenAt\` **不重置**（${led[0].firstSeenAt}）——"这份报告从何时起存在"可答`)
+    : bad(`指纹账④：firstSeenAt 被重置或为空（${JSON.stringify(led.map((r) => r.firstSeenAt))}）`)
+  // G13 双字段：问题行必须带 `unusedAtFirstObservation` 与 `stillUnused`
+  const iss = readFileSync(M.sleepIssuesStreamOf(kRoot), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l))
+  const withBoth = iss.filter((r) => typeof r.unusedAtFirstObservation === 'string' && r.unusedAtFirstObservation && r.stillUnused === true)
+  iss.length > 0 && withBoth.length === iss.length
+    ? ok(`G13 双字段齐：${iss.length} 条标记全带 \`unusedAtFirstObservation\` + \`stillUnused=true\`（"标了多久"与"是否仍在"可答）`)
+    : bad(`G13 双字段缺：${withBoth.length}/${iss.length}`)
+  // 第二个分母：当日产出条数（本夹具 0 产出 ⇒ 分母 0、比例记 0 —— **不给"无意义的 0%"**）
+  const lastRoundStats = roundRows[roundRows.length - 1].stats
+  lastRoundStats.producedToday === 0 && lastRoundStats.suspectPerProduced === 0
+    ? ok('G13 第二分母：当日产出 0 ⇒ 分母记 0 且比例记 0（口径显式，不冒充"通过"）')
+    : bad(`G13 第二分母异常：${JSON.stringify(lastRoundStats)}`)
 }
 
 rmSync(kRoot, { recursive: true, force: true }); rmSync(bankRoot, { recursive: true, force: true })

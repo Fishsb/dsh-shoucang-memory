@@ -67,6 +67,10 @@ const STREAMS = [
    *     它是"待处置标记"，与台账里"已发生的事实"分族。 */
   ['sleep-reports.jsonl', 'keyed', '睡眠汇报流（每轮一行 kind=sleep-round + 影响账并入 kind=impact）——**注入派生源**与面板只读面共读', 'suite'],
   ['sleep-issues.jsonl', 'keyed', '睡眠问题队列（只标记不处置：state=open / handled=not-handled；只增不改历史行）', 'suite'],
+  /* G11「报告永不删除」的**判据载体**（2026-09-19）：每轮一行**整文件**指纹（sha256/bytes/lines/sections）。
+   *  为何不并入台账：① 它是**产物的指纹**（被验对象是 `reports/sleep/<date>.md`），不是"发生了什么事件"；
+   *  ② 读侧语义是"取该 dateFile 的最早/最新一行"（键控），与事件族不同。 */
+  ['sleep-report-ledger.jsonl', 'keyed', '睡眠报告指纹账（整文件 sha256 + 字节/行/段数；"永不删除"= 行数单调 + 全覆盖 + 逐值相等）', 'suite'],
   ['ledger.jsonl', 'event', '统一台账（judgement + write 回执 + 各域并入流；**DS4 主干**）', 'suite'],
   // ── 事件流 · **bank 域**（数据属库）—— 与 suite 台账分域，**不并入**
   ['access-real.jsonl', 'event', '真实访问流水（由**库内脚本** harvest-access 增采；活性/遗忘/回想强度的真实信号源）', 'bank'],

@@ -10,6 +10,13 @@ export interface ReviewDeps {
     now: () => number;
     log: (m: string) => void;
     audit: (o: Record<string, unknown>) => void;
+    /** **可调阈值**（G16 · 2026-09-19）：由配置注入（scheduler schema 的 `review*` 三键，
+     *  注册表缺省见 `criteria.json#trigger.review*`）。省略 ⇒ 用 `REVIEW_DEFAULTS`。 */
+    thresholds?: {
+        idleMs?: number;
+        minNewEntries?: number;
+        minNewEvents?: number;
+    };
 }
 /** 一条校正提案（**只提案不执行**）。 */
 export interface ReviewProposal {
@@ -57,7 +64,10 @@ export declare function readReviewState(d: ReviewDeps, sid: string): {
     formatVersion?: string;
     fp?: string;
 } | null;
-/** 触发判定（三态可分辨）。 */
+/** 触发判定（三态可分辨）。
+ *  ⚠ **阈值可调**（G16 · 2026-09-19）：运行期优先取 `d.thresholds`（由配置/schema 传入，
+ *  注册表缺省见 `criteria.json#trigger.review*`）；`REVIEW_DEFAULTS` 只作**注册表缺席时**的兜底
+ *  （保持"另有一份默认"≠"两份事实源"：本函数不做第二套解释，只是取不到就用常数）。 */
 export declare function decideReview(d: ReviewDeps, i: {
     sid: string;
     lastActivityMs: number;
