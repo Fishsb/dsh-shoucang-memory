@@ -38,7 +38,7 @@ type Section = {
 export declare function parseSections(ls: string[]): Section[];
 /** 归一化 op.file（容忍 `notes/x.md` 与 `x.md` 两种写法；禁 INDEX.md/穿越路径） */
 export declare function normalizeNotesFile(f: unknown): string | null;
-export declare function atomicWrite(p: string, text: string): boolean;
+export declare const atomicWrite: (p: string, text: string) => boolean;
 /** 既有行整理口径：空行压缩 + 末尾单换行（与 applyPrinciples/applyPointerOps/consolidateTree 一致） */
 export declare const finalize: (ls: string[]) => string;
 export declare const readLines: (p: string) => string[] | null;

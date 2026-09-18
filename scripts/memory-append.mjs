@@ -4,6 +4,7 @@
 // 安全网：① 写前备份 audit/backup-<ts>/（保留最近 SHOUCANG_BACKUP_KEEP=30 个，0=不裁剪）② 小节不存在→exit 2（列出可选，不自动新建散落小节）
 //        ③ 主文档容量硬限（追加后总量超限→exit 1 不写）④ 目标文件白名单（仅 notes/<7个> + MEMORY/USER/AGENT）
 //        ⑤ 原子写（同目录 tmp + rename，2026-09-11 D3 修复：中断不留半文件）；tmp 落盘/替换失败→exit 5 且原文件未改动
+// 退出码：0 成功 · 1 超容量（仅 SHOUCANG_CAP_STRICT=1）· 2 白名单外/小节缺失/标签或 § 非法 · 3 用法 · 4 文件不存在 · 5 tmp 写或 rename 失败 · **6 库锁被占用（拒写）**
 // 用法: node scripts/memory-append.mjs <MEMORY.md|USER.md|AGENT.md|notes/<file>.md> <小节名> <条目文本>
 //       node scripts/memory-append.mjs <目标> <小节名> --new <索引行>     # 主文档新条目行（文件尾）
 import { readFile, writeFile, copyFile, mkdir, rename, unlink, readdir, rm } from 'node:fs/promises';
@@ -11,6 +12,8 @@ import { join, dirname, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // S1R（2026-09-19）：索引行准入复用**单一语义件**（与宿主侧 `src/section-ref.ts` 同口径，差分锁守）
 import { pointersOfRow, resolveSectionSpec } from './section-ref.mjs';
+// S2S3 册零（2026-09-19）：**库级单写者锁**（与宿主 `src/bank-lock.ts` 同语义，差分锁守）
+import { acquireBankLock, releaseBankLock } from './bank-lock.mjs';
 
 const skillDir = process.env.MEMORY_ROOT ?? join(dirname(fileURLToPath(import.meta.url)), '..'); // 数据根（结构分离：开发经 MEMORY_ROOT 指向私人区；缺省=脚本上一级兼容生产副本）
 const [fileArg, sectionArg, ...rest] = process.argv.slice(2);
@@ -31,6 +34,16 @@ const isMain = MAIN.includes(norm);
 if (!isNotes && !isMain) { console.error(`目标不在白名单: ${fileArg}（允许 ${MAIN.concat(NOTES).join(' / ')}）`); process.exit(2); }
 
 const filePath = isAbsolute(fileArg) ? fileArg : join(skillDir, fileArg);
+
+// ── S2S3 册零（2026-09-19）：**取库锁**（本脚本是「读 → 改 → 原子写」的读改写，两个并发调用会互相覆盖：
+//    末写者吃掉前者的条目 = 实测丢更新）。锁粒度 = 库根；父进程已持锁时经 env 重入（不重复加锁、不释放）。
+//    拿不到锁 ⇒ **拒写**（exit 6），绝不静默放行。释放挂在 `exit` 钩子上，覆盖本脚本全部退出路径。
+const bankHandle = acquireBankLock(skillDir, { note: 'memory-append' });
+if (!bankHandle) {
+  console.error('库锁被占用（拒写）：另一写者正在改库（见 <库>/.write-lock.log），请稍后重试');
+  process.exit(6);
+}
+process.on('exit', () => { releaseBankLock(bankHandle); });
 const raw = await readFile(filePath, 'utf8').catch(() => null);
 if (raw === null) { console.error(`文件不存在: ${filePath}`); process.exit(4); }
 

@@ -15,8 +15,9 @@
 //
 // **回滚**：被收敛的行**整行**写入 `<bank>/audit/converge/converge-<ts>.jsonl`（append-only），
 //   需要时按 file+line 逐字贴回即可恢复 —— **绝不直删**（与忘归档同族纪律）。
-import { readFileSync, writeFileSync, appendFileSync, mkdirSync } from 'node:fs'
+import { readFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { appendFileUnderLock, editFileUnderLock } from './section-rewrite.js'
 
 /** 每轮收敛配额（与 `consolidate.demote.archive.maxPerRun` 同法；**单一常量**，勿散落字面量）。 */
 export const CONVERGE_MAX_PER_RUN = 3
@@ -78,20 +79,25 @@ export async function applyConvergeOps(
     if (!isCoarseRow(lines[iCoarse])) { res.skipped++; res.reasons.push('粗粒度行无标签'); continue }
     if (iFine === iCoarse) { res.skipped++; res.reasons.push('同一行（防自收敛）'); continue }
 
-    // 归档（append-only，整行原文）→ 再移除
+    // 归档（append-only，整行原文）→ 再移除（S2S3 册零：归档与改写**都在库锁内**，防并发丢更新）
     try {
       mkdirSync(archDir, { recursive: true })
       archFile = archFile || join(archDir, `converge-${ts}.jsonl`)
-      appendFileSync(archFile, JSON.stringify({ at: new Date().toISOString(), file, line: lines[iFine], into: lines[iCoarse] }) + '\n', 'utf8')
+      const ar = appendFileUnderLock(memRoot, archFile, JSON.stringify({ at: new Date().toISOString(), file, line: lines[iFine], into: lines[iCoarse] }) + '\n', { note: 'converge-archive' })
+      if (!ar.ok) { res.skipped++; res.reasons.push(`归档失败（拒绝移除）：${String(ar.error).slice(0, 60)}`); continue }
       res.archived++
     } catch (e) {
       res.skipped++; res.reasons.push(`归档失败（拒绝移除）：${String((e as Error)?.message || e).slice(0, 60)}`); continue
     }
-    lines.splice(iFine, 1)
-    // 原子整文件重写（同仓内既有落盘纪律：tmp + rename 由调用方保证；此处先直写，失败由上层回滚）
-    try { writeFileSync(join(memRoot, file), lines.join('\n'), 'utf8') } catch (e) {
-      res.skipped++; res.reasons.push(`写回失败：${String((e as Error)?.message || e).slice(0, 60)}`); continue
-    }
+    // 库锁内「读 → 变换 → 原子写」：**写前在锁内重新定位该行**（旧写法是锁外读、锁外直写 ⇒ 并发下末写者吃掉前者）
+    const ed = editFileUnderLock(memRoot, join(memRoot, file), (ls) => {
+      const i = ls.findIndex((l) => norm(l) === fine)
+      if (i < 0) return null
+      ls.splice(i, 1)
+      return ls
+    }, { note: 'converge-rewrite' })
+    if (!ed.ok) { res.skipped++; res.reasons.push(ed.refused ? '库锁被占用（拒写）' : `写回失败：${String(ed.error).slice(0, 60)}`); continue }
+    if (!ed.changed) { res.skipped++; res.reasons.push(`写前复检未命中（并发变更）：${fine.slice(0, 30)}`); continue }
     res.applied++
     audit({ kind: 'converge', file, removed: lines.length >= 0 ? fine.slice(0, 60) : '', into: coarse.slice(0, 60) })
     log(`converge: ${file} 收敛 1 条（细 → 粗），已归档可回滚`)

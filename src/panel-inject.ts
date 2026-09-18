@@ -7,11 +7,13 @@
  * 依赖窄传：7 个；ctx 另传（只有 effect/systemPrompt 挂点需要宿主上下文）。
  */
 import { execFile } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Context } from 'cordis'
 import { knowledgeRoot, memoryLibRoot, isRealUserEvent } from './targets.js'
+import { acquireBankLock, releaseBankLock } from './bank-lock.js'
+import { gatedWriteFile } from './section-rewrite.js'
 import { clearVecCache, vecStats } from './vec.js'
 import { contractFor } from './panel-contract.js'
 // S-P4e（2026-09-16）注入侧跨形态消重（薄引用缝：异步预热 + 同步逐字过滤）
@@ -108,13 +110,21 @@ const readMemFile = (file: string): { text: string | null; abs: string } => {
 }
 
 const writeMemViaGate = async (file: string, nextText: string): Promise<{ ok: boolean; reason?: string; out?: string }> => {
-  const abs = join(memoryLibRoot(), file)
-  const tmp = abs + '.ui-tmp'
-  try { writeFileSync(tmp, nextText, 'utf8') } catch (e) { return { ok: false, reason: 'tmp write fail: ' + String((e as Error).message).slice(0, 80) } }
-  const g = await gateWrite(file, tmp)
-  if (g.ok) { try { renameSync(tmp, abs); return { ok: true, out: g.out || '' } } catch (e) { return { ok: false, reason: 'rename fail: ' + String((e as Error).message).slice(0, 80) } } }
-  try { unlinkSync(tmp) } catch { /* 清理失败无害 */ }
-  return g
+  const root = memoryLibRoot()
+  const abs = join(root, file)
+  // S2S3 册零（2026-09-19）：① 原 tmp 名固定（`.ui-tmp`）⇒ 同文件并发面板写互踩；② 无锁。
+  //   现取**库锁**（与蒸馏/深睡同一把）并用**唯一 tmp 名**的带门禁原语。
+  const h = acquireBankLock(root, { note: 'panel-write' })
+  if (!h) return { ok: false, reason: '库锁被占用（拒写，防并发覆盖）' }
+  try {
+    const w = await gatedWriteFile(abs, nextText, async (tmp) => {
+      const g = await gateWrite(file, tmp)
+      return { ok: g.ok, out: g.out, raw: g.reason }
+    })
+    return w.ok ? { ok: true, out: '' } : { ok: false, reason: w.error, out: w.gate }
+  } finally {
+    releaseBankLock(h)
+  }
 }
 
 /**

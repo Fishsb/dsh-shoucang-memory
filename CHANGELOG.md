@@ -5,6 +5,21 @@
 ## [Unreleased]
 
 ### Changed
+- **S2S3 册零（2026-09-19，用户指令「目标模式全部落地」）· 落盘一致性与单写者（第一批）**：
+  · **库级单写者锁**：新增 `src/bank-lock.ts` + 零依赖孪生 `skill/scripts/bank-lock.mjs` ≡ `scripts/bank-lock.mjs`
+    （`<bank>/.write-lock`，`mkdir` 原子取锁；**进程内重入表 + 跨进程 env 令牌**双重重入；陈旧锁**改名留证**接管；
+    **拿不到锁即拒写** fail-closed，拒写落 `<bank>/.write-lock.log`）。
+  · **唯一写入原语**：新增 `src/section-rewrite.ts`（唯一 tmp 名 + 原子 rename + **写后回读字节校验** + 带门禁写），
+    原语收敛五处：`treeops.atomicWrite`（升格委托）、`sectionops.applyConvergeOps`（原直写无 tmp/无锁）、
+    `deepsleep-apply.applyPointerOps`（原固定 tmp + 锁外跑 20s 门禁）、`panel-inject.writeMemViaGate`（原固定 `.ui-tmp`）、
+    `distill-write` 画像行。
+  · **孤儿指针预防**：`distill-write` 写索引行前先过 `admitIndexRow`——指针目标节不存在即**拒写该行**（同写/同不写）。
+  · **失败明细**：`distill-run` 审计行新增 `failedItems`（条目身份 `k/target/section/tag/reason`，上限 20 条），
+    供 L2 会话级复盘消费（原有实现只有 `failed` 计数 ⇒ 复盘侧会误判"会话没这条知识"）。
+  · **判据（可复现）**：`node scripts/test-bank-lock.mjs`——**先红**：无锁读改写形状 8 轮并发实测**丢更新 8/16 条**；
+    现行真路径（`memory-append` + 库锁）16 轮 × 2 写者 **0 丢更新**；索引指针可解析、无 `.tmp-*` 残留、跑完不留锁。
+    `node scripts/check-bank-lock-parity.mjs`——孪生逐字节 + 与编译产物 `lib/bank-lock.js` 的 10 项行为差分 + 反例自证。
+  · 登记：两件入 `scripts/check-runner.mjs`（**147 件**）；`AGENTS.md` / `docs/ARCHITECTURE.md` 模块数 83 → **85**。
 - **S1R 小节寻址收口（2026-09-19，用户指令「目标模式全部落地」）**：按 `docs/specs/S1R-section-ref-plan.md`
   的依赖序 P0→P3 全部施工，**G1–G8 逐条转绿**（记录见 `docs/specs/S1R-section-ref-record.md`）。
   · **P0 判据层**：新增 `src/section-ref.ts` + `skill/scripts/section-ref.mjs`（**跨面同语义**）——
