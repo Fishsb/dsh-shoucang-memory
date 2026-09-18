@@ -283,7 +283,11 @@ const distillAgent = async (dep: AgentDeps, agent: any): Promise<void> => {
           dep.io.infra.log(`distill: ${dep.io.infra.sidShort(sid)} 段${k + 1}/${segLimit} completed，水位推进 ${wmNow}→${chunk.endSeq}${chunk.endSeq < maxSeq ? `（整窗尚余 ${chunks.length - k - 1} 段，下轮续传）` : '（整窗蒸馏完成，水位=maxSeq）'}`)
           wmNow = chunk.endSeq
           // 段间紧凑清单续上下文：本段裁决一行（供同轮后段查重/合并，勿重复入册；超 MANIFEST_CAP 丢最早行）
-          manifest = manifestPush(manifest, manifestLineFor(chunk.endSeq, route, out), MANIFEST_CAP)
+          // S2S3 册零：**同一行同时持久化**到 `<kRoot>/audit/distill-manifest/<sid>.jsonl`
+          //   （内存版只听同轮后段，落盘版才是 L2 会话级复盘可消费的"本会话 L1 全产出"）
+          const mline = manifestLineFor(chunk.endSeq, route, out)
+          manifest = manifestPush(manifest, mline, MANIFEST_CAP)
+          dep.io.infra.manifest(sid, mline)
           segOk = true
         } else if (stop === 'completed' && out && disp.failed > 0) {
           // A1（2026-09-11 审查修复）：stop/JSON 都 OK 但**条目级落盘失败** → 本段不算消化，水位不前移。
@@ -295,7 +299,9 @@ const distillAgent = async (dep: AgentDeps, agent: any): Promise<void> => {
             dep.wm.st.skipHoldStreak.delete(sid) // 本段已放弃 ⇒ 不再因它扣住跳过分支
             dep.wm.wm.writeWatermark(sid, chunk.endSeq, agent, { runId, phase: 'forced', attempt: tries })
             wmNow = chunk.endSeq
-            manifest = manifestPush(manifest, manifestLineFor(chunk.endSeq, route, out), MANIFEST_CAP)
+            const mline2 = manifestLineFor(chunk.endSeq, route, out)
+            manifest = manifestPush(manifest, mline2, MANIFEST_CAP)
+            dep.io.infra.manifest(sid, mline2)
             segOk = true
             dep.io.infra.audit({ sid, kind: 'distill-run', route, stop, fclass: 'dispatch-failed-forced', llm: llmLabel, targetLib: disp.targetLib, added: disp.added, rejected: disp.rejected, failed: disp.failed, chunk: k + 1, chunkStart: chunk.startSeq, chunkEnd: chunk.endSeq, totalChunks: chunks.length, tries })
             dep.io.infra.log(`distill: ${dep.io.infra.sidShort(sid)} 段${k + 1}/${segLimit} 落盘失败 ${disp.failed} 条、已连续 ${tries} 轮——强制推进水位 → ${chunk.endSeq}（丢失已审计 dispatch-failed-forced）`)
