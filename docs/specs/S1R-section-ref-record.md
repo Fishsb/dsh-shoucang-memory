@@ -100,9 +100,20 @@ node scripts/inject-baseline-diff.mjs              # 注入面
 
 ---
 
-## 7. 版本与云端
+## 7. 版本与云端（五层，缺一层即未同步）
 
-（本节在推送与 pin 更新后回填；命令：`git push origin master` → `git status -sb` → 核 profile `dependencies['dsh-shoucang-memory']#<sha>`）
+| 层 | 读数 |
+|---|---|
+| ① 仓内绿 | `typecheck`/`build` 零错；全量 `check-runner` **PASS（145 pass · 0 xfail · 0 skip）** |
+| ② 部署同步 | `deploy-installed` → 341 件一致；`check-installed-sync --strict` → **254/254 逐件 sha1 一致** |
+| ③ 运行态 | `dev_reload_package` → active（重建 83 模块） |
+| ④ 功能探针 | `check-installed-features` → **53 项标记齐全** |
+| ⑤ 云端 + pin | 直连 `git push` 失败（`Recv failure: Connection was reset`）⇒ 走**本机代理**（`127.0.0.1:10808`，实测在听）成功：**`3339116..7c24283 master -> master`**（含 IR1 未推的那一枚）；`git status -sb` 无 ahead；**profile pin 已改 `#3339116` → `#7c24283`**（纯文本，未跑 `pnpm install`） |
+
+**库侧 git**：`~/.dsh/skills/managing-memory` 提交 `3c7c25a`（P2/P3 的 58 处指针改写 + 5 处改名 + 工具链 + 备份出库）。
+**仍存的一处不一致（如实记）**：`check-version-pin` 报 `package.json 7c24283 / lock 与 .modules.yaml 3339116` ——
+后者只在宿主**重新物化**（`pnpm install`）时重生成；该动作会触发宿主批量删除保护 ⇒ **宜择时手动**（报告态，exit 0）。
+⇒ 宿主若不物化则**不影响当前运行**（当前运行的是已部署副本，②③④ 三层已证）。
 
 ---
 
