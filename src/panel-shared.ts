@@ -556,13 +556,21 @@ function buildHotMemoryText(d: HotMemoryDeps, cache: HotMemoryCache, query = '',
   //   抽取动因 = 本模块受大模块冻结棘轮约束（曾顶格 846/846），为 S4-3 的中层 `process` 槽腾出接入空间。
   // S4-3（2026-09-14）中层 `process` 槽的**候选源**：全层索引行（`[路径]` 属 R 层、在 AGENT.md）；
   //   ⚠ 只算**一次**并复用给选行与出账（IR1 册三：`process` 槽要单独出账 ⇒ 需要这份候选集）。
-  const procRows = (SURFACE.injection as unknown as { process?: { enabled?: boolean } }).process?.enabled === true ? scanIndexRows(memRoot).map((r) => r.line) : []
+  const procCfg = (SURFACE.injection as unknown as { process?: { enabled?: boolean; carrierTag?: readonly string[]; topN?: number; gate?: string } }).process
+  const procRows = procCfg?.enabled === true ? scanIndexRows(memRoot).map((r) => r.line) : []
+  // ★Q4（2026-09-20）**任务键词表上移复用**：`knownTaskCuesOf(memRoot)` 每次要 loadStore 全量记录
+  //   （实测 25ms / 5700+ 条）。原先它只在 :648 的 `sitCtx` 处算一次；若为 process 槽**就地再算一次**
+  //   即「每轮注入多付一次 loadStore」。故此处**提前算一次并复用**给 process 槽与下方 `sitCtx`。
+  //   ⚠ 与 `gate` 无关：无论 gate 取值都只算一次（缺省 tag 下结果不进任何判据 ⇒ 零行为变化）。
+  const taskCueTable = knownTaskCuesOf(memRoot)
+  const procTaskKeys = procCfg?.enabled === true && procCfg.gate === 'task' ? taskCueTable : []
   const dyn = selectDynamicLines({
     allMem, cap, q, memRoot,
     activityFile: join(memRoot, 'audit', 'activity.jsonl'),
     readSuite: () => { try { return d.suite.read() as Record<string, unknown> } catch { return {} } },
     // S4-3（2026-09-14）中层 `process` 槽：整对象传注册表配置（缺省 `enabled:false` ⇒ 本项零行为变化）
-    process: (SURFACE.injection as unknown as { process?: { enabled?: boolean; carrierTag?: readonly string[]; topN?: number } }).process,
+    process: procCfg,
+    taskKeys: procTaskKeys,
     // IR1 册一：**恒定面已持有的行**不再进动态面（防"同一行两处注入"，实测曾出现 2 行重复）
     exclude: [...agentLines, ...userLines],
     processRows: procRows,
@@ -638,7 +646,7 @@ function buildHotMemoryText(d: HotMemoryDeps, cache: HotMemoryCache, query = '',
   const sitCfg = (SURFACE.injection as unknown as { situation?: { enabled?: boolean; budgetChars?: number; cueDims?: string[] } }).situation
   // 主开关与额度**都 honored**（两个都读，避免"放进来却不可控"的假可控——仓内 storeMode 的先例注解）
   const sitBudget = (sitCfg?.enabled ?? false) ? Math.max(0, Number(sitCfg?.budgetChars ?? 0) || 0) : 0
-  const sitCtx: SituationCtx = { scope: (() => { try { const p = d.root.activeRootOf()?.path; return p ? `workspace:${p}` : '' } catch { return '' } })(), task: taskCueOf(q, knownTaskCuesOf(memRoot)) }
+  const sitCtx: SituationCtx = { scope: (() => { try { const p = d.root.activeRootOf()?.path; return p ? `workspace:${p}` : '' } catch { return '' } })(), task: taskCueOf(q, taskCueTable) }
   const sitCues = cuesOf(sitCtx, sitCfg?.cueDims)
   const sitLines = situationLinesOf(memRoot, sitCues, new Date(now).toISOString(), sitBudget)
   // 情境槽**按额度取行**（切割语义归装配域：`takeSlotLines` 与 `assembleSupply` 内部**同一实现**）

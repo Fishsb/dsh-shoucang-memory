@@ -45,7 +45,14 @@ L4 交互（DSH Web GUI）
 | **M10 自省** | `assistant_capabilities` | 能力面查询 | 只读，无 token |
 
 > **载体归属口径（2026-09-12 根治 A–D 后；2026-09-14 P1 订正）**：
-> `src/` 共 **91 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> `src/` 共 **94 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> **2026-09-20 新增 `probe-config.ts` / `probe-plan.ts` / `trigger-plan.ts`** ⇒ 91 → 94：深睡/蒸馏**触发链**
+> 四册（S-P2a..P4）。`probe-config.ts` = 探测域（8 键）配置**单一事实源**（schema 与显式映射同处一文件，
+> 防「schema 有 ≠ 运行时 config 有」），按**领域接缝**自 `scheduler.ts` 抽出（解其冻结棘轮）；
+> `probe-plan.ts` / `trigger-plan.ts` = 本轮新增判据的纯函数区（`planProbeOutcome` · `planSleepWindow` ·
+> `dueSelfCheck`）——抽出的**硬理由**是 `deepsleep-core.ts` 导出数受 `audit-architecture` 棘轮约束
+> （阈值 35 · 只许收紧，抽出前实测 34 ⇒ 就地新增即破），而放松棘轮属须用户拍板之事（R3）；
+> 两者**只向下**依赖 `deepsleep-core`（取类型）⇒ 零环。
 > **2026-09-19 新增 `section-supply.ts`** ⇒ 89 → 90：**指针供给三册**册一「小节地址供给」
 > （复用 `section-ref#sectionTitles` 作**唯一解析器**、不新写；预算逐级降级 + `buildDistillUserInput` 纯装配
 > ⇒ 「接线 ≠ 抵达」可机检）——判因：蒸馏 prompt 要求「section = **既有** ## 小节名」而材料里**从未注入清单**

@@ -17,7 +17,7 @@
 // 反例自证：把 `finalText` 改为并入装配器的其他输出（模拟接管），④ 必须红；还原则绿。
 //
 // 用法: node scripts/check-injection-reach.mjs
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -187,8 +187,32 @@ const segsPushCandidates = /segs\.push\([^)]*跨粒度收敛候选/.test(runSrc)
 ok(runBuildsCandidates && segsPushCandidates,
   `⑪ 候选抵达：宿主预筛候选=${runBuildsCandidates} · 产出入 userInput=${segsPushCandidates}（缺 ⇒ 又把"找候选"推给模型，首发实测必空手）`)
 
-console.log('')
-console.log('📋 抵达面申报（**不静默**：partial/none 逐条写明理由）：')
+/* ⑫ **时态剔除抵达面**（2026-09-20 · 本轮「读数/抵达」复查的产物）：
+ *   判因（实测，**会掩盖其他问题**的那一类）：`supply-assembly#buildCandidates` 的注释声称
+ *   「把『失效者不得入候选』变成**读侧的硬规则**」并称其为"读侧闭环"，但实测 `grep buildCandidates`
+ *   的命中 = 定义处 + `scripts/supply-preview.mjs`（离线预览）+ 单测 ⇒ **`src/` 内零消费者**
+ *   ⇒ 恒定面与相关性召回**都不经时态剔除**；而真库 `validTo` 非空 = **0/5777**（从未落库一条）。
+ *   两个缺陷叠加 = 「机制在、通路无、样本零」，且**注释宣称与实况相反**（诊断者会据此以为已闭环）。
+ *   ⇒ 本断言把**实况钉住**（正面：消费者集合就是那两个离线件；**反向**：一旦接线，本断言翻红并要求改表）。
+ *   ⚠ `buildCandidates` 出现在 `ring-supply.ts` **仅注释**（`// 与 buildCandidates 同纪律`）⇒ 判据必须**先剥注释**，
+ *     否则注释一条就"接线了"（仓内既有先例：`check-carriers` 的「先剥注释再匹配」）。 */
+{
+  /* ⚠ 工程坑（先红自证抓到的，记档）：本块首版写 `read(join(root, f))`，而 `read()` 内部已是
+   *   `readFileSync(join(root, p))` ⇒ **root 被拼两次** ⇒ 每件都 ENOENT ⇒ `read` 的 try/catch
+   *   把异常**吞成空串** ⇒ 扫描面恒空 ⇒ 断言**恒真**（且照样打印 ✅）。
+   *   ⇒ 纪律：**先红自证不是形式**，它是唯一能抓到"恒真断言"的手段（本仓已有同类实证：
+   *     `check-relevance-live` 的零命中断言三 case 全在 false 侧被验）。此处只传**相对路径**。 */
+  const scanFiles = readdirSync(join(root, 'src')).filter((f) => f.endsWith('.ts')).map((f) => `src/${f}`)
+  const consumers = []
+  for (const f of scanFiles) {
+    const src = read(f).replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1')
+    if (!src) { fail++; console.log(`  ❌ ⑫ 扫描面读不到文件（${f}）—— 读失败不得静默当作"无消费者"`); continue }
+    if (/\bbuildCandidates\s*\(/.test(src) && !/export function buildCandidates/.test(src)) consumers.push(f)
+  }
+  const expected = []
+  ok(JSON.stringify(consumers.sort()) === JSON.stringify(expected),
+    `⑫ 时态剔除抵达面**如实登记**：\`buildCandidates\` 的 \`src/\` 内消费者 = [${consumers.join(', ') || '无'}]（\`validTo\` 到注入面**无通路**；真库样本 0/5777）—— 接线后此断言翻红 ⇒ 同步改本表与 OPEN-ITEMS`)
+}
 for (const r of REACH) console.log(`   · ${r.reaches.padEnd(7)} ${r.module}#${r.symbol} —— ${r.path}`)
 const part = REACH.filter((r) => r.reaches !== 'full').length
 console.log(`   合计 ${REACH.length} 项：full ${REACH.length - part} · partial/none ${part}`)

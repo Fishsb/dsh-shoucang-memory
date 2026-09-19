@@ -57,12 +57,19 @@ const gateRows = Number(gate?.surface?.rerank?.gate?.indexRows || 200)
 
 // 模型判据覆盖率（台账里带 judgement 的行占比）
 // v2.1 M2：统一台账优先（audit/ledger.jsonl），旧 judgement-ledger.jsonl 兼容
+/* ⚠ **跨档读（G13 轮转失明 · 2026-09-20 修）**：台账按大小轮转（保留 3 档），本件原只读主档
+ *   ⇒「判据覆盖率」的**分母（台账行数）与分子（带 judgement 行）双双残缺**。
+ *   实测（本轮）：跨档 26624 行 vs 单档 4270 行 ⇒ **覆盖率读数建立在 16% 的样本上**。
+ *   现改走唯一实现 `readLedgerVolumes`。判据：`scripts/check-ledger-read.mjs`。 */
 const ledgerDir = join(homedir(), '.dsh', 'suite', 'knowledge', 'audit')
-const ledgerPath = [join(ledgerDir, 'ledger.jsonl'), join(ledgerDir, 'judgement-ledger.jsonl')].find((p) => existsSync(p)) || join(ledgerDir, 'ledger.jsonl')
+const { readLedgerVolumes } = await import(new URL('../lib/ledger-compact.js', import.meta.url).href)
+const ledgerPath = join(ledgerDir, 'ledger.jsonl')
 let ledgerRows = 0
 let withJudgement = 0
 try {
-  const rows = readFileSync(ledgerPath, 'utf8').split(/\r?\n/).filter(Boolean).map((l) => { try { return JSON.parse(l) } catch { return null } }).filter(Boolean)
+  const rows = existsSync(ledgerPath)
+    ? readLedgerVolumes(ledgerPath).map((l) => { try { return JSON.parse(l) } catch { return null } }).filter(Boolean)
+    : readFileSync(join(ledgerDir, 'judgement-ledger.jsonl'), 'utf8').split(/\r?\n/).filter(Boolean).map((l) => { try { return JSON.parse(l) } catch { return null } }).filter(Boolean)
   ledgerRows = rows.length
   withJudgement = rows.filter((r) => r.judgement && Object.keys(r.judgement).length).length
 } catch { /* 无台账 */ }

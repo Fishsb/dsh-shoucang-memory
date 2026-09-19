@@ -4,7 +4,53 @@
 > **当前状态（2026-09-15 机检）**：五阶段（S0–S4）+ S4R + S4X + S4Y + **UI1 面板架构整理** 的**可施工项全部完成**；
 > 下表 3 项**判据全部满足**（`node scripts/verify-open-items.mjs` ⇒ **3/3**），**当前无阻塞项**。
 
-**最后更新**：2026-09-15
+**最后更新**：2026-09-20
+
+---
+
+## 0f. 🔴🔴 **G13「轮转失明」大面积漏网：三处结论被推翻**（2026-09-20 · 本轮最高优先）
+
+> **性质**：这不是"新增待办"，而是**已有结论的真伪问题**。台账 `audit/ledger.jsonl` 按大小轮转
+> （`ledger-compact#rotateBySize`，保留 3 档），**只读主档 = 静默丢历史且不报错**。
+> 本轮实测：**10 件**消费点仍是单档读（此前已独立修过 3 处，但**没有一道门问"还有谁在读单档"**）。
+> 逐 kind 失真（单档 → 跨档）：`deep-sleep` **0 → 49**（全丢）· `mcl-step` **981 → 9115**（漏 89.2%）·
+> `distill-run` **56 → 879**（93.6%）· `write.ingest` **29 → 537**（94.6%）· `decision.ingest` **32 → 616**（94.8%）。
+
+| # | 被推翻的结论 | 原读数（错） | **真读数（跨档）** | 后果 |
+|---|---|---|---|---|
+| **G13-①** | **S-P1b′/S-P1c′ 阈值"不可校准"** | `epoch-calibrate` 报「纪元 **0** < 10 ⇒ `insufficient-data` ⇒ 维持关闭」 | **46 个不同纪元** ⇒ `calibratable` | 两条阈值（`trigger.contentMinChars` / `trigger.materialChunkChars`）的**"何时可校准"判断一直是错的**；现已在注册表 `recheck` 段更正 |
+| **G13-②** | **OPEN-3「L3 forget 候选消费」判据未满足** | `verify-open-items` 报「审计轮次 0」 | **49 轮**（cand>0 的 **48** 轮 · 消费 **37** 轮 · 最近 cand=1 kept=1） | 该项**早已满足**，长期挂在表上；现 `verify-open-items` 报 **3/3** |
+| **G13-③** | **门3「信号源已死」的程度** | `yield-signal-probe` 报 compliance **635** 行 · `switchSource` 恒真 **98.0%** | compliance **4722** 行 · 恒真 **94.6%** | 「信号源已死」**成立且更严重**（分母补齐后病灶更清楚）；但**样本量结论**须以新值为准 |
+
+**已修（本轮）**：10 件消费点全部改为跨档读（`readLedgerVolumes` 唯一实现）——
+`epoch-calibrate` · `mcl-calibrate` · `mcl-compliance` · `recall-diagnose` · `essence-review-stability` ·
+`verify-open-items` · `yield-signal-probe` · `criteria-audit` · `criteria-report` · `memory-reconcile`
+（+ 源码侧 3 处：`panel-arch#ledgerFacts` · `session-review#buildMaterials` · `sleep-report#roundInputFromLedger`）。
+
+**防再生门禁**：新增 `scripts/check-ledger-read.mjs`（源码面**硬门** + 脚本面报告态 + **10 条样例全部取自真机原文**的自证）
+并登记 `check-runner`（**173 → 175 件**）。该门与 `check-observability --parsability` **分工不重叠**：
+前者治「读的**档位**」（跨档/单档），后者治「读的**编解码**」（失败行）——实测两者会**同时命中同一个器**。
+
+**顺带暴露（未修，如实登记）**：`memory-reconcile` 改跨档后报出 **`MEMORY.md` 未解释差异 499 行**
+（实际 543 − 基线 44 − 台账写入 0）· `USER.md` 21 行 · `AGENT.md` **-2** 行 ⇒ 台账**回执与库内实际行数对不上**，
+属**独立缺陷**（口径可能为"台账写入记账不完整"），须**单独一轮**核（不在本轮范围）。
+
+---
+
+## 0e. 🔴 记忆吸收评估产出（2026-09-20 · 只读圆桌会议）
+
+> **口径**：本轮结论已部分落地（见 `CHANGELOG.md [Unreleased]` 首条）；**下表登记尚未落地的两项**。
+> **共同判因**：两者都不是"机制缺失"，而是「**零样本**」—— 缺的是**触发源**，不是门。
+> 按「**夹具绿非真数据绿**」纪律：**先造触发源，再谈接线**。
+
+| 项 | 现状（实测） | 卡在哪 | 触发条件（谁满足了就该做） |
+|---|---|---|---|
+| **门4 时态剔除进注入链** | `supply-assembly#buildCandidates` 在 `src/` 内**零消费者**（仅离线 `supply-preview.mjs` + 单测）；真库 `validTo` 非空 **0/5777**；`check-injection-reach` **⑫** 已把此实况钉住（接线后必翻红） | **零输入可剔**：接线后行为逐字节不变 ⇒ 换不到证据，只会产出"机制在、证据无"的假绿 | 库内出现**第一条真实失效记录**（`validTo` 非空 ≥1）⇒ 此时接线才有可判定的验收对象 |
+| **门3 淘汰门（行为回灌）** | 收益取证链已齐（`yield-rounds.jsonl` 3326 行 · `recall-yield.ts` 严格解析 + 保守链）；但信号源 `switchSource=true` **878/1061 = 82.8% 恒真**（`OPEN-ITEMS` 下段 J5/U3-信号源）⇒ **无判别力**，且判定结果**只进审计不反馈选行** | **先修信号源**：给恒真信号接淘汰判据 ＝ 给代理指标加正反馈环，与已拍板「代理指标非判据」直接冲突 | `switchSource` 非恒真（真阳性率显著低于 ~83%）⇒ 此时"信号接选行"才有意义 |
+
+**已落地部分**（详见 `CHANGELOG`）：读数口径四件套（`check-observability --parsability`）· `buildCandidates` 闭环自述如实化 + 抵达面钉住 ⑫ · `adviseFromMissCounts` 定位锁定 · Letta 许可证标签更正。
+
+**明确不吸收**（有硬理由，非保守）：① 分层门「P 触顶不得挤 P」与用户 2026-09-16「容量非硬限」拍板冲突（R3②）；② 外部五仓库**全为 Python 栈**，本仓纯 TS 零新增运行依赖 ⇒ 只取判据形状不取代码；③ Mem0 的 `DELETE` 与「遗忘＝迁移，不删除」（`forgetops.ts` + `record-store.ts:296`）冲突。
 
 ---
 
@@ -417,6 +463,29 @@ calls=2 → bySid: sid=6b89a084 · qLen=2 · qHash=005c4d6f · lastReason=new ·
 |---|---|---|---|---|---|
 | **S2S3-R1** | **真库 1 处孤儿指针**（`MEMORY.md` 末段）：`[教训] junction 装配漂移 · … → notes/env.md §npm 失效与残留 shim 修复/junction 装配漂移`，而 `notes/env.md` 只有 `### npm 失效与残留 shim 修复`（**无**子节 `junction 装配漂移`）⇒ spec 级 `partial`（父在子缺）。<br>**成因链（实证，非推断）**：`2026-09-18T20:15:03Z` 的蒸馏轮 `kind=distill-run added=5 / failed=4` 且 `failedItems` 含 `k=append` —— **明细 append 失败，而同批索引行仍入库**；当时的准入策略对 `partial` 一律放行 | `node scripts/check-section-refs.mjs`（现状：`❌ 路径部分悬空 1 ≤ 基线 0` ⇒ 红） | 重指为可解析前缀（`§npm 失效与残留 shim 修复`）⇒ 该门归 0；**真源数据改动须用户拍板（R3-②）** | **待拍板** |
 | **S2S3-R2** | 同族**代码侧已收口**（防再生）：`admitIndexRow` 对 **末段缺失** 的 `partial` **视同 missing ⇒ 拒写**；中段缺失仍放行（读侧可回落）。孪生 `skill/scripts/section-ref.mjs` 同改（`check-section-ref-parity` 差分锁守） | `node scripts/check-section-ref-parity.mjs`（A3 四条：末段拒写 · 孪生同结论 · 中段放行 · partial 明细留痕） | **先红已留证**：收口前 A3 两条红（`ok=true`）；收口后四条全绿 | **已完成（2026-09-19）** |
+
+### 11-b 深睡/蒸馏触发链四册（2026-09-20 · 真机取证 → 判据外移）
+
+> **登记性质**：本节四条**均已在本轮落地并过六层验收**，此处留档的是**真机证据**与**新增的待校准项**——
+> 不是"待办"。留下它们的理由：四条的取证方式（读真机日志 / 水位流 / 审计）与**判据是否真的外移**
+> 这件事，日后复验时要能一眼对照。
+
+| # | 项 | 真机证据（可复算） | 判据与修复 | 状态 |
+|---|---|---|---|---|
+| **S-P2a** | 全 `stalled` ⇒ 深睡**永不触发**（代码与状态机自述相反） | ① 探针：仅 `stalled` 会话 ⇒ 未触发；仅 `ended` ⇒ 触发（同阈值）。② 日志：09-17T08:34 起 `28f9f094` 等转 stalled 后**连续 11 小时无 `deep sleep: 触发` 行**。③ 面板：同源过滤令 `lastActivityAt=0` ⇒ `nextEligibleAt = 0 + idleMs` ⇒ 渲染 `1970-01-01` | `planSleepWindow`（归约与判定分离，巡检 + 面板**共用**）；判据 `test-sleep-window-reduction`（36 条，含**变异重演**：把 stalled 改回跳过 ⇒ 用例必红） | **✅ 已落地**（运行态活体：`nextEligibleAt` 为有效近期时刻） |
+| **S-P2b** | `conflict` 分支**不推进计数** ⇒ 活锁 | ① 日志：`28f9f094` **连续 23 次 conflict、跨 11 小时**（09-16T21:36 → 09-17T08:41）；该窗口「探测未决」**41 行**、触发行 **0 行**。② 全库 conflict 仅此 1 会话 23 条 | `planProbeOutcome`（6 出口决策表）+ **冲突有界**（新阈值 `deepSleepProbeConflictMax`=3）；判据 `test-probe-outcome`（28 条） | **✅ 已落地** |
+| **S-P3** | **段级**重试计数误用**会话级末行**读 ⇒ 结构性归零 | ① 水位流 1093 行，`phase:"retry"` **0 行**。② `spawn` 行 399 条，`attempt` 分布 `{0:31, undefined:368}` ⇒ 带 `segKey` 且 `attempt>0` 的 **0 条**。③ 日志重试 307 条，分布 `{1/3:267, 2/3:40}` ⇒ **`3/3` 从未达**（「有界重试」真机从未生效）。④ 探针：retry 行后插一条 skip 式写入 ⇒ carriedAttempt 由 1 变 **0** | `readSegFlowState` 段级读口（水位流「末行生效」语义**不变**）；`retryAttemptFor` / `retryRowHeld` **同源**；判据 `test-seg-flow-state`（14 条，含旧形态反例对照） | **✅ 已落地** |
+| **S-P4** | 自检名义 6h 周期实为**每挂载必跑一次** | ① 日志：09-19 **十次挂载 → 十次 `selfcheck(timer)`**，`mount→自检` 间隔**恒 179s**（十组全同）。② 09-18 **43 挂载 / 40 次自检**。③ 09-16 起 76 次/天 | `dueSelfCheck`（读 `selfcheck-latest.json` mtime；定时器降级为**唤醒节拍**）；判据 `test-selfcheck-cadence`（17 条，含「10 次装配 ⇒ 0 次真自检」反向自证） | **✅ 已落地** |
+
+**新增待校准项（登记制 · 非阻塞）**：
+- `trigger.deepSleepProbeConflictMax`＝**3**，`preregistered: false`、`samples: 0`。**说明**：本项**不是**待校准的经验阈值，
+  而是**有界性（正确性要求）**——无上界即活锁，故先给上界。复检：conflict 事件累计 ≥10 次后，按「误判长任务」
+  与「活锁时长」**双向代价**定值（口径见 `criteria.json#thresholds` 对应条目）。
+
+**本轮一处结构性发现（供后续同类参考）**：`deepsleep-core.ts` 的导出数受 `audit-architecture` **棘轮**约束
+（阈值 35 · 只许收紧；抽出前实测 **34**）⇒ 在本文件**就地**新增判据会破棘轮，而放松棘轮属 `R3` 须用户拍板之事。
+故本轮判据按**领域接缝**单独成件（`probe-plan.ts` / `trigger-plan.ts`），并**只向下**依赖取类型 ⇒ 零环。
+同类先例：`injection-playbook` / `recall-diagnosis` / `dynamic-select` / `situation-supply`。
 
 ---
 

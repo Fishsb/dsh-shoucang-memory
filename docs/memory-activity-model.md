@@ -22,7 +22,7 @@
 | M2 | 时间衰减曲线 | Mem0 decay；ACT-R declarative base-level activation `B=ln(Σ(t−t_j)^−d)`（认知架构，d≈0.5） | 条目活性分衰减用 ACT-R 幂律形状；半衰期参数按本项目频率标定（初值：warm 14 天无命中→cold；cold 再 30 天→archive 候选）。纯本地计算，无依赖 |
 | M3 | 反复使用加深 | FSRS review-强化语义（open-spaced-repetition，MIT） | 一次"命中/写入/被展开"=一次 review 事件 → 提升活性并进入跨周期加深判定（§5）。不做抽卡式调度 UI，只借"复习次数→熟练度"语义 |
 | M4 | 矛盾即失效（负信号） | Zep/Graphiti temporal KG：边衰减 + 被事实矛盾时 invalidate（arXiv:2501.13956，MIT） | 现有 correction/supersede/gate-reject/空命中 = invalidate 信号 → 记负分并降级候选（§4/§6），与"提纯降级不删除"兼容 |
-| M5 | 分层记忆+睡眠期整合 | Letta/MemGPT sleep-time compute（AGPL——只借架构不借码） | 注入=核心层（常驻指针+原则）、notes=archival、深睡=sleep-time consolidation（本架构已同构）；冷条目降级=核心层 eviction 减压 |
+| M5 | 分层记忆+睡眠期整合 | Letta/MemGPT sleep-time compute（**Apache-2.0**——2026-09-20 经 GitHub License API 实测更正，此处原误标 AGPL） | 注入=核心层（常驻指针+原则）、notes=archival、深睡=sleep-time consolidation（本架构已同构）；冷条目降级=核心层 eviction 减压 |
 | M6 | 反思提炼参照系 | 本仓 `docs/agent-reflection-research.md`（Reflexion/GA/ExpeL/AWM/Letta 考古） | 沿用其已落地结论，不重复调研 |
 
 ## 3. 数据模型（存储零新增，落 `notes/INDEX.md` 条目元数据表）
@@ -88,5 +88,5 @@ active ──14 天无命中──► warm ──30 天无命中──► cold(s
 - ACT-R base-level activation（Anderson & Lebiere 认知架构）——公式借形
 - FSRS — https://github.com/open-spaced-repetition/fsrs-rs（MIT）——review-强化语义
 - Zep — arXiv:2501.13956；Graphiti — https://github.com/getzep/graphiti（MIT）——invalidate/decay
-- Letta — https://www.letta.com/blog/sleep-time-compute（AGPL，仅借架构）
+- Letta — https://www.letta.com/blog/sleep-time-compute（**Apache-2.0**，2026-09-20 GitHub License API 实测；原标 AGPL 有误）· 代码参考 https://github.com/letta-ai/sleep-time-compute（**MIT**）
 - 本仓既有：docs/agent-reflection-research.md、docs/memory-core-model.md（v6 指针生命周期 §2.6）、skill/memory-whitelist-spec.md（§8 元数据表/生命周期）、audit-protocol.md（§3 提纯降级）

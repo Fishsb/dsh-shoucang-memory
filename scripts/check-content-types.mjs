@@ -141,22 +141,59 @@ const missingForms = ALL_FORMS.filter((f) => !declaredForms.has(f))
 ok(missingForms.length === 0, `B5 每个输出形态都有 typeId 承载（缺：${missingForms.join(', ') || '无'}）`)
 console.log('   · 形态覆盖：' + ALL_FORMS.map((f) => `${f}=${types.filter(([, t]) => t.form === f).length}`).join(' · '))
 
-// ── C 形态合法 ──
-const LAYERS = new Set(['outer', 'middle', 'inner', 'none'])
-const TIMINGS = new Set(['session-start', 'task-start', 'per-step', 'on-demand', 'none'])
-const CRITERIA = new Set(['always', 'relevance', 'situation-key', 'due', 'none'])
-const BUDGETS = new Set(['stable', 'dynamic', 'oneshot', 'mcl', 'situation', 'process', 'none'])
+// ── A7 认知类型轴（Q1 · 2026-09-20）：memClass 是**可机检的三类对位** ──
+//   由来：此前「语义/情景/程序性记忆」在 src/ 与 criteria.json **零命中**，三类对位只是本件
+//   `faceOf()` 的推导量（折 3 面且被 recordKind 抹平）⇒ 分类学只存在于文档里。本判据把它变成断言。
+//   计数口径：semantic 17 / procedural 1 / episodic 7 / none 1（共 26）；none 只给 noteBody
+//   （notes 正文本体是**载体形态**，不是第四类记忆，不进三类计数 ⇒ 三类合计 25）。
+const vocab = (reg.contentTypes && reg.contentTypes.vocab) || null
+const memBad = []
+if (!vocab) memBad.push('缺 vocab 段（值域真源）')
+else {
+  for (const col of ['layer', 'timing', 'criterion', 'budget', 'memClass']) {
+    if (!Array.isArray(vocab[col]) || !vocab[col].length) memBad.push(`vocab.${col} 非非空数组`)
+  }
+  const allowed = new Set(vocab.memClass || [])
+  const mc = {}
+  for (const [id, t] of types) {
+    if (!t.memClass) { memBad.push(`${id}:缺 memClass`); continue }
+    if (Array.isArray(t.memClass)) { memBad.push(`${id}:memClass 是数组（应单值）`); continue }
+    if (!allowed.has(t.memClass)) { memBad.push(`${id}:memClass=${t.memClass} 不在值域`); continue }
+    mc[t.memClass] = (mc[t.memClass] || 0) + 1
+  }
+  const want = { semantic: 17, procedural: 1, episodic: 7, none: 1 }
+  for (const [k, v] of Object.entries(want)) if ((mc[k] || 0) !== v) memBad.push(`memClass 计数 ${k}=${mc[k] || 0}（应 ${v}）`)
+  if (Object.keys(mc).length && Object.values(mc).reduce((a, b) => a + b, 0) !== types.length) memBad.push(`memClass 合计 ${Object.values(mc).reduce((a, b) => a + b, 0)} ≠ 类型数 ${types.length}`)
+  // 三条三类对位（可读化输出）
+  if (!memBad.length) console.log(`   · 认知类型：semantic ${mc.semantic} · procedural ${mc.procedural} · episodic ${mc.episodic} · none ${mc.none}（三类合计 ${mc.semantic + mc.procedural + mc.episodic}）`)
+}
+ok(memBad.length === 0, `A7 memClass 每类恰一个且计数 17/1/7/1（异常：${memBad.join(', ') || '无'}）`)
+
+// ── C 形态合法 ──（Q1：四 Set 改读真源 vocab —— 原先硬编码在本件脚本内，
+//   真源写错取值门禁不动；reserved 声明的值视为合法但**须实测 0 使用**，用后即须从 reserved 摘除）
+const LAYERS = new Set([...(vocab?.layer || []), ...((vocab?.reserved && vocab.reserved.layer) || [])])
+const CRITERIA = new Set([...(vocab?.criterion || []), ...((vocab?.reserved && vocab.reserved.criterion) || [])])
+const BUDGETS = new Set([...(vocab?.budget || []), ...((vocab?.reserved && vocab.reserved.budget) || [])])
 const formBad = []
 for (const [id, t] of types) {
   const c = t.consumer || {}
   if (!LAYERS.has(c.layer)) formBad.push(`${id}:layer=${c.layer}`)
-  if (!TIMINGS.has(c.timing)) formBad.push(`${id}:timing=${c.timing}`)
   if (!CRITERIA.has(c.criterion)) formBad.push(`${id}:criterion=${c.criterion}`)
   if (!BUDGETS.has(t.budget)) formBad.push(`${id}:budget=${t.budget}`)
   if (!Array.isArray(t.recordKind) || !t.recordKind.length) formBad.push(`${id}:recordKind 空`)
   if (typeof t.reachable !== 'boolean') formBad.push(`${id}:reachable 非布尔`)
 }
 ok(formBad.length === 0, `C 契约字段形态合法（异常：${formBad.join(', ') || '无'}）`)
+
+// ── C2 reserved 棘轮：声明的「0 使用」值一旦被真实使用即红（防豁免名单永不清空）──
+const resBad = []
+if (vocab && vocab.reserved) {
+  for (const [col, vals] of Object.entries(vocab.reserved)) {
+    const used = new Set(col === 'criterion' ? types.map(([, t]) => t.consumer.criterion) : types.map(([, t]) => t.budget))
+    for (const v of vals) if (used.has(v)) resBad.push(`${col}.${v}:已在使用`)
+  }
+}
+ok(resBad.length === 0, `C2 reserved 值须保持 0 使用（异常：${resBad.join(', ') || '无'}）`)
 
 // ── B4 假绿可见：登记为 wired:false 的判据必须显式列出（不静默）──
 const falseWired = [...ctSrc.matchAll(/criterion: '([a-z-]+)'[\s\S]{0,120}?wired: false/g)].map((m) => m[1])

@@ -28,8 +28,16 @@ const rd = (p) => (existsSync(p) ? readFileSync(p, 'utf8').split(/\r?\n/).filter
 const parseAll = (p) => rd(p).map((l) => { try { return JSON.parse(l) } catch { return null } }).filter(Boolean)
 
 // 双源合并（与 mcl-calibrate / mcl-compliance 同口径：legacy ∪ 台账 type=mcl-step）
+// ⚠ **跨档读（G13 轮转失明 · 2026-09-20 修）**：台账按大小轮转（保留 3 档），本件原先**只读主档**
+//   ⇒ `mcl-step` 样本**结构性丢历史**（实测：主档 964 行 / 跨档真值 **9098 行**，**漏 89%**）
+//   ⇒ 归因分布（`missReason` 计数）与 `adviseFromMissCounts` 的**方向结论建立在残缺样本上**。
+//   现改走唯一实现 `lib/ledger-compact.js#readLedgerVolumes`。
+const { readLedgerVolumes } = await import(new URL('../lib/ledger-compact.js', import.meta.url).href)
 const legacy = parseAll(join(AUD, 'mcl-audit.jsonl')).filter((o) => (o.kind || o.type) === 'mcl-step')
-const live = parseAll(join(AUD, 'ledger.jsonl')).filter((o) => o.type === 'mcl-step')
+const live = readLedgerVolumes(join(AUD, 'ledger.jsonl'))
+  .map((l) => { try { return JSON.parse(l) } catch { return null } })
+  .filter(Boolean)
+  .filter((o) => o.type === 'mcl-step')
 const all = [...legacy, ...live]
 
 // 库内可召回的索引行（分母参考：三索引里"有标签 + 有 notes 指针"的薄行）
@@ -92,10 +100,17 @@ console.log('         两种情形 ⇒ 任何"猜出来的分布"都会误导后
 console.log('')
 // S4R/R3（2026-09-14）：**由分布推导调参方向** —— 判据来自 `recall-diagnosis#adviseFromMissCounts`
 //   （**不是写死的方向**：原 S4-7 写死"两条件分流"，其前提"瓶颈在标签门"已被 S1 证伪）
+// ⚠ **口径（2026-09-20 实测后加）**：本件是**报告态**（未登记进 `check-runner` 门禁），其输出是
+//   **对账基线**，**不是调参依据** —— 实测它与注册表细校准**方向相反、一致率 = 0**
+//   （见 `src/recall-diagnosis.ts#adviseFromMissCounts` 头注：并列了两次实测的实际输出）。改阈值一律以
+//   `criteria.json#thresholds.mcl.familiarThreshold` 的细校准 note 为准。
 const { adviseFromMissCounts } = await import(new URL('../lib/recall-diagnosis.js', import.meta.url).href)
 const adv = adviseFromMissCounts(byReason)
 console.log('')
 console.log(`🧭 调参建议（**由数据推导**，非写死）：**${adv.advice}**`)
 console.log(`   ${adv.why}`)
+console.log('')
+console.log('   ⚠ **本读数是对账基线，非调参依据**：实测与细校准方向相反（一致率 = 0）。')
+console.log('      改阈值以 `criteria.json#thresholds.mcl.familiarThreshold` 的细校准结论为准。')
 console.log('')
 console.log(attributable === 0 ? '⏳ 待数据：字段已就位，等新会话产生样本后重跑本件。' : '✅ 已可归因。')

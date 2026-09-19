@@ -103,7 +103,16 @@ export declare function latestDerivation(d: {
     kRoot: string;
 }): string[];
 /** 从**台账末条 `deep-sleep` 行**装配本轮输入（**解耦**：不必把一轮的十几个字段穿过装配层，
- *  也避开 `runDeepSleep` 的函数跨度上限 399/400 —— 这是会审记下的"净减前置"约束下的务实解法）。 */
+ *  也避开 `runDeepSleep` 的函数跨度上限 399/400 —— 这是会审记下的"净减前置"约束下的务实解法）。
+ *
+ * ⚠ **跨档读（G13 轮转失明 · 2026-09-20 修）**：原走 `parseRows(…/ledger.jsonl, 4000)` ——
+ *   而 `parseRows` 基于 `readTailLines`（**只在主档尾部窗口内**）⇒ 台账轮转后
+ *   **"末条 deep-sleep" 可能整个不在主档里** ⇒ 本函数返回 null ⇒ 睡眠汇报静默退化成
+ *   「no-deep-sleep-round」（**看着像"没跑过深睡"**）。实测（本轮）：主档 `deep-sleep` 行 **0** /
+ *   跨档真值 **49** ⇒ 该退化**当时正处于激活态**。
+ *   ⇒ 现改为 `readLedgerVolumes`（跨档、按时间序）+ 从**末尾反向**找最后一条 `kind==='deep-sleep'`；
+ *     语义（"取最后一条"）**不变**，只是把可见范围从"主档尾部"扩到"全部档位"。
+ *   判据：`scripts/check-ledger-read.mjs` 源码面硬门。 */
 export declare function roundInputFromLedger(d: {
     kRoot: string;
     untilMs?: number;

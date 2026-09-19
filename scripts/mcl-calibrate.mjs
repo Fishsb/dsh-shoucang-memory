@@ -36,6 +36,11 @@ const ledger = join(auditDir, 'ledger.jsonl')
 if (!existsSync(legacy) && !existsSync(ledger)) { console.log(`⏭ 无 MCL 审计源（${auditDir}）—— 无数据可标定`); process.exit(3) }
 
 // **双源读**（与 mcl.ts / panel 同口径）：legacy 历史 ∪ 台账里的 `mcl*` 行
+// ⚠ **跨档读（G13 轮转失明 · 2026-09-20 修）**：台账按大小轮转（保留 3 档），本件原先**只读主档**
+//   ⇒ `mcl-step` 样本**结构性丢历史**（实测：主档 964 行 / 跨档真值 **9098 行**，**漏 89%**）。
+//   而本件的用途正是**给 `mcl.familiarThreshold` 标定分位**（样本 2154 条那次就是这个数出来的）
+//   ⇒ 分母残缺 ⇒ **阈值标定的样本集一直不完整**。现改用唯一实现 `lib/ledger-compact.js#readLedgerVolumes`。
+const { readLedgerVolumes } = await import(new URL('../lib/ledger-compact.js', import.meta.url).href)
 const rows = []
 const readInto = (file, keep) => {
   if (!existsSync(file)) return
@@ -45,7 +50,11 @@ const readInto = (file, keep) => {
   }
 }
 readInto(legacy, () => true)
-readInto(ledger, (o) => String(o?.type || '').startsWith('mcl'))
+// 跨档：最旧档 → 主档（按时间序），只留 `mcl*` 行
+for (const line of readLedgerVolumes(ledger)) {
+  if (!line.trim()) continue
+  try { const o = JSON.parse(line); if (String(o?.type || '').startsWith('mcl')) rows.push(o) } catch { /* 坏行跳过 */ }
+}
 const steps = rows.filter((r) => r.kind === 'mcl-step' && typeof r.sim === 'number')
 if (!steps.length) { console.log('⏭ 无 mcl-step 样本（阈值标定需要带 sim 的步级审计）'); process.exit(3) }
 

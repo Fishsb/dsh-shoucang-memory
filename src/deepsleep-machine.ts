@@ -14,6 +14,8 @@ import type { SleepIo, SleepSession, SleepState } from './deepsleep-contract.js'
 // 触发阈值回退的**单一来源**已下沉到 deepsleep-core（依赖链底部，machine/deepsleep/distill-hooks 三处共用）——
 // 见该件 `idleMsOf` 的注释：全仓曾有 8 处硬编码兜底（首轮因大小写敏感检索漏报 4 处）。
 import { idleMsOf, epochIdOf, windowMaterialBytes, planTriggerDim } from './deepsleep-core.js'
+// S-P2a（2026-09-20）：睡眠窗口归约（自 deepsleep-core 按领域接缝抽出，守其导出棘轮）
+import { planSleepWindow } from './trigger-plan.js'
 
 /** 装配层持有的**可变**状态（按引用传给状态机；标量必须装箱才写得回）。 */
 export interface SleepMachine {
@@ -48,6 +50,7 @@ export function noteEvent(dep: MachineDeps, m: SleepMachine, sid: string, isTurn
   rec.probeAt = 0
   rec.probeRound = 0
   rec.stallRound = 0
+  rec.conflictRound = 0 // S-P2b：新事件 = 会话复活，冲突计数与新证据无关，必须同清
   rec.probeResult = undefined
   m.sessions.set(sid, rec)
 }
@@ -133,24 +136,25 @@ export function deepSleepCheck(dep: MachineDeps, m: SleepMachine): void {
   const now = Date.now()
   const idleMs = idleMsOf(dep.config)
   const probeAfter = Number(dep.config.deepSleepProbeAfterMs) || idleMs
-  let hottest = m.sessions.size ? 0 : m.lastActivityAt // 无在册会话时用全局兜底水位
-  let probing = 0, stalled = 0, ended = 0, running = 0
+  // 会话存续过滤（IO）+ 探测推进：**归约之前**的副作用一律留在这里（纯函数不得碰 ctx）。
   for (const [sid, rec] of m.sessions) {
     try { if (!dep.ctx.agents.get(sid)) { m.sessions.delete(sid); continue } } catch { m.sessions.delete(sid); continue }
     // 子代理守卫（2026-09-10 实态修复）：子代理在跑 = 父会话仍在干活——直接视为 running 且刷新活动，
     // 既不发起"输出增长探测"（子代理写的是自己的转录，父转录不增长会被误判卡住），也不阻塞计数为停滞。
-    if (dep.session.hasActiveSubagents(sid)) { rec.state = 'running'; rec.lastEventAt = now; running++; continue }
+    if (dep.session.hasActiveSubagents(sid)) { rec.state = 'running'; rec.lastEventAt = now; continue }
     // 状态机推进：running 且无事件 ≥ probeAfter → 发起探测；suspect → 下轮巡检复核（卡住需连续确认）
     if (dep.config.deepSleepProbe) {
       if (rec.state === 'running' && now - rec.lastEventAt >= probeAfter) probeSession(dep.probe, rec)
       else if (rec.state === 'suspect') probeSession(dep.probe, rec)
     }
-    if (rec.state === 'probing' || rec.state === 'suspect') { probing++; continue } // 未决/待复核 → 阻塞本轮（不睡）
-    if (rec.state === 'stalled') { stalled++; continue } // 已确认无输出 → 不阻塞睡眠
-    if (rec.state === 'ended') ended++; else running++
-    const act = rec.state === 'ended' ? rec.lastEndAt : rec.lastEventAt
-    if (act > hottest) hottest = act
   }
+  // ★ S-P2a（2026-09-20）**归约与判定分离**：窗口派生量只此一处（与面板 `getDeepSleepStatus` 共用
+  //   `planSleepWindow`）——此前两边各写一份循环，且 `stalled` 被跳过 ⇒ 全 stalled 时 `hottest` 恒 0
+  //   ⇒ 永不触发（真机实测 11 小时零触发），而状态机自述 STALLED「不阻塞」。
+  const win = planSleepWindow(m.sessions.values(), { lastActivityAt: m.lastActivityAt, lastDeepSleepAt: m.lastDeepSleepAt })
+  const { hottest } = win
+  const { running, ended, stalled } = win.counts
+  const probing = win.blocking
   if (probing > 0) { dep.io.log(`deep sleep: ${probing} 个会话探测未决，本轮跳过（保守不睡）`); return }
   // ⚠ **判据顺序（S-P1b）**：「窗口已消化」必须先于「时间/内容双维」判定 ——
   //   否则内容维会绕过 `hottest <= m.lastDeepSleepAt` 而**重复消化同一批材料**。
@@ -218,19 +222,13 @@ export function deepSleepCheck(dep: MachineDeps, m: SleepMachine): void {
 
 /** 状态机快照——面板展示 / 手动触发（POST /deepsleep/trigger）/ 配置读写（/deepsleep/config）均读这里 */
 export function getDeepSleepStatus(dep: MachineDeps, m: SleepMachine): DeepSleepStatus {
-  let hottest = m.sessions.size ? 0 : m.lastActivityAt
+  // ★ S-P2a：**与巡检共用同一归约**（`planSleepWindow`）——此前本函数自带一份循环，且把
+  //   `stalled/probing/suspect` 排除出 `hottest` ⇒ 全 stalled 时 `lastActivityAt=0`
+  //   ⇒ `nextEligibleAt = 0 + idleMs` ⇒ 面板「下次可睡」渲染成 **1970-01-01**（假读数）。
+  const win = planSleepWindow(m.sessions.values(), { lastActivityAt: m.lastActivityAt, lastDeepSleepAt: m.lastDeepSleepAt })
+  const { running, ended, probing, suspect, stalled } = win.counts
   const list: DeepSleepStatus['sessions'] = []
-  let running = 0, ended = 0, probing = 0, stalled = 0, suspect = 0
   for (const rec of m.sessions.values()) {
-    if (rec.state === 'probing') probing++
-    else if (rec.state === 'suspect') suspect++
-    else if (rec.state === 'stalled') stalled++
-    else if (rec.state === 'ended') ended++
-    else running++
-    if (rec.state !== 'stalled' && rec.state !== 'probing' && rec.state !== 'suspect') {
-      const act = rec.state === 'ended' ? rec.lastEndAt : rec.lastEventAt
-      if (act > hottest) hottest = act
-    }
     list.push({ sid: (rec.sid.startsWith('session-') ? rec.sid.slice(8, 16) : rec.sid.slice(0, 8)), fullSid: rec.sid, state: rec.state, lastEventAt: rec.lastEventAt, lastEndAt: rec.lastEndAt, probeResult: rec.probeResult })
   }
   return {
@@ -240,10 +238,10 @@ export function getDeepSleepStatus(dep: MachineDeps, m: SleepMachine): DeepSleep
     epochSince: (dep.state && dep.state.epoch && dep.state.epoch.since) || null,
     idleMs: idleMsOf(dep.config),
     probeAfterMs: Number(dep.config.deepSleepProbeAfterMs) || idleMsOf(dep.config),
-    lastActivityAt: hottest,
+    lastActivityAt: win.hottest,
     lastDeepSleepAt: m.lastDeepSleepAt,
     running, ended, probing, suspect, stalled,
-    nextEligibleAt: hottest + idleMsOf(dep.config),
+    nextEligibleAt: win.hottest + idleMsOf(dep.config),
     // S3-6（2026-09-14）**当前阶段**：由既有计数与标志派生（**零新采集、零跨源依赖**）。
     //   优先级 = 「最该先知道」在前：开关关 → 正在跑 → 探测/复核中 → 会话活跃 → 可睡 → 等待 → 无会话。
     //   注：`suspect`（探针证据冲突、待复核）与 `probing` 同归"探测中"—— 对观察者而言都是"在确认能不能睡"。

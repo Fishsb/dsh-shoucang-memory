@@ -24,6 +24,13 @@ const AUD = join(HOME, 'suite', 'knowledge', 'audit')
 const BANK = process.env.MEMORY_ROOT || join(HOME, 'skills', 'managing-memory')
 const rd = (p) => (existsSync(p) ? readFileSync(p, 'utf8').split(/\r?\n/).filter(Boolean)
   .map((l) => { try { return JSON.parse(l) } catch { return null } }).filter(Boolean) : [])
+/* ⚠ **跨档读（G13 轮转失明 · 2026-09-20 修）**：OPEN-3 的判据是"审计轮次里有几轮 cand>0 / 见到消费"，
+ *   而 deep-sleep 行**全在旧卷**（实测：主档 0 行 / 跨档 **49** 行）⇒ 该判据原读到的 `withF.length` 恒 0
+ *   ⇒ 报「条件未到/未满足」。现改走唯一实现 `readLedgerVolumes`。
+ *   判据：`scripts/check-ledger-read.mjs`（脚本面 known-broken 名单）——**修完须从该名单删**。 */
+const { readLedgerVolumes } = await import(new URL('../lib/ledger-compact.js', import.meta.url).href)
+const rdLedgerAll = () => readLedgerVolumes(join(AUD, 'ledger.jsonl'))
+  .map((l) => { try { return JSON.parse(l) } catch { return null } }).filter(Boolean)
 const rows = []
 
 /* ── OPEN-1：样本量 + coarse advice + 细校准结论 ── */
@@ -80,7 +87,7 @@ let o3 = { ok: false, note: '未能取值' }
 try {
   const mats = await import('file:///' + join(root, 'lib', 'deepsleep-materials.js').replace(/\\/g, '/'))
   const M = mats.gatherMaterials(BANK)
-  const rounds = [...rd(join(AUD, 'ledger.jsonl')).filter((o) => o.kind === 'deep-sleep')]
+  const rounds = rdLedgerAll().filter((o) => o.kind === 'deep-sleep')
   const withF = rounds.filter((r) => typeof r.forgetCandidates === 'number')
   const consumed = withF.filter((r) => (r.forgetKept || 0) + (r.forgetArchived || 0) > 0)
   const nonzero = withF.filter((r) => r.forgetCandidates > 0)

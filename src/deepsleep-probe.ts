@@ -1,6 +1,7 @@
 // deepsleep-probe.ts — 深睡「会话输出增长探测」领域（依赖 5 个）
 import { statSync } from 'node:fs'
 import type { SessRec } from './deepsleep-core.js'
+import { planProbeOutcome, type ProbeEvidence } from './probe-plan.js'
 
 /** 探测的全部依赖：日志 + 审计 + 配置 + 宿主 ctx + 转录定位。 */
 export interface ProbeDeps {
@@ -58,8 +59,10 @@ export function probeSession(d: ProbeDeps, rec: SessRec): void {
         if (rec.state !== 'probing') return // 新事件打断 → 交回状态机，不覆盖
       }
       if (!file) {
-        rec.probeResult = 'no-transcript'
-        rec.state = 'ended'
+        // ★ S-P2b：本出口同样经决策表（`noTranscript: true`）——判据全在判据层，本文件零判定分支。
+        const o = planProbeOutcome({ alive: true, active: false, viaChildren: false, grew: false, noTranscript: true }, { stallRound: rec.stallRound || 0, conflictRound: rec.conflictRound || 0 }, { confirm, conflictMax: Math.max(1, Number(config.deepSleepProbeConflictMax) || 3) })
+        rec.probeResult = o.probeResult
+        rec.state = o.state
         rec.lastEndAt = rec.lastEventAt
         log(`deep sleep probe: ${short} 探针不可用（已重试 ${retries} 次）→ 无法确认为长任务，按停滞处理（正常睡眠）；请检查记忆仓 locate-transcript-probe 是否就位`)
         audit({ kind: 'deep-sleep-probe', sid: short, result: 'no-transcript', rounds: rec.probeRound, note: '探针不可用，无法确认长任务，按停滞处理' })
@@ -82,71 +85,66 @@ export function probeSession(d: ProbeDeps, rec: SessRec): void {
         rounds = i + 1
       }
       if (rec.state !== 'probing') return
-      if (grew) {
-        rec.probeResult = 'long-run'
-        rec.state = 'running'
-        rec.lastEventAt = Date.now() // 唯一会刷新水位的分支（确认长任务，3h 后再复查）
-        rec.stallRound = 0
-        rec.probeEvidence = { rounds, samples, deltaBytes: delta, alive: true, active: true }
-        log(`deep sleep probe: ${short} 第 ${rounds}/${samples} 轮检出输出增长（+${delta}B）→ 正常长任务，不睡`)
-        audit({ kind: 'deep-sleep-probe', sid: short, result: 'long-run', deltaBytes: delta, rounds, samples })
-        return
-      }
-      // ③ 无增长：二次确认存活（防瞬时查找失败误判 exit）
+      /* ★ S-P2b（2026-09-20）：全部出口收敛为**一张决策表**（`planProbeOutcome`，判据层纯函数）。
+       *   原实现在此处写 8 个命令式 if，其中 `active`（证据冲突）分支**排在 stallRound 推进之前且直接
+       *   return** ⇒ 计数永不推进 ⇒ 状态回写 suspect ⇒ 下轮再探再冲突 = **活锁**
+       *   （真机 `28f9f094` 连续 23 次 / 跨 11 小时，该窗口「探测未决」41 行、触发 0 行）。
+       *   现判据外移：本函数只负责**采证**（下方 evidence）与**搬状态**（apply）。 */
       const alive1 = agentAlive()
       if (!alive1) await sleep(3000)
       const alive = alive1 && agentAlive()
       const active = agentActive()
-      rec.probeEvidence = { rounds, samples, deltaBytes: 0, alive, active }
-      if (!alive) {
-        rec.probeResult = 'exit'
-        rec.state = 'ended'
+      const viaChildren = hasLiveSubagent()
+      rec.probeEvidence = { rounds, samples, deltaBytes: delta, alive, active, ...(viaChildren ? { viaChildren: true } : {}) }
+      const evidence: ProbeEvidence = { alive, active, viaChildren, grew, noTranscript: false }
+      const outcome = planProbeOutcome(
+        evidence,
+        { stallRound: rec.stallRound || 0, conflictRound: rec.conflictRound || 0 },
+        { confirm, conflictMax: Math.max(1, Number(config.deepSleepProbeConflictMax) || 3) },
+      )
+      rec.state = outcome.state
+      rec.probeResult = outcome.probeResult
+      rec.stallRound = outcome.stallRound
+      rec.conflictRound = outcome.conflictRound
+      if (outcome.refreshActivity) rec.lastEventAt = Date.now()
+      // 审计与日志按结论分支（与改前逐字保持同一观测口径；新增 conflict 计数以便复核）
+      if (outcome.probeResult === 'long-run') {
+        rec.lastEventAt = Date.now() // 唯一会刷新水位的分支（确认长任务，probeAfter 后再复查）
+        if (evidence.viaChildren) {
+          log(`deep sleep probe: ${short} 父转录无增长但**子代理仍在跑** → 判正常长任务（不睡）`)
+          audit({ kind: 'deep-sleep-probe', sid: short, result: 'long-run', rounds, samples, viaChildren: true, note: '父会话等待子代理（子代理活跃）' })
+        } else {
+          log(`deep sleep probe: ${short} 第 ${rounds}/${samples} 轮检出输出增长（+${delta}B）→ 正常长任务，不睡`)
+          audit({ kind: 'deep-sleep-probe', sid: short, result: 'long-run', deltaBytes: delta, rounds, samples })
+        }
+        return
+      }
+      if (outcome.probeResult === 'exit') {
         rec.lastEndAt = rec.lastEventAt
         log(`deep sleep probe: ${short} ${samples} 轮无增长且会话已消失（二次确认）→ 异常退出（正常睡眠）`)
         audit({ kind: 'deep-sleep-probe', sid: short, result: 'exit', rounds, samples, note: '会话已退出（二次确认）' })
         return
       }
-      /* ③′ 2026-09-16 **父转录无增长但子代理在跑** ⇒ 判正常长任务（不睡）。
-       *   ⚠ **必须排在 `active` 冲突分支之前**：子代理活跃是**正向进展证据**（比"状态说活跃但没输出"的
-       *   证据冲突更强），先判它可避免把"父会话等子代理"记成 conflict 噪声。
-       *   依据见 `hasLiveSubagent` 抬头；并**顺手刷新 `lastEventAt`** —— 它原先**只在"确认长任务"分支刷新**
-       *   （原第 67 行），故 `idleMin` 实为「距上次**确认长任务**的分钟数」而非「距上次输出」⇒ 审计读数误导
-       *   （实测全为 58–66 分钟）。此处一并修正该基准。 */
-      if (hasLiveSubagent()) {
-        rec.probeResult = 'long-run'
-        rec.state = 'running'
-        rec.lastEventAt = Date.now()
-        rec.stallRound = 0
-        rec.probeEvidence = { rounds, samples, deltaBytes: 0, alive: true, active: false, viaChildren: true }
-        log(`deep sleep probe: ${short} 父转录无增长但**子代理仍在跑** → 判正常长任务（不睡）`)
-        audit({ kind: 'deep-sleep-probe', sid: short, result: 'long-run', rounds, samples, viaChildren: true, note: '父会话等待子代理（子代理活跃）' })
+      if (outcome.probeResult === 'conflict') {
+        log(`deep sleep probe: ${short} 无输出增长但 agent 状态活跃 → 证据冲突第 ${outcome.conflictRound} 轮，转 suspect 下轮复核`)
+        audit({ kind: 'deep-sleep-probe', sid: short, result: 'conflict', rounds, samples, conflictRound: outcome.conflictRound, note: '状态活跃但无输出增长，复核' })
         return
       }
-      if (active) {
-        // 证据冲突：状态说活跃但输出没长 → 不判卡住，转 suspect 复核（宁可多等一轮，不误判长任务）
-        rec.state = 'suspect'
-        rec.probeResult = 'conflict'
-        log(`deep sleep probe: ${short} 无输出增长但 agent 状态活跃 → 证据冲突，转 suspect 下轮复核`)
-        audit({ kind: 'deep-sleep-probe', sid: short, result: 'conflict', rounds, samples, note: '状态活跃但无输出增长，复核' })
+      if (outcome.probeResult === 'stall') {
+        rec.lastEndAt = rec.lastEndAt || rec.lastEventAt
+        log(`deep sleep probe: ${short} ${outcome.note}`)
+        audit({ kind: 'deep-sleep-probe', sid: short, result: 'stall', rounds, samples, stallRound: outcome.stallRound, conflictRound: outcome.conflictRound, idleMin: Math.round((Date.now() - rec.lastEventAt) / 60000), note: outcome.note })
         return
       }
-      // ④ 卡住需连续 confirm 轮确认
-      const sr = (rec.stallRound || 0) + 1
-      rec.stallRound = sr
-      if (sr >= confirm) {
-        rec.probeResult = 'stall'
-        rec.state = 'stalled'
-        log(`deep sleep probe: ${short} 连续 ${sr}/${confirm} 轮无输出增长（会话仍在）→ 确认卡住，不阻塞睡眠（请人工确认）`)
-        audit({ kind: 'deep-sleep-probe', sid: short, result: 'stall', rounds, samples, stallRound: sr, idleMin: Math.round((Date.now() - rec.lastEventAt) / 60000), note: '疑似卡住：连续无输出增长且会话未退出' })
-      } else {
-        rec.state = 'suspect'
-        rec.probeResult = 'suspect'
-        log(`deep sleep probe: ${short} 第 ${sr}/${confirm} 次无增长 → suspect，下轮巡检复核（期间阻塞睡眠）`)
-        audit({ kind: 'deep-sleep-probe', sid: short, result: 'suspect', rounds, samples, stallRound: sr })
-      }
+      log(`deep sleep probe: ${short} ${outcome.note}`)
+      audit({ kind: 'deep-sleep-probe', sid: short, result: 'suspect', rounds, samples, stallRound: outcome.stallRound })
     } catch (e) {
+      // 探测异常一律"按停滞处理（正常睡）"（既有口径）；并**复位冲突计数**——否则异常残留的
+      // conflictRound 会污染下一次探测的判据（S-P2b 新增字段，必须与 stallRound 同寿同清）。
       rec.probeResult = 'error'
       rec.state = 'ended'
+      rec.stallRound = 0
+      rec.conflictRound = 0
       rec.lastEndAt = rec.lastEventAt
       log(`deep sleep probe err ${short}: ${String((e as Error)?.message || e).slice(0, 120)} → 按停滞处理（正常睡眠）`)
       audit({ kind: 'deep-sleep-probe', sid: short, result: 'error', rounds: rec.probeRound, note: String((e as Error)?.message || e).slice(0, 120) })

@@ -87,7 +87,7 @@ export declare const SURFACE_PARAMS: {
         };
         readonly situation: {
             readonly enabled: true;
-            readonly budgetChars: 300;
+            readonly budgetChars: 1200;
             readonly cueDims: readonly ["scope", "task"];
             readonly cueDimRules: {
                 readonly scope: "路径归一：`\\`→`/` · 去尾斜杠 · 折叠重复斜杠 · **不改大小写**（POSIX 敏感）";
@@ -104,8 +104,9 @@ export declare const SURFACE_PARAMS: {
             readonly enabled: true;
             readonly carrierTag: readonly ["路径"];
             readonly topN: 3;
+            readonly gate: "tag";
             readonly budgetChars: 300;
-            readonly note: "S4-3（2026-09-14）**中层 process 槽**：任务级供给 —— 按标签取 `[路径]` 行（**不走内容相关性竞争**）。判因：人类三层结构里**中层是唯一没有专用通路的层**（`[路径]` 现经 R 层 gated 相关性召回，与其它内容争同一预算；且实测库内 `[路径]` 仅 5 条）。★2026-09-18 **启用**（原 enabled:false）：按域路由方案 P0-b —— task 路由 = 打开本槽（零新代码）。⚠ 原 note 称「运行时实现被前置重构阻塞（panel-shared 大模块冻结棘轮）」**该判断已过期**：实测 `src/dynamic-select.ts` 已有 `selectProcessLines`(:80-95) 且 `panel-shared.ts:551-553` 已有 `process`/`processRows` 消费点（S4-3 的动态面选行领域拆分已完成）⇒ 启用即生效，无需前置。额度语义：本槽行 **不吃 dynamic cap**（`dynamic-select.ts:145-154` 额外占位）⇒ 总额不再无界的前提是封顶只在 `budgetOf`（见 surface.injection.note）。";
+            readonly note: "S4-3（2026-09-14）**中层 process 槽**：任务级供给 —— 按标签取 `[路径]` 行（**不走内容相关性竞争**）。判因：人类三层结构里**中层是唯一没有专用通路的层**（`[路径]` 现经 R 层 gated 相关性召回，与其它内容争同一预算；且实测库内 `[路径]` 仅 5 条）。★2026-09-18 **启用**（原 enabled:false）：按域路由方案 P0-b —— task 路由 = 打开本槽（零新代码）。⚠ 原 note 称「运行时实现被前置重构阻塞（panel-shared 大模块冻结棘轮）」**该判断已过期**：实测 `src/dynamic-select.ts` 已有 `selectProcessLines`(:80-95) 且 `panel-shared.ts:551-553` 已有 `process`/`processRows` 消费点（S4-3 的动态面选行领域拆分已完成）⇒ 启用即生效，无需前置。额度语义：本槽行 **不吃 dynamic cap**（`dynamic-select.ts:145-154` 额外占位）⇒ 总额不再无界的前提是封顶只在 `budgetOf`（见 surface.injection.note）。★**Q4（2026-09-20）新增 `gate`**：`tag`（缺省）⇒ 旧行为（按标签取前 topN 条，**零行为变化**）；`task` ⇒ 按**离散任务键**（`situation-key#taskCueOf` 读侧产出）过滤行。**判因**：真机实测三个语义无关 query（三种长期记忆梳理／深睡蒸馏怎么触发／发布插件到 github release）得到**同一组 3 条** `[路径]` ⇒ 原注自称「任务型门控」与运行态不符（那是**位置门控**）。**当前只落结构、gate 保持 tag 不启用 task**——未决项：`[路径]` 行是 md 索引行**不带 cues**（cues 只在环记录 meta），任务键与行的对齐口径（借指针 § 对齐 / 退回 `recallIndex` 词法打分）属结构选择，未裁前启用即造第二个假旋钮。**硬约束**：本槽门控**不得复用** `surface.mcl.familiarThreshold`（0.55）——那是 dense 相似度量纲，与任务键的**有/无离散命中**不是同一件事（复用即量纲误用）。";
         };
     };
     readonly score: {

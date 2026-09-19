@@ -18,7 +18,9 @@
  *
  * 用法：node scripts/check-observability.mjs [--selftest | --shape]
  *   --shape  读**真实数据**给逐流形态表（DS4 合并的前置；报告态 exit 0）
- * 退出码：0 = pass（≤ 基线）· 1 = fail（出现未登记流）· selftest 下 0/1 表扫描器自证
+ *   --parsability  两库根 jsonl 的**可解析性强制项**（R2「读数口径四件套」；见下方长注释）
+ *   --selftest-parsability  上项扫描器的**反例样本自证**（无此则该项断言恒真）
+ * 退出码：0 = pass（≤ 基线）· 1 = fail（出现未登记流 / 读数真损坏）· selftest 下 0/1 表扫描器自证
  */
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -170,6 +172,32 @@ if (process.argv.includes('--selftest')) {
   process.exit(bad ? 1 : 0)
 }
 
+/* `--selftest-parsability`：**反例样本自证**（读数口径四件套的第四件 —— 无此则该断言恒真）。
+ * ⚠ 与主扫描**共用同一函数** `scanJsonlText`（自证验的必须是运行态那份逻辑，不是复制品）。 */
+if (process.argv.includes('--selftest-parsability')) {
+  const cases = [
+    // [描述, 输入, 期望 {nonEmpty, ok, bad, hasBom}]
+    ['正例·纯 JSON 两行', '{"a":1}\n{"b":2}\n', { nonEmpty: 2, ok: 2, bad: 0, hasBom: false }],
+    ['**反例**·一行乱码 ⇒ 失败必须 = 1 且成功 = n−1', '{"a":1}\n鏈嶅姟涓庨噸鍚害鏉?\n{"b":2}\n', { nonEmpty: 3, ok: 2, bad: 1, hasBom: false }],
+    ['**反例**·BOM 空文件', '\uFEFF', { nonEmpty: 0, ok: 0, bad: 0, hasBom: true }],
+    ['正例·带 BOM 且剥后全可解析', '\uFEFF{"a":1}\n{"b":2}\n', { nonEmpty: 2, ok: 2, bad: 0, hasBom: true }],
+    ['正例·空行不是坏行', '{"a":1}\n\n\n{"b":2}\n', { nonEmpty: 2, ok: 2, bad: 0, hasBom: false }],
+    ['正例·人读行豁免 JSON 判', '[segment 1] route=memory appends=2\n', { nonEmpty: 1, ok: 1, bad: 0, hasBom: false }, { lineOnly: true }],
+  ]
+  let bad = 0
+  for (const [label, input, want, opts] of cases) {
+    const got = scanJsonlText(input, opts || {})
+    const okCase = got.nonEmpty === want.nonEmpty && got.ok === want.ok && got.bad === want.bad && got.hasBom === want.hasBom
+    if (!okCase) bad++
+    console.log(`${okCase ? '✅' : '❌'} ${label} → ${JSON.stringify({ nonEmpty: got.nonEmpty, ok: got.ok, bad: got.bad, hasBom: got.hasBom })}`)
+  }
+  // **必须有一条真反例**（否则本自证自身也是"恒真断言"）
+  const hasNegative = cases.some(([l]) => l.includes('反例'))
+  if (!hasNegative) { bad++; console.log('❌ 自证不含反例样本 —— 恒真断言不得进验收') }
+  console.log(bad ? `\nFAIL（${bad} 例）` : `\nPASS（可解析性扫描器自证可用：${cases.length} 例，含反例）`)
+  process.exit(bad ? 1 : 0)
+}
+
 // ── `--shape`：**形态审计**（DS4 合并的前置）────────────────────────────────────
 // 为什么：DS4 要把 13 条流并成 1 条，但合并**前提是形态一致**——否则并进去之后无法区分记录。
 // 实测（2026-09-13）：判别字段三种写法（`ledger.type` / `mcl.distill.activation.kind` / `score-shadow.mode`），
@@ -204,6 +232,110 @@ if (process.argv.includes('--shape')) {
   console.log('  · 判别字段统一为 `type`（现为 kind/mode/无）· 时间统一 `at` · 会话键统一 `sid`')
   console.log('  · 形态一致后，合并 = 追加到同一文件 + 读侧按 `type` 过滤（消费方逐条切）')
   console.log('  · ⚠ 本表读的是**历史数据**：代码侧修复（信封/判别字段）只对**之后**的写入生效 —— 故"需改造"计数会随新数据自然下降，不是没修。')
+  process.exit(0)
+}
+
+/** 单件 jsonl 的可解析性扫描（**单一实现**：主扫描与 `--selftest` 反例共用同一函数 —— 否则自证验的是另一份逻辑）。
+ *  返回：`{ nonEmpty, ok, bad, hasBom, firstBad, lineOnly }`。
+ *  · 剥首字节 BOM（`EF BB BF` ⇒ `charCodeAt(0) === 0xFEFF`）后再解析，并**如实报出** `hasBom`；
+ *  · 空行不计入失败（空行是排版，不是坏行）；
+ *  · `lineOnly`（`distill-manifest`）按行可读性判，不做 `JSON.parse`。 */
+function scanJsonlText(raw, opts = {}) {
+  const hasBom = raw.length > 0 && raw.charCodeAt(0) === 0xFEFF
+  const body = hasBom ? raw.slice(1) : raw
+  const nonEmptyLines = body.split(/\r?\n/).filter((l) => l.trim() !== '')
+  let ok = 0, bad = 0, firstBad = null
+  for (const l of nonEmptyLines) {
+    if (opts.lineOnly) { ok++; continue }
+    try { JSON.parse(l); ok++ } catch { bad++; if (firstBad === null) firstBad = l }
+  }
+  return { nonEmpty: nonEmptyLines.length, ok, bad, hasBom, firstBad, lineOnly: !!opts.lineOnly }
+}
+
+if (process.argv.includes('--parsability')) {
+  /* ══ 两库根 jsonl 的**可解析性强制项**（R2「读数口径四件套」）══════════════════════════
+   * 判因（2026-09-20 实测 · 一次真实事故）：用 PowerShell `Get-Content`（**默认编码**，PS 5.1）读
+   *   `suite/knowledge/audit/sleep-reports.jsonl`，**111 行**因中文段落名乱码致 JSON 引号被吃掉 ⇒
+   *   **解析失败被静默丢弃**，报出的 `impact` 行数 = **246**；改显式 UTF8 重读 ⇒ 同一文件 362 行
+   *   **全部解析成功**、`impact` = **357**。**同一文件、同一机器、同一会话，仅读取编码不同，分母少 23%**。
+   *   而该文件是否决门3/门4 的**唯一事实源** ⇒ 错误读数会直接生成错误结论与假工作量。
+   *   ⚠ 该规则本仓记忆库早有（`notes/lessons.md §编码坑`：「无 BOM 的 UTF-8 在 PowerShell 5.1 下按 GBK 解码」）
+   *     —— 属「**已知规则在测量点未被强制执行**」，故只能靠机检兜住（本模式即该强制执行点）。
+   *
+   * 口径（**四件套**：谓词 + 分子/分母 + **解析失败行数** + 反例样本）：
+   *   · 读取一律**显式 utf8**（`readFileSync(p,'utf8')` / `readAllLines(...,UTF8)`）；
+   *   · **成功行与失败行两数同报**，失败 > 0 ⇒ 该文件读数判「**不可用**」；
+   *   · 不按「空行」计入失败（空行不是坏行，是排版）。
+   *
+   * **两档判定**（2026-09-20 实测后分级，理由写在下面，不是为放水）：
+   *   · **硬门**：剥掉首行 BOM 后**仍解析失败** ⇒ exit 1。这是真损坏，无标准一行修复，必须修。
+   *   · **报告态**：文件带 **UTF-8 BOM**（首字节 `EF BB BF`）⇒ 只 ⚠ 报出**件名与行号**，不判红。
+   *     理由：① BOM 有标准、无歧义的修复（剥首字节），且**本件自己已剥** ⇒ 不构成"行丢失"；
+   *     ② 实测全库**仅 1 件**（`audit/secret-redaction-log.jsonl`，由 agent 手工落盘、**全仓零消费者**）
+   *        ⇒ 属**潜在**风险（任何按 `JSON.parse(行)` 直读的消费方会丢首行），非当前故障；
+   *     ③ 该文件在**审计台账**域，改动它属 R3（改真源语义）须具名授权 ⇒ 本件**不得替它做数据修复**。
+   *     ⚠ 但**必须可见**：本项把 BOM 件逐件列出 —— 「降为报告态」不等于「不报」。
+   *
+   * 扫描面 = **两库根**（此前只扫 `suite/knowledge/audit`，库侧 4 个受审 jsonl 无解析失败账）：
+   *   · suite 根 = `<DSH_HOME>/suite/knowledge`（含 `audit/`，含 `distill-manifest/<sid>.jsonl`）；
+   *   · bank  根 = `memoryLibRoot()`（含 `audit/`、`.records/`）。
+   *
+   * ⚠ 已知豁免：`distill-manifest/<sid>.jsonl` **不是 JSONL**（是 `[segment N] route=… topics=…` 的
+   *   人读行，`distill-infra#manifest` 直写字符串），故按**行可读性**判（非空行数 == 文件行数），
+   *   不按 `JSON.parse` 判。**豁免必须写明理由，不许默默略过** —— 与上方 EXEMPT 表同纪律。
+   * 反例样本：构造一行乱码 ⇒ 失败计数必须 = 1 且成功行 = n−1；构造首行 BOM ⇒ 必须被剥且计入 BOM 件数。 */
+  const HOME = process.env.DSH_HOME || join(homedir(), '.dsh')
+  const roots = [
+    { name: 'suite', root: join(HOME, 'suite', 'knowledge') },
+    { name: 'bank', root: process.env.MEMORY_ROOT || join(HOME, 'skills', 'managing-memory') },
+  ]
+  /** 非 JSONL 的人读行流（按行可读性判；豁免须写明理由） */
+  const LINE_ONLY = /[\\/]distill-manifest[\\/]/
+  const walk = (dir, out = []) => {
+    if (!existsSync(dir)) return out
+    let ents
+    try { ents = readdirSync(dir, { withFileTypes: true }) } catch { return out }
+    for (const e of ents) {
+      const p = join(dir, e.name)
+      if (e.isDirectory()) walk(p, out)
+      else if (e.isFile() && e.name.endsWith('.jsonl')) out.push(p)
+    }
+    return out
+  }
+  console.log('两库根 jsonl **可解析性**（读数口径四件套：谓词 + 分子/分母 + 解析失败行数 + 反例样本）')
+  console.log('  文件                                                          行数   成功   失败  判定')
+  let files = 0, unusable = 0, totalBad = 0, bomFiles = 0
+  const exemplars = []
+  const bomList = []
+  for (const { name, root } of roots) {
+    for (const p of walk(root).sort()) {
+      files++
+      let raw
+      try { raw = readFileSync(p, 'utf8') } catch { unusable++; totalBad++; console.log(`  ${p.padEnd(62)}   ——   ——   ——  ❌ 读取失败`); continue }
+      const rel = p.replace(root, name)
+      const r = scanJsonlText(raw, { lineOnly: LINE_ONLY.test(p) })
+      const hasBom = r.hasBom
+      if (hasBom) { bomFiles++; bomList.push(rel) }
+      if (r.bad > 0) { unusable++; totalBad += r.bad; if (exemplars.length < 3) exemplars.push({ p: rel, l: r.firstBad }) }
+      const tag = r.bad > 0
+        ? '❌ **读数不可用**'
+        : (r.bad === 0 && r.lineOnly ? '✅ 人读行（豁免 JSON 判）' : (hasBom ? '⚠ 可解析（**带 BOM**）' : '✅ 可解析'))
+      console.log(`  ${rel.padEnd(62)} ${String(r.nonEmpty).padStart(5)} ${String(r.ok).padStart(6)} ${String(r.bad).padStart(6)}  ${tag}`)
+    }
+  }
+  console.log(`\n汇总：文件 ${files} · 解析失败件数 ${unusable} · 失败行合计 ${totalBad} · **带 BOM 件数 ${bomFiles}**`)
+  for (const e of exemplars) console.log(`  · 失败样本（${e.p}）：${String(e.l).slice(0, 120)}`)
+  for (const b of bomList) console.log(`  · ⚠ 带 UTF-8 BOM（首行剥 BOM 后可解析；**任何直读 JSON.parse(行) 的消费方会丢首行**）：${b}`)
+  if (unusable > 0) {
+    console.log(`\n❌ FAIL：${unusable} 件读数**真损坏**（剥 BOM 后仍不可解析）—— 不得据其下任何结论；改用显式 utf8 重读后再判`)
+    process.exit(1)
+  }
+  if (bomFiles > 0) {
+    console.log(`\n✅ PASS（硬门）：无真损坏（失败 ${unusable} 件）。**但 ${bomFiles} 件带 BOM，见上方 ⚠** —— 属潜在风险，非当前故障；`)
+    console.log(`   本件已剥首字节故不判红；⚠ **BOM 文件在审计台账域，数据修复属 R3 须具名授权，本件不代做**。`)
+    process.exit(0)
+  }
+  console.log('✅ PASS：两库根 jsonl 全部可解析且失败行 = 0、无 BOM（读数口径四件套的「解析失败行数」项成立）')
   process.exit(0)
 }
 

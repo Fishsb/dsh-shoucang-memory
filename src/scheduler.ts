@@ -24,6 +24,8 @@ import { recallRanked } from './vec.js'
 import { renderAssocBlock, supplyAssociations } from './association-supply.js'
 // B 档（审查 F1-A）：深睡触发 / 召回融合 / MCL / 画像行上限的**缺省值直接读判据注册表**（单一真源）
 import { TRIGGER, SURFACE, SCORE, MATURATION } from './criteria.generated.js'
+// S-P2b（2026-09-20）：探测域（8 键）按**领域接缝**抽出 —— schema 与显式映射同处一文件，单一事实源。
+import { probeConfigSchema, probeOptionsOf, type ProbeConfigFields } from './probe-config.js'
 import { registerDistill } from './distill.js'
 import type { CompositionHandles, SchedulerApi } from './composition.js'
 import { registerMcl } from './mcl.js'
@@ -51,7 +53,7 @@ const SELF_MEMBER: SuiteMember = {
 const memberSpecsOf = (config: Config): SuiteMember[] =>
   (Array.isArray(config.members) && config.members.length ? config.members : [SELF_MEMBER])
 
-export interface Config {
+export interface Config extends ProbeConfigFields {
   members: SuiteMember[]
   verify_enabled: boolean // G30 证据计数（#5，审计 §8 Q3 兼容）
   // ═══ ADR-0002 阶段 2：蒸馏器配置（蒸馏配置归守藏，承接原记忆仓 F-001/F-002）═══
@@ -78,14 +80,8 @@ export interface Config {
   enableRemPass?: boolean // REM 相（认知对照 P2）：深睡同 pass 内做跨主题联想（crossTopic，须 ≥2 不同 § 主题）；缺省关
   deepSleepIdleMs: number // 停滞判定：无任何根会话活动持续此毫秒数才触发（缺省读注册表 TRIGGER.idleMs = 2700000ms 即 45min；⚠ 2026-09-15 P0.1 实证订正：原注释误称 3 小时）
   // ═══ 会话活跃状态机（2026-09-08 重构）：区分「正常长任务 / 卡住 / 异常退出」═══
-  deepSleepProbe: boolean // 输出增长探测开关（running 无事件超时后，采样 transcript 确认真活跃）
-  deepSleepProbeAfterMs: number // running 状态无事件多久发起探测（缺省同 idleMs = 2700000ms 即 45min；⚠ 同上订正）
-  deepSleepProbeWindowMs: number // 探测采样间隔（缺省 60 秒）
-  // 探测可靠性加固（2026-09-08）：防一次采样错判把长任务睡掉
-  deepSleepProbeSamples: number // 每轮采样次数（缺省 3；任一次检出增长即判长任务）
-  deepSleepProbeConfirm: number // 卡住需连续确认轮数（缺省 2；首轮落 suspect，阻塞睡眠待复核）
-  deepSleepProbeRetries: number // 探针不可用/异常时重试次数（缺省 2）
-  deepSleepProbeMaxMs: number // 单轮探测总时长兜底（缺省 10 分钟，防悬挂）
+  // S-P2b（2026-09-20）：8 个探测键按**领域接缝**抽出到 `probe-config.ts`（与 `deepsleep-probe.ts` 同域、
+  //   且只被该链路消费）⇒ 类型经上方 `extends ProbeConfigFields` 继承，schema 经下方展开引入。
   deepSleepDaemonParent: boolean // 无会话场景兜底：是否自建守护 parent 承载归纳子代理（缺省关；宿主新建空 agent 场景未验证）
   // ═══ 路线④ 打扰度观察（shadow-first MVP：默认只写影子日志不注入；active 待影子校准后拍板）═══
   activationShadow: boolean // 观察打分+落统一台账 type=activation.shadow（缺省开；不注入上下文）
@@ -193,13 +189,8 @@ export const Config: any = z.object({
   enableDeepSleep: z.boolean().default(true).description('深度睡眠归纳：全部会话停滞 ≥deepSleepIdleMs 自动提炼习得原则写入 agent 画像 AGENT.md（[原则] 行），同 pass 反思双通道维护 USER 画像'),
   enableRemPass: z.boolean().default(false).description('REM 相（认知对照 P2）：深睡同 pass 内额外做**跨主题联想**（crossTopic 通道，产出须覆盖 ≥2 个不同 § 主题才被宿主接收）；缺省关'),
   deepSleepIdleMs: z.number().min(600000).default(TRIGGER.idleMs).description('停滞判定阈值（毫秒）：无任何会话活动持续满此时长触发深度睡眠归纳（缺省读注册表 TRIGGER.idleMs = 2700000ms 即 45min；⚠ 2026-09-15 P0.1 实证订正：此处原描述误称 3 小时）'),
-  deepSleepProbe: z.boolean().default(true).description('输出增长探测：会话 running 但长时间无事件时，采样转录文件两次确认是长任务还是卡住'),
-  deepSleepProbeAfterMs: z.number().min(600000).default(TRIGGER.probeAfterMs).description('running 状态无事件持续此毫秒数后发起探测（缺省 3 小时）'),
-  deepSleepProbeWindowMs: z.number().min(5000).default(TRIGGER.probeWindowMs).description('探测采样间隔（毫秒，缺省 60 秒）'),
-  deepSleepProbeSamples: z.number().min(1).default(3).description('每轮探测采样次数：任一次检出转录增长即判为长任务（缺省 3）'),
-  deepSleepProbeConfirm: z.number().min(1).default(2).description('判「卡住」需连续无增长的轮数，首轮落 suspect 阻塞睡眠待下轮复核（缺省 2）'),
-  deepSleepProbeRetries: z.number().min(1).default(2).description('探针不可用或异常时的重试次数（缺省 2）'),
-  deepSleepProbeMaxMs: z.number().min(30000).default(600000).description('单轮探测总时长兜底（毫秒，缺省 10 分钟，防悬挂）'),
+  // ═══ 会话活跃状态机（2026-09-08 重构）：探测域 schema 展开（S-P2b 抽出到 probe-config.ts）═══
+  ...probeConfigSchema,
   deepSleepDaemonParent: z.boolean().default(false).description('无会话场景兜底：自建守护 parent 承载归纳子代理（宿主新建空 agent 路径未经验证，默认关）'),
   activationShadow: z.boolean().default(true).description('路线④ 打扰度影子观察：每轮 user 消息按词法打分（recallIndex），滞回+冷却，只落**统一台账** <knowledgeRoot>/audit/ledger.jsonl（	ype=activation.shadow），不注入上下文——默认开，攒样本校准阈值'),
   activationPrefetch: z.boolean().default(false).description('路线④ active 注入（缺省关）：影子校准满意后开启；注入接线为后续档'),
@@ -654,18 +645,15 @@ function distillOptionsOf(config: Config) {
   enableDeepSleep: config.enableDeepSleep,
   enableRemPass: config.enableRemPass,
   deepSleepIdleMs: config.deepSleepIdleMs,
-  deepSleepProbe: config.deepSleepProbe,
-  deepSleepProbeAfterMs: config.deepSleepProbeAfterMs,
-  deepSleepProbeWindowMs: config.deepSleepProbeWindowMs,
+  // S-P2b（2026-09-20）：探测域 8 键经 `probeOptionsOf` **显式映射**（与 schema 同文件，单一事实源）。
+  //   ⚠ 本件下方两行注释记的「schema 有 ≠ 运行时 config 有」正是本形态最容易漏的坑：
+  //   新增键必须**在 probe-config.ts 内两处都加**（schema + 映射），**不要**回到本文件散着写。
+  ...probeOptionsOf(config),
   // ⚠ 2026-09-16 补：这两个键**此前只在 zod schema 里、没进本映射** ⇒ 白名单不报警（schema 认得），
   //   但下游 `config` 里**永远是 undefined** ⇒ 功能"接线了却开不了"（实测：置 cap=30000 后仍 `chunk=0/1`）。
   //   教训：**schema 有 ≠ 运行时 config 有** —— 本件是"显式映射"形态，新增键必须**两处都加**。
   deepSleepContentMinChars: config.deepSleepContentMinChars,
   deepSleepMaterialChunkChars: config.deepSleepMaterialChunkChars,
-  deepSleepProbeSamples: config.deepSleepProbeSamples,
-  deepSleepProbeConfirm: config.deepSleepProbeConfirm,
-  deepSleepProbeRetries: config.deepSleepProbeRetries,
-  deepSleepProbeMaxMs: config.deepSleepProbeMaxMs,
   deepSleepDaemonParent: config.deepSleepDaemonParent,
   activationShadow: config.activationShadow,
   activationPrefetch: config.activationPrefetch,

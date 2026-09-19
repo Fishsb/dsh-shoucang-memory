@@ -15,6 +15,7 @@
  * 只读工具，不产生副作用。
  */
 import type { Context } from 'cordis';
+import { type ProbeConfigFields } from './probe-config.js';
 import type { CompositionHandles } from './composition.js';
 export declare const name = "@dsh-external/shoucang-scheduler";
 export declare const inject: string[];
@@ -24,7 +25,7 @@ export interface SuiteMember {
     repo: string;
     role: string;
 }
-export interface Config {
+export interface Config extends ProbeConfigFields {
     members: SuiteMember[];
     verify_enabled: boolean;
     enableDistill: boolean;
@@ -46,13 +47,6 @@ export interface Config {
     enableDeepSleep: boolean;
     enableRemPass?: boolean;
     deepSleepIdleMs: number;
-    deepSleepProbe: boolean;
-    deepSleepProbeAfterMs: number;
-    deepSleepProbeWindowMs: number;
-    deepSleepProbeSamples: number;
-    deepSleepProbeConfirm: number;
-    deepSleepProbeRetries: number;
-    deepSleepProbeMaxMs: number;
     deepSleepDaemonParent: boolean;
     activationShadow: boolean;
     activationPrefetch: boolean;

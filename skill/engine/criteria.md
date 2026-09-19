@@ -53,8 +53,8 @@
 
 | 阈值 id | 值 | 归属 | 预注册 | 样本 | 结论 | 复检触发 |
 |---|---|---|---|---|---|---|
-| `trigger.materialChunkChars` | `null` | `skill/engine/criteria.json#trigger.materialChunkChars` | ❌ | 0 | **insufficient-data（维持关闭 = null）** —— S-P1c 分片**纯切分器已落地**（`deepsleep-core#splitByCap`：段边界即语义边界、永不切开单段、`cap<=0` 与改造前逐字等价），run 侧接线待做。阈值不可校准：截至 2026-09-15 仅 **1 个真实纪元**，单纪元材料分布未成形。⚠ **水位口径**：采取「**全片落地才推进**」而非方案册原写的「按片推进」—— 单一时间戳水位**表达不了片级进度**，片级推进会**永久排除失败片的材料**（正是 G-16/G-19 两次修掉的静默丢料）；片级进度改由 **ledger 留痕可见**，失败即整纪元回滚重试（写侧去重保证幂等） | 纪元累计 ≥10 个 ⇒ 取单纪元材料量分位定 cap（与 `trigger.contentMinChars` 同批校准） |
-| `trigger.contentMinChars` | `null` | `skill/engine/criteria.json#trigger.contentMinChars` | ❌ | 0 | 🚫 **已停用（维持关闭 = null）· 口径经真机证伪** —— S-P1b 机制（第二触发维）代码仍在，但**度量口径不成立**：真机实测审计行 `materialBytes=0` 而 `materialChars=46692`（**差 4.6 万字符**）⇒ `windowMaterialBytes`（数 pending/+candidates/ 里 mtime>since 的 .md 字节）**不是深睡材料的来源**（材料由 `gatherDeepSleepTraces` 按 `since` 从 notes 命中/运行统计/待回收裁决等处**聚合**）。**根因是架构性的**：本系统材料模型是**窗口式**的 ⇒ 「材料量」与「窗口长度」**单调同源** ⇒ 内容维**不是独立轴**；按旧口径取阈会得到**永不触发的假阈值**。⇒ 代码已加**守卫**：`contentMinChars > 0` 时**告警并按关闭处理**（`contentMinEffective = 0`），宁可功能关着也不给假旋钮；`test-epoch-watermark` ④ 守该接线（变异绕过守卫 ⇒ 15/1 红）。⚠ 要真正启用，须先把度量换成**与材料同源**的口径（候选：触发层复用 `gatherDeepSleepTraces` 取 trace 字符数；或改用「上一纪元实测 `materialChars`」作前瞻代理），再解除守卫 | **口径定案后**才谈校准；纪元累计 ≥10 个（校准器已就位） |
+| `trigger.materialChunkChars` | `null` | `skill/engine/criteria.json#trigger.materialChunkChars` | ❌ | 0 | **insufficient-data（维持关闭 = null）** —— S-P1c 分片**纯切分器已落地**（`deepsleep-core#splitByCap`：段边界即语义边界、永不切开单段、`cap<=0` 与改造前逐字等价），run 侧接线待做。阈值不可校准：截至 2026-09-15 仅 **1 个真实纪元**，单纪元材料分布未成形。⚠ **水位口径**：采取「**全片落地才推进**」而非方案册原写的「按片推进」—— 单一时间戳水位**表达不了片级进度**，片级推进会**永久排除失败片的材料**（正是 G-16/G-19 两次修掉的静默丢料）；片级进度改由 **ledger 留痕可见**，失败即整纪元回滚重试（写侧去重保证幂等） | 纪元累计 ≥10 个 ⇒ 取单纪元材料量分位定 cap（与 `trigger.contentMinChars` 同批校准）。**⚠ 2026-09-20 复检：门槛已满足** —— 校准器修掉「G13 轮转失明」后实测 **46 个不同纪元**（此前一直报 0，因只读主档）；分片上限可按单纪元材料量分位预注册取值（`node scripts/epoch-calibrate.mjs --json`） |
+| `trigger.contentMinChars` | `null` | `skill/engine/criteria.json#trigger.contentMinChars` | ❌ | 0 | 🚫 **已停用（维持关闭 = null）· 口径经真机证伪** —— S-P1b 机制（第二触发维）代码仍在，但**度量口径不成立**：真机实测审计行 `materialBytes=0` 而 `materialChars=46692`（**差 4.6 万字符**）⇒ `windowMaterialBytes`（数 pending/+candidates/ 里 mtime>since 的 .md 字节）**不是深睡材料的来源**（材料由 `gatherDeepSleepTraces` 按 `since` 从 notes 命中/运行统计/待回收裁决等处**聚合**）。**根因是架构性的**：本系统材料模型是**窗口式**的 ⇒ 「材料量」与「窗口长度」**单调同源** ⇒ 内容维**不是独立轴**；按旧口径取阈会得到**永不触发的假阈值**。⇒ 代码已加**守卫**：`contentMinChars > 0` 时**告警并按关闭处理**（`contentMinEffective = 0`），宁可功能关着也不给假旋钮；`test-epoch-watermark` ④ 守该接线（变异绕过守卫 ⇒ 15/1 红）。⚠ 要真正启用，须先把度量换成**与材料同源**的口径（候选：触发层复用 `gatherDeepSleepTraces` 取 trace 字符数；或改用「上一纪元实测 `materialChars`」作前瞻代理），再解除守卫 | **口径定案后**才谈校准；纪元累计 ≥10 个（校准器已就位）。**⚠ 2026-09-20 复检：纪元门槛已满足（46 个）** —— 校准器修掉「G13 轮转失明」后首次可读；**但口径问题仍未定案**（材料量实测与窗口长度 Pearson r=**0.845**、极短窗材料量已达 36.3k 字符地板 ⇒ 非独立轴）⇒ **维持关闭**，先定口径再谈阈值 |
 | `mcl.familiarThreshold` | 0.55 | `skill/engine/criteria.json#surface.mcl.familiarThreshold` | ✅ | 2154 | 维持 0.55（实测覆盖率 27.5%，距目标 0.0pp；降 0.54 会过冲至 39.1%） | 近期带 missReason 样本 N≥300（现 120） |
 | `trigger.idleMs` | 2700000 | `skill/engine/criteria.json#trigger.idleMs` | ❌ | 0 | insufficient-data —— 值已生效（2026-09-15 P0.1 实证：运行态探针 idleMs=2700000）但**从未校准**；原注释误称 3h 已订正 | P1 双维水位落地时按预注册判据校准（需真实纪元材料量/触发间隔分布） |
 | `ingest.dedup.bigram.threshold` | 0.66 | `skill/engine/criteria.json#ingest.criteria[ingest.dedup.bigram].params.threshold` | ❌ | 0 | insufficient-data（未校准） | J2 |
@@ -72,6 +72,7 @@
 | `trigger.reviewIdleMs` | 1800000 | `skill/engine/criteria.json#trigger.reviewIdleMs` | ✅ | 352 | 保留 30min（无实测冲突） | node -e "…档 L 口径复算段中位…"（见 S2S3-book4-record §5 U4 行） |
 | `trigger.reviewMinNewEntries` | 3 | `skill/engine/criteria.json#trigger.reviewMinNewEntries` | ✅ | 352 | 3 条（略低于段中位 4 ⇒ 保证多数段可触发） | 对齐 `test-session-review` 的三态断言（not-triggered / skipped-by-threshold / reviewed） |
 | `trigger.reviewMinNewEvents` | 600 | `skill/engine/criteria.json#trigger.reviewMinNewEvents` | ✅ | 352 | 600 事件（与 3 条并列成对，任一满足即触发） | 同上 |
+| `trigger.deepSleepProbeConflictMax` | 3 | `skill/engine/criteria.json#trigger.deepSleepProbeConflictMax` | ❌ | 0 | 初值 3（与 deepSleepProbeConfirm 同量级，取「连续」语义）；**未校准** —— 但「有界」本身是正确性要求（无界 = 活锁），故先给上界、数值待样本 | conflict 事件累计 ≥10 次 ⇒ 按「误判长任务」与「活锁时长」双向代价定值 |
 
 ## 载体契约（v2.2 · layer / form / inject）
 
@@ -108,34 +109,38 @@
 
 > 唯一事实源 = `criteria.json#contentTypes`。`reachable` 为**可机检字段**：`true` ⇒ 消费侧必须存在对应通路（按 `criterion` 反查），由 `scripts/check-content-types.mjs` 守。**契约描述现状**：尚未落地的目标槽（`process` / `due`）写在 `why` 里，落地后再改判据。
 
-| 类型 | Record kind | 标签 | 形态 | 投影 | 层 | 时机 | 判据 | 预算 | 可达 |
+| 类型 | Record kind | 标签 | 形态 | 投影 | 层 | 判据 | 预算 | 认知类型 | 可达 |
 |---|---|---|---|---|---|---|---|---|---|
-| `principle` | persona | 原则 | profile | md | outer | session-start | always | stable | ✅ |
-| `cognition` | persona | 认知 | profile | md | outer | session-start | always | stable | ✅ |
-| `boundary` | persona | 边界 | profile | md | outer | session-start | always | stable | ✅ |
-| `evolution` | persona | 演化 | index | md | outer | session-start | always | stable | ✅ |
-| `identity` | persona | 身份 | index | md | outer | session-start | always | stable | ✅ |
-| `mission` | persona | 使命 | index | md | outer | session-start | always | stable | ✅ |
-| `character` | persona | 性格 | profile | md | outer | session-start | always | stable | ✅ |
-| `preference` | persona | 偏好 | index | md | outer | session-start | always | stable | ✅ |
-| `habit` | persona | 习惯 | index | md | outer | session-start | always | stable | ✅ |
-| `environment` | persona | 环境 | index | md | outer | session-start | always | stable | ✅ |
-| `hardware` | persona | 硬件 | index | md | outer | session-start | always | stable | ✅ |
-| `path` | procedure | 路径 | index | md | middle | task-start | relevance | dynamic | ✅ |
-| `experience` | fact | 经验 | index | md | inner | on-demand | relevance | dynamic | ✅ |
-| `lessonTag` | fact | 教训 | index | md | inner | on-demand | relevance | dynamic | ✅ |
-| `env` | fact | env | index | md | inner | on-demand | relevance | dynamic | ✅ |
-| `tool` | fact | tool | index | md | inner | on-demand | relevance | dynamic | ✅ |
-| `flow` | fact | flow | index | md | inner | on-demand | relevance | dynamic | ✅ |
-| `lesson` | fact | lesson | index | md | inner | on-demand | relevance | dynamic | ✅ |
-| `episode` | episode | — | ring | none | inner | per-step | situation-key | situation | ✅ |
-| `decision` | decision | — | ring | none | inner | per-step | situation-key | situation | ✅ |
-| `outcome` | outcome | — | ring | none | inner | per-step | situation-key | situation | ✅ |
-| `valence` | valence | — | ring | none | inner | per-step | situation-key | situation | ✅ |
-| `relation` | relation | — | ring | none | inner | per-step | situation-key | situation | ✅ |
-| `commitment` | commitment | — | ring | none | middle | on-demand | situation-key | situation | ✅ |
-| `association` | association | — | ring | none | inner | per-step | situation-key | situation | ✅ |
-| `noteBody` | prose | — | notes | md | inner | on-demand | none | none | ✅ |
+| `principle` | persona | 原则 | profile | md | outer | always | stable | semantic | ✅ |
+| `cognition` | persona | 认知 | profile | md | outer | always | stable | semantic | ✅ |
+| `boundary` | persona | 边界 | profile | md | outer | always | stable | semantic | ✅ |
+| `evolution` | persona | 演化 | index | md | outer | always | stable | semantic | ✅ |
+| `identity` | persona | 身份 | index | md | outer | always | stable | semantic | ✅ |
+| `mission` | persona | 使命 | index | md | outer | always | stable | semantic | ✅ |
+| `character` | persona | 性格 | profile | md | outer | always | stable | semantic | ✅ |
+| `preference` | persona | 偏好 | index | md | outer | always | stable | semantic | ✅ |
+| `habit` | persona | 习惯 | index | md | outer | always | stable | semantic | ✅ |
+| `environment` | persona | 环境 | index | md | outer | always | stable | semantic | ✅ |
+| `hardware` | persona | 硬件 | index | md | outer | always | stable | semantic | ✅ |
+| `path` | procedure | 路径 | index | md | middle | relevance | dynamic | procedural | ✅ |
+| `experience` | fact | 经验 | index | md | inner | relevance | dynamic | episodic | ✅ |
+| `lessonTag` | fact | 教训 | index | md | inner | relevance | dynamic | semantic | ✅ |
+| `env` | fact | env | index | md | inner | relevance | dynamic | semantic | ✅ |
+| `tool` | fact | tool | index | md | inner | relevance | dynamic | semantic | ✅ |
+| `flow` | fact | flow | index | md | inner | relevance | dynamic | semantic | ✅ |
+| `lesson` | fact | lesson | index | md | inner | relevance | dynamic | semantic | ✅ |
+| `episode` | episode | — | ring | none | inner | situation-key | situation | episodic | ✅ |
+| `decision` | decision | — | ring | none | inner | situation-key | situation | episodic | ✅ |
+| `outcome` | outcome | — | ring | none | inner | situation-key | situation | episodic | ✅ |
+| `valence` | valence | — | ring | none | inner | situation-key | situation | semantic | ✅ |
+| `relation` | relation | — | ring | none | inner | situation-key | situation | episodic | ✅ |
+| `commitment` | commitment | — | ring | none | middle | situation-key | situation | episodic | ✅ |
+| `association` | association | — | ring | none | inner | situation-key | situation | episodic | ✅ |
+| `noteBody` | prose | — | notes | md | inner | none | none | none | ✅ |
+
+> **认知类型轴（Q1 · 2026-09-20）**：`memClass` 三值 + `none`。计数 semantic 17 · procedural 1 · episodic 7 · none 1（共 26）；**三类合计 25** —— `noteBody`（notes 正文本体）标 `none`，它是**载体形态**而非第四类记忆，不进三类计数。
+
+> **值域声明**：`criteria.json#contentTypes.vocab`（门禁 `check-content-types` 的四 Set 改读此处）；reserved = 合法但当前 0 使用（criterion: due · budget: oneshot/mcl/process）。
 
 > **结构性记录**（不属信息类型、不注入）：blank · structure · prose
 

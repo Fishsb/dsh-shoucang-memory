@@ -85,6 +85,14 @@ const HOST_FEATURES = [
   ['册三 失败三态水位判据（planSegmentWatermark）', 'lib/deepsleep-core.js', 'planSegmentWatermark'],
   ['册四 重试计数随水位流落盘（segKey/attempt）', 'lib/distill-watermark.js', 'segKey: run.segKey'],
   ['册二 准入判定单一实现（planIngestAdmission）', 'lib/ingest-admission.js', 'planIngestAdmission'],
+  // S-P1..P4（2026-09-20 · 深睡/蒸馏触发链四册）——「装上去的那份带着本轮能力」的正式证明。
+  //   各留一条**出口符号级**标记（非通用词）：触发/探测判据外移到独立纯函数件（守 core 的导出棘轮）。
+  ['S-P2a 睡眠窗口归约（planSleepWindow）', 'lib/trigger-plan.js', 'planSleepWindow'],
+  ['S-P2b 探测结论决策表（planProbeOutcome）', 'lib/probe-plan.js', 'planProbeOutcome'],
+  ['S-P2b 冲突有界阈值（conflictRound）', 'lib/probe-plan.js', 'conflictRound: c'],
+  ['S-P3 段级流程状态读口（readSegFlowState）', 'lib/distill-watermark.js', 'readSegFlowState'],
+  ['S-P4 自检节拍持久判据（dueSelfCheck）', 'lib/trigger-plan.js', 'dueSelfCheck'],
+  ['S-P2b 探测域配置单一事实源（probeConfigSchema）', 'lib/probe-config.js', 'probeConfigSchema'],
   ['五环注册表（kind→环唯一声明 + RING_KPI）', 'lib/rings.js', 'RING_OF_KIND'],
   ['决策环（后果回收 scorecardOf）', 'lib/decision-ring.js', 'scorecardOf'],
   ['关系环（双向兑现率 trustOf）', 'lib/relation-ring.js', 'trustOf'],

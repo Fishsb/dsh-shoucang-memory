@@ -495,7 +495,7 @@
       },
       "situation": {
         "enabled": true,
-        "budgetChars": 300,
+        "budgetChars": 1200,
         "cueDims": [
           "scope",
           "task"
@@ -523,8 +523,9 @@
           "路径"
         ],
         "topN": 3,
+        "gate": "tag",
         "budgetChars": 300,
-        "note": "S4-3（2026-09-14）**中层 process 槽**：任务级供给 —— 按标签取 `[路径]` 行（**不走内容相关性竞争**）。判因：人类三层结构里**中层是唯一没有专用通路的层**（`[路径]` 现经 R 层 gated 相关性召回，与其它内容争同一预算；且实测库内 `[路径]` 仅 5 条）。★2026-09-18 **启用**（原 enabled:false）：按域路由方案 P0-b —— task 路由 = 打开本槽（零新代码）。⚠ 原 note 称「运行时实现被前置重构阻塞（panel-shared 大模块冻结棘轮）」**该判断已过期**：实测 `src/dynamic-select.ts` 已有 `selectProcessLines`(:80-95) 且 `panel-shared.ts:551-553` 已有 `process`/`processRows` 消费点（S4-3 的动态面选行领域拆分已完成）⇒ 启用即生效，无需前置。额度语义：本槽行 **不吃 dynamic cap**（`dynamic-select.ts:145-154` 额外占位）⇒ 总额不再无界的前提是封顶只在 `budgetOf`（见 surface.injection.note）。"
+        "note": "S4-3（2026-09-14）**中层 process 槽**：任务级供给 —— 按标签取 `[路径]` 行（**不走内容相关性竞争**）。判因：人类三层结构里**中层是唯一没有专用通路的层**（`[路径]` 现经 R 层 gated 相关性召回，与其它内容争同一预算；且实测库内 `[路径]` 仅 5 条）。★2026-09-18 **启用**（原 enabled:false）：按域路由方案 P0-b —— task 路由 = 打开本槽（零新代码）。⚠ 原 note 称「运行时实现被前置重构阻塞（panel-shared 大模块冻结棘轮）」**该判断已过期**：实测 `src/dynamic-select.ts` 已有 `selectProcessLines`(:80-95) 且 `panel-shared.ts:551-553` 已有 `process`/`processRows` 消费点（S4-3 的动态面选行领域拆分已完成）⇒ 启用即生效，无需前置。额度语义：本槽行 **不吃 dynamic cap**（`dynamic-select.ts:145-154` 额外占位）⇒ 总额不再无界的前提是封顶只在 `budgetOf`（见 surface.injection.note）。★**Q4（2026-09-20）新增 `gate`**：`tag`（缺省）⇒ 旧行为（按标签取前 topN 条，**零行为变化**）；`task` ⇒ 按**离散任务键**（`situation-key#taskCueOf` 读侧产出）过滤行。**判因**：真机实测三个语义无关 query（三种长期记忆梳理／深睡蒸馏怎么触发／发布插件到 github release）得到**同一组 3 条** `[路径]` ⇒ 原注自称「任务型门控」与运行态不符（那是**位置门控**）。**当前只落结构、gate 保持 tag 不启用 task**——未决项：`[路径]` 行是 md 索引行**不带 cues**（cues 只在环记录 meta），任务键与行的对齐口径（借指针 § 对齐 / 退回 `recallIndex` 词法打分）属结构选择，未裁前启用即造第二个假旋钮。**硬约束**：本槽门控**不得复用** `surface.mcl.familiarThreshold`（0.55）——那是 dense 相似度量纲，与任务键的**有/无离散命中**不是同一件事（复用即量纲误用）。"
       }
     },
     "score": {
@@ -588,11 +589,12 @@
     "contentMinChars": null,
     "materialChunkChars": null,
     "manual": true,
-    "note": "触发数据化（v2.1 §2.4 · B 档接线后为 runtime）：idleMs=全部根会话停滞阈值；probeAfterMs/probeWindowMs=卡住探测；newTracesMin=窗口内最少新痕迹数；manual=面板「立即归纳一次」。**改这里即改行为**（scheduler zod 缺省直接读本块）。⚠ **2026-09-15 P0.1 实证订正**：本块原注释称「缺省 3h」，但**实际生效值是本块的 2700000ms（45min）**——`scheduler.ts` 的 zod `.default(TRIGGER.idleMs)` 取本块值，而**全仓 8 处** `|| 10800000`（3h）兜底因 zod 有 default 而是**死代码**（⚠ 首轮只报 4 处：检索用了大小写敏感的 `idleMs`，漏掉 `deepSleepIdleMs` 那 4 处 —— `deepsleep.ts` ×2 / `distill-hooks.ts` ×2 ⇒ 「模式派生集合先核对」的典型踩坑）。已修：**8 处全部**统一改引本块（**单一来源已下沉 `deepsleep-core#idleMsOf`**）+ 注释订正 + 护栏 `test-deepsleep-wiring` ⑦（可执行代码不得再出现该字面量），**数值未动**（P0 不改行为）。**数值本身待 P1 双维水位按预注册判据校准**。",
+    "note": "触发数据化（v2.1 §2.4 · B 档接线后为 runtime）：idleMs=全部根会话停滞阈值；probeAfterMs/probeWindowMs=卡住探测；newTracesMin=窗口内最少新痕迹数；manual=面板「立即归纳一次」。**改这里即改行为**（scheduler zod 缺省直接读本块）。⚠ **2026-09-15 P0.1 实证订正**：本块原注释称「缺省 3h」，但**实际生效值是本块的 2700000ms（45min）**——`scheduler.ts` 的 zod `.default(TRIGGER.idleMs)` 取本块值，而**全仓 8 处** `|| 10800000`（3h）兜底因 zod 有 default 而是**死代码**（⚠ 首轮只报 4 处：检索用了大小写敏感的 `idleMs`，漏掉 `deepSleepIdleMs` 那 4 处 —— `deepsleep.ts` ×2 / `distill-hooks.ts` ×2 ⇒ 「模式派生集合先核对」的典型踩坑）。已修：**8 处全部**统一改引本块（**单一来源已下沉 `deepsleep-core#idleMsOf`**）+ 注释订正 + 护栏 `test-deepsleep-wiring` ⑦（可执行代码不得再出现该字面量），**数值未动**（P0 不改行为）。**数值本身待 P1 双维水位按预注册判据校准**。 **S-P2b（2026-09-20）**：deepSleepProbeConflictMax=证据冲突（agent 状态活跃但连续零输出）连续多少轮即按卡住处理——补 conflict 分支**无界**致活锁（真机 28f9f094 连续 23 次 / 跨 11 小时零触发）。",
     "reviewIdleMs": 1800000,
     "reviewMinNewEntries": 3,
     "reviewMinNewEvents": 600,
-    "reviewNote": "L2 会话级复盘的**触发阈值**（S2S3 册一触发面 · 册四 U4 裁定 2026-09-19）：reviewIdleMs=空闲阈值；reviewMinNewEntries/reviewMinNewEvents=内容维下限。**实测依据**：蒸馏段中位仅 **4**（口径 = `kind=distill-run` 且 `stop` 存在，档 L 352 行 / 1108 段 ⇒ 段中位 4）⇒ 原 8/1200 会大面积漏触发，故内容维下调为 3/600（静默维保留 30min）。改这里即改行为（scheduler zod 缺省直接读本块；`session-review.ts` 只留注册表缺席时的兜底）。"
+    "reviewNote": "L2 会话级复盘的**触发阈值**（S2S3 册一触发面 · 册四 U4 裁定 2026-09-19）：reviewIdleMs=空闲阈值；reviewMinNewEntries/reviewMinNewEvents=内容维下限。**实测依据**：蒸馏段中位仅 **4**（口径 = `kind=distill-run` 且 `stop` 存在，档 L 352 行 / 1108 段 ⇒ 段中位 4）⇒ 原 8/1200 会大面积漏触发，故内容维下调为 3/600（静默维保留 30min）。改这里即改行为（scheduler zod 缺省直接读本块；`session-review.ts` 只留注册表缺席时的兜底）。",
+    "deepSleepProbeConflictMax": 3
   },
   "thresholds": {
     "note": "阈值登记制（J0 · 2026-09-15 · 依据 docs/judge-layering-plan-2026-09-15.md §4.2）。**规则**：任何影响「接受/拒绝/归类/取舍」判断的数值阈值都必须登记在此，且登记项必须含 `preregisteredCriterion` + `samples` + `conclusion` + `recheck`。机检 scripts/check-threshold-registry.mjs（未登记 ⇒ 红；登记了但缺预注册或样本数 ⇒ 红）。**范围界定**：不含格式门（归 ingest.format.index-line 的 params）、容量/预算（归 gate.caps / surface.*）、工程常量（超时/重试/熔断）。**样板**：mcl.familiarThreshold 是全仓**唯一**有完整预注册校准记录的阈值。⚠ **暴露出的真问题**：13 项里 **12 项 samples=0 / 未预注册** —— 其中 activity.statusDays 已**实证失真**（假冷 26 条，见 skill/scripts/harvest-access.mjs:6）。",
@@ -611,7 +613,7 @@
         "preregisteredCriterion": null,
         "samples": 0,
         "conclusion": "**insufficient-data（维持关闭 = null）** —— S-P1c 分片**纯切分器已落地**（`deepsleep-core#splitByCap`：段边界即语义边界、永不切开单段、`cap<=0` 与改造前逐字等价），run 侧接线待做。阈值不可校准：截至 2026-09-15 仅 **1 个真实纪元**，单纪元材料分布未成形。⚠ **水位口径**：采取「**全片落地才推进**」而非方案册原写的「按片推进」—— 单一时间戳水位**表达不了片级进度**，片级推进会**永久排除失败片的材料**（正是 G-16/G-19 两次修掉的静默丢料）；片级进度改由 **ledger 留痕可见**，失败即整纪元回滚重试（写侧去重保证幂等）",
-        "recheck": "纪元累计 ≥10 个 ⇒ 取单纪元材料量分位定 cap（与 `trigger.contentMinChars` 同批校准）",
+        "recheck": "纪元累计 ≥10 个 ⇒ 取单纪元材料量分位定 cap（与 `trigger.contentMinChars` 同批校准）。**⚠ 2026-09-20 复检：门槛已满足** —— 校准器修掉「G13 轮转失明」后实测 **46 个不同纪元**（此前一直报 0，因只读主档）；分片上限可按单纪元材料量分位预注册取值（`node scripts/epoch-calibrate.mjs --json`）",
         "calibrator": null,
         "rollback": "置 `null`/`0` ⇒ 单片段（现行为）"
       },
@@ -629,7 +631,7 @@
         "preregisteredCriterion": null,
         "samples": 0,
         "conclusion": "🚫 **已停用（维持关闭 = null）· 口径经真机证伪** —— S-P1b 机制（第二触发维）代码仍在，但**度量口径不成立**：真机实测审计行 `materialBytes=0` 而 `materialChars=46692`（**差 4.6 万字符**）⇒ `windowMaterialBytes`（数 pending/+candidates/ 里 mtime>since 的 .md 字节）**不是深睡材料的来源**（材料由 `gatherDeepSleepTraces` 按 `since` 从 notes 命中/运行统计/待回收裁决等处**聚合**）。**根因是架构性的**：本系统材料模型是**窗口式**的 ⇒ 「材料量」与「窗口长度」**单调同源** ⇒ 内容维**不是独立轴**；按旧口径取阈会得到**永不触发的假阈值**。⇒ 代码已加**守卫**：`contentMinChars > 0` 时**告警并按关闭处理**（`contentMinEffective = 0`），宁可功能关着也不给假旋钮；`test-epoch-watermark` ④ 守该接线（变异绕过守卫 ⇒ 15/1 红）。⚠ 要真正启用，须先把度量换成**与材料同源**的口径（候选：触发层复用 `gatherDeepSleepTraces` 取 trace 字符数；或改用「上一纪元实测 `materialChars`」作前瞻代理），再解除守卫",
-        "recheck": "**口径定案后**才谈校准；纪元累计 ≥10 个（校准器已就位）",
+        "recheck": "**口径定案后**才谈校准；纪元累计 ≥10 个（校准器已就位）。**⚠ 2026-09-20 复检：纪元门槛已满足（46 个）** —— 校准器修掉「G13 轮转失明」后首次可读；**但口径问题仍未定案**（材料量实测与窗口长度 Pearson r=**0.845**、极短窗材料量已达 36.3k 字符地板 ⇒ 非独立轴）⇒ **维持关闭**，先定口径再谈阈值",
         "calibrator": null,
         "rollback": "置 `0`（或删键）⇒ 回纯时间维；scheduler.json `deepSleepContentMinChars` 热生效"
       },
@@ -936,6 +938,24 @@
         "preregisteredCriterion": "U4 裁定（2026-09-19）：内容维事件数下限由 1200 下调至 600（同上依据）",
         "conclusion": "600 事件（与 3 条并列成对，任一满足即触发）",
         "recheck": "同上"
+      },
+      {
+        "id": "trigger.deepSleepProbeConflictMax",
+        "probe": {
+          "registryPath": [
+            "trigger",
+            "deepSleepProbeConflictMax"
+          ]
+        },
+        "value": 3,
+        "owner": "skill/engine/criteria.json#trigger.deepSleepProbeConflictMax",
+        "preregistered": false,
+        "preregisteredCriterion": null,
+        "samples": 0,
+        "conclusion": "初值 3（与 deepSleepProbeConfirm 同量级，取「连续」语义）；**未校准** —— 但「有界」本身是正确性要求（无界 = 活锁），故先给上界、数值待样本",
+        "recheck": "conflict 事件累计 ≥10 次 ⇒ 按「误判长任务」与「活锁时长」双向代价定值",
+        "calibrator": null,
+        "rollback": "scheduler.json deepSleepProbeConflictMax（热生效；置大值≈退回无界）"
       }
     ]
   },
@@ -1018,8 +1038,21 @@
   ],
   "contentTypes": {
     "note": "内容类型契约（S0 · 2026-09-14）：把「信息类型 ↔ 生产/载体/消费」的映射收敛到唯一一处，补齐此前裂成三份且互不引用的定义（carriers.tags 管注入面 / record-store.kindOfLine 管 Record kind / targets 管 md 行形态）。reachable 是**可机检字段**：reachable=true ⇒ 消费侧必须存在对应通路（按 consumer.criterion 反查），由 scripts/check-content-types.mjs 守。producers 记录当前实际写入者；layer 采用人类三层（outer 任务级 / middle 行动级 / inner 认知级）。 结构性记录（不属信息类型、不注入）：不属「信息类型」，不注入（consumer.layer = none）。保留于此以便 check-content-types 的枚举完备性断言可覆盖 RecordKind 全集。",
+    "vocab": {
+      "note": "值域声明（Q1 · 2026-09-20）。**由来**：此前 layer/timing/criterion/budget 四列的取值域**只活在 `scripts/check-content-types.mjs` 的 `new Set` 里** —— 真源写错一个取值，门禁不动（实测 `due` 合法却 0 使用、`oneshot` 从未有类型挂载）。本段把值域搬回真源，门禁改读此处（唯一事实源原则）。**reserved 语义**：值合法但当前 0 使用 —— 标注而非删除，因为它们是**真实存在的槽或已声明目标**（`oneshot` = 真实注入槽；`mcl` 与 `situation.mcl` 既有消费相冲突故保留；`process` 随 Q4 门控改造在途；`due` 通路已接线 `ring-supply#dueSoon` 但暂无类型挂载）。**memClass**：认知类型轴（语义/情景/程序性），三类对位由此从文档句变成可执行断言；`none` 只给 `noteBody`（notes 正文本体是**载体形态**，不是第四类记忆，不进三类计数）。",
+      "layer": ["outer", "middle", "inner", "none"],
+      "timing": ["session-start", "task-start", "per-step", "on-demand", "none"],
+      "criterion": ["always", "relevance", "situation-key", "none"],
+      "budget": ["stable", "dynamic", "situation", "none"],
+      "memClass": ["semantic", "episodic", "procedural", "none"],
+      "reserved": {
+        "criterion": ["due"],
+        "budget": ["oneshot", "mcl", "process"]
+      }
+    },
     "types": {
       "principle": {
+        "memClass": "semantic",
         "recordKind": [
           "persona"
         ],
@@ -1027,20 +1060,16 @@
           "原则"
         ],
         "form": "profile",
-        "producers": [
-          "distill",
-          "deepsleep"
-        ],
         "projection": "md",
         "consumer": {
           "layer": "outer",
-          "timing": "session-start",
           "criterion": "always"
         },
         "budget": "stable",
         "reachable": true
       },
       "cognition": {
+        "memClass": "semantic",
         "recordKind": [
           "persona"
         ],
@@ -1048,20 +1077,16 @@
           "认知"
         ],
         "form": "profile",
-        "producers": [
-          "distill",
-          "deepsleep"
-        ],
         "projection": "md",
         "consumer": {
           "layer": "outer",
-          "timing": "session-start",
           "criterion": "always"
         },
         "budget": "stable",
         "reachable": true
       },
       "boundary": {
+        "memClass": "semantic",
         "recordKind": [
           "persona"
         ],
@@ -1069,20 +1094,16 @@
           "边界"
         ],
         "form": "profile",
-        "producers": [
-          "distill",
-          "deepsleep"
-        ],
         "projection": "md",
         "consumer": {
           "layer": "outer",
-          "timing": "session-start",
           "criterion": "always"
         },
         "budget": "stable",
         "reachable": true
       },
       "evolution": {
+        "memClass": "semantic",
         "recordKind": [
           "persona"
         ],
@@ -1090,20 +1111,16 @@
           "演化"
         ],
         "form": "index",
-        "producers": [
-          "distill",
-          "deepsleep"
-        ],
         "projection": "md",
         "consumer": {
           "layer": "outer",
-          "timing": "session-start",
           "criterion": "always"
         },
         "budget": "stable",
         "reachable": true
       },
       "identity": {
+        "memClass": "semantic",
         "recordKind": [
           "persona"
         ],
@@ -1111,20 +1128,16 @@
           "身份"
         ],
         "form": "index",
-        "producers": [
-          "distill",
-          "deepsleep"
-        ],
         "projection": "md",
         "consumer": {
           "layer": "outer",
-          "timing": "session-start",
           "criterion": "always"
         },
         "budget": "stable",
         "reachable": true
       },
       "mission": {
+        "memClass": "semantic",
         "recordKind": [
           "persona"
         ],
@@ -1132,20 +1145,16 @@
           "使命"
         ],
         "form": "index",
-        "producers": [
-          "distill",
-          "deepsleep"
-        ],
         "projection": "md",
         "consumer": {
           "layer": "outer",
-          "timing": "session-start",
           "criterion": "always"
         },
         "budget": "stable",
         "reachable": true
       },
       "character": {
+        "memClass": "semantic",
         "recordKind": [
           "persona"
         ],
@@ -1153,20 +1162,16 @@
           "性格"
         ],
         "form": "profile",
-        "producers": [
-          "distill",
-          "deepsleep"
-        ],
         "projection": "md",
         "consumer": {
           "layer": "outer",
-          "timing": "session-start",
           "criterion": "always"
         },
         "budget": "stable",
         "reachable": true
       },
       "preference": {
+        "memClass": "semantic",
         "recordKind": [
           "persona"
         ],
@@ -1174,20 +1179,16 @@
           "偏好"
         ],
         "form": "index",
-        "producers": [
-          "distill",
-          "deepsleep"
-        ],
         "projection": "md",
         "consumer": {
           "layer": "outer",
-          "timing": "session-start",
           "criterion": "always"
         },
         "budget": "stable",
         "reachable": true
       },
       "habit": {
+        "memClass": "semantic",
         "recordKind": [
           "persona"
         ],
@@ -1195,20 +1196,16 @@
           "习惯"
         ],
         "form": "index",
-        "producers": [
-          "distill",
-          "deepsleep"
-        ],
         "projection": "md",
         "consumer": {
           "layer": "outer",
-          "timing": "session-start",
           "criterion": "always"
         },
         "budget": "stable",
         "reachable": true
       },
       "environment": {
+        "memClass": "semantic",
         "recordKind": [
           "persona"
         ],
@@ -1216,20 +1213,16 @@
           "环境"
         ],
         "form": "index",
-        "producers": [
-          "distill",
-          "deepsleep"
-        ],
         "projection": "md",
         "consumer": {
           "layer": "outer",
-          "timing": "session-start",
           "criterion": "always"
         },
         "budget": "stable",
         "reachable": true
       },
       "hardware": {
+        "memClass": "semantic",
         "recordKind": [
           "persona"
         ],
@@ -1237,20 +1230,16 @@
           "硬件"
         ],
         "form": "index",
-        "producers": [
-          "distill",
-          "deepsleep"
-        ],
         "projection": "md",
         "consumer": {
           "layer": "outer",
-          "timing": "session-start",
           "criterion": "always"
         },
         "budget": "stable",
         "reachable": true
       },
       "path": {
+        "memClass": "procedural",
         "recordKind": [
           "procedure"
         ],
@@ -1258,14 +1247,9 @@
           "路径"
         ],
         "form": "index",
-        "producers": [
-          "distill",
-          "deepsleep"
-        ],
         "projection": "md",
         "consumer": {
           "layer": "middle",
-          "timing": "task-start",
           "criterion": "relevance"
         },
         "budget": "dynamic",
@@ -1273,6 +1257,7 @@
         "why": "中层独立 process 槽为 S4-3 目标；当前实际经相关性召回（R 层 gated，不进恒常面）"
       },
       "experience": {
+        "memClass": "episodic",
         "recordKind": [
           "fact"
         ],
@@ -1280,20 +1265,16 @@
           "经验"
         ],
         "form": "index",
-        "producers": [
-          "distill",
-          "deepsleep"
-        ],
         "projection": "md",
         "consumer": {
           "layer": "inner",
-          "timing": "on-demand",
           "criterion": "relevance"
         },
         "budget": "dynamic",
         "reachable": true
       },
       "lessonTag": {
+        "memClass": "semantic",
         "recordKind": [
           "fact"
         ],
@@ -1301,20 +1282,16 @@
           "教训"
         ],
         "form": "index",
-        "producers": [
-          "distill",
-          "deepsleep"
-        ],
         "projection": "md",
         "consumer": {
           "layer": "inner",
-          "timing": "on-demand",
           "criterion": "relevance"
         },
         "budget": "dynamic",
         "reachable": true
       },
       "env": {
+        "memClass": "semantic",
         "recordKind": [
           "fact"
         ],
@@ -1322,20 +1299,16 @@
           "env"
         ],
         "form": "index",
-        "producers": [
-          "distill",
-          "deepsleep"
-        ],
         "projection": "md",
         "consumer": {
           "layer": "inner",
-          "timing": "on-demand",
           "criterion": "relevance"
         },
         "budget": "dynamic",
         "reachable": true
       },
       "tool": {
+        "memClass": "semantic",
         "recordKind": [
           "fact"
         ],
@@ -1343,20 +1316,16 @@
           "tool"
         ],
         "form": "index",
-        "producers": [
-          "distill",
-          "deepsleep"
-        ],
         "projection": "md",
         "consumer": {
           "layer": "inner",
-          "timing": "on-demand",
           "criterion": "relevance"
         },
         "budget": "dynamic",
         "reachable": true
       },
       "flow": {
+        "memClass": "semantic",
         "recordKind": [
           "fact"
         ],
@@ -1364,20 +1333,16 @@
           "flow"
         ],
         "form": "index",
-        "producers": [
-          "distill",
-          "deepsleep"
-        ],
         "projection": "md",
         "consumer": {
           "layer": "inner",
-          "timing": "on-demand",
           "criterion": "relevance"
         },
         "budget": "dynamic",
         "reachable": true
       },
       "lesson": {
+        "memClass": "semantic",
         "recordKind": [
           "fact"
         ],
@@ -1385,128 +1350,99 @@
           "lesson"
         ],
         "form": "index",
-        "producers": [
-          "distill",
-          "deepsleep"
-        ],
         "projection": "md",
         "consumer": {
           "layer": "inner",
-          "timing": "on-demand",
           "criterion": "relevance"
         },
         "budget": "dynamic",
         "reachable": true
       },
       "episode": {
+        "memClass": "episodic",
         "recordKind": [
           "episode"
         ],
         "carrier": [],
         "form": "ring",
-        "producers": [
-          "distill",
-          "deepsleep"
-        ],
         "projection": "none",
         "consumer": {
           "layer": "inner",
-          "timing": "per-step",
           "criterion": "situation-key"
         },
         "budget": "situation",
         "reachable": true
       },
       "decision": {
+        "memClass": "episodic",
         "recordKind": [
           "decision"
         ],
         "carrier": [],
         "form": "ring",
-        "producers": [
-          "distill",
-          "deepsleep"
-        ],
         "projection": "none",
         "consumer": {
           "layer": "inner",
-          "timing": "per-step",
           "criterion": "situation-key"
         },
         "budget": "situation",
         "reachable": true
       },
       "outcome": {
+        "memClass": "episodic",
         "recordKind": [
           "outcome"
         ],
         "carrier": [],
         "form": "ring",
-        "producers": [
-          "distill",
-          "deepsleep"
-        ],
         "projection": "none",
         "consumer": {
           "layer": "inner",
-          "timing": "per-step",
           "criterion": "situation-key"
         },
         "budget": "situation",
         "reachable": true
       },
       "valence": {
+        "memClass": "semantic",
         "recordKind": [
           "valence"
         ],
         "carrier": [],
         "form": "ring",
-        "producers": [
-          "distill",
-          "deepsleep"
-        ],
         "projection": "none",
         "consumer": {
           "layer": "inner",
-          "timing": "per-step",
           "criterion": "situation-key"
         },
         "budget": "situation",
         "reachable": true
       },
       "relation": {
+        "memClass": "episodic",
         "recordKind": [
           "relation"
         ],
         "carrier": [],
         "form": "ring",
-        "producers": [
-          "distill",
-          "deepsleep"
-        ],
         "projection": "none",
         "consumer": {
           "layer": "inner",
-          "timing": "per-step",
           "criterion": "situation-key"
         },
         "budget": "situation",
         "reachable": true
       },
       "commitment": {
+        "memClass": "episodic",
         "recordKind": [
           "commitment"
         ],
         "carrier": [],
         "form": "ring",
-        "producers": [
-          "distill",
-          "deepsleep"
-        ],
         "projection": "none",
         "consumer": {
           "layer": "middle",
-          "timing": "on-demand",
           "criterion": "situation-key"
         },
         "budget": "situation",
@@ -1514,38 +1450,30 @@
         "why": "到期前瞻（due 主动提）为 S4-4 目标；当前实际经情境槽进入（commitment 属 relation 环）"
       },
       "association": {
+        "memClass": "episodic",
         "recordKind": [
           "association"
         ],
         "carrier": [],
         "form": "ring",
-        "producers": [
-          "distill",
-          "deepsleep"
-        ],
         "projection": "none",
         "consumer": {
           "layer": "inner",
-          "timing": "per-step",
           "criterion": "situation-key"
         },
         "budget": "situation",
         "reachable": true
       },
       "noteBody": {
+        "memClass": "none",
         "recordKind": [
           "prose"
         ],
         "carrier": [],
         "form": "notes",
-        "producers": [
-          "distill",
-          "deepsleep"
-        ],
         "projection": "md",
         "consumer": {
           "layer": "inner",
-          "timing": "on-demand",
           "criterion": "none"
         },
         "budget": "none",
@@ -1558,7 +1486,6 @@
         "projection": "none",
         "consumer": {
           "layer": "none",
-          "timing": "none",
           "criterion": "none"
         },
         "budget": "none",
@@ -1569,7 +1496,6 @@
         "projection": "none",
         "consumer": {
           "layer": "none",
-          "timing": "none",
           "criterion": "none"
         },
         "budget": "none",
@@ -1580,7 +1506,6 @@
         "projection": "md",
         "consumer": {
           "layer": "inner",
-          "timing": "on-demand",
           "criterion": "relevance"
         },
         "budget": "dynamic",

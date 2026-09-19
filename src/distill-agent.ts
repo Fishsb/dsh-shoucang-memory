@@ -56,18 +56,24 @@ export type AgentApi = ReturnType<typeof createAgentApi>
  *   ⇒「有界重试」退化为「无界重试」。现计数随**水位流**（append-only，已有 `runId/phase/attempt` 先例）落盘：
  *   同一 `segKey` 的行回读即可重建；内存 Map 降级为**缓存**（读不到时回落）。
  * 旧行兼容：历史行无 `attempt`/`segKey` ⇒ 回读 0 / ''，判据按"不匹配"处理 ⇒ 与改前逐字等价。
+ *
+ * ★ S-P3（2026-09-20）**读口修正**：原用 `readRunState`（**会话级末行**）取段级计数 —— 语义错配。
+ *   水位流里多处**不带 `segKey`** 的写入（跳过分支 / `segment-done` / `forced`）插在中间即令末行失配
+ *   ⇒ 计数**结构性归零**（真机三证：`phase:"retry"` 0 行 · 带 segKey 且 attempt>0 的 spawn 行 0 条 ·
+ *   日志 `3/3` 从未达）。现改走**段级读口** `readSegFlowState`（最近一条带 `segKey` 的行）。
  */
 const retryAttemptFor = (dep: AgentDeps, sid: string, segKey: string): number => {
   try {
-    const p = dep.wm.wm.readRunState(sid)
+    const p = dep.wm.wm.readSegFlowState(sid)
     if (p && p.segKey === segKey && Number(p.attempt) > 0) return Number(p.attempt)
   } catch { /* 读失败 ⇒ 回落内存缓存 */ }
   return dep.wm.st.dispatchFailStreak.get(`${sid}#${segKey}`) || 0
 }
 
-/** 册四：末行处于 `retry`（= 本会话仍有未消化段）——跳过分支的「扣住」判据据此**可跨重载** */
+/** 册四：末行处于 `retry`（= 本会话仍有未消化段）——跳过分支的「扣住」判据据此**可跨重载**
+ *  ★ S-P3（2026-09-20）：与 `retryAttemptFor` **同源**（同一个段级读口），否则两处口径又会漂移。 */
 const retryRowHeld = (dep: AgentDeps, sid: string): boolean => {
-  try { return dep.wm.wm.readRunState(sid)?.phase === 'retry' } catch { return false }
+  try { return dep.wm.wm.readSegFlowState(sid)?.phase === 'retry' } catch { return false }
 }
 
 const distillAgent = async (dep: AgentDeps, agent: any): Promise<void> => {

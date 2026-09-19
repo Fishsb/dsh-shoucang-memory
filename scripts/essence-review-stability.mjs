@@ -19,20 +19,32 @@ const rounds = Math.max(1, Number(argOf('--rounds', '3')) || 3)
 const port = argOf('--port', '3080')
 const ledger = join(homedir(), '.dsh', 'suite', 'knowledge', 'audit', 'ledger.jsonl')
 
-const lastDeepSleep = () => {
+/* ⚠ **跨档读（G13 轮转失明 · 2026-09-20 修）**：本件原先**只读主档**，而 deep-sleep 行**全在旧卷**
+ *   （实测：主档 `type==='audit.deep-sleep'` **0** 行 / 旧卷 **49** 行）⇒ 该器一直报
+ *   「上一纪元 (无)」并按**空样本**算分布（P5c 接线的全部结论建立在此之上）。
+ *   现改用唯一实现 `lib/ledger-compact.js#readLedgerVolumes`（最旧档 → 主档，按时间序）。
+ *   判据：`scripts/check-ledger-read.mjs`（脚本面 known-broken 名单）——**修完须从该名单删**。 */
+const { readLedgerVolumes } = await import(new URL('../lib/ledger-compact.js', import.meta.url).href)
+/** 跨档深睡行（**唯一读出口**，本件所有分布/极差/Jaccard 都从这里取） */
+const deepSleepRows = () => {
   const rows = []
-  for (const l of readFileSync(ledger, 'utf8').split(/\r?\n/)) {
+  for (const l of readLedgerVolumes(ledger)) {
     const t = l.trim(); if (!t) continue
     try { const o = JSON.parse(t); if (o?.type === 'audit.deep-sleep') rows.push(o) } catch { /* 坏行 */ }
   }
+  return rows
+}
+
+const lastDeepSleep = () => {
+  const rows = deepSleepRows()
   return rows[rows.length - 1] || null
 }
 const before = lastDeepSleep()
 const seenEpoch = before?.sleepEpoch || null
 
-const READONLY = argv.includes('--live') || argv.includes('--from-ledger') || argv.includes('--decompose')
+const READONLY = argv.includes('--live') || argv.includes('--from-ledger') || argv.includes('--decompose') || argv.includes('--jaccard')
 console.log(READONLY ? 'P5c 语义判定稳定性（**只读模式**）' : 'P5c 语义判定稳定性（报告态 · **会触发深睡**）')
-console.log(`台账 ${ledger}`)
+console.log(`台账 ${ledger}（**跨档读**：最旧档 → 主档）`)
 console.log(READONLY ? '（只读：不发触发）' : `将触发 ${rounds} 轮深睡；逐轮取 releaseSemantic*（上一纪元 ${seenEpoch || '(无)'}）`)
 console.log('')
 
@@ -42,11 +54,7 @@ console.log('')
  *   · 候选每轮只 +1 条 ⇒ "新增那条全通过/全不通过"给出**通过率变化上界**；
  *   · 实测相邻轮变化若**远大于**该上界 ⇒ 差额只能归因于**模型判定波动**。 */
 if (argv.includes('--decompose')) {
-  const rowsAll = []
-  for (const l of readFileSync(ledger, 'utf8').split(/\r?\n/)) {
-    const t = l.trim(); if (!t) continue
-    try { const o = JSON.parse(t); if (o?.type === 'audit.deep-sleep' && typeof o.releaseSemanticCandidates === 'number' && o.releaseSemanticCandidates > 0) rowsAll.push(o) } catch { /* 坏行 */ }
-  }
+  const rowsAll = deepSleepRows().filter((o) => typeof o.releaseSemanticCandidates === 'number' && o.releaseSemanticCandidates > 0)
   const last = rowsAll.slice(-6)
   if (last.length < 2) { console.log(`⚠ 可分解样本 ${last.length} < 2 ⇒ 不足以分解`); process.exit(0) }
   console.log('P5c 波动分解（只读台账 · 不触发）')
@@ -111,11 +119,7 @@ if (argv.includes('--decompose')) {
 if (argv.includes('--from-ledger')) {
   const n = Math.max(2, Number(argOf('--from-ledger', '6')) || 6)
   const since = argOf('--since', '')
-  const rowsAll = []
-  for (const l of readFileSync(ledger, 'utf8').split(/\r?\n/)) {
-    const t = l.trim(); if (!t) continue
-    try { const o = JSON.parse(t); if (o?.type === 'audit.deep-sleep' && Number(o.releaseSemanticCandidates) > 0) rowsAll.push(o) } catch { /* 坏行 */ }
-  }
+  const rowsAll = deepSleepRows().filter((o) => Number(o.releaseSemanticCandidates) > 0)
   let pool = rowsAll
   if (since) {
     /* ⚠ 语义首版写错（`endsWith` = **只精确匹配那一个**），而 `--since` 应为「**从该世代起**（含之后）」。
@@ -155,13 +159,10 @@ if (argv.includes('--from-ledger')) {
  *   ⇒ 本模式读宿主状态 `/deepsleep`：若 `currentEpoch` ≠ 台账末行纪元 ⇒ **有纪元在跑**（未落账），
  *     这与"没跑"是**完全不同**的事实，必须分开报。 */
 if (argv.includes('--live')) {
-  const rowsAll = []
-  for (const l of readFileSync(ledger, 'utf8').split(/\r?\n/)) {
-    const t = l.trim(); if (!t) continue
-    try { const o = JSON.parse(l); if (o?.type === 'audit.deep-sleep') rowsAll.push(o) } catch { /* 坏行 */ }
-  }
+  const rowsAll = deepSleepRows()
   const lastRow = rowsAll[rowsAll.length - 1] || null
   let st = null
+  /* 下一段原为 `readFileSync(ledger)` 单档读；已随跨档读统一（见 `deepSleepRows`）。 */
   try {
     const r = await fetch(`http://127.0.0.1:${port}/api/shoucang-panel/deepsleep`, { signal: AbortSignal.timeout(10000) })
     if (r.ok) st = await r.json()
@@ -188,14 +189,7 @@ if (argv.includes('--live')) {
  *     1.0 = 两轮释放集合完全一致；0 = 完全无关。**阈值 0.8**（与"极差 ≤10pp"同精神：允许小扰动）。
  *   ⚠ 只对有指纹的纪元有效（本字段自 2026-09-16 起才记）⇒ 无指纹时**如实说"不可判"**，不猜。 */
 if (argv.includes('--jaccard')) {
-  const rowsAll = []
-  for (const l of readFileSync(ledger, 'utf8').split(/\r?\n/)) {
-    const t = l.trim(); if (!t) continue
-    try {
-      const o = JSON.parse(t)
-      if (o?.type === 'audit.deep-sleep' && Array.isArray(o.releaseApprovedHashes) && o.releaseApprovedHashes.length) rowsAll.push(o)
-    } catch { /* 坏行 */ }
-  }
+  const rowsAll = deepSleepRows().filter((o) => Array.isArray(o.releaseApprovedHashes) && o.releaseApprovedHashes.length)
   if (rowsAll.length < 2) {
     console.log(`⚠ 带集合指纹的纪元 ${rowsAll.length} < 2 ⇒ **不可判**（该字段自 2026-09-16 起才记；不猜）`)
     process.exit(3)

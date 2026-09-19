@@ -64,20 +64,28 @@ const buildTs = () => {
   lines.push('')
   // S0（2026-09-14）：内容类型契约投影 —— 供 src/content-types.ts 消费（含 25 类型 + 4 结构性；
   //   md 投影自持长 note，TS 投影只带短 note 以控包体（依据 [flow] 教训准入路径「契约进包有成本」）。
-  lines.push('export interface ContentTypeConsumer { layer: string; timing: string; criterion: string }')
+  // Q1（2026-09-20）：新增 **vocab 值域段**并列投影 + `memClass` 认知类型轴列；同步删除
+  //   `producers`（实测全仓零消费方）与 `consumer.timing`（实测 src 侧零消费，真实时机真源是
+  //   `carriers.tags.inject`）——两处删除与接口串同批改，否则 tsc 报 TS2741（本仓实测）。
+  lines.push('export interface ContentTypeConsumer { layer: string; criterion: string }')
   lines.push('export interface ContentType {')
   lines.push('  recordKind: string[]')
   lines.push('  carrier: string[]')
   lines.push('  form: string')
-  lines.push('  producers: string[]')
   lines.push('  projection: string')
   lines.push('  consumer: ContentTypeConsumer')
   lines.push('  budget: string')
   lines.push('  reachable: boolean')
+  lines.push('  memClass?: string')
   lines.push('  why?: string')
   lines.push('}')
   lines.push('export interface ContentTypeStructural { projection: string; consumer: ContentTypeConsumer; budget: string; reachable?: boolean; why?: string }')
-  lines.push(`export const CONTENT_TYPES: { note?: string; types: Record<string, ContentType>; structural: Record<string, ContentTypeStructural> } = ${JSON.stringify({ types: reg.contentTypes.types, structural: reg.contentTypes.structural }, null, 2)}`)
+  // Q1：值域段与 types **并列投影** —— 必须进本载荷（L80）：只写进 criteria.json 而不在此投影 = 死数据
+  //   （三条现有门禁都抓不到：check-injection-reach 守 src 模块、check-field-usage 只认 fieldRoles、
+  //    check-criteria 只查投影新鲜度）。投影后 check-content-types 的四 Set 改读此处，真源写错取值即红。
+  //   机检锚：`grep -c '"vocab"' src/criteria.generated.ts` 须 ≥1（判据册A-A1）。
+  lines.push('export interface ContentTypeVocab { note?: string; layer: string[]; timing: string[]; criterion: string[]; budget: string[]; memClass: string[]; reserved: { criterion: string[]; budget: string[] } }')
+  lines.push(`export const CONTENT_TYPES: { note?: string; vocab: ContentTypeVocab; types: Record<string, ContentType>; structural: Record<string, ContentTypeStructural> } = ${JSON.stringify({ vocab: reg.contentTypes.vocab, types: reg.contentTypes.types, structural: reg.contentTypes.structural }, null, 2)}`)
   lines.push('')
   return lines.join('\n')
 }
@@ -130,11 +138,15 @@ const buildMd = () => {
   o.push('')
   o.push('> 唯一事实源 = `criteria.json#contentTypes`。`reachable` 为**可机检字段**：`true` ⇒ 消费侧必须存在对应通路（按 `criterion` 反查），由 `scripts/check-content-types.mjs` 守。**契约描述现状**：尚未落地的目标槽（`process` / `due`）写在 `why` 里，落地后再改判据。')
   o.push('')
-  o.push('| 类型 | Record kind | 标签 | 形态 | 投影 | 层 | 时机 | 判据 | 预算 | 可达 |')
+  o.push('| 类型 | Record kind | 标签 | 形态 | 投影 | 层 | 判据 | 预算 | 认知类型 | 可达 |')
   o.push('|---|---|---|---|---|---|---|---|---|---|')
   for (const [id, t] of Object.entries(reg.contentTypes.types)) {
-    o.push(`| \`${id}\` | ${t.recordKind.join('/') || '—'} | ${t.carrier.join('/') || '—'} | ${t.form} | ${t.projection} | ${t.consumer.layer} | ${t.consumer.timing} | ${t.consumer.criterion} | ${t.budget} | ${t.reachable ? '✅' : '❌'} |`)
+    o.push(`| \`${id}\` | ${t.recordKind.join('/') || '—'} | ${t.carrier.join('/') || '—'} | ${t.form} | ${t.projection} | ${t.consumer.layer} | ${t.consumer.criterion} | ${t.budget} | ${t.memClass || '—'} | ${t.reachable ? '✅' : '❌'} |`)
   }
+  o.push('')
+  o.push(`> **认知类型轴（Q1 · 2026-09-20）**：\`memClass\` 三值 + \`none\`。计数 semantic 17 · procedural 1 · episodic 7 · none 1（共 26）；**三类合计 25** —— \`noteBody\`（notes 正文本体）标 \`none\`，它是**载体形态**而非第四类记忆，不进三类计数。`)
+  o.push('')
+  o.push(`> **值域声明**：\`criteria.json#contentTypes.vocab\`（门禁 \`check-content-types\` 的四 Set 改读此处）；reserved = 合法但当前 0 使用（${Object.entries(reg.contentTypes.vocab.reserved || {}).map(([k, v]) => `${k}: ${v.join('/')}`).join(' · ') || '无'}）。`)
   o.push('')
   o.push(`> **结构性记录**（不属信息类型、不注入）：${Object.keys(reg.contentTypes.structural).join(' · ')}`)
   o.push('')

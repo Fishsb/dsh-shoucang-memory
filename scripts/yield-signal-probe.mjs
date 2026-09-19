@@ -21,8 +21,16 @@ const argOf = (k, d) => { const i = argv.indexOf(k); return i > -1 && argv[i + 1
 const ledger = argOf('--ledger', join(homedir(), '.dsh', 'suite', 'knowledge', 'audit', 'ledger.jsonl'))
 if (!existsSync(ledger)) { console.log(`台账缺席：${ledger}（exit 3）`); process.exit(3) }
 
+/* ⚠ **跨档读（G13 轮转失明 · 2026-09-20 修）**：台账按大小轮转（保留 3 档），本件原**只读主档**
+ *   ⇒ `compliance` 行样本 **635 → 跨档 4653（漏 87%）**；`switchSource=true` 恒真率
+ *   由"98.0%（单档）"变为 **"94.5%（跨档）"** —— 不是变好，是**分母补齐后病灶更清楚**。
+ *   本件的用途正是**判"信号源是否已死/是否恒真"** ⇒ 样本残缺直接导致误判。
+ *   现改走唯一实现 `lib/ledger-compact.js#readLedgerVolumes`。
+ *   判据：`scripts/check-ledger-read.mjs`（脚本面 known-broken 名单）——**修完须从该名单删**。 */
+const { readLedgerVolumes } = await import(new URL('../lib/ledger-compact.js', import.meta.url).href)
+
 const rows = []
-for (const l of readFileSync(ledger, 'utf8').split(/\r?\n/)) {
+for (const l of readLedgerVolumes(ledger)) {
   const t = l.trim(); if (!t) continue
   try { const o = JSON.parse(t); if (o?.phase === 'compliance') rows.push(o) } catch { /* 坏行跳过（报告态） */ }
 }

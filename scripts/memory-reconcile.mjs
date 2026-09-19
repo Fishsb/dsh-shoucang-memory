@@ -23,13 +23,21 @@ const readJsonl = (p) => {
   return readFileSync(p, 'utf8').split(/\r?\n/).filter(Boolean).map((l) => { try { return JSON.parse(l) } catch { return null } }).filter(Boolean)
 }
 const auditDir = join(stateRoot, 'audit')
-const ledgerPath = [join(auditDir, 'ledger.jsonl'), join(auditDir, 'judgement-ledger.jsonl')].find((p) => existsSync(p)) || join(auditDir, 'ledger.jsonl')
-const ledger = readJsonl(ledgerPath)
+/* ⚠ **跨档读（G13 轮转失明 · 2026-09-20 修）**：台账按大小轮转（保留 3 档），本件原只读主档
+ *   ⇒ ①「行数闭合」期望值里的**台账写入累计**丢历史 ②`distillAudit` 的 `audit.*` 行丢历史。
+ *   实测（本轮）：`distill-run` 主档 56 行 / 旧卷 **823** 行；`write.*` 回执同类。
+ *   现改走唯一实现 `readLedgerVolumes`（跨档、按时间序）。 */
+const { readLedgerVolumes } = await import(new URL('../lib/ledger-compact.js', import.meta.url).href)
+const ledgerPath = join(auditDir, 'ledger.jsonl')
+const ledgerRowsAll = existsSync(ledgerPath)
+  ? readLedgerVolumes(ledgerPath).map((l) => { try { return JSON.parse(l) } catch { return null } }).filter(Boolean)
+  : readJsonl(join(auditDir, 'judgement-ledger.jsonl'))
+const ledger = ledgerRowsAll
 // DS4 第六刀（2026-09-13）：蒸馏审计写入已并入统一台账（type=audit.*）⇒ **双源读**（历史不丢）。
 // ⚠ 双源是**强制**的：实测单读台账会让深睡水位回放命中 0 轮（历史丢光）⇒ 水位置 now ⇒ 丢一轮痕迹。
 const distillAudit = [
   ...readJsonl(join(auditDir, 'distill-audit.jsonl')),
-  ...readJsonl(join(auditDir, 'ledger.jsonl')).filter((r) => String(r?.type || '').startsWith('audit.')),
+  ...ledgerRowsAll.filter((r) => String(r?.type || '').startsWith('audit.')),
 ]
 // 载体契约（层映射唯一来源）—— 兼容两种布局：仓内 skill/engine/ · 库内 engine/
 const carriers = (() => {

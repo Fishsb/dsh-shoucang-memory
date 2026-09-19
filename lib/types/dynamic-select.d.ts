@@ -39,12 +39,20 @@ export interface DynamicSelectDeps {
     activityFile: string;
     /** suite 配置读取（注入而非直连，保持本件可独立测试） */
     readSuite: () => Record<string, unknown>;
-    /** S4-3（2026-09-14）**中层 `process` 槽**配置（`enabled:false` ⇒ 零行为变化）；字段名与注册表一致以便整对象传入 */
+    /** S4-3（2026-09-14）**中层 `process` 槽**配置（`enabled:false` ⇒ 零行为变化）；字段名与注册表一致以便整对象传入
+     *  ★Q4（2026-09-20）新增 `gate`（`'tag'` 缺省=旧行为 / `'task'`=任务键门控，当前未启用）。 */
     process?: {
         enabled?: boolean;
         carrierTag?: readonly string[];
         topN?: number;
+        gate?: string;
     };
+    /**
+     * Q4：`gate==='task'` 时用的**离散任务键**（读侧 `situation-key#taskCueOf` 的产出）。
+     * ⚠ 只在 `gate==='task'` 时被消费；缺省（tag）下**不进任何判据** ⇒ 零行为变化。
+     * ⚠ 传空数组 ⇒ 不筛（回落 tag 行为），防「开了开关却空槽」。
+     */
+    taskKeys?: readonly string[];
     /**
      * S4-3：`process` 槽的**候选源** —— **全层索引行**（三索引的 `[tag] … → notes/` 薄行）。
      * ⚠ **不能复用** `allMem`（只含 P 层 always）或 `allMemFill`（只读 MEMORY.md）：
@@ -63,11 +71,25 @@ export interface DynamicSelectDeps {
  *   本槽给它**优先进位**（与 `situation`/`serendipity` 同构的理由：改权重解决不了，只能分槽）。
  *
  * 边界：**只选行**（不渲染、不裁切、不记账）；`enabled !== true` ⇒ 返回空（**缺省零行为变化**）。
+ *
+ * ★Q4（2026-09-20）**`gate` 开关**：原实现**完全不读 query** ⇒ 真机实测三个语义无关 query
+ *   （「三种长期记忆梳理」／「深睡蒸馏怎么触发」／「发布插件到 github release」）得到**同一组 3 条**
+ *   `[路径]`（恒取文件序最前 3 条）——而注册表 note 自称「任务型门控」，实为**位置门控**（声明的意图
+ *   与运行态不符，用户已判为缺陷）。新增 `gate`：
+ *     · `'tag'`（**缺省**）⇒ 旧行为逐字保留（按标签取前 topN）⇒ **零行为变化**（可机检对拍）；
+ *     · `'task'` ⇒ 标签过滤后**追加任务键判据**（见 `processRowMatchesTask`）。
+ *   ⚠ **当前只落结构、不启用 task**：`[路径]` 是 md 索引行、**不带 cues**（cues 只在环记录 meta），
+ *     任务键与行的**对齐口径**属结构选择、尚未裁定（见 `criteria.json#surface.injection.process.note`）。
+ *   ⚠ **硬约束**：本槽**不得**复用 `surface.mcl` 的**熟悉度阈值**——那是 **dense 相似度**量纲，
+ *     与任务键的**有/无离散命中**不是同一件事，复用即量纲误用（该阈值服务于向量分流，见 `mcl.ts`）。
+ *     （判据 `test-process-supply` ⑦ 会 grep 本文件：门控路径**不得出现**该阈值标识符或其字面量。）
  */
 export declare function selectProcessLines(allIndexRows: readonly string[], opts?: {
     enabled?: boolean;
     carrierTag?: readonly string[];
     topN?: number;
+    gate?: string;
+    taskKeys?: readonly string[];
 }): string[];
 /**
  * 动态面选行（**IR1 册一后**：相关性面已交 `relevance-supply`，本件只留"补齐与合并"）。

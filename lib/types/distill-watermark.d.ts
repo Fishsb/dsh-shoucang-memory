@@ -54,6 +54,7 @@ export declare function createWmApi(d: WmDeps): {
     };
     resolveWatermark: (sid: string, agent: any, mapCache?: Map<string, any> | undefined) => WmBaseline | null;
     readRunState: (sid: string) => RunSnapshot | null;
+    readSegFlowState: (sid: string) => SegFlowState | null;
 };
 export type WmApi = ReturnType<typeof createWmApi>;
 declare const readWatermarks: (d: WmDeps) => Map<string, any>;
@@ -67,6 +68,30 @@ declare const readWatermarks: (d: WmDeps) => Map<string, any>;
  * 零抛出：水位文件不可读时返回 null（调用方按"无实例"处理）。
  */
 declare const readRunState: (d: WmDeps, sid: string) => RunSnapshot | null;
+/**
+ * **段级流程状态读口**（S-P3 · 2026-09-20）——根治「用会话级末行承载段级计数」的语义错配。
+ *
+ * 判因（可执行探针 + 真机三证，2026-09-19）：
+ *   `retryAttemptFor` 用 `readRunState(sid)`（= **末行**）取重试计数，而末行代表「会话最近一次状态」。
+ *   水位流里另有多处**不带 `segKey`/`attempt`** 的写入（跳过分支 `:159/:188`、`segment-done`、`forced`）；
+ *   任何一条插在中间，末行的 `segKey` 就与当前段失配 ⇒ 计数被打回 0（**结构性，非偶发**）。
+ *   真机三证：① 水位流 1093 行中 `phase:"retry"` **0 行**；② `spawn` 行 399 条，`attempt` 分布
+ *   `{0:31, undefined:368}` ⇒ **带 segKey 且 attempt>0 的 0 条**；③ 日志重试 307 条，分布
+ *   `{1/3:267, 2/3:40}` ⇒ **`3/3` 从未达**（「有界重试」在真机从未生效）。
+ *
+ * 修法（**不改水位流核心语义**——「末行生效」原样保留，只增加读口）：
+ *   取该会话**最近一条携带 `segKey` 的行**，即「最后一个段的流程状态」；计数与段身份同寿。
+ *   `phase` 由该行原样给出 ⇒ `retryRowHeld`（跳过分支「扣住」判据）也一并修正为段级读。
+ * 成本：复用 `readTailLines`（mtimeMs+size 失效缓存 + 末尾有界窗口），**不整读**（水位流已 1093 行并持续增长）。
+ */
+export interface SegFlowState {
+    segKey: string;
+    phase: string;
+    attempt: number;
+    lastSeq: number;
+    updatedAt: string;
+}
+declare const readSegFlowState: (d: WmDeps, sid: string) => SegFlowState | null;
 declare const writeWatermark: (d: WmDeps, sessionId: string, lastSeq: number, agent?: any, run?: RunState) => void;
 declare const sessionFormatVersionOf: (d: WmDeps, agent: any) => number | undefined;
 /** 锚点事件指纹：记录时刻 lastSeq 处事件的 type|time|data 长度（seq 重排后此三元组随之改变）。 */

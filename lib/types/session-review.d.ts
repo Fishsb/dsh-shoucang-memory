@@ -78,7 +78,14 @@ export declare function decideReview(d: ReviewDeps, i: {
     state: 'not-triggered' | 'skipped-by-threshold' | 'ready';
     reason: string;
 };
-/** 材料装配：**只读**（清单流 + 失败明细 + 骨架由调用方经 S2 侧提供，本件不读会话原文）。 */
+/** 材料装配：**只读**（清单流 + 失败明细 + 骨架由调用方经 S2 侧提供，本件不读会话原文）。
+ *
+ * ⚠ **跨档读（G13 轮转失明 · 2026-09-20 修）**：失败明细原走 `tailLines(…/ledger.jsonl, 2000)` ——
+ *   **尾读只覆盖主档**，而台账轮转后**旧卷里全是历史 `distill-run` 行**（实测：主档该 kind 56 行 /
+ *   旧卷 823 行）⇒ L2 复盘拿到的"失败明细"**长期只覆盖最近一小段**，早先的失败**结构性看不见**。
+ *   ⇒ 现改为 `readLedgerVolumes`（跨档、按时间序）+ 只对**本 sid** 的行取明细；
+ *     行量由「末 N 行」改为「全档过滤」，因过滤条件已极窄（`kind==='distill-run' && sid===本会话`）。
+ *   判据：`scripts/check-ledger-read.mjs` 源码面硬门。 */
 export declare function buildMaterials(d: ReviewDeps, sid: string, skeleton?: string[]): {
     manifest: string[];
     failures: string[];

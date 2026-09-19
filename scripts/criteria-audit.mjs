@@ -26,8 +26,15 @@ const readJsonl = (p) => {
   return readFileSync(p, 'utf8').split(/\r?\n/).filter(Boolean).map((l) => { try { return JSON.parse(l) } catch { return null } }).filter(Boolean)
 }
 // v2.1 M2：统一台账 audit/ledger.jsonl（type=decision.*）优先；旧 judgement-ledger.jsonl 兼容一版
-const ledgerPath = [join(stateRoot, 'audit', 'ledger.jsonl'), join(stateRoot, 'audit', 'judgement-ledger.jsonl')].find((p) => existsSync(p)) || join(stateRoot, 'audit', 'ledger.jsonl')
-const ledger = readJsonl(ledgerPath).filter((r) => Date.parse(r.at || '') >= since && (!r.type || String(r.type).startsWith('decision')))
+/* ⚠ **跨档读（G13 轮转失明 · 2026-09-20 修）**：台账按大小轮转（保留 3 档），本件原**只读主档**
+ *   ⇒ 判据-结果对账的**历史批次结构性丢失**（而本件的全部结论就是"一致率"）⇒ 分母残缺。
+ *   现改为 `readLedgerVolumes`（跨档、按时间序）；`--days` 窗口过滤照旧。 */
+const { readLedgerVolumes } = await import(new URL('../lib/ledger-compact.js', import.meta.url).href)
+const ledgerPath = join(stateRoot, 'audit', 'ledger.jsonl')
+const ledgerAll = existsSync(ledgerPath)
+  ? readLedgerVolumes(ledgerPath).map((l) => { try { return JSON.parse(l) } catch { return null } }).filter(Boolean)
+  : readJsonl(join(stateRoot, 'audit', 'judgement-ledger.jsonl'))
+const ledger = ledgerAll.filter((r) => Date.parse(r.at || '') >= since && (!r.type || String(r.type).startsWith('decision')))
 const accessReal = readJsonl(join(bank, 'audit', 'access-real.jsonl')).filter((r) => Date.parse(r.t || '') >= since)
 const activity = readJsonl(join(bank, 'audit', 'activity.jsonl'))
 

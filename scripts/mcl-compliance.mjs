@@ -48,7 +48,14 @@ const readInto = (file, keep) => {
   }
 }
 readInto(legacyF, () => true) // 历史批次
-readInto(ledgerF, (o) => String(o?.type || '').startsWith('mcl')) // 现行（统一台账；兼容历史 `mcl.*` 写法）
+// ⚠ **跨档读（G13 轮转失明 · 2026-09-20 修）**：原为 `readInto(ledgerF, …)`（**只读主档**）⇒
+//   台账轮转后 `mcl-step` 行的**绝大多数历史在旧卷**（实测：主档 964 行 / 跨档真值 **9098 行**）
+//   ⇒ 本件的"合规率/回引率"分母**结构性残缺**。现改走唯一实现 `readLedgerVolumes`。
+const { readLedgerVolumes } = await import(new URL('../lib/ledger-compact.js', import.meta.url).href)
+for (const line of readLedgerVolumes(ledgerF)) {
+  if (!line.trim()) continue
+  try { const o = JSON.parse(line); if (String(o?.type || '').startsWith('mcl')) rows.push(o) } catch { /* 坏行跳过 */ }
+}
 rows.sort((a, b) => Date.parse(a.at || '') - Date.parse(b.at || '')) // 合并后按时间序（下游按窗口过滤）
 // 键名 2026-09-18 由 `compliant` 更名为 `topicEcho`（IR1 附册 F2：诚实命名）⇒ 跨代都收（历史行 + 现行行）。
 const hasEcho = (r) => typeof r.topicEcho === 'boolean' || typeof r.compliant === 'boolean'

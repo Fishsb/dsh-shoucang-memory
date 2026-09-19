@@ -86,6 +86,18 @@ export const planTriggerDim = (
   return 'none'
 }
 
+/** 睡眠窗口归约与自检节拍判据已按**领域接缝**抽到 `trigger-plan.ts`（S-P2a/P4 2026-09-20）——
+ *  理由同 `probe-plan.ts`：本件导出数受 `audit-architecture` **棘轮**约束（阈值 35 · 只许收紧，
+ *  HEAD 实测 34），就地新增会破棘轮，而放松棘轮属须用户拍板之事（R3）。
+ *  ⚠ 依赖单向：`trigger-plan` → 本件（只取 `SessRec` 类型），本件**不**反向依赖。
+ *  导入方：`deepsleep-machine.ts`（巡检 + 面板共用同一归约）/ `distill-hooks.ts`（自检节拍）。 */
+
+/** 探测证据/结论/决策表已按**领域接缝**抽到 `probe-plan.ts`（S-P2b 2026-09-20）——
+ *  理由：本件导出数受 `audit-architecture` **棘轮**约束（阈值 35 · 只许收紧），
+ *  就地新增探针判据会破棘轮，而放松棘轮属须用户拍板之事（R3）；本仓既有出路即"单独成件"
+ *  （先例：`injection-playbook` / `recall-diagnosis` / `dynamic-select` / `probe-config`）。
+ *  ⚠ 依赖单向：`probe-plan` → 本件（只取类型），本件**不**反向依赖；导入方直接引 `probe-plan.ts`。 */
+
 /**
  * **材料分片**（S-P1c · 2026-09-15）：把已按"面"分好的材料段贪心装进 ≤ `capChars` 的片里。
  *
@@ -230,6 +242,9 @@ export interface SessRec {
   probeAt: number // 最近一次探测发起时刻
   probeRound: number // 已发起探测轮次（失败重试计数）
   stallRound: number // 连续「无输出增长」轮次（达到 confirm 才落 stalled）
+  /** S-P2b（2026-09-20）：连续「证据冲突」轮次（状态称活跃但零输出）。
+   *  原实现不让 conflict 推进任何计数 ⇒ 活锁（真机 23 次 / 11 小时零触发）；现达上限即转 stalled。 */
+  conflictRound?: number
   probeEvidence?: { rounds: number; samples: number; deltaBytes: number; alive: boolean; active: boolean; viaChildren?: boolean } // 末次证据（排查用；`viaChildren` = 因**子代理活跃**而判长任务）
   probeResult?: 'long-run' | 'stall' | 'suspect' | 'conflict' | 'exit' | 'no-transcript' | 'error' // 探测结论（审计可查）
 }

@@ -62,8 +62,15 @@ export interface DynamicSelectDeps {
   activityFile: string
   /** suite 配置读取（注入而非直连，保持本件可独立测试） */
   readSuite: () => Record<string, unknown>
-  /** S4-3（2026-09-14）**中层 `process` 槽**配置（`enabled:false` ⇒ 零行为变化）；字段名与注册表一致以便整对象传入 */
-  process?: { enabled?: boolean; carrierTag?: readonly string[]; topN?: number }
+  /** S4-3（2026-09-14）**中层 `process` 槽**配置（`enabled:false` ⇒ 零行为变化）；字段名与注册表一致以便整对象传入
+   *  ★Q4（2026-09-20）新增 `gate`（`'tag'` 缺省=旧行为 / `'task'`=任务键门控，当前未启用）。 */
+  process?: { enabled?: boolean; carrierTag?: readonly string[]; topN?: number; gate?: string }
+  /**
+   * Q4：`gate==='task'` 时用的**离散任务键**（读侧 `situation-key#taskCueOf` 的产出）。
+   * ⚠ 只在 `gate==='task'` 时被消费；缺省（tag）下**不进任何判据** ⇒ 零行为变化。
+   * ⚠ 传空数组 ⇒ 不筛（回落 tag 行为），防「开了开关却空槽」。
+   */
+  taskKeys?: readonly string[]
   /**
    * S4-3：`process` 槽的**候选源** —— **全层索引行**（三索引的 `[tag] … → notes/` 薄行）。
    * ⚠ **不能复用** `allMem`（只含 P 层 always）或 `allMemFill`（只读 MEMORY.md）：
@@ -83,22 +90,55 @@ export interface DynamicSelectDeps {
  *   本槽给它**优先进位**（与 `situation`/`serendipity` 同构的理由：改权重解决不了，只能分槽）。
  *
  * 边界：**只选行**（不渲染、不裁切、不记账）；`enabled !== true` ⇒ 返回空（**缺省零行为变化**）。
+ *
+ * ★Q4（2026-09-20）**`gate` 开关**：原实现**完全不读 query** ⇒ 真机实测三个语义无关 query
+ *   （「三种长期记忆梳理」／「深睡蒸馏怎么触发」／「发布插件到 github release」）得到**同一组 3 条**
+ *   `[路径]`（恒取文件序最前 3 条）——而注册表 note 自称「任务型门控」，实为**位置门控**（声明的意图
+ *   与运行态不符，用户已判为缺陷）。新增 `gate`：
+ *     · `'tag'`（**缺省**）⇒ 旧行为逐字保留（按标签取前 topN）⇒ **零行为变化**（可机检对拍）；
+ *     · `'task'` ⇒ 标签过滤后**追加任务键判据**（见 `processRowMatchesTask`）。
+ *   ⚠ **当前只落结构、不启用 task**：`[路径]` 是 md 索引行、**不带 cues**（cues 只在环记录 meta），
+ *     任务键与行的**对齐口径**属结构选择、尚未裁定（见 `criteria.json#surface.injection.process.note`）。
+ *   ⚠ **硬约束**：本槽**不得**复用 `surface.mcl` 的**熟悉度阈值**——那是 **dense 相似度**量纲，
+ *     与任务键的**有/无离散命中**不是同一件事，复用即量纲误用（该阈值服务于向量分流，见 `mcl.ts`）。
+ *     （判据 `test-process-supply` ⑦ 会 grep 本文件：门控路径**不得出现**该阈值标识符或其字面量。）
  */
 export function selectProcessLines(
   allIndexRows: readonly string[],
-  opts?: { enabled?: boolean; carrierTag?: readonly string[]; topN?: number },
+  opts?: { enabled?: boolean; carrierTag?: readonly string[]; topN?: number; gate?: string; taskKeys?: readonly string[] },
 ): string[] {
   if (opts?.enabled !== true) return []
   const tags = opts.carrierTag && opts.carrierTag.length ? opts.carrierTag : ['路径']
   const topN = Math.max(1, Number(opts.topN) || 3)
+  // Q4：**缺省 tag** ⇒ 与改造前逐字等价（任何非 'task' 值都走 tag，防拼写错误静默改变行为）
+  const taskGate = opts.gate === 'task'
+  const taskKeys = (opts.taskKeys ?? []).map((k) => String(k || '').trim().toLowerCase()).filter(Boolean)
   const out: string[] = []
   for (const l of allIndexRows) {
     const m = /^\[([^\]\s]+)\]/.exec(String(l).trim())
     if (!m || !tags.includes(m[1])) continue
+    if (taskGate && taskKeys.length && !processRowMatchesTask(l, taskKeys)) continue
     if (!out.includes(l)) out.push(l)
     if (out.length >= topN) break
   }
   return out
+}
+
+/**
+ * Q4（2026-09-20）：`process` 槽的**任务键对齐**（只在 `gate==='task'` 时走到）。
+ *
+ * ⚠ **口径未裁**（见 `criteria.json#surface.injection.process.note`）：`[路径]` 是 md 索引行、
+ *   不带 cues ⇒「任务键 ↔ 行」的两种候选口径（借指针 § 对齐 / 退回词法打分）属**结构选择**。
+ *   本实现取**词法包含**（复用既有行文本，**不新写解析器**，符合「不从零造轮子」）：
+ *   行文本含任一任务键即命中。口径裁定后只改本函数，**不动调用方**。
+ *
+ * **空键 ⇒ 不筛**（返回 true）：与 tag 门控同行为，避免「开了开关却空槽」的退化
+ *   （判据：`taskCueOf` 返空须回落 tag 且 `kept ≥ 1`）。
+ */
+function processRowMatchesTask(line: string, taskKeys: readonly string[]): boolean {
+  if (!taskKeys.length) return true
+  const t = String(line).toLowerCase()
+  return taskKeys.some((k) => t.includes(k))
 }
 
 /**
@@ -144,7 +184,10 @@ export function selectDynamicLines(dep: DynamicSelectDeps): { lines: string[]; t
     return { cold, hits30: hits }
   }
   // S4-3（2026-09-14）：**中层 `process` 槽**先算（与 query 无关 —— 任务级供给在任务开始即生效）
-  const proc = selectProcessLines(dep.processRows ?? [], dep.process)
+  // ★Q4（2026-09-20）：`gate` 由注册表传入（缺省 `'tag'` ⇒ 与改造前逐字等价；`'task'` 时才消费
+  //   `dep.taskKeys`）。**taskKeys 由调用方派生并复用**（panel-shared 的 `knownTaskCuesOf`），
+  //   本件不自行读库 ⇒ 不新增第二处 loadStore（实测一次 25ms / 5700+ 条记录）。
+  const proc = selectProcessLines(dep.processRows ?? [], { ...(dep.process ?? {}), taskKeys: dep.taskKeys })
   /* 位置式回退基线的**候选池**（空 query 分支用）。
    *
    * ★2026-09-18 修（按域路由 P0-a 的副作用）：池仍是 `allMem`（= `readIdx('MEMORY.md')`，**只含 `inject=always` 行**）——
