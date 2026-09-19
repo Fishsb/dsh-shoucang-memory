@@ -40,6 +40,63 @@ export declare function sectionTitles(memRoot: string, file: string): {
  * @param file    `env.md` 或 `notes/env.md`（`normalizeNotesFile` 容错）
  * @param name    § 后的名字（可含括号日期；允许多级路径的**单段**）
  */
+/**
+ * ══ 册三（2026-09-19 · docs/pointer-supply-plan.md §5-1）：**层级化放置裁决** ══
+ *
+ * 判因（方案 §2.2 G5，实测坐实）：`memory-append` 自带一份 `matches`（**双向包含**）+ `findChild`（逐级取**首个**）
+ *   ⇒ 夹具库只有 `## DSH 环境` 时写「环境」**误配**进「DSH 环境」（exit 0 无提示），与本节三态语义不统一。
+ * 语义（与 `resolveFromTitles` 同源，但**限定父作用域 + 指定层级**）：exact → loose 唯一命中 →
+ *   **多命中 ⇒ `ambiguous`**（调用方必须拒绝并要求写「父/子」全路径）；无命中 ⇒ `missing`（写入侧按既有策略建子节）。
+ * ⚠ 与 `skill/scripts/section-ref.mjs` 是同一语义的两份物理实现（子进程活件零依赖，不可 import src/），
+ *   一致由 `scripts/check-section-ref-parity.mjs` 的**放置用例**差分锁守。
+ */
+export interface PlacementHit {
+    title: string;
+    core: string;
+    level: number;
+    idx: number;
+    at: number;
+    exact: boolean;
+}
+export interface LevelResolution {
+    state: 'exact' | 'loose' | 'ambiguous' | 'missing';
+    pick: PlacementHit | null;
+    cands: PlacementHit[];
+}
+export declare function resolveLevelInParent(titles: {
+    title: string;
+    level: number;
+    idx: number;
+}[] | null | undefined, parentIdx: number, level: number, name: unknown, opts?: {
+    loose?: 'prefix' | 'contains';
+}): LevelResolution;
+export interface PlacementStep {
+    pi: number;
+    level: number;
+    state: string;
+    name: string;
+    at?: number;
+    title?: string;
+}
+export interface PlacementPlan {
+    refused: {
+        pi: number;
+        level: number;
+        name: string;
+        cands: string[];
+    } | null;
+    steps: PlacementStep[];
+    parentIdx: number;
+    missingPi: number;
+}
+/** 路径放置计划：逐级裁决；`ambiguous` ⇒ **refused**（不猜、不取首个）；首缺层 ⇒ `missingPi` */
+export declare function planPlacement(titles: {
+    title: string;
+    level: number;
+    idx: number;
+}[] | null | undefined, pathParts: string[], opts?: {
+    loose?: 'prefix' | 'contains';
+}): PlacementPlan;
 export declare function resolveSection(memRoot: string, file: string, name: unknown): SectionRefResult;
 /** 纯函数裁决（供差分锁在不落盘的前提下逐例比对） */
 export declare function resolveFromTitles(titles: {

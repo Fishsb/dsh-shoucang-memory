@@ -10,6 +10,8 @@ import { randomUUID } from 'node:crypto'
 import { memoryLibRoot } from './targets.js'
 import { CHUNK_CHARS, MAX_CHUNKS_PER_RUN, buildEventChunks, manifestLineFor, manifestPush } from './distill-chunks.js'
 import { recallRanked } from './vec.js'
+// 册一（2026-09-19 · docs/pointer-supply-plan.md）：**小节地址供给**（库侧供给，模型只做选择）
+import { sectionAddressSupply, buildDistillUserInput, addressKeyOf } from './section-supply.js'
 import { evaluateL0 } from './criteria.js'
 import { DISCARD_SNAPSHOT_CB_N, SKIP_HOLD_MAX, planSegmentWatermark, planSkipWatermark } from './deepsleep-core.js'
 // 册二（2026-09-19）：准入判定单一实现（扫尾 / idle 入口 / 手动入口三处共用）
@@ -150,7 +152,10 @@ const distillAgent = async (dep: AgentDeps, agent: any): Promise<void> => {
     const totalChars = chunks.reduce((n, c) => n + c.text.length, 0)
     let candFiles: string[] = []
     // A2：候选池排除 project-defer 卡（它们归 flushDeferCards 直写，不进 LLM 重裁决）
-    try { candFiles = readdirSync(dep.io.pendDir).filter((f) => /^\d{4}-\d{2}-\d{2}-.*\.md$/.test(f) && !f.includes('-project-defer-')).sort() } catch { candFiles = [] }
+    try { candFiles = readdirSync(dep.io.pendDir).filter((f) => /^\d{4}-\d{2}-\d{2}-.*\.md$/.test(f) && !f.includes('-project-defer-') && !f.includes('-knowledge-defer-')).sort() } catch { candFiles = [] }
+    // ⚠ `-knowledge-defer-`（册二 · 指针供给 §4-3「未落地知识回退」）**必须**被排除：
+    //   它是"等人工/工具认领"的暂存队列，不是待裁决候选——喂回 LLM 会与它自身的失败成因形成**重裁决死循环**。
+    //   （与 `-project-defer-` 同一模式；机检 `check-pointer-pairing.mjs` 锁死本排除。）
     // 门槛（below-min 语义保持现状）：整窗文本总字符 < minTurnChars（chunks 空=无增量/全无文本事件）→ 跳过并推进水位
     if (!chunks.length || totalChars < (dep.env.config.minTurnChars ?? 200)) {
       // G-4a：有未消化段时**不得**把水位推到 maxSeq（否则该段永不重扫），改为扣住不推（最多 SKIP_HOLD_MAX 轮）
@@ -207,6 +212,13 @@ const distillAgent = async (dep: AgentDeps, agent: any): Promise<void> => {
       return candBlock
     }).join('\n')
 
+    // ═══ 册一（2026-09-19 · docs/pointer-supply-plan.md）**小节地址供给** ═══
+    // 地址由库侧定义并供给（模型只做选择）：逐文件读 `notes/*.md` 的 `##`/`###` 清单，
+    //   按预算生成"可用小节地址"材料段。★ 只进**材料**、绝不进 persona（用户可自定义 `distillPrompt`）。
+    // 真机判因：抽查 5 个悬空小节名在真库 334 个两级小节中 **0 命中** ⇒ 模型确实在编名。
+    const supply = sectionAddressSupply(memoryLibRoot(), 3000)
+    dep.io.infra.log(`distill: ${dep.io.infra.sidShort(sid)} 地址供给 ${supply.summary}`)
+
     // ═══ v18 分段主循环（2026-09-10）：每段一次性 spawn（与现状同参数），段间连续性由 manifest 紧凑清单承接；
     // 「可复用子代理 + 全上下文」列为后续可选档（规格已定，本轮不实现）。
     // 每段成功（stop=completed && out）→ 既有 route 判定 + writeDispatch + episode 留痕 + 立即 writeWatermark(该段 endSeq)；
@@ -234,14 +246,12 @@ const distillAgent = async (dep: AgentDeps, agent: any): Promise<void> => {
           const rres = await recallRanked(memoryLibRoot(), chunk.text.slice(0, 512), 5, 'all', dep.llm.embedCfgOf())
           if (rres.rows.length) relMemLines = rres.rows.map((r) => `- ${r.line}`).join('\n')
         } catch { /* 相关记忆上下文失败=省略 */ }
-        const userInput = [
-          `## 待蒸馏会话\nsessionId=${sid}（分段蒸馏，本段 seq ${chunk.startSeq}→${chunk.endSeq}，共 ${chunks.length} 段第 ${k + 1} 段）`,
-          `## 会话增量正文（本段）\n${chunk.text}`,
-          manifest ? `## 同轮前段固化清单（防重复入册/可引用合并，勿重复入册）\n${manifest}` : '（同轮前段固化清单：无——本段为当前触发首段；后续段将携带本段裁决清单防重复入册）',
-          relMemLines ? `## 相关既有记忆（recallRanked 召回，Q0 已有归属 / Q3 合并判据；命中即视为已覆盖候选）\n${relMemLines}` : '（相关既有记忆：未启用向量或零命中，按无历史裁决）',
-          candIncluded.length ? `## 待固化候选（pending/ 中 ${candIncluded.length}/${candFiles.length} 个，预算 ${CAND_BUDGET} 字符内）\n${candText}` : (candFiles.length ? '（待固化候选超预算，本轮不携带；候选保留 pending 待下轮）' : '（无待固化候选）'),
-          '请按规则处理：裁决本段可复用知识点并输出入册指令 JSON。',
-        ].join('\n\n')
+        const userInput = buildDistillUserInput({
+          sid, startSeq: chunk.startSeq, endSeq: chunk.endSeq, totalChunks: chunks.length, index: k + 1,
+          body: chunk.text, manifest, relMemLines,
+          candidates: candIncluded.length ? `## 待固化候选（pending/ 中 ${candIncluded.length}/${candFiles.length} 个，预算 ${CAND_BUDGET} 字符内）\n${candText}` : (candFiles.length ? '（待固化候选超预算，本轮不携带；候选保留 pending 待下轮）' : '（无待固化候选）'),
+          addressLines: supply.lines,
+        })
 
         // 阶段 2：**spawn 前落 phase** —— 原实现只在段末写审计，spawn 卡住（最长 10min 超时）时
         //   外界无从判断"正在蒸"还是"已经卡死"。
@@ -271,13 +281,18 @@ const distillAgent = async (dep: AgentDeps, agent: any): Promise<void> => {
         if (raceTimer) { clearTimeout(raceTimer); raceTimer = null }
         const stop = result && result.stopReason
         const out = parseAgentJson(dep, result, `distill ${dep.io.infra.sidShort(sid)}`) // 子代理输出 → JSON（剥离代码栅栏+容错提取，与深睡共用同一实现）
+        // 册一：**sectionMiss** —— 模型给的 section **不在**本轮供给的地址清单内的条数（只增字段，不改既有语义）。
+        //   这是「清单有没有被模型听见」的直接读数（与写门后果解耦：写门另有 needsAnchor 计数）。
+        const sectionMiss = (out && Array.isArray(out.appends))
+          ? out.appends.filter((a: any) => a && a.section && !supply.set.has(addressKeyOf(String(a.target || ''), a.section))).length
+          : 0
         if (stop === 'completed' && out) dep.llm.llmState.providerFailCount = 0
         else if (useProvider && (stop !== 'completed' || !out)) dep.llm.llmState.providerFailCount++
         const rawRoute = (out && typeof out.route === 'string') ? out.route.trim().toLowerCase() : ''
         const route = ['memory', 'project', 'discard'].includes(rawRoute) ? rawRoute : 'memory' // 归一化+未知回退 memory（宁滥勿丢）
         const workspace = await dep.llm.llm.resolveWorkspace(sid)
         const disp = route === 'discard'
-          ? { added: 0, rejected: 0, failed: 0, undigested: 0, needsAnchor: 0, items: [] as Array<Record<string, string>>, targetLib: 'none' }
+          ? { added: 0, rejected: 0, failed: 0, undigested: 0, needsAnchor: 0, pairedSkipped: 0, items: [] as Array<Record<string, string>>, targetLib: 'none' }
           : await dep.write.write.writeDispatch(sid, out, route, workspace)
         dep.io.infra.log(`distill: ${dep.io.infra.sidShort(sid)} 段${k + 1}/${segLimit}（seq ${chunk.startSeq}→${chunk.endSeq}）stop=${stop} route=${route} → ${disp.targetLib} 入册 ${disp.added} / 拒收 ${disp.rejected} / 失败 ${disp.failed}`)
         // WikiSkill 借鉴：失败归类 fclass（供审计聚合/深睡根因回流）+ LLM 指纹（大小模型蒸馏质量实证的数据底座）
@@ -298,7 +313,7 @@ const distillAgent = async (dep: AgentDeps, agent: any): Promise<void> => {
               : fclass === 'json-parse' ? `json-parse stop=${stop}`
                 : (fclass === 'provider-fail' || fclass === 'agent-stop') ? `agent stop=${stop} llm=${llmLabel}`
                   : ''
-        dep.io.infra.audit({ sid, kind: 'distill-run', route, stop, fclass, llm: llmLabel, targetLib: disp.targetLib, added: disp.added, rejected: disp.rejected, failed: disp.undigested, undigested: disp.undigested, needsAnchor: disp.needsAnchor, chunk: k + 1, chunkStart: chunk.startSeq, chunkEnd: chunk.endSeq, totalChunks: chunks.length, segKey: chunk.segKey, materialEvents: chunk.events, ...(failReason ? { reason: failReason } : {}) })
+        dep.io.infra.audit({ sid, kind: 'distill-run', route, stop, fclass, llm: llmLabel, targetLib: disp.targetLib, added: disp.added, rejected: disp.rejected, failed: disp.undigested, undigested: disp.undigested, needsAnchor: disp.needsAnchor, pairedSkipped: disp.pairedSkipped, sectionMiss, supplySections: supply.sections, chunk: k + 1, chunkStart: chunk.startSeq, chunkEnd: chunk.endSeq, totalChunks: chunks.length, segKey: chunk.segKey, materialEvents: chunk.events, ...(failReason ? { reason: failReason } : {}) })
         // 判据台账（摄取域）：模型判据（可选 judgement）+ 宿主 L0 代理评估 + 决策与结果
         dep.io.infra.ledger({
           domain: 'ingest', sid: sid.slice(0, 8), chunk: k + 1,

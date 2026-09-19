@@ -68,9 +68,64 @@ export function resolveFromTitles(titles, name, fileExists = true) {
   if (list.length > 1) return { state: 'ambiguous', exact: exactHits.length > 0, cands: list.map(cand), fileExists };
   return { state: 'missing', exact: false, cands: [], fileExists };
 }
+// ══ 册三（2026-09-19 · docs/pointer-supply-plan.md §5-1）：**层级化放置裁决**（收敛第 5 份实现）══
+// 判因（方案 §2.2 G5，实测坐实）：`memory-append` 自带一份 `matches`（**双向包含**）+ `findChild`（逐级取**首个**），
+//   与本节的三态语义不统一 ⇒ 夹具库只有 `## DSH 环境` 时写「环境」会**误配**进「DSH 环境」（exit 0 无提示）。
+// 语义（与 `resolveFromTitles` 同源，但**限定在父作用域内 + 指定层级**）：exact 优先 → loose 唯一命中 →
+//   **多命中 ⇒ ambiguous（调用方必须拒绝并要求写「父/子」全路径）**；无命中 ⇒ missing（写入侧按既有策略建子节）。
+/** 在 `parentIdx`（titles 下标；-1=文件顶）作用域内，按 `level` 找 `name` 的三态 */
+export function resolveLevelInParent(titles, parentIdx, level, name, opts = {}) {
+  const kw = sectionCore(name);
+  const looseMode = opts.loose === 'contains' ? 'contains' : 'prefix'; // 写侧默认 prefix；contains=读侧宽容（应急回退用）
+  const list = Array.isArray(titles) ? titles : [];
+  const from = parentIdx < 0 ? 0 : Number(parentIdx) + 1;
+  const parentLevel = parentIdx < 0 ? 1 : list[Number(parentIdx)].level;
+  const scope = [];
+  for (let i = from; i < list.length; i++) {
+    if (list[i].level <= parentLevel) break; // 出父范围
+    if (list[i].level === level) scope.push({ t: list[i], at: i });
+  }
+  const candidate = ({ t, at }) => { const core = sectionCore(t.title); return { title: t.title, core, level: t.level, idx: t.idx, at, exact: core === kw }; };
+  const exactHits = scope.filter(({ t }) => sectionCore(t.title) === kw);
+  if (exactHits.length === 1) return { state: 'exact', pick: candidate(exactHits[0]), cands: [candidate(exactHits[0])] };
+  // ⚠ **写侧比读侧严**（册三 · §5-1）：读侧的"双向包含"是**容错回落**（读了再说），
+  //   而写侧 loose 只认**前缀关系**（候选以 kw 开头 / kw 以候选开头）。
+  //   判因（G5 实测）：仅尾部包含会让「环境」落进「DSH 环境」——语义面不同的两件事，属**放错**而非容错。
+  //   `opts.loose='contains'` 保留旧宽容语义，**仅供应急回退**（`SHOUCANG_APPEND_PLACEMENT_CHECK=0`）。
+  const uniq = new Map();
+  for (const s of scope) {
+    const c = sectionCore(s.t.title);
+    if (!kw || !c) continue;
+    const hit = looseMode === 'contains' ? (c === kw || c.includes(kw) || kw.includes(c)) : (c.startsWith(kw) || kw.startsWith(c));
+    if (hit) uniq.set(s.t.idx, s);
+  }
+  const hits = [...uniq.values()].sort((a, b) => a.t.idx - b.t.idx);
+  if (hits.length === 1) return { state: 'loose', pick: candidate(hits[0]), cands: [candidate(hits[0])] };
+  if (hits.length > 1) return { state: 'ambiguous', pick: null, cands: hits.map(candidate) };
+  return { state: 'missing', pick: null, cands: [] };
+}
+/**
+ * 路径放置计划（`pathParts` = 逐级小节名）：逐级 `resolveLevelInParent`；
+ *   `ambiguous` ⇒ 立刻 **refused**（不猜、不取首个）；首缺层 ⇒ `missingPi`（写入侧自该层起建子节）。
+ */
+export function planPlacement(titles, pathParts, opts = {}) {
+  const parts = Array.isArray(pathParts) ? pathParts : [];
+  const steps = []; let parentIdx = -1; let missingPi = -1;
+  for (let pi = 0; pi < parts.length; pi++) {
+    const level = 2 + pi;
+    const r = resolveLevelInParent(titles, parentIdx, level, parts[pi], opts);
+    if (r.state === 'ambiguous') {
+      return { refused: { pi, level, name: parts[pi], cands: r.cands.map((c) => c.title) }, steps, parentIdx, missingPi: -1 };
+    }
+    if (r.state === 'missing') { missingPi = pi; steps.push({ pi, level, state: 'missing', name: parts[pi] }); break; }
+    steps.push({ pi, level, state: r.state, name: parts[pi], at: r.pick.at, title: r.pick.title });
+    parentIdx = r.pick.at;
+  }
+  return { refused: null, steps, parentIdx, missingPi };
+}
+
 /** 单一小节名 → 三态 */
-export function resolveSection(root, file, name) {
-  const f = normNotesFile(file);
+export function resolveSection(root, file, name) {  const f = normNotesFile(file);
   if (!f) return { state: 'missing', exact: false, cands: [], fileExists: false, reason: '文件名非法（仅 notes/<name>.md）' };
   const p = join(String(root || ''), 'notes', f);
   const fileExists = existsSync(p);

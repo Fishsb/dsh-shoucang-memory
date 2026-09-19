@@ -66,6 +66,11 @@ const FEATURES = [
  *   双时间戳 · P2b 材料块）**全都查不到**——而"文件 sha 一致 ≠ 装上去的那份带着本轮能力"正是本件的立件理由。
  */
 const HOST_FEATURES = [
+  // 指针供给三册（2026-09-19 · docs/pointer-supply-plan.md）——同一纪律：词组级标记，非通用词
+  ['指针册一 小节地址供给（sectionAddressSupply）', 'lib/section-supply.js', 'sectionAddressSupply'],
+  ['指针册三 写侧放置语义（planPlacement）', 'lib/section-ref.js', 'planPlacement'],
+  ['指针册二 段级成对裁决（unpairedPointersOf）', 'lib/distill-write.js', 'unpairedPointersOf'],
+  ['指针册三 画像行 § 准入（源指针悬空拒写）', 'lib/distill-write.js', '源指针悬空'],
   // 册一至册四（2026-09-19 · docs/distill-admission-plan.md）——「装上去的那份带着本轮能力」的正式证明：
   //   文件 sha 一致 **≠** 特性齐全（本件立件理由），故四册各留一条**词组级**标记（非通用词）。
   ['册一 蒸馏输入面白名单 + 段身份 segKey', 'lib/distill-chunks.js', 'MATERIAL_EVENT_TYPES'],
