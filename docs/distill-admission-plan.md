@@ -253,7 +253,7 @@ Select-String "$env:USERPROFILE/.dsh/super-injector/shoucang-scheduler.log" -Pat
 | 水位流字段膨胀 | 只允许白名单字段（`segKey`/`phase`/`attempt`），沿用 `readRunState` 的末行语义；不新增文件 |
 | 需要上调棘轮基线 | **本方案不需要**；棘轮只许收紧（上调须用户拍板） |
 | 真源数据 | 本方案**不做存量手术**：不改既有水位行、不删索引行、不动 `_memory/` |
-| 未知上游（未验证） | 09-15「落点失败」突增（7→62）的上游成因**未定**；`dsh-client-auto-continue` 是否为自主轮次放大器**未验证** ⇒ 两者都不作为本方案前提 |
+| 未知上游（未验证） | 09-15「落点失败」突增（7→62）的上游成因**未定**；`dsh-client-auto-continue` **已于收口轮归因**（§13.5：是自主轮次源，但 `origin=subagent` 硬门 ⇒ 与重复蒸馏无因果）⇒ 后者**不再列为未知**，前者仍不作方案前提 |
 
 ---
 
@@ -334,11 +334,45 @@ Select-String "$env:USERPROFILE/.dsh/super-injector/shoucang-scheduler.log" -Pat
 | ⑦ 云端 + pin | `git push origin master` → `git status -sb` → 核 profile `dependencies['dsh-shoucang-memory']` 的 `#<sha>` | 推送 `b83c506..f33b690`；远端 = 本地 = `f33b69094f37952abd69681b3ce62819071d48e4`；**pin 由 `#b83c506` 更新为 `#f33b690`**（纯文本，JSON 回读复验合法）—— 治「pin 不跟 ⇒ 宿主重物化退回旧代」的既有失效模式 |
 | ⑧ 推送前红线 | `check-hardcode` + `check-public-tree` | 硬面 **560 件零命中** · 公开树纯净门 **PASS** |
 
-### 13.4 遗留（下一轮候选，未施工）
+### 13.4 遗留（**收口轮：全部关闭**，2026-09-19）
 
-1. ~~**特性标记未加项**~~ **已完成**：四册各留一条词组级标记（`check-installed-features` 63 → **67 项**）；
-   原先未加项的原因是当时该文件正被**另一会话**改动（跨会话边界，R3-⑤），待其提交后本轮补齐。
-2. **`needsAnchor` 队列的消费方**：本轮只落台账 `type=anchor-needed`（可查、可认领），**未**自动建锚（方案 §3 明确"不自动建顶层散节"）。
-3. **指针供给三册（`docs/pointer-supply-plan.md`）**：与本方案 `§7` 的接口决策已生效（本册三先落）⇒ 其册二（写入事务化）现在可以接着上，且判据输入（失败三态）已就位。
-4. **未验证**：`dsh-client-auto-continue` 是否为自主轮次放大器——仍为开源假设，未归因。
+> 收口授权：用户在本轮明确「**遗留全部处理，目标模式做**」⇒ 下列第 2、4 项由"下一轮候选"转入**施工态**（R1 具名授权）。
+
+| # | 原遗留 | 状态 | 落点 / 证据 |
+|---|---|---|---|
+| 1 | 特性标记未加项 | ~~**已完成**~~ | 四册各留一条词组级标记（`check-installed-features` 63 → **67 项**）；原先未加项是因该文件正被另一会话改动（跨会话边界 R3-⑤），待其提交后补齐 |
+| 2 | `needsAnchor` 队列**无消费方** | **已完成（收口轮）** | 新增 `src/pointer-deficits.ts`：`deferredQueueOf`（类缺陷**统一读出口**）+ `registerDeficits`（定期登记，挂 `distill-bank#runSelfCheck` 维护链，**不新增定时器**）；判据 `check-deferred-queue`；详见 `docs/pointer-supply-plan.md` §12 |
+| 3 | 指针供给三册 | **已完成** | `docs/pointer-supply-plan.md` §11（三册落地）+ §12（收口轮） |
+| 4 | `dsh-client-auto-continue` 未归因 | **已完成 → §13.5** | 结论：**是**自主轮次源，但 `origin=subagent` 硬门 ⇒ 与"重复蒸馏"**无因果** |
+
+**仍不做（明确边界，非遗留）**：不自动建顶层散节（锚）、不自动回填内容、不替真库做语义改写——队列只**登记与呈现**，处置权在用户。
+
+### 13.5 归因实证：`dsh-client-auto-continue` 是"自主轮次源"（**是否成败的关键：作用面**）
+
+问：它能否**无用户发言即产生新轮次**（§10 曾列为"未验证假设"，故不作方案前提）。
+
+**源码侧**（`~/.dsh/profiles/web/node_modules/dsh-client-auto-continue/lib/index.js`）：
+- `onSessionEvent` 仅对 `turn/end` 的 `error`（经 `isTransientFailure` 分类）与 `max-tokens` 走 `onTurnFailure → schedule()`；
+  `interrupted` 只清零计数器（**不续跑**），`completed` 清零。
+- `schedule()`（L1156）在 `graceMs = 3000` 后调 `fire()`；`fire()`（L1198）用
+  `createUserMessage({ source: { kind: 'user' } })` + `agent.followup(message)` ⇒ **合成一条 user 消息并开新回合**。
+- **硬门**：`state.subagent` 三处 early-return（L1135 / L1159 / L1202）+ 启动扫描跳过 `header.origin === 'subagent'`（L1328）；
+  另受 `paused` / 冷却 20s（退避 ×2，上限 300s）/ 连续上限 3 次约束。
+
+**运行态侧**（`~/.dsh/sessions/**/session.v3.jsonl.zstd` —— 多帧 zstd，**逐帧解**方得全量；近 7 天 219 会话 / 1008 个 `turn/end`）：
+
+| 量 | 读数 |
+|---|---|
+| `turn/end` 原因分布 | completed **945** · error **29** · aborted **28** · interrupted **6** · max-tokens **0** |
+| 合成续跑注入（`agent/inbox/spliced{target:next-turn}` 内嵌文本以 `继续`/`Continue` 开头） | **46 次** / 涉 **18** 会话 |
+| 其中 `origin=user` : `origin=subagent` | **46 : 0** |
+| 失败回合 → 下一事件采样（`session-6be5ac2e`，4 例） | 均 **+3005~3018ms** ⇒ `inbox/spliced`（text=`继续…`，`source.kind='user'`，`id=<uuid>`）⇒ `turn/start`（turn 号递增），与源码 `graceMs=3000` 逐毫秒吻合 |
+| 63 个非 completed 回合之后紧跟 `user/message` 者 | **0**（确非人类发言） |
+
+**结论（3 条，可直接引用）**：
+1. **是**自主轮次放大器——3 秒后合成 user 消息开新轮，**无人类发言**（源码 + 运行态双重证据，非推断）。
+2. **但作用面有硬界**：46/46 落在 `origin=user` 主会话，子会话 **0**。蒸馏子会话为 `origin=subagent`
+   ⇒ 该插件**不会**为其补轮 ⇒ **不是"重复蒸馏"的成因**（本方案原假设**排除**）。
+3. **效应方向相反（抑制而非触发）**：它刷新"最后一个回合结束时刻" ⇒ 配合 §4 静默门只会**推迟**蒸馏；
+   风险仅是"错误循环期间该会话长期不静默"（保守侧，不产生重复消费）。
 

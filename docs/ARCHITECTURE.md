@@ -45,7 +45,7 @@ L4 交互（DSH Web GUI）
 | **M10 自省** | `assistant_capabilities` | 能力面查询 | 只读，无 token |
 
 > **载体归属口径（2026-09-12 根治 A–D 后；2026-09-14 P1 订正）**：
-> `src/` 共 **90 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> `src/` 共 **91 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
 > **2026-09-19 新增 `section-supply.ts`** ⇒ 89 → 90：**指针供给三册**册一「小节地址供给」
 > （复用 `section-ref#sectionTitles` 作**唯一解析器**、不新写；预算逐级降级 + `buildDistillUserInput` 纯装配
 > ⇒ 「接线 ≠ 抵达」可机检）——判因：蒸馏 prompt 要求「section = **既有** ## 小节名」而材料里**从未注入清单**

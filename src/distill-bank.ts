@@ -8,6 +8,8 @@ import { join } from 'node:path'
 import { memoryLibRoot, dshHome } from './targets.js'
 import { runNode } from './distill-proc.js'
 import { writeSleepReportFromLedger } from './sleep-report.js'
+// 待认领队列（单一实现）：周期巡检把新缺陷幂等登记成卡（与写侧回退队列同源）
+import { registerDeficits } from './pointer-deficits.js'
 import type { InfraApi } from './distill-infra.js'
 import type { DistillState } from './distill-state.js'
 
@@ -53,6 +55,15 @@ const runSelfCheck = async (dep: BankDeps, trigger: 'deep-sleep' | 'timer' | 'ma
       if (rep.ok) dep.infra.log(`sleep-report: 汇报落盘 ${rep.reportFile}（问题标记 ${rep.issues} 条）`)
       else dep.infra.log(`sleep-report: 暂无睡眠轮可汇报（${rep.reason}）`)
     } catch (e) { dep.infra.log(`sleep-report: 汇报失败（不阻断自检）: ${String((e as Error)?.message || e).slice(0, 100)}`) }
+    // 指针缺陷**周期登记闭环**（2026-09-19 · 指针供给 §4-3/§12）：把「地址有效、正文为空」的新缺陷
+    //   （空壳落点 / 全库空壳标题）幂等登记成待认领卡 ⇒ 与写侧 `-knowledge-defer-` 同一队列、同一命名实现。
+    //   边界：**不自动建锚、不自动回填**（方案 §3「不做」）——登记只保证"漏掉的可见、可捞"。
+    //   挂在这里的理由：本函数已是**维护链**（定时 6h + 深睡后）的唯一自检入口，且自带 kRoot/bankRoot 两参数，
+    //   无需新增定时器、无需改动装配面（I1/I2 零压力）。
+    try {
+      const reg = registerDeficits({ kRoot: dep.kRoot, bankRoot: memoryLibRoot() })
+      dep.infra.log(`pointer-deficits: 巡检 ${reg.scanned} 条缺陷 · 新登记 ${reg.written} · 已存在 ${reg.skipped}`)
+    } catch (e) { dep.infra.log(`pointer-deficits: 登记失败（不阻断自检）: ${String((e as Error)?.message || e).slice(0, 100)}`) }
     if (dep.config.selfCheckAutoRollback === true) {
       const adj = (sc.adjustments || []).find((a) => a.id === 'rollback-scoreWeights' && a.action)
       if (adj?.action) {

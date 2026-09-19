@@ -71,6 +71,10 @@ const HOST_FEATURES = [
   ['指针册三 写侧放置语义（planPlacement）', 'lib/section-ref.js', 'planPlacement'],
   ['指针册二 段级成对裁决（unpairedPointersOf）', 'lib/distill-write.js', 'unpairedPointersOf'],
   ['指针册三 画像行 § 准入（源指针悬空拒写）', 'lib/distill-write.js', '源指针悬空'],
+  // 遗留收口轮（2026-09-19 · docs/pointer-supply-plan.md §12）——同纪律：新增模块各留出口符号级标记。
+  //   治「三类"知识没落地"存量各写各的、无统一读出口」⇒ 装上去的那份必须带统一出口与定期登记。
+  ['收口轮 缺陷队列统一出口（deferredQueueOf）', 'lib/pointer-deficits.js', 'deferredQueueOf'],
+  ['收口轮 缺陷定期登记（registerDeficits）', 'lib/pointer-deficits.js', 'registerDeficits'],
   // 册一至册四（2026-09-19 · docs/distill-admission-plan.md）——「装上去的那份带着本轮能力」的正式证明：
   //   文件 sha 一致 **≠** 特性齐全（本件立件理由），故四册各留一条**词组级**标记（非通用词）。
   ['册一 蒸馏输入面白名单 + 段身份 segKey', 'lib/distill-chunks.js', 'MATERIAL_EVENT_TYPES'],

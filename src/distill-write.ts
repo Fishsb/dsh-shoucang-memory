@@ -12,6 +12,8 @@ import { runNode, textOf } from './distill-proc.js'
 import type { RunResult } from './distill-proc.js'
 import { semanticSim } from './vec.js'
 import { admitIndexRow, pointersOfRow, sectionCore } from './section-ref.js'
+// 待认领队列（单一实现）：卡命名与「未落地知识回退」共用同一函数（本件只转发导出，勿再写第二份）
+import { knowledgeDeferFileOf } from './pointer-deficits.js'
 import { atomicWriteFile } from './section-rewrite.js'
 import { carrierFiles, mirrorAll, mirrorFile } from './record-shadow.js'
 import { commitRingChannels } from './ring-commit.js'
@@ -246,11 +248,8 @@ export const unpairedPointersOf = (
     .filter((p) => failedFilesWide.has(String(p.file)) || failedPairs.has(pairKeyOf(`notes/${p.file}`, p.spec)))
     .map((p) => `notes/${p.file}§${String(p.spec).replace(/[·、,，:：;；\s]+$/, '')}`)
 
-/** 册二：回退队列文件路径（幂等命名：同 (源会话, 行原文) ⇒ 同路径） */
-export const knowledgeDeferFileOf = (pendDir: string, sid: string, line: string, now = new Date()): string => {
-  const hash = createHash('sha1').update(`${sid}\n${String(line ?? '')}`).digest('hex').slice(0, 10)
-  return join(String(pendDir), `${now.toISOString().slice(0, 10)}-knowledge-defer-${hash}.md`)
-}
+/** 册二：回退队列文件路径（**单一实现已下沉 `pointer-deficits#knowledgeDeferFileOf`**，此处只转发） */
+export { knowledgeDeferFileOf } from './pointer-deficits.js'
 
 /**
  * 册二：未落地知识的**回退队列**（复用既有 `pending/` 通道，不新造）。
