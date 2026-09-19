@@ -2285,6 +2285,13 @@
   证据写在**既有 `note` 字段**（册一 `evidence` 必填**尚未施工**，不假装用了不存在的字段）。
   **同时实测暴露既有缺陷 G10**：全库 `--reconcile` **181/1018 内容不一致**（样例为 `decision:*`/`valence:*`，**无 commitment**）——
   用落库前备份快照跑同一对账**同为 181**，证明**先于本次写入**；据此把册一 V1.2 口径**收敛为 `commitment:*` 切片零漂移**（全库 181 另立项）。
+  **并暴露更严重的新缺陷 G11 · 结算不改变注入面**：落库 10 条后逐面实测，`记录/队列/KPI/事件` **四面全变**，
+  但 **注入面 `[环·承诺]` 仍显示已结清项**。函数级根因（非缓存）：`ringCandidates`（`src/ring-supply.ts:166-175`）
+  的过滤链是 `环记录 → ring≠none → isLive(时态) → 文本非空`，**没有一条看 `meta.status`**，而 `isLive` 只判 `validTo`
+  （75 条承诺 `validTo` 全空）⇒ **`settleCommitment` 改的是 `status`，读侧看的是 `validTo`，两条链不相交**。
+  决定性复现：绕过一切缓存直接调库函数 `createRingSupplyApi().lines(磁盘 store, [], now)`，**仍吐出**已结清项。
+  两条修法已在方案登记（均**未施工**，需授权）：**(a)** 供给侧对 commitment 增加 `status==='pending'` 判据（最小、可机检）·
+  **(b)** 写侧结算时复用既有幂等原语 `fact-ring#supersede` 落 `validTo`（时态对齐，需另议口径）。
 - **pin 归位（2026-09-19 · 用户指令「需要归位」）+ 检查器假红修复**：
   · **归位**：profile `web` 执行一次 `pnpm install`（21.7s · `+3` 包 · 无批量删除拦截；前置备份
     `~/.dsh/backups/sc-pin-align-20260919-165658`）⇒ 声明/锁定/实装三处**同为** `ad6d7370ec76…`；
