@@ -2273,6 +2273,23 @@
 - **panel client 迁移到 slot 契约（2026-09-05，解冻前置）**：client.js 注入声明加 `'slots'`，入口从直插侧栏 footArea DOM 改为注册 `sidebar.footer.action` 插槽按钮（无 slots 环境保留直插兜底）；host+client 已注入运行（ef85e372），构建产物 lib/ 重建
 
 ### Fixed
+- **「不要问我了」全权收尾轮（2026-09-19 · 三处真机缺口一并修掉）**：
+  · **G11 · 结算不改变注入面（最严重）**：`src/ring-supply.ts#ringCandidates` 准入链加**结清门**——
+    `kind==='commitment'` 时只收 `meta.status==='pending'`（缺字段视作 pending，**只限承诺**不误伤其它环）。
+    先红 → 后绿：`test-ring-supply.mjs` ①′ 五条断言 **39 pass·2 fail → 41 pass·0 fail**；
+    真机函数级复现：修前供给里**仍含已结清项**，修后**已消失**（pending 阴性对照仍在）。
+    修法 (b)（写侧落 `validTo`）**明确不做**：会让 `validTo` 兼"事实失效/承诺结清"两义，收益不抵风险。
+  · **G12 · 台账窗口截断**：`readAnchorNeeded` 原 `slice(-4000)` 只读末 4000 行，台账 2.2 万行时
+    **靠前的缺陷行被静默漏掉**（出口报 25，全量 33）⇒ 改**全量读**。
+  · **G13 · 台账轮转失明**：台账**按大小轮转**（`ledger.jsonl.1`）；17:45 轮转后主档只剩 105 行、
+    **33 条 anchor 行全在旧卷** ⇒ 只读主档读数变 **0（全盲）**。改用**既有单一实现**
+    `ledger-compact#readLedgerVolumes`（跨档按时间序读），**不自写第二份口径**。
+  · **G14 · 过时项冒充缺陷**：指向**已建好**小节的行仍在报"缺锚"⇒ 逐行判 `stillMissing`
+    （复用 `section-ref#resolveSectionSpec`），过时项归 `staleAnchor`/`staleRefs` **单列**（不进 counts/rows）。
+  · **真机读数（修后）**：`{"empty-landing":0,"empty-section":0,"anchor-needed":8,"knowledge-defer":0}` **total 8**
+    · **过时项 17**（33 行 = 8 真缺陷 + 过时/重复）· 不变量 `rows.length === total === Σcounts`。
+    先红三读数：①″ `anchors=0`(6001 行) · ①‴ `anchors=0`(旧卷 33 行) · ①′ `staleAnchor=undefined`。
+  · 特性标记 +2（`ring-supply` 结清门 · `pointer-deficits` 读全部卷）⇒ 探针 **73 → 75 项**。
 - **册五落库：承诺账 10 条结清（2026-09-19 · 用户指令「落」）**：
   用**唯一写入通道** `scripts/record-ring.mjs --settle <id> --kept --note "…"`（内部 `settleCommitment` → `commit()`：
   **先记事件、再存状态**）把册五分类中 **A 类 11 条**里未结的 **10 条**落库：

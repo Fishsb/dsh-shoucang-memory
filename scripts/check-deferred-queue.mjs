@@ -30,12 +30,15 @@ const mkFixture = (opts = {}) => {
   mkdirSync(join(k, 'audit'), { recursive: true })
   mkdirSync(join(k, 'pending'), { recursive: true })
   writeFileSync(join(bank, 'notes', 'a.md'), ['# a', '', '## 有内容节', '正文', '', ...(opts.emptySection === false ? ['## 空壳节', '已补正文', ''] : ['## 空壳节', ''])].join('\n'), 'utf8')
+  // 供"过时项"判据用：该小节**已存在** ⇒ 指向它的 anchor-needed 行是**过时**的（不是真缺陷）
+  writeFileSync(join(bank, 'notes', 'env.md'), ['# env', '', '## 已建锚节', '正文', ''].join('\n'), 'utf8')
   writeFileSync(join(bank, 'MEMORY.md'), ['- [env] 落点探针 · 概况/短语 → notes/a.md §空壳节', ''].join('\n'), 'utf8')
-  // 台账：两条同 ref（应去重）+ 一条不同 ref
+  // 台账：两条同 ref（应去重）+ 一条不同 ref + **一条指向已存在小节（过时）**
   writeFileSync(join(k, 'audit', 'ledger.jsonl'), [
     JSON.stringify({ at: 'x', type: 'anchor-needed', target: 'notes/env.md', section: '不存在的一号', reason: 'r1', sid: 'sid1' }),
     JSON.stringify({ at: 'y', type: 'anchor-needed', target: 'notes/env.md', section: '不存在的一号', reason: 'r2', sid: 'sid2' }),
     JSON.stringify({ at: 'z', type: 'anchor-needed', target: 'notes/env.md', section: '不存在的二号', reason: 'r3', sid: 'sid3' }),
+    JSON.stringify({ at: 's', type: 'anchor-needed', target: 'notes/env.md', section: '已建锚节', reason: 'r4', sid: 'sid4' }),
     JSON.stringify({ at: 'w', type: 'distill-run', added: 1 }),
     '',
   ].join('\n'), 'utf8')
@@ -52,6 +55,56 @@ const mkFixture = (opts = {}) => {
   ok('① 台账 anchor-needed **按 ref 去重**（3 行 → 2 条）', q.counts['anchor-needed'] === 2, `anchors=${q.counts['anchor-needed']}`)
   ok('① pending 知识回退计入', q.counts['knowledge-defer'] === 1)
   ok('① total = 各类之和', q.total === q.counts['empty-landing'] + q.counts['empty-section'] + q.counts['anchor-needed'] + q.counts['knowledge-defer'], `total=${q.total}`)
+  // ── ①′ 过时项（G14 · 2026-09-19 真机暴露：台账里指向**已存在**小节的行仍在报缺）──
+  ok('①′ 指向**已存在**小节的 anchor-needed **不计入**（过时项不再冒充缺陷）', q.counts['anchor-needed'] === 2, JSON.stringify(q.counts))
+  ok('①′ 过时项**单独可见**（staleAnchor 计数，不静默丢弃）', q.staleAnchor === 1, `staleAnchor=${q.staleAnchor}`)
+  ok('①′ 过时项 ref 可列举（供人工复核）', Array.isArray(q.staleRefs) && q.staleRefs.some((r) => r.includes('已建锚节')), JSON.stringify(q.staleRefs))
+  ok('①′ 不变量：rows.length === total === Σcounts（清单与计数同源）', q.rows.length === q.total && q.total === Object.values(q.counts).reduce((a, b) => a + b, 0), `rows=${q.rows.length} total=${q.total}`)
+  rmSync(bank, { recursive: true, force: true }); rmSync(k, { recursive: true, force: true })
+}
+
+// ── ①″ 台账**窗口不截断**（G12 · 2026-09-19 真机暴露：25 vs 33）──
+// 判因：`readAnchorNeeded` 缺省只回读**末 4000 行** ⇒ 台账长到 2.2 万行时，
+//   **靠前**的 anchor-needed 行**被静默漏掉**（真机实测：出口报 25 条，全量 33 条 ⇒ 输入量不可信）。
+// 判据：缺陷行落在窗口之外也必须被读到；且**不改写台账**（纯读）。
+{
+  const bank = mkdtempSync(join(tmpdir(), 'dq-win-bank-'))
+  const k = mkdtempSync(join(tmpdir(), 'dq-win-k-'))
+  mkdirSync(join(bank, 'notes'), { recursive: true })
+  mkdirSync(join(k, 'audit'), { recursive: true })
+  mkdirSync(join(k, 'pending'), { recursive: true })
+  writeFileSync(join(bank, 'MEMORY.md'), '', 'utf8')
+  const filler = Array.from({ length: 6000 }, (_, i) => JSON.stringify({ at: `f${i}`, type: 'distill-run', added: 0 }))
+  // 缺陷行放在**最前**（旧实现的 slice(-4000) 必然漏掉它）
+  const led = [JSON.stringify({ at: 'head', type: 'anchor-needed', target: 'notes/env.md', section: '窗口外的锚', reason: 'r', sid: 's' }), ...filler, ''].join('\n')
+  writeFileSync(join(k, 'audit', 'ledger.jsonl'), led, 'utf8')
+  const q = deferredQueueOf({ bankRoot: bank, kRoot: k })
+  ok('①″ 窗口外（靠前）的 anchor-needed 行**必须被读到**（先红：旧实现只读末 4000 行 ⇒ 0 条）', q.counts['anchor-needed'] === 1, `anchors=${q.counts['anchor-needed']} 台账行=${led.split('\n').length - 1}`)
+  ok('①″ 台账**零改写**（纯读：行数不变）', readFileSync(join(k, 'audit', 'ledger.jsonl'), 'utf8').split('\n').length - 1 === 6001)
+  rmSync(bank, { recursive: true, force: true }); rmSync(k, { recursive: true, force: true })
+}
+
+// ── ①‴ 台账**读全部卷**（G13 · 2026-09-19 真机暴露，比窗口截断更严重）──
+// 判因：台账按大小**轮转**（`ledger-compact#rotateBySize` ⇒ `ledger.jsonl.1`）。
+//   真机实测（17:45 轮转后）：主档只剩 105 行，**33 条 anchor-needed 全在旧卷** ⇒
+//   只读主档的实现读数变 **0**（全盲）。⇒ 判据：缺陷行**只在旧卷**时也必须被读到。
+//   真机先红读数：修前 `deferredQueueOf` = `{anchor-needed:0}`，旧卷实有 **33** 行。
+{
+  const bank = mkdtempSync(join(tmpdir(), 'dq-vol-bank-'))
+  const k = mkdtempSync(join(tmpdir(), 'dq-vol-k-'))
+  mkdirSync(join(bank, 'notes'), { recursive: true })
+  mkdirSync(join(k, 'audit'), { recursive: true })
+  mkdirSync(join(k, 'pending'), { recursive: true })
+  writeFileSync(join(bank, 'MEMORY.md'), '', 'utf8')
+  // 缺陷行只在**旧卷**（.1），主档只有无关行
+  writeFileSync(join(k, 'audit', 'ledger.jsonl.1'), [
+    JSON.stringify({ at: 'old', type: 'anchor-needed', target: 'notes/env.md', section: '旧卷里的锚', reason: 'r', sid: 's' }),
+    '',
+  ].join('\n'), 'utf8')
+  writeFileSync(join(k, 'audit', 'ledger.jsonl'), [JSON.stringify({ at: 'new', type: 'distill-run', added: 1 }), ''].join('\n'), 'utf8')
+  const q = deferredQueueOf({ bankRoot: bank, kRoot: k })
+  ok('①‴ 缺陷行只在**旧卷**（ledger.jsonl.1）也必须被读到（真机先红：读数 0，旧卷实有 33 行）', q.counts['anchor-needed'] === 1, `anchors=${q.counts['anchor-needed']}`)
+  ok('①‴ 主档与旧卷**都不被改写**', readFileSync(join(k, 'audit', 'ledger.jsonl.1'), 'utf8').includes('旧卷里的锚'))
   rmSync(bank, { recursive: true, force: true }); rmSync(k, { recursive: true, force: true })
 }
 

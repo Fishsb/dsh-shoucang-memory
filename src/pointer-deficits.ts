@@ -18,6 +18,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, write
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { pointersOfRow, resolveSectionSpec, sectionTitles } from './section-ref.js'
+import { readLedgerVolumes } from './ledger-compact.js'
 
 export type DeficitKind = 'empty-landing' | 'empty-section' | 'anchor-needed' | 'knowledge-defer'
 
@@ -27,6 +28,8 @@ export interface DeficitRow {
   ref: string
   /** 来源说明（主档行 / 全库巡检 / 台账 / pending 卡） */
   detail: string
+  /** 台账 anchor-needed 专用：该小节**现在是否仍不存在**（`true`=真缺陷 / `false`=过时项 / `undefined`=未判） */
+  stillMissing?: boolean
 }
 
 /** 小节正文 = 标题后到下一个同级/更高级标题之间的**非空行数**（确定性口径；与 check-pointer-content 同源） */
@@ -88,17 +91,53 @@ export function scanEmptyLandings(bankRoot: string): DeficitRow[] {
   return out
 }
 
-/** 台账 `type=anchor-needed`（蒸馏写侧登记的"需人工建锚"；同 target§section 只留一条） */
-export function readAnchorNeeded(ledgerFile: string, limitLines = 4000): DeficitRow[] {
+/**
+ * 建锚行是否**仍然**缺锚（确定性，复用 `section-ref` 的**同一**解析器，不另写匹配）。
+ * 保守方向：说不清（文件/小节名为空、解析异常）⇒ 视为**仍缺**（宁可报缺，不静默丢缺陷）。
+ */
+const anchorStillMissing = (bankRoot: string, target: string, section: string): boolean => {
+  const file = String(target ?? '').trim()
+  const spec = String(section ?? '').trim()
+  if (!file || !spec) return true
+  try {
+    const { agg, parts } = resolveSectionSpec(bankRoot, file, spec)
+    const okParts = parts.filter((x) => x.res.state === 'exists')
+    return agg === 'missing' || !okParts.length
+  } catch { return true }
+}
+
+/**
+ * 台账 `type=anchor-needed`（蒸馏写侧登记的"需人工建锚"；同 target§section 只留一条）。
+ *
+ * ⚠ **必须读全量 + 读全部卷**（G12/G13 · 2026-09-19 真机暴露两次）：
+ *   ① 原先缺省 `slice(-4000)` 只回读末 4000 行，而真库台账已 **2.2 万行**
+ *      ⇒ **靠前的缺陷行被静默漏掉**（实测：出口报 **25** 条，全量 **33** 条）；
+ *   ② 即便改成"全量读主档"仍不够——台账有**按大小轮转**（`rotateBySize` ⇒ `ledger.jsonl.1`），
+ *      实测 17:45 轮转后主档只剩 105 行，**33 条 anchor 行全在旧卷** ⇒ 只读主档读数变 **0**（全盲）。
+ *   现改为复用**既有单一实现** `ledger-compact#readLedgerVolumes`（跨档按时间序、不可读档跳过），
+ *   不再自写"读哪些文件"的逻辑（避免又一份口径）。
+ *
+ * 传入 `bankRoot` 时对每行判 `stillMissing`：指向**已存在**小节的行是**过时项**
+ *   （小节后来经别的路径建好了）⇒ 由 `deferredQueueOf` 归入 `staleAnchor`，**不再冒充缺陷**。
+ */
+export function readAnchorNeeded(ledgerFile: string, bankRoot?: string): DeficitRow[] {
   const seen = new Map<string, DeficitRow>()
-  let lines: string[] = []
-  try { lines = readFileSync(ledgerFile, 'utf8').split(/\r?\n/).filter(Boolean).slice(-limitLines) } catch { return [] }
+  const lines = readLedgerVolumes(ledgerFile)
   for (const l of lines) {
+    if (!l) continue
     try {
       const o = JSON.parse(l)
       if (!o || o.type !== 'anchor-needed') continue
-      const ref = `notes/${String(o.target || '').replace(/^notes\//, '')} §${String(o.section || '')}`
-      seen.set(ref, { kind: 'anchor-needed', ref, detail: `${String(o.reason || '').slice(0, 90)}（sid ${String(o.sid || '').slice(0, 8)}）` })
+      const target = String(o.target ?? '')
+      const section = String(o.section ?? '')
+      const ref = `notes/${target.replace(/^notes\//, '')} §${section}`
+      const stillMissing = bankRoot ? anchorStillMissing(bankRoot, target, section) : undefined
+      seen.set(ref, {
+        kind: 'anchor-needed',
+        ref,
+        detail: `${String(o.reason ?? '').slice(0, 90)}（sid ${String(o.sid ?? '').slice(0, 8)}）`,
+        ...(stillMissing === undefined ? {} : { stillMissing }),
+      })
     } catch { /* 坏行跳过 */ }
   }
   return [...seen.values()]
@@ -143,19 +182,29 @@ export interface DeferredQueue {
   counts: Record<DeficitKind, number>
   total: number
   rows: DeficitRow[]
+  /** 台账 anchor-needed 中**指向已存在小节**的过时项条数（不计入 counts/rows，但显式可见） */
+  staleAnchor: number
+  /** 过时项 ref 清单（供人工复核；不静默丢弃） */
+  staleRefs: string[]
 }
 
-/** **统一只读出口**：四个来源合并（空壳落点 / 全库空壳 / 台账 anchor-needed / pending 知识回退） */
+/**
+ * **统一只读出口**：四个来源合并（空壳落点 / 全库空壳 / 台账 anchor-needed / pending 知识回退）。
+ * 不变量：`rows.length === total === Σcounts`——**清单与计数同源**（stale 项单列，不进这一组）。
+ */
 export function deferredQueueOf(d: { bankRoot: string; kRoot: string }): DeferredQueue {
+  const anchors = readAnchorNeeded(join(d.kRoot, 'audit', 'ledger.jsonl'), d.bankRoot)
+  const liveAnchors = anchors.filter((r) => r.stillMissing !== false)
+  const staleRefs = anchors.filter((r) => r.stillMissing === false).map((r) => r.ref)
   const rows: DeficitRow[] = [
     ...scanEmptyLandings(d.bankRoot),
     ...scanEmptySections(d.bankRoot),
-    ...readAnchorNeeded(join(d.kRoot, 'audit', 'ledger.jsonl')),
+    ...liveAnchors,
     ...readKnowledgeDefers(join(d.kRoot, 'pending')),
   ]
   const counts = { 'empty-landing': 0, 'empty-section': 0, 'anchor-needed': 0, 'knowledge-defer': 0 } as Record<DeficitKind, number>
   for (const r of rows) counts[r.kind]++
-  return { counts, total: rows.length, rows }
+  return { counts, total: rows.length, rows, staleAnchor: staleRefs.length, staleRefs: staleRefs.sort() }
 }
 
 /** 回退卡文件名（幂等命名：同 (源, 目标形态, 内容) ⇒ 同路径）——`distill-write` 的同类卡复用本函数 */

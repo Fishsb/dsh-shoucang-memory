@@ -60,6 +60,30 @@ console.log('环记录情境供给（ring-supply）')
   ok(ids.includes('a'), '合规环记录 ⇒ 入选')
 }
 
+// ── ①′ 承诺的**结清门**（G11 · 2026-09-19 实测暴露）──
+// 判因：`settleCommitment` 改的是 `meta.status`，而本通道此前只按 `isLive()`（`validTo`）过滤
+//   ⇒ **结算对注入面零影响**：已结清的承诺仍被当作"待办"唤起（真机实测：落库 10 条后注入面照旧显示）。
+// 判据：承诺类记录**只收 `status === 'pending'`**；缺 `status` 视为 pending（向后兼容老记录）。
+//   范围**只限承诺**：其它环记录（决策/事实/联想…）没有 status 语义，不得被本门误伤。
+{
+  const statusOf = (s) => ({ status: s, direction: 'owed-by-me', who: '用户' })
+  const recs = [
+    mk({ id: 'p1', text: '待办承诺', meta: statusOf('pending') }),
+    mk({ id: 'k1', text: '已兑现承诺', meta: statusOf('kept') }),
+    mk({ id: 'b1', text: '未兑现承诺', meta: statusOf('broken') }),
+    mk({ id: 'legacy', text: '老记录无 status 字段' }),                     // 兼容：视作 pending
+    mk({ id: 'dec', kind: 'decision', text: '决策记录带 status', meta: statusOf('kept') }), // 不得误伤
+  ]
+  // ⚠ 必须显式给 `topN`：默认 topN=3 会**截断**候选 ⇒ 断言会因"被裁掉"而假绿/假红（本判据自身踩过）。
+  const out = R.ringCandidates(recs, [], { at: AT, topN: 10 })
+  const ids = out.map((x) => x.id)
+  ok(!ids.includes('k1'), 'G11 已兑现（status=kept）⇒ **不进**情境层')
+  ok(!ids.includes('b1'), 'G11 未兑现（status=broken）⇒ **不进**情境层（已结清即出待办）')
+  ok(ids.includes('p1'), 'G11 阴性对照：pending ⇒ 仍入选')
+  ok(ids.includes('legacy'), 'G11 向后兼容：缺 meta.status ⇒ 视作 pending，仍入选（不静默丢老记录）')
+  ok(ids.includes('dec'), 'G11 范围只限承诺：决策记录带 status=kept **照常入选**（不误伤其它环）')
+}
+
 // ── ② 活性（时态维，与 lifecycle 正交）──
 {
   const live = mk({ id: 'live', text: '未失效' })
