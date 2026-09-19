@@ -198,7 +198,42 @@ const legacyDiffs = compare(legacyTs, legacyMjs, CASES)
 ok(legacyDiffs.length > 0, `先红证据：旧两实现（多命中⇒判不存在 ↔ 任一命中⇒判存在）在本夹具上分歧 ${legacyDiffs.length} 例 ⇒ 本锁对历史分歧有效`)
 for (const d of legacyDiffs.slice(0, 3)) console.log(`   · 分歧样例 ${d.file} §${d.name}  旧TS=${d.ts}  旧MJS=${d.mjs}`)
 
+// ── C 放置用例（**册三扩面** · 2026-09-19 · docs/pointer-supply-plan.md §5-1）──
+//   为什么扩到这里：放置语义（`planPlacement`）是**写侧**判据，而本件是"跨面同源"的**唯一**差分锁 ⇒
+//   新判据必须一并纳入，否则「写侧一份、读侧一份」的老病会以新形态复活。
+//   G5 先红形态（方案 §2.2 实测）：夹具库只有 `## DSH 环境` 时写「环境」**旧实现误配**落进「DSH 环境」。
+writeFileSync(join(TMP, 'notes', 'place-a.md'), ['# a', '', '## DSH 环境', 'x', ''].join('\n'), 'utf8')
+writeFileSync(join(TMP, 'notes', 'place-b.md'), ['# b', '', '## 环境配置', 'x', '', '## 环境变量', 'y', ''].join('\n'), 'utf8')
+writeFileSync(join(TMP, 'notes', 'place-c.md'), ['# c', '', '## 环境', 'x', '', '## 环境变量', 'y', ''].join('\n'), 'utf8')
+{
+  const PLACE = [
+    ['place-a.md', ['环境'], 'missing', 'G5 先红形态：写「环境」**不得**落进「DSH 环境」'],
+    ['place-a.md', ['DSH'], 'loose', '前缀命中照常落（不误伤）'],
+    ['place-b.md', ['环境'], 'refused', '多前缀候选 ⇒ 拒绝（要求「父/子」/全名）'],
+    ['place-b.md', ['环境配置'], 'exact', '写全名 ⇒ exact 落点'],
+    ['place-c.md', ['环境'], 'exact', 'exact 优先于 loose'],
+  ]
+  let pDiff = 0, pFail = 0
+  for (const [file, parts, want, why] of PLACE) {
+    const ta = ts.sectionTitles(TMP, file), tb = mjs.sectionTitles(TMP, file)
+    const pa = ts.planPlacement(ta, parts), pb = mjs.planPlacement(tb, parts)
+    if (JSON.stringify(pa) !== JSON.stringify(pb)) { pDiff++; console.log(`   ⚠ 放置分歧 ${file} ${parts.join('/')}`) }
+    const got = pa.refused ? 'refused' : (pa.steps.length ? pa.steps[pa.steps.length - 1].state : 'missing')
+    if (got !== want) { pFail++; console.log(`   ⚠ 放置期望不符 ${file} ${parts.join('/')} got=${got} want=${want}（${why}）`) }
+  }
+  ok(pDiff === 0, `C 放置决策两侧同结论（${PLACE.length} 例 · 差异 ${pDiff}）`)
+  ok(pFail === 0, `C 放置期望逐例命中（${PLACE.length} 例 · 不符 ${pFail}）`)
+
+  // 应急回退模式（`loose:'contains'` = 旧宽容语义）**同一实现参数化** ⇒ 两侧同结论，且复现旧行为
+  const ta = ts.sectionTitles(TMP, 'place-a.md'), tb = mjs.sectionTitles(TMP, 'place-a.md')
+  const la = ts.planPlacement(ta, ['环境'], { loose: 'contains' })
+  const lb = mjs.planPlacement(tb, ['环境'], { loose: 'contains' })
+  ok(JSON.stringify(la) === JSON.stringify(lb), 'C 回退模式两侧逐字一致')
+  const lastTitle = la.steps.length ? la.steps[la.steps.length - 1].title : ''
+  ok(lastTitle === 'DSH 环境', 'C 先红等价：旧语义（contains）确实落进「DSH 环境」⇒ 新语义（missing）与旧行为**结论不同**（判据有判别力）')
+}
+
 rmSync(TMP, { recursive: true, force: true })
-console.log(fail ? `\nFAIL（${fail} 项）` : `\nPASS（夹具 ${CASES.length} 例 + 契约 ${EXPECT.length} 例 + 准入 ${ROW_CASES.length} 例 + 反例 3 组）`)
+console.log(fail ? `\nFAIL（${fail} 项）` : `\nPASS（夹具 ${CASES.length} 例 + 契约 ${EXPECT.length} 例 + 准入 ${ROW_CASES.length} 例 + 放置 5 例 + 反例 3 组）`)
 if (AS_JSON) console.log(JSON.stringify({ cases: CASES.length, diffs: diffs.length, fail }))
 process.exit(fail ? 1 : 0)

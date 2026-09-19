@@ -80,6 +80,80 @@ export function sectionTitles(memRoot: string, file: string): { title: string; l
  * @param file    `env.md` 或 `notes/env.md`（`normalizeNotesFile` 容错）
  * @param name    § 后的名字（可含括号日期；允许多级路径的**单段**）
  */
+/**
+ * ══ 册三（2026-09-19 · docs/pointer-supply-plan.md §5-1）：**层级化放置裁决** ══
+ *
+ * 判因（方案 §2.2 G5，实测坐实）：`memory-append` 自带一份 `matches`（**双向包含**）+ `findChild`（逐级取**首个**）
+ *   ⇒ 夹具库只有 `## DSH 环境` 时写「环境」**误配**进「DSH 环境」（exit 0 无提示），与本节三态语义不统一。
+ * 语义（与 `resolveFromTitles` 同源，但**限定父作用域 + 指定层级**）：exact → loose 唯一命中 →
+ *   **多命中 ⇒ `ambiguous`**（调用方必须拒绝并要求写「父/子」全路径）；无命中 ⇒ `missing`（写入侧按既有策略建子节）。
+ * ⚠ 与 `skill/scripts/section-ref.mjs` 是同一语义的两份物理实现（子进程活件零依赖，不可 import src/），
+ *   一致由 `scripts/check-section-ref-parity.mjs` 的**放置用例**差分锁守。
+ */
+export interface PlacementHit { title: string; core: string; level: number; idx: number; at: number; exact: boolean }
+export interface LevelResolution { state: 'exact' | 'loose' | 'ambiguous' | 'missing'; pick: PlacementHit | null; cands: PlacementHit[] }
+export function resolveLevelInParent(
+  titles: { title: string; level: number; idx: number }[] | null | undefined,
+  parentIdx: number,
+  level: number,
+  name: unknown,
+  opts: { loose?: 'prefix' | 'contains' } = {},
+): LevelResolution {
+  const kw = sectionCore(name)
+  const looseMode: 'prefix' | 'contains' = opts.loose === 'contains' ? 'contains' : 'prefix'
+  const list = Array.isArray(titles) ? titles : []
+  const from = parentIdx < 0 ? 0 : Number(parentIdx) + 1
+  const parentLevel = parentIdx < 0 ? 1 : list[Number(parentIdx)].level
+  const scope: { t: { title: string; level: number; idx: number }; at: number }[] = []
+  for (let i = from; i < list.length; i++) {
+    if (list[i].level <= parentLevel) break // 出父范围
+    if (list[i].level === level) scope.push({ t: list[i], at: i })
+  }
+  const cand = ({ t, at }: { t: { title: string; level: number; idx: number }; at: number }): PlacementHit => {
+    const core = sectionCore(t.title); return { title: t.title, core, level: t.level, idx: t.idx, at, exact: core === kw }
+  }
+  const exactHits = scope.filter(({ t }) => sectionCore(t.title) === kw)
+  if (exactHits.length === 1) return { state: 'exact', pick: cand(exactHits[0]), cands: [cand(exactHits[0])] }
+  // ⚠ **写侧比读侧严**（册三 · §5-1）：读侧的"双向包含"是**容错回落**（读了再说），
+  //   而写侧 loose 只认**前缀关系**（候选以 kw 开头 / kw 以候选开头）。
+  //   判因（G5 实测）：仅尾部包含会让「环境」落进「DSH 环境」——语义面不同的两件事，属**放错**而非容错。
+  const uniq = new Map<number, { t: { title: string; level: number; idx: number }; at: number }>()
+  for (const s of scope) {
+    const c = sectionCore(s.t.title)
+    if (!kw || !c) continue
+    const hit = looseMode === 'contains' ? (c === kw || c.includes(kw) || kw.includes(c)) : (c.startsWith(kw) || kw.startsWith(c))
+    if (hit) uniq.set(s.t.idx, s)
+  }
+  const hits = [...uniq.values()].sort((a, b) => a.t.idx - b.t.idx)
+  if (hits.length === 1) return { state: 'loose', pick: cand(hits[0]), cands: [cand(hits[0])] }
+  if (hits.length > 1) return { state: 'ambiguous', pick: null, cands: hits.map(cand) }
+  return { state: 'missing', pick: null, cands: [] }
+}
+
+export interface PlacementStep { pi: number; level: number; state: string; name: string; at?: number; title?: string }
+export interface PlacementPlan {
+  refused: { pi: number; level: number; name: string; cands: string[] } | null
+  steps: PlacementStep[]
+  parentIdx: number
+  missingPi: number
+}
+/** 路径放置计划：逐级裁决；`ambiguous` ⇒ **refused**（不猜、不取首个）；首缺层 ⇒ `missingPi` */
+export function planPlacement(titles: { title: string; level: number; idx: number }[] | null | undefined, pathParts: string[], opts: { loose?: 'prefix' | 'contains' } = {}): PlacementPlan {
+  const parts = Array.isArray(pathParts) ? pathParts : []
+  const steps: PlacementStep[] = []
+  let parentIdx = -1
+  let missingPi = -1
+  for (let pi = 0; pi < parts.length; pi++) {
+    const level = 2 + pi
+    const r = resolveLevelInParent(titles, parentIdx, level, parts[pi], opts)
+    if (r.state === 'ambiguous') return { refused: { pi, level, name: parts[pi], cands: r.cands.map((c) => c.title) }, steps, parentIdx, missingPi: -1 }
+    if (r.state === 'missing') { missingPi = pi; steps.push({ pi, level, state: 'missing', name: parts[pi] }); break }
+    steps.push({ pi, level, state: r.state, name: parts[pi], at: r.pick!.at, title: r.pick!.title })
+    parentIdx = r.pick!.at
+  }
+  return { refused: null, steps, parentIdx, missingPi }
+}
+
 export function resolveSection(memRoot: string, file: string, name: unknown): SectionRefResult {
   const f = normalizeNotesFile(file)
   const kw = sectionCore(name)

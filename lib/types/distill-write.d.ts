@@ -39,6 +39,7 @@ export declare function createWriteApi(dep: WriteDeps): {
         failed: number;
         undigested: number;
         needsAnchor: number;
+        pairedSkipped: number;
         items: Array<Record<string, string>>;
         targetLib: string;
     }>;
@@ -60,3 +61,13 @@ export declare const classifyMemFailure: (text: string) => {
     kind: "needsAnchor" | "rejected" | "undigested";
     marker: string;
 };
+declare const pairKeyOf: (target: string, section: unknown) => string;
+export { pairKeyOf };
+/**
+ * 册二：给定索引行 → 其**未成对**（明细未落地）的指针描述（空数组 = 该行可落）。
+ * 抽成**导出纯函数**是为了可机检：直接驱动 `writeDispatch` 会经 `resolveTarget()`/子进程写**真库**（红线禁止），
+ * 故判据只驱动本函数（`scripts/check-pointer-pairing.mjs`），并把"新判定 vs 旧规则"的**判别力**一并断言。
+ */
+export declare const unpairedPointersOf: (line: string, failedPairs: ReadonlySet<string>, failedFilesWide: ReadonlySet<string>) => string[];
+/** 册二：回退队列文件路径（幂等命名：同 (源会话, 行原文) ⇒ 同路径） */
+export declare const knowledgeDeferFileOf: (pendDir: string, sid: string, line: string, now?: Date) => string;

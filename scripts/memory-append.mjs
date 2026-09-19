@@ -11,7 +11,7 @@ import { readFile, writeFile, copyFile, mkdir, rename, unlink, readdir, rm } fro
 import { join, dirname, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // S1R（2026-09-19）：索引行准入复用**单一语义件**（与宿主侧 `src/section-ref.ts` 同口径，差分锁守）
-import { pointersOfRow, resolveSectionSpec } from './section-ref.mjs';
+import { pointersOfRow, resolveSectionSpec, planPlacement } from './section-ref.mjs';
 // S2S3 册零（2026-09-19）：**库级单写者锁**（与宿主 `src/bank-lock.ts` 同语义，差分锁守）
 import { acquireBankLock, releaseBankLock } from './bank-lock.mjs';
 
@@ -79,36 +79,38 @@ if (!pathParts.length) { console.error('小节路径为空'); process.exit(2); }
 
 const headingAt = (l) => (/^(#{2,6}) /.test(l) ? /^(#{2,6}) /.exec(l)[1].length : 0);
 const cleanTitle = (l) => l.replace(/^#{2,6} /, '').trim();
-const matches = (title, kw) => { const t = title.toLowerCase(); const k = kw.toLowerCase(); return t === k || t.includes(k) || k.includes(t); };
 
 // 建标题行索引：[{line, level, title}]
 const heads = [];
 lines.forEach((l, i) => { const lv = headingAt(l); if (lv >= 2) heads.push({ line: i, level: lv, title: cleanTitle(l) }); });
 
-// 在 heads 中找「parent 之后、level 层的 kw 标题」；parentIdx 为父标题在 heads 的下标（-1=文件级）
-const findChild = (parentIdx, level, kw) => {
-  const from = parentIdx < 0 ? 0 : parentIdx + 1;
-  for (let i = from; i < heads.length; i++) {
-    if (heads[i].level <= (parentIdx < 0 ? 1 : heads[parentIdx].level)) break; // 出父范围
-    if (heads[i].level === level && matches(heads[i].title, kw)) return i;
+// ══ 册三（2026-09-19 · docs/pointer-supply-plan.md §5-1）**放置收敛** ══════════════════════════
+// 判因（方案 §2.2 G5 实测坐实）：本件原自带 `matches`（**双向包含**）+ `findChild`（逐级取**首个**），
+//   与 `section-ref` 的三态语义不统一 ⇒ 夹具库只有 `## DSH 环境` 时写「环境」会**误配**进「DSH 环境」
+//   （exit 0 无提示）。现统一走 `planPlacement`（exact → loose 唯一命中 → **多命中 ⇒ 拒绝并要求「父/子」全路径**）。
+// 应急回退（`SHOUCANG_APPEND_PLACEMENT_CHECK=0`）：歧义时**取首个命中**（旧行为）并**显式告警**（不静默）。
+const LEGACY_FIRST = process.env.SHOUCANG_APPEND_PLACEMENT_CHECK === '0';
+const titles = heads.map((h) => ({ title: h.title, level: h.level, idx: h.line }));
+// 应急回退 = **同一实现的参数化**（`loose:'contains'` 恢复读侧宽容语义），不留第二份匹配代码
+let plan = planPlacement(titles, pathParts, LEGACY_FIRST ? { loose: 'contains' } : {});
+if (plan.refused) {
+  if (!LEGACY_FIRST) {
+    console.error(`小节名有 ${plan.refused.cands.length} 个同层候选（**拒绝写入**，请写「父/子」全路径消歧）: ${plan.refused.name} ⇒ ${plan.refused.cands.join(' | ')}`);
+    console.error('  ⇒ 或用 `node section-ref.mjs <notes/x.md> "<小节名>"` 查看候选；应急回退：SHOUCANG_APPEND_PLACEMENT_CHECK=0（取首个，旧行为）');
+    process.exit(2);
   }
-  return -1;
-};
-
-// 逐级下钻：维护「当前父标题下标」链
-let parentIdx = -1; // 当前父级（在 heads 中的下标；-1=文件顶）
-const anchored = []; // 已命中的各级 heads 下标（供定位最深层已存在节）；缺失层记负值 -(pi+1)
-for (let pi = 0; pi < pathParts.length; pi++) {
-  const level = 2 + pi;
-  const hi = findChild(parentIdx, level, pathParts[pi]);
-  if (hi === -1) {
-    // 本层缺失：记录「从第 pi 层起需新建」，跳出
-    anchored.push(-pi - 1); // 负标记：第 pi 层缺失
-    break;
-  }
-  anchored.push(hi);
-  parentIdx = hi;
+  console.error(`⚠ 放置歧义（${plan.refused.name} ⇒ ${plan.refused.cands.join(' | ')}）⇒ 应急回退**取首个**（旧行为，请尽快改成「父/子」全路径）`);
+  const first = plan.refused.cands[0];
+  const at = titles.findIndex((t) => t.title === first && t.level === plan.refused.level);
+  const steps = plan.steps.slice();
+  const prevParent = plan.parentIdx;
+  // 强制以首个候选作为该层落点（等价旧 findChild 取首个），后续层级继续按需新建
+  plan = { refused: null, steps: [...steps, { pi: plan.refused.pi, level: plan.refused.level, state: 'loose', name: plan.refused.name, at, title: first }], parentIdx: at, missingPi: -1 };
+  if (prevParent < 0 && at < 0) plan.missingPi = plan.refused.pi; // 兜底：候选定位失败 ⇒ 当作缺失（不猜）
 }
+const anchored = plan.steps.filter((s) => s.state !== 'missing').map((s) => s.at);
+if (plan.missingPi >= 0) anchored.push(-plan.missingPi - 1);
+let parentIdx = plan.parentIdx;
 
 let content;
 if (isNewIndexLine) {

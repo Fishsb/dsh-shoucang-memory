@@ -2273,6 +2273,23 @@
 - **panel client 迁移到 slot 契约（2026-09-05，解冻前置）**：client.js 注入声明加 `'slots'`，入口从直插侧栏 footArea DOM 改为注册 `sidebar.footer.action` 插槽按钮（无 slots 环境保留直插兜底）；host+client 已注入运行（ef85e372），构建产物 lib/ 重建
 
 ### Fixed
+- **指针供给三册全量落地（2026-09-19 · 方案档 `docs/pointer-supply-plan.md` §11 施工记录）**：
+  治「模型编小节名 → 写门拒收 → 知识静默丢」这条链，三册各带先红→后绿与在册机检：
+  · **册一 地址供给**：新增 `src/section-supply.ts`（复用 `section-ref#sectionTitles` 作**唯一解析器**、预算逐级降级、
+    材料段**绝不进 persona**）+ 纯装配 `buildDistillUserInput`（"接线 ≠ 抵达"可机检）⇒ 蒸馏材料首次带上**库侧真实小节清单**；
+    审计新增 `sectionMiss`/`supplySections`（只增字段）。判据 `check-section-supply`（19 条，含空库显式「0 条」与深睡侧"不叠第二份"正面断言）。
+  · **册二 写入事务化**：`distill-write` 增**段级成对裁决**（`unpairedPointersOf`：同批 append 未落地 ⇒ 索引行**不落**，
+    治 G2「行落了、知识没落」的孤儿指针）+ `-knowledge-defer-` **回退队列**（幂等命名；且被候选过滤器排除 ⇒ **防重裁决死循环**）
+    + 逐条 `gate-reject` 带 `class`（unpaired/missing/dup/format）。新增 `check-pointer-pairing`（15 条）与
+    **内容存在性判据** `check-pointer-content`（缺省报告态；真库**独立复现**方案基线：指针 617 · **空壳落点 4 条 / 3 小节**）。
+  · **册三 判据单一化收尾**：`section-ref` 增 `resolveLevelInParent`/`planPlacement`（**写侧严格语义**：exact →
+    **前缀** loose 唯一 → 多命中**拒绝并要求「父/子」全路径**；`loose:'contains'` 参数化保留应急回退开关
+    `SHOUCANG_APPEND_PLACEMENT_CHECK=0`）⇒ `memory-append` **删掉第 5 份匹配实现**（G5「写『环境』落进『DSH 环境』」消除）；
+    **画像行 § 准入**补齐（`USER/AGENT` 的 `← 源: notes/x.md §y` 与索引行**同一实现** `admitIndexRow`；真库存量 10 行全部仍可通过）。
+    判据 `check-placement-convergence`（12 条，含"默认拒绝 / 回退复现旧行为"两态对照）、`check-profile-admission`（9 条）、
+    差分锁 `check-section-ref-parity` **扩面 5 例放置**（含 G5 先红等价）。
+  五层：typecheck/build ✓ · `check-deploy-sync` 首跑**红 4 件**（库内脚本仍是旧逻辑）→ 部署后 **0 不一致** ·
+  `check-installed-sync --strict` **364/364** · 热重载 fiber active · 特性探针 **71 项**（+4）。
 - **蒸馏「重复蒸馏无挡板」根治（2026-09-19 · 四册全量落地，方案档 `docs/distill-admission-plan.md`）**：
   真机实测：三个会话水位**冻结数小时**（`3a0b155d`=2 · `f25fad0c`=808 · `308db868`=0），
   同一段被反复重蒸（近 1h `distill-run` **30/30 带 `failed>0`**；单会话一小时 **12–15 次** LLM 调用）。

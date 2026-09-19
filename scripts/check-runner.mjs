@@ -351,6 +351,33 @@ const CHECKS = [
   //   无增量 → 熔断 → claim → 不在途 → 宽限 → 放行；手动只豁免宽限）；② `quiescenceOf` 三态证据链
   //   （`unknown` 不是 busy）；③ `lastTurnEndMsOf`（宽限期的持久来源）；④ 三处调用点同源的符号级断言。
   ['scripts/test-ingest-admission.mjs'],
+  // 指针供给册一（2026-09-19 · docs/pointer-supply-plan.md §3）**小节地址供给**：
+  //   判因（真机取证）：蒸馏 prompt 要求「section = 既有 ## 小节名」，材料里却**从未注入真实清单**
+  //   ⇒ 模型编名（抽查 5 个悬空名在真库 334 个两级小节中 **0 命中**）⇒ 写门拒收 = 污染换成丢料。
+  //   本件锁：① 清单条数 == `sectionTitles` 实测（独立计数）；② 每条地址读侧可达；
+  //   ③ **接线 ≠ 抵达**（直接调 `buildDistillUserInput` 断言返回文本含地址段）；④ 空库显式「0 条」+ 预算降级不截半行；
+  //   ⑤ **深睡侧不叠第二份**（正面断言既有 `currentTreeSections` 已含清单）；⑥ 归一键判别力（反例自证）。
+  //   先红：改造前无 `src/section-supply.ts` ⇒ 本件首跑 import 即失败（红读数入档 §13 施工记录）。
+  ['scripts/check-section-supply.mjs'],
+  // 指针供给册二（2026-09-19 · docs/pointer-supply-plan.md §4）**段级成对裁决 + 未落地回退**：
+  //   判因（G2 实测坐实）：同批 append 落点失败后 `newIndex` 行**照写**且指针指向**合法存在**的小节
+  //   ⇒「行落了、知识没落」，现有准入只测地址空间、测不到"地址背后是否有内容"。
+  //   本件只驱动**导出纯函数**（`writeDispatch` 会经 `resolveTarget()`/子进程写真库 ⇒ 红线禁止），
+  //   锁：① 未成对行判 unpaired ② 阴性对照不误伤 ③ 反例自证旧规则会放行 ④ 回退队列命名幂等 + 候选过滤器排除。
+  ['scripts/check-pointer-pairing.mjs'],
+  // 指针供给册二**内容存在性**（方案 §4 核心产出）：补「地址有效 ≠ 地址下有知识」这条空白面。
+  //   缺省**报告态**（真库实测 4 条 / 去重 3 小节 = 方案基线）；`--strict` 才按基线判回归（与 §2.3 待决项解耦）。
+  //   判据**只做确定性判定**（正文非空）；词面代理已由方案 §4「失败记录」否证，本件含反例自证（宽节不得误报）。
+  ['scripts/check-pointer-content.mjs'],
+  // 指针供给册三（方案 §5-1）**放置语义收敛**：`memory-append` 原自带 `matches`（双向包含）+`findChild`（取首个）
+  //   ⇒ 夹具库只有 `## DSH 环境` 时写「环境」误配落进「DSH 环境」（G5 实测）。
+  //   本件**两态对照**：默认（前缀语义）拒绝 + 文件零副写；应急回退 `SHOUCANG_APPEND_PLACEMENT_CHECK=0`
+  //   复现旧行为（落进 DSH 环境）⇒ 证明两态确有差别（非恒真）；另锁双份脚本逐字一致与本地实现已删除。
+  ['scripts/check-placement-convergence.mjs'],
+  // 指针供给册三（方案 §5-2）**画像行 § 准入**（补 G4）：`USER/AGENT` 的 `← 源: notes/x.md §y` 原**无判据**
+  //   （真库存量 10 行、当前 0 悬空 ⇒ 潜在口）。现与索引行**同一实现** `admitIndexRow`（missing ⇒ 拒）。
+  //   本件锁：悬空 ⇒ 拒写且零副写 / 合法 ⇒ 照常落 / **真库存量逐行仍可通过**（只堵新口）/ 判据判别力。
+  ['scripts/check-profile-admission.mjs'],
   // 阶段 2（2026-09-14）**产线流程实例**单测：水位行**纯增量**扩展出 `runId`/`phase`/`attempt` 后，
   //   钉死三件不能靠"看着对"的事 ——
   //   ① **旧行兼容**：磁盘上 v18 之前的历史行没有新字段，必须能读且 `phase` 回落 `unknown`

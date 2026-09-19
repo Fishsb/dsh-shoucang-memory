@@ -45,7 +45,13 @@ L4 交互（DSH Web GUI）
 | **M10 自省** | `assistant_capabilities` | 能力面查询 | 只读，无 token |
 
 > **载体归属口径（2026-09-12 根治 A–D 后；2026-09-14 P1 订正）**：
-> `src/` 共 **89 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> `src/` 共 **90 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> **2026-09-19 新增 `section-supply.ts`** ⇒ 89 → 90：**指针供给三册**册一「小节地址供给」
+> （复用 `section-ref#sectionTitles` 作**唯一解析器**、不新写；预算逐级降级 + `buildDistillUserInput` 纯装配
+> ⇒ 「接线 ≠ 抵达」可机检）——判因：蒸馏 prompt 要求「section = **既有** ## 小节名」而材料里**从未注入清单**
+> ⇒ 模型编名（抽查 5 个悬空名在真库 334 个两级小节中 **0 命中**）；判据 `check-section-supply`。
+> 同日另落（同批，均不在 `src/` 计数内）：`section-ref` 的 `resolveLevelInParent`/`planPlacement`（写侧放置语义）、
+> `memory-append` 删本地 `matches`/`findChild`、`distill-write` 段级成对裁决 + 画像行 § 准入。
 > **2026-09-19 新增 `ingest-admission.ts`** ⇒ 88 → 89：蒸馏**准入判定单一实现**
 > （`planIngestAdmission` 决策表「无增量 → 熔断 → claim → 不在途 → 宽限 → 放行」+ `quiescenceOf` 静默三态
 > 「子代理 / status / inbox」+ `lastTurnEndMsOf` 把宽限期来源从**内存态**换成**持久事实**）——

@@ -291,3 +291,44 @@ node <库根>/scripts/memory-append.mjs MEMORY.md - --new '[env] 半落探针 ·
 | 册三 | 放置路径收敛 + profiles § 准入 | 施工态 | **具名授权** |
 
 **建议顺序：册一 → 册二 → 册三**（先除因、再补事务、最后收尾判据）。
+
+---
+
+## 11 施工记录（2026-09-19 · 三册全量落地）
+
+> **态标签（R5）**：册一/册二/册三 = **施工态**，授权来源 = 用户在上一轮方案交付后明确指令「**目标模式，继续全量推进**」。
+> 本会话另已先落 `docs/distill-admission-plan.md` 册三（失败三态）——本档 §7 的接口决策（指针册二须在其后）**前提已满足**。
+
+### 11.1 每册落点与判据
+
+| 册 | 落点（改动） | 在册判据 | 先红 → 后绿 |
+|---|---|---|---|
+| **册一** 地址供给 | **新增** `src/section-supply.ts`：`sectionAddressSupply`（复用 `section-ref#sectionTitles` 作唯一解析器、预算逐级降级+不截半行）+ `buildDistillUserInput`（纯装配，供"抵达"机检）；接线 `distill-agent`（材料段 + 审计 `sectionMiss`/`supplySections`） | `check-section-supply` | 先红：**无该模块 ⇒ 首跑 import 即失败**；后绿 **19 PASS** |
+| **册二** 写入事务化 | `distill-write.ts`：`pairKeyOf`/`unpairedPointersOf`（**导出纯函数** ⇒ 可机检且不触真库）+ 段级成对裁决 + `-knowledge-defer-` 回退队列（幂等命名）+ 逐条 `gate-reject` **class 分类**；`distill-agent` 候选过滤器排除 `-knowledge-defer-`（**防重裁决循环**） | `check-pointer-pairing` + **`check-pointer-content`** | 先红（真机形态 G2：行落而详情未落）；后绿 **15 PASS** / **7 PASS** |
+| **册三** 判据收尾 | `section-ref`（TS + `skill/scripts` 孪生 + 仓内两份）：增 `resolveLevelInParent`/`planPlacement`（**写侧严格语义**：exact → **前缀** loose 唯一 → 多命中**拒绝**；`loose:'contains'` 参数化 = 应急回退）；`memory-append`（三份副本）**删本地 `matches`/`findChild`**；`writeProfileLine` 补**画像行 § 准入**（与索引行同一实现）；差分锁**扩面 5 例放置** | `check-placement-convergence` + `check-profile-admission` + 差分锁扩面 | 先红（G5：环境→DSH 环境 误配；画像口 0 判据）；后绿 **12 PASS** / **9 PASS** / 差分锁 `+ 放置 5 例` |
+
+### 11.2 真机读数
+
+| 项 | 读数 |
+|---|---|
+| 地址供给（册一） | 真库材料段现含 `## 可用小节地址`（库侧清单）；`sectionMiss`/`supplySections` 落 `distill-run`（**新字段只增不改**） |
+| 内容存在性（册二 · 复核方案 §2.3 基线） | **独立复现**：指针 **617** · 含指针行 **592** · **空壳落点 4 条 / 去重 3 小节** · 悬空 0 —— 与方案 §2.3 记录 **4/3 一致** |
+| 画像口存量（册三） | AGENT **5** + USER **5** = **10 行**带 `← 源: notes/`；同判据下**全部可通过**（只堵新口、不动存量） |
+| 放置语义（册三） | 夹具两态对照：默认写「环境」⇒ **exit 2 且文件零副写**；`SHOUCANG_APPEND_PLACEMENT_CHECK=0` ⇒ **exit 0 落进「DSH 环境」**（旧行为可复现 ⇒ 两态确有差别，非恒真） |
+
+### 11.3 五层验收（本轮实测）
+
+| 层 | 命令 | 读数 |
+|---|---|---|
+| ① 仓内绿 | `npm run typecheck` · `npm run build` | 均 exit 0 |
+| ② 部署同步 | `deploy-installed` → `check-installed-sync --strict` | **364 件一致 / 漂移 0**；另 `check-deploy-sync` = **一致 86 · 不一致 0**（首跑曾红 **4 件**：库内 `memory-append.mjs`/`section-ref.mjs` 仍是旧逻辑 ⇒ **运行态走库内那份**，已部署归零） |
+| ③ 运行态生效 | `dev_reload_package` | fiber active |
+| ④ 功能探针 | `check-installed-features` | **71 项齐全**（本轮 +4：`sectionAddressSupply` / `planPlacement` / `unpairedPointersOf` / `源指针悬空`） |
+| ⑤ 云端 + pin | push + `git status -sb` + profile pin | 见提交记录 |
+
+### 11.4 遗留（如实登记）
+
+1. **空壳落点 3 小节**：§2.3 待决项**仍未拍板** ⇒ 本方案**未处置**（`check-pointer-content` 缺省报告态；基线 4 只作 `--strict` 回归闸，**不锁死待决项**）。
+2. **跨批"行—详情"一致性**：册二只保证「**同批**未落地 ⇒ 行不落」；跨批（上批的行 + 本批的详情）仍靠读侧回落语义，未做跨批对账（属新增能力，需另立判据）。
+3. **两个"待认领"队列**（`needsAnchor` 台账 + `-knowledge-defer-` pending）当前**无自动消费者**——设计如此（**不自动建锚**），消费方待定。
+
