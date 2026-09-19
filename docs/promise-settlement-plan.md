@@ -107,6 +107,18 @@ export function isLive(r, at) { if (!r.validTo) return true; return Date.parse(r
 - **(b) 写侧时态对齐**：结算时同时落 `validTo`（复用**既有幂等原语** `fact-ring#supersede`，不新造机制）⇒ `isLive` 自然排除，且与"结算即失效"的时态语义一致；副作用是复用 `validTo` 表达"已结清"，需确认不与事实环时态口径冲突。
 - 建议 **(a) 先落（最小、无歧义）**，(b) 作为时态口径统一另议。
 
+**G11 已修（2026-09-19 · 用户指令「不要问我了」= 全权授权）**
+- **修法**：`src/ring-supply.ts#ringCandidates` 准入链增 **结清门**——
+  `if (r.kind === 'commitment' && String(r.meta?.status ?? 'pending') !== 'pending') continue`。
+  语义：承诺是**待办**语义，只收 `pending`；**只限承诺**（不误伤决策/事实/联想）；缺 `status` 视作 `pending`（不静默丢老记录）。
+- **先红 → 后绿**：`scripts/test-ring-supply.mjs` ①′ 新增 5 条断言（含 pending 阴性对照 / 缺字段兼容 / 决策不误伤）——
+  先红 **39 pass · 2 fail**（kept/broken 未被排除）→ 后绿 **41 pass · 0 fail**。
+- **真机函数级复现**：`createRingSupplyApi({topN:20}).lines(磁盘 store, [], now)` 中
+  **已结清项已消失**（修前仍在）；注入面 `[环·承诺]` 只剩 pending 项。
+- **未做**：修法 (b)（写侧落 `validTo`）**不做**——判据 (a) 已完整关掉用户可见缺口，
+  而 (b) 会让 `validTo` 同时承担"事实失效"与"承诺已结清"两种语义（跨环口径耦合），收益不抵风险。
+- **同族副产**：`test-ring-supply.mjs` 自身踩过 `topN` 截断 ⇒ 判据内显式 `topN: 10` 并写明理由（防"被裁掉"型假绿）。
+
 ### 2.3 我上一轮的错判（如实纠正，防据此施工）
 
 | 我曾说 | 实测 | 结论 |

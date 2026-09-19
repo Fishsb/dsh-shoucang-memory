@@ -14,6 +14,7 @@ import { join } from 'node:path'
 import { spawn } from 'node:child_process'
 import { resolveTarget, knowledgeRoot, dshHome } from './targets.js'
 import { applyTreeOps } from './treeops.js'
+import { readLedgerVolumes } from './ledger-compact.js'
 import { applyForgetOps } from './forgetops.js'
 import { activityAggregate } from './activity.js'
 import { TRIGGER, SURFACE } from './criteria.generated.js'
@@ -62,7 +63,11 @@ async function attributeRecallMisses(ctx: any, parent: any, agentOptions: any): 
     const calibVerdict = calibrationVerdictOf(calib.conclusion)
     const missRows = []
     try {
-        const rows = readFileSync(join(knowledgeRoot(), 'audit', 'ledger.jsonl'), 'utf8').split(/\r?\n/)
+        // ⚠ **必须读全部卷**（G13 同因 · 2026-09-19 实测）：台账按大小轮转（`ledger.jsonl.<n>`），
+        //   轮转后主档只剩极少数行（实测：`mcl-step` 主档 76 行 / **旧卷 8134 行**）
+        //   ⇒ 只读主档会让归因取样**几乎取不到真机行**（'samples 不足' ⇒ 归因链路静默降级）。
+        //   复用**既有单一实现** `ledger-compact#readLedgerVolumes`（跨档按时间序、不可读档跳过）。
+        const rows = readLedgerVolumes(join(knowledgeRoot(), 'audit', 'ledger.jsonl'))
         for (let i = rows.length - 1; i >= 0 && missRows.length < 60; i--) {
             const t = rows[i].trim()
             if (!t)

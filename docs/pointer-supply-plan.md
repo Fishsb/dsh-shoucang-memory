@@ -356,7 +356,6 @@ node <库根>/scripts/memory-append.mjs MEMORY.md - --new '[env] 半落探针 ·
 | ④ 判据收口 | `scripts/check-pointer-content.mjs` 重写为**薄封装**（扫描全部来自 `lib/pointer-deficits.js`，**不再自带第二份**）+ 基线钉 0；新增 `scripts/check-deferred-queue.mjs` 并**登记进 `check-runner`** | `check-runner` | 登记纪律（N1）：未登记 = 没写 |
 
 ### 12.2 真机读数（收口后）
-
 | 项 | 读数 |
 |---|---|
 | 统一出口计数 | `{"empty-landing":0,"empty-section":0,"anchor-needed":25,"knowledge-defer":0}` **total = 25** |
@@ -365,7 +364,28 @@ node <库根>/scripts/memory-append.mjs MEMORY.md - --new '[env] 半落探针 ·
 | 空壳 | 空落点 **0** · 全库空壳标题 **0**（基线 0） |
 | 库写入 | `Record` 影子对账 `分歧 0`；库仓提交 `1e8f891` 作**回退点** |
 
-**注（如实登记，非缺陷）**：`anchor-needed` **25 行**是**存量待人工建锚**的排队项（蒸馏写侧登记"知识无锚可落"），
+**注（如实登记，非缺陷）**：`anchor-needed` 行是**存量待人工建锚**的排队项（蒸馏写侧登记"知识无锚可落"），
 本轮的产出是**让它可统一读取与定期登记**，**不是**自动建锚（§3 边界）。其处置权在用户：或建锚、或转 pending。
+
+### 12.3 续修：队列读数两次**全盲**（2026-09-19 · G12/G13/G14 · 全权授权后施工）
+
+> **判因**：§12.2 记的 `anchor-needed 25` 是**错的**——不是 25，也不总是 0；读数随"台账落在哪一卷 / 多长"而变。
+> 两处机制性失明（都不是"没数据"，而是**读侧看不见**）：
+
+| 缺口 | 判据（实测） | 修法 |
+|---|---|---|
+| **G12 窗口截断** | `readAnchorNeeded` 缺省 `slice(-4000)`：台账 2.2 万行时**靠前的缺陷行被静默漏掉**（出口 **25** vs 全量 **33**） | 改为**全量读**；判据 `check-deferred-queue` ①″（6001 行夹具，缺陷行放最前 ⇒ 旧实现 0 条） |
+| **G13 轮转失明** | 台账**按大小轮转**（`rotateBySize` ⇒ `ledger.jsonl.1`）：17:45 轮转后主档只剩 105 行，**33 条 anchor 行全在旧卷** ⇒ 只读主档读数 **0**（全盲） | 复用**既有单一实现** `ledger-compact#readLedgerVolumes`（跨档按时间序）——**不自写第二份"读哪些文件"**；判据 ①‴（缺陷行只放旧卷 ⇒ 必须读到） |
+| **G14 过时项冒充缺陷** | 台账里指向**已建好**小节的行仍在报"缺锚"（小节后来经别的路径建好） | `readAnchorNeeded(file, bankRoot)` 逐行判 `stillMissing`（复用 `section-ref#resolveSectionSpec`）；过时项归 `staleAnchor` + `staleRefs` 单列，**不计入** `counts/rows`；判据 ①′（含"删掉小节即变回真缺陷"的反例自证） |
+
+**真机读数（修后 · 全部卷）**：`{"empty-landing":0,"empty-section":0,"**anchor-needed:8**,"knowledge-defer":0}` **total = 8**
+· **过时项 17**（`staleAnchor`）⇒ 台账 33 行 = **8 真缺陷 + 17 过时（去重后）+ 其余为同 ref 重复行**。
+不变量：`rows.length === total === Σcounts`（清单与计数同源，stale 单列）。
+**先红证据**：①″ 先红 `anchors=0`（6001 行）· ①‴ 先红 `anchors=0`（33 行在旧卷）· ①′ 先红 `staleAnchor=undefined`。
+
+**8 条真缺陷（待人工建锚）**：`flows.md §圆桌预设事务化更新` · `tools.md §圆桌三模式差异` · `tools.md §构建打包/tsdown clean` ·
+`env.md §插件RPC无鉴权边界` · `env.md §用量真值` · `env.md §目标模式/goal 回合约束` · `lessons.md §静默席判据` · `lessons.md §掩盖根因的开关`。
+**不自动建锚**（§3 边界不变）：建锚须带内容，而空锚会立刻撞上本档刚收紧的**空壳基线 0**（自伤）。
+
 
 

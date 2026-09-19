@@ -75,6 +75,10 @@ const HOST_FEATURES = [
   //   治「三类"知识没落地"存量各写各的、无统一读出口」⇒ 装上去的那份必须带统一出口与定期登记。
   ['收口轮 缺陷队列统一出口（deferredQueueOf）', 'lib/pointer-deficits.js', 'deferredQueueOf'],
   ['收口轮 缺陷定期登记（registerDeficits）', 'lib/pointer-deficits.js', 'registerDeficits'],
+  // 遗留清零轮续（2026-09-19）：两处真机缺口各留一枚**出口符号/判据级**标记。
+  ['结算门 承诺只收 pending（G11）', 'lib/ring-supply.js', "status ?? 'pending'"],
+  ['台账读全部卷（G13 轮转失明）', 'lib/pointer-deficits.js', 'readLedgerVolumes'],
+  ['归因取样读全部卷（G13 同因）', 'lib/deepsleep-run.js', 'readLedgerVolumes'],
   // 册一至册四（2026-09-19 · docs/distill-admission-plan.md）——「装上去的那份带着本轮能力」的正式证明：
   //   文件 sha 一致 **≠** 特性齐全（本件立件理由），故四册各留一条**词组级**标记（非通用词）。
   ['册一 蒸馏输入面白名单 + 段身份 segKey', 'lib/distill-chunks.js', 'MATERIAL_EVENT_TYPES'],

@@ -18,6 +18,8 @@ import { fileURLToPath } from 'node:url'
 import { homedir } from 'node:os'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+// 台账读取的**单一实现**（跨档按时间序；G13：只读主档会在轮转后失明 ⇒ 假红）
+const { readLedgerVolumes } = await import(new URL('../lib/ledger-compact.js', import.meta.url).href)
 let fail = 0
 const ok = (c, m) => { console.log(`${c ? '✅' : '❌'} ${m}`); if (!c) fail++ }
 
@@ -111,7 +113,7 @@ for (const e of EXEMPT) {
     const led = join(homedir(), '.dsh', 'suite', 'knowledge', 'audit', 'ledger.jsonl')
     let yes = 0, no = 0
     try {
-      for (const l of readFileSync(led, 'utf8').split('\n')) {
+      for (const l of readLedgerVolumes(led, 3)) {
         if (l.includes('"compliant":true')) yes++
         else if (l.includes('"compliant":false')) no++
       }
@@ -128,14 +130,18 @@ for (const e of EXEMPT) {
   const need = ['buildAttributionRequest', 'parseAttribution', 'calibrationVerdictOf', 'samplesFromMclRows', 'judgeYieldRounds']
   const missing = need.filter((n) => !run.includes(n + '('))
   ok(!missing.length, `F3 归因/收益调用点在场（deepsleep-run.ts：${need.join(' / ')}）${missing.length ? ' 缺：' + missing.join(',') : ''}`)
+  // ⚠ **必须读全部卷**（G13 · 2026-09-19 实测）：台账按大小轮转（`ledger.jsonl.<n>`）——
+  //   轮转后主档只剩极少数行（实测：`attributionVerdict` 主档 **0** / 旧卷 **35**；
+  //   `yieldJudged` 主档 **0** / 旧卷 **33**）⇒ 只读主档会把"真机已跑过"读成 **0 行**并判红（**假红**）。
+  //   本件是**报告/判据件**，与运行侧同口径：复用 `lib/ledger-compact.js#readLedgerVolumes`。
   const led = join(homedir(), '.dsh', 'suite', 'knowledge', 'audit', 'ledger.jsonl')
   let attr = 0, yld = 0
   try {
-    const t = readFileSync(led, 'utf8')
+    const t = readLedgerVolumes(led, 3).join('\n')
     attr = (t.match(/"attributionVerdict"/g) || []).length
     yld = (t.match(/"yieldJudged"/g) || []).length
   } catch { /* 台账不可读 */ }
-  console.log(`  真机证据（打印 · 台账 ${led}）：attributionVerdict 行 ${attr} · yieldJudged 行 ${yld}`)
+  console.log(`  真机证据（打印 · 台账 ${led} 全部卷）：attributionVerdict 行 ${attr} · yieldJudged 行 ${yld}`)
   ok(attr + yld > 0, 'F3′ 台账含真机行（自述不得当证据：以调用图 + 审计行为准）')
 }
 
