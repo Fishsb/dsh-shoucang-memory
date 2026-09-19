@@ -2273,6 +2273,18 @@
 - **panel client 迁移到 slot 契约（2026-09-05，解冻前置）**：client.js 注入声明加 `'slots'`，入口从直插侧栏 footArea DOM 改为注册 `sidebar.footer.action` 插槽按钮（无 slots 环境保留直插兜底）；host+client 已注入运行（ef85e372），构建产物 lib/ 重建
 
 ### Fixed
+- **册五落库：承诺账 10 条结清（2026-09-19 · 用户指令「落」）**：
+  用**唯一写入通道** `scripts/record-ring.mjs --settle <id> --kept --note "…"`（内部 `settleCommitment` → `commit()`：
+  **先记事件、再存状态**）把册五分类中 **A 类 11 条**里未结的 **10 条**落库：
+  `pending 74 → 64` · `kept 1 → 11` · `commitment.settle 1 → 11`（**恰 +10**，差分投影自洽）·
+  幂等实测（重复结清被拒）· `check-record-parity` PASS（分歧 0）·
+  `trustOf('用户')` 由"**0 不可辨**"变为 `{mineKept:9, mineBroken:0, mineRate:1}`（分母非空、分子全部有据；无据的 64 条留 pending 不进分母）。
+  回退点：文件备份 `~/.dsh/backups/sc-settle-20260919-173020` · 库仓 git `d640b7cc` → `361461df`。
+  **未落的 3 条 B 类**（前提被否证/被取代）**刻意不落**——其语义是"承诺作废"，而枚举无"作废"位：
+  记 `kept` 会虚高、记 `broken` 会失真，两条路都污染 KPI ⇒ 停在 pending 等册零给出口。
+  证据写在**既有 `note` 字段**（册一 `evidence` 必填**尚未施工**，不假装用了不存在的字段）。
+  **同时实测暴露既有缺陷 G10**：全库 `--reconcile` **181/1018 内容不一致**（样例为 `decision:*`/`valence:*`，**无 commitment**）——
+  用落库前备份快照跑同一对账**同为 181**，证明**先于本次写入**；据此把册一 V1.2 口径**收敛为 `commitment:*` 切片零漂移**（全库 181 另立项）。
 - **pin 归位（2026-09-19 · 用户指令「需要归位」）+ 检查器假红修复**：
   · **归位**：profile `web` 执行一次 `pnpm install`（21.7s · `+3` 包 · 无批量删除拦截；前置备份
     `~/.dsh/backups/sc-pin-align-20260919-165658`）⇒ 声明/锁定/实装三处**同为** `ad6d7370ec76…`；
