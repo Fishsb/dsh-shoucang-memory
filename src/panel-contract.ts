@@ -91,7 +91,7 @@ export const PANEL_ROUTES: readonly RouteSpec[] = [
   { path: '/memory/section-edit', summary: '改写小节正文', contract: { body: z.object({ rel: z.string(), section: z.string(), newBody: z.string().required(false) }), required: ['rel', 'section'] } },
   { path: '/memory/edit', summary: '行级编辑', contract: { body: z.object({ file: z.string(), line: z.string(), newText: z.string() }), required: ['file', 'line', 'newText'] } },
   { path: '/memory/remove', summary: '行级删除', contract: { body: z.object({ file: z.string(), line: z.string(), pendingFile: z.string().required(false) }), required: ['file', 'line'] } },
-  { path: '/memory/approve', summary: '采纳候选', contract: { body: z.object({ pendingFile: z.string() }), required: ['pendingFile'] } },
+  { path: '/memory/approve', summary: '采纳/忽略候选（root 指定双根；action=approve|ignore 语义分离）', contract: { body: z.object({ pendingFile: z.string(), root: z.string().required(false), action: z.string().required(false) }), required: ['pendingFile'] } },
   { path: '/inject/preview', summary: '热记忆注入预览' },
   { path: '/inject/stats', summary: '注入统计' },
 

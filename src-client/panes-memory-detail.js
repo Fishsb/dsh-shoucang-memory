@@ -210,10 +210,62 @@ function mmGrowthMonth(ctx) {
   }
 }
 
+/** 字节数格式化（本文件局部用：库内结构体量）。>1KB 显示一位小数。 */
+function fmtBytesOf(n) {
+  var v = Number(n) || 0;
+  if (v < 1024) return v + ' B';
+  if (v < 1024 * 1024) return (v / 1024).toFixed(1) + ' KB';
+  return (v / 1048576).toFixed(1) + ' MB';
+}
+
 function mmIndexRows(ctx) {
   var host = ctx._tb.pane('index');
   var data = ctx.data, view = ctx.view, memoryFile = ctx.memoryFile, cap = ctx.cap;
   var group = function (t) { host.appendChild(el('div', 'sc-mem-group-title', t)); };
+  /* ── 册五：库内结构（三档枚举 · 只读 ──
+   * 用户裁决（本会话设置卡）：「三档枚举 —— 内容档进分区、工具态与产物档只报只读计数」。
+   * 判因：库根 27 条目里 engine/scripts/audit/.records/reports/维护文档族**六个板块此前无任何入口**；
+   *   本会话起点正是「库内到底有哪些板块」无法从面板回答。
+   * ⚠ 枚举**由后端派生**（`libraryStructureOf`，readdirSync + 白名单分档），前端**不硬编码目录名**——
+   *   写死清单会让库内结构随目录漂移而失真（零硬编码红线的同类风险）。 */
+  var st5 = data.structure;
+  if (st5 && Derive.has(st5.entries)) {
+    var s5 = st5.summary || {};
+    group(tr("库内结构 · ") + Derive.count(st5.entries) + tr(" 个顶层条目（内容 ") + String(s5.content || 0)
+      + tr(" · 工具态 ") + String(s5.tooling || 0) + tr(" · 产物 ") + String(s5.artifact || 0) + '）');
+    /* ⚠ R4 红线：`tr()` **不得出现在装载期表**（数组/对象字面量的初始化式里），
+     *   否则 locale 未接入时值被冻死为中文、切语言不生效——本行原写成
+     *   `var KINDLABEL = { content: tr("内容"), … }` 即触发该红线（门禁实测抓到）。
+     *   现改为**渲染期按需取值**（函数体内调用，每次渲染重新求值）。 */
+    var kindLabelOf = function (k) {
+      if (k === 'content') return tr("内容");
+      if (k === 'tooling') return tr("工具态");
+      return tr("产物");
+    };
+    /* 内容档展开（承载知识的板块逐条列出）；工具态/产物档**只报计数**（用户裁决：不把可重建产物当内容） */
+    ['content', 'artifact', 'tooling'].forEach(function (kind) {
+      var list = (st5.entries || []).filter(function (e) { return e.kind === kind; });
+      if (!Derive.has(list)) return;
+      if (kind !== 'content') {
+        host.appendChild(el('div', 'sc-mem-sub', kindLabelOf(kind) + tr("（只报计数，不展开）：")
+          + list.map(function (e) { return e.name + ' ' + Derive.count(e.files) + tr(" 件"); }).join(' · ')));
+        return;
+      }
+      host.appendChild(el('div', 'sc-mem-sub', tr("内容档（承载知识的板块）")));
+      var box = el('div', 'sc-idx-list');
+      list.forEach(function (e) {
+        var row = el('div', 'sc-idx-row');
+        row.appendChild(el('span', 'sc-idx-tag', e.doc ? tr("文档") : tr("板块")));
+        row.appendChild(el('span', 'sc-idx-subject', e.name));
+        /* 工具态档不给字节（后端记 0）⇒ 置 0 时只显示件数，不显示「0 B」（避免假读数） */
+        var sizeTxt = Number(e.bytes) > 0 ? (Derive.count(e.files) + tr(" 件 · ") + fmtBytesOf(e.bytes)) : (Derive.count(e.files) + tr(" 件"));
+        row.appendChild(el('span', 'sc-idx-pointer', sizeTxt));
+        box.appendChild(row);
+      });
+      host.appendChild(box);
+      host.appendChild(el('div', 'sc-desc', tr("口径：目录为递归文件数；工具态档（.git/.obsidian/scripts 等）**只报文件数不报体量**（.git 递归可达数十 MB，会把「库有多大」这个读数污染）。枚举由后端 readdirSync 派生，未登记的新条目默认落内容档（宁可多报不静默丢）。")));
+    });
+  }
   /* ── §3 知识索引 MEMORY.md（progressive disclosure：默认 8 条 + 展开全部） ── */
   if (Derive.has(memoryFile && memoryFile.lines)) {
   group(tr("知识索引 MEMORY.md · ") + memoryFile.lines.length + tr(" 条"));
@@ -240,37 +292,74 @@ function mmPendingRows(ctx) {
   var host = ctx._tb.pane('pending');
   var data = ctx.data, view = ctx.view, memoryFile = ctx.memoryFile, cap = ctx.cap;
   var group = function (t) { host.appendChild(el('div', 'sc-mem-group-title', t)); };
-  /* ── §4 pending 候选队列（U5：行尾加批准/忽略——Cursor/Mem0 审核态借鉴；写走 /memory/approve 门禁） ── */
-  if (data.pending && data.pending.count) {
-  group(tr("pending 候选队列 · ") + data.pending.count + tr(" 条"));
-    var plist = el('div', 'sc-pointer-list');
-    (data.pending.recent || []).forEach(function (p2) {
-      var row = makeMemoryPointerRow(String(p2.name || '').replace(/\.md$/, ''), null, (p2.mtime || '').slice(0, 10));
-      // 批准=确认有价值（移 .processed 跳过后续蒸馏裁决）；忽略=同语义手动处置；均只读安全
-      var act = el('div', 'sc-row-gap');
-      var fname = String(p2.name || '');
-      var okBtn = el('button', 'sc-btn subtle', tr("批准"));
-      okBtn.type = 'button';
-      okBtn.classList.add('sc-btn-xs', 'sc-btn-ok');
-      okBtn.addEventListener('click', function () {
-        appState.api('/memory/approve', { method: 'POST', body: JSON.stringify({ pendingFile: fname }) })
-          .then(function () { appState.statusFn(tr("✓ 已批准 ") + fname + tr("（移 .processed，内容由蒸馏正常入册）")); })
-          .catch(appState.failFn);
+  /* ── §4 候选区（U5 审核态 + 册一 双根合并）──
+   * 册一（2026-09-19）：**双根并列**。判因（实测）：本段原只渲染 `data.pending`（= memory 库根），
+   *   而真候选 9 条在 suite 根（`data.suite.pending`）⇒ 面板显示「候选 0 条」却点不到那 9 条；
+   *   写侧 /memory/approve 同时也只读 suite 根 ⇒ 「读的根 ≠ 批的根」（根因 C2）。
+   * 现：三处来源（memory / suite 根 / suite·flow-candidates）各自成组，逐条标注来源根，
+   *   并显式传 `root` + `action` ⇒ 批准与忽略**物理分离**（.processed / .ignored）。
+   *   ⚠ 判因（原实现缺陷）：批准与忽略原调**同一端点同一参数**，一律 rename 进 `.processed/`
+   *   ⇒ 两个语义相反的按钮效果完全相同，只有文案不同（「看得见的操作是假的」）。 */
+  /* ⚠ R4 红线：数组/对象字面量的**初始化式**里不得调 tr()（装载期求值 ⇒ locale 未接入时冻死为中文）。
+   *   故此处只存 **root 键**（稳定、语言无关），标签在渲染期经 labelOfRoot() 取。 */
+  var groups = [
+    { root: 'suite', src: (data.suite && data.suite.pending) || null },
+    { root: 'flow-candidates', src: (data.suite && data.suite.flowCandidates) || null },
+    { root: 'memory', src: data.pending || null }
+  ];
+  var labelOfRoot = function (r) {
+    if (r === 'suite') return tr("suite · knowledge/pending");
+    if (r === 'flow-candidates') return tr("suite · flow-candidates");
+    return tr("记忆库 · pending");
+  };
+  /* ⚠ 判因（实测真缺陷，由 test-panel-view-contract 抓到）：`Derive.count()` 只处理**数组**
+   *   （返回 `v.length`），而 `pending.count` 是**数字** ⇒ `Derive.count(9) === 0`
+   *   ⇒ total 恒 0 ⇒ **候选区整块不渲染**（真机探针实测 `[pending] 0 个组标题`）。
+   *   此处数字直接用；`recent` 这种数组才走 Derive.count/Has。 */
+  var numOf = function (v) { return typeof v === 'number' && v > 0 ? v : 0; };
+  var total = 0;
+  groups.forEach(function (g) { if (g.src) total += numOf(g.src.count); });
+  if (total > 0) {
+    group(tr("候选区 · ") + total + tr(" 条（双根合并）"));
+    groups.forEach(function (g) {
+      var n = g.src ? numOf(g.src.count) : 0;
+      if (!n) return;
+      host.appendChild(el('div', 'sc-mem-sub', labelOfRoot(g.root) + ' · ' + n + tr(" 条")));
+      var plist = el('div', 'sc-pointer-list');
+      /* 先渲染本地已列的 recent；该本源 count > recent 时如实标注剩余（不假装全列） */
+      (g.src.recent || []).forEach(function (p2) {
+        var fname = String(p2.name || '');
+        var row = makeMemoryPointerRow(fname.replace(/\.md$/, ''), null, (p2.mtime || '').slice(0, 10));
+        var act = el('div', 'sc-row-gap');
+        /* 批准 ⇒ .processed（内容由蒸馏正常入册）；忽略 ⇒ .ignored（明确丢弃，不入册）。
+         * 两者**不同子目录** ⇒ 效果可区分且事后可审计（原先混在同一 .processed/ 无法分辨）。 */
+        var okBtn = el('button', 'sc-btn subtle', tr("批准"));
+        okBtn.type = 'button';
+        okBtn.classList.add('sc-btn-xs', 'sc-btn-ok');
+        okBtn.addEventListener('click', function () {
+          appState.api('/memory/approve', { method: 'POST', body: JSON.stringify({ pendingFile: fname, root: g.root, action: 'approve' }) })
+            .then(function (r) { appState.statusFn(tr("✓ 已批准 ") + fname + tr("（移 ") + ((r && r.moved) || '.processed') + tr("，内容由蒸馏正常入册）")); })
+            .catch(appState.failFn);
+        });
+        var rmBtn = UI.button(tr("忽略"), function () {
+          return appState.api('/memory/approve', { method: 'POST', body: JSON.stringify({ pendingFile: fname, root: g.root, action: 'ignore' }) })
+            .then(function (r) { appState.statusFn(tr("已忽略 ") + fname + tr("（移 ") + ((r && r.moved) || '.ignored') + tr("，不入册）")); });
+        }, { danger: true, async: true, busyText: tr("忽略中…"), okText: tr("已忽略"), confirm: tr("忽略并移出候选队列（移入 .ignored，不入册）：") + fname + '？' });
+        act.appendChild(okBtn); act.appendChild(rmBtn);
+        row.appendChild(act);
+        plist.appendChild(row);
       });
-      var rmBtn = UI.button(tr("忽略"), function () {
-        return appState.api('/memory/approve', { method: 'POST', body: JSON.stringify({ pendingFile: fname }) })
-          .then(function () { appState.statusFn(tr("已忽略 ") + fname); });
-      }, { danger: true, async: true, busyText: tr("忽略中…"), okText: tr("已忽略"), confirm: tr("忽略并移出候选队列：") + fname + '？' });
-      act.appendChild(okBtn); act.appendChild(rmBtn);
-      row.appendChild(act);
-      plist.appendChild(row);
+      host.appendChild(plist);
+      var shown = Derive.count(g.src.recent);
+      if (n > shown) host.appendChild(el('div', 'sc-desc', tr("（本根仅显示最近 ") + shown + tr(" 条，共 ") + n + tr(" 条）")));
     });
-    host.appendChild(plist);
-    host.appendChild(el('div', 'sc-desc', tr("共 ") + data.pending.count + tr(" 条（仅显示最近 ") + Derive.count(data.pending.recent) + tr(" 条）· 批准=确认有价值入册，忽略=移出队列")));
+    host.appendChild(el('div', 'sc-desc', tr("共 ") + total + tr(" 条 · 批准=确认有价值入册（移 .processed），忽略=移出队列（移 .ignored，不入册）")));
     /* v9（原型候选区 `.alert.info`）：升格/降格的口径与边界说明。 */
     var pTip = el('div', 'sc-ds-alert info');
     pTip.appendChild(el('div', null, tr("升格 / 降格走 /memory/approve，由 L0 判据裁决。索引行只读，正文编辑走 /memory/section-edit。")));
     host.appendChild(pTip);
+  } else {
+    host.appendChild(el('div', 'sc-mem-empty', tr("暂无候选（已查 记忆库 / suite / flow-candidates 三处）")));
   }
 }
 

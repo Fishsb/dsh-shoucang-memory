@@ -343,21 +343,58 @@ try {
 } catch (e) { sendJson(res, 500, { error: String(e) }) }
 }
 
+/* 册一（2026-09-19）：候选处置**双根 + 动作语义分离**。
+ *
+ * 判因（实测，两处真缺陷）：
+ *  ① **读写两侧各绑不同根**：读侧 `panel-memory.ts#memOverviewOf(base)` 读的是 memory 库根
+ *     （`memoryLibRoot()`），而本端点原只读 `knowledgeRoot()/pending` ⇒ UI 显示「候选 0 条」
+ *     而真候选 9 条躺在 suite 根，**点不到也批不动**（根因 C2）。
+ *  ② **批准与忽略调同一端点同一参数**：原实现只认 `pendingFile`，一律 `renameSync` 到
+ *     `.processed/` ⇒ 两个语义相反的按钮**效果完全相同**，唯一区别是前端那句文案。
+ *     这是「看得见的操作是假的」——比「看不到」更严重。
+ *
+ * 现语义：`pendingFile` + 可选 `root`（memory|suite|flow-candidates，缺省按 flow-candidates →
+ *   suite → memory 顺序探测，向后兼容旧调用）+ 可选 `action`（approve 缺省 | ignore）。
+ *   · approve ⇒ 移入该区 `.processed/`（= 内容由蒸馏正常入册）
+ *   · ignore  ⇒ 移入该区 `.ignored/`（= 明确丢弃，不入册）
+ *   ⚠ 两区物理分离，**效果可区分且可审计**（原先两者混在同一 `.processed/`，事后无法分辨）。
+ */
+const PENDING_ZONES: Array<{ zone: string; dir: string }> = [
+  { zone: 'flow-candidates', dir: join(knowledgeRoot(), 'pending', 'flow-candidates') },
+  { zone: 'suite', dir: join(knowledgeRoot(), 'pending') },
+  { zone: 'memory', dir: join(memoryLibRoot(), 'pending') },
+]
+
 async function memoryApproveRoute(d: InjectDeps, req: IncomingMessage, res: ServerResponse): Promise<void> {
 try {
-  const body = (await readBody(req).catch(() => ({}))) as { pendingFile?: string }
+  const body = (await readBody(req).catch(() => ({}))) as { pendingFile?: string; root?: string; action?: string }
   const pf = String(body.pendingFile || '').trim().replace(/^.*[\\/]/, '')
   if (!/^[\w\u4e00-\u9fa5-]+\.md$/.test(pf)) return sendJson(res, 400, { error: 'bad pending file' })
-  // 双区支持：优先 flow-candidates（待转正候选），其次根 pending
-  const pendRoot = join(knowledgeRoot(), 'pending')
-  let src = join(pendRoot, 'flow-candidates', pf)
-  let zone = 'flow-candidates'
-  if (!existsSync(src)) { src = join(pendRoot, pf); zone = 'pending' }
-  if (!existsSync(src)) return sendJson(res, 404, { error: 'candidate not found' })
-  // approved 移区（与蒸馏成功处理一致：.processed 子目录，蒸馏采集不递归不回流）
-  const procDir = zone === 'flow-candidates' ? join(pendRoot, 'flow-candidates', '.processed') : join(pendRoot, '.processed')
-  try { mkdirSync(procDir, { recursive: true }); renameSync(src, join(procDir, pf)) } catch (e) { return sendJson(res, 500, { error: 'move fail: ' + String((e as Error).message).slice(0, 100) }) }
-  return sendJson(res, 200, { ok: true, moved: zone + '/.processed/' + pf })
+  const action = body.action === 'ignore' ? 'ignore' : 'approve'
+  const wantRoot = String(body.root || '').trim()
+
+  // 显式 root ⇒ 只查该区（不静默回退，避免"批准了另一个根"的静默错位）
+  const zones = wantRoot ? PENDING_ZONES.filter((z) => z.zone === wantRoot) : PENDING_ZONES
+  if (!zones.length) return sendJson(res, 400, { error: 'bad root（允许：memory | suite | flow-candidates）' })
+
+  let hit: { zone: string; dir: string; src: string } | null = null
+  for (const z of zones) {
+    const src = join(z.dir, pf)
+    if (existsSync(src)) { hit = { zone: z.zone, dir: z.dir, src }; break }
+  }
+  // 向后兼容：旧调用不带 root 时，若根 pending 命中过即按 suite 语义处理（该区 dir 即根）
+  if (!hit) return sendJson(res, 404, { error: 'candidate not found', searched: zones.map((z) => z.zone) })
+
+  const sub = action === 'ignore' ? '.ignored' : '.processed'
+  const destDir = join(hit.dir, sub)
+  try {
+    mkdirSync(destDir, { recursive: true })
+    // 同名冲突可见化：忽略区与处理区可能已有同名（重复处置）⇒ 追加时间戳，不静默覆盖
+    let dest = join(destDir, pf)
+    if (existsSync(dest)) dest = join(destDir, pf.replace(/\.md$/, '') + '-' + Date.now() + '.md')
+    renameSync(hit.src, dest)
+  } catch (e) { return sendJson(res, 500, { error: 'move fail: ' + String((e as Error).message).slice(0, 100) }) }
+  return sendJson(res, 200, { ok: true, action, root: hit.zone, moved: `${hit.zone}/${sub}/${pf}` })
 } catch (e) { sendJson(res, 500, { error: String(e) }) }
 }
 

@@ -11,7 +11,7 @@ import { readFile, writeFile, copyFile, mkdir, rename, unlink, readdir, rm } fro
 import { join, dirname, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // S1R（2026-09-19）：索引行准入复用**单一语义件**（与宿主侧 `src/section-ref.ts` 同口径，差分锁守）
-import { pointersOfRow, resolveSectionSpec, planPlacement } from './section-ref.mjs';
+import { pointersOfRow, resolveSectionSpec, planPlacement, sectionCore } from './section-ref.mjs';
 // S2S3 册零（2026-09-19）：**库级单写者锁**（与宿主 `src/bank-lock.ts` 同语义，差分锁守）
 import { acquireBankLock, releaseBankLock } from './bank-lock.mjs';
 
@@ -74,8 +74,17 @@ const lines = raw.split(/\r?\n/);
 // v5.4 树状定位：section 支持路径（父/子/孙…），逐级定位；深层小节不存在自动分裂（###+），顶层 ## 须锚。
 // 安全策略：先只读解析定位（不改 lines），若最深层缺 → 计算从最深已存在父往下需新建的层级链；
 // 插入阶段统一在「最深层已存在小节的末尾」追加（保正文在子节前不被打乱）。
-const pathParts = String(sectionArg).trim().split('/').map((s) => s.trim()).filter(Boolean);
-if (!pathParts.length) { console.error('小节路径为空'); process.exit(2); }
+//
+// ══ 修（2026-09-19 · 真机实证 · 与 ADR-246「后端/工具侧=唯一语义层」同边界）══════════════════
+// **判因**：本行原**无条件**按 `/` 分割 `sectionArg`，而**小节标题本身常含 `/`**
+//   （实测形状：`网络坑（2026-08-13/14，2026-09-03 增补）`）。
+//   ⇒ 标题被劈成 `网络坑（2026-08-13` + `14，2026-09-03 增补）`，第二段被当作子节路径
+//   ⇒ 自动创建出**残片标题** `### 14，2026-09-03 增补）`（真机两处：`lessons.md` L10 与 L102，
+//     且蒸馏每次写入会**再产生一处** ⇒ 修数据必被下一次写入覆盖，属**写入端缺陷**而非数据问题）。
+// **修法**：先按**整串**在小节标题里找（归一后精确 → 双向包含唯一）；命中即视为**单个标题**、
+//   **不做分段**（`/` 是标题的一部分）。只有整串不命中时，才按 `/` 分段走既有「父/子」路径语义。
+//   ⇒ 两种语义各归其位，且**不新增第二份匹配实现**（仍复用 `planPlacement` / `resolveLevelInParent`）。
+const rawSpec = String(sectionArg).trim();
 
 const headingAt = (l) => (/^(#{2,6}) /.test(l) ? /^(#{2,6}) /.exec(l)[1].length : 0);
 const cleanTitle = (l) => l.replace(/^#{2,6} /, '').trim();
@@ -83,6 +92,22 @@ const cleanTitle = (l) => l.replace(/^#{2,6} /, '').trim();
 // 建标题行索引：[{line, level, title}]
 const heads = [];
 lines.forEach((l, i) => { const lv = headingAt(l); if (lv >= 2) heads.push({ line: i, level: lv, title: cleanTitle(l) }); });
+
+/* ⚠ 归一核心名**复用 `section-ref#sectionCore`**（库侧唯一实现，与宿主 `src/section-ref.ts` 差分锁守），
+ *   不在本文件另写一份——「同一语义多份实现」正是本缺陷的成因类别（ADR-246 边界）。 */
+/* 整串优先：只有当整串**能在标题集合里唯一命中**时才不分段（避免把真的「父/子」路径误当标题）。
+ * ⚠ 口径：`网络坑（2026-08-13/14，…）` 的 core 是 `网络坑`；整串命中即视为单个标题。 */
+const wholeHit = (() => {
+  if (!rawSpec.includes('/')) return null   // 无 `/` 时无需特判（分段结果与整串同）
+  const kw = sectionCore(rawSpec)
+  if (!kw) return null
+  const exact = heads.filter((h) => sectionCore(h.title) === kw)
+  if (exact.length === 1) return exact[0]
+  const loose = heads.filter((h) => { const c = sectionCore(h.title); return c && (c.includes(kw) || kw.includes(c)) })
+  return loose.length === 1 ? loose[0] : null
+})();
+const pathParts = wholeHit ? [rawSpec] : rawSpec.split('/').map((s) => s.trim()).filter(Boolean);
+if (!pathParts.length) { console.error('小节路径为空'); process.exit(2); }
 
 // ══ 册三（2026-09-19 · docs/pointer-supply-plan.md §5-1）**放置收敛** ══════════════════════════
 // 判因（方案 §2.2 G5 实测坐实）：本件原自带 `matches`（**双向包含**）+ `findChild`（逐级取**首个**），

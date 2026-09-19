@@ -5,6 +5,21 @@
 ## [Unreleased]
 
 ### Changed
+- **记忆面板前后端分离落地（六册 · 2026-09-19 · 圆桌会议「记忆板块前后端分离落地」产出，ADR-246）**：确立面板记忆域**「后端=唯一语义层，前端只渲染」**的职责边界，并据此修掉 7 处缺口。判因：同一语义「§名→小节」在仓内长出**三份实现**（`section-ref.ts` 权威 / 库侧孪生 / 前端 `panes-memory.js` 内联 `indexOf`），且门禁只守库侧 ⇒ 实测 623 行索引行中**多命中 209 处（33.8%）**「点一次展开一堆且不滚到位置」，而该失效在既有全部门禁下**不可观测**。六册：
+  · **册零 载荷瘦身**：`/memory/overview` 删两个**零消费**字段（`indexes[].text` 全文、`lines[].raw` 逐行原文）——实测前端两者 `grep` **0 命中**，且 MEMORY.md 的 `text` 与 `raw` 去空白后**比值 1.00**（同一文件装两份）。载荷 **297,928 → 113,437 B（−61.9%）**。
+  · **册一 候选区双根 + 动作分离**：修**最高优先缺陷**——「批准」与「忽略」原调**同一端点同一参数**，一律 `renameSync` 进 `.processed` ⇒ 两个语义相反的按钮**效果完全相同**（「看得见的操作是假的」）。现 `/memory/approve` 增 `action`（approve→`.processed` / ignore→`.ignored`，物理分离可审计）与 `root`（memory|suite|flow-candidates）；读侧 `pending` 按根分装（原「读 memory 根、批 suite 根」读写不同源）。
+  · **册二 契约收敛（决议 D1）**：`/memory/sections` 每个小节**随响应下发** `foldKey`（折叠键，单一构造点）与 `core`（归一核心名，取库内唯一实现 `treeops#coreName`）；前端**删除**自有匹配器，改为「唯一命中才展开 + 落点进视口」，多命中时**不展开任何一个**并列出候选（原实现对每个命中节点都置位，且全仓 `scrollIntoView` 0 命中）。
+  · **册三 残损标题修复（写库）**：`notes/lessons.md:11` 的 `### 14，2026-09-03 增补）` 是蒸馏写入时误用的残片标题（把「推送与依赖拉取分通道」一条追加到了错位置）⇒ 合并归位后「网络坑」正文非空、「重钉与全量下载」不再空壳；残损标题正则命中 **1→0**，`check-section-refs` 三态不退化（exists 650 / missing 0）。
+  · **册四 标签显示层归并**：`byTag` 统计串原直接拼**原始键** ⇒ 同一张卡同时出现 `lesson` 与 `教训`（实测 lesson 237 / 教训 91、env 24 / 环境 93），而胶囊早已映射成中文 ⇒ **同一页两套词面**。现按显示名归并（`教训 328`、`环境 117` 各一行）；`TAG_ORDER` 补中文键别名（原只认 7 个英文键 ⇒ 288 条中文标签全落末组）。**数据侧零改动**（仍两套键并存，仅显示层归并）。
+  · **册五 库内结构三档枚举**：新增只读盘点（**派生式** `readdirSync` + 白名单分档，**不硬编码目录名**）——内容档（notes/engine/audit/docs…）进分区展开，工具态档（.git/.obsidian/scripts…）与产物档（.records/reports/pending…）**只报计数**（工具态不计字节：递归 `.git` 达 36MB 会污染「库有多大」的读数）。补全 engine/scripts/audit/.records/reports 五个此前**无任何 UI 入口**的板块。
+  · **判据载体补齐**：新增 `scripts/test-approve-actions.mjs`（**DSH_HOME 隔离根** + 真实 handler，断言「结果达成」而非 HTTP 200；判别力自证真做）并登记进 `CHECKS`；`test-idxrow-pills.mjs` 夹具源由仓根 `_memory/`（2026-09-08 旧副本、19 索引行、未被 git 跟踪）**改活库**（520 行），并新增**响应字段真机断言**（本仓此前**无任何响应字段级门禁**，删字段零护栏）——含「先把 `text` 加回则必红」的先红自证。
+  · **顺带修**：`test-panel-view-contract` 夹具的 `pending.recent` 字段名与真实契约不符（夹具写 `file`、真机是 `name`）——属「夹具绿非真数据绿」型假绿，已随本轮对齐。
+- **深睡/蒸馏触发链四册（S-P2a..P4 · 2026-09-20）**：把「判据长在命令式流程里」与「用一次性进程状态承载需跨实例连续的语义」两类病，各自收口到**可穷举纯函数**与**持久事实**。四册各治一症，均先在真机取证、再由先红单测钉死：
+  · **① 全 `stalled` ⇒ 深睡永不触发**（`planSleepWindow`）：巡检原把 `stalled` 从水位计算中 `continue` 跳过 ⇒ 在册会话全为 `stalled` 时 `hottest` 恒为初值 `0` ⇒ `hottest <= lastDeepSleepAt` **恒真** ⇒ 永不触发；而状态机头注明写 STALLED =「已确认卡住，**不阻塞**」——**代码与自述相反**。真机：09-17 08:34 起 `28f9f094` 等转 stalled 后**连续 11 小时零触发行**。同源缺陷还令面板 `nextEligibleAt = 0 + idleMs` ⇒ 渲染成 **1970-01-01**（假读数）。现巡检与面板**共用同一归约**（`trigger-plan.ts`）。
+  · **② `conflict` 分支活锁**（`planProbeOutcome`）：证据冲突分支排在 `stallRound` 推进**之前**且直接 return ⇒ 计数永不推进 ⇒ 状态回写 `suspect`、下轮再探再冲突。真机：`28f9f094` **连续 23 次 conflict、跨 11 小时**，该窗口「探测未决」41 行、触发行 **0 行**。现决策表统一出口 + **冲突有界**（连续满新阈值 `deepSleepProbeConflictMax`＝3 即转 `stalled`）。新阈值贯通注册表 → 生成投影 → schema → **显式映射**（防「schema 有 ≠ 运行时 config 有」）。
+  · **③ 段级重试计数被会话级末行读打回 0**（`readSegFlowState`）：`retryAttemptFor` 原用 `readRunState`（= 会话最近状态）取**段级**计数，而水位流里多处不带 `segKey` 的写入（跳过分支 / `segment-done` / `forced`）插在中间即令末行失配 ⇒ 计数**结构性归零**。真机三证：水位流 1093 行 `phase:"retry"` **0 行** · `spawn` 行 399 条中带 segKey 且 attempt>0 的 **0 条** · 日志重试 307 条分布 `{1/3:267, 2/3:40}` ⇒ **`3/3` 从未达**（「有界重试」真机从未生效）。现增**段级读口**（取最近一条带 `segKey` 的行），水位流「末行生效」核心语义**不变**。
+  · **④ 自检名义 6h 周期实为「每挂载必跑一次」**（`dueSelfCheck`）：「启动后 3 分钟首跑」与 6h 周期**并联**且每次装配重置 ⇒ 热重载常态下每挂载必跑。实测 09-19 十次挂载 → 十次 `selfcheck(timer)`，间隔**恒 179s**；09-18 43 挂载对应 40 次自检。现「到期」由 `selfcheck-latest.json` 的 mtime（自检自身每次覆盖写）判定，定时器降级为**唤醒节拍**——**不新增持久面、不新增定时器**。
+  · 判据：新增 `test-sleep-window-reduction`（36）/ `test-probe-outcome`（28）/ `test-seg-flow-state`（14）/ `test-selfcheck-cadence`（17），全部登记 `CHECKS` 且含**变异重演反向自证**（把旧行为改回 ⇒ 对应用例必红）。特性探针 76 → **82 项**。模块 91 → 94（`probe-config` / `probe-plan` / `trigger-plan`，后两者因 `deepsleep-core` 导出数受 `audit-architecture` 棘轮约束而按**领域接缝**单独成件）。
 - **用户授权「全部做」后的三项收口（2026-09-19）**：
   · **A 抬注入基线**：重立 `_memory/audit/inject-baseline-pre-R0.json`（`inject-baseline-diff --write`，仅落 `_memory/`、不入公开树）
     ⇒ 该项由 3/3 红转 **PASS（3 case 逐字节一致）**。

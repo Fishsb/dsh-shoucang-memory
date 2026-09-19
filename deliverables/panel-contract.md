@@ -43,7 +43,7 @@
 | `/memory/section-edit` | 改写小节正文 | rel, section | `rel`:string · `section`:string · `newBody`?:string |
 | `/memory/edit` | 行级编辑 | file, line, newText | `file`:string · `line`:string · `newText`:string |
 | `/memory/remove` | 行级删除 | file, line | `file`:string · `line`:string · `pendingFile`?:string |
-| `/memory/approve` | 采纳候选 | pendingFile | `pendingFile`:string |
+| `/memory/approve` | 采纳/忽略候选（root 指定双根；action=approve|ignore 语义分离） | pendingFile | `pendingFile`:string · `root`?:string · `action`?:string |
 | `/inject/preview` | 热记忆注入预览 | — | — |
 | `/inject/stats` | 注入统计 | — | — |
 | `/arch/records` | 记录层：store 人口 · md↔store 逐载体对账 · 写时自证 · 跨文件同文 · 行寻址口径 | — | — |
