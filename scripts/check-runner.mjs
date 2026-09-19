@@ -345,6 +345,37 @@ const CHECKS = [
   //   段身份不匹配 ⇒ 计数归零；旧行兼容（缺字段 ⇒ 0/''）；不传 run ⇒ 行内不出现新字段（零行为变化）。
   //   判因：热重载实测 220 次（09-18 单日 28 次）清零内存计数 ⇒「连败 3 次强制推进」退化为无界重试。
   ['scripts/test-guard-lifetime.mjs'],
+  // S-P2a（2026-09-20）**睡眠窗口归约与判定分离**：
+  //   判因（真机实测 + 可执行探针）：`deepSleepCheck` 把归约与判定写在同循环，且 `stalled` 被
+  //   `continue` 跳过（不参与 hottest）⇒ 在册会话**全为 stalled** 时 hottest 恒 0 ⇒ **永不触发**，
+  //   而状态机自述 STALLED「不阻塞」（代码与自述相反）；真机 09-17 起 11 小时零触发。
+  //   面板同源缺陷：`nextEligibleAt = 0 + idleMs` ⇒ 渲染成 1970-01-01（假读数）。
+  //   本件锁：① 全 stalled ⇒ 仍应答（hottest 取 lastEventAt）② 阻塞语义（probing/suspect 阻塞，其余不）
+  //   ③ 水位取值规则（只有 ended 取 lastEndAt）④ 空集合回落兜底 ⑤ 边界（<= 判据）⑥ 两处共用同一归约
+  //   ⑦ **变异重演**反向自证 ⑧ planTriggerDim 等价性 ⑨ dueSelfCheck 判据表。
+  ['scripts/test-sleep-window-reduction.mjs'],
+  // S-P2b（2026-09-20）**探测结论决策表 + conflict 有界**：
+  //   判因：`probeSession` 的 `if (active)`（证据冲突）分支排在 `stallRound+1` 之前且不推进任何计数
+  //   ⇒ 状态回写 suspect ⇒ 下轮再探再冲突 = **活锁**（真机 28f9f094 连续 23 次、跨 11 小时、
+  //   该窗口「探测未决」41 行而触发行 0 行）。本件锁：① 优先级顺序（未存活→增长→子代理→冲突→卡住）
+  //   ② **conflict 有界**（满 conflictMax 转 stalled）③ 卡住路径不变 ④ refreshActivity 只在正向进展为真
+  //   ⑤ 布线（出口全经决策表 / conflictRound 与 stallRound 同寿同清 / 阈值显式映射）。
+  ['scripts/test-probe-outcome.mjs'],
+  // S-P3（2026-09-20）**段级流程状态读口**：
+  //   判因（真机三证）：`retryAttemptFor` 用**会话级末行**（readRunState）取**段级**重试计数 ⇒ 语义错配；
+  //   任何不带 segKey 的写入（跳过分支/segment-done/forced）插在中间即令末行失配 ⇒ **计数结构性归零**
+  //   （水位流 1093 行 `phase:"retry"` **0 行**；spawn 行 399 条中带 segKey 且 attempt>0 的 **0 条**；
+  //   日志重试 307 条 `{1/3:267, 2/3:40}` ⇒ `3/3` **从未达**）。
+  //   本件锁：① 段级读口取最近一条带 segKey 的行 ② 插入无 segKey 写入后计数**仍可读回**（含旧形态反例对照）
+  //   ③ 段身份变化归零 ④ 边界零抛出 ⑤ 水位流核心语义不变（末行读原样保留）⑥ 两处消费同源。
+  ['scripts/test-seg-flow-state.mjs'],
+  // S-P4（2026-09-20）**定时自检节拍基于持久事实**：
+  //   判因：自检 effect 每次装配都新设「启动后 3 分钟首跑」并与 6h 周期并联 ⇒ 热重载常态下
+  //   **每挂载必跑一次**（实测 09-19 十次挂载 → 十次自检、间隔恒 179s；09-18 43 挂载 / 40 次自检）。
+  //   本件锁：① dueSelfCheck 判据表（never-ran/interval-elapsed/not-due/interval-disabled + 边界）
+  //   ② 节拍取自 `selfcheck-latest.json` mtime ③ **连跑 10 次装配 ⇒ 0 次真自检**（旧行为 10 次，反向自证）
+  //   ④ 布线（旧「装配即无条件 setTimeout」形态已消除）。
+  ['scripts/test-selfcheck-cadence.mjs'],
   // 册二（2026-09-19 · docs/distill-admission-plan.md）**准入判定单一实现**：
   //   判因：「该不该现在蒸」原先散在三处、口径不一，且宽限期只看内存 `sleep.sessions`（热重载 220 次
   //   ⇒ 每次重载 30 秒后必蒸，实测 5/5 配对）。本件锁：① `planIngestAdmission` 决策表（顺序即优先级：
@@ -689,6 +720,14 @@ const CHECKS = [
   //   ⇒ 同一行渲染两次同一个标签（真机实测 pills=2 "环境 | 环境"）。折叠态与「展开全部」同一渲染器，故两处都重复。
   //   本件用**真实 _memory/MEMORY.md** 造夹具、真机逐行数 `.sc-idx-tag`，断言「每行恰好 1 个」且右列计数仍在。
   ['scripts/test-idxrow-pills.mjs'],
+  // 册一（2026-09-19）：**候选处置动作语义**（approve→`.processed` / ignore→`.ignored`）。
+  //   判因（会议最高优先缺陷 + 我自己的施工教训）：原实现两按钮调**同一端点同一参数**，
+  //   一律 rename 进 `.processed` ⇒ 语义相反的操作效果完全相同（「看得见的操作是假的」）。
+  //   本件用 **DSH_HOME 隔离根** 跑**真实 handler**（`registerInject` → `ctx.effect` →
+  //   `mountMemoryWriteRoutes`），断言「结果达成（目标目录实际 +1）」而非仅 HTTP 200。
+  //   ⚠ 隔离是硬要求：首版验收直接对**真候选池**跑，移走了 2 条真候选（已还原；且
+  //     `suite/knowledge` 非 git 库 ⇒ 移动不可回滚）——验收工具不得改真源数据（R2③）。
+  ['scripts/test-approve-actions.mjs'],
   // S-P5（2026-09-17 **圆桌会议「灵枢模块吸收评审」产出**）**注入边界 `{{` 防护**。
   //   判因（会议实证，非推测）：宿主 `dsh-system-prompt` 的 `interpolate()` 对注入文本做
   //   严格 `{{var}}` 插值，三处 throw（lib/index.js L158/L164/L167）冒泡到 `assemble` ⇒

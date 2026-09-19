@@ -108,7 +108,18 @@ const FIX = `var FIX = {
   '/deepsleep/config': { failPolicy: 'graded', attempted: 0 },
   '/memory/overview': { present: true,
     indexes: [ { name: 'MEMORY.md', chars: 3100, cap: 5000, lines: new Array(86).fill('[x]') }, { name: 'USER.md', chars: 2340, cap: 3000, lines: new Array(24).fill('[x]') }, { name: 'AGENT.md', chars: 1440, cap: 3000, lines: new Array(19).fill('[x]') } ],
-    pending: { count: 9, last24h: 3, recent: [ { file: 'a.md', mtime: '2026-09-12 14:02' } ] },
+    pending: { count: 9, last24h: 3, recent: [ { name: 'a.md', mtime: '2026-09-12 14:02' } ] },
+    /* 册一（2026-09-19）新增：候选区改「双根合并」后，本夹具**必须**给 suite 根，
+     * 否则 suite 组为空、组标题不渲染 ⇒ 基线漏项（实测：正是本次 1 项漂移的根因）。
+     * 字段名与真实契约一致（name，非 file）——旧夹具写 file 是**与真机不符的口径**，
+     *   会造出「夹具绿而真机不渲染」的假绿（本仓既有教训：夹具绿非真数据绿）。 */
+    suite: { present: true, pending: { count: 9, last24h: 3, recent: [ { name: 'a.md', mtime: '2026-09-12 14:02' } ] },
+      flowCandidates: { count: 14, recent: [ { name: 'b.md', mtime: '2026-09-13 09:00' } ] } },
+    structure: { summary: { content: 2, tooling: 1, artifact: 1 }, entries: [
+      { name: 'notes', kind: 'content', files: 12, bytes: 460000 },
+      { name: 'MEMORY.md', kind: 'content', files: 1, bytes: 67000, doc: true },
+      { name: '.git', kind: 'tooling', files: 432, bytes: 0 },
+      { name: 'pending', kind: 'artifact', files: 70, bytes: 88000 } ] },
     distillStats: { runs: 128, last: { at: 1757000000000 }, added: 342, failed: 4, byRoute: { memory: 120 }, byDay: [ { added: 2 }, { added: 5 } ] },
     distill: { last: { at: '2026-09-13T06:00:00.000Z', lastSeq: 36, sessionId: 'session-abcdef12' } },
     growth: { month: '2026-09', sleep: { passes: 18, principleAdded: 42, replaced: 7, profilesAdded: 11 }, distill: { runs: 128, ok: 121, bad: 4, skips: 31 }, now: { tagRows: 63, principleRows: 41, pathRows: 22, agentChars: 2880 } },

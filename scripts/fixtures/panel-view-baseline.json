@@ -199,6 +199,16 @@
     },
     {
       "pane": "index",
+      "name": "库内结构 · 4 个顶层条目（内容 2 · 工具态 1 · 产物 1）",
+      "kind": "mem-group-title"
+    },
+    {
+      "pane": "index",
+      "name": "守藏本地知识区 · suite/knowledge",
+      "kind": "mem-group-title"
+    },
+    {
+      "pane": "index",
       "name": "知识索引 MEMORY.md · 86 条",
       "kind": "mem-group-title"
     },
@@ -209,10 +219,10 @@
     },
     {
       "pane": "pending",
-      "name": "pending 候选队列 · 9 条",
+      "name": "候选区 · 32 条（双根合并）",
       "kind": "mem-group-title"
     }
   ],
   "note": "面板视图契约基线（真机渲染快照）",
-  "at": "2026-09-13T18:31:46.528Z"
+  "at": "2026-09-19T14:45:34.923Z"
 }

@@ -468,7 +468,7 @@ export const PANEL_CONTRACT = {
     },
     {
       "path": "/memory/approve",
-      "summary": "采纳候选",
+      "summary": "采纳/忽略候选（root 指定双根；action=approve|ignore 语义分离）",
       "required": [
         "pendingFile"
       ],
@@ -477,6 +477,16 @@ export const PANEL_CONTRACT = {
           "name": "pendingFile",
           "type": "string",
           "optional": false
+        },
+        {
+          "name": "root",
+          "type": "string",
+          "optional": true
+        },
+        {
+          "name": "action",
+          "type": "string",
+          "optional": true
         }
       ]
     },

@@ -34,15 +34,66 @@ function openMemoryNote(pointer, autoSection, returnRender) {
      *  `renderRunExtras` 同法），由 `body.js`（同时 import 两侧）注入 ⇒ 依赖变**单向**：detail → memory。
      *  句柄的声明与注入由 `check-appstate-contract` 四方对账守。 */
     appState.renderNoteSections(appState.refs.view, r);
-    if (autoSection) {
-      /* 旧实现用 `h.click()` 模拟点击来展开——依赖 DOM 结构（nextElementSibling 恰是 body）
-         且会连带触发一次真实 toggle（若该节点本就展开则反而被收起）。
-         现直接对单一数据源置位，由各自的 paint 订阅同步 DOM，幂等且不碰结构。 */
-      appState.refs.view.querySelectorAll('[data-fold-key]').forEach(function (h) {
-        if ((h.textContent || '').indexOf(autoSection) !== -1) Fold.set(h.getAttribute('data-fold-key'), true);
-      });
-    }
+    if (autoSection) locateSection(appState.refs.view, autoSection, r);
   }).catch(appState.failFn);
+}
+
+/**
+ * 定位小节（册二 · 决议 D1 终态：**前端零匹配逻辑**）。
+ *
+ * 判因（实测，根因 C1「同一语义多份实现 + 门禁只守库侧」）：
+ *   原实现用 `head.textContent.indexOf(autoSection) !== -1` 做**子串包含**匹配，与库侧权威
+ *   三态（归一核心名 + 双向包含 + 多命中 ⇒ ambiguous，`section-ref.ts:170-192`）不同源
+ *   ⇒ 实测 623 行索引行中**多命中 209 处（33.8%）**：点一次把**所有**含该词的节点都置位展开，
+ *   且全仓 `scrollIntoView` **0 命中** ⇒ 用户看到「点了没反应」。
+ *
+ * 现语义（**前端不做任何名字判定**）：后端 `/memory/sections` 已为每条 `§指针` 下发
+ *   `pointerIndex[spec] = { state, foldKey, title, cands? }`（state ∈ exists|ambiguous|missing|partial，
+ *   由库内唯一实现 `section-ref` 解析）。前端**只按 state 分支渲染**：
+ *   · `exists`   ⇒ 用后端给的 `foldKey` 精确置位 + 滚动入视口（唯一，无歧义）
+ *   · `ambiguous`⇒ **不展开**，列出后端给的候选名（有歧义就不猜）
+ *   · `partial`  ⇒ 展开后端回落的父节（读侧可解析到的最深段）
+ *   · `missing`/无记录 ⇒ 如实告知，不展开
+ *   ⚠ 此处**不得再出现** `indexOf`/归一/逐段收窄等任何匹配代码——那正是被删掉的第二份实现。
+ *
+ * @param view 渲染容器
+ * @param autoSection 指针里的 § 段（后端 `pointerIndex` 的键）
+ * @param data 后端响应（含 `pointerIndex`）
+ */
+function locateSection(view, autoSection, data) {
+  var raw = String(autoSection || '').trim();
+  if (!raw) return;
+  var idx = (data && data.pointerIndex) || {};
+  var ent = idx[raw] || null;
+  var heads = view.querySelectorAll('[data-fold-key]');
+  var setAndScroll = function (foldKey) {
+    if (!foldKey) return false;
+    Fold.set(foldKey, true);
+    var target = null;
+    Array.prototype.forEach.call(heads, function (h) { if (h.getAttribute('data-fold-key') === foldKey) target = h; });
+    if (!target) return false;
+    /* 滚动入视口（原实现缺失 ⇒「展开了但看不见」= 真实失败形态）。
+     * 展开由 Fold 单一数据源驱动，DOM 同步可能在本帧之后 ⇒ 下一帧再滚动。 */
+    var scroll = function () {
+      try { if (target.scrollIntoView) target.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) { /* 老环境无 options 支持则忽略 */ }
+    };
+    if (window.requestAnimationFrame) window.requestAnimationFrame(scroll); else scroll();
+    return true;
+  };
+  if (!ent) { appState.statusFn(tr("小节未找到（指针锚：") + raw + tr("）——已显示整篇，未自动展开")); return; }
+  if (ent.resolveState === 'exists' || ent.resolveState === 'partial') {
+    if (setAndScroll(ent.foldKey)) return;
+    appState.statusFn(tr("小节未找到（指针锚：") + raw + tr("）——已显示整篇，未自动展开"));
+    return;
+  }
+  if (ent.resolveState === 'ambiguous') {
+    /* 多命中（真实歧义）：**不展开任何一个** —— 展开任何一个都会误导「这就是你要找的」。
+     * 用户可据此把库内指针写得更精确（父/子全路径），这正是本册要暴露的信息。 */
+    var names = Derive.has(ent.cands) ? ent.cands.slice(0, 4).join(' / ') : '';
+    appState.statusFn(tr("该指针命中 ") + Derive.count(ent.cands) + tr(" 个同名/包含小节，无法唯一定位（未展开）：") + names);
+    return;
+  }
+  appState.statusFn(tr("小节未找到（指针锚：") + raw + tr("）——已显示整篇，未自动展开"));
 }
 
 function makeMemoryPointerRow(title, pointer, meta, summary) {
@@ -100,7 +151,20 @@ function idxPill(tag) {
   return pill;
 }
 
-var TAG_ORDER = ['env', 'tool', 'flow', 'lesson', 'release', 'user', 'agent'];
+/* 索引行排序键（**原始 tag**，不变式：必须吃原始键，见本文件头注）。
+ * 册四（2026-09-19）：**补中文原始键别名** —— 库内标签是两套键空间共存
+ *   （`env`/`环境`、`lesson`/`教训`，实测 lesson 232 / 教训 91 / env 24 / 环境 91）。
+ *   原表只认 7 个英文键 ⇒ **中文键全部落到 `indexOf === -1` 的「末尾组」**，
+ *   实测未覆盖 288 条（教训 91 + 环境 91 + 原则 79 + 路径 17 + 偏好 3 + 经验 2 + 习惯 2 + 身份 1 + 硬件 1）。
+ *   现按语义归入同族（`教训`→与 `lesson` 同组、`环境`→与 `env` 同组），其余中文键排在英文键之后、
+ *   保持稳定书写序（不改它们彼此的相对顺序，避免打乱用户的检索直觉）。 */
+var TAG_ORDER = ['env', '环境', 'tool', 'flow', 'lesson', '教训', 'release', 'user', 'agent',
+  '原则', '路径', '经验', '身份', '使命', '边界', '性格', '认知', '演化', '偏好', '习惯', '硬件'];
+
+/* 中文**显示名**排序表（供统计串归并后排序用）。
+ * 与 TAG_ORDER 同序：env/环境 → tool → flow → lesson/教训 → release → user → agent → 其余中文键。 */
+var TAG_ORDER_ZH = ['环境', '工具', '流程', '教训', '发布', '用户', '智能体',
+  '原则', '路径', '经验', '身份', '使命', '边界', '性格', '认知', '演化', '偏好', '习惯', '硬件'];
 
 function renderIndexRows(container, lines, returnRender) {
   var arr = (lines || []).slice();
@@ -192,12 +256,27 @@ function renderPersona(view, data) {
   var statGrid = el('div', 'sc-mem-grid');
   statGrid.style.gridTemplateColumns = 'repeat(2, minmax(0, 1fr))';
   pair.forEach(function (f) {
+    /* 册四（2026-09-19）：统计串**必须走 tagLabel**（显示层唯一映射点）。
+     * 判因（实测）：库内标签是**两套键空间**共存——`lesson` 232 条 / `教训` 91 条、
+     *   `env` 24 条 / `环境` 91 条（`tag-label.js:22-23` 已记 1:N 撞名）。
+     *   本处原直接拼**原始键**（`k + ' ' + n`）⇒ 同一张卡上同时出现 `lesson` 与 `教训`，
+     *   而胶囊（`idxPill:88`）已映射成中文 ⇒ **同一页两套词面**（根因 C4）。
+     * 现：先按**显示名**归并计数（`env`+`环境` 合成一档），再按 TAG_ORDER 排序后输出。
+     * ⚠ 归并只发生在**显示层**：色相（idxHue）/排序键/统计键仍吃原始 tag（AV 不变式，见本文件头注）。 */
     var byTag = {};
     (f.lines || []).forEach(function (ln) {
       var t = String((ln && ln.tag) || '').trim();
-      if (t) byTag[t] = (byTag[t] || 0) + 1;
+      if (!t) return;
+      var disp = tagLabel(t, lang());
+      byTag[disp] = (byTag[disp] || 0) + 1;
     });
-    var parts = Object.keys(byTag).map(function (k) { return k + ' ' + byTag[k]; });
+    var parts = Object.keys(byTag)
+      .sort(function (a, b) {
+        var ia = TAG_ORDER_ZH.indexOf(a); if (ia === -1) ia = TAG_ORDER_ZH.length;
+        var ib = TAG_ORDER_ZH.indexOf(b); if (ib === -1) ib = TAG_ORDER_ZH.length;
+        return ia - ib || a.localeCompare(b);
+      })
+      .map(function (k) { return k + ' ' + byTag[k]; });
     var pct = f.cap ? Math.round((f.chars || 0) / f.cap * 100) : null;
     var tip = pct !== null && pct >= 80
       ? tr("容量 ") + Derive.num(f.chars) + ' / ' + Derive.num(f.cap) + tr(" —— 超过 80% 时在此显示一行提示；红线由 write_gate 写入时强制。")

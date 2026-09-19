@@ -7,9 +7,15 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { dshHome, knowledgeRoot } from './targets.js'
+/* 册二（决议 D1）：归一核心名与小节解析**均取库内唯一实现**（与 `section-ref` 同源），
+ * 不在本文件另写一份——「同一语义多份实现」正是根因 C1 本身。
+ * ⚠ `resolveSectionSpec` 是**权威四态解析**（exists|ambiguous|missing|partial）：自写匹配必然与它分叉
+ *   （施工实测：自写版得 117 partial / 7 missing，而权威口径 655 exists / 0 partial / 0 missing）。 */
+import { coreName } from './treeops.js'
+import { resolveSectionSpec, pointersOfRow } from './section-ref.js'
 import { MATURATION } from './criteria.generated.js'
 import { vecStats } from './vec.js'
-import { nonEmptyLineCount } from './file-stat-cache.js'
+import { nonEmptyLineCount, statSize } from './file-stat-cache.js'
 import { readDistillAuditText } from './audit-source.js'
 import { isLocalBase, sendJson, statMtime } from './panel-shared.js'
 import type { PanelLogger, RouteFn, SuiteConfigAccess } from './panel-shared.js'
@@ -27,9 +33,16 @@ export interface MemoryDeps {
  * 唯一事实源 ~/.dsh/skills/managing-memory/。零硬编码路径：home = DSH_HOME || ~/.dsh。
  * 只读：不提供任何写入口（写/裁决归记忆插件）。 */
 
-interface MemIndexEntry { tag: string; subject: string; pointer: string; raw: string }
+/* 册零（2026-09-19 载荷瘦身）：`raw`（逐行原文）与 `text`（整文件全文）**不进响应**。
+ * 判因（实测）：前端全域 `.raw` **0 命中**、`indexes[].text` **0 命中**；而 MEMORY.md 的
+ *   `text` 与 `lines[].raw` 去空白后**比值 1.00**（同一文件被装了两份）⇒ 总载荷 297,928 B
+ *   中 indexes 占 **95.6%**，瘦身后 ≈115 KB（−61.3%）。
+ * ⚠ 边界（不得连带删）：`charsOf(text)` 与 `parseIndexLines(text)` 仍需**读文件文本**，
+ *   只是不再把它塞进响应；`lines` 的 tag/subject/pointer 三字段**一个都不能少** ——
+ *   少一个会让 `panes-memory-detail.js:219` 静默显示「知识索引 0 条」（该处无空态守卫）。 */
+interface MemIndexEntry { tag: string; subject: string; pointer: string }
 
-interface MemIndexFile { name: string; label: string; text: string; chars: number; cap: number; lines: MemIndexEntry[] }
+interface MemIndexFile { name: string; label: string; chars: number; cap: number; lines: MemIndexEntry[] }
 
 const memoryHomeOf = (): string | null => {
   const base = join(dshHome(), 'skills', 'managing-memory')
@@ -92,6 +105,74 @@ const MEM_INDEX_FILES: Array<{ file: string; label: string }> = [
 
 const NOTE_RELS = ['env', 'tools', 'flows', 'lessons', 'release', 'user', 'agent', 'INDEX']
 
+/* ══ 册五（2026-09-19 · 用户拍板 A：三档枚举）库内结构盘点 ══
+ *
+ * 判因：面板此前**只读** MEMORY/USER/AGENT.md + notes/ + pending/ + audit 两个 jsonl
+ *   ⇒ 库根 27 条目里 engine/ scripts/ audit/ .records/ reports/ 维护文档族**六个板块无任何入口**
+ *   （用户问「库内到底有哪些板块」时面板给不出答案——这正是本方案的起点）。
+ *
+ * **零硬编码红线**：目录名**一律 readdirSync 派生**，不写成常量清单
+ *   （写常量 = 把库内结构硬编码进源码，目录漂移即 UI 漂移）。下面的白名单**只做分档归类**，
+ *   且未登记的新条目**默认落「内容档」**（宁可多报也不静默丢——与 `renderIndexRows` 的
+ *   「异常可见而不静默」同口径）。
+ *
+ * 三档语义（用户裁决）：
+ *   · content  内容档 —— 承载知识/判据，进分区展开（notes/engine/docs/…）
+ *   · tooling  工具态档 —— 编辑器/版本库状态（.git/.obsidian/.internal/…），**只报计数**
+ *   · artifact 产物档 —— 可重建或运行产物（audit/.records/reports/scripts/*.jsonl），**只报计数**
+ *     （把可重建产物当「内容」展示 = 噪音大于信息，故只给体量不展开条目）
+ */
+/* 工具态档 = 版本库/编辑器状态 + **库自身工具代码**（`scripts/`）——均非知识内容，只报计数。
+ * 判因：`scripts/` 是库的工具代码（memory_write_gate / read_section 等），不承载知识，
+ *   与 `.git` 同属「不该以内容形态展开」的一类（用户裁决：只报只读计数）。 */
+const STRUCT_TOOLING = new Set(['.git', '.obsidian', '.internal', '.gitignore', 'scripts'])
+/* 产物档 = **可重建的运行产物与暂存区**（用户裁决：「工具态与产物档只报只读计数」）。
+ * ⚠ 用户裁决原话把 `audit` 列在**内容档**（「内容档进分区（notes/engine/audit 等承载内容的板块）」）
+ *   ⇒ audit 是台账（承载判据/水位/审计事实），**归内容档**；此处只列运行产物与候选暂存区。 */
+const STRUCT_ARTIFACT = new Set(['.records', 'reports', 'pending', 'pending-migrated-20260906'])
+
+/** 递归目录体量（文件数 + 字节数）。
+ *  ⚠ `countBytes=false` 用于**工具态档**：`.git` 递归后可达数十 MB，会把「库有多大」这个读数
+ *    彻底污染（实测 .git 36MB vs 内容总计 ~1.3MB）⇒ 工具态**只报文件数，字节记 0**
+ *    （与用户裁决「工具态只报只读计数」一致：不展开、也不参与体量口径）。 */
+const dirSizeOf = (p: string, countBytes = true): { files: number; bytes: number } => {
+  let files = 0, bytes = 0
+  try {
+    for (const e of readdirSync(p, { withFileTypes: true })) {
+      const full = join(p, e.name)
+      if (e.isDirectory()) { const s = dirSizeOf(full, countBytes); files += s.files; bytes += s.bytes }
+      else { files++; if (countBytes) { try { bytes += statSize(full) } catch { /* 跳过不可读 */ } } }
+    }
+  } catch { /* 不可读目录按 0 计 */ }
+  return { files, bytes }
+}
+
+/** 库内结构盘点（派生式；返回紧凑结构，供前端按档渲染）。 */
+const libraryStructureOf = (base: string): { entries: Array<{ name: string; kind: 'content' | 'tooling' | 'artifact'; files: number; bytes: number; doc?: boolean }>; summary: { content: number; tooling: number; artifact: number } } => {
+  const entries: Array<{ name: string; kind: 'content' | 'tooling' | 'artifact'; files: number; bytes: number; doc?: boolean }> = []
+  let names: string[] = []
+  try { names = readdirSync(base, { withFileTypes: true }).map((e) => e.name).sort() } catch { /* 库根不可读 */ }
+  for (const name of names) {
+    const full = join(base, name)
+    let isDir = false
+    try { isDir = readdirSync(full) !== undefined } catch { isDir = false }
+    const kind: 'content' | 'tooling' | 'artifact' =
+      STRUCT_TOOLING.has(name) ? 'tooling' : STRUCT_ARTIFACT.has(name) ? 'artifact' : 'content'
+    if (isDir) {
+      const s = dirSizeOf(full, kind !== 'tooling')
+      entries.push({ name, kind, files: s.files, bytes: s.bytes })
+    } else {
+      let bytes = 0
+      if (kind !== 'tooling') { try { bytes = statSize(full) } catch { /* 跳过 */ } }
+      // 根级文档（.md / .json）标 doc=true：它们与目录同属「内容」但形态不同，前端可分区呈现
+      entries.push({ name, kind, files: 1, bytes, doc: /\.(md|json|yml)$/i.test(name) })
+    }
+  }
+  const summary = { content: 0, tooling: 0, artifact: 0 }
+  for (const e of entries) summary[e.kind]++
+  return { entries, summary }
+}
+
 /**
  * 容量上限单一事实源（2026-09-10 修复：与写门同源）。
  * 优先级：① ~/.dsh/suite/scheduler.json 的容量门 capAgent/capUser/capMemory（= write_gate 的 env SHOUCANG_CAP_*，
@@ -115,13 +196,13 @@ const memoryCaps = (d: MemoryDeps, base: string): Record<string, number> => {
   return out
 }
 
-/** 索引行：`[标签] 主题 · 概况 → notes/x.md §小节` */
+/** 索引行：`[标签] 主题 · 概况 → notes/x.md §小节`（只留三字段，`raw` 不进响应——见上方册零说明） */
 const parseIndexLines = (text: string): MemIndexEntry[] => {
   const out: MemIndexEntry[] = []
   for (const raw of text.split(/\r?\n/)) {
     const m = raw.match(/^\[([^\]]+)\]\s+(.+?)\s*→\s*(.+)$/)
     if (!m) continue
-    out.push({ tag: m[1].trim(), subject: m[2].trim(), pointer: m[3].trim(), raw })
+    out.push({ tag: m[1].trim(), subject: m[2].trim(), pointer: m[3].trim() })
   }
   return out
 }
@@ -131,7 +212,7 @@ const charsOf = (text: string): number => text.replace(/\s+/g, '').length
 const readIndexFile = (base: string, f: { file: string; label: string }, caps: Record<string, number>): MemIndexFile | null => {
   try {
     const text = readFileSync(join(base, f.file), 'utf8')
-    return { name: f.file, label: f.label, text, chars: charsOf(text), cap: caps[f.file] ?? 3000, lines: parseIndexLines(text) }
+    return { name: f.file, label: f.label, chars: charsOf(text), cap: caps[f.file] ?? 3000, lines: parseIndexLines(text) }
   } catch { return null }
 }
 
@@ -210,12 +291,13 @@ const growthOf = (monthStr?: string): Record<string, unknown> => {
   }
 }
 
-const memOverviewOf = (d: MemoryDeps, base: string): Record<string, unknown> => {
-  const caps = memoryCaps(d, base)
-  const indexes = MEM_INDEX_FILES.map((f) => readIndexFile(base, f, caps)).filter(Boolean) as MemIndexFile[]
-  let pendingCount = 0
-  let pendingMeta: Record<string, number> = {}
-  const pendingRecent: Array<{ name: string; mtime: string }> = []
+/* 册一（2026-09-19）：候选**按根分装**——根因 C2「root 是隐式常量、读写两侧各绑不同根」。
+ * 判因（实测）：`pending` 原只读本根（memory 库），而真候选 9 条在 suite 根 ⇒ UI 显示
+ *   「候选 0 条」却点不到那 9 条；写侧（/memory/approve）也只读 suite 根 ⇒ **读写不同源**。
+ * 现：`pendingByRoot` 显式并列各根本地（memory / suite / flow-candidates），
+ *   `pending` 保持**向后兼容**（= memory 根，旧消费方零改动）。 */
+const pendingOfRoot = (base: string): { count: number; last24h: number; recent: Array<{ name: string; mtime: string }> } => {
+  const out = { count: 0, last24h: 0, recent: [] as Array<{ name: string; mtime: string }> }
   try {
     const pendDir = join(base, 'pending')
     const nowMs = Date.now()
@@ -223,20 +305,41 @@ const memOverviewOf = (d: MemoryDeps, base: string): Record<string, unknown> => 
       .filter((e) => e.isFile() && e.name.endsWith('.md'))
       .map((e) => e.name)
       .sort((a, b) => statMtime(join(pendDir, b)).localeCompare(statMtime(join(pendDir, a))))
-    pendingCount = names.length
-    // 24h 内新增数（趋势语境：候选正在被消化=减少，新增快于消化=增长）
-    let last24h = 0
+    out.count = names.length
     for (const n of names) {
-      try { if (nowMs - new Date(statMtime(join(pendDir, n))).getTime() < 86400000) last24h++ } catch { /* 跳过 */ }
+      try { if (nowMs - new Date(statMtime(join(pendDir, n))).getTime() < 86400000) out.last24h++ } catch { /* 跳过 */ }
     }
-    for (const n of names.slice(0, 8)) pendingRecent.push({ name: n, mtime: statMtime(join(pendDir, n)) })
-    pendingMeta = { last24h }
+    for (const n of names.slice(0, 8)) out.recent.push({ name: n, mtime: statMtime(join(pendDir, n)) })
   } catch { /* pending 缺失 */ }
+  return out
+}
+
+/** flow-candidates 子区（待转正候选；蒸馏采集不递归，故与根 pending 分列） */
+const flowCandidatesOf = (base: string): { count: number; recent: Array<{ name: string; mtime: string }> } => {
+  const out = { count: 0, recent: [] as Array<{ name: string; mtime: string }> }
+  try {
+    const dir = join(base, 'pending', 'flow-candidates')
+    const names = readdirSync(dir, { withFileTypes: true })
+      .filter((e) => e.isFile() && e.name.endsWith('.md'))
+      .map((e) => e.name)
+      .sort((a, b) => statMtime(join(dir, b)).localeCompare(statMtime(join(dir, a))))
+    out.count = names.length
+    for (const n of names.slice(0, 8)) out.recent.push({ name: n, mtime: statMtime(join(dir, n)) })
+  } catch { /* 无该子区 */ }
+  return out
+}
+
+const memOverviewOf = (d: MemoryDeps, base: string): Record<string, unknown> => {
+  const caps = memoryCaps(d, base)
+  const indexes = MEM_INDEX_FILES.map((f) => readIndexFile(base, f, caps)).filter(Boolean) as MemIndexFile[]
+  const pend = pendingOfRoot(base)
+  const flow = flowCandidatesOf(base)
   const watermark = readJsonlTail(join(base, 'audit', 'distill-watermark.jsonl'), 5)
   return {
     root: base,
     indexes,
-    pending: { count: pendingCount, ...pendingMeta, recent: pendingRecent },
+    pending: { count: pend.count, last24h: pend.last24h, recent: pend.recent },
+    flowCandidates: flow,
     distill: { recent: watermark, last: watermark[watermark.length - 1] ?? null },
     notes: notesSectionIndex(base),
   }
@@ -332,6 +435,9 @@ function memoryOverviewRoute(d: MemoryDeps, _req: IncomingMessage, res: ServerRe
       distillStats: distillStatsOf(),
       growth: growthOf(),
       delta,
+      /* 册五：库内结构三档枚举（派生式 · 只读）——补全 engine/scripts/audit/.records/reports 等
+       * 此前面板不可见的板块。「什么存在」由后端派生，前端只渲染（与决议 D1 同一原则）。 */
+      structure: libraryStructureOf(base),
       vector: vectorMini,
       weekDiff,
       maturity,
@@ -356,8 +462,17 @@ function memorySectionsRoute(d: MemoryDeps, req: IncomingMessage, res: ServerRes
   if (!existsSync(abs)) return sendJson(res, 404, { error: 'note not found' })
   try {
     const text = readFileSync(abs, 'utf8')
-    // v5.4 树状：多层标题解析——## 为顶层 section，其下 ###/#### 递归收集为 children（子树）
-    interface SecNode { title: string; line: number; body: string; children: SecNode[]; titleLevel: number }
+    /* 册二（2026-09-19 · 决议 D1）：**小节的权威解析态与折叠键由后端下发**，前端只渲染。
+     *
+     * 判因（实测，根因 C1「同一语义三份实现 + 门禁只守库侧」）：
+     *   前端 `panes-memory.js:42` 原用 `head.textContent.indexOf(autoSection) !== -1` 做**子串包含**匹配，
+     *   而库侧权威语义是「归一核心名 + 双向包含 + 多命中 ⇒ ambiguous」（`section-ref.ts:170-192`）。
+     *   实测（623 行索引行 / firstSeg 口径）：**多命中 209（33.8%）**——点一次展开**多个**同名/包含节点，
+     *   且 `src-client/*.js` 全域 `scrollIntoView` **0 命中** ⇒ 用户看到「点了没反应」。
+     * 现：每条小节带 `foldKey`（`data-fold-key` 的值，单一构造点）与 `core`（归一核心名），
+     *   前端按 `foldKey` 精确置位（不再自己做匹配），并按解析结果滚动入视口。
+     * ⚠ 与库侧同源：`coreName` 取自 `treeops.ts`（库内唯一归一实现），不在此另写一份。 */
+    interface SecNode { title: string; line: number; body: string; children: SecNode[]; titleLevel: number; foldKey: string; core: string }
     const lines = text.split(/\r?\n/)
     const sections: SecNode[] = []
     const stack: Array<{ node: SecNode; body: string[] }> = []
@@ -383,13 +498,23 @@ function memorySectionsRoute(d: MemoryDeps, req: IncomingMessage, res: ServerRes
           if (stack.length) stack[stack.length - 1].node.children.push(top.node)
           else sections.push(top.node)
         }
-        const node: SecNode = { title: h.title, titleLevel: h.level, line: i + 1, body: '', children: [] }
+        const node: SecNode = { title: h.title, titleLevel: h.level, line: i + 1, body: '', children: [], foldKey: '', core: '' }
         stack.push({ node, body: [] })
       } else if (stack.length) {
         stack[stack.length - 1].body.push(lines[i])
       }
     }
     flush()
+    /* 后序补 foldKey/core：折叠键 = `note:<rel>:<父路径>/…§<标题>`，与前端 `secFoldKey` **同式**
+     * （此处是唯一构造点；前端同式函数由 `check-shared-fn` 与判据守，改动须双改）。 */
+    const fillKeys = (list: SecNode[], path: string): void => {
+      for (const s of list) {
+        s.core = coreName(s.title)
+        s.foldKey = `note:${rel}:${path}§${s.title}`
+        if (s.children.length) fillKeys(s.children, (path ? path + '/' : '') + s.title)
+      }
+    }
+    fillKeys(sections, '')
     // U3：反链聚合（Logseq/思源借鉴）——扫三索引 + notes 全文，找指向「本文件 §小节」的引用行
     const backrefs: Array<{ from: string; line: string }> = []
     try {
@@ -411,7 +536,62 @@ function memorySectionsRoute(d: MemoryDeps, req: IncomingMessage, res: ServerRes
         }
       }
     } catch { /* 反链扫描失败不阻塞正文 */ }
-    sendJson(res, 200, { present: true, root: rootParam, rel, name: rel.split('/').pop() ?? '', text, sections, backrefs: backrefs.slice(0, 20) })
+    /* 册二（决议 D1）**核心交付**：为本文件涉及的每条 `§指针` 做**权威解析**并随响应下发
+     * `resolveState` + 目标折叠键，前端**只消费结果、不再自行匹配**。
+     *
+     * 判因（会议实测）：前端原用 `head.textContent.indexOf(autoSection)` 子串包含匹配，与库侧
+     *   权威三态（归一核心名 + 双向包含 + 多命中 ⇒ ambiguous，见 `section-ref.ts:170-192`）不同源
+     *   ⇒ 623 行索引行中**多命中 209 处（33.8%）**「点一次展开一堆且不滚到位置」。
+     * ⚠ **本处必须调用 `resolveSectionSpec`（库内唯一实现）**，不得自写匹配——首版我自写了一份
+     *   逐段收窄逻辑，实测与权威结论不符（自算 117 partial / 7 missing，而 `check-section-refs`
+     *   权威口径为 655 exists / 0 partial / 0 missing）⇒ 那正是「第五份实现」，已废弃。
+     * 形态：`{ [指针spec]: { state, foldKey, title, cands? } }`——state ∈ exists|ambiguous|missing|partial。
+     * 折叠键由 `parts` 的解析结果（真实标题）在**本文件小节集合**里查得（单一构造点 `fillKeys`）。 */
+    const pointerIndex: Record<string, { resolveState: string; foldKey: string; title: string; cands?: string[] }> = (() => {
+      const out: Record<string, { resolveState: string; foldKey: string; title: string; cands?: string[] }> = {}
+      const relStem2 = rel.replace(/^notes\//, '').replace(/\.md$/, '')
+      /* 标题（原文）→ 折叠键：由后端 `fillKeys` 生成的**唯一键源**反查 */
+      const keyByTitle = new Map<string, string>()
+      const walkKeys = (list: SecNode[]): void => {
+        for (const s of list) { keyByTitle.set(s.title, s.foldKey); if (s.children.length) walkKeys(s.children) }
+      }
+      walkKeys(sections)
+      const scan = ['MEMORY.md', 'USER.md', 'AGENT.md', ...NOTE_RELS.filter((w) => w !== 'INDEX').map((w) => `notes/${w}.md`)]
+      for (const sf of scan) {
+        const sfAbs = join(base, sf)
+        if (!existsSync(sfAbs)) continue
+        let raw = ''
+        try { raw = readFileSync(sfAbs, 'utf8') } catch { continue }
+        for (const l of raw.split(/\r?\n/)) {
+          /* ★ 行解析也走**权威实现** `pointersOfRow`（一行可含多个指针、正确处理 `§A/§B` 并列）。
+           * ⚠ 首版此处自写正则 `/notes\/…\.md\s*§(.+)$/` ⇒ **贪婪捕获到行尾**，把后续指针文本
+           *   并进了 spec（实测产出 10 条假 `partial`，形态如 `…/notes/lessons.md §假绿与实`），
+           *   与 `check-section-refs` 的权威口径（655 exists / 0 partial）分叉 ⇒ 已换成权威解析器。 */
+          for (const p of pointersOfRow(l)) {
+            if (p.file !== relStem2 + '.md') continue
+            const spec = p.spec.trim()
+            if (!spec || out[spec]) continue
+            /* ★ 权威四态解析（库内唯一实现） */
+            const { agg, parts } = resolveSectionSpec(base, p.file, spec)
+            /* 取「最深可解析段」的真实标题 → 折叠键（读侧 `partial` 回落最深段，与库侧一致） */
+            let title = ''
+            for (let i = parts.length - 1; i >= 0; i--) { if (parts[i].res.state === 'exists') { title = parts[i].res.cands[0]?.title ?? ''; break } }
+            const candsOf = (): string[] => {
+              const amb = parts.find((q) => q.res.state === 'ambiguous')
+              return amb ? amb.res.cands.map((c) => c.title) : []
+            }
+            out[spec] = {
+              resolveState: agg,
+              foldKey: agg === 'exists' || agg === 'partial' ? (keyByTitle.get(title) || '') : '',
+              title,
+              ...(agg === 'ambiguous' ? { cands: candsOf() } : {}),
+            }
+          }
+        }
+      }
+      return out
+    })()
+    sendJson(res, 200, { present: true, root: rootParam, rel, name: rel.split('/').pop() ?? '', text, sections, backrefs: backrefs.slice(0, 20), pointerIndex })
   } catch (e) { sendJson(res, 500, { error: String(e) }) }
 }
 
