@@ -55,12 +55,23 @@ const ok = (c, n) => { console.log(`${c ? '✅' : '❌'} ${n}`); if (!c) bad++ }
 
 const orig = readFileSync(TARGET)
 let restored = false
+let exitedEarly = 0
 try {
   const text = orig.toString('utf8')
   if (!text.includes(MARK)) {
+    /* ⚠⚠ **本处曾让污染永久留存（2026-09-20 实测事故 · 必须读）**：
+     *   原实现直接 `process.exit(1)` —— 而 **Node 的 `process.exit()` 不执行 `finally`**。
+     *   触发链条：① 本件先写入反例（污染 `panes-toggles.js` / `styles.js`）→ ② 某轮构建/子进程异常
+     *   或并发跑 runner 时被打断 ⇒ 反例留存 → ③ 下一次运行走到这里，锚点 `MARK` **已被反例替换** ⇒
+     *   "找不到锚点" ⇒ `process.exit(1)` ⇒ **又跳过还原** ⇒ **一旦污染就永远无法自愈**，
+     *   并且把 `test-panel-view-contract` / `ui-geo-regress` / `test-css-usage-gate` / 自身
+     *   **共 4 道门一起拖红**（实测：工作树里残留 2 个源文件的注入，`runner` 报 4 项红）。
+     *   ⇒ 修法：**不得 `process.exit`**；改为设标记 + 走完 `finally`（还原）后再以退出码结束。
+     *     并且：**锚点缺失本身就是"上次注入没还原"的强信号** ⇒ 此时**必须尝试还原**（见 finally 分支）。 */
     console.log('❌ 找不到注入点标记（panes-toggles.js 结构变了？）—— 本件需同步更新锚点')
-    process.exit(1)
-  }
+    console.log('   ⚠ 该形态也可能是「上次反例未还原」⇒ 本件将在 finally 中执行 git 还原兜底')
+    exitedEarly = 1
+  } else {
   const broken = text.replace(MARK, '  /* 反例（本件临时注入）：故意不渲染 sched tab */')
 
   /* ── A2 的破坏点：把导航宽压成极小值（`styles.js` 的 `--sc-nav-w`）—— `ui-geo-regress` 量得到 ── */
@@ -103,9 +114,31 @@ try {
   const m4 = /(\d+) PASS \/ (\d+) FAIL/.exec(out4)
   ok(m4 && Number(m4[2]) === 0 && Number(m4[1]) >= 100,
     'A3d 还原后 ui-geo-regress 回到全绿（实得 ' + (m4 ? m4[1] + ' PASS / ' + m4[2] + ' FAIL' : '取不到计数') + '，要求 ≥100 PASS 且 0 FAIL）')
+  }
 } finally {
-  if (!restored) { writeFileSync(TARGET, orig); build(); console.log('⚠ 异常路径：已强制还原') }
+  /* **还原兜底**（两条路）：
+   *   ① 正常/异常路径未还原 ⇒ 用**内存里的 orig** 还原（逐字节）；
+   *   ② 走到"锚点缺失"分支（= 上次未还原）⇒ 内存里的 orig **本身就是被污染的内容**，
+   *      用它还原等于**继续污染** ⇒ 此时**必须用 `git checkout --` 从 HEAD 还原**。
+   *   ⚠ `styles.js` 同理：本件对它的写入在 A2 之后才发生，锚点分支里它可能已被上次污染。 */
+  if (!restored) {
+    if (exitedEarly) {
+      try {
+        execFileSync('git', ['checkout', '--', 'src-client/panes-toggles.js', 'src-client/styles.js'], { cwd: root, stdio: 'pipe' })
+        console.log('⚠ 锚点缺失 ⇒ 已用 `git checkout --` 从 HEAD 还原两源文件（上次反例未还原的兜底）')
+      } catch (e) {
+        console.log('❌ git 还原兜底失败 —— **工作树可能仍带反例污染**，须人工执行：')
+        console.log('   git checkout -- src-client/panes-toggles.js src-client/styles.js')
+        console.log('   ' + String(e.message).slice(0, 200))
+      }
+    } else {
+      writeFileSync(TARGET, orig)
+      console.log('⚠ 异常路径：已强制还原 panes-toggles.js')
+    }
+    build()
+  }
 }
 
-console.log(bad ? `\nFAIL（${bad} 项未过 —— 拆分等价性证据不成立）` : '\nPASS（拆分等价性证据成立：两门均能抓到人为破坏，且还原后回绿）')
-process.exit(bad ? 1 : 0)
+console.log(bad ? `\nFAIL（${bad} 项未过 —— 拆分等价性证据不成立）` : (exitedEarly ? '\nFAIL（锚点缺失 ⇒ 反例未执行，本件未产出"门能抓到破坏"的证据；已兜底还原，请重跑）' : '\nPASS（拆分等价性证据成立：两门均能抓到人为破坏，且还原后回绿）'))
+/* ⚠ **退出码不得用 `process.exit`**（会再次跳过 finally 里的兜底）—— 本处已走完 finally，安全。 */
+process.exitCode = (bad || exitedEarly) ? 1 : 0

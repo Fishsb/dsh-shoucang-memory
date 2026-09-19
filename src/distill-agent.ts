@@ -333,9 +333,15 @@ const distillAgent = async (dep: AgentDeps, agent: any): Promise<void> => {
         })
         if (disp.added > 0 || (out?.newIndex || []).length > 0) void dep.write.bankSnapshot('distill') // v2：写后库快照（best-effort，不阻塞）
         // v2.1 M2：摄取侧**写入回执**（write.ingest）
+        /* ⚠ **`targetKind` 显式声明（2026-09-20 加）**：`target` 字段在 `write.*` 里**两种语义并存**
+         *   （库标识 vs 文件名），而**取值是变量 ⇒ 静态判据猜不出语义**（实测：把文件维回执塞进同一 type，
+         *   `check-write-receipts` 的 ②/②′/②″ **三条全不红** —— ②′ 靠正则猜、两处都是变量故猜不出）。
+         *   ⇒ 加**显式声明字段** `targetKind`（`'library'` | `'file'`），让语义**可机检而非靠猜**：
+         *     判据改为「同 type 下所有回执的 `targetKind` 必须齐一」，**不依赖取值形态**。
+         *   本处 = **库标识**（`disp.targetLib`）。 */
         dep.io.infra.ledger({
           type: 'write.ingest', domain: 'ingest', sid: sid.replace(/^session-/, '').slice(0, 8), chunk: k + 1,
-          channel: 'appends+newIndex', carrier: 'gated:index', target: disp.targetLib || 'memory',
+          channel: 'appends+newIndex', carrier: 'gated:index', target: disp.targetLib || 'memory', targetKind: 'library',
           verdict: disp.added > 0 ? 'written' : (disp.rejected > 0 ? 'rejected' : 'skipped'),
           attempted: (out?.appends || []).length + (out?.newIndex || []).length, written: disp.added, rejected: disp.rejected, failed: disp.failed,
         })

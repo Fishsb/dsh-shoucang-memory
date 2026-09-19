@@ -621,6 +621,19 @@ const CHECKS = [
   //   ③ 每条回执带 `attempted` + `written`（缺则无法闭合）。
   ['scripts/check-write-receipts.mjs'],
   ['scripts/check-write-receipts.mjs', '--selftest'],
+  // R2‴「自改源码型测试件必须能自愈」（2026-09-20 · **事故驱动**）：一次污染拖红 4 道门。
+  //   判因：`test-split-equivalence` 是**先红自证**型测试（临时改 `src-client/` 做反例注入），
+  //   事故形态 = **反例留在工作树** ⇒ `test-split-equivalence` / `test-panel-view-contract` /
+  //   `ui-geo-regress` / `test-css-usage-gate` **一起红**。
+  //   **根因两条叠加**：① `process.exit()` **不执行 finally** ⇒ 锚点缺失分支裸退出、跳过还原；
+  //   ② 而"锚点缺失"**正是"上次未还原"的信号** ⇒ **不可自愈死循环**（一旦污染永不自恢复）。
+  //   判据（**登记制**，不是推断制）：已登记的自改源码件须 ① `try` 内无 `process.exit`
+  //   ② `finally` 内有还原兜底（写回原值 或 `git checkout --`）③ 锚点缺失分支不裸退出。
+  //   ⚠ 为什么用**登记制**（三版教训）：v1 误报 31 件 · v2 误报 9 件 · v3 误报 7 件 ——
+  //     都在**用静态分析推断**"谁在改真实源码"，而全仓**真正**会改源的件实测**只有 1 个**
+  //     ⇒ 触犯本仓「禁止为 ≤2 个使用点提前抽象」。登记制与 `check-ledger-read` 的 EXEMPT **同构**。
+  ['scripts/check-test-self-restore.mjs'],
+  ['scripts/check-test-self-restore.mjs', '--selftest'],
   // **统一事件信封**单测（2026-09-13）：`{ at, ...o }` 的展开顺序允许调用方用 `at: undefined` 覆盖注入值，
   //   而 `JSON.stringify` 静默丢弃 undefined ⇒ 行里没有 `at`（实测 distill-audit 930 行里 1 行如此）。
   //   本件把「任何一行都必须有非空 `at` + `type`」钉死，覆盖 audit/episode/stub/ledger 四条写出路径。

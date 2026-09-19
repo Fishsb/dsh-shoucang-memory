@@ -725,7 +725,7 @@ export async function runDeepSleep(d: RunDeps, sinceArg?: number): Promise<'done
             // v2.1 M2：**写入回执**（write.* 事件）——写入是否落地、被拒原因与原文，与上面的 decision.* 同址同版本
             ledger({
                 type: 'write.consolidate', domain: 'consolidate', step: 'deep-sleep-write', channel: 'principles',
-                carrier: 'always:index', target: 'AGENT.md',
+                carrier: 'always:index', target: 'AGENT.md', targetKind: 'file',
                 verdict: app.gate === 'pass' ? 'written' : (app.attempted ? 'rejected' : 'skipped'),
                 attempted: app.attempted, written: app.added + app.replaced, added: app.added, replaced: app.replaced,
                 reason: app.gate, gateExit: app.gateExit, rejectedLines: (app.rejectedLines || []).slice(0, 5),

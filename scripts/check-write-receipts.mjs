@@ -51,16 +51,21 @@ const WRITE_CARRIERS = [
 /** 库标识字面量（`write.ingest.target` 的取值域；出现于 `target:` 位置时判为"非文件名"） */
 const LIB_TOKENS = new Set(['memory', 'none', 'workspace', 'pending-defer', 'shoucang', 'project'])
 
-/** 从一段源码里抽 `write.X` 回执：返回 `[{ type, targetLiterals, hasAttempted, hasWritten, index }]` */
+/** 从一段源码里抽 `write.X` 回执：返回 `[{ type, targetLiterals, targetKind, hasAttempted, hasWritten, index }]`
+ *  ⚠ **`targetKind` 是显式声明字段**（`'library'` | `'file'`）—— 由本件⑨ 强制要求。
+ *  为什么必须显式声明（**本轮实测教训**）：`target` 取值多为**变量**，靠正则猜语义**必然漏判** ——
+ *  实测把"文件维回执"塞进 `write.ingest`（真混语义）后，②（字面量）、②′（同文件形态）、
+ *  ②″（运行期，样本未产生）**三条全不红**。⇒ 语义必须由**声明**给出，判据才能可靠。 */
 function receiptsOf(src) {
   const out = []
-  // 定位每个 `type: 'write.X'`，再取其前后 400 字符窗口看 target / attempted / written
   for (const m of src.matchAll(/type:\s*'(write\.[A-Za-z._-]+)'/g)) {
     const win = src.slice(Math.max(0, m.index - 400), m.index + 600)
     const targetLiterals = [...win.matchAll(/\btarget:\s*(?:'([^']*)'|"([^"]*)"|`([^`]*)`)/g)].map((x) => x[1] ?? x[2] ?? x[3])
+    const kindMatch = /\btargetKind:\s*'([^']+)'/.exec(win)
     out.push({
       type: m[1],
       targetLiterals,
+      targetKind: kindMatch ? kindMatch[1] : null,
       hasAttempted: /\battempted\s*:/.test(win),
       hasWritten: /\bwritten\s*:/.test(win),
       index: m.index,
@@ -230,6 +235,33 @@ const kRootGuess = join(process.env.DSH_HOME || join(process.env.USERPROFILE || 
       console.log(`        ${t.padEnd(20)} 行 ${String(s.n).padStart(5)} · 文件名 ${String(s.fileLike).padStart(5)} / 库标识 ${String(s.libLike).padStart(5)} / 其他 ${String(s.other).padStart(5)} · 样本 ${[...s.samples].map((x) => JSON.stringify(x)).join(' ')}`)
     }
   }
+}
+
+/* ②′ **显式语义声明齐一**（`targetKind`）—— 【本件的主判据】
+ *   判因（**本轮亲身踩到，值得完整记档**）：给 `write.ingest` 加"文件维回执"时，第一版把 `target`
+ *   写成**文件名**，而同一 type 既有回执的 `target` 是**库标识** ⇒ **同 type 混语义**。
+ *   而当时三条判据**全都不红**：② 只看字面量（两处都是变量）· ②′（旧版）靠正则**猜**形态（猜不出）
+ *   · ②″ 只看真库样本（**新回执尚未产生，行数 0**）⇒ **真跑起来才会暴露**。
+ *   ⇒ 改为**显式声明**：每条回执必须带 `targetKind`（`'file'` | `'library'`），判据只做"同 type 齐一"
+ *     的比较 —— **不依赖取值形态、不依赖样本是否已产生**（这是本条相对 ②/②″ 的根本改进）。
+ *   ⚠ 缺声明即红（不许省略）：省略了就退回"靠猜"，而靠猜已证不可靠。 */
+{
+  const kindsByType = new Map()
+  const missingKind = []
+  for (const [f, s] of srcOf) {
+    for (const r of receiptsOf(s)) {
+      if (!r.targetKind) { missingKind.push(`src/${f} ${r.type}`); continue }
+      const set = kindsByType.get(r.type) || new Set()
+      set.add(r.targetKind)
+      kindsByType.set(r.type, set)
+    }
+  }
+  ok(missingKind.length === 0,
+    `②′ 每条 write.* 回执必须显式声明 \`targetKind\`（'file' | 'library'）${missingKind.length ? ` —— 缺：${missingKind.join(' · ')}` : ` · 已声明 ${[...kindsByType.values()].reduce((n, s) => n + s.size, 0)} 处`}`)
+  const mixedKind = []
+  for (const [type, set] of kindsByType) if (set.size > 1) mixedKind.push(`${type}（${[...set].join(' + ')}）`)
+  ok(mixedKind.length === 0,
+    `②′ 同一 type 下 \`targetKind\` 齐一（**不靠猜取值形态**）${mixedKind.length ? ` —— 违规：${mixedKind.join(' · ')}` : ` · ${[...kindsByType.entries()].map(([t, s]) => `${t}=${[...s].join('/')}`).join(' · ')}`}`)
 }
 
 /* ③ 回执字段齐备（attempted + written 两个计数） */

@@ -2301,6 +2301,20 @@
 - **panel client 迁移到 slot 契约（2026-09-05，解冻前置）**：client.js 注入声明加 `'slots'`，入口从直插侧栏 footArea DOM 改为注册 `sidebar.footer.action` 插槽按钮（无 slots 环境保留直插兜底）；host+client 已注入运行（ef85e372），构建产物 lib/ 重建
 
 ### Fixed
+- **自改源码型测试件污染工作树：一次事故拖红 4 道门（2026-09-20 · 已修 + 新增防再生门禁）**：`test-split-equivalence.mjs` 是**先红自证**型测试——它**临时改写真实源文件**做反例注入（`src-client/panes-toggles.js` 去掉 sched tab 渲染、`styles.js` 把导航宽压成 4px），约定 `finally` 逐字节还原。实测**反例留在了工作树**，4 道门同时红：该件自身（找不到锚点）· `test-panel-view-contract`（缺 sched tab）· `ui-geo-regress`（几何破坏）· `test-css-usage-gate`（样式门）。
+  · **根因（两条叠加，第二条是致命的）**：① **`process.exit()` 不执行 `finally`** —— 锚点缺失分支直接 `process.exit(1)` 跳过还原；② 而**"锚点缺失"恰恰就是"上次未还原"的信号**（反例把锚点文本替换掉了）⇒ 形成**不可自愈死循环**：一旦污染，该件**永远无法自行恢复**，且每跑一次就把 4 道门再拖红一次。
+  · **修复**：① 锚点缺失分支改为**设标记**（`exitedEarly`）+ 走完 `finally`，退出码一律用 `process.exitCode`（不再 `process.exit`）；② `finally` 增加**第二级兜底**——锚点缺失时**内存里的 `orig` 本身就是被污染的内容**（用它还原等于继续污染）⇒ 此时改用 **`git checkout --` 从 HEAD 还原**；③ 兜底失败时**打印人工修复命令**而非静默；④ 退出文案区分"证据成立"与"锚点缺失⇒未产出证据"（原实现走兜底分支却仍打 PASS，属**假绿**）。
+  · **新增门禁 `scripts/check-test-self-restore.mjs`**（登记 `check-runner`，**177 → 179**）：① `try` 块内不得 `process.exit`（会跳过 `finally`）② `finally` 内必须有还原兜底 ③ 锚点缺失分支不得裸退出 ④ 反例自证 4 例（含 3 反例，**样例取自真机事故原文**）。
+  · ⚠ **判据设计用登记制，不是推断制（三版教训必读）**：v1「写 + 路径含 src」⇒ 误报 **31 件**（生成器/门禁全进来）；v2「+ 反例/还原语汇」⇒ 仍误报 **9 件**（写临时目录者因注释提到"反例"被判进来）；v3「跟踪路径绑定」⇒ 仍误报 **7 件**（生成器写 `src-client` 字面量属**正常产出**）。三版**错在同一个方向**：想用静态分析**推断**"谁在改真实源码"，而全仓**真正**会改源的件实测**只有 1 个** ⇒ 触犯本仓「**禁止为 ≤2 个使用点提前抽象**」。v4 改**登记制**（`SELF_MODIFYING` 显式列出 + 报告态提示未登记候选），与 `check-ledger-read` 的 `EXEMPT_SCRIPTS` **同构**。
+  · **现场已恢复**：`git checkout --` 还原两源文件（逐字节核验：注入注释 false · 4px false · 216px true）。
+  · **判据自身的三处假红/漏判也已修**（都靠先红自证抓到）：① `tryBody` 取"第一个 `try {`"⇒ 抓到 `build()` **局部** try/catch 里**故意**的 `process.exit(1)`（那是既有加固）⇒ 改取"**带 `finally` 的那个 try**"；② `strip` 把**字符串字面量**也剥成空引号 ⇒ `['checkout','--',f]` 变 `['','',f]` ⇒ 还原兜底认不出来 ⇒ **只剥注释、不动字符串**；③ 还原判据靠**变量名**（`orig|raw|backup`）⇒ 自证正例假红，放宽到"值是个标识符"又让"只写不还原"漏判 ⇒ 正解是**看还原动作的位置**（必须出现在 `finally` 体内）+ `git checkout --` 形态。
+- **`write.ingest` 补文件维：行数闭合的最后一块（2026-09-20 · `OPEN-ITEMS §0f` 遗留项结清）**：`write.ingest` 的 `target` 是**目标库标识**（`disp.targetLib`：`shoucang`/`none`/`workspace`），**无文件维** ⇒ "这一轮往 `MEMORY.md` 写了几行索引行"**在台账上不可回答**，只能以"基线 + 域级上界"规避。
+  · **修复**：`distill-write` 的 `appends` / `newIndex` 循环**按实际落点文件**分别累计（`notes/<file>` 与 `MEMORY.md`），各发一行 **`write.ingest-file`**（独立 type · `target` = 文件名 · `targetKind: 'file'`）。**不改任何写入门禁语义**（仍走 `gate()` / `memAppend` / `admitIndexRow`），只补**回执的维度**。与库级回执**并存**：库级答"往哪本库写"、文件级答"往哪个文件写了几行"——两个问题都要能答。
+  · **`memory-reconcile` 据此把摄取侧文件维计入闭合**（`writtenExact` 新增第三项）。
+  · ⚠ **我自己差点放过一处真错**：第一版把文件维回执**塞进了 `write.ingest`**（与库标识同 type）——即**同 type 混语义**，正是上一轮 `check-write-receipts` 要禁的形态。而当时 **②/②′/②″ 三条判据全不红**：② 只看字面量（两处都是变量）、②′ 靠正则猜形态（猜不出）、②″ 只看真库样本（**新回执尚未产生，行数 0**）⇒ **判据未红 ≠ 形态正确**。
+  · **据此给 `check-write-receipts` 加了主判据 ②′**：每条回执必须**显式声明 `targetKind`**（`'file'` | `'library'`），判据只做"**同 type 齐一**"的比较 —— **不依赖取值形态、不依赖样本是否已产生**（这是它相对 ②/②″ 的根本改进）。缺声明即红（省略就退回"靠猜"，而靠猜已证不可靠）。**先红自证已做**：把 `write.ingest-file` 改回 `write.ingest`（声明保留 `file`）⇒ `②′` 报「write.ingest（library + file）」exit 1；还原 ⇒ 绿。
+  · **基线按「回执维度版本」重锚**：原基线建于 2026-09-11，而历史行是在**回执维度缺失期**写入的（账上无据、与"凭空多行"不可分辨）。⇒ 改为**每补齐一层维度重锚一次**（`RECEIPT_VERSION`：v1 = `write.profile`、v2 = `write.ingest-file`），旧值留档 `priorBaselines`。⚠ 非"移动门槛"：重锚后三文件一律 `unexplained === 0` **硬判**（比原判据更严），且**触发条件只由代码里的版本号决定** —— 版本不变则**永不重锚**（"因为红了所以重锚"这条路被堵死）。实测重锚后闭合 **✅ 未解释差异 0**，第二次运行不再重锚。
+  · **顺带**：注入对拍基线重立（`_memory/audit/inject-baseline-pre-R0.json`）——唯一差异是记忆库自身的「🧠 最近成长」条目 **8 → 9 条**（活库自然增长），**与代码改动无关**（首差位置 @字符 65 即该行）。
 - **「不要问我了」全权收尾轮（2026-09-19 · 三处真机缺口一并修掉）**：
   · **G11 · 结算不改变注入面（最严重）**：`src/ring-supply.ts#ringCandidates` 准入链加**结清门**——
     `kind==='commitment'` 时只收 `meta.status==='pending'`（缺字段视作 pending，**只限承诺**不误伤其它环）。

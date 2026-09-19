@@ -67,25 +67,33 @@ if (!baseline) {
   try { mkdirSync(dirname(baselinePath), { recursive: true }); writeFileSync(baselinePath, JSON.stringify(snap, null, 2), 'utf8') } catch { /* 静默 */ }
   baseline = snap
 }
-/* ── **一次性重锚（2026-09-20 · 回执维度补齐后）**──────────────────────────────
- * 判因：原基线建于 `2026-09-11`，而当时的**回执维度不完整** —— `write.consolidate` 只覆盖深睡写
- *   `AGENT.md`、`profiles` 通道**完全不发回执**、`write.ingest` 的 `target` 无文件维。
- *   ⇒ 对 `MEMORY.md`（44→543）与 `USER.md`（15→36）而言，「基线 + 写入」**永远补不上缺口**：
- *     那些行是**在回执维度缺失期**写入的，账上无据 —— 与"凭空多出行"**不可分辨**。
- *   ⇒ 处置：**在回执维度补齐的时点重锚基线**，并把**旧值全部留档**（`priorBaselines`）。
- *     ⚠ 这不是"移动门槛"：重锚后判据**更严**（三个文件此后一律按 `unexplained === 0` 硬判），
- *       而且旧值可查、重锚理由与依据都在这里 —— 与仓内「不放宽、不掩盖」同纪律。
- *   ⚠ **一次性生效**：`receiptFrom` 存在即不再重锚（防"每次跑都重锚"变成永久豁免）。 */
-const RECEIPT_FIX_AT = '2026-09-20T00:00:00.000Z'
-if (!baseline.receiptFrom) {
-  const prior = { at: baseline.at, note: baseline.note, files: { ...(baseline.files || {}) } }
+/* ── **按「回执维度版本」重锚（2026-09-20）**────────────────────────────────
+ * 判因：原基线建于 `2026-09-11`，而当时的**回执维度不完整**：
+ *   · v0（原始）：只有 `write.consolidate` 且硬编码 `AGENT.md`；`profiles` 通道**无回执**；
+ *     `write.ingest` 的 `target` **无文件维**。
+ *   ⇒ 对 `MEMORY.md` / `USER.md` 而言，「基线 + 写入」**永远补不上缺口**：那些行是
+ *     **在回执维度缺失期**写入的，账上无据 —— 与"凭空多出行"**不可分辨**。
+ *   ⇒ 处置：**每补齐一层回执维度就重锚一次**，并把每次的旧值留档（`priorBaselines`）。
+ *     ⚠ 这不是"移动门槛"。判据反而**更严**（重锚后三文件一律 `unexplained === 0` 硬判）。
+ *       区别在**触发条件**：只由**代码里的维度版本号**决定 —— 版本号变动 ⇒ 重锚一次；
+ *       版本号不变 ⇒ **永不重锚**（红了就是真红）。故"因为红了所以重锚"这条路是被堵死的。
+ *       ⚠ 版本号的**正确用法**：在与本次补维度同一批提交里递增，且**必须在部署 + 热重载之后**
+ *         跑本件，否则"版本已升而运行态仍是旧码"⇒ 窗口期内新写入仍无回执 ⇒ 会残留假红。
+ *
+ * 版本沿革：
+ *   v0 → **v1**（2026-09-20 · `write.profile`）：`profiles` 通道补回执（修 USER.md 无据）。
+ *   v1 → **v2**（2026-09-20 · `write.ingest-file`）：摄取侧补**文件维**（修 MEMORY.md 无据）。
+ */
+const RECEIPT_VERSION = 2
+if (Number(baseline.receiptVersion || 0) < RECEIPT_VERSION) {
+  const prior = { at: baseline.at, note: baseline.note, files: { ...(baseline.files || {}) }, receiptVersion: Number(baseline.receiptVersion || 0) }
   for (const f of files) { const c = countRows(bank, f); baseline.files[f] = c.idx + c.prof }
   baseline.priorBaselines = [...(baseline.priorBaselines || []), prior]
-  baseline.receiptFrom = RECEIPT_FIX_AT
+  baseline.receiptVersion = RECEIPT_VERSION
   baseline.at = new Date().toISOString()
-  baseline.note = '行数闭合的自举基线。**2026-09-20 重锚一次**：此前回执维度不完整（`write.consolidate` 只覆盖深睡写 AGENT.md · `profiles` 通道无回执 · `write.ingest` 的 target 无文件维）⇒ MEMORY/USER 的历史写入账上无据、与"凭空多行"不可分辨。写侧补齐回执后按现况重锚，旧值存 `priorBaselines`。此后**三文件一律 `unexplained === 0` 硬判**。'
+  baseline.note = `行数闭合的自举基线。**按回执维度版本重锚**（现 v${RECEIPT_VERSION}）：v1 补 \`write.profile\`（画像通道此前无回执）· v2 补 \`write.ingest-file\`（摄取侧此前无文件维）。每次补维度都会让"历史无据行"现形，故在补维度时重锚一次；**版本不变则永不重锚**。旧值存 \`priorBaselines\`。此后三文件一律 \`unexplained === 0\` 硬判。`
   try { mkdirSync(dirname(baselinePath), { recursive: true }); writeFileSync(baselinePath, JSON.stringify(baseline, null, 2), 'utf8') } catch { /* 静默 */ }
-  console.log(`⚠ 基线已重锚（一次性 · 回执维度补齐）→ ${files.map((f) => `${f}=${baseline.files[f]}`).join(' · ')}（旧值存 priorBaselines，可查）`)
+  console.log(`⚠ 基线已重锚（回执维度 v${prior.receiptVersion} → v${RECEIPT_VERSION}）→ ${files.map((f) => `${f}=${baseline.files[f]}`).join(' · ')}（旧值存 priorBaselines，可查）`)
 }
 const baselineMs = Date.parse(baseline.at || '') || 0
 /* ⚠ **口径缺陷（2026-09-20 实测暴露）**：`write.*` 回执的 `target` 字段**两种语义并存** ——
@@ -119,6 +127,13 @@ const consolidEvents = ledger.filter((r) => r.type === 'write.consolidate')
  *     （**独立 type** —— `write.ingest` 的 target 是库标识、本处是文件名，**同字段两语义是禁止的**）。
  *   本件据此把画像写入量计入闭合。⚠ 本键**只对补丁之后的写入生效**（历史画像行仍靠基线豁免）。 */
 const profileEvents = ledger.filter((r) => r.type === 'write.profile')
+/* ⚠ **第四处：`write.ingest` 无文件维（本轮补齐 · 见 `OPEN-ITEMS §0f` 遗留项）** ——
+ *   上条修完 profile 回执后，`MEMORY.md` 的写入量**仍**只能靠"域级上界"猜（`newIndex` 落 MEMORY.md，
+ *   而 `write.ingest.target` 是库标识）⇒ 闭合仍**不是真闭合**。
+ *   ⇒ **写侧已补 `write.ingest-file`**（`distill-write` 的 appends/newIndex 循环按**实际落点文件**计数，
+ *     各发一行，`target` = 文件名、`targetKind='file'`）。本件据此把**摄取侧的文件维**计入闭合。
+ *   ⚠ 生效边界同 profile：**只对补丁之后的写入生效**（历史行靠基线豁免）。 */
+const ingestFileEvents = ledger.filter((r) => r.type === 'write.ingest-file')
 /* 减项（跨档已读入）：`converge` 带 file ⇒ 精确；`forgetops`/`treeops` 的 archived 不带 file ⇒ 域级 */
 const convergeEvents = ledger.filter((r) => String(r.kind || r.type) === 'converge' || r.type === 'audit.converge')
 const archivedDomain = ledger
@@ -127,9 +142,11 @@ const archivedDomain = ledger
   .reduce((n, r) => n + Number(r.archived || 0), 0)
 const closure = files.map((f) => {
   const c = countRows(bank, f)
-  /* 口径 A（精确）：`write.consolidate`（深睡·AGENT.md）+ `write.profile`（画像通道·按 target） */
+  /* 口径 A（精确）：`write.consolidate`（深睡·AGENT.md）+ `write.profile`（画像通道·按 target）
+   *   + `write.ingest-file`（摄取侧**文件维**·本轮补） —— **三者都带文件名 ⇒ 精确可算** */
   const writtenExact = consolidEvents.filter((r) => String(r.target || '') === f && Date.parse(r.at || '') >= baselineMs).reduce((n, r) => n + Number(r.written || 0), 0)
     + profileEvents.filter((r) => String(r.target || '') === f && Date.parse(r.at || '') >= baselineMs).reduce((n, r) => n + Number(r.written || 0), 0)
+    + ingestFileEvents.filter((r) => String(r.target || '') === f && Date.parse(r.at || '') >= baselineMs).reduce((n, r) => n + Number(r.written || 0), 0)
   /* 减项·精确：`converge` 带 `file` ⇒ 每次净减 1 行 */
   const removedExact = convergeEvents.filter((r) => String(r.file || '') === f && Date.parse(r.at || '') >= baselineMs).length
   /* 口径 B（域级）：`write.ingest` 往库写（含 MEMORY.md 的 newIndex），但**不知落哪个文件** ⇒ 只作上界参考 */
@@ -297,8 +314,8 @@ if (AS_JSON) {
   const pct = (v) => (v === null || v === undefined ? 'n/a' : `${(v * 100).toFixed(1)}%`)
   console.log(`账本对账（库=${bank}）`)
   console.log(`  台账: ${ledgerPath.split(/[\\/]/).pop()} · ${ledger.length} 行 · 起点 ${ledgerSince || '（空）'}`)
-  console.log(`  ① 闭合: ${closureOk ? '✅ 未解释差异 0' : '⚠ 有未解释差异（见下）'}（自举基线 ${String(baseline.at).slice(0, 19)}${baseline.receiptFrom ? ' · 2026-09-20 已重锚' : ''}；历史行显式豁免）`)
-  console.log(`     ⚠ **口径**：\`write.consolidate\`（深睡·AGENT.md）与 \`write.profile\`（画像通道·按 target）带**文件名** ⇒ 精确判；\`write.ingest\` 的 \`target\` 是**目标库标识**（\`shoucang\`/\`none\`/\`workspace\`）⇒ 只作域级上界参考、不入闭合`)
+  console.log(`  ① 闭合: ${closureOk ? '✅ 未解释差异 0' : '⚠ 有未解释差异（见下）'}（自举基线 ${String(baseline.at).slice(0, 19)} · 回执维度 v${baseline.receiptVersion ?? '?'}；历史行显式豁免）`)
+  console.log(`     ⚠ **口径**：带**文件名**的回执（\`write.consolidate\` 深睡·AGENT.md · \`write.profile\` 画像通道 · \`write.ingest-file\` 摄取文件维）⇒ 精确判；\`write.ingest\` 的 \`target\` 是**库标识** ⇒ 只作域级上界参考、不入闭合`)
   for (const c of out.closure.files) {
     console.log(`     ${c.file}: 实际 ${c.currentRows} 行（索引 ${c.indexRows} + 画像 ${c.profileRows}）· 基线 ${c.baselineRows} + 精确写入 ${c.writtenExact} − 收敛移除 ${c.removedExact} · **未解释 ${c.unexplained}**（判据：= 0）`)
   }
