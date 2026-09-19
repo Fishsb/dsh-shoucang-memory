@@ -326,9 +326,46 @@ node <库根>/scripts/memory-append.mjs MEMORY.md - --new '[env] 半落探针 ·
 | ④ 功能探针 | `check-installed-features` | **71 项齐全**（本轮 +4：`sectionAddressSupply` / `planPlacement` / `unpairedPointersOf` / `源指针悬空`） |
 | ⑤ 云端 + pin | push + `git status -sb` + profile pin | 见提交记录 |
 
-### 11.4 遗留（如实登记）
+### 11.4 遗留（**收口轮全部关闭**，2026-09-19）
 
-1. **空壳落点 3 小节**：§2.3 待决项**仍未拍板** ⇒ 本方案**未处置**（`check-pointer-content` 缺省报告态；基线 4 只作 `--strict` 回归闸，**不锁死待决项**）。
-2. **跨批"行—详情"一致性**：册二只保证「**同批**未落地 ⇒ 行不落」；跨批（上批的行 + 本批的详情）仍靠读侧回落语义，未做跨批对账（属新增能力，需另立判据）。
-3. **两个"待认领"队列**（`needsAnchor` 台账 + `-knowledge-defer-` pending）当前**无自动消费者**——设计如此（**不自动建锚**），消费方待定。
+> 收口授权：用户明确「**遗留全部处理，目标模式做**」⇒ 第 1 项由"待拍板"转入**施工态**（R1 具名授权），第 3 项转入施工态。
+
+1. ~~**空壳落点 3 小节**（§2.3 待决项）~~ **已处置完毕**：4 条空落点行逐条重指 + 4 个空壳并档消除
+   （`scripts/apply-empty-shell-merge.mjs --apply`，库备份 `~/.dsh/backups/sc-shellmerge-2026-09-19T08-37-15`，
+   读数 `{applied:4, skipped:0, archived:4}`，三条事后断言全过）⇒ `check-pointer-content` 基线 **4 → 0**（`BASELINE_EMPTY = 0`，只许收紧）。
+2. **跨批"行—详情"一致性** —— **判据面已覆盖，写入面明确不做**：`check-pointer-content` 的扫描是**全库**的
+   （`notesFilesOf(bankRoot)` 全 `notes/*.md` + 全部索引行 → `scanEmptyLandings`），**不区分批次**
+   ⇒ 跨批失配与同批失配在同一判据下同时可测（真机当前 **0**）。故不另立"跨批事务"：写入侧只保证同批成对（册二），
+   跨批一致性由**全库巡检 + 定期登记**（§12）兜住。
+3. ~~**两个"待认领"队列无自动消费者**~~ **已关闭（收口轮）**：`src/pointer-deficits.ts#deferredQueueOf` 作统一读出口，
+   `registerDeficits` 作定期登记（挂维护链），判据 `scripts/check-deferred-queue.mjs` ⇒ 见 §12。
+   设计边界**不变**：只登记不处置（不自动建锚、不回填内容）。
+
+## 12 收口轮施工记录（2026-09-19 · 遗留清零）
+
+> **态标签（R5）**：施工态。授权来源 = 用户指令「**遗留全部处理，目标模式做**」。
+> 本轮同时收口 `docs/distill-admission-plan.md` §13.4 的两项（`needsAnchor` 消费方 + `dsh-client-auto-continue` 归因）。
+
+### 12.1 落点与判据
+
+| 项 | 落点（改动） | 判据 | 读数 |
+|---|---|---|---|
+| ① 行重指 | `scripts/section-ref-reanchor.mjs` `ROW_OVERRIDES` **+4 条**（批改前先核字节→`lessons §完整性核验`；架构档机检与落点→`flows`；git 推送与代理回退→`env §网络与代理`；不可达结论须多通道→`lessons §假失败`） | 幂等复跑 | 首跑改动 4 行；**复跑 0 改动**；备份 `~/.dsh/backups/sc-s1r-2026-09-19T08-35-31` |
+| ② 空壳消除 | `scripts/apply-empty-shell-merge.mjs`（**新**；dry/apply 两态，先备份、先断言后执行、事后三断言） | `check-pointer-content --strict` | `{applied:4,skipped:0,archived:4}` ⇒ 空壳 **4 → 0** |
+| ③ 统一出口 | `src/pointer-deficits.ts`（**新**）：`scanEmptySections`/`scanEmptyLandings`/`readAnchorNeeded`/`readKnowledgeDefers`/`pointerStats`/`deferredQueueOf`/`knowledgeDeferFileOf`/`registerDeficits`；`distill-bank#runSelfCheck` 挂维护链 | `check-deferred-queue` | 4 组断言全绿（含**幂等**与**干净库零写入**阴性对照） |
+| ④ 判据收口 | `scripts/check-pointer-content.mjs` 重写为**薄封装**（扫描全部来自 `lib/pointer-deficits.js`，**不再自带第二份**）+ 基线钉 0；新增 `scripts/check-deferred-queue.mjs` 并**登记进 `check-runner`** | `check-runner` | 登记纪律（N1）：未登记 = 没写 |
+
+### 12.2 真机读数（收口后）
+
+| 项 | 读数 |
+|---|---|
+| 统一出口计数 | `{"empty-landing":0,"empty-section":0,"anchor-needed":25,"knowledge-defer":0}` **total = 25** |
+| 登记闭环 | `{scanned:0, written:0, skipped:0}`（库已干净 ⇒ 零新增；**幂等**） |
+| 小节寻址 | `check-section-refs`：exists **627** · partial **0** · ambiguous **0** · missing **0** |
+| 空壳 | 空落点 **0** · 全库空壳标题 **0**（基线 0） |
+| 库写入 | `Record` 影子对账 `分歧 0`；库仓提交 `1e8f891` 作**回退点** |
+
+**注（如实登记，非缺陷）**：`anchor-needed` **25 行**是**存量待人工建锚**的排队项（蒸馏写侧登记"知识无锚可落"），
+本轮的产出是**让它可统一读取与定期登记**，**不是**自动建锚（§3 边界）。其处置权在用户：或建锚、或转 pending。
+
 

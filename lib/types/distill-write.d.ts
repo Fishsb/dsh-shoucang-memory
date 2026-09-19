@@ -69,5 +69,5 @@ export { pairKeyOf };
  * 故判据只驱动本函数（`scripts/check-pointer-pairing.mjs`），并把"新判定 vs 旧规则"的**判别力**一并断言。
  */
 export declare const unpairedPointersOf: (line: string, failedPairs: ReadonlySet<string>, failedFilesWide: ReadonlySet<string>) => string[];
-/** 册二：回退队列文件路径（幂等命名：同 (源会话, 行原文) ⇒ 同路径） */
-export declare const knowledgeDeferFileOf: (pendDir: string, sid: string, line: string, now?: Date) => string;
+/** 册二：回退队列文件路径（**单一实现已下沉 `pointer-deficits#knowledgeDeferFileOf`**，此处只转发） */
+export { knowledgeDeferFileOf } from './pointer-deficits.js';

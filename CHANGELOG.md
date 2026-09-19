@@ -2273,6 +2273,20 @@
 - **panel client 迁移到 slot 契约（2026-09-05，解冻前置）**：client.js 注入声明加 `'slots'`，入口从直插侧栏 footArea DOM 改为注册 `sidebar.footer.action` 插槽按钮（无 slots 环境保留直插兜底）；host+client 已注入运行（ef85e372），构建产物 lib/ 重建
 
 ### Fixed
+- **遗留清零轮（2026-09-19 · 用户指令「遗留全部处理，目标模式做」⇒ 两份方案档的遗留项全部关闭）**：
+  · **空壳落点 4 条 → 0**（指针档 §2.3 待决项，本轮施工）：4 条空落点行**逐条重指**（`section-ref-reanchor`，幂等复跑 0 改动）
+    + 4 个**空壳并档结构性消除**（新件 `scripts/apply-empty-shell-merge.mjs`：dry/apply 两态、先备份
+    `~/.dsh/backups/sc-shellmerge-2026-09-19T08-37-15`、事前 4 断言 + 事后 3 断言，读数 `{applied:4,skipped:0,archived:4}`）
+    ⇒ `check-pointer-content` 基线 **4 → 0**（`BASELINE_EMPTY = 0`，只许收紧）。
+  · **"知识没落地"三态有统一出口了**：新增 `src/pointer-deficits.ts`（`deferredQueueOf` 统一读出口 +
+    `registerDeficits` 定期登记，挂 `distill-bank#runSelfCheck` 维护链、**不新增定时器**；幂等，含"干净库零写入"阴性对照）；
+    `check-pointer-content` 改为**薄封装**（扫描全部来自该模块，判据件不再自带第二份）；
+    新判据 `check-deferred-queue` 并**登记进 `check-runner`**（N1：未登记 = 没写）。
+    真机读数：`{"empty-landing":0,"empty-section":0,"anchor-needed":25,"knowledge-defer":0}` total=25。
+  · **归因收口（假设 → 实证）**：`dsh-client-auto-continue` **确会无人类发言开新轮**（源码 `fire()` 合成
+    `source.kind='user'` 消息 + `followup`；运行态 7 天 **46 次**合成续跑，与 `graceMs=3000` 逐毫秒吻合，失败回合后
+    **0 次**紧跟真人消息）——但 `origin=subagent` 硬门 ⇒ 46/46 落在主会话、子会话 **0** ⇒ **非"重复蒸馏"成因**，
+    且效应方向是**刷新回合静默（推迟蒸馏）**而非触发。详见 `docs/distill-admission-plan.md` §13.5。
 - **指针供给三册全量落地（2026-09-19 · 方案档 `docs/pointer-supply-plan.md` §11 施工记录）**：
   治「模型编小节名 → 写门拒收 → 知识静默丢」这条链，三册各带先红→后绿与在册机检：
   · **册一 地址供给**：新增 `src/section-supply.ts`（复用 `section-ref#sectionTitles` 作**唯一解析器**、预算逐级降级、
