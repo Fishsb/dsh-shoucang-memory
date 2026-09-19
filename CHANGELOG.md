@@ -2273,6 +2273,18 @@
 - **panel client 迁移到 slot 契约（2026-09-05，解冻前置）**：client.js 注入声明加 `'slots'`，入口从直插侧栏 footArea DOM 改为注册 `sidebar.footer.action` 插槽按钮（无 slots 环境保留直插兜底）；host+client 已注入运行（ef85e372），构建产物 lib/ 重建
 
 ### Fixed
+- **pin 归位（2026-09-19 · 用户指令「需要归位」）+ 检查器假红修复**：
+  · **归位**：profile `web` 执行一次 `pnpm install`（21.7s · `+3` 包 · 无批量删除拦截；前置备份
+    `~/.dsh/backups/sc-pin-align-20260919-165658`）⇒ 声明/锁定/实装三处**同为** `ad6d7370ec76…`；
+    安装副本与仓内 `lib/` 仍 **278/278 sha1 一致**，装载态全部插件 `[active]`。
+  · **顺带归位的另一项（如实登记）**：同一次安装按 profile **自身声明**把 `@dsh-external/project-nav`
+    由 `0.10.4` 归位到 `0.10.6`（该 specifier 早已写进 package.json，lock 停在 0.10.4）——非本仓改动，
+    回退路径 = 备份锁 + 磁盘上 `0.10.4.tgz` 仍在。
+  · **检查器假红（本件缺陷）**：`check-version-pin` 用 `new Set(shas).size === 1` 比较，把声明侧 7 位短 sha
+    `#ad6d737` 与记录侧 40 位全 sha `ad6d7370ec74…` 判成"三处不一致"——**同一提交被报脱钩**（假红灯会诱导
+    人做一次无用的重装）。改为**前缀别名判据** `pinConsistent`：互不为前缀才算不一致（严格性不变），
+    `--selftest` 增 4 例自证（短/全 40 位视为一致 · **真不同提交判不一致**做反例 · 空集判不一致）。
+    修后真机 `PASS（三处一致 @ ad6d7370 · 声明侧为短 sha，同一提交）`，`--strict` exit 0。
 - **遗留清零轮（2026-09-19 · 用户指令「遗留全部处理，目标模式做」⇒ 两份方案档的遗留项全部关闭）**：
   · **空壳落点 4 条 → 0**（指针档 §2.3 待决项，本轮施工）：4 条空落点行**逐条重指**（`section-ref-reanchor`，幂等复跑 0 改动）
     + 4 个**空壳并档结构性消除**（新件 `scripts/apply-empty-shell-merge.mjs`：dry/apply 两态、先备份

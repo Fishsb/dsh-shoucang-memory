@@ -42,6 +42,21 @@ function shasIn(text, pkg) {
 }
 
 // ── 反向证伪（`--selftest`）：证明抽取器**真的会抽出东西**，否则它坏了也只会显示"跳过" ──
+/**
+ * 判据：**同一提交的不同书写长度不算不一致**。
+ * 2026-09-19 实测假红（本件自己的缺陷）：声明侧写 7 位短 sha `#ad6d737`、lock/.modules.yaml 记 40 位全 sha
+ *   `ad6d7370ec76…` ⇒ `new Set(shas).size === 2` 被判"三处不一致"，而三处其实是**同一提交**。
+ *   「假红灯」与「假绿灯」是镜像错误：它会让一次成功的归位看起来没做，从而诱导人做无用的重装。
+ * 严格性**不变**：只要存在两个**互不为前缀**的 sha ⇒ 仍判不一致（那才是真的脱钩）。
+ */
+function pinConsistent(shas) {
+  const xs = [...new Set(shas.map((s) => String(s).trim().toLowerCase()).filter(Boolean))]
+  if (xs.length === 0) return { consistent: false, canon: '', short: false }
+  const canon = xs.slice().sort((a, b) => b.length - a.length)[0]
+  const consistent = xs.every((s) => canon.startsWith(s))
+  return { consistent, canon, short: consistent && xs.some((s) => s.length < canon.length) }
+}
+
 if (SELFTEST) {
   const cases = [
     ['dsh-shoucang-memory": "github:Fishsb/dsh-shoucang-memory#f81eb2e5b6f8517e4af6f0d0284f3375302fed74",', 'dsh-shoucang-memory', ['f81eb2e5b6f8517e4af6f0d0284f3375302fed74']],
@@ -55,6 +70,19 @@ if (SELFTEST) {
     const okCase = JSON.stringify(got) === JSON.stringify(want)
     if (!okCase) bad++
     console.log(`${okCase ? '✅' : '❌'} 抽 ${want.length} 个 → 得 ${JSON.stringify(got)}`)
+  }
+  // 一致性判据自证：**必须能区分"同一提交的不同长度"与"真的不同提交"**（否则修完还是假红/假绿）。
+  const aliasCases = [
+    ['短 7 位 vs 全 40 位（同一提交）', ['ad6d737', 'ad6d7370ec768dbef17f4a80087420a0ba83d72c'], true],
+    ['两侧都是全 40 位', ['ad6d7370ec768dbef17f4a80087420a0ba83d72c', 'ad6d7370ec768dbef17f4a80087420a0ba83d72c'], true],
+    ['真的不同提交（反例，必须判不一致）', ['ad6d737', '3339116a1b2c3d4e5f60718293a4b5c6d7e8f901'], false],
+    ['空集（无记录）', [''], false],
+  ]
+  for (const [name, shas, want] of aliasCases) {
+    const got = pinConsistent(shas).consistent
+    const okCase = got === want
+    if (!okCase) bad++
+    console.log(`${okCase ? '✅' : '❌'} 一致性判据 · ${name} → ${got ? '一致' : '不一致'}（期望 ${want ? '一致' : '不一致'}）`)
   }
   console.log(bad ? `\nFAIL（${bad} 例）` : '\nPASS（抽取器自证可用）')
   process.exit(bad ? 1 : 0)
@@ -97,16 +125,16 @@ if (!sources.some((s) => s.present && s.shas.length)) {
   process.exit(3)
 }
 
-const all = new Set(sources.flatMap((s) => s.shas))
-const consistent = all.size === 1
+const all = sources.flatMap((s) => s.shas)
+const { consistent, canon, short } = pinConsistent(all)
 console.log(`版本记录巡检 · profile=${PROFILE} · 依赖=${PKG}`)
 for (const s of sources) {
   const v = !s.present ? '（文件缺席）' : s.shas.length ? s.shas.map((x) => x.slice(0, 8)).join(' / ') : '（无记录）'
   console.log(`  ${s.role.padEnd(2)} ${s.file.padEnd(26)} ${v}${s.error ? ` · ${s.error}` : ''}`)
 }
-if (consistent) console.log(`\nPASS（三处一致 @ ${[...all][0].slice(0, 8)}）`)
+if (consistent) console.log(`\nPASS（三处一致 @ ${canon.slice(0, 8)}${short ? ' · 声明侧为短 sha，同一提交' : ''}）`)
 else {
-  console.log(`\n⚠ 三处不一致（${[...all].map((x) => x.slice(0, 8)).join(' / ')}）`)
+  console.log(`\n⚠ 三处不一致（${[...new Set(all.map((x) => x.slice(0, 8)))].join(' / ')}）`)
   console.log('  · 这意味着「仓内绿」与「装上去的是哪一代」脱钩——曾有修复已提交、安装副本仍旧代而三道门全绿的前例。')
   console.log('  · 根治：在 profile 跑一次 `pnpm install` 重生成 lock 与 .modules.yaml（会触发宿主批量删除保护，宜择时手动做）。')
   console.log(`  · 本件为报告态（不改仓库、不判代码红）；要当 CI 硬门用 --strict。`)
