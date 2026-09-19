@@ -452,13 +452,37 @@ const writeDispatch = async (dep: WriteDeps, sid: string, out: any, route: strin
     // 双画像：Q2「归谁」的 USER/AGENT 通道（宿主直写，格式/容量/去重门禁）
     const profiles = (out && Array.isArray(out.profiles)) ? out.profiles : []
     const date = new Date().toISOString().slice(0, 10)
+    /* 画像回执分文件计数（2026-09-20 补 · **写侧「文件维」欠账**）：
+     *   判因（`memory-reconcile` 实测暴露）：`write.consolidate` 是**深睡专属**且硬编码 `target: 'AGENT.md'`
+     *     （`deepsleep-run.ts:728`），而**唯一能写 `USER.md` 的 `profiles` 通道此前完全不发回执**
+     *     ⇒ 台账里 `write.consolidate` 的 target 分布 = `{AGENT.md: 65}` **恒无 USER.md/MEMORY.md**
+     *     ⇒ 「行数闭合」判据的分母**结构性缺失**（USER.md 未解释 21 行、MEMORY.md 499 行皆源于此）。
+     *   ⇒ 本处按 target 分别累计并各发一行回执（`channel:'profiles'`），让闭合有据可算。
+     *   ⚠ **不改写入门禁语义**（仍走既有 `writeProfileLine`：归一化/防注入/容量/去重），只补**回执**。 */
+    const profileTally: Record<string, { attempted: number; written: number; rejected: number }> = {}
     for (const p of profiles) {
       if (!p || !p.target || !p.section || !p.text) { markRejected('profile-baditem', p?.target, p?.section, '字段缺失'); continue }
-      const w = writeProfileLine(dep, resolved.root, String(p.target).trim(), String(p.section), `- ${String(p.text).trim()} ← 源: distill ${dep.infra.sidShort(sid)} ${date}`)
-      if (w.st === 'added') added++
-      else if (w.st === 'rejected') { rejected++; dep.infra.audit({ sid, kind: 'gate-reject', target: p.target, reason: `画像更新被拒（${w.why}）` }) }
+      const tg = String(p.target).trim()
+      const k = tg.toLowerCase() === 'user' ? 'USER.md' : tg.toLowerCase() === 'agent' ? 'AGENT.md' : tg
+      profileTally[k] = profileTally[k] || { attempted: 0, written: 0, rejected: 0 }
+      profileTally[k].attempted++
+      const w = writeProfileLine(dep, resolved.root, tg, String(p.section), `- ${String(p.text).trim()} ← 源: distill ${dep.infra.sidShort(sid)} ${date}`)
+      if (w.st === 'added') { added++; profileTally[k].written++ }
+      else if (w.st === 'rejected') { rejected++; profileTally[k].rejected++; dep.infra.audit({ sid, kind: 'gate-reject', target: p.target, reason: `画像更新被拒（${w.why}）` }) }
       else if (w.st === 'failed') markUndigested('profile', String(p.target), String(p.section), '画像行落盘失败')
       // dedup：静默不计
+    }
+    for (const [k, t] of Object.entries(profileTally)) {
+      /* ⚠ 用**独立 type** `write.profile`（不塞进 `write.ingest`）—— 理由：`write.ingest` 的 `target`
+       *   语义是**目标库标识**（`targetLib`），本处的 `target` 是**文件名**；两者同名不同义已经害过
+       *   `memory-reconcile` 一次（闭合判据分母恒 0）。**同 type 混两种语义是禁止的**（仓内同族教训：
+       *   「同一语义两处判据必然漂移」的镜像形态 —— 这里是"同一字段两处语义"）。 */
+      dep.infra.ledger({
+        sid: sid.replace(/^session-/, '').slice(0, 8), type: 'write.profile', domain: 'ingest',
+        channel: 'profiles', carrier: 'always:profile', target: k,
+        verdict: t.written > 0 ? 'written' : (t.rejected > 0 ? 'rejected' : 'skipped'),
+        attempted: t.attempted, written: t.written, rejected: t.rejected, failed: undigested,
+      })
     }
     // P4 双写期**覆盖修复**（2026-09-13）：**一趟写入结束统一镜像全部载体**。
     //   原实现只在两处镜像（MEMORY.md 落盘后 :262 · 画像落盘后 :146），而 `appends` 循环写的

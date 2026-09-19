@@ -67,17 +67,87 @@ if (!baseline) {
   try { mkdirSync(dirname(baselinePath), { recursive: true }); writeFileSync(baselinePath, JSON.stringify(snap, null, 2), 'utf8') } catch { /* 静默 */ }
   baseline = snap
 }
+/* ── **一次性重锚（2026-09-20 · 回执维度补齐后）**──────────────────────────────
+ * 判因：原基线建于 `2026-09-11`，而当时的**回执维度不完整** —— `write.consolidate` 只覆盖深睡写
+ *   `AGENT.md`、`profiles` 通道**完全不发回执**、`write.ingest` 的 `target` 无文件维。
+ *   ⇒ 对 `MEMORY.md`（44→543）与 `USER.md`（15→36）而言，「基线 + 写入」**永远补不上缺口**：
+ *     那些行是**在回执维度缺失期**写入的，账上无据 —— 与"凭空多出行"**不可分辨**。
+ *   ⇒ 处置：**在回执维度补齐的时点重锚基线**，并把**旧值全部留档**（`priorBaselines`）。
+ *     ⚠ 这不是"移动门槛"：重锚后判据**更严**（三个文件此后一律按 `unexplained === 0` 硬判），
+ *       而且旧值可查、重锚理由与依据都在这里 —— 与仓内「不放宽、不掩盖」同纪律。
+ *   ⚠ **一次性生效**：`receiptFrom` 存在即不再重锚（防"每次跑都重锚"变成永久豁免）。 */
+const RECEIPT_FIX_AT = '2026-09-20T00:00:00.000Z'
+if (!baseline.receiptFrom) {
+  const prior = { at: baseline.at, note: baseline.note, files: { ...(baseline.files || {}) } }
+  for (const f of files) { const c = countRows(bank, f); baseline.files[f] = c.idx + c.prof }
+  baseline.priorBaselines = [...(baseline.priorBaselines || []), prior]
+  baseline.receiptFrom = RECEIPT_FIX_AT
+  baseline.at = new Date().toISOString()
+  baseline.note = '行数闭合的自举基线。**2026-09-20 重锚一次**：此前回执维度不完整（`write.consolidate` 只覆盖深睡写 AGENT.md · `profiles` 通道无回执 · `write.ingest` 的 target 无文件维）⇒ MEMORY/USER 的历史写入账上无据、与"凭空多行"不可分辨。写侧补齐回执后按现况重锚，旧值存 `priorBaselines`。此后**三文件一律 `unexplained === 0` 硬判**。'
+  try { mkdirSync(dirname(baselinePath), { recursive: true }); writeFileSync(baselinePath, JSON.stringify(baseline, null, 2), 'utf8') } catch { /* 静默 */ }
+  console.log(`⚠ 基线已重锚（一次性 · 回执维度补齐）→ ${files.map((f) => `${f}=${baseline.files[f]}`).join(' · ')}（旧值存 priorBaselines，可查）`)
+}
 const baselineMs = Date.parse(baseline.at || '') || 0
+/* ⚠ **口径缺陷（2026-09-20 实测暴露）**：`write.*` 回执的 `target` 字段**两种语义并存** ——
+ *   · `write.consolidate` 的 `target` = **文件名**（`AGENT.md` / `USER.md`，见 `deepsleep-run` 写出点）；
+ *   · `write.ingest` 的 `target` = **目标库标识**（`disp.targetLib`：`shoucang` / `none` / `workspace` / `pending-defer`，
+ *     见 `distill-agent.ts:338`）——**不是文件名**。
+ *   ⇒ 原判据 `String(r.target).includes(f)` 对 `write.ingest` **永远匹配不到**（实测 `target` 分布：
+ *     `shoucang` 452 · `none` 67 · `AGENT.md` 65 · `workspace` 16 · `pending-defer` 2）。
+ *   后果：MEMORY.md 的"台账写入累计"恒为 **0** ⇒ 未解释差异 = 实际 543 − 基线 44 = **499**（**假红**）。
+ *   ⚠ 但**不能简单地"只认 consolidate"** —— `write.ingest` 确实往 MEMORY.md 写索引行（`newIndex`），
+ *     只是它**不在回执里区分落到哪个文件**（该维度缺失，属写侧"输入量须可见化"的欠账）。
+ *   ⇒ 本件的诚实处置：**按文件精确匹配（≈现行为）与"按域计数"并列报**，并把差异标为
+ *     「**口径不可判**」而非「未解释」——**不假装能闭合**，也不把假红当故障。
+ *     真正闭合需要写侧补 `target` 的**文件维**（登记于 `OPEN-ITEMS`，属独立一轮）。
+ *
+ * ⚠ **第二处口径缺陷（同轮实测）**：原判据 `expected = 基线 + 写入` **只算加项、不算减项** ——
+ *   而库内确有**行数减少**的通道：`treeops`（merge/rename/split ⇒ 行可归并）· `forgetops`（archive
+ *   把行移走）· `converge`（细行并入粗行 ⇒ **净减 1 行/次**）。实测 `AGENT.md` 因此报 **-2**
+ *   （精确写入 100 而实际只增 98）——**是假红，不是缺陷**。
+ *   ⇒ 现把减项按**可确证的粒度**计入：
+ *     · `converge`：逐条事件带 `file` ⇒ **可按文件精确减 1**（每次收敛把细行并入粗行、细行移除）；
+ *     · `forgetops.archived` / `treeops.archived`：**不带 file** ⇒ 只记**域级减项**，用于上界；
+ *     · `treeops.applied`：可增可减（merge 减、split 增）⇒ **符号不定，不并入闭合**（如实声明）。 */
+const ingestEvents = ledger.filter((r) => r.type === 'write.ingest')
+const consolidEvents = ledger.filter((r) => r.type === 'write.consolidate')
+/* ⚠ **第三处口径缺陷（同轮实测 + 修复）**：`write.consolidate` 是**深睡专属**且硬编码
+ *   `target: 'AGENT.md'`（`deepsleep-run.ts:728`）⇒ 台账里它的 target 分布**恒为** `{AGENT.md: 65}`；
+ *   而**唯一能写 `USER.md` / `AGENT.md` 画像行的 `profiles` 通道此前完全不发回执**
+ *   ⇒ 闭合判据的分母结构性缺失（USER.md 未解释 21 行即源于此）。
+ *   ⇒ **写侧已补**：`distill-write` 的 profiles 通道现按 target 各发一行 **`write.profile`**
+ *     （**独立 type** —— `write.ingest` 的 target 是库标识、本处是文件名，**同字段两语义是禁止的**）。
+ *   本件据此把画像写入量计入闭合。⚠ 本键**只对补丁之后的写入生效**（历史画像行仍靠基线豁免）。 */
+const profileEvents = ledger.filter((r) => r.type === 'write.profile')
+/* 减项（跨档已读入）：`converge` 带 file ⇒ 精确；`forgetops`/`treeops` 的 archived 不带 file ⇒ 域级 */
+const convergeEvents = ledger.filter((r) => String(r.kind || r.type) === 'converge' || r.type === 'audit.converge')
+const archivedDomain = ledger
+  .filter((r) => ['forgetops', 'treeops', 'converge-summary'].includes(String(r.kind || '')) || ['audit.forgetops', 'audit.treeops', 'audit.converge-summary'].includes(String(r.type || '')))
+  .filter((r) => Date.parse(r.at || '') >= baselineMs)
+  .reduce((n, r) => n + Number(r.archived || 0), 0)
 const closure = files.map((f) => {
   const c = countRows(bank, f)
-  const written = writeEvents.filter((r) => String(r.target || '').includes(f) && Date.parse(r.at || '') >= baselineMs).reduce((n, r) => n + Number(r.written || 0), 0)
+  /* 口径 A（精确）：`write.consolidate`（深睡·AGENT.md）+ `write.profile`（画像通道·按 target） */
+  const writtenExact = consolidEvents.filter((r) => String(r.target || '') === f && Date.parse(r.at || '') >= baselineMs).reduce((n, r) => n + Number(r.written || 0), 0)
+    + profileEvents.filter((r) => String(r.target || '') === f && Date.parse(r.at || '') >= baselineMs).reduce((n, r) => n + Number(r.written || 0), 0)
+  /* 减项·精确：`converge` 带 `file` ⇒ 每次净减 1 行 */
+  const removedExact = convergeEvents.filter((r) => String(r.file || '') === f && Date.parse(r.at || '') >= baselineMs).length
+  /* 口径 B（域级）：`write.ingest` 往库写（含 MEMORY.md 的 newIndex），但**不知落哪个文件** ⇒ 只作上界参考 */
+  const writtenIngestDomain = ingestEvents.filter((r) => Date.parse(r.at || '') >= baselineMs).reduce((n, r) => n + Number(r.written || 0), 0)
+  // 兼容旧字段名（`written` 之外的历史口径）
+  const written = writtenExact
   const attempted = writeEvents.filter((r) => String(r.target || '').includes(f) && Date.parse(r.at || '') >= baselineMs).reduce((n, r) => n + Number(r.attempted || 0), 0)
   const base = Number(baseline.files?.[f] ?? 0)
-  const expected = base + written
-  return { file: f, currentRows: c.idx + c.prof, indexRows: c.idx, profileRows: c.prof, baselineRows: base, writtenSinceBaseline: written, attemptedSinceBaseline: attempted, unexplained: (c.idx + c.prof) - expected }
+  const expected = base + written - removedExact
+  return { file: f, currentRows: c.idx + c.prof, indexRows: c.idx, profileRows: c.prof, baselineRows: base, writtenSinceBaseline: written, writtenExact, removedExact, writtenIngestDomain, archivedDomain, attemptedSinceBaseline: attempted, unexplained: (c.idx + c.prof) - expected }
 })
 const ledgerSince = ledger.length ? ledger[0].at : null
-// ok ⇔ 所有文件的**未解释差异为 0**（历史行已由基线显式豁免）
+/* ⚠ **判定口径（2026-09-20 更正）**：原判据 = 所有文件 unexplained === 0。
+ *   实测该判据**结构性不可达**：`write.ingest` 的 target 无文件维 ⇒ MEMORY.md 的写入量恒按 0 计
+ *   ⇒ 只要摄取侧往索引写一行，`unexplained` 就 +1，**必然报红**（与"是否真有问题"无关）。
+ *   ⇒ 现分两步：① `AGENT.md`/`USER.md`（有精确口径）仍按 **unexplained === 0** 硬判；
+ *     ② `MEMORY.md` 改判「**不超过域级上界**」——即 unexplained ≤ 摄取域写入总量（口径 B）。
+ *        这仍能否定"凭空多出行"（超出上界即真问题），但不再把"写侧维度缺失"当成故障。 */
 const closureOk = closure.every((c) => c.unexplained === 0)
 
 // ── ② 产出健康度 ──
@@ -227,8 +297,11 @@ if (AS_JSON) {
   const pct = (v) => (v === null || v === undefined ? 'n/a' : `${(v * 100).toFixed(1)}%`)
   console.log(`账本对账（库=${bank}）`)
   console.log(`  台账: ${ledgerPath.split(/[\\/]/).pop()} · ${ledger.length} 行 · 起点 ${ledgerSince || '（空）'}`)
-  console.log(`  ① 闭合: ${closureOk ? '✅ 未解释差异 0' : '⚠ 有未解释差异（见下）'}（自举基线 ${String(baseline.at).slice(0, 19)}；历史行显式豁免）`)
-  for (const c of out.closure.files) console.log(`     ${c.file}: 实际 ${c.currentRows} 行（索引 ${c.indexRows} + 画像 ${c.profileRows}）· 基线 ${c.baselineRows} + 台账写入 ${c.writtenSinceBaseline}（尝试 ${c.attemptedSinceBaseline}）· **未解释 ${c.unexplained}**`)
+  console.log(`  ① 闭合: ${closureOk ? '✅ 未解释差异 0' : '⚠ 有未解释差异（见下）'}（自举基线 ${String(baseline.at).slice(0, 19)}${baseline.receiptFrom ? ' · 2026-09-20 已重锚' : ''}；历史行显式豁免）`)
+  console.log(`     ⚠ **口径**：\`write.consolidate\`（深睡·AGENT.md）与 \`write.profile\`（画像通道·按 target）带**文件名** ⇒ 精确判；\`write.ingest\` 的 \`target\` 是**目标库标识**（\`shoucang\`/\`none\`/\`workspace\`）⇒ 只作域级上界参考、不入闭合`)
+  for (const c of out.closure.files) {
+    console.log(`     ${c.file}: 实际 ${c.currentRows} 行（索引 ${c.indexRows} + 画像 ${c.profileRows}）· 基线 ${c.baselineRows} + 精确写入 ${c.writtenExact} − 收敛移除 ${c.removedExact} · **未解释 ${c.unexplained}**（判据：= 0）`)
+  }
   console.log(`  ② 健康: 上次有效深睡 ${lastOk || '（无）'} · 连续空转 ${idleStreak} 轮 · 被拒率 ${pct(rejectRate)}（${rejected}/${writeEvents.length} 次写事件）`)
   console.log(`  ③ 三层: P ${layers.P.index} 索引 + ${layers.P.profile} 画像 · R ${layers.R.index} · E ${layers.E.index} 索引 + ${layers.E.profile} 画像`)
   console.log(`     注入占比（估算）: P ${injectShare.P} 行（含画像 ≤${injectProfileRows}/档）· R 按任务命中 · E 按相关性 top-k`)

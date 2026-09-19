@@ -606,6 +606,21 @@ const CHECKS = [
   //     —— 实测两者会**同时命中同一个器**（`epoch-calibrate` 曾既单档读、又默认编码读）⇒ 必须并存。
   ['scripts/check-ledger-read.mjs'],
   ['scripts/check-ledger-read.mjs', '--selftest'],
+  // R2″「写入回执完备性」（2026-09-20）：**`memory-reconcile` 行数闭合判据的护栏**。
+  //   判因：闭合判据要成立，前提是**每条写入路径都发回执且回执带文件维**。实测两处缺失：
+  //     · **缺项**：`write.consolidate` 是深睡专属且硬编码 `target: 'AGENT.md'`，而**唯一能写 USER.md 的
+  //       `profiles` 通道完全不发回执** ⇒ 台账该 type 的 target 分布恒为 `{AGENT.md: 65}`
+  //       ⇒ USER.md 写入量无据可查（未解释 21 行的成因）；
+  //     · **同字段两语义**：`write.ingest` 的 `target` = **库标识**（`targetLib`），
+  //       而 `write.consolidate` 的 `target` = **文件名** ⇒ 同名不同义，按文件名匹配 `write.ingest` 恒落空
+  //       （MEMORY.md 未解释 499 行的成因）。
+  //   修复：`distill-write` 的 profiles 通道按 target 各发一行 **`write.profile`**（**独立 type**）。
+  //   本门四条断言：① 每个写载体所在文件必须有 write.* 回执 ② 同 type 下 target **字面量**语义单一
+  //   ②″ **运行期**（扫真库跨档台账）target 形态不得混用（`.md` 尾 vs 库标识尾）
+  //      —— ②″ 补②的盲区：静态看不到"两个变量各持一种语义"，**先红自证已证** ② 抓不到该形态；
+  //   ③ 每条回执带 `attempted` + `written`（缺则无法闭合）。
+  ['scripts/check-write-receipts.mjs'],
+  ['scripts/check-write-receipts.mjs', '--selftest'],
   // **统一事件信封**单测（2026-09-13）：`{ at, ...o }` 的展开顺序允许调用方用 `at: undefined` 覆盖注入值，
   //   而 `JSON.stringify` 静默丢弃 undefined ⇒ 行里没有 `at`（实测 distill-audit 930 行里 1 行如此）。
   //   本件把「任何一行都必须有非空 `at` + `type`」钉死，覆盖 audit/episode/stub/ledger 四条写出路径。
