@@ -77,10 +77,35 @@
 若干承诺的交付物落在**别的仓/别的会话**（如另一 DSH 插件仓的发布批次、PR 回帖）。它们以 `subject=user / scope=global` 落进同一份台账 ⇒ **本仓无权结、也无证据结**，只能长期挂着。
 ⇒ 需要一条**归属规则**：开条时记 `repo`/`session` 归属；非本仓的**不进本仓待办队列**（否则本仓永远替别仓背账）。
 
-**G10 · 环事件重放不能重建当前状态（结算落库时实测暴露，**既有缺陷、非本次引入**）**
-`record-ring.mjs --reconcile` 现状：store 环记录 **1018** · 事件重放 **1018** · **内容不一致 181**（样例 `decision:1buikz2` / `decision:v8h2mw` / `valence:rc8yr3`，**无 commitment**）。
+**G10 · 环事件重放不能重建当前状态（结算落库时实测暴露，**既有缺陷、非本次引入**）**`record-ring.mjs --reconcile` 现状：store 环记录 **1018** · 事件重放 **1018** · **内容不一致 181**（样例 `decision:1buikz2` / `decision:v8h2mw` / `valence:rc8yr3`，**无 commitment**）。
 **证明其先于本次结算**：用落库前的备份快照（`~/.dsh/backups/sc-settle-20260919-173020`）跑同一对账 ⇒ **同样是 181**，数量与首三个 id 完全一致。
 ⇒ 含义：**「事件流是不可变真源」这一条在 decision/valence 面上当前不成立**（181/1018 无法从事件重建）。对本案的**直接影响**：§4 册一的 V1.2 原本写"重放后对账**零漂移**"，在全库红的情况下**无法被判绿** ⇒ V1.2 口径必须收敛为**承诺面切片**（`commitment:*` 零漂移），全库 181 另立项修复（不在本方案授权范围）。
+
+**G11 · 结算**不改变注入面**（落库后活体验证暴露 · **最严重的一条**）**
+实测（2026-09-19 落库 10 条之后）：
+
+| 面 | 是否随结算改变 | 证据 |
+|---|---|---|
+| 记录状态 | **✅ 变** | `pending 74 → 64` · `kept 1 → 11` |
+| 待兑现队列（`openCommitments`） | **✅ 变** | 已结清 id **不在**队列（函数级实测） |
+| KPI（`trustOf`/面板 `/rings`） | **✅ 变** | `/rings` 返回 `{pending:64, kept:11}`；`trustOf('用户') = {mineKept:9, mineRate:1}` |
+| 事件流 | **✅ 变** | `commitment.settle 1 → 11`（恰 +10） |
+| **注入面 `[环·承诺]`** | **❌ 不变** | 已结清项**仍出现在注入文本里** |
+
+**函数级根因**（不是缓存）：`ringCandidates`（`src/ring-supply.ts:166-175`）的过滤是
+`file===RING_RECORD_FILE` → `ringOfKind≠none` → **`isLive(r, at)`** → 文本非空——
+**没有一条看 `meta.status`**；而 `isLive`（`src/fact-ring.ts`）只判 `validTo`：
+```ts
+export function isLive(r, at) { if (!r.validTo) return true; return Date.parse(r.validTo) > Date.parse(at) }
+```
+⇒ 75 条承诺的 `validTo` 全为空 ⇒ **结算(sets `meta.status`)对注入面零影响**。
+**复现（决定性）**：直接调库函数、绕过任何缓存——`createRingSupplyApi().lines(磁盘 store, [], now)` **仍然吐出**已结清项 ⇒ 排除缓存因素。
+**后果**：`openCommitments`（唯一按 pending 过滤的读路径）**没有注入面消费者**（兑现 G5）；用户可见面因此**一直在提醒已结清的事**。
+
+**两条修法（均为施工，需授权；本方案只登记）**：
+- **(a) 供给侧最小修正**：`ringCandidates` 对 `kind==='commitment'` 增加 `meta.status==='pending'` 判据（语义：**"待办"只收未结清的**）。改动面 1 处、可机检、零副作用。
+- **(b) 写侧时态对齐**：结算时同时落 `validTo`（复用**既有幂等原语** `fact-ring#supersede`，不新造机制）⇒ `isLive` 自然排除，且与"结算即失效"的时态语义一致；副作用是复用 `validTo` 表达"已结清"，需确认不与事实环时态口径冲突。
+- 建议 **(a) 先落（最小、无歧义）**，(b) 作为时态口径统一另议。
 
 ### 2.3 我上一轮的错判（如实纠正，防据此施工）
 
@@ -99,8 +124,7 @@
    | 消费者 | 现状 | 目标 |
    |---|---|---|
    | `/rings` 视图（`panel-observe`） | 只展示 `trustOf` | 展示三态（兑现 / 未兑现 / **未结算**） |
-   | 注入面（`ring-supply`） | 按 `dueSoon` 优先供给 pending | 不变（**判据不动**） |
-   | 待裁决队列 | 无 | `openCommitments` + 逾期过滤，供册三/册五消费 |
+   | 注入面（`ring-supply`） | **只按 `isLive`(时态) 过滤，不看 `meta.status`** ⇒ 结算对它**无效**（见 G11） | 待办只收 `pending`（修法 a，需授权） |   | 待裁决队列 | 无 | `openCommitments` + 逾期过滤，供册三/册五消费 |
    | 结算执行 | 仅未部署 CLI | 册二提案 → 册零执行通道 |
 
 **验收（成对）**
@@ -269,6 +293,16 @@ node scripts/test-relation-ring.mjs && node scripts/test-ring-events.mjs
 两条路都**污染 KPI**，与 §10 红线（"兑现率不许虚高"）直接冲突 ⇒ **停在 pending 等册零给出作废出口**（G8 同源问题）。
 
 **证据落点说明**：册一（`SettlementInit.evidence` 必填）**尚未施工**，故本轮证据写在**既有 `note` 字段**（真实存在的字段），不假装用了不存在的字段。
+
+**改动面矩阵（落库后逐面实测——避免"看着像做了"）**
+
+| 面 | 结果 | 证据 |
+|---|---|---|
+| 记录状态 | ✅ 变 | `pending 74→64` · `kept 1→11` |
+| 待兑现队列 | ✅ 变 | 已结清 id 不在 `openCommitments`（函数级） |
+| KPI / 面板 `/rings` | ✅ 变 | `/rings` → `{pending:64, kept:11}`；`trustOf('用户') = {mineKept:9, mineRate:1}` |
+| 事件流 | ✅ 变 | `commitment.settle 1→11` |
+| **注入面 `[环·承诺]`** | **❌ 不变** | 已结清项**仍在注入文本中**（函数级复现，非缓存）⇒ **新缺陷 G11**，修法需另授权 |
 
 ---
 
