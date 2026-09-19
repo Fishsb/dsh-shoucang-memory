@@ -56,7 +56,7 @@
 | 项 | 现状（实测） | 卡在哪 | 触发条件（谁满足了就该做） |
 |---|---|---|---|
 | **门4 时态剔除进注入链** | `supply-assembly#buildCandidates` 在 `src/` 内**零消费者**（仅离线 `supply-preview.mjs` + 单测）；真库 `validTo` 非空 **0/5860**（本轮复测，此前记 0/5777）；`check-injection-reach` **⑫** 已把此实况钉住（接线后必翻红） | **零输入可剔**：接线后行为逐字节不变 ⇒ 换不到证据，只会产出"机制在、证据无"的假绿 | 库内出现**第一条真实失效记录**（`validTo` 非空 ≥1）⇒ 此时接线才有可判定的验收对象 |
-| **门3 淘汰门（行为回灌）** | 收益取证链已齐（`yield-rounds.jsonl` 3326 行 · `recall-yield.ts` 严格解析 + 保守链）；信号源 `switchSource=true` **跨档真值 4409/4666 = 94.5% 恒真**（⚠ 原登记 82.8% 系**单档读**失真，已随 G13 修正）⇒ **无判别力**，且判定结果**只进审计不反馈选行** | **先修信号源**：给恒真信号接淘汰判据 ＝ 给代理指标加正反馈环，与已拍板「代理指标非判据」直接冲突 | `switchSource` 非恒真（真阳性率显著低于 ~95%）⇒ 此时"信号接选行"才有意义 |
+| **门3 淘汰门（行为回灌）** | **✅ 本轮已修输入源（2026-09-20）**：`switchSource` 恒真的**根因链**已定位并修掉 —— `topicEcho` 恒 `false`（`true=0/4865`）← **`prevText` 恒空**（原实现从 `decision.messages` 找 assistant 回复，而那是**"本步新认领的消息"**，收尾步恒空；`OPEN-ITEMS §0d` 早已实证该语义）。**改**为从 `agent.session.snapshotEvents()` 取 `assistant/message` 的 text 片 + 降级保护 + 审计 `prevTextSrc`（**两类失败可分辨**）。判据 `test-prev-text-source`（登记 **179 → 181**）。<br>⚠ **但"真实回引率是否落在有判别力区间"仍待真机样本**：修复后须新 compliance 行落账才可测（探针实测**当前 0 行**，如实记）。判定结果**仍只进审计、不反馈选行** | **接线前须先看真实回引率**：恒真已从**根因**上消除，但"回引率是否有判别力"须等真机行 | 新 compliance 行 **≥30** 且 `topicEcho=true` 占比落在 **(0%, 95%)** 区间 ⇒ 此时"信号接选行"才有意义 |
 
 **已落地部分**（详见 `CHANGELOG`）：读数口径四件套（`check-observability --parsability`）· `buildCandidates` 闭环自述如实化 + 抵达面钉住 ⑫ · `adviseFromMissCounts` 定位锁定 · Letta 许可证标签更正。
 

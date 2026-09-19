@@ -634,6 +634,19 @@ const CHECKS = [
   //     ⇒ 触犯本仓「禁止为 ≤2 个使用点提前抽象」。登记制与 `check-ledger-read` 的 EXEMPT **同构**。
   ['scripts/check-test-self-restore.mjs'],
   ['scripts/check-test-self-restore.mjs', '--selftest'],
+  // 「回引判定的输入来源」（2026-09-20 · **真机缺陷驱动 · "机制正常、输入为零"型假绿**）：
+  //   `topicEcho` 真机**恒 false**（`true = 0 / 4865`）⇒ `zeroGain` 只能递增、永不清零
+  //   ⇒ `switchSource` 阈值后**恒真**（实测 4604/4865 = **94.6%**）⇒ 该信号**无判别力**。
+  //   逐层排除（每步都有实测）：`topics` 非空 52.3% · `materialChars` 全非零 · `nudge=1` 有 107 行
+  //   （判定点确实到达）· **判据本身是好的**（重放：真实主题词 ⇒ true / 无关句 ⇒ false）
+  //   ⇒ **真因是 `prevText` 恒为空**：原实现从 `decision.messages` 找 assistant 回复，
+  //     而宿主的 `messages` 是"**本步新认领的消息**"（`inbox.claim`；`OPEN-ITEMS §0d` 已实证）
+  //     ⇒ 收尾步没有认领消息 ⇒ 恒空。
+  //   修复：改从**会话事件流**取（`agent.session.snapshotEvents()` 的最近 `assistant/message` text 片，
+  //   **不取 reasoning**，与 `distill-chunks` 材料面同口径）+ 不可达时退回原口径 + 审计落 `prevTextSrc`
+  //   （使"真没回引"与"取不到回复"**可分辨**——此前混为一谈，缺陷因此潜伏）。
+  ['scripts/test-prev-text-source.mjs'],
+  ['scripts/test-prev-text-source.mjs', '--selftest'],
   // **统一事件信封**单测（2026-09-13）：`{ at, ...o }` 的展开顺序允许调用方用 `at: undefined` 覆盖注入值，
   //   而 `JSON.stringify` 静默丢弃 undefined ⇒ 行里没有 `at`（实测 distill-audit 930 行里 1 行如此）。
   //   本件把「任何一行都必须有非空 `at` + `type`」钉死，覆盖 audit/episode/stub/ledger 四条写出路径。

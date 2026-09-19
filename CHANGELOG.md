@@ -2301,6 +2301,14 @@
 - **panel client 迁移到 slot 契约（2026-09-05，解冻前置）**：client.js 注入声明加 `'slots'`，入口从直插侧栏 footArea DOM 改为注册 `sidebar.footer.action` 插槽按钮（无 slots 环境保留直插兜底）；host+client 已注入运行（ef85e372），构建产物 lib/ 重建
 
 ### Fixed
+- **回引判定的输入恒空："机制正常、输入为零"型假绿（2026-09-20 · 真机驱动 · 门3「信号无判别力」的根因）**：`topicEcho`（上一步是否回引材料主题词）在真机**恒 `false`**（`true = 0 / 4865` 行）⇒ `nextZeroGain` 只能递增、**永不清零** ⇒ `shouldSwitchSource` 在阈值后**恒真**（实测 `switchSource=true` 占 **4604/4865 = 94.6%**）⇒ 该信号**无判别力**（`OPEN-ITEMS §0e` 门3 判"缓"的直接依据）。
+  · **逐层排除，每步都有实测证据**（这正是本仓「先判边界再换挡」的做法）：① `topics` 恒空？**否**——4865 行里 **52.3% 非空**（样本 `["指针非限制","记忆体系分工",…]`）· ② `materialChars` 恒 0？**否**——全为非零 · ③ 判定点从未到达？**否**——`nudge=1` 有 **107 行**（再引导确实发出过）· ④ **判据本身失效？否**——重放实测：喂真实主题词 ⇒ `true`、喂无关句 ⇒ `false`（**判据是好的**）· ⑤ **⇒ 真因是 `prevText` 恒为 `''`**。
+  · **根因**：原实现从 `decision.messages` 里找 assistant 回复，而**宿主的 `messages` 是"本步新认领的消息"**（`agent-loop` 的 `inbox.claim(target, turn)`；仓内 `OPEN-ITEMS §0d` **早已实证**该语义）⇒ **收尾步根本没有认领消息** ⇒ 取不到任何 assistant 文本 ⇒ `judge('') === false` 恒成立。⇒ 属**"机制正常、输入为零"**型假绿（与仓内已登记的「探针 PASS ≠ 生效」同族），**且因"真没回引"与"取不到回复"在审计上不可分辨而潜伏至今**。
+  · **修复**：① 改从**会话事件流**取——`agent.session.snapshotEvents()` 里最近一条 `assistant/message` 的 **text 片**（**不取 reasoning**，与蒸馏材料面同口径）；② `snapshotEvents` 不可达时**退回原口径**（降级保护，不使判定整体失效）；③ 审计落 **`prevTextSrc`**（`events`/`events-empty`/`messages`/`none`）与 `prevTextLen` ⇒ **两类失败可分辨**。
+  · **正解复用既有实现**：口径与 `distill-chunks#textPartsOfEvent` 一致（**不另写一份 v3 事件形状解析**，避免第三份口径）——实测该口径对真机构造 `{seq,type,time,data:{message:{content:[{type:'text',…}]}}}` 取到 text 片且**排除 reasoning**。
+  · **新增判据 `scripts/test-prev-text-source.mjs`**（登记 `check-runner`，**179 → 181**）：① 数据源必须是事件流 · ② 只取 text 片 · ③ 审计可分辨 · ④ 有降级保护；自证 2 例含 1 反例（**反例取自真机修前形态**）。
+  · **端到端链路实证**：`nextZeroGain(5, true) = 0` ⇒ `shouldSwitchSource(0) = false`（回引后**不再恒真**）。
+  · ⚠ 真机上"新 compliance 行"须本会话走一次慢通道判定步才落账（探针实测**当前 0 行**，如实记）——本轮的判据是**代码级 + 解析器级**实证，**不谎报运行态已验证**。
 - **自改源码型测试件污染工作树：一次事故拖红 4 道门（2026-09-20 · 已修 + 新增防再生门禁）**：`test-split-equivalence.mjs` 是**先红自证**型测试——它**临时改写真实源文件**做反例注入（`src-client/panes-toggles.js` 去掉 sched tab 渲染、`styles.js` 把导航宽压成 4px），约定 `finally` 逐字节还原。实测**反例留在了工作树**，4 道门同时红：该件自身（找不到锚点）· `test-panel-view-contract`（缺 sched tab）· `ui-geo-regress`（几何破坏）· `test-css-usage-gate`（样式门）。
   · **根因（两条叠加，第二条是致命的）**：① **`process.exit()` 不执行 `finally`** —— 锚点缺失分支直接 `process.exit(1)` 跳过还原；② 而**"锚点缺失"恰恰就是"上次未还原"的信号**（反例把锚点文本替换掉了）⇒ 形成**不可自愈死循环**：一旦污染，该件**永远无法自行恢复**，且每跑一次就把 4 道门再拖红一次。
   · **修复**：① 锚点缺失分支改为**设标记**（`exitedEarly`）+ 走完 `finally`，退出码一律用 `process.exitCode`（不再 `process.exit`）；② `finally` 增加**第二级兜底**——锚点缺失时**内存里的 `orig` 本身就是被污染的内容**（用它还原等于继续污染）⇒ 此时改用 **`git checkout --` 从 HEAD 还原**；③ 兜底失败时**打印人工修复命令**而非静默；④ 退出文案区分"证据成立"与"锚点缺失⇒未产出证据"（原实现走兜底分支却仍打 PASS，属**假绿**）。

@@ -603,10 +603,42 @@ export async function handlePreStep(payload: any, next: () => Promise<any>, dep:
       //   ★闸（2026-09-13 §70）：材料若**落在本步**（含"消息到达即判定"把材料放进 system 段的情形），
       //   本步**不判合规**——模型还没有机会使用它；否则会在第 1 步就误发再引导（实测 F3 回归）。
       if (step <= Number(st.materialStep || 0)) return decision
-      const prevAssistant = [...messages].reverse().find((m) => m && m.role === 'assistant')
-      const prevText = prevAssistant && Array.isArray(prevAssistant.content)
-        ? prevAssistant.content.filter((b: any) => b && (b.type === 'text' || b.type === 'reasoning') && typeof b.text === 'string').map((b: any) => b.text).join('')
-        : ''
+      /* ⚠ **`prevText` 取值方式修正（2026-09-20 · 真机实测缺陷）**：
+       *   原实现从 `decision.messages` 里找 assistant 回复 —— 而**宿主的 `messages` 是"本步新认领的消息"**
+       *   （`agent-loop` 的 `inbox.claim(target, turn)`；仓内 `OPEN-ITEMS §0d` 已实证该语义）。
+       *   ⇒ **收尾步根本没有认领消息**（工具跑完、无新用户消息）⇒ `prevText` 恒为 `''`
+       *   ⇒ `judge('') === false` 恒成立 ⇒ **`topicEcho` 恒 false**、`zeroGain` **只能递增、永不清零**
+       *   ⇒ `shouldSwitchSource` 在 `zeroGain>=2` 后**恒真**（真机实测 `switchSource=true` 占 **4604/4865 = 94.6%**）。
+       *   ⚠ **判据本身是好的**（本处实测：喂真实主题词 ⇒ true；喂无关句 ⇒ false）——
+       *     坏的是**喂给它的输入恒为空**（"机制正常、输入为零"型假绿，与本仓已登记的
+       *     「探针 PASS ≠ 生效」同族）。
+       *   ⇒ 正解：从**会话事件流**取上一步的 assistant 文本 —— 复用本仓**既有**解析器
+       *     `distill-chunks#textPartsOfEvent`（**不另写一份** v3 事件形状解析，避免第三份口径），
+       *     取最近一条 `assistant/message` 的 text 片（**不取 reasoning**，与蒸馏材料面同口径）。
+       *     ⚠ `snapshotEvents()` 缺失/抛错时**退回原行为**（`prevText=''` ⇒ 恒 false），
+       *       并**显式落账** `prevTextSrc` 以便区分"真没回引"与"取不到回复"（此前两者不可分辨）。 */
+      let prevText = ''
+      let prevTextSrc = 'none'
+      const evs = (() => { try { return agent?.session && typeof agent.session.snapshotEvents === 'function' ? agent.session.snapshotEvents() : null } catch { return null } })()
+      if (Array.isArray(evs) && evs.length) {
+        for (let i = evs.length - 1; i >= 0; i--) {
+          const e: any = evs[i]
+          if (String(e?.type) !== 'assistant/message') continue
+          const m = e?.data && e.data.message
+          const arr = m && Array.isArray(m.content) ? m.content : []
+          const txt = arr.filter((c: any) => c && c.type === 'text' && typeof c.text === 'string').map((c: any) => c.text).join('')
+          if (txt) { prevText = txt; prevTextSrc = 'events'; break }
+        }
+        if (!prevText) prevTextSrc = 'events-empty'
+      }
+      if (!prevText) {
+        // 退回原口径（本步认领消息）—— 兼容 `snapshotEvents` 不可达的环境
+        const prevAssistant = [...messages].reverse().find((m) => m && m.role === 'assistant')
+        if (prevAssistant && Array.isArray(prevAssistant.content)) {
+          const t = prevAssistant.content.filter((b: any) => b && (b.type === 'text' || b.type === 'reasoning') && typeof b.text === 'string').map((b: any) => b.text).join('')
+          if (t) { prevText = t; prevTextSrc = 'messages' }
+        }
+      }
       const topicEcho = dep.tools.judge(prevText, st.topics, st.signals)
       st.zeroGain = nextZeroGain(st.zeroGain, topicEcho) // S4/D1：折收益（回引归零、未回引递增）
       if (!topicEcho && st.nudges < dep.cfg.maxNudges && st.topics.length) {
@@ -614,18 +646,18 @@ export async function handlePreStep(payload: any, next: () => Promise<any>, dep:
         dep.counters.nudged++
         await loadMsgFactory()
         const nudge = `【认知环·再引导 ${st.nudges}/${dep.cfg.maxNudges}】上一步未引用本任务相关的经验（${st.topics.slice(0, 3).join(' / ')}）。请用一句话补上：任务类型与目标 + 你要引用的一条 \`[路径]\`/\`[原则]\`（指针见上一步材料），然后继续。`
-        dep.hooks.audit({ kind: 'mcl-step', sid: sid.replace(/^session-/, '').slice(0, 8), step, channel: 'slow', phase: 'compliance', materialChars: (st.materialText || '').length, materialStep: st.materialStep || 0, sim: Number(st.sim.toFixed(3)), topicEcho: false, nudge: 1, zeroGain: st.zeroGain, switchSource: shouldSwitchSource(st.zeroGain), topics: st.topics })
+        dep.hooks.audit({ kind: 'mcl-step', sid: sid.replace(/^session-/, '').slice(0, 8), step, channel: 'slow', phase: 'compliance', materialChars: (st.materialText || '').length, materialStep: st.materialStep || 0, sim: Number(st.sim.toFixed(3)), topicEcho: false, prevTextSrc, prevTextLen: prevText.length, nudge: 1, zeroGain: st.zeroGain, switchSource: shouldSwitchSource(st.zeroGain), topics: st.topics })
         dep.hooks.log(`mcl: ${sid.slice(0, 8)} 慢通道 → 再引导 ${st.nudges}/${dep.cfg.maxNudges}`)
         return { ...decision, messages: messages.concat([dep.tools.mkMsg(nudge)]) }
       }
       if (!topicEcho) {
-        dep.hooks.audit({ kind: 'mcl-step', sid: sid.replace(/^session-/, '').slice(0, 8), step, channel: 'slow', phase: 'compliance', materialChars: (st.materialText || '').length, materialStep: st.materialStep || 0, sim: Number(st.sim.toFixed(3)), topicEcho: false, nudge: 0, nudges: st.nudges, zeroGain: st.zeroGain, switchSource: shouldSwitchSource(st.zeroGain), topics: st.topics })
+        dep.hooks.audit({ kind: 'mcl-step', sid: sid.replace(/^session-/, '').slice(0, 8), step, channel: 'slow', phase: 'compliance', materialChars: (st.materialText || '').length, materialStep: st.materialStep || 0, sim: Number(st.sim.toFixed(3)), topicEcho: false, prevTextSrc, prevTextLen: prevText.length, nudge: 0, nudges: st.nudges, zeroGain: st.zeroGain, switchSource: shouldSwitchSource(st.zeroGain), topics: st.topics })
       } else {
         // **回引步也落账**（2026-09-13 补）：原实现只在「未回引」分支写审计行 ⇒ 该率**没有分母**
         //   （实测 mcl-audit 803 条全为 false、true 0 行）⇒ 方案档 §12 风险 1 的放行判据**无法执行**。
         //   补上这一行才有前后可比 —— 「机制必须有仪表盘」的又一例。（键名 2026-09-18 由 `compliant`
         //   更名为 `topicEcho`：它测的是**主题词回引**，不是"材料被用上了"。）
-        dep.hooks.audit({ kind: 'mcl-step', sid: sid.replace(/^session-/, '').slice(0, 8), step, channel: 'slow', phase: 'compliance', materialChars: (st.materialText || '').length, materialStep: st.materialStep || 0, sim: Number(st.sim.toFixed(3)), topicEcho: true, nudge: 0, nudges: st.nudges, zeroGain: st.zeroGain, switchSource: shouldSwitchSource(st.zeroGain), topics: st.topics })
+        dep.hooks.audit({ kind: 'mcl-step', sid: sid.replace(/^session-/, '').slice(0, 8), step, channel: 'slow', phase: 'compliance', materialChars: (st.materialText || '').length, materialStep: st.materialStep || 0, sim: Number(st.sim.toFixed(3)), topicEcho: true, prevTextSrc, prevTextLen: prevText.length, nudge: 0, nudges: st.nudges, zeroGain: st.zeroGain, switchSource: shouldSwitchSource(st.zeroGain), topics: st.topics })
       }
       return decision
     } catch (e) {
