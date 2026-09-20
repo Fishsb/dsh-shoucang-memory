@@ -287,7 +287,18 @@ function applySuiteConfigFile(config: Config, warn?: (m: string) => void): void 
         warn?.(`[shoucang] scheduler.json 键 ${k} 值非法（${JSON.stringify(v)}）⇒ 忽略并用缺省：${String((e as Error)?.message || e).slice(0, 80)}`)
       }
     }
-  } catch { /* 坏文件按纯缺省（可选文件） */ }
+  } catch (e) {
+    /* ⚠ **2026-09-20 round 10 实证修：此处原本是 `catch { /* 坏文件按纯缺省 *\/ }` —— 完全静默。**
+     *   实测后果（本轮真实踩到）：`~/.dsh/suite/scheduler.json` 被写入 **UTF-8 BOM**（一次改 pin 的
+     *   副作用）⇒ `JSON.parse` 抛 ⇒ 外层 catch 吞掉 ⇒ **文件里 16 个运行态配置键全部被丢弃**，
+     *   而**不留任何痕迹**（`releaseAuto:true` / `proposalApply:true` / `mclFamiliarThreshold:0.58`
+     *   等全被静默忽略，退回纯 schema 缺省）。
+     *   这与本仓反复剿的形态同源：**把"坏掉了"显示成"没事"**；且 `warn` 通道**本来就在手边**
+     *   （逐键分支一直在用它），只有这一层把它丢了。
+     *   ⇒ 改为留痕：坏文件仍按纯缺省（安全语义不变），但**必须说出"整份配置被忽略"**。 */
+    warn?.(`[shoucang] scheduler.json **整份读取失败，全部持久配置键已忽略（退回 schema 缺省）**：${String((e as Error)?.message || e).slice(0, 120)}`
+      + '（常见成因：文件带 UTF-8 BOM / JSON 语法损坏 / 权限拒绝）')
+  }
 }
 
 type LlmModelsFn = () => Promise<Array<{ provider: string; id: string; name: string }>>

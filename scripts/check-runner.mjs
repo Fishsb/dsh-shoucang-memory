@@ -583,6 +583,12 @@ const CHECKS = [
   ['scripts/check-bridges.mjs', '--selftest'],
   // 版本巡检的**反向证伪**：证明抽取器真会抽（否则解析器一坏就永远走"跳过"分支＝假绿）
   ['scripts/check-version-pin.mjs', '--selftest'],
+  // 运行态配置读取面（2026-09-20 round 10）：**起因为真实事故** —— 一次 `Set-Content -Encoding UTF8`
+  //   写文件带出 BOM，实测 `JSON.parse` 必抛，而 `scheduler.ts` 的外层 catch 彻底静默
+  //   ⇒ 文件里 16 个持久键**全被丢弃且不留痕**（面板读侧 `catch { return {} }` 同病：
+  //   把"文件损坏"渲染成"用户啥都没设"）。判据 ① 本机配置可解析（带 BOM 即红）
+  //   ② 两处失败分支必须留痕（剥注释后判定）② 写侧不产 BOM ③ 反例自证检测器非恒真。
+  ['scripts/check-suite-config-read.mjs'],
   // G0 DS4「单一事件源」前置棘轮（2026-09-13）：把运行时**观测流**登记成注册表并数成数字
   //   （实测 **13 条**，DS4 目标 **1**）——只许减不许增：出现未登记的 `.jsonl` 字面量即 FAIL。
   //   扫描**先剥注释**（否则文档里提到的目标名 `events.jsonl` 会被当成未登记流 ⇒ 门禁对文档开火，实测踩过）。

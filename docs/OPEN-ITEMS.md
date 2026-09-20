@@ -2,11 +2,34 @@
 
 > **用途**：本仓**唯一的待办入口** —— 任何"还没做完的事"都必须在此登记一行，否则视为未登记。
 > **当前状态（2026-09-20 round 10 复核 · 机检）**：五阶段（S0–S4）+ S4R + S4X + S4Y + IR1 + S1R + S2S3 + **UI1 面板架构整理** 的**可施工项均已完成**；
-> `node scripts/verify-open-items.mjs` ⇒ **3/3**；`check-runner` **188 → 190 pass / 0 fail**。
+> `node scripts/verify-open-items.mjs` ⇒ **3/3**；`check-runner` **188 → 191 pass / 0 fail**。
 > **本轮另落地两项行为变更**（A1 阈值 0.58 · A2 水位判定轴改痕迹文件数），故「待拍板」只剩 A3/A4 两条。
 > **仍开口的三类**（逐条见文末「§12 开口项汇总」）：① 待拍板的行为变更（仅 A3/A4） · ② 待真机样本落账 · ③ 长期校准欠账。
 
-**最后更新**：2026-09-20（round 10：§0m 缺陷已修 + 带门 + 五层验收全绿；**A1/A2 两项行为变更已授权落地**；登记卫生复核 4 处）
+**最后更新**：2026-09-20（round 10：§0m 缺陷已修 + 带门；**§0n/§0o 三条门自身与配置读取的假绿链已修**；A1/A2 两项行为变更落地；五层验收全绿）
+
+---
+
+## 0o. 🔴 **一个 BOM 掀出三层假绿：运行态配置整体失效 · 门自己静默降级 · 探针"平凡通过"**（2026-09-20 round 10 · 已修 + 带门）
+
+> **起点是一次操作失误，收获是一条链**：本轮改 profile pin 时用 `Set-Content -Encoding UTF8`
+> 写入（PowerShell 该编码**默认加 BOM**），连带把 `~/.dsh/suite/scheduler.json` 与仓内 `AGENTS.md`
+> 也写成了带 BOM 的文件。顺着这条线查出**三个各自独立、且都属"把坏掉了显示成没事"的缺陷**。
+
+| 层 | 事实（逐条实测） |
+|---|---|
+| **① 运行态配置整体失效（最重）** | `scheduler.ts#applySuiteConfigFile` 外层是 `catch { /* 坏文件按纯缺省 */ }` —— **完全静默**。BOM ⇒ `JSON.parse` 抛 ⇒ 该文件里 **16 个持久键全部被丢弃**（`releaseAuto:true` / `proposalApply:true` / `mclFamiliarThreshold:0.58` … 一并退回 schema 缺省），**不留任何痕迹**。⇒ 已改为**必须留痕**（`warn?.(…)` 明说「整份读取失败，全部持久配置键已忽略」）；安全语义不变（仍用纯缺省） |
+| **② 面板读侧同病** | `panel-shared.ts#createSuiteConfig.read` 是 `catch { return {} }` ⇒ 会把**「文件损坏」渲染成「用户啥都没设」**（全是缺省），比加载失败更难发现。⇒ 同样改为留痕（`createSuiteConfig(warn?)`，调用点 `panel.ts` 传入 logger） |
+| **③ 门自己静默降级** | `check-version-pin` 声明侧解析失败时，`error` 只被记进 `sources`，而判定只取 `flatMap(shas)` ⇒ **声明侧整侧被排除**，剩两处一致即打印**「PASS（三处一致）」**。⇒ 已改：声明侧失败**立即 exit 1**（详见 §0n） |
+| **④ 探针"平凡通过"（最隐蔽）** | `inject-dedup-probe` 读同一个 `scheduler.json` 造向量配置；BOM 期间 `embedCfgFromSuite` 读失败 ⇒ `skip=0` ⇒ 探针走「**无重复可去（合法结果）**」分支 ⇒ **一条断言都不执行即 PASS**。BOM 修好后它才算得出 `skip=1`，当场暴露 **活体 warm 仍是旧态**（那次 warm 发生在 BOM 期间）⇒ 假红。**重载后 PASS（0/1 条仍在）**。⚠ **教训**：凡"输入为空 ⇒ 跳过断言"的分支，都必须同时报告**为何为空**，否则它会成为**输入链断掉时的静默保护伞**（同族：门4 零样本实为输入链断） |
+| **⑤ 我用字符串 API 查 BOM，得到假绿** | 第一轮"去 BOM"用 `[System.IO.File]::ReadAllText` / Node `readFileSync(…, 'utf8')` 检测 ⇒ **二者都会自动剥 BOM** ⇒ 复扫报「全都干净」，而 `AGENTS.md` 实际仍带 BOM。⇒ 改**字节级**检测（读 `Buffer` 判 `EF BB BF`）才查出来 |
+
+**修法落点**：`src/scheduler.ts`（留痕）· `src/panel-shared.ts` + `src/panel.ts`（留痕）· `scripts/check-version-pin.mjs`（+2 反例）·
+**新增 `scripts/check-suite-config-read.mjs`**（登记 `CHECKS`，**190 → 191**）。
+
+**新门五条判据**：① 本机实际配置**可解析**且**无 BOM**（= 事故直接检测器）② 两处失败分支**必须留痕**（**剥注释后判定**，防"只改注释不改行为"）③ 写侧不产 BOM（`'utf8'` 写 + 无 `\uFEFF` 字面量）④ 反例自证：带 BOM 的 JSON **必抛**、剥 BOM 后**值不变** ⑤ **仓内文本件字节级无 BOM** 扫描 + 检测器自证。
+**先红→后绿（两处独立实证）**：给真机 `scheduler.json` 注入 BOM ⇒ **exit 1**；还原 ⇒ **exit 0（11 PASS）**。仓内造一个带 BOM 的 `.md` ⇒ ⑤ **命中并红**；删除 ⇒ 绿。
+**⚠ 未做（环境侧）**：lock / `.modules.yaml` 归位需在 profile 跑 `pnpm install`（会顺带归位所有"声明领先"的依赖）—— 与 §0n 同一条，本轮不动。
 
 ---
 
@@ -790,6 +813,7 @@ calls=2 → bySid: sid=6b89a084 · qLen=2 · qHash=005c4d6f · lastReason=new ·
 | E3 | **A1 熟悉度阈值 0.55 → 0.58**（原 §12-A1 待拍板项） | ✅ **已授权落地** —— 注册表 + 运行态 `scheduler.json` **两处同改**（⚠ 只改注册表不改真机行为：显式热覆盖优先于注册表缺省） | `node scripts/mcl-calibrate.mjs` ⇒「当前值 0.58（判据源）· 保持当前值」 |
 | E4 | **A2 深睡内容水位判定轴 → 痕迹文件数**（原 §12-A2 待拍板项） | ✅ **已授权落地**；代价已具名（约 51% 入睡纪元输入面被砍，25 轮不再入睡）；**不丢数据**（滑窗后新文件 mtime 必晚于水位） | `node scripts/test-epoch-watermark.mjs`（**27 PASS**）· 变异实证：改回旧轴 ⇒ exit 1 |
 | E5 | **`check-version-pin` 自身假绿**（防"pin 脱钩"的那道门，在声明侧失读时**静默降级**为两处比对仍报"三处一致"） | ✅ **已修 + 2 反例自证**（见 §0n） | `node scripts/check-version-pin.mjs --selftest`（含带 BOM 反例） |
+| E6 | **运行态配置读取整体静默**（一个 BOM ⇒ `scheduler.json` 16 键全丢且不留痕；面板读侧同病；探针"平凡通过"；仓内文件 BOM） | ✅ **已修 + 新门 `check-suite-config-read`**（`CHECKS` 190→191，11 PASS） | `node scripts/check-suite-config-read.mjs`（详见 §0o） |
 
 > ⚠ **A3/A4 仍待具名授权**：这是本轮之后**仅剩**的两条「结论已明确、只等授权」的项。
 

@@ -241,7 +241,7 @@ export function createRootAccess(state: StateStore): RootAccess {
 }
 
 /* ── 全局配置通道（~/.dsh/suite/scheduler.json；与 scheduler.applySuiteConfigFile 同源） ── */
-export function createSuiteConfig(): SuiteConfigAccess {
+export function createSuiteConfig(warn?: (m: string) => void): SuiteConfigAccess {
   const fileOf = (): string => join(dshHome(), 'suite', 'scheduler.json')
   return {
     read: (): Record<string, unknown> => {
@@ -250,7 +250,14 @@ export function createSuiteConfig(): SuiteConfigAccess {
         if (!existsSync(f)) return {}
         const raw = JSON.parse(readFileSync(f, 'utf8')) as Record<string, unknown>
         return raw && typeof raw === 'object' ? raw : {}
-      } catch { return {} }
+      } catch (e) {
+        /* ⚠ **2026-09-20 round 10**：此处原为 `catch { return {} }` —— **静默返回空**，
+         *   与 `scheduler.applySuiteConfigFile` 的外层 catch 是**同一病**（把"坏掉了"显示成"没事"）：
+         *   读侧一旦静默返回 `{}`，UI 会把「文件损坏」渲染成「用户啥都没设」（全是缺省），
+         *   比配置加载失败更难发现。⇒ 仍然返回 `{}`（安全语义不变），但**必须留痕**。 */
+        warn?.(`[shoucang] scheduler.json 读取失败 ⇒ 面板按空配置渲染（配置可能已损坏）：${String((e as Error)?.message || e).slice(0, 120)}`)
+        return {}
+      }
     },
     // 原子写（同目录 tmp + renameSync）+ 备份先行，零硬编码路径
     write: (obj: Record<string, unknown>): void => {

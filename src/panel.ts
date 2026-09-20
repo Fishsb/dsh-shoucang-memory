@@ -67,7 +67,7 @@ export function applyPanel(ctx: Context, config: Config, comp?: CompositionHandl
   const state = createStateStore(expandHome(config.state_path))
   const bind = createRouteBinder(webServer, logger)
   const root = createRootAccess(state)
-  const suite = createSuiteConfig()
+  const suite = createSuiteConfig((m) => ctx.logger?.warn?.(m))
   const injectMeta = createInjectMeta()
   const hot = createHotMemory({ suite, root })
 

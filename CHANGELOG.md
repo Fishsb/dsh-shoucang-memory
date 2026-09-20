@@ -2408,6 +2408,14 @@
 - **panel client 迁移到 slot 契约（2026-09-05，解冻前置）**：client.js 注入声明加 `'slots'`，入口从直插侧栏 footArea DOM 改为注册 `sidebar.footer.action` 插槽按钮（无 slots 环境保留直插兜底）；host+client 已注入运行（ef85e372），构建产物 lib/ 重建
 
 ### Fixed
+- **🔴 一个 BOM 掀出三层假绿：运行态配置整体失效 · 门静默降级 · 探针"平凡通过"（2026-09-20 round 10）**：起点是一次操作失误（用 `Set-Content -Encoding UTF8` 改 pin，**PowerShell 该编码默认加 BOM**），顺线查出三个独立缺陷 —— 全都是**把"坏掉了"显示成"没事"**。
+  · **① 运行态配置整体失效（最重）**：`scheduler.ts#applySuiteConfigFile` 外层 `catch { /* 坏文件按纯缺省 */ }` **完全静默** ⇒ BOM 让 `JSON.parse` 抛 ⇒ `~/.dsh/suite/scheduler.json` 里 **16 个持久键全被丢弃**（`releaseAuto:true`/`proposalApply:true`/`mclFamiliarThreshold:0.58` 一并退回 schema 缺省），**不留痕**。⇒ 改为**必须留痕**（安全语义不变）。
+  · **② 面板读侧同病**：`panel-shared#createSuiteConfig.read` 是 `catch { return {} }` ⇒ 把**「文件损坏」渲染成「用户啥都没设」**。⇒ 同样留痕（`createSuiteConfig(warn?)`）。
+  · **③ `inject-dedup-probe` 曾是"平凡通过"**：它读同一文件造向量配置；BOM 期间 `embedCfgFromSuite` 读失败 ⇒ `skip=0` ⇒ 走「无重复可去（合法结果）」分支 ⇒ **一条断言都不执行即 PASS**。BOM 修好后它才算得出 `skip=1`，暴露出**活体 warm 仍旧态**（那次 warm 发生在 BOM 期间）＝ 假红；重载后 **PASS（0/1 条仍在）**。
+  · **④ 顺带修**：`check-version-pin` 声明侧失读时静默降级（已在 `### Fixed` 另条详述 + 本节 §0n 登记）。
+  · **新增判据** `scripts/check-suite-config-read.mjs`（登记 `CHECKS`，**190 → 191**）：① 本机配置可解析且无 BOM ② 两处失败分支必须留痕（**剥注释后判定**）③ 写侧不产 BOM ④ 反例自证（带 BOM 必抛 / 剥 BOM 值不变）⑤ **仓内文本件字节级无 BOM** 扫描 + 检测器自证。
+  · **先红→后绿（两处独立）**：真机 `scheduler.json` 注入 BOM ⇒ **exit 1**；还原 ⇒ **exit 0（11 PASS）**。仓内造带 BOM 的 `.md` ⇒ ⑤ 命中并红；删除 ⇒ 绿。
+  · **⚠ 我的检测器先假绿一次（记档）**：首轮"去 BOM"用 `ReadAllText`/`readFileSync(…,'utf8')` 检测 —— **二者都会自动剥 BOM** ⇒ 复扫报「全都干净」，而 `AGENTS.md` 实际仍带 BOM。**必须字节级判 `EF BB BF`** 才查得出。
 - **🔴 `check-version-pin` 自身假绿修复：声明侧解析失败时它静默降级为「两处一致仍报 PASS」（2026-09-20 round 10）**：本轮改 profile pin 时踩到，根因与修法一并记档。
   · **病症**：profile `package.json` 被写入 **UTF-8 BOM**（一次改 pin 的副作用）⇒ `JSON.parse` 抛 `Unexpected token ''` ⇒ 声明侧 `shas: []` 且带 `error` **被记进 sources**，但判定只取 `all = flatMap(shas)` ⇒ **声明侧整侧被静默排除**，剩 lock + `.modules.yaml` 两处一致 ⇒ 打印 **「PASS（三处一致 @ f802ab77）」**。**「三处」实际只读了两处，而失读的恰是防"声明领先于 lock"的那一处在报错里被吞掉** —— 本仓反复剿的形态：**把"坏掉了"显示成"没那么坏"**。
   · **修**：声明侧解析失败 ⇒ **立即 exit 1**（文件/代码问题，非环境问题），不再降级判定；`--selftest` 增 **2 例**（带 BOM 的 JSON 必须解析失败 + 剥 BOM 后可解析 ⇒ 证明修法是「去 BOM」而非「放弃解析」）。

@@ -150,7 +150,7 @@ export declare function statMtime(file: string): string;
 export declare function createStateStore(statePath: string): StateStore;
 export declare function createRouteBinder(webServer: RouteRegistry, logger: PanelLogger): RouteBinder;
 export declare function createRootAccess(state: StateStore): RootAccess;
-export declare function createSuiteConfig(): SuiteConfigAccess;
+export declare function createSuiteConfig(warn?: (m: string) => void): SuiteConfigAccess;
 export declare function createInjectMeta(): InjectMeta;
 /** 幂等建「单库骨架」：目录 + 三索引 + 七 notes + INDEX 注册表 + whitelist.json + 随包 scripts/engine/规则档 */
 export declare const bootstrapDefaults: (rootPath: string) => {
