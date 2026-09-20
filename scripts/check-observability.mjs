@@ -294,7 +294,7 @@ if (process.argv.includes('--parsability')) {
   const HOME = process.env.DSH_HOME || join(homedir(), '.dsh')
   const roots = [
     { name: 'suite', root: join(HOME, 'suite', 'knowledge') },
-    { name: 'bank', root: process.env.MEMORY_ROOT || join(HOME, 'skills', 'managing-memory') },
+    { name: 'bank', root: process.env.MEMORY_ROOT || join(HOME, 'suite', 'memory') },
   ]
   /** 非 JSONL 的人读行流（按行可读性判；豁免须写明理由） */
   const LINE_ONLY = /[\\/]distill-manifest[\\/]/

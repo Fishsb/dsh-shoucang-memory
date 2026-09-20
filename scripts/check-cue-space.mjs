@@ -49,7 +49,7 @@ if (argv.includes('--selftest')) {
 }
 
 // ── 事实源：记录集 + 注册表 + 源码 ──
-const memRoot = process.env.MEMORY_ROOT || join(homedir(), '.dsh', 'skills', 'managing-memory')
+const memRoot = process.env.MEMORY_ROOT || join(homedir(), '.dsh', 'suite', 'memory')
 const recFile = join(memRoot, '.records', 'records.jsonl')
 const registry = JSON.parse(readFileSync(join(root, 'skill', 'engine', 'criteria.json'), 'utf8'))
 const declared = registry?.surface?.injection?.situation?.cueDims

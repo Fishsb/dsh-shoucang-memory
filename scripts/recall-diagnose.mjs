@@ -21,7 +21,7 @@ import { join } from 'node:path'
 
 const HOME = process.env.DSH_HOME || join(homedir(), '.dsh')
 const AUD = join(HOME, 'suite', 'knowledge', 'audit')
-const BANK = process.env.MEMORY_ROOT || join(HOME, 'skills', 'managing-memory')
+const BANK = process.env.MEMORY_ROOT || join(HOME, 'suite', 'memory')
 const AS_JSON = process.argv.includes('--json')
 
 const rd = (p) => (existsSync(p) ? readFileSync(p, 'utf8').split(/\r?\n/).filter(Boolean) : [])

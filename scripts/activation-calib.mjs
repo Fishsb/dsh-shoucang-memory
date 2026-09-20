@@ -34,7 +34,7 @@ const USE_EMBED = !argv.includes('--no-embed')
 const TOPK = Math.min(5, Math.max(1, Number(argOf('--topk', '3')) || 3))
 const AS_JSON = argv.includes('--json')
 const sessionsRoot = argOf('--sessions', lib.pathConfig().sessionsRoot)
-const bank = argOf('--bank', process.env.MEMORY_ROOT || join(homedir(), '.dsh', 'skills', 'managing-memory'))
+const bank = argOf('--bank', process.env.MEMORY_ROOT || join(homedir(), '.dsh', 'suite', 'memory'))
 if (!existsSync(join(bank, 'MEMORY.md'))) {
   console.error(`未找到记忆库（bank=${bank}）；用 --bank 或设 MEMORY_ROOT。`)
   process.exit(2)

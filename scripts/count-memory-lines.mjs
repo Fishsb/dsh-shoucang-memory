@@ -29,7 +29,7 @@ import { homedir } from 'node:os'
 const argv = process.argv.slice(2)
 const argOf = (k, d) => { const i = argv.indexOf(k); return i > -1 && argv[i + 1] ? argv[i + 1] : d }
 const JSON_OUT = argv.includes('--json')
-const bank = argOf('--bank', process.env.MEMORY_ROOT || join(homedir(), '.dsh', 'skills', 'managing-memory'))
+const bank = argOf('--bank', process.env.MEMORY_ROOT || join(homedir(), '.dsh', 'suite', 'memory'))
 
 const TAG_RE = /\[([^\]\s]{1,6})\]/g
 const hasTag = (l) => /\[[^\]\s]{1,6}\]/.test(l)

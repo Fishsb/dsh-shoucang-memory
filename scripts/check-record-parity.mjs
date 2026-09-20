@@ -24,7 +24,7 @@ const argv = process.argv.slice(2)
 const argOf = (name, def) => { const i = argv.indexOf(name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def }
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 const dshHome = process.env.DSH_HOME || join(homedir(), '.dsh')
-const ROOT = argOf('--root', process.env.MEMORY_ROOT || join(dshHome, 'skills', 'managing-memory'))
+const ROOT = argOf('--root', process.env.MEMORY_ROOT || join(dshHome, 'suite', 'memory'))
 
 const S = await import(new URL('../lib/record-store.js', import.meta.url).href)
 const H = await import(new URL('../lib/record-shadow.js', import.meta.url).href)

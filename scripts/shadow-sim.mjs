@@ -15,7 +15,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const repo = join(dirname(fileURLToPath(import.meta.url)), '..')
 const argv = process.argv.slice(2)
 const argOf = (k, d) => { const i = argv.indexOf(k); return i > -1 && argv[i + 1] ? argv[i + 1] : d }
-const bank = argOf('--bank', process.env.MEMORY_ROOT || join(homedir(), '.dsh', 'skills', 'managing-memory'))
+const bank = argOf('--bank', process.env.MEMORY_ROOT || join(homedir(), '.dsh', 'suite', 'memory'))
 // 产品实现（importanceOf）动态解析：仓内(../lib) → $SHOUCANG_LIB → 库内/lib → profile lib。
 // **依赖缺失 = 诚实跳过（exit 3）**，而不是判失败——库内布局本就没有 lib/（实测踩过：库内跑必 ERR_MODULE_NOT_FOUND）。
 const importanceOf = await (async () => {

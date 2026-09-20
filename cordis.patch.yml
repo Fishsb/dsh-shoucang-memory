@@ -2,3 +2,25 @@
 - insert:
     - id: dsh-shoucang-memory
       name: 'dsh-shoucang-memory'
+
+# ⚠ **记忆库根与 skill 装载面解耦（2026-09-21 用户拍板 A 方案）**
+# 由来：`~/.dsh/skills/managing-memory` 同时兼任两个角色 ——
+#   A「DSH skill」`dshHome/skills` 是 `@deepseek-ai/dsh-skill-filesystem` 的官方加载根
+#      （`lib/index.js#roots()`：`join(this.dshHome, "skills")`，rank=user-dsh）；
+#   B「记忆库根」守藏插件 `targets.ts#memoryLibRoot()` 硬指向，插件 spawn 其 scripts/*.mjs
+#      跑蒸馏/深睡、读写三索引与 records。
+# ⇒ 用户要「清理 skill」，但删目录必连坐删掉 563 次提交的记忆库。故把 A 面收回**插件包内**：
+#   本插件包已随 `files: ["skill"]` 发布同一份（哈希逐字节相同），无需第二个副本。
+#
+# 申报方式抄 `@tt-a1i/archify-dsh` 的同款范式：显式挂一个 `dsh-skill-filesystem` 实例，
+#   用 `bundledSkillDir` 指向**包内** `skill/` 目录，`includeDefaultRoots: false`
+#   ⇒ 不再扫 `~/.dsh/skills`，旧址可安全删除。
+#   ⚠ 路径必须由 `createRequire(baseUrl).resolve(<自身包名>/package.json)` 求包根再拼，
+#     **不得**把路径直接拼到 baseUrl 上（archify 注释原文：never as a path concatenated onto baseUrl）。
+- insert:
+    - id: shoucang-skill-filesystem
+      name: '@deepseek-ai/dsh-skill-filesystem'
+      config:
+        providerName: shoucang-bundled
+        includeDefaultRoots: false
+        bundledSkillDir: !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('dsh-shoucang-memory/package.json')), 'skill')

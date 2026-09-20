@@ -6,7 +6,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { dshHome, knowledgeRoot } from './targets.js'
+import { dshHome, knowledgeRoot, memoryLibRoot } from './targets.js'
 /* 册二（决议 D1）：归一核心名与小节解析**均取库内唯一实现**（与 `section-ref` 同源），
  * 不在本文件另写一份——「同一语义多份实现」正是根因 C1 本身。
  * ⚠ `resolveSectionSpec` 是**权威四态解析**（exists|ambiguous|missing|partial）：自写匹配必然与它分叉
@@ -30,7 +30,8 @@ export interface MemoryDeps {
 
 /* ---------- 记忆库（managing-memory 技能仓）实况只读展示（2026-09-06） ----------
  * F-003 重定义：面板「画像/记忆」视图不再读 Obsidian 仓库，改读蒸馏 watcher 的
- * 唯一事实源 ~/.dsh/skills/managing-memory/。零硬编码路径：home = DSH_HOME || ~/.dsh。
+ * 唯一事实源（`memoryLibRoot()`；2026-09-21 起 = `~/.dsh/suite/memory`，
+ * 与 skill 装载面已解耦）。零硬编码路径：home = DSH_HOME || ~/.dsh。
  * 只读：不提供任何写入口（写/裁决归记忆插件）。 */
 
 /* 册零（2026-09-19 载荷瘦身）：`raw`（逐行原文）与 `text`（整文件全文）**不进响应**。
@@ -45,7 +46,9 @@ interface MemIndexEntry { tag: string; subject: string; pointer: string }
 interface MemIndexFile { name: string; label: string; chars: number; cap: number; lines: MemIndexEntry[] }
 
 const memoryHomeOf = (): string | null => {
-  const base = join(dshHome(), 'skills', 'managing-memory')
+  // 收口到单一事实源（2026-09-21）：旧址写死 `skills/managing-memory`，与 targets 的
+  // `MEMORY_ROOT` 覆盖语义不一致 ⇒ 迁库时面板会读旧根、插件写新根（半迁移）。
+  const base = memoryLibRoot()
   return existsSync(base) ? base : null
 }
 
@@ -347,7 +350,7 @@ const memOverviewOf = (d: MemoryDeps, base: string): Record<string, unknown> => 
 
 function memoryOverviewRoute(d: MemoryDeps, _req: IncomingMessage, res: ServerResponse): void {
   const base = memoryHomeOf()
-  if (!base) return sendJson(res, 200, { present: false, error: '未检测到记忆库技能仓（~/.dsh/skills/managing-memory）——记忆插件蒸馏事实源不在本机默认位' })
+  if (!base) return sendJson(res, 200, { present: false, error: '未检测到记忆库根（<DSH_HOME>/suite/memory，可用 MEMORY_ROOT 覆盖）——记忆插件蒸馏事实源不在本机默认位' })
   try {
     const mem = memOverviewOf(d, base)
     const suiteBase = suiteHomeOf()

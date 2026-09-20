@@ -86,6 +86,21 @@ const repoLib = join(root, 'lib')
 const targets = probeInstalled()
 if (!existsSync(repoLib)) { console.log('⏭ 跳过：仓内 lib/ 不存在（先 npm run build）'); process.exit(3) }
 if (!targets.length) { console.log(`⏭ 跳过：未探测到已安装副本（~/.dsh/profiles/*/node_modules/${PKG_NAME}）`); process.exit(3) }
+//   ⚠ **patch 与 skill/ 必须纳入安装面**（2026-09-21 实测缺陷）：原先只同步 `lib/` ⇒ 仓内改了
+//   `cordis.patch.yml`（含 2026-09-21 新增的 `bundledSkillDir` skill 自注册条目）**装上去的那份不变**，
+//   `dev_reload_package` 也只会重载 lib ⇒ **配置改动静默不生效**（"仓内绿 ≠ 运行态绿"的又一实例）。
+//   实证：安装副本 patch 停在单条 `dsh-shoucang-memory`，而仓内已是 2 条。skill/ 同理：
+//   `bundledSkillDir` 指向的正是**安装副本内**的 `skill/`，不同步 ⇒ 注册到的是旧规则档。
+//   ⚠ 与本面上方的「勿纳入仓根 client.js」**不冲突**：那件是**构建中间产物**（`lib/client.js` 才是加载面）；
+//     本处两者皆为**随包发布件**（`package.json#files` 含 `"skill"` 与 `cordis.patch.yml`），非冗余副本。
+const FACE1_EXTRA = ['cordis.patch.yml']
+for (const extra of FACE1_EXTRA) {
+  const src = join(root, extra)
+  if (existsSync(src)) for (const tgt of targets) planCopy(src, join(tgt, extra), extra, true)
+}
+for (const [rel, src] of walk(join(root, 'skill'))) {
+  for (const tgt of targets) planCopy(src, join(tgt, 'skill', rel.split('/').join(sep)), `skill/${rel}`, true)
+}
 for (const tgt of targets) {
   const instLib = join(tgt, 'lib')
   for (const [rel, src] of walk(repoLib)) planCopy(src, join(instLib, rel.split('/').join(sep)), `lib/${rel}`, true)
@@ -101,7 +116,19 @@ const FACE2_REQUIRED = new Set([
   'vendor/fzstd.cjs',
 ])
 // ── 面 2：记忆库面（**只覆盖库内已存在者** + 白名单缺失补建）──
-const bank = argOf('--bank') || process.env.MEMORY_ROOT || join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'skills', 'managing-memory')
+const bank = argOf('--bank') || process.env.MEMORY_ROOT || join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'suite', 'memory')
+//   ⚠ **顶层规则档（skill/*.md）必须显式列出**（2026-09-21 实测缺陷）：它们**不在**任何 srcDir 下，
+//   原先只由 `panel-shared#bootstrapDefaults` 的 `copyFileIfAbsent` 播种（**只建不缺**）⇒
+//   仓内升级**永不抵达**活库。实证：`audit-protocol.md` 活库停在 09-10（写已退役的
+//   `audit/raw-stub/stub.jsonl`），仓内 09-13 已升级为 `ledger.jsonl` 的 `type=stub`，**漂移 3 天无人知**
+//   （六件其余五件因恰好未被改过而"看起来一致"，属偶然而非机制保证）。
+//   与 `bootstrapDefaults` 的六件清单保持同一集合：新增加顶层规则档须**两处同步**。
+const FACE2_TOP_FILES = ['SKILL.md', 'audit-protocol.md', 'human-execution-loop.md', 'memory-whitelist-spec.md', 'task-protocols.md', 'README.md']
+for (const f of FACE2_TOP_FILES) {
+  const src = join(root, 'skill', f)
+  if (!existsSync(src)) continue
+  planCopy(src, join(bank, f), `skill/${f}`, false)
+}
 for (const [srcDir, bankDir] of [['scripts', 'scripts'], ['skill/scripts', 'scripts'], ['skill/engine', 'engine'], ['skill/docs', 'docs']]) {
   const d = join(root, srcDir)
   if (!existsSync(d)) continue

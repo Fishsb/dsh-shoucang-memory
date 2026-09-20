@@ -75,7 +75,7 @@ if (Array.isArray(dr)) {
    * ⇒ 精确化：**真泄漏 = 文本里还有该行，且它在源文件里只有一份**（唯一那份被丢却仍在 ⇒ 才是真丢假）。
    *   若源文件里 ≥2 份，则"丢了一份"已成立 ⇒ 不计泄漏。**这不是放宽**：它同时排除了真泄漏，且更严格地
    *   指出了"丢的到底是哪一份"。 */
-  const bankRoot = process.env.MEMORY_ROOT || join(homedir(), '.dsh', 'skills', 'managing-memory')
+  const bankRoot = process.env.MEMORY_ROOT || join(homedir(), '.dsh', 'suite', 'memory')
   /* ⚠ 形态归一：`droppedRows` 记的是**注入形态**（行首带 `- ` bullet），而源文件（AGENT/USER/MEMORY.md）
    *   里的行**不带** `- ` ⇒ 直接整行匹配源文件会得 **0 份**（我第一版就踩了这个，把合法重复误判成真泄漏）。
    *   ⇒ 比较时**剥掉注入前缀**（`- `）再数。 */

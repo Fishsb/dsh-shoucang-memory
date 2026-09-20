@@ -39,11 +39,11 @@ const bad = (m) => { fail++; console.error('  ❌ ' + m) }
 const HOME = mkdtempSync(join(tmpdir(), 'approve-home-'))
 const PEND = join(HOME, 'suite', 'knowledge', 'pending')
 mkdirSync(join(PEND, 'flow-candidates'), { recursive: true })
-mkdirSync(join(HOME, 'skills', 'managing-memory', 'pending'), { recursive: true })
+mkdirSync(join(HOME, 'suite', 'memory', 'pending'), { recursive: true })
 writeFileSync(join(PEND, 'cand-a.md'), '# a\n', 'utf8')
 writeFileSync(join(PEND, 'cand-b.md'), '# b\n', 'utf8')
 writeFileSync(join(PEND, 'flow-candidates', 'cand-c.md'), '# c\n', 'utf8')
-writeFileSync(join(HOME, 'skills', 'managing-memory', 'pending', 'cand-m.md'), '# m\n', 'utf8')
+writeFileSync(join(HOME, 'suite', 'memory', 'pending', 'cand-m.md'), '# m\n', 'utf8')
 
 /* 必须在 import 产品模块**之前**设 DSH_HOME：targets 在模块加载期不固化路径（函数每次算），
  * 但为稳妥起见仍先设，避免将来有人把路径提到模块级常量后静默失效。 */

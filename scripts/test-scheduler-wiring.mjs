@@ -158,9 +158,13 @@ ok(!mErr && Array.isArray(models), `⑦ llmModels 无宿主 llm 时返回数组�
 {
   const { mkdirSync, writeFileSync } = await import('node:fs')
   const { join } = await import('node:path')
-  // ⚠ 工具读的是 `memoryLibRoot()`（= `<DSH_HOME>/skills/managing-memory`），**不是** MEMORY_ROOT
-  //    —— 第一版写错了地方，工具报"影子库不可用（空）"，是我的夹具路径错（不是工具错）。
-  const bankLib = join(process.env.DSH_HOME, 'skills', 'managing-memory')
+  // ⚠ 夹具根必须**跟随 memoryLibRoot() 的真实解析**（`MEMORY_ROOT` 优先 → 否则 `<DSH_HOME>/suite/memory`）。
+  //   2026-09-21 实测教训：本件 L21 设了 `MEMORY_ROOT=<tmp>/memory`，而此处原先**另拼第二份**
+  //   `join(DSH_HOME, 'skills', 'managing-memory')`——当时 `memoryLibRoot()` 忽略 env，两者碰巧同址故未暴露；
+  //   库根迁移后 memoryLibRoot() 改 env 优先，夹具当即与工具读的目录**分家** ⇒
+  //   工具报「影子库不可用（空）」= **夹具错位，不是工具回归**。改为从 lib 取真实解析值，消除第二份推导。
+  const { memoryLibRoot } = await import('../lib/targets.js')
+  const bankLib = memoryLibRoot()
   mkdirSync(join(bankLib, '.records'), { recursive: true })
   const rows = [
     // ⚠ 必须有**标题行**：`sectionsOf` 按 `#`/`##` 切节，标题之前的内容按设计丢弃

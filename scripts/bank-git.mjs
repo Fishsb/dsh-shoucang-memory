@@ -15,7 +15,7 @@ import { homedir } from 'node:os'
 const argv = process.argv.slice(2)
 const argOf = (k, d) => { const i = argv.indexOf(k); return i > -1 && argv[i + 1] ? argv[i + 1] : d }
 const VERBOSE = argv.includes('--verbose')
-const root = argOf('--root', process.env.MEMORY_ROOT || join(homedir(), '.dsh', 'skills', 'managing-memory'))
+const root = argOf('--root', process.env.MEMORY_ROOT || join(homedir(), '.dsh', 'suite', 'memory'))
 const message = argOf('--message', `memory: snapshot ${new Date().toISOString().slice(0, 19)}`)
 const log = (m) => { if (VERBOSE) console.log(`bank-git: ${m}`) }
 

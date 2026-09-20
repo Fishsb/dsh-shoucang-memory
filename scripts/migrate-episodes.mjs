@@ -26,7 +26,7 @@ import { join } from 'node:path'
 const argv = process.argv.slice(2)
 const has = (f) => argv.includes(f)
 const argOf = (n, d) => { const i = argv.indexOf(n); return i >= 0 && argv[i + 1] ? argv[i + 1] : d }
-const ROOT = argOf('--root', process.env.MEMORY_ROOT || join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'skills', 'managing-memory'))
+const ROOT = argOf('--root', process.env.MEMORY_ROOT || join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'suite', 'memory'))
 const APPLY = has('--apply')
 
 const H = await import(new URL('../lib/record-shadow.js', import.meta.url).href)

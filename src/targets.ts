@@ -2,11 +2,21 @@
  * targets.ts — 目标层：单库路由 + 白名单门禁（纯函数，零硬编码路径）。
  *
  * 单库化（2026-09-08 用户拍板：pmg 项目卡库已随治理插件整体移除，守藏只是一个记忆插件）：
- *   - 唯一记忆库 = 生产部署根 ~/.dsh/skills/managing-memory（数据 + 脚本 + 审计同根）
  *   - 取消 route=project 的 pmg-cards / local-pending 二分：项目专属事实由蒸馏器直写
  *     「项目工作区」<workspace>/docs/devref/shoucang/（workspace 由会话转录反解，见 distill.ts）
  *   - suite/knowledge 仅承载蒸馏器运行状态（审计/水位/pending 输入队列），不再是库
  * 白名单：库数据根 whitelist.json 自治（库自维护，蒸馏器只读）；缺文件 → 内建缺省（可观测标注）。
+ *
+ * ⚠ **记忆库根与 skill 目录已解耦（2026-09-21 用户拍板 A 方案）**：
+ *   旧址 `~/.dsh/skills/managing-memory` 同时兼任**两个互不相干的角色**——
+ *     A「DSH skill」：`dshHome/skills` 是 dsh-skill-filesystem 的官方加载根
+ *        （`lib/index.js#roots()`：`join(this.dshHome, "skills")`）⇒ 本会话技能清单里那个 managing-memory；
+ *     B「记忆库根」：本函数硬指向，插件 spawn 其 `scripts/*.mjs` 跑蒸馏/深睡、读写三索引与 records。
+ *   实测：A 面仅 7 个文件 / 0.1 MB，且**与插件包内 `skill/` 逐字节相同**（随包发布，`files` 含 `"skill"`）
+ *   ⇒ 纯冗余；B 面 485 文件 / 33.5 MB / 563 次本地 git 提交，是**不可重建的用户认知**。
+ *   故 A 面收回插件包内（`cordis.patch.yml` 的 `bundledSkillDir`，抄 `@tt-a1i/archify-dsh` 范式），
+ *   B 面迁出 skills 扫描面（`skills/` 下不再有它 ⇒ 不会被 DSH 当 skill 重复注册）。
+ *   迁移实证：482+3 文件 / 33.6 MB / 563 提交逐项 sha 一致，MEMORY.md 77231 字节不变。
  */
 import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
@@ -22,9 +32,13 @@ export function knowledgeRoot(): string {
   return join(dshHome(), 'suite', 'knowledge')
 }
 
-/** 记忆库根（数据与脚本同根，scripts 缺省自定位） */
+/** 记忆库根（数据与脚本同根，scripts 缺省自定位）。
+ *  **单一事实源**：`panel-memory` / `panel-config` / `panel-shared` 三处的旧本地副本已收口到此。
+ *  `MEMORY_ROOT` 可覆盖（与 `panel-shared#memoryRootOf` 语义对齐——此前两处不一致，
+ *  迁库时会出现「写入跟 env、读取跟硬编码」的**半迁移**，即 ring-commit.ts:107 记载的游离事实源）。 */
 export function memoryLibRoot(): string {
-  return join(dshHome(), 'skills', 'managing-memory')
+  const env = process.env.MEMORY_ROOT?.trim()
+  return env || join(dshHome(), 'suite', 'memory')
 }
 
 // —— 装配探测（injected registry + profiles 双基准；shoucang_suite 工具与 panel /suite 视图共用）——

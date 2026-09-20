@@ -28,7 +28,7 @@ const argOf = (name, def) => { const i = argv.indexOf(name); return i >= 0 && ar
 const positionalAfter = (flag) => { const i = argv.indexOf(flag); return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[i + 1] : '' }
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
-const ROOT = argOf('--root', process.env.MEMORY_ROOT || join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'skills', 'managing-memory'))
+const ROOT = argOf('--root', process.env.MEMORY_ROOT || join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'suite', 'memory'))
 const at = new Date().toISOString()
 
 const S = await import(new URL('../lib/record-store.js', import.meta.url).href)

@@ -35,7 +35,12 @@ console.log('== A. 路径推导（环境契约：无硬编码本机路径，全�
   const expectHome = process.env.DSH_HOME || join(homedir(), '.dsh')
   ok(T.dshHome() === expectHome, `dshHome() 随 DSH_HOME/home 派生（= ${T.dshHome()}）`)
   ok(T.knowledgeRoot() === join(T.dshHome(), 'suite', 'knowledge'), 'knowledgeRoot() = <home>/suite/knowledge')
-  ok(T.memoryLibRoot() === join(T.dshHome(), 'skills', 'managing-memory'), 'memoryLibRoot() = <home>/skills/managing-memory')
+  // 2026-09-21 用户拍板 A 方案：记忆库根自 `skills/managing-memory` 迁出 skills 扫描面
+  //   （旧址同时兼任 DSH skill 装载根 ⇒ 删技能必连坐删库）。断言随之改到新址 +
+  //   新增「不得再回落旧址」的反向锁（防改一处漏一处造成半迁移）。
+  ok(T.memoryLibRoot() === join(T.dshHome(), 'suite', 'memory'), 'memoryLibRoot() = <home>/suite/memory（已与 skill 装载面解耦）')
+  // 反向锁：旧址必须**不再**被回落到（防「改一处漏一处」只改声明不改默认值）
+  ok(T.memoryLibRoot() !== join(T.dshHome(), 'skills', 'managing-memory'), 'memoryLibRoot 不回落旧址 <home>/skills/managing-memory')
   ok(!/[A-Za-z]:\\Users\\[^\\]+/.test(T.memoryLibRoot()) || T.memoryLibRoot().startsWith(expectHome),
     'memoryLibRoot 不含字面用户目录（除 homedir 派生本身）')
 }

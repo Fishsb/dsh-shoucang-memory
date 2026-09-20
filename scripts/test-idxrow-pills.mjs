@@ -34,7 +34,7 @@ import { execFileSync } from 'node:child_process'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 /* 夹具源优先级：① $MEMORY_ROOT/MEMORY.md（显式覆盖）② 活库（真数据）③ 仓根 _memory/（旧副本兜底） */
-const LIVE = process.env.MEMORY_ROOT || join(homedir(), '.dsh', 'skills', 'managing-memory')
+const LIVE = process.env.MEMORY_ROOT || join(homedir(), '.dsh', 'suite', 'memory')
 const CANDIDATES = [
   { path: join(LIVE, 'MEMORY.md'), src: '活库' },
   { path: join(ROOT, '_memory', 'MEMORY.md'), src: '仓根 _memory（旧副本，兜底）' },

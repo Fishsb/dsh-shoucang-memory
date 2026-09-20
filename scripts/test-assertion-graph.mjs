@@ -144,7 +144,7 @@ console.log('== I. 真库（若在）：引用完整性 —— **每条边的两
 {
   const cands = [
     join(homedir(), '.dsh', 'suite', 'knowledge', '.records', 'records.jsonl'),
-    join(homedir(), '.dsh', 'skills', 'managing-memory', '.records', 'records.jsonl'),
+    join(homedir(), '.dsh', 'suite', 'memory', '.records', 'records.jsonl'),
   ]
   const file = cands.find((p) => existsSync(p))
   if (!file) { console.log('⚠️  I1 跳过：未找到真库 records.jsonl') }

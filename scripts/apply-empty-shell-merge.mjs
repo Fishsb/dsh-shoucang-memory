@@ -33,7 +33,7 @@ const argv = process.argv.slice(2)
 const argOf = (k, d) => { const i = argv.indexOf(k); return i > -1 && argv[i + 1] ? argv[i + 1] : d }
 const APPLY = argv.includes('--apply')
 const AS_JSON = argv.includes('--json')
-const BANK = argOf('--bank', process.env.MEMORY_ROOT || join(homedir(), '.dsh', 'skills', 'managing-memory'))
+const BANK = argOf('--bank', process.env.MEMORY_ROOT || join(homedir(), '.dsh', 'suite', 'memory'))
 
 /** 处置表：drop = 待废弃空壳（可用无斜杠短名匹配）；keep = 同父叶子兄弟节（依据见 docs/pointer-supply-plan.md §12） */
 const OPS = [

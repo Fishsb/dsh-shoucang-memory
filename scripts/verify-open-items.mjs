@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const HOME = process.env.DSH_HOME || join(homedir(), '.dsh')
 const AUD = join(HOME, 'suite', 'knowledge', 'audit')
-const BANK = process.env.MEMORY_ROOT || join(HOME, 'skills', 'managing-memory')
+const BANK = process.env.MEMORY_ROOT || join(HOME, 'suite', 'memory')
 const rd = (p) => (existsSync(p) ? readFileSync(p, 'utf8').split(/\r?\n/).filter(Boolean)
   .map((l) => { try { return JSON.parse(l) } catch { return null } }).filter(Boolean) : [])
 /* ⚠ **跨档读（G13 轮转失明 · 2026-09-20 修）**：OPEN-3 的判据是"审计轮次里有几轮 cand>0 / 见到消费"，

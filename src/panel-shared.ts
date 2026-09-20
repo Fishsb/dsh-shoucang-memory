@@ -16,7 +16,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { SURFACE } from './criteria.generated.js'
-import { dshHome, knowledgeRoot, profileCarrierSet, indexRowInLayer, scanIndexRows } from './targets.js'
+import { dshHome, knowledgeRoot, memoryLibRoot, profileCarrierSet, indexRowInLayer, scanIndexRows } from './targets.js'
 import { selectDynamicLines } from './dynamic-select.js'
 import { relevanceNoteOf, type RelevanceTrace } from './relevance-supply.js'
 import { libStampOf, stampKeyOf } from './supply-stamp.js'
@@ -391,8 +391,9 @@ const readDeltaFallback = (): string => {
 }
 // 数据根：守藏自有记忆库（三索引体系，与蒸馏写入权威根一致）；MEMORY_ROOT 可覆盖
 const memoryRootOf = (): string => {
-  const env = process.env.MEMORY_ROOT?.trim()
-  return env || join(dshHome(), 'skills', 'managing-memory')
+  // 收口到 targets#memoryLibRoot（2026-09-21）：此处原有**第二份**「env || 硬编码」实现，
+  // 与 targets 的同名函数是重复事实源——迁移库根时两处须同时改，漏一处即半迁移。
+  return memoryLibRoot()
 }
 
 /* ── R1 热记忆注入：画像+记忆指针行，每轮注入（依赖 2 个：suite / root） ──

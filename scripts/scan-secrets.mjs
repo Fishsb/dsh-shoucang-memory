@@ -40,7 +40,7 @@ const roots = []
 if (args.includes('--root')) roots.push(args[args.indexOf('--root') + 1])
 else {
   roots.push(join(homedir(), '.dsh', 'suite', 'knowledge'))
-  roots.push(join(homedir(), '.dsh', 'skills', 'managing-memory'))
+  roots.push(join(homedir(), '.dsh', 'suite', 'memory'))
 }
 const asJson = args.includes('--json')
 

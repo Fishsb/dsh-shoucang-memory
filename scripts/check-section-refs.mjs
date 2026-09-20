@@ -27,7 +27,7 @@ const SELFTEST = argv.includes('--selftest')
 const rootIdx = argv.indexOf('--root')
 const LIB = rootIdx > -1 && argv[rootIdx + 1]
   ? argv[rootIdx + 1]
-  : (process.env.MEMORY_ROOT || join(homedir(), '.dsh', 'skills', 'managing-memory'))
+  : (process.env.MEMORY_ROOT || join(homedir(), '.dsh', 'suite', 'memory'))
 
 /** 棘轮基线（**变更须在此处改并注明日期与原因**）——下调 = 收口完成，上调 = 需显式说明。
  *  ⚠ 口径（2026-09-19 定）：**spec 级**（`§父/子` 整体）计数，与写入准入同一判据面：

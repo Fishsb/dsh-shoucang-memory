@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url'
 const repo = join(dirname(fileURLToPath(import.meta.url)), '..')
 const argv = process.argv.slice(2)
 const argOf = (k, d) => { const i = argv.indexOf(k); return i > -1 && argv[i + 1] ? argv[i + 1] : d }
-const bank = argOf('--bank', process.env.MEMORY_ROOT || join(homedir(), '.dsh', 'skills', 'managing-memory'))
+const bank = argOf('--bank', process.env.MEMORY_ROOT || join(homedir(), '.dsh', 'suite', 'memory'))
 const days = Number(argOf('--days', '7')) || 7
 const day = new Date().toISOString().slice(0, 10)
 const outRel = argOf('--out', `audit/criteria-report-${day}.md`)

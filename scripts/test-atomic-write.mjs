@@ -23,7 +23,7 @@ const repoRoot = resolve(here, '..');
 const SUT = join(repoRoot, 'skill', 'scripts', 'memory-append.mjs');
 const INJECTOR = join(here, 'atomic-fault-injector.mjs');
 // 运行时实际加载的副本（主理人已 md5 校验一致；此处复验，保证「测的就是跑的那个」）
-const DEPLOYED = process.env.SC_DEPLOYED_APPEND || join(homedir(), '.dsh', 'skills', 'managing-memory', 'scripts', 'memory-append.mjs');
+const DEPLOYED = process.env.SC_DEPLOYED_APPEND || join(homedir(), '.dsh', 'suite', 'memory', 'scripts', 'memory-append.mjs');
 const NODE = process.env.NODE_BIN || process.execPath;
 
 let pass = 0;

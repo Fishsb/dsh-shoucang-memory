@@ -47,12 +47,14 @@ const sinceMs = (() => {
 })();
 
 const sessionsRoot = argOf('--sessions', lib.pathConfig().sessionsRoot);
-// 记忆库根（索引所在处）：--bank > MEMORY_ROOT > rootDir（技能副本） > ~/.dsh/skills/managing-memory（生产库）
+// 记忆库根（索引所在处）：--bank > MEMORY_ROOT > rootDir（技能副本） > ~/.dsh/suite/memory（生产库）
 // 末项与 candidate_grep 推导 ~/.dsh/sessions 同法（家目录相对，非本机盘符硬编码）。
 const bank = argOf('--bank',
   process.env.MEMORY_ROOT
-  || (existsSync(join(lib.rootDir, 'MEMORY.md')) ? lib.rootDir : join(homedir(), '.dsh', 'skills', 'managing-memory')));
-const BANK_RE = /managing-memory/i;
+  || (existsSync(join(lib.rootDir, 'MEMORY.md')) ? lib.rootDir : join(homedir(), '.dsh', 'suite', 'memory')));
+// 兜底字面名：2026-09-21 库根自 `skills/managing-memory` 迁出 ⇒ 新增 `suite/memory` 形态
+//   （旧名保留，历史转录与夹具里仍可能引用）。
+const BANK_RE = /(managing-memory|suite[\\/]memory)/i;
 // 「是否访问本记忆库」按 **bank 路径**判定（评测器已知道 bank）；字面名仅作兜底，以便夹具容器也能被测。
 // 注意：tool/call 的 arguments 是 JSON 串，路径里的分隔符是**双反斜杠**（目录转义），
 // 故须先归一转义再比较，否则 args.includes(bank) 永远为 false（本仓 test.mjs 的夹具用例即据此抓出）。

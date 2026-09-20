@@ -24,7 +24,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const argv = process.argv.slice(2)
 const argOf = (k, d) => { const i = argv.indexOf(k); return i >= 0 && argv[i + 1] ? argv[i + 1] : d }
 const APPLY = argv.includes('--apply')
-const memRoot = argOf('--root', '') || process.env.MEMORY_ROOT || join(homedir(), '.dsh', 'skills', 'managing-memory')
+const memRoot = argOf('--root', '') || process.env.MEMORY_ROOT || join(homedir(), '.dsh', 'suite', 'memory')
 const recFile = join(memRoot, '.records', 'records.jsonl')
 
 const { serializeCues, parseCues, normalizeCueKey, declaredCueDims } = await import(new URL('../lib/cue-space.js', import.meta.url).href)

@@ -53,7 +53,7 @@ function buildNav() {
   })
   html += '<div class="sc-nav-spacer"></div>' +
     '<div class="sc-nav-foot"><div class="sc-nav-health"><span class="sc-dot ok"></span>记忆库 <b>正常</b></div>' +
-    '<div class="sc-nav-sub">~/.dsh/skills/managing-memory</div></div>'
+    '<div class="sc-nav-sub">~/.dsh/suite/memory</div></div>'
   return html
 }
 

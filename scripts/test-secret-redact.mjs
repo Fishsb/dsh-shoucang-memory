@@ -73,7 +73,7 @@ for (const [name, text] of MUST_NOT_MATCH) {
 }
 
 /* ── ③ 保真组：真实库取样（非合成）必须零命中 ── */
-const libRoot = join(homedir(), '.dsh', 'skills', 'managing-memory')
+const libRoot = join(homedir(), '.dsh', 'suite', 'memory')
 const samples = []
 if (existsSync(libRoot)) {
   const walk = (dir, depth = 0) => {

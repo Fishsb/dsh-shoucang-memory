@@ -26,7 +26,7 @@ const has = (f) => argv.includes(f)
 const argOf = (name, def) => { const i = argv.indexOf(name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def }
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
-const ROOT = argOf('--root', process.env.MEMORY_ROOT || join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'skills', 'managing-memory'))
+const ROOT = argOf('--root', process.env.MEMORY_ROOT || join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'suite', 'memory'))
 const JSON_OUT = argOf('--json', '')
 const at = new Date().toISOString()
 

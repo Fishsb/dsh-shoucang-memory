@@ -134,7 +134,7 @@ if (process.argv.includes('--selftest')) {
     ['正例·跨档读（src/panel-observe.ts:16 真形态）',
       `import { readLedgerVolumes } from './ledger-compact.js'\nconst rows = readLedgerVolumes(file)`, false],
     ['正例·只是路径常量（scripts/recall-diagnose.mjs:24 真形态）',
-      `const BANK = process.env.MEMORY_ROOT || join(HOME, 'skills', 'managing-memory')`, false],
+      `const BANK = process.env.MEMORY_ROOT || join(HOME, 'suite', 'memory')`, false],
     ['正例·写侧（scripts/sleep-selfcheck.mjs:117 真形态）',
       `const ledgerFile = join(stateRoot, 'audit', 'ledger.jsonl')\nwriteFileSync(ledgerFile, JSON.stringify(o) + '\\n')`, false],
     ['正例·含跨档口 + 台账路径（scripts/test-ledger-rotation.mjs:21/28 真形态）',

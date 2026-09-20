@@ -8,7 +8,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { isAbsolute, join, resolve } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { contractFor } from './panel-contract.js'
-import { dshHome } from './targets.js'
+import { dshHome, memoryLibRoot } from './targets.js'
 import { CONFIG_FILE, backupThenWrite, bootstrapDefaults, flipBool, parseView, readBody, sendJson, statMtime } from './panel-shared.js'
 import type { HotMemory, PanelLogger, RootAccess, RouteFn, StateStore, SuiteConfigAccess } from './panel-shared.js'
 
@@ -77,7 +77,7 @@ function configRoute(d: ConfigDeps, _req: IncomingMessage, res: ServerResponse):
   // actual = 当前实际量（动态参考，随内容成长变化，仅展示不参与配置）
   const CAP_GATES: Record<string, number> = { 'AGENT.md': 3000, 'USER.md': 3000, 'MEMORY.md': 5000 }
   const fileChars = (name: string): number => {
-    try { const base = join(dshHome(), 'skills', 'managing-memory'); const t = readFileSync(join(base, name), 'utf8'); return t.replace(/\s+/g, '').length } catch { return 0 }
+    try { const base = memoryLibRoot(); const t = readFileSync(join(base, name), 'utf8'); return t.replace(/\s+/g, '').length } catch { return 0 }
   }
   const globalCfg = {
     persona: String(sched.injectPersona ?? 'both'),

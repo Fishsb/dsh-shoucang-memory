@@ -12,7 +12,7 @@ import { homedir } from 'node:os'
 
 const argv = process.argv.slice(2)
 const argOf = (k, d) => { const i = argv.indexOf(k); return i > -1 && argv[i + 1] ? argv[i + 1] : d }
-const bank = argOf('--bank', process.env.MEMORY_ROOT || join(homedir(), '.dsh', 'skills', 'managing-memory'))
+const bank = argOf('--bank', process.env.MEMORY_ROOT || join(homedir(), '.dsh', 'suite', 'memory'))
 const APPLY = argv.includes('--apply')
 const notesDir = join(bank, 'notes')
 const norm = (s) => String(s).replace(/（[^）]*）/g, '').replace(/\([^)]*\)/g, '').trim()

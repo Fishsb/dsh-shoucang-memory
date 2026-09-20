@@ -74,7 +74,7 @@ for (const s of [...HOSTILE, '{{{{{x}}}}}', '{a}{b}', 'no braces']) {
 }
 
 /* ── ④ 保真：不含 `{{` 的文本逐字节零改写（**真实库取样**，禁合成夹具） ── */
-const libRoot = join(homedir(), '.dsh', 'skills', 'managing-memory')
+const libRoot = join(homedir(), '.dsh', 'suite', 'memory')
 const sampled = []
 if (existsSync(libRoot)) {
   const walk = (dir, depth = 0) => {

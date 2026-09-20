@@ -1,7 +1,10 @@
 export declare function dshHome(): string;
 /** 守藏运行状态区（蒸馏审计/水位/pending 输入队列；非记忆库） */
 export declare function knowledgeRoot(): string;
-/** 记忆库根（数据与脚本同根，scripts 缺省自定位） */
+/** 记忆库根（数据与脚本同根，scripts 缺省自定位）。
+ *  **单一事实源**：`panel-memory` / `panel-config` / `panel-shared` 三处的旧本地副本已收口到此。
+ *  `MEMORY_ROOT` 可覆盖（与 `panel-shared#memoryRootOf` 语义对齐——此前两处不一致，
+ *  迁库时会出现「写入跟 env、读取跟硬编码」的**半迁移**，即 ring-commit.ts:107 记载的游离事实源）。 */
 export declare function memoryLibRoot(): string;
 export interface RegistryEntry {
     dir: string;

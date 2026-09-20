@@ -31,7 +31,7 @@ const VERBOSE = argv.includes('--verbose');
 const sessionsRoot = argOf('--sessions', lib.pathConfig().sessionsRoot);
 const bank = argOf('--bank',
   process.env.MEMORY_ROOT
-  || (existsSync(join(lib.rootDir, 'MEMORY.md')) ? lib.rootDir : join(homedir(), '.dsh', 'skills', 'managing-memory')));
+  || (existsSync(join(lib.rootDir, 'MEMORY.md')) ? lib.rootDir : join(homedir(), '.dsh', 'suite', 'memory')));
 const auditDir = join(bank, 'audit');
 const outFile = join(auditDir, 'access-real.jsonl');
 const wmFile = join(auditDir, 'access-real-watermark.json');
@@ -166,7 +166,7 @@ for (const p of files) {
     const args = String(o?.data?.arguments || '');
     // arguments 是 JSON 串：路径分隔符为**双反斜杠**，比较前须归一转义（同 recall-eval 的教训）。
     const argsNorm = args.replace(/\\\\/g, '\\');
-    if (!(args.includes(bank) || argsNorm.includes(bank) || /managing-memory/i.test(args))) continue;
+    if (!(args.includes(bank) || argsNorm.includes(bank) || /(managing-memory|suite[\\/]memory)/i.test(args))) continue;
     const at = new Date(Number(o?.time) || Date.now()).toISOString();
     // 目标文件
     const targets = new Set();

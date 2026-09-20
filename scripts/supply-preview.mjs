@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url'
 const argv = process.argv.slice(2)
 const argOf = (n, d) => { const i = argv.indexOf(n); return i >= 0 && argv[i + 1] ? argv[i + 1] : d }
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
-const ROOT = argOf('--root', process.env.MEMORY_ROOT || join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'skills', 'managing-memory'))
+const ROOT = argOf('--root', process.env.MEMORY_ROOT || join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'suite', 'memory'))
 const JSON_OUT = argOf('--json', '')
 
 const H = await import(new URL('../lib/record-shadow.js', import.meta.url).href)

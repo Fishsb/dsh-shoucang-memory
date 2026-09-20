@@ -25,7 +25,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const HERE = dirname(fileURLToPath(import.meta.url))
 const argv = process.argv.slice(2)
 const argOf = (k, d) => { const i = argv.indexOf(k); return i > -1 && argv[i + 1] ? argv[i + 1] : d }
-const LIB = argOf('--root', process.env.MEMORY_ROOT || join(homedir(), '.dsh', 'skills', 'managing-memory'))
+const LIB = argOf('--root', process.env.MEMORY_ROOT || join(homedir(), '.dsh', 'suite', 'memory'))
 const MIN = Number(argOf('--min', '0.95')) // ⚠ 缺省 0.95 = **关闭通用自动重指**：实测 0.5 阈值会产出
 // 「看似合理但错位」的锚（大节包含度虚高：`§本地版本管理` 被指到「Windows 系统运维与数据安全」）
 // ⇒ 只信**逐条人工裁决**（REPOINTS）+ 前缀收敛 + 降级；自动匹配仅作证据展示（--json 里带 evidence）。

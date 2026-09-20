@@ -15,7 +15,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 const argv = process.argv.slice(2)
 const argOf = (k, d) => { const i = argv.indexOf(k); return i > -1 && argv[i + 1] ? argv[i + 1] : d }
-const bank = argOf('--bank', process.env.MEMORY_ROOT || join(homedir(), '.dsh', 'skills', 'managing-memory'))
+const bank = argOf('--bank', process.env.MEMORY_ROOT || join(homedir(), '.dsh', 'suite', 'memory'))
 const minSim = Number(argOf('--min-sim', '0.72'))
 const maxShared = Number(argOf('--max-shared', '2'))
 const topN = Number(argOf('--top', '20'))

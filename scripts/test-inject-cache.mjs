@@ -29,7 +29,7 @@ const ok = (cond, name) => { if (cond) pass++; else fails.push(name) }
 /** 造一个隔离的假 DSH_HOME（三层索引 + 三条介质），返回 {home, mem, kn} */
 function fixture() {
   const home = mkdtempSync(join(tmpdir(), 'sc-injcache-'))
-  const mem = join(home, 'skills', 'managing-memory')
+  const mem = join(home, 'suite', 'memory')
   const kn = join(home, 'suite', 'knowledge')
   mkdirSync(join(mem, 'audit'), { recursive: true })
   mkdirSync(join(kn, 'audit'), { recursive: true })
