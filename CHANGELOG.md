@@ -5,6 +5,9 @@
 ## [Unreleased]
 
 ### Changed
+- **两条长期挂账项经复核确认已完成 / 补登记（2026-09-20 round 9）**：两条都是「登记与现实脱节」，而不是「尚未施工」。
+  · **S-P4e′-落点 ✅ 已解决**：IR1 册五 E5（2026-09-18）**已把消重移到配额结算之前**（`panel-shared.ts:522-526`，`filterInjected` 位于分组与补齐之前）；且**登记中"受冻结棘轮阻挡"的前提已消失** —— 当时 `panel-shared` 831 行顶格，**现实测 524 行**。真机复验四条判据全过：skip 行不在注入面（0/1）· 额度被用上（画像行 6 ≥ 6）· 每条 skip 带 `by`/`sim`（⟨0.821⟩）· 关闭即 Buffer 级逐字节回基线。
+  · **S-P4d ✅ 补登记（真缺陷）**：`inject-dedup-probe.mjs` **文件早已存在且能跑（exit 0），但从未登记进 `CHECKS`** ⇒ 按仓规则 6「**未登记 = 等于没写**」，它**从未在 `npm test` 里跑过**（同族先例：`test-deepsleep-verdict` / `test-watermark-guard` / `test-atomic-write` 曾写了从不运行）。本轮登记 ⇒ **185 → 186 件**，该脚本首次真正进入回归链。
 - **门4 根因定位并修复：`supersede` 产量恒 0 的真因是「取值域从未抵达 prompt」（2026-09-20 round 9）**：本轮追门4 的「为什么模型从不判 `supersede`」，**推翻了"等样本"的处置**，定位到一条**可修的链断**。
   · **读码 + 真机双重取证**：prompt 只带 `JUDGEMENT_HINT`，其原文是「…取值见 criteria 注册表」—— 而**模型读不到注册表**（它是构建期投影，不是模型手里的东西）。实测：两处 prompt 常量（`distill.ts` / `deepsleep-core.ts`）里 `supersede` / `coexist` / `cross-task` / `cross-day` **命中 0**。
   · **后果可测**：模型只能**自造**取值 —— 真机 `judgement.conflict` 实测 `无`(11) / `0`(9) / `false`(8) / `0.1`(5) / 整句(3) / `replace-1` / `yes` / `1`；台账带 `l0After` 的 **551 行全 `none`** ⇒ `supersede` **产量 0**。
