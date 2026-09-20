@@ -20,7 +20,7 @@ import { activityAggregate } from './activity.js'
 import { TRIGGER, SURFACE } from './criteria.generated.js'
 import { demoteVerdict, promoteVerdict } from './criteria.js'
 import { DEEP_SLEEP_PROMPT, deepSleepLanded, liveFailPolicy, planDeepSleepVerdict, DeepSleepOtherChannels, splitByCap, windowMaterialBytes } from './deepsleep-core.js'
-import { gatherDeepSleepTraces, type TraceDeps } from './deepsleep-traces.js'
+import { gatherDeepSleepTraces, countWindowTraces, type TraceDeps } from './deepsleep-traces.js'
 import { consolidateTree, type TreeDeps } from './deepsleep-tree.js'
 import { applyPrinciples, applyPointerOps, applyNarratives, type ApplyDeps } from './deepsleep-apply.js'
 import { commitRingChannels } from './ring-commit.js'
@@ -390,8 +390,8 @@ async function assembleSegs(deps: any): Promise<any> {
 /* 深睡审计字段抽出（2026-09-16）：只**构造并落一行审计**，无判据、无其它副作用。
  *   抽出原因同①（函数跨度棘轮）。等价性：字段名、取值与顺序**逐字保留**（解构只为把名字带进作用域）。 */
 function emitDeepSleepAudit(audit: any, x: any): any {
-    const { state, since, userInput, chunkIdx, chunks, app, M, cc, relPlan, attribution, yieldRes, relReview, out, remOn, profileAdded, ptrRes, treeRes, forgetRes, otherChannels, landedNow, fp, streak, pv, materialBytes, stop } = x
-    return { kind: 'deep-sleep', sleepEpoch: state.epoch.v, epochSince: since, materialBytes, materialChars: userInput.length, chunk: chunkIdx, totalChunks: chunks.length,
+    const { state, since, userInput, chunkIdx, chunks, app, M, cc, relPlan, attribution, yieldRes, relReview, out, remOn, profileAdded, ptrRes, treeRes, forgetRes, otherChannels, landedNow, fp, streak, pv, materialBytes, stop, traceFiles } = x
+    return { kind: 'deep-sleep', sleepEpoch: state.epoch.v, epochSince: since, materialBytes, materialChars: userInput.length, traceFiles, chunk: chunkIdx, totalChunks: chunks.length,
                 // S-P1a（2026-09-15）**纪元标识**：`epoch-<起时刻 ms>`（单一实现 `deepsleep-core#epochIdOf`）。
                 //   用途：① R1 有效性度量以**纪元**为样本（"这一纪元睡完，下一纪元召回命中/误注入有无改善"）；
                 //   ② 面板把"本轮深睡"与审计行对上；③ P1c 分片后**片间共享同一 id**。
@@ -486,12 +486,28 @@ export async function runDeepSleep(d: RunDeps, sinceArg?: number): Promise<'done
         const traces = gatherDeepSleepTraces(traceDeps, resolved.root, since)
         // 无痕迹=无事可归纳，不调用 LLM、不留审计（防每巡检周期一条 no-traces 的膨胀与空转感）——
         // 「没有材料就不需要睡眠」：窗口直接滑到当前，未来痕迹 mtime 必然晚于水位，永不丢失。
-        const minTraces = Number(TRIGGER.newTracesMin ?? 1); // B 档：读注册表（trigger.newTracesMin）
+        /* ⚠ **2026-09-20 round 9（S-P1b″ 口径定案）名实订正** —— 这段此前是「名实不符」的：
+         *   · 注册项 `trigger.newTracesMin` 的名字与 note 都说「窗口内最少新痕迹**数**」；
+         *   · 而这里比的是 `traces.length` —— `traces` 是 `gatherDeepSleepTraces` 返回的**字符串**，
+         *     `.length` 是**材料段字符数**（下一条 log 自己就写着"痕迹 N **字符**"）。
+         *   ⇒ 值 `1` 时两者恰好同效（材料非空 ⇔ 至少一条痕迹），**所以一直没暴露**；
+         *     但它是**潜伏的假旋钮**：把值调到 3，名字说"至少 3 个痕迹文件"，
+         *     行为却是"材料段至少 3 个字符"（几乎必然通过 ⇒ 改了没反应）。
+         *   **真机影响面（本轮实测）**：49 个纪元里 **46** 个 `materialBytes=0`（窗口内 pending 零文件），
+         *     其中 **25** 个仍照常入睡（靠"窗口内任务运行统计"等段撑出非空材料）
+         *     ⇒ 若真按文件数判，这 25 轮**全部不该入睡** —— 差距是**行为级**的，不是措辞问题。
+         *   **本轮处置**：① 真正的那条轴（痕迹**文件数**）落进审计 `traceFiles` ⇒ 从此**可测量**；
+         *     ② 门仍按**现状语义**（材料非空）判，但**显式改名登记**（见注册表 `trigger.newTracesMin` 的 note）
+         *        —— 改判定为文件数是**行为变更**（会砍掉 51% 的入睡纪元的输入面），属 R3 须用户拍板，
+         *        本轮**只把它变成可判定的事**，不擅自改。③ 该轴的数据源与 S-P1b″ 所需的
+         *        「与'新增材料'同源的量」**正好同一个** ⇒ 一并解开 S-P1b″ 的口径僵局。 */
+        const traceFiles = countWindowTraces(traceDeps, resolved.root, since)
+        const minTraces = Number(TRIGGER.newTracesMin ?? 1); // 注册语义 = 痕迹**数**；现行判定见下（按材料非空，见上注）
         if (!traces || traces.length < minTraces) {
-            log(`deep sleep: 窗口内痕迹不足（${traces ? traces.length : 0} < ${minTraces}，起点 ${new Date(since).toLocaleString()}），窗口滑到当前，本轮不睡`)
+            log(`deep sleep: 窗口内材料不足（${traces ? traces.length : 0} 字符 < ${minTraces}，痕迹文件 ${traceFiles} 个，起点 ${new Date(since).toLocaleString()}），窗口滑到当前，本轮不睡`)
             return 'no-traces'
         }
-        log(`deep sleep: 窗口内痕迹 ${traces.length} 字符（起点 ${new Date(since).toLocaleString()}）`)
+        log(`deep sleep: 窗口内材料 ${traces.length} 字符 · 痕迹文件 ${traceFiles} 个（起点 ${new Date(since).toLocaleString()}）`)
         llm.validateProvider()
         const M = gatherMaterials(resolved.root, since)
         // 认知对照 P2「REM 相」**带向量候选去判**（2026-09-13 · 项目原则：候选生成交向量，模糊判断交模型）：
@@ -699,7 +715,7 @@ export async function runDeepSleep(d: RunDeps, sinceArg?: number): Promise<'done
             const fp = liveFailPolicy()
             const pv = planDeepSleepVerdict(landedNow, fp.policy, streak.v, fp.maxRounds)
         ledger({ domain: 'consolidate', step: 'deep-sleep-stage', stage: 'pre-audit', sleepEpoch: state.epoch.v, chunk: chunkIdx, totalChunks: chunks.length })
-        audit(emitDeepSleepAudit(audit, { state, since, userInput, chunkIdx, chunks, app, M, cc, relPlan, attribution, yieldRes, relReview, out, remOn, profileAdded, ptrRes, treeRes, forgetRes, otherChannels, landedNow, fp, streak, pv, materialBytes, stop }))
+        audit(emitDeepSleepAudit(audit, { state, since, userInput, chunkIdx, chunks, app, M, cc, relPlan, attribution, yieldRes, relReview, out, remOn, profileAdded, ptrRes, treeRes, forgetRes, otherChannels, landedNow, fp, streak, pv, materialBytes, stop, traceFiles }))
         ledger({ domain: 'consolidate', step: 'deep-sleep-stage', stage: 'audit-done', sleepEpoch: state.epoch.v, chunk: chunkIdx, totalChunks: chunks.length })
             // 判据台账（巩固域）：模型判据（可选 judgement）+ 宿主侧**升格/降格裁决**（criteria.ts 单一实现）+ 六通道结果
             ledger({

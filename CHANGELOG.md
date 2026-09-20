@@ -5,6 +5,22 @@
 ## [Unreleased]
 
 ### Changed
+- **门4 根因定位并修复：`supersede` 产量恒 0 的真因是「取值域从未抵达 prompt」（2026-09-20 round 9）**：本轮追门4 的「为什么模型从不判 `supersede`」，**推翻了"等样本"的处置**，定位到一条**可修的链断**。
+  · **读码 + 真机双重取证**：prompt 只带 `JUDGEMENT_HINT`，其原文是「…取值见 criteria 注册表」—— 而**模型读不到注册表**（它是构建期投影，不是模型手里的东西）。实测：两处 prompt 常量（`distill.ts` / `deepsleep-core.ts`）里 `supersede` / `coexist` / `cross-task` / `cross-day` **命中 0**。
+  · **后果可测**：模型只能**自造**取值 —— 真机 `judgement.conflict` 实测 `无`(11) / `0`(9) / `false`(8) / `0.1`(5) / 整句(3) / `replace-1` / `yes` / `1`；台账带 `l0After` 的 **551 行全 `none`** ⇒ `supersede` **产量 0**。
+  · ⇒ **与既有 `formatConstraintLine()` 同族**（判因原文：「模型**不知道有上限**」）——**判据在注册表里，而模型手里没有**。
+  · **修复**：`gen-criteria.mjs` 新增 `l0EnumLine()`，从注册表 `l0.*.values` **派生**取值域说明（含 `conflict` 三义辨析 + 「拿不准填 `none`」的宁缺毋滥指引），投影 `JUDGEMENT_VALUES` 并接入**两处 prompt**（蒸馏 + 深睡）。
+  · **判据**：`check-l0-conflict-wiring` 新增 **④（3 断言）** —— 生成物含全部取值 · **运行期 prompt** 含全部取值 · 两处 prompt 均接入。**先红实证**：删掉深睡 prompt 的 `${JUDGEMENT_VALUES}` ⇒ **exit 1**；还原 ⇒ **exit 0**；字节级还原 true。
+  · ⚠ **我的判据写错一次（记档）**：④ 首版 grep `lib/distill.js` 找字面量 ⇒ **假红**（`DEFAULT_DISTILL_PROMPT` 在 `tsc` 产物里是**模板表达式**，字面量只在**运行时**展开）⇒ 改为 **import 模板常量求值**。教训：**判「文本里有没有」之前，先确认读的是「已求值的文本」还是「生成它的文本」**。
+  · **门4 剩余段（`fact-ring#supersede()` 落库接线）**：方案与验收已出 —— `docs/specs/gate4-supersede-plan.md`（**决策态 · 待具名授权**）。前置门语义随之改变：不再是「等一个不可能出现的取值」，而是「看修复后新落账的分布」。
+- **门3 判据满足 + S-P1b″ 口径定案 + 新发现 `newTracesMin` 名实不符（2026-09-20 round 9）**：门3 与 S-P1b″ 挂了多轮，共同点都是**缺读数**而非缺机制。本轮把两者读数都做出来，并顺带抓到一个**同族新病灶**。
+  · **门3（行为回灌）✅ 判据满足**：真机跨档读（**只取修复后带 `prevTextSrc` 的行**）—— compliance **112 条**（≥30 ✅），其中 `topicEcho=true` **9** ⇒ 回引率 **8.0%**，落在 **(0%, 95%)** ✅；`prevTextSrc` 分布 `events` 100 / `events-empty` 12（**两类失败可分辨**，正是修复目标）。对照修复前 **0/1847 = 0%**。⚠ **但 `switchSource` 在修复后样本上仍 95/112 = 84.8% 恒真** ⇒ `topicEcho` 与 `switchSource` **不是同一个信号**，**不可因前者转绿就顺手接后者**；接线本身亦属行为变更，本轮**只出结论不动行为**。
+  · **S-P1b″（内容水位口径）🟡 定案**：**正确轴 = 窗口内痕迹文件数**。三个旧候选各有硬反证 —— ① `windowMaterialBytes`（字节量）与真实材料**非同源**（实测 0 vs 46692）；② `materialChars`（装配总长）有**地板效应**（min 15891 / p50 37228，min 已达中位 **43%** ⇒ 量的是固定开销）；③「上一纪元 `materialChars` 作前瞻代理」同因 ② 不成立。新轴**同源**（同一遍枚举）· **零额外 IO** · **已可测量**。
+  · **⚠ 新发现（同族第四次）**：`trigger.newTracesMin` **名实不符，且根本没进登记表**。注册名与 note 写「窗口内最少新痕迹**数**」，而消费点比的是 `gatherDeepSleepTraces(...).length` —— **材料段字符数**（**该处日志自己就写着「痕迹 N 字符」**）。值 `1` ⇒ 两义恰好同效 ⇒ **潜伏的假旋钮**（调到 3 则名字说「3 个文件」、行为是「3 个字符」，几乎必然通过）。**真机影响面是行为级的**：49 纪元中 **46** 个 `materialBytes=0`（窗口内零文件），其中 **25** 个仍照常入睡 ⇒ 若真按文件数判，这 **25 轮全不该入睡**。**为什么此前没被抓到**：它**不在 `thresholds.entries`** 里 —— 而按 `thresholds.note` 的范围界定它是**应登记项**（影响"睡不睡"）⇒ **漏登记的阈值 = 不可见的旋钮**。
+  · **本轮已做**：真轴 `deepsleep-traces#countWindowTraces`（与 `gatherDeepSleepTraces` **同一遍枚举**、非第二份实现）+ 审计字段 `traceFiles` + 登记项 `trigger.newTracesMin` + name/note 订正 + 判据 `test-epoch-watermark` **⑤/⑤′**（**6 条新断言**，含**变异反证**：把 `countWindowTraces` 改回"返回字符数"复现原病灶 ⇒ **必红**，还原 ⇒ **必绿**，字节级还原 true）。
+  · **未做（R3）**：把判定真的改成按文件数 = **行为变更**（砍掉 51% 入睡纪元的输入面）⇒ 须用户拍板，本轮**只使其可判定**。
+  · ⚠ **我的断言写错一次（记档）**：⑤ 首版把单文件内容从 4000 改到 8000 想证"字符数变"，撞上 `PEND_PER_FILE=2500` 截断 ⇒ 字符数不变 ⇒ **假红**。教训：**测「量随输入变」之前先确认该量没有饱和机制**。
+  · 验收：typecheck 0 错 · build OK · **check-runner 185 pass / 0 fail** · 阈值登记 **21 项**（新增 1 项）· `check-threshold-control` PASS · 注入对拍逐字节一致。
 - **🔴 自我推翻：上一轮的「阈值假旋钮」分类建立在代理指标上，两类结论是错的（2026-09-20 round 8）**：上一轮把 9 项登记阈值分进「真死配置 / 命名不符 / 键名写错 / 消费点是字面量」**四类**并写进注册表。**本轮逐项复核，四类里至少两类被推翻**：
   · **① `mcl.fastGate` 判「真死配置」→ 错**。其 `probe.contains`（`hit / sg.length >= 0.6`）在 `mcl.ts` 里**确有一处**，但那是 **`judge()` 的词元覆盖率门**，**不是**快通道门（后者 = `sim >= familiarThreshold && hasHighConf`）。⇒ 判据**真实存在且可调**，只是**登记项贴错了名字**。已改名 **`mcl.topicEchoGate`** 并接上读口。
   · **② `activity.statusDays` 判「键名写错」→ 错**。值是**活的**：`scheduler.ts` zod 缺省 → `deepsleep-run.ts` → `activity.ts` opts。只是 zod 缺省**硬编码 `14/44/90`** 而不读注册表 ⇒ 与其余同类，**都是"双源"**。

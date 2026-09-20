@@ -196,6 +196,45 @@ const L0_VALUES = new Set(Object.values(L0).flatMap((s) => (Array.isArray(s?.val
   }
 }
 
+/* ④ **取值域必须抵达 prompt**（2026-09-20 round 9 新增 · **门4 产量恒 0 的真根因**）
+ *   判因（真机实测 + 读码）：③ 说"模型不按枚举写"，但**更上游的问题是模型根本不知道枚举是什么**。
+ *   · `JUDGEMENT_HINT` 要求模型输出 `conflict`/`reuse` 等取值，却只说「取值见 criteria 注册表」；
+ *   · 而 **prompt 里没有任何一个枚举字面量**（实测 `distill.ts` / `deepsleep-core.ts` 的 prompt 常量
+ *     中 `supersede` / `coexist` / `cross-task` / `cross-day` **命中 0**）；
+ *   · 模型读不到注册表 ⇒ 只能自造 ⇒ 真机出现 `无`(11) / `0`(9) / `false`(8) / `0.1`(5) / 整句(3) …
+ *   ⇒ 与既有 `formatConstraintLine()`（判因原文：「模型**不知道有上限**」）**同族**：
+ *     **判据在注册表里，而模型手里没有**。
+ *   判据：① `criteria.md` 里声明的**每个** L0 取值，必须在**两处 prompt 常量**（蒸馏 + 深睡）里
+ *     真实出现（经生成投影 `JUDGEMENT_VALUES` 派生 ⇒ 不手抄、不漂移）；
+ *     ② 反例自证见 `--selftest`。 */
+{
+  const gen = strip(readFileSync(join(S, 'criteria.generated.ts'), 'utf8'))
+  const hasProj = /JUDGEMENT_VALUES/.test(gen)
+  const distillSrc = strip(readFileSync(join(S, 'distill.ts'), 'utf8'))
+  const sleepSrc = strip(readFileSync(join(S, 'deepsleep-core.ts'), 'utf8'))
+  const wiredBoth = /\$\{JUDGEMENT_VALUES\}/.test(distillSrc) && /\$\{JUDGEMENT_VALUES\}/.test(sleepSrc)
+  /* 真正要判的是**运行期 prompt 文本** —— 必须**import 模板常量**求值，不能 grep `lib/distill.js`：
+   *   ⚠ 本判据首版正是 grep 源码 ⇒ **假红**（`DEFAULT_DISTILL_PROMPT` 在 `tsc` 产物里是
+   *     **模板表达式** `${JUDGEMENT_VALUES}`，字面量只在**运行时**展开）。教训同族：
+   *     **判「文本里有没有」之前，先确认读的是"已求值的文本"还是"生成它的源码"**。 */
+  const { DEFAULT_DISTILL_PROMPT } = await import(new URL('../lib/distill.js', import.meta.url).href)
+  const { DEEP_SLEEP_PROMPT } = await import(new URL('../lib/deepsleep-core.js', import.meta.url).href)
+  const genJs = (() => { try { return readFileSync(join(root, 'lib', 'criteria.generated.js'), 'utf8') } catch { return '' } })()
+  const missingInPrompts = [...L0_VALUES].filter((v) => !DEFAULT_DISTILL_PROMPT.includes(v) || !DEEP_SLEEP_PROMPT.includes(v))
+  const missingInGen = [...L0_VALUES].filter((v) => {
+    const esc = String(v).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return !new RegExp(`["'|]${esc}(?=["'|]|\\b)`).test(genJs)
+  })
+  console.log(`   · ④ 取值域进 prompt：投影 ${hasProj ? '有' : '无'} · 两 prompt 引用 ${wiredBoth ? '有' : '无'} · 生成物缺 ${missingInGen.length} 个 · 运行期 prompt 缺 ${missingInPrompts.length} 个`)
+  ok(hasProj && wiredBoth, '④ 取值域经 `JUDGEMENT_VALUES` 派生并接入**两处** prompt（蒸馏 + 深睡）')
+  const missGen = missingInGen.length ? ' —— 缺：' + missingInGen.join(', ') : '（' + L0_VALUES.size + ' 个）'
+  ok(missingInGen.length === 0,
+    '④ 生成物含**全部** L0 取值字面量' + missGen)
+  const missPmt = missingInPrompts.length ? ' —— 缺：' + missingInPrompts.join(', ') : ''
+  ok(missingInPrompts.length === 0,
+    '④ **运行期 prompt** 含全部 L0 取值（读 `lib/` 编译产物，防「引用了但投影为空」的假绿）' + missPmt)
+}
+
 console.log('')
 if (fail) { console.log(`FAIL（${fail} 项）`); process.exit(1) }
-console.log('PASS（L0 取值可达性已核：声明的取值均有产生路径，或不可达已显式登记；模型输出取值合法率达标）')
+console.log('PASS（L0 取值可达性已核：声明的取值均有产生路径，或不可达已显式登记；模型输出取值合法率达标；**取值域已抵达 prompt**）')

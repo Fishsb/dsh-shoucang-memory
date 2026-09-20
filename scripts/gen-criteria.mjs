@@ -36,6 +36,8 @@ const buildTs = () => {
   lines.push("].join('\\n')")
   lines.push('')
   lines.push(`export const JUDGEMENT_HINT = ${JSON.stringify(reg.judgement.hint)}`)
+  // round 9：取值域**派生**进 prompt（与 `formatConstraintLine()` 同法 —— 判据在注册表、模型手里必须有）
+  lines.push(`export const JUDGEMENT_VALUES = ${JSON.stringify(l0EnumLine())}`)
   lines.push(`export const LEDGER_FILE = ${JSON.stringify(reg.judgement.ledger)}`)
   lines.push('')
   for (const [name, val] of [['L0', reg.l0], ['GATE', reg.gate], ['HEALTH', reg.health], ['SURFACE', reg.surface]]) {
@@ -236,6 +238,22 @@ const buildGate = () => JSON.stringify({
   surface: reg.surface,
   health: reg.health,
 }, null, 2) + '\n'
+
+/** L0 四维**取值域**进 prompt（2026-09-20 round 9 · **门4 前置根因修复**）。
+ *  判因（真机实测）：`JUDGEMENT_HINT` 要求模型输出 `conflict`/`reuse` 等取值，却只说
+ *  「取值见 criteria 注册表」—— 而**模型读不到注册表**。后果是**可测的**：
+ *   · 模型自造取值（真机 `judgement.conflict`：`无` 11 · `0` 9 · `false` 8 · `0.1` 5 · 整句 3 ·
+ *     `replace-1` · `yes` · `1` 各 1 —— 非法合计约 40 行）；
+ *   · 且 **`supersede` 产量恒为 0**（551 行 `l0After` **全 `none``**）。
+ *  ⇒ 与既有 `formatConstraintLine()`（判因原文：「模型**不知道有上限**」）**同族**：
+ *    **判据在注册表里，而模型手里没有**。本函数把取值域**派生**进 prompt（不手抄，防漂移）。 */
+function l0EnumLine() {
+  const parts = Object.entries(reg.l0).map(([k, v]) => `${k}=${v.values.join('|')}`)
+  return `- **judgement 取值域（必须逐字取下列之一，禁自造、禁写中文、禁写整句）**：${parts.join(' · ')}。`
+    + '其中 `conflict` 三义须分清：`none`=与既有不冲突 · `coexist`=与既有并存（**不取代**）· '
+    + '`supersede`=**取代既有**（旧条目标记为已失效，读者不再见到它）。'
+    + '拿不准时填 `none`（**宁缺毋滥**——错填 `supersede` 会让真事实被标失效）。'
+}
 
 const targets = [
   { path: join(root, 'src', 'criteria.generated.ts'), text: buildTs() },

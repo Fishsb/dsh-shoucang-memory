@@ -10,11 +10,22 @@ export interface TraceDeps {
   auditFile: string
 }
 
-export function gatherDeepSleepTraces(d: TraceDeps, memRoot: string, since: number): string {
-  const { candidateDir, pendDir, auditFile } = d
-  const parts: string[] = []
+/**
+ * **窗口内痕迹文件枚举**（`pending/` + `notes/`，按 mtime ≥ since）。
+ *
+ * 抽出的理由（2026-09-20 round 9 · S-P1b″ 口径定案）：
+ *   `trigger.newTracesMin` 注册名是「窗口内最少新痕迹**数**」，而消费点比较的是
+ *   `gatherDeepSleepTraces(...).length` —— **材料段字符串的字符数**，不是痕迹数。
+ *   ⇒ 值 `1` 时两者恰好同效（非空 ⇔ ≥1 条），但这个**名实不符是潜伏的**：一旦有人把
+ *     该值调到 3，名字说"至少 3 个痕迹文件"，行为却是"材料段至少 3 个字符"（**必然通过**）。
+ *   本函数把这个**真正的轴**变成可测量量（进审计 `traceFiles`），使"改值"这件事
+ *   第一次有真机分布可依，而不是靠猜（仓内纪律：样本不足写 `insufficient-data`，不猜方向）。
+ */
+export function enumerateWindowTraces(d: TraceDeps, memRoot: string, since: number): { pend: string[]; notes: string[] } {
+  const { candidateDir, pendDir } = d
+  void candidateDir // 候选区不计入"痕迹"（它是背景材料，语义不同；此处显式声明避免误读）
   // 窗口内文件枚举（pending 按 mtime 判定，不解析文件名日期——文件名是 UTC 口径，本地日切会跨日错配）
-  const pendFiles = ((): string[] => {
+  const pend = ((): string[] => {
     try {
       return readdirSync(pendDir).filter((f) => f.endsWith('.md')).filter((f) => {
         try { return statSync(join(pendDir, f)).mtimeMs >= since } catch { return false }
@@ -22,13 +33,29 @@ export function gatherDeepSleepTraces(d: TraceDeps, memRoot: string, since: numb
     } catch { return [] }
   })()
   const notesDir = join(memRoot, 'notes')
-  const noteFiles = ((): string[] => {
+  const notes = ((): string[] => {
     try {
       return readdirSync(notesDir).filter((f) => f.endsWith('.md') && f !== 'INDEX.md').filter((f) => {
         try { return statSync(join(notesDir, f)).mtimeMs >= since } catch { return false }
       }).sort()
     } catch { return [] }
   })()
+  return { pend, notes }
+}
+
+/** **窗口内痕迹文件数**（`newTracesMin` 的**注册语义**所指的那个量）。
+ *  ⚠ 与 `gatherDeepSleepTraces(...).length`（材料段字符数）**不是一个量** —— 两者当前都被
+ *    "痕迹"一词覆盖，是本轮定案的病灶；本函数的存在让二者此后**可分辨**。 */
+export function countWindowTraces(d: TraceDeps, memRoot: string, since: number): number {
+  const { pend, notes } = enumerateWindowTraces(d, memRoot, since)
+  return pend.length + notes.length
+}
+
+export function gatherDeepSleepTraces(d: TraceDeps, memRoot: string, since: number): string {
+  const { candidateDir, pendDir, auditFile } = d
+  const parts: string[] = []
+  // 痕迹文件枚举走**单一实现** `enumerateWindowTraces`（与 `countWindowTraces` 同源 ⇒ 二者不可能漂移）
+  const { pend: pendFiles, notes: noteFiles } = enumerateWindowTraces(d, memRoot, since)
   // 0) 痕迹清单先给全——跨工作区公平：正文按预算截断时，子代理至少知道窗口内有哪些痕迹存在（不被静默吞掉）
   if (pendFiles.length || noteFiles.length) {
     parts.push('### 窗口内痕迹清单（记忆库为全局单库，痕迹可能来自多个工作区；正文按单文件上限截断）\n'
@@ -50,6 +77,7 @@ export function gatherDeepSleepTraces(d: TraceDeps, memRoot: string, since: numb
   // 2) notes 正文（原则源指针唯一合法来源）：单文件上限 NOTES_PER_FILE，保证多工作区痕迹都能进上下文
   const NOTES_PER_FILE = 6000
   let notesBudget = 18000
+  const notesDir = join(memRoot, 'notes') // 与 `enumerateWindowTraces` 同源路径（该函数内亦由此拼出）
   for (const f of noteFiles) {
     if (notesBudget <= 0) break
     let body = ''

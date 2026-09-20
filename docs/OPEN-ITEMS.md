@@ -8,6 +8,88 @@
 
 ---
 
+## 0i. ✅ **门4 根因定位并修复：取值域从未抵达 prompt**（2026-09-20 round 9）
+
+> **性质**：门4 挂了多轮，处置在「等样本」与「补接线」之间反复。本轮**第三度更正**，这次定位到一条
+> **可修的链断** —— 与既有 `formatConstraintLine()` **同族**。
+
+| 环节 | 事实（实测） |
+|---|---|
+| 现象 | 台账带 `l0After` 的 **551 行**，`conflict` 取值**全 `none`** ⇒ `supersede` **产量 0** |
+| 模型原始取值 | `judgement.conflict`：`none` 403 · **`无` 11 · `0` 9 · `false` 8 · `0.1` 5 · 整句 3** · `replace-1` / `yes` / `1` / `(缺)` 若干 |
+| **根因** | prompt 只带 `JUDGEMENT_HINT`，原文是「…**取值见 criteria 注册表**」—— **而模型读不到注册表**（它是构建期投影）。实测：两处 prompt 常量（`distill.ts` / `deepsleep-core.ts`）里 `supersede` / `coexist` / `cross-task` / `cross-day` **命中 0** ⇒ 模型只能**自造** |
+
+**⇒ 与既有 `formatConstraintLine()` 的判因**（原文：「模型**不知道有上限**」，导致索引行因超 30 字被整条丢弃）**完全同族**：
+**判据在注册表里，而模型手里没有。**
+
+**修复（本轮已施工 · R2 可逆、不改判定语义）**：
+- `gen-criteria.mjs` 新增 `l0EnumLine()` —— 从注册表 `l0.*.values` **派生**取值域说明
+  （含 `conflict` 三义辨析 + 「拿不准填 `none`」的宁缺毋滥指引；**不手抄** ⇒ 不漂移）；
+- 投影为 `JUDGEMENT_VALUES`，接入 `DEFAULT_DISTILL_PROMPT` **与** `DEEP_SLEEP_PROMPT`。
+
+**判据**：`check-l0-conflict-wiring` 新增 **④（3 断言）**：
+① 生成物含**全部** L0 取值字面量（12 个）；② **运行期 prompt** 含全部取值；
+③ 两处 prompt 均接入。
+**先红实证**：删掉深睡 prompt 的 `${JUDGEMENT_VALUES}` ⇒ **exit 1**；还原 ⇒ **exit 0**；**字节级还原 true**。
+
+**⚠ 我的判据写错一次（记档）**：④ 首版 grep `lib/distill.js` 找字面量 ⇒ **假红** ——
+`DEFAULT_DISTILL_PROMPT` 在 `tsc` 产物里是**模板表达式**（`${JUDGEMENT_VALUES}`），字面量只在**运行时**展开。
+⇒ 改为 **import 模板常量求值**。教训：**判「文本里有没有」之前，先确认读的是「已求值的文本」还是「生成它的文本」**。
+
+**剩余段（门4 的真正接线）**：`fact-ring#supersede()` 的落库调用 —— **方案与验收成对**见
+**`docs/specs/gate4-supersede-plan.md`**（**决策态 · 待具名授权**，R1）：
+4 册分批（新件+单测 / 蒸馏落点 / 深睡落点+通道锁 / 读取侧实证），每册判据与复验命令齐全；
+**前置门语义已改变** —— 不再是「等一个不可能出现的取值」，而是「看修复后新落账的分布」。
+
+---
+
+## 0h. ✅ **门3 判据满足** + 🟡 **S-P1b″ 口径定案** + ⚠ **新发现：`newTracesMin` 名实不符**（2026-09-20 round 9）
+
+> 门3 与 S-P1b″ 挂了多轮，共同点都是「缺读数」而非「缺机制」。本轮把两者的读数都做出来。
+
+### 门3（行为回灌）· ✅ **判据满足，可接线**
+
+**真机读数（跨档读 · 只取修复后带 `prevTextSrc` 的行）**：
+
+| 量 | 值 |
+|---|---|
+| 修复后 compliance 行（带 `prevTextSrc`） | **112**（阈值 ≥30 ✅） |
+| 其中 `topicEcho=true` | **9** ⇒ 回引率 **8.0%**，落在 **(0%, 95%)** 区间 ✅ |
+| `prevTextSrc` 分布 | `events` 100 · `events-empty` 12（**两类失败可分辨**，正是修复目标） |
+| 对照：修复前（无 `prevTextSrc`） | `topicEcho=true` **0 / 1847 = 0%** |
+
+⇒ **判据两条件同时满足**（样本 ≥30 且占比落在开区间内）⇒ 「信号接选行」**首次具备意义**。
+⚠ **但接线是行为变更**（`switchSource`/`zeroGain` 接进选行会改召回行为，且该路径 R3 属性待判），
+本轮**只出结论不动行为**；且 `switchSource` 在**修复后**样本上仍 **95/112 = 84.8%** 恒真
+⇒ **它自己仍是坏判据**（`topicEcho` 好了、`switchSource` 没好，两个信号**不是一回事**，
+不可因为前者转绿就顺手接后者）。接线前须先定 `switchSource` 的去向（重定义或退役）。
+
+### S-P1b″（内容水位口径）· 🟡 **口径定案，判定改动待拍板**
+
+**定案**：内容水位的**正确轴 = 窗口内痕迹文件数**（`countWindowTraces`）。
+否掉了此前三个候选，各有硬证据：① `windowMaterialBytes`（字节量）**与真实材料非同源**（实测 0 vs 46692）；
+② `materialChars`（装配总长）有**地板效应**（min 已达中位 43%，量的是固定开销）；
+③ 「上一纪元 `materialChars` 作前瞻代理」同因 ② 不成立。
+新轴同时满足**同源**（与"新增材料"同一枚举）、**零额外 IO**（复用同一遍 `enumerateWindowTraces`）、**可测量**（已落审计 `traceFiles`）。
+
+### ⚠ 新发现（本轮 · 与 §0g 同族）：`trigger.newTracesMin` **名实不符，且根本没登记**
+
+- **名实不符**：注册名与 note 写「窗口内最少新痕迹**数**」，而消费点 `deepsleep-run.ts:490` 比的是
+  `gatherDeepSleepTraces(...).length` —— **材料段字符数**（**该处日志自己写着「痕迹 N 字符」**）。
+- **为什么长期没暴露**：值 `1` ⇒ 两义恰好同效（材料非空 ⇔ 至少一条痕迹）⇒ 属**潜伏的假旋钮**
+  （调到 `3` 则名字说「3 个文件」、行为是「3 个字符」，**几乎必然通过**）。
+- **真机影响面（行为级）**：49 纪元中 **46** 个 `materialBytes=0`（窗口内零文件），其中 **25** 个仍照常入睡
+  ⇒ 若真按文件数判，这 **25 轮全不该入睡**（砍掉 51% 入睡纪元的输入面）。
+- **为什么此前没被任何门抓到**：它**根本没进 `thresholds.entries`**（21 项里此前无此项）——
+  而它是「睡不睡」的判据，按 `thresholds.note` 的范围界定**属于应登记项**。**漏登记的阈值 = 不可见的旋钮。**
+
+**本轮已做**：真轴 `deepsleep-traces#countWindowTraces`（与 `gatherDeepSleepTraces` **同一遍枚举**，
+非第二份实现）+ 审计字段 `traceFiles` + 登记项 `trigger.newTracesMin` + name/note 订正
++ 判据 `test-epoch-watermark` **⑤/⑤′**（6 条断言，含变异反证：把 `countWindowTraces` 改回复现原病灶 ⇒ 必红）。
+**未做（R3）**：把判定真的改成按文件数 —— 属**行为变更**，须用户拍板。
+
+---
+
 ## 0g. 🔴🔴 **我自己上一轮的「阈值假旋钮」分类被推翻：判据建立在代理指标上**（2026-09-20 round 8 · 最高优先）
 
 > **性质**：与 §0f 同族 —— 不是"新增待办"，而是**已有结论的真伪问题**。上一轮我新增门禁
@@ -104,8 +186,8 @@
 
 | 项 | 现状（实测） | 卡在哪 | 触发条件（谁满足了就该做） |
 |---|---|---|---|
-| **门4 时态剔除进注入链** | **⚠ 登记已于 2026-09-20 两度更正**。**更正一（前几轮判断被推翻）**：原判"**零样本**"不成立 —— 断链在**产生路径**：`fact-ring#supersede()` 在 `src/` 内**无调用方** · `evaluateL0.input.supersedes` **全仓零赋值** · `evaluateL0` 只 1 处调用且只传 `{text,traces}` ⇒ `conflict` **恒 `none`** ⇒ `coexist`/`supersede` **永不产生**。**本轮已修该段**：写侧校验 `judgement.conflict`（真机合法率仅 **89.9%**，非法样本 `0`/`1`/`无`/`false`/整句）并**真的喂给** `evaluateL0.supersedes` ⇒ 产生路径**首次可达**；新增门禁 `check-l0-conflict-wiring`（**181 → 183**）。<br>**更正二（本轮再次推翻一个我自己的前提）**："影子库非活体（`storeMode` 缺省 `md`）故无处可落" —— **实测不成立**：`~/.dsh/suite/scheduler.json` 现为 **`storeMode="dual"`**，`.records/records.jsonl` **5871 行 / 2.8MB / mtime 距今约 1 小时**，`shadow-stats` 计数 **writes 5789 · verified 5789 · diverged 0** ⇒ **影子库是活体**，落库通道（`ring-commit#loadStore → 改 → saveStoreRecords`）**现成且在生产运行**。真库 `validTo` 非空 **0/5860** | **剩余一段**：`conflict='supersede'` 裁决 → `fact-ring#supersede()` 落库的**调用接线**（现无调用方；落库模式可仿 `ring-commit`，但属**跨链新增能力**，须按 R1 具名授权——**本轮不擅自施工**） | ① 台账出现 `l0After.conflict='supersede'` 行（产生路径已通，等模型真判出取代）· ② 取得该裁决的具名授权后补落库接线 ⇒ 真库 `validTo` 非空 ≥1 ⇒ 门4 全链可验收 |
-| **门3 淘汰门（行为回灌）** | **✅ 本轮已修输入源（2026-09-20）**：`switchSource` 恒真的**根因链**已定位并修掉 —— `topicEcho` 恒 `false`（`true=0/4865`）← **`prevText` 恒空**（原实现从 `decision.messages` 找 assistant 回复，而那是**"本步新认领的消息"**，收尾步恒空；`OPEN-ITEMS §0d` 早已实证该语义）。**改**为从 `agent.session.snapshotEvents()` 取 `assistant/message` 的 text 片 + 降级保护 + 审计 `prevTextSrc`（**两类失败可分辨**）。判据 `test-prev-text-source`（登记 **179 → 181**）。<br>⚠ **但"真实回引率是否落在有判别力区间"仍待真机样本**：修复后须新 compliance 行落账才可测（探针实测**当前 0 行**，如实记）。判定结果**仍只进审计、不反馈选行** | **接线前须先看真实回引率**：恒真已从**根因**上消除，但"回引率是否有判别力"须等真机行 | 新 compliance 行 **≥30** 且 `topicEcho=true` 占比落在 **(0%, 95%)** 区间 ⇒ 此时"信号接选行"才有意义 |
+| **门4 时态剔除进注入链** | **⚠ 登记已于 2026-09-20 两度更正 —— round 9 第三度更正：真因是「取值域从未抵达 prompt」（已修）**。见下「§0i」 | **根因（本轮定位）**：prompt 只带 `JUDGEMENT_HINT`（原文「取值见 criteria 注册表」），而**模型读不到注册表** ⇒ 实测两处 prompt 常量里 `supersede`/`coexist`/`cross-task` **命中 0** ⇒ 模型自造取值（真机 `无`/`0`/`false`/`0.1`/整句）⇒ 台账 551 行 `l0After` **全 `none`** ⇒ **`supersede` 产量 0**。**与 `formatConstraintLine()` 同族**（「模型不知道有上限」）。**已修**：`gen-criteria#l0EnumLine()` 派生取值域 → `JUDGEMENT_VALUES` → 接入**两处 prompt**；判据 `check-l0-conflict-wiring` ④（3 断言 + 先红实证）。**剩余段**：`fact-ring#supersede()` 落库接线 → **方案与验收成对**见 **`docs/specs/gate4-supersede-plan.md`**（决策态 · **待具名授权**，R1） | ① 修复后新落账出现 `l0After.conflict='supersede'` 行 · ② 取得该裁决的**具名授权**后补落库接线 ⇒ 真库 `validTo` 非空 ≥1 ⇒ 门4 全链可验收 |
+| **门3 淘汰门（行为回灌）** | **✅ 判据已满足（2026-09-20 round 9 实测）—— 详见 §0h**：修复后带 `prevTextSrc` 的 compliance 行 **112 条**（≥30 ✅），其中 `topicEcho=true` **9** ⇒ 回引率 **8.0%**，落在 **(0%, 95%)** ✅。两类失败可分辨（`events` 100 / `events-empty` 12）。对照修复前 **0/1847 = 0%**。⚠ **但 `switchSource` 在修复后样本上仍 84.8% 恒真**——`topicEcho` 与 `switchSource` **不是同一个信号**，不可因前者转绿就顺手接后者；接线本身亦属行为变更，本轮**只出结论不动行为**。**根因（本轮之前已修）**：`switchSource` 恒真的根因链 —— `topicEcho` 恒 `false` ← **`prevText` 恒空**（原实现从 `decision.messages` 找 assistant 回复，而那是**"本步新认领的消息"**，收尾步恒空；`OPEN-ITEMS §0d` 早已实证该语义）。**改**为从 `agent.session.snapshotEvents()` 取 `assistant/message` 的 text 片 + 降级保护 + 审计 `prevTextSrc`（**两类失败可分辨**）。判据 `test-prev-text-source`（登记 **179 → 181**）。<br>⚠ **但"真实回引率是否落在有判别力区间"仍待真机样本**：修复后须新 compliance 行落账才可测（探针实测**当前 0 行**，如实记）。判定结果**仍只进审计、不反馈选行** | **接线前须先看真实回引率**：恒真已从**根因**上消除，但"回引率是否有判别力"须等真机行 | 新 compliance 行 **≥30** 且 `topicEcho=true` 占比落在 **(0%, 95%)** 区间 ⇒ 此时"信号接选行"才有意义 |
 
 **已落地部分**（详见 `CHANGELOG`）：读数口径四件套（`check-observability --parsability`）· `buildCandidates` 闭环自述如实化 + 抵达面钉住 ⑫ · `adviseFromMissCounts` 定位锁定 · Letta 许可证标签更正。
 
@@ -323,7 +405,7 @@ calls=2 → bySid: sid=6b89a084 · qLen=2 · qHash=005c4d6f · lastReason=new ·
 | **S-J2a** | ✅ **活性族校准（`activity.hotHits` / `statusDays` / `demote.coldDays`）** | — | `node scripts/activity-calibrate.mjs` | 实测 n=46：**hotHits 5→23**（原值低于 p50 无区分度）；**statusDays 与 coldDays 登记 `insufficient-data`**（真实天距 max 6.2 天 ≪ 14/44/90，分布未覆盖阈值区间）；**假冷率复测 1/9=11.1%**（历史 26/49=53%）⇒ 聚合已由 harvest 接线修正 | 已完成 2026-09-15 |
 | **S-P1a** | ✅ **睡眠纪元身份（`sleepEpoch`）** | — | `node scripts/test-epoch-identity.mjs` · 真机 `POST /api/shoucang-panel/deepsleep/trigger` 后核审计 | 审计三处 `kind:'deep-sleep'` **全带** `sleepEpoch`+`epochSince`；`DeepSleepStatus.currentEpoch` 与审计**逐字一致**；判据双向变异实证（改名/删字段 ⇒ 0/3 红） | 已完成 2026-09-15（真机证据：`epoch-1789502907492` · 区间 ≈16.0h） |
 | **S-P1b** | ✅ **R0 内容水位（第二触发维）** | — | `node scripts/test-epoch-watermark.mjs` | 决策表穷举：时间到⇒time · 内容达阈⇒content · 都未到⇒none；**回归保护**：关闭时与纯时间判据逐分支等价（51 例）；判定顺序（已消化先于双维）修正并证等价；变异实证（内容分支置不可达⇒2 FAIL） | 已完成 2026-09-15 |
-| **S-P1b″** | 🔴 **内容水位度量口径被真机数据证伪（须重新设计）——2026-09-20 复核：加判一条"地板效应"证据，结论维持** | **实测**：真机触发后审计行 `materialBytes=0` 而 `materialChars=46692` —— **相差 4.6 万字符**。⇒ `deepsleep-core#windowMaterialBytes`（数 `pending/`+`candidates/` 里 mtime>since 的 .md 字节）**不是深睡材料的来源**（材料由 `gatherDeepSleepTraces` 从 notes 命中 / 运行统计 / 待回收裁决等处聚合）。**本轮加判**（44 纪元实测）：`materialChars` 有**显著地板效应** —— min **15891** / p50 **37228**（min 已达中位的 **43%**）⇒ 大头是**全量画像/清单的固定开销**，非"新增材料量" ⇒ **候选口径 A（上一纪元 `materialChars` 作前瞻代理）也不成立**（它量的是装配总长，与"该不该睡"无单调关系）。**另**：相邻纪元变化非零率 81.8% 只说明"有变化"，不说明"变化对应新增"——地板效应才是决定性反证 | 内容水位的度量必须**与"新增材料"同源**：候选只剩「触发层复用 `gatherDeepSleepTraces` 取 trace 字符数」（但被注释按"零 LLM、低 IO"否决过 ⇒ **须先定口径再谈阈值**）。⚠ **正确轴其实已存在**：`trigger.newTracesMin`（窗口内最少**新痕迹数**）已在 `deepsleep-run.ts:489` 使用 —— 内容维若要做，应沿**新痕迹数**而非字节量 | **口径定案**（含"是否改用 `newTracesMin` 路线"）⇒ 定案后才谈阈值 |
+| **S-P1b″** | 🟡 **口径已定案（2026-09-20 round 9）—— 正确轴 = 窗口内痕迹文件数；判定改动待拍板**（详见 §0h） | **三个候选全部有硬反证**：① `windowMaterialBytes`（字节量）与真实材料**非同源**（实测 `materialBytes=0` 而 `materialChars=46692`，差 4.6 万字符）；② `materialChars`（装配总长）有**地板效应** —— 44 纪元 min **15891** / p50 **37228**（min 已达中位 **43%**）⇒ 量的是全量画像/清单的**固定开销**，非「新增材料量」；③ 「上一纪元 `materialChars` 作前瞻代理」同因 ② 不成立（与「该不该睡」无单调关系）。⇒ 定案用 **`countWindowTraces`（窗口内痕迹文件数）**：**同源**（与"新增材料"同一遍枚举）、**零额外 IO**（复用 `enumerateWindowTraces`）、**已可测量**（审计 `traceFiles`）。⚠ **改判定为文件数属行为变更**（49 纪元中 46 个 `materialBytes=0`、其中 25 个仍入睡 ⇒ 砍掉 51% 入睡纪元的输入面）⇒ R3 须用户拍板，本轮**只使其可判定** | **判定改动待拍板**；若不改，则本项收口为「口径已定案 + 现判定即『材料下限』」 |
 | **S-P1b′** | ⏳ **内容水位阈值校准** | 纪元 **3/10**（`epoch-calibrate` 实测）；**且须先解决 S-P1b″ 的口径问题** | `node scripts/epoch-calibrate.mjs` | 纪元 ≥10 ⇒ 按**正确口径**取分位；不足 ⇒ 写 `insufficient-data` | 纪元满 10 个 **且** 口径定案后 |
 | **S-P1b-审计前置** | ✅ **材料量进审计（已完成，真机证实）** | — | 真机触发后核 `audit.deep-sleep` 行 | 审计行带 `materialBytes` + `materialChars`（实测：`materialBytes=0` · `materialChars=46692`）—— **正是这对读数把 S-P1b″ 证伪的** | 已完成 2026-09-16 |
 | **S-P1c** | 🟡 **材料分片 — 计划层已接线**（`splitByCap` + run 侧消费 + 21 用例），**多轮执行待接线** | `runDeepSleep` 现**实际消费** `materialChunkChars` 并求分片计划；但 `cap>0` 切出多片时**仍单片跑全量**（不截断、不丢料，已显式留痕） | `node scripts/test-epoch-chunk.mjs` | ① 每片 ≤ cap ② 永不切开单段 ③ 保持段序 ④ `cap<=0` 与改造前逐字等价 ⑤ 接线层四点（消费点/切分器调用/多片留痕/**无截断**） | 多轮执行：随时（计划层已就位） |

@@ -181,7 +181,7 @@
     "contentMinChars": null,
     "materialChunkChars": 52232,
     "manual": true,
-    "note": "触发数据化（v2.1 §2.4 · B 档接线后为 runtime）：idleMs=全部根会话停滞阈值；probeAfterMs/probeWindowMs=卡住探测；newTracesMin=窗口内最少新痕迹数；manual=面板「立即归纳一次」。**改这里即改行为**（scheduler zod 缺省直接读本块）。⚠ **2026-09-15 P0.1 实证订正**：本块原注释称「缺省 3h」，但**实际生效值是本块的 2700000ms（45min）**——`scheduler.ts` 的 zod `.default(TRIGGER.idleMs)` 取本块值，而**全仓 8 处** `|| 10800000`（3h）兜底因 zod 有 default 而是**死代码**（⚠ 首轮只报 4 处：检索用了大小写敏感的 `idleMs`，漏掉 `deepSleepIdleMs` 那 4 处 —— `deepsleep.ts` ×2 / `distill-hooks.ts` ×2 ⇒ 「模式派生集合先核对」的典型踩坑）。已修：**8 处全部**统一改引本块（**单一来源已下沉 `deepsleep-core#idleMsOf`**）+ 注释订正 + 护栏 `test-deepsleep-wiring` ⑦（可执行代码不得再出现该字面量），**数值未动**（P0 不改行为）。**数值本身待 P1 双维水位按预注册判据校准**。 **S-P2b（2026-09-20）**：deepSleepProbeConflictMax=证据冲突（agent 状态活跃但连续零输出）连续多少轮即按卡住处理——补 conflict 分支**无界**致活锁（真机 28f9f094 连续 23 次 / 跨 11 小时零触发）。",
+    "note": "触发数据化（v2.1 §2.4 · B 档接线后为 runtime）：idleMs=全部根会话停滞阈值；probeAfterMs/probeWindowMs=卡住探测；**newTracesMin=窗口材料下限（⚠ 2026-09-20 round 9 名实订正：原写「窗口内最少新痕迹数」，而消费点比的其实是 `gatherDeepSleepTraces(...).length`，即**材料段字符数**；真机影响面：49 纪元中 46 个 `materialBytes=0`、其中 25 个仍入睡 ⇒ 若真按「痕迹文件数」判，这 25 轮**全不该入睡** ⇒ 名实差距是**行为级**的。见下「S-P1b″ 口径定案」）**；manual=面板「立即归纳一次」。**改这里即改行为**（scheduler zod 缺省直接读本块）。⚠ **2026-09-15 P0.1 实证订正**：本块原注释称「缺省 3h」，但**实际生效值是本块的 2700000ms（45min）**——`scheduler.ts` 的 zod `.default(TRIGGER.idleMs)` 取本块值，而**全仓 8 处** `|| 10800000`（3h）兜底因 zod 有 default 而是**死代码**（⚠ 首轮只报 4 处：检索用了大小写敏感的 `idleMs`，漏掉 `deepSleepIdleMs` 那 4 处 —— `deepsleep.ts` ×2 / `distill-hooks.ts` ×2 ⇒ 「模式派生集合先核对」的典型踩坑）。已修：**8 处全部**统一改引本块（**单一来源已下沉 `deepsleep-core#idleMsOf`**）+ 注释订正 + 护栏 `test-deepsleep-wiring` ⑦（可执行代码不得再出现该字面量），**数值未动**（P0 不改行为）。**数值本身待 P1 双维水位按预注册判据校准**。 **S-P2b（2026-09-20）**：deepSleepProbeConflictMax=证据冲突（agent 状态活跃但连续零输出）连续多少轮即按卡住处理——补 conflict 分支**无界**致活锁（真机 28f9f094 连续 23 次 / 跨 11 小时零触发）。 **S-P1b″ 口径定案（2026-09-20 round 9）**：内容水位的**正确轴**已定位并落地 —— 不用字节量（`windowMaterialBytes` 与真实材料非同源，实测 0 vs 46692），也不用 `materialChars`（有**地板效应**：min 已达中位 43%），而用 **`countWindowTraces`（窗口内痕迹文件数）**——它与「新增材料」同源、零额外 IO（复用 `enumerateWindowTraces` 同一遍枚举）、且已落审计 `traceFiles`。⚠ **改判定为文件数是行为变更**（会砍掉 51% 入睡纪元的输入面）⇒ 属 R3 须用户拍板；本轮只把它**变成可判定的事**（有轴、有读数、有判据），**未擅自改判定**。",
     "reviewIdleMs": 1800000,
     "reviewMinNewEntries": 3,
     "reviewMinNewEvents": 600,
@@ -562,6 +562,25 @@
         "recheck": "conflict 事件累计 ≥10 次 ⇒ 按「误判长任务」与「活锁时长」双向代价定值",
         "calibrator": null,
         "rollback": "scheduler.json deepSleepProbeConflictMax（热生效；置大值≈退回无界）"
+      },
+      {
+        "id": "trigger.newTracesMin",
+        "probe": {
+          "registryPath": [
+            "trigger",
+            "newTracesMin"
+          ]
+        },
+        "read": "src/deepsleep-run.ts:504（`TRIGGER.newTracesMin` 与 `traces.length` 比较）",
+        "value": 1,
+        "owner": "skill/engine/criteria.json#trigger.newTracesMin",
+        "preregistered": false,
+        "preregisteredCriterion": null,
+        "samples": 0,
+        "conclusion": "**2026-09-20 round 9（S-P1b″ 口径定案）新登记 —— 本项此前**根本没进登记表**，而它是「睡不睡」的判据 ⇒ 属漏登记**（`thresholds.note` 的范围界定明确含「影响接受/拒绝判断的数值阈值」）。**名实订正**：注册名与 note 原写「窗口内最少新痕迹**数**」，而消费点 `deepsleep-run.ts` 比的是 `gatherDeepSleepTraces(...).length` —— **材料段字符数**（该处日志自己写「痕迹 N **字符**」）。值 `1` 时两者恰好同效（非空 ⇔ 至少一条痕迹）⇒ 一直没暴露，但是**潜伏的假旋钮**（调到 3 则名字说「3 个文件」、行为是「3 个字符」，几乎必然通过）。**真机影响面**：49 纪元中 **46** 个 `materialBytes=0`（窗口内 pending/candidate 零文件），其中 **25** 个仍照常入睡（靠「窗口内任务运行统计」等段撑出非空材料）⇒ 若真按**痕迹文件数**判，这 25 轮**全不该入睡**（差距是**行为级**的）。**本轮已做**：新增真轴 `deepsleep-traces#countWindowTraces`（痕迹文件数，与 `gatherDeepSleepTraces` **同一遍枚举**，非第二份实现）并落审计 `traceFiles` ⇒ 该轴**从此可测量**（判据 `test-epoch-watermark` ⑤/⑤′，含变异反证）。**未做（R3）**：把判定真的改成按文件数 = **行为变更**（砍掉 51% 入睡纪元的输入面）⇒ 须用户拍板，本轮只使其**可判定**。",
+        "recheck": "新审计行积累 `traceFiles` 分布后（≥30 条）⇒ 若决定改判定，按该分布定值；不改则本项维持「材料下限」语义",
+        "calibrator": null,
+        "rollback": "scheduler.json（若将来接线）；当前判定在 `deepsleep-run.ts:504-508`，改回即恢复"
       }
     ]
   },

@@ -34,6 +34,7 @@ export const CONSOLIDATE_JUDGE = [
 ].join('\n')
 
 export const JUDGEMENT_HINT = "judgement：可选对象，把本次判据取值写进输出（reuse/generality/stability/conflict/dup 或 evidence/stability/conflict/cost；取值见 criteria 注册表），宿主据此写统一台账 audit/ledger.jsonl（type=decision.*）供对账。"
+export const JUDGEMENT_VALUES = "- **judgement 取值域（必须逐字取下列之一，禁自造、禁写中文、禁写整句）**：reuse=cross-task|cross-project|session-only · generality=direction|contract-fact|detail · stability=once|same-day-repeat|cross-day · conflict=none|coexist|supersede。其中 `conflict` 三义须分清：`none`=与既有不冲突 · `coexist`=与既有并存（**不取代**）· `supersede`=**取代既有**（旧条目标记为已失效，读者不再见到它）。拿不准时填 `none`（**宁缺毋滥**——错填 `supersede` 会让真事实被标失效）。"
 export const LEDGER_FILE = "audit/ledger.jsonl"
 
 export const L0 = {
@@ -346,7 +347,7 @@ export const TRIGGER = {
   "contentMinChars": null,
   "materialChunkChars": 52232,
   "manual": true,
-  "note": "触发数据化（v2.1 §2.4 · B 档接线后为 runtime）：idleMs=全部根会话停滞阈值；probeAfterMs/probeWindowMs=卡住探测；newTracesMin=窗口内最少新痕迹数；manual=面板「立即归纳一次」。**改这里即改行为**（scheduler zod 缺省直接读本块）。⚠ **2026-09-15 P0.1 实证订正**：本块原注释称「缺省 3h」，但**实际生效值是本块的 2700000ms（45min）**——`scheduler.ts` 的 zod `.default(TRIGGER.idleMs)` 取本块值，而**全仓 8 处** `|| 10800000`（3h）兜底因 zod 有 default 而是**死代码**（⚠ 首轮只报 4 处：检索用了大小写敏感的 `idleMs`，漏掉 `deepSleepIdleMs` 那 4 处 —— `deepsleep.ts` ×2 / `distill-hooks.ts` ×2 ⇒ 「模式派生集合先核对」的典型踩坑）。已修：**8 处全部**统一改引本块（**单一来源已下沉 `deepsleep-core#idleMsOf`**）+ 注释订正 + 护栏 `test-deepsleep-wiring` ⑦（可执行代码不得再出现该字面量），**数值未动**（P0 不改行为）。**数值本身待 P1 双维水位按预注册判据校准**。 **S-P2b（2026-09-20）**：deepSleepProbeConflictMax=证据冲突（agent 状态活跃但连续零输出）连续多少轮即按卡住处理——补 conflict 分支**无界**致活锁（真机 28f9f094 连续 23 次 / 跨 11 小时零触发）。",
+  "note": "触发数据化（v2.1 §2.4 · B 档接线后为 runtime）：idleMs=全部根会话停滞阈值；probeAfterMs/probeWindowMs=卡住探测；**newTracesMin=窗口材料下限（⚠ 2026-09-20 round 9 名实订正：原写「窗口内最少新痕迹数」，而消费点比的其实是 `gatherDeepSleepTraces(...).length`，即**材料段字符数**；真机影响面：49 纪元中 46 个 `materialBytes=0`、其中 25 个仍入睡 ⇒ 若真按「痕迹文件数」判，这 25 轮**全不该入睡** ⇒ 名实差距是**行为级**的。见下「S-P1b″ 口径定案」）**；manual=面板「立即归纳一次」。**改这里即改行为**（scheduler zod 缺省直接读本块）。⚠ **2026-09-15 P0.1 实证订正**：本块原注释称「缺省 3h」，但**实际生效值是本块的 2700000ms（45min）**——`scheduler.ts` 的 zod `.default(TRIGGER.idleMs)` 取本块值，而**全仓 8 处** `|| 10800000`（3h）兜底因 zod 有 default 而是**死代码**（⚠ 首轮只报 4 处：检索用了大小写敏感的 `idleMs`，漏掉 `deepSleepIdleMs` 那 4 处 —— `deepsleep.ts` ×2 / `distill-hooks.ts` ×2 ⇒ 「模式派生集合先核对」的典型踩坑）。已修：**8 处全部**统一改引本块（**单一来源已下沉 `deepsleep-core#idleMsOf`**）+ 注释订正 + 护栏 `test-deepsleep-wiring` ⑦（可执行代码不得再出现该字面量），**数值未动**（P0 不改行为）。**数值本身待 P1 双维水位按预注册判据校准**。 **S-P2b（2026-09-20）**：deepSleepProbeConflictMax=证据冲突（agent 状态活跃但连续零输出）连续多少轮即按卡住处理——补 conflict 分支**无界**致活锁（真机 28f9f094 连续 23 次 / 跨 11 小时零触发）。 **S-P1b″ 口径定案（2026-09-20 round 9）**：内容水位的**正确轴**已定位并落地 —— 不用字节量（`windowMaterialBytes` 与真实材料非同源，实测 0 vs 46692），也不用 `materialChars`（有**地板效应**：min 已达中位 43%），而用 **`countWindowTraces`（窗口内痕迹文件数）**——它与「新增材料」同源、零额外 IO（复用 `enumerateWindowTraces` 同一遍枚举）、且已落审计 `traceFiles`。⚠ **改判定为文件数是行为变更**（会砍掉 51% 入睡纪元的输入面）⇒ 属 R3 须用户拍板；本轮只把它**变成可判定的事**（有轴、有读数、有判据），**未擅自改判定**。",
   "reviewIdleMs": 1800000,
   "reviewMinNewEntries": 3,
   "reviewMinNewEvents": 600,
@@ -508,6 +509,13 @@ export const THRESHOLDS: { note: string; entries: ThresholdEntry[] } = {
       "id": "trigger.deepSleepProbeConflictMax",
       "value": 3,
       "owner": "skill/engine/criteria.json#trigger.deepSleepProbeConflictMax",
+      "preregistered": false,
+      "samples": 0
+    },
+    {
+      "id": "trigger.newTracesMin",
+      "value": 1,
+      "owner": "skill/engine/criteria.json#trigger.newTracesMin",
       "preregistered": false,
       "samples": 0
     }

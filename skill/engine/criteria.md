@@ -73,6 +73,7 @@
 | `trigger.reviewMinNewEntries` | 3 | `skill/engine/criteria.json#trigger.reviewMinNewEntries` | ✅ | 352 | 3 条（略低于段中位 4 ⇒ 保证多数段可触发） | 对齐 `test-session-review` 的三态断言（not-triggered / skipped-by-threshold / reviewed） |
 | `trigger.reviewMinNewEvents` | 600 | `skill/engine/criteria.json#trigger.reviewMinNewEvents` | ✅ | 352 | 600 事件（与 3 条并列成对，任一满足即触发） | 同上 |
 | `trigger.deepSleepProbeConflictMax` | 3 | `skill/engine/criteria.json#trigger.deepSleepProbeConflictMax` | ❌ | 0 | 初值 3（与 deepSleepProbeConfirm 同量级，取「连续」语义）；**未校准** —— 但「有界」本身是正确性要求（无界 = 活锁），故先给上界、数值待样本 | conflict 事件累计 ≥10 次 ⇒ 按「误判长任务」与「活锁时长」双向代价定值 |
+| `trigger.newTracesMin` | 1 | `skill/engine/criteria.json#trigger.newTracesMin` | ❌ | 0 | **2026-09-20 round 9（S-P1b″ 口径定案）新登记 —— 本项此前**根本没进登记表**，而它是「睡不睡」的判据 ⇒ 属漏登记**（`thresholds.note` 的范围界定明确含「影响接受/拒绝判断的数值阈值」）。**名实订正**：注册名与 note 原写「窗口内最少新痕迹**数**」，而消费点 `deepsleep-run.ts` 比的是 `gatherDeepSleepTraces(...).length` —— **材料段字符数**（该处日志自己写「痕迹 N **字符**」）。值 `1` 时两者恰好同效（非空 ⇔ 至少一条痕迹）⇒ 一直没暴露，但是**潜伏的假旋钮**（调到 3 则名字说「3 个文件」、行为是「3 个字符」，几乎必然通过）。**真机影响面**：49 纪元中 **46** 个 `materialBytes=0`（窗口内 pending/candidate 零文件），其中 **25** 个仍照常入睡（靠「窗口内任务运行统计」等段撑出非空材料）⇒ 若真按**痕迹文件数**判，这 25 轮**全不该入睡**（差距是**行为级**的）。**本轮已做**：新增真轴 `deepsleep-traces#countWindowTraces`（痕迹文件数，与 `gatherDeepSleepTraces` **同一遍枚举**，非第二份实现）并落审计 `traceFiles` ⇒ 该轴**从此可测量**（判据 `test-epoch-watermark` ⑤/⑤′，含变异反证）。**未做（R3）**：把判定真的改成按文件数 = **行为变更**（砍掉 51% 入睡纪元的输入面）⇒ 须用户拍板，本轮只使其**可判定**。 | 新审计行积累 `traceFiles` 分布后（≥30 条）⇒ 若决定改判定，按该分布定值；不改则本项维持「材料下限」语义 |
 
 ## 载体契约（v2.2 · layer / form / inject）
 

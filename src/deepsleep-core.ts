@@ -18,7 +18,7 @@
 //   **绝不依赖 distill.ts**。判据层从此不再被 3500 行的闭包裹挟，可独立阅读、独立测试、独立演进。
 import { readFileSync, renameSync, unlinkSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { CONSOLIDATE_JUDGE, JUDGEMENT_HINT, TRIGGER } from './criteria.generated.js'
+import { CONSOLIDATE_JUDGE, JUDGEMENT_HINT, JUDGEMENT_VALUES, TRIGGER } from './criteria.generated.js'
 import { dshHome } from './targets.js'
 
 /**
@@ -281,7 +281,8 @@ ${CONSOLIDATE_JUDGE}
 - 重构：小节改名/合并导致指针 § 失效或漂移 → update 指针 §（概况如需一并刷新）。
 - 去重：现行清单中同 标签+主题 出现两行 → 保留信息更全/命中更高者，update 被留行合并概况（绝不双写）。
 - match 一律逐字取自「现行画像 / 现行知识索引」清单；无锚不 update，拿不准不动。
-${JUDGEMENT_HINT}`
+${JUDGEMENT_HINT}
+${JUDGEMENT_VALUES}`
 /**
  * 深睡本轮是否算「已消化」（决定水位推进 or 回滚）——**单一实现**，供 runDeepSleep 与单测共用。
  *
