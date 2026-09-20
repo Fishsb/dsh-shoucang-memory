@@ -709,6 +709,19 @@ const CHECKS = [
   //   ⚠ 先红实证：变异 `LIMIT 30→20` ⇒ 本件 exit 1；还原 ⇒ exit 0 且**字节级还原**（`_tmp-mut-j3.mjs`，已删）。
   ['scripts/check-attribution-samples.mjs'],
   ['scripts/check-attribution-samples.mjs', '--selftest'],
+  // **索引行合法标签集：注册表 ⟷ 写门 ⟷ 孪生 ⟷ prompt 抵达**（2026-09-20 · 真机取证）
+  //   判因（与 `formatConstraintLine()` / 门4「取值域未抵达 prompt」**同族**）：写门的标签白名单
+  //     只在 `memory-append.mjs` 的 `--new` 正则里，**prompt 里一个都没有** ⇒ 模型自造
+  //     `[路径]`/`[原则]`（真机跨档 921 轮：标签非法 **138 条**，占 rejected 773 的 **17.9%**；
+  //     09-20 单日 added 92 / rejected 106，其中标签非法 27 = 25%）⇒ 被拒 ⇒ `rejected` ⇒ **推水位不重试**
+  //     ⇒ 知识**静默流失**（不是"没提炼"，是"提炼了被整条丢弃"）。
+  //   修法：标签集登记进注册表 `ingest.format.index-line.params.lineTags`，生成器**派生**进两处 prompt 的
+  //     判据段（不手抄）；本件守「注册表 == 写门 == 孪生」差分锁 + 「运行期 prompt 真含全部标签」（读 lib/ 求值）
+  //     + 「深睡面未被反向污染」（它的产出走 principles/pointerOps，写 AGENT.md 的 [原则]/[路径]）。
+  //   先红实证：注册表 lineTags 注入 `原则`（写门无此项）⇒ 本件 **exit 1**；还原 ⇒ exit 0（字节级还原）。
+  //   反例自证 6 例 / 5 条反例（含"声明了却没落地""改一处忘另一处""孪生漂移""prompt 零标签"）。
+  ['scripts/check-index-tag-reach.mjs'],
+  ['scripts/check-index-tag-reach.mjs', '--selftest'],
   // **统一事件信封**单测（2026-09-13）：`{ at, ...o }` 的展开顺序允许调用方用 `at: undefined` 覆盖注入值，
   //   而 `JSON.stringify` 静默丢弃 undefined ⇒ 行里没有 `at`（实测 distill-audit 930 行里 1 行如此）。
   //   本件把「任何一行都必须有非空 `at` + `type`」钉死，覆盖 audit/episode/stub/ledger 四条写出路径。

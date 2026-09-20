@@ -27,6 +27,7 @@ const buildTs = () => {
   lines.push('export const INGEST_JUDGE = [')
   for (const l of reg.ingest.judgeText) lines.push(`  ${JSON.stringify(l)},`)
   lines.push(`  ${JSON.stringify(formatConstraintLine())},`) // v2.2 修复：格式硬约束**从注册表派生**并进 prompt（原先模型不知有 30 字上限）
+  lines.push(`  ${JSON.stringify(indexTagLine())},`)          // round 9′：**索引行合法标签集**同法派生（原先模型不知有白名单 ⇒ 自造标签被整条丢弃）
   lines.push("].join('\\n')")
   lines.push('')
   lines.push('/** 巩固域判据段（拼进 DEEP_SLEEP_PROMPT） */')
@@ -216,7 +217,24 @@ function formatConstraintLine() {
   return `- **索引行格式硬门（写门 exit=4，违反任一条即整条被拒）**：${parts.join('；')}。**若内容压不进上限：把细节写进 notes 小节，索引行只留 ≤${p.summaryMax} 字概况**——切勿硬塞长句（长句会被整条丢弃，等于白提炼）。`
 }
 
-/** C · 脚本面扁平参数 */
+/** round 9′（2026-09-20）索引行**合法标签集**从注册表派生后注入两处 prompt。
+ *   判因（真机取证，与 `formatConstraintLine()` **完全同族**）：写门的标签白名单（14 个）只在
+ *   `scripts/memory-append.mjs` 的 `--new` 正则里，而 prompt **从未携带它** ⇒ 模型自造
+ *   `[路径]`/`[原则]`（真机跨档 915 轮：标签非法 **131 条**，占同期 rejected 725 的 18%；
+ *   09-20 单日占 25%）⇒ 被拒 ⇒ `rejected` ⇒ **推水位不重试** ⇒ **知识静默流失**。
+ *   ⇒ 本函数让「模型手里的判据」与「写门的手里的判据」同源（注册表 → 投影 → prompt）。
+ *   ⚠ **不手抄**：标签集只写在注册表 `ingest.format.index-line.params.lineTags`，
+ *     与写门正则的一致性由 `check-index-tag-reach`（差分锁）守。 */
+function indexTagLine() {
+  const p = reg.ingest.criteria.find((c) => c.id === 'ingest.format.index-line').params
+  const tags = Array.isArray(p.lineTags) ? p.lineTags : []
+  if (!tags.length) return ''
+  return `- **索引行行首标签必须逐字取下列之一（写门 exit=2，白名单外整条被拒）**：${tags.map((t) => `\`[${t}]\``).join(' ')}。`
+    + '**`[原则]`/`[路径]` 不在 `newIndex` 白名单内** —— 它们是 AGENT.md 的画像行，'
+    + '唯一入口是**深度睡眠的 principles / pointerOps**，写进 `newIndex` 必被拒（这是真机最高频的两类流失，占标签非法条目的 88%）。'
+    + '本通道只收上列标签；若这条知识既非环境事实、也非工具/流程/教训，**宁可不提**（留 `skipped` 并写理由），不要自造标签或换标标签。'
+}
+
 const buildGate = () => JSON.stringify({
   version: reg.version,
   caps: reg.gate.caps,

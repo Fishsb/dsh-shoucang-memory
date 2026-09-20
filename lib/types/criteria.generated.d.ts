@@ -443,6 +443,8 @@ export declare const CRITERIA_ROWS: readonly [{
         readonly requireMiddleDot: true;
         readonly forbidArrowInPath: true;
         readonly note: "**实测根因（2026-09-11）**：写门曾硬编码 30/40 而 prompt 未携带该约束 ⇒ 深睡产出普遍超标被逐条拦掉（attempted=3 → all-rejected，概况 31/38/36 字）。现：门读投影 + 生成器把约束派生进两个判据段。";
+        readonly lineTags: readonly ["env", "tool", "flow", "lesson", "身份", "环境", "硬件", "偏好", "习惯", "使命", "边界", "经验", "演化", "教训"];
+        readonly lineTagsNote: "**验收门（写门）实际接受的索引行行首标签集** —— 唯一强制点在 `scripts/memory-append.mjs`（孪生 `skill/scripts/memory-append.mjs`）的 `--new` 正则；本字段是该正则的**登记副本**，两侧一致由 `scripts/check-index-tag-reach.mjs` 差分锁守（不一致即红）。**为什么登记（2026-09-20 · 真机取证）**：跨档 915 轮蒸馏里 `新索引行标签非法` **131 条**（占同期 rejected 725 的 **18%**；09-20 单日 added 92 / rejected 106，其中标签非法 **27 = 25%**），非法标签集中在 `[路径]` **75** · `[原则]` **40**（其余 `工具/方法/机制/参考/流程/纪律` 为同族自造）。**根因与 `formatConstraintLine()` 完全同族**：判据（合法标签集）只在代码里，而**两处 prompt 从未携带它**（实测两处 prompt 内标签集命中 0）⇒ 模型只能自造；被拒行走 `rejected` ⇒ **推水位、不再重试** ⇒ 知识**静默流失**。**⚠ `[原则]`/`[路径]` 为何不在表内**：二者属 AGENT.md（P/R 层画像行），唯一写入通道 = 深度睡眠 principles/pointerOps，**不走 `newIndex`** ⇒ 写进 newIndex 必被拒（115/131 条流失即此形态）。**本字段只登记、不驱动写门**：让 `memory-append.mjs` 读注册表会给这个**零依赖子进程活件**加运行时依赖，故取「登记 + 差分锁」而非「共用实现」；prompt 侧则由生成器**派生**（`indexTagLine()`）⇒ 模型手里终于有了这份判据。";
     };
 }, {
     readonly id: "consolidate.support.principle";

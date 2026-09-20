@@ -1,10 +1,32 @@
 # 待办总表（OPEN ITEMS）
 
 > **用途**：本仓**唯一的待办入口** —— 任何"还没做完的事"都必须在此登记一行，否则视为未登记。
-> **当前状态（2026-09-15 机检）**：五阶段（S0–S4）+ S4R + S4X + S4Y + **UI1 面板架构整理** 的**可施工项全部完成**；
-> 下表 3 项**判据全部满足**（`node scripts/verify-open-items.mjs` ⇒ **3/3**），**当前无阻塞项**。
+> **当前状态（2026-09-20 round 10 复核 · 机检）**：五阶段（S0–S4）+ S4R + S4X + S4Y + IR1 + S1R + S2S3 + **UI1 面板架构整理** 的**可施工项均已完成**；
+> `node scripts/verify-open-items.mjs` ⇒ **3/3**；`check-runner` **188 → 190 pass / 0 fail**。
+> **仍开口的三类**（逐条见文末「§12 开口项汇总」）：① 待拍板的行为变更 · ② 待真机样本落账 · ③ 长期校准欠账。
 
-**最后更新**：2026-09-20
+**最后更新**：2026-09-20（round 10：§0m 缺陷已修 + 带门 + **五层验收全绿**；登记卫生复核 4 处）
+
+---
+
+## 0m. 🔴 **索引行合法标签集从未抵达 prompt ⇒ 知识静默流失**（2026-09-20 round 10 · 已修 + 带门）
+
+> **性质**：与 §0i（门4「取值域从未抵达 prompt」）、`formatConstraintLine()`（「模型不知道有上限」）**完全同族** ——
+> **判据在写门里，而模型手里没有**。这是同族第 **6** 例。
+
+| 面 | 事实（实测） |
+|---|---|
+| **真缺陷** | 写门的合法标签白名单**只存在于** `scripts/memory-append.mjs` 的 `--new` 正则（14 个标签）；**两处 prompt 里一个都没有**（实测 `src/distill.ts` / `src/deepsleep-core.ts` 的 prompt 常量中标签集命中 **0**）⇒ 模型只能**自造** |
+| **规模（跨档台账）** | 921 轮 `distill-run` 中 `新索引行标签非法` **138 条**，占同期 `rejected` 773 的 **17.9%**（涉及 71 轮）；09-20 单日 30 轮 added 92 / rejected 106 ⇒ 标签非法 **27 = 25%** |
+| **流失形态** | `[路径]` **75** · `[原则]` **40**（此二类占 88%）· `工具`4 · `方法`4 · `lesson`4 · `机制`3 · `参考`2 · `流程`1 · `纪律`1 · `path`3 · `flows`1 |
+| **为什么是"流失"而不是"没提炼"** | 被拒 ⇒ `classifyMemFailure` 判 `rejected` ⇒ **推水位**（设计如此：内容已裁决，不该扣水位）⇒ **同一段不再重试** ⇒ 这条知识**永久消失**（既不进库、也不进 `pending/` 回退队列——那是 `index-unpaired` 专属） |
+| **`[原则]`/`[路径]` 为何必被拒** | 二者属 **AGENT.md**（P/R 层画像行），唯一写入通道 = **深睡 `principles`/`pointerOps`**；写进 `newIndex`（MEMORY.md 知识索引）与写门白名单**结构性不符**——模型不知这条分工，便按"最自然的归纳命名"写了 |
+| **修法（本轮已施工 · R2 可逆）** | 标签集**登记进注册表** `ingest.format.index-line.params.lineTags`（单一事实源）+ 生成器 `indexTagLine()` **派生**进判据段（**不手抄**，与 `formatConstraintLine()`/`l0EnumLine()` 同法）⇒ 模型手里终于有了这份判据，且**显式声明** `[原则]`/`[路径]` 不走本通道 |
+| **判据** | 新增 `check-index-tag-reach.mjs`（登记 `CHECKS`，**188 → 190**）：① 注册表 ⟷ 写门正则 ⟷ 仓内孪生 **三者标签集逐个相等**（差分锁）② 全部标签**运行期**抵达 `DEFAULT_DISTILL_PROMPT`（**import `lib/` 求值**，不 grep 源码——防 `check-l0` 踩过的假红）③ 深睡 prompt **不得**携带该白名单（它的产出走 principles/pointerOps，判据放错面 = 造新缺陷） |
+| **先红→后绿** | 注册表 `lineTags` 注入 `原则`（写门无此项）⇒ 本件 **exit 1**；还原 ⇒ **exit 0**（还原由脚本自证）· `--selftest` **6 例 / 5 反例** |
+| **五层验收（本轮实测，全绿）** | ① 仓内 `typecheck` 零错 + `build` 成功 + `check-runner` **190 pass / 0 fail**（新增门计入 188→190）② 部署副本 `287/287` sha1 一致 + 部署面 `0 不一致` ③ `dev_reload_package` 重建 1 fiber（94 模块）④ `check-installed-features` **82 项标记齐全** ⑤ 渲染级 `ui-geo-regress` **121 PASS / 0 FAIL** + `check-panel-contract` 5 PASS + `gen-panel-contract --check` 产物新鲜 + `check-public-tree` PASS + `check-hardcode` 零命中 |
+| **运行期实证（非"改了源码"）** | 直读编译产物：`DEFAULT_DISTILL_PROMPT` **len 4570 · 14/14 标签命中**，且含排除声明句（`[原则]`/`[路径]` 不在 newIndex 通道）；`DEEP_SLEEP_PROMPT` **不含**该白名单句（反向污染检查）——深睡提示词**合法**含有 `[原则]`/`[路径]`（那是它的本职产出通道），故 ③ 的判据是**白名单整句**而非"标签不出现" |
+| **⚠ 已知未做（非假绿）** | 存量 **140 条不可改造**（历史行，随轮次仍在增长）；本修只保证**此后**不再流失。**验证触发** = 此后新增 `distill-run` 行里 `failedItems` 的 `标签非法` 计数应趋 0（可复跑本件 ④ 段看分布）· 本轮读数：**927 轮 / rejected 777 / 标签非法 140（18.0% · 73 轮）** |
 
 ---
 
@@ -231,10 +253,13 @@ T      sim 过线        其中快通道   被标签门挡掉
 新增门禁 `check-write-receipts`（4 条断言，含**运行期判据 ②″** 与 `--kroot` 先红自证口，登记 **175 → 177**）。
 现闭合 **✅ 未解释差异 0**（三文件一律按 `=== 0` 硬判，比原判据更严）。
 
-**⚠ 遗留一项（下次可做 · 非本轮范围）**：`write.ingest` 的 `target` **仍无文件维**（只到库标识
-`shoucang`/`none`/`workspace`）—— 即「这一轮往 `MEMORY.md` 写了几行索引行」在台账上**仍不可回答**，
-当前只能以「基线 + 域级上界」规避。**真正的解 = 写侧给 `ingest` 回执补文件维**（改动面小、语义清晰，
-但须单独一轮 + 再次重锚基线）。判据：`check-write-receipts` ③ 已守字段齐备；补文件维后本项可删。
+**✅ 已结清（2026-09-20 round 10 复核）—— 本段原登记「遗留一项（下次可做）」已过期**：`write.ingest` 的
+`target` **文件维已补齐**（提交 `c9ddfb7`）：写侧按**实际落点文件**各发一行独立 `type=write.ingest-file`
+回执（`targetKind:'file'`，**不塞进 `write.ingest`** —— 同 type 混两种 target 语义是禁止的），
+并给 `check-write-receipts` 加主判据 **②′**（每条回执必须显式声明 `targetKind`，只做「同 type 齐一」
+比较——不依赖取值形态、不依赖样本是否已产生）。
+**实测**（本轮只读复核）：真库 `write.ingest-file` **38 行**（`notes/env.md` / `notes/lessons.md` …），
+`check-write-receipts` **PASS**；`memory-reconcile` 未解释差异 **0**。
 
 ---
 
@@ -632,7 +657,7 @@ calls=2 → bySid: sid=6b89a084 · qLen=2 · qHash=005c4d6f · lastReason=new ·
 
 ---
 
-## 11. S2S3 三层供给链协调（2026-09-19 立 · **决策态，未施工** · **v2 经圆桌会审修订**）
+## 11. S2S3 三层供给链协调（2026-09-19 立 · **五册均已落地**（2026-09-19 · 用户指令「全部做」）· **v2 经圆桌会审修订**）
 
 > 由来：用户口径「L1 窗口级快速总结知识；**L2 会话级复盘要参考整个会话 + L1 产出，并能调整 L1 产出**；
 > **S3 睡眠不产出**，但需**审查当日每条记忆在会话实际中产生的影响**后做**裁剪压缩**（细节压缩、只留方向节点）」。
@@ -662,7 +687,7 @@ calls=2 → bySid: sid=6b89a084 · qLen=2 · qHash=005c4d6f · lastReason=new ·
 
 | # | 项 | 差什么 | 复验命令 | 判据 | 何时可做 |
 |---|---|---|---|---|---|
-| **S2S3-R1** | **真库 1 处孤儿指针**（`MEMORY.md` 末段）：`[教训] junction 装配漂移 · … → notes/env.md §npm 失效与残留 shim 修复/junction 装配漂移`，而 `notes/env.md` 只有 `### npm 失效与残留 shim 修复`（**无**子节 `junction 装配漂移`）⇒ spec 级 `partial`（父在子缺）。<br>**成因链（实证，非推断）**：`2026-09-18T20:15:03Z` 的蒸馏轮 `kind=distill-run added=5 / failed=4` 且 `failedItems` 含 `k=append` —— **明细 append 失败，而同批索引行仍入库**；当时的准入策略对 `partial` 一律放行 | `node scripts/check-section-refs.mjs`（现状：`❌ 路径部分悬空 1 ≤ 基线 0` ⇒ 红） | 重指为可解析前缀（`§npm 失效与残留 shim 修复`）⇒ 该门归 0；**真源数据改动须用户拍板（R3-②）** | **待拍板** |
+| **S2S3-R1** | **真库 1 处孤儿指针**（`MEMORY.md` 末段）：`[教训] junction 装配漂移 · … → notes/env.md §npm 失效与残留 shim 修复/junction 装配漂移`，而 `notes/env.md` 只有 `### npm 失效与残留 shim 修复`（**无**子节 `junction 装配漂移`）⇒ spec 级 `partial`（父在子缺）。<br>**成因链（实证，非推断）**：`2026-09-18T20:15:03Z` 的蒸馏轮 `kind=distill-run added=5 / failed=4` 且 `failedItems` 含 `k=append` —— **明细 append 失败，而同批索引行仍入库**；当时的准入策略对 `partial` 一律放行 | `node scripts/check-section-refs.mjs`（现状：**0/0/0/0 PASS**） | **✅ 已结清（2026-09-19 用户指令「全部做」B 项）**：经**唯一写入原语**（库单写者锁 + 唯一 tmp + 原子 rename + 写后回读）把该行重指为可解析前缀 `§npm 失效与残留 shim 修复`，重镜像 + 库内 git 提交（回滚点）；`check-record-parity` 分歧 0。<br>⚠ 本行原写「待拍板 · 门为红」—— **该状态描述已过期**（本轮只读复核：门 0/0/0/0，CHANGELOG「用户授权『全部做』后的三项收口」§B 有全链读数） | ✅ **已完成 2026-09-19**（2026-09-20 round 10 复核确认） |
 | **S2S3-R2** | 同族**代码侧已收口**（防再生）：`admitIndexRow` 对 **末段缺失** 的 `partial` **视同 missing ⇒ 拒写**；中段缺失仍放行（读侧可回落）。孪生 `skill/scripts/section-ref.mjs` 同改（`check-section-ref-parity` 差分锁守） | `node scripts/check-section-ref-parity.mjs`（A3 四条：末段拒写 · 孪生同结论 · 中段放行 · partial 明细留痕） | **先红已留证**：收口前 A3 两条红（`ok=true`）；收口后四条全绿 | **已完成（2026-09-19）** |
 
 ### 11-b 深睡/蒸馏触发链四册（2026-09-20 · 真机取证 → 判据外移）
@@ -687,6 +712,57 @@ calls=2 → bySid: sid=6b89a084 · qLen=2 · qHash=005c4d6f · lastReason=new ·
 （阈值 35 · 只许收紧；抽出前实测 **34**）⇒ 在本文件**就地**新增判据会破棘轮，而放松棘轮属 `R3` 须用户拍板之事。
 故本轮判据按**领域接缝**单独成件（`probe-plan.ts` / `trigger-plan.ts`），并**只向下**依赖取类型 ⇒ 零环。
 同类先例：`injection-playbook` / `recall-diagnosis` / `dynamic-select` / `situation-supply`。
+
+---
+
+## 12. 开口项汇总（2026-09-20 round 10 · 逐条复核后重排）
+
+> **为什么单列**：§0–§11 是**时序登记**（每条留当时的取证与结论，按纪律「已完成的项不删」），
+> 而"还剩什么"要在 700 行里自己找 —— 这正是 §5′ 记档过的「待办表自我繁殖」病灶。
+> 本节只回答**一个**问题：**现在开口的有哪几条、各卡在什么上、复验命令是什么。**
+> ⚠ 本节是**视图**，不取代上面各节（判据与证据仍在原处）。
+
+### A. 待拍板的行为变更（agent 不得自行推进 · R1/R3）
+
+| # | 项 | 一句话 | 现值 → 建议 | 复验 |
+|---|---|---|---|---|
+| A1 | **OPEN-1 阈值** | 4217 条样本下 0.55 **过冲 14.6pp**（120 条时的"恰好命中"是低样本巧合） | `mcl.familiarThreshold` 0.55 → **0.58**（27.7%，距预注册目标 0.2pp） | `node scripts/mcl-calibrate.mjs`（详见 §0j） |
+| A2 | **S-P1b″ 内容水位判定轴** | 正确轴已定案 = **窗口内痕迹文件数**；改判定属行为变更（49 纪元里 46 个 `materialBytes=0`、其中 25 个仍入睡） | 判定仍按"材料非空"；改后**砍掉 51% 入睡纪元的输入面** | `node scripts/epoch-calibrate.mjs`（详见 §0h） |
+| A3 | **门4 `supersede` 落库接线** | 根因（取值域未抵达 prompt）**已修**；剩余段 = `fact-ring#supersede()` 的调用接线 | 方案+验收成对：`docs/specs/gate4-supersede-plan.md`（4 册）· **待具名授权** | 见该档 §5 逐册命令 |
+| A4 | **承诺结算册零～册四** | 册五（存量 10 条）已落库；其余四册**未授权** | 方案+验收成对：`docs/promise-settlement-plan.md` §11/§12 | 见该档 |
+
+### B. 等真机样本 / 等时间（无代码动作）
+
+| # | 项 | 卡在哪 | 触发条件 |
+|---|---|---|---|
+| B1 | `S-P1b′`（痕迹文件数轴校准） | `traceFiles.n = 0 / missing = 47`（字段 09-20 才落审计） | **新深睡纪元**落账（≥10 个） |
+| B2 | `J3/U1 归因一致率` | 断链**已修**（上限 20 vs 门槛 30 恒真）；修后新纪元尚无样本 | 新纪元 `attributionSamples ≥ 30` |
+| B3 | `S-P5c 释放接线` | 集合稳定度 Jaccard **0.088**（需 ≥0.8）；波动主因已定案 = 模型判定（加权 91%） | 波动收敛（手段在判据/提示层） |
+| B4 | `S-J2` 阈值校准（13 项 `samples=0`） | 见 §12-C | 真实分布积累（嵌入类需本地 bge） |
+| B5 | `H-10` S6 观测收尾 | 自然跑 2–3 天 | 时间 |
+| B6 | `J5/U3 收益判定升级` | `switchSource` 仍 94.4% 恒真且 `src/` 内无消费者 ⇒ **先在"重定义 or 退役"上定案，再接判定** | 见 §7 `J5/U3-信号源` |
+
+### C. 长期欠账（登记在册、非阻塞）
+
+- **阈值校准 13 项**：`trigger.contentMinChars` · `trigger.idleMs` · `ingest.dedup.bigram.threshold` · `tree.indexSemanticSim` · `tree.sectionMergeSim` · `inject.crossFormDedupSim` · `write.semanticDupSim` · `write.cardSimilar` · `activity.interferenceBand` · `mcl.topicEchoGate` · `ingest.granularity.splitLaw` · `trigger.deepSleepProbeConflictMax` · `trigger.newTracesMin`。
+  ⚠ **"能否被改到"这一层已于 round 8 全部核实并接线**（读口 `criteria.ts#thresholdValue` + 门禁 `check-threshold-control`）——**剩下的只是校准**，不再是"改了没反应"。复验 `node scripts/check-threshold-registry.mjs`。
+- **`H-10`** 之外的 §5 历史遗留**均已结清**（16 项 / 2 真缺陷已修带门 / 11 项早已解决 / 1 项 no-go），见 §5′。
+
+### D. 本轮登记卫生复核（4 处「登记与现实脱节」已就地订正）
+
+1. §0f 末「`write.ingest` 无文件维」→ **已结清**（`c9ddfb7`；真库 `write.ingest-file` **38 行**）。
+2. §11 抬头「决策态，未施工」→ 与本节自己的「施工状态：五册均已落地」矛盾 ⇒ 抬头已订正。
+3. `S2S3-R1`「真库孤儿指针 · 待拍板」→ **已结清**（2026-09-19；`check-section-refs` **0/0/0/0**）。
+4. `scripts/` 的 `CHECKS` 件数与 `check-installed-features` 标记数在 `AGENTS.md` 里长期偏小（156/63 → 实测 **190/82**）⇒ 已订正 + 纳入下述机检。
+
+### E. 本轮（round 10）新增已修项 —— §0m 索引行标签集
+
+| # | 项 | 状态 | 复验 |
+|---|---|---|---|
+| E1 | **索引行合法标签集从未抵达 prompt**（真机 927 轮 / rejected 777 / 标签非法 **140**） | ✅ **已修 + 带门 + 五层验收全绿**（详见 §0m） | `node scripts/check-index-tag-reach.mjs`（含 `--selftest` 6 例 / 5 反例） |
+| E2 | **登记数字漂移纳入机检**（原先只靠人记 ⇒ 长期偏小） | ✅ 新增 `check-arch-sync` ⑦/⑧：`AGENTS.md` 的 CHECKS 件数 ⟷ `check-runner` 元组行数、标记数 ⟷ 四数组之和，**静态解析机检** | `node scripts/check-arch-sync.mjs` |
+
+> ⚠ **A1/A2 两项仍待一句话拍板**（agent 不得自行推进）：这两条是本轮唯一"结论已明确、只等授权"的行为变更。
 
 ---
 

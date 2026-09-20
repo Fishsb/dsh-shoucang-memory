@@ -143,5 +143,45 @@ const shareFiles = readdirSync(join(root, 'src')).filter((f) => f.endsWith('-sha
     `⑥ 接线缺席声明 = 注册表 wiring.pending（豁免 ${pending.length} 条；未申报却宣告 ${offenders.length} 处${offenders.length ? '：' + offenders.map((o) => `L${o.line}(${o.modules.join('/')})`).join(' · ') : ''}）`)
 }
 
+// ── ⑦ 登记件数：AGENTS.md 声称的 `CHECKS` 件数 ⟷ `check-runner.mjs` 实装条目数（2026-09-20 round 10）──
+//   判因（实证）：`AGENTS.md` 两处写死「**156 件**登记于 `CHECKS`」/「（63 项标记）」，
+//   而实测 **190 / 82** —— 本门 ①–⑥ 只守**模块数 / 预算 / 桥 / 接线声明**，**这两个数字从来没被守过**
+//   （与 §5′ 记档的「待办表自我繁殖」同族：文档里的数字没人对，就会一路偏下去）。
+//   判据：从**源码**数（不跑全量 runner —— 本门须轻），口径写死在输出里以便复核。
+{
+  const seg = (() => {
+    const s = read('scripts/check-runner.mjs')
+    const i = s.indexOf('const CHECKS = [')
+    const j = i < 0 ? -1 : s.indexOf('\n]', i)
+    return i < 0 || j < 0 ? '' : s.slice(i, j)
+  })()
+  const measuredChecks = (seg.match(/^\s*\['/gm) || []).length
+  const m = read('AGENTS.md').match(/\*\*(\d+)\s*件\*\*\s*登记于\s*`?CHECKS/)
+  const claim = m ? Number(m[1]) : null
+  chk(measuredChecks > 0 && claim === measuredChecks,
+    `⑦ AGENTS.md 声称的 CHECKS 件数 = check-runner 实装条目数（声称 ${claim ?? '(未找到)'} · 实测 ${measuredChecks}；口径 = CHECKS 数组内 \`['…']\` 元组行数）`)
+}
+
+// ── ⑧ 特性标记数：AGENTS.md 声称 ⟷ `check-installed-features.mjs` 实装标记数（同轮）──
+//   判因同 ⑦：该数字在 `AGENTS.md` 出现两处（原文 63），实测 **82**；而它**只在运行期由脚本自算**
+//   （`FEATURES.length + HOST_FEATURES.length + FEATURES_I18N.length + 1`）⇒ 文档侧必须人工跟。
+//   口径：本门**静态解析**该脚本的数组长度表达式（与运行时同式），不依赖已安装副本是否在位。
+{
+  const s = read('scripts/check-installed-features.mjs')
+  const arrLen = (name) => {
+    const i = s.indexOf(`const ${name} = [`)
+    if (i < 0) return null
+    const j = s.indexOf('\n]', i)
+    if (j < 0) return null
+    return (s.slice(i, j).match(/^\s*\{/gm) || []).length || (s.slice(i, j).match(/^\s*\[/gm) || []).length
+  }
+  const lens = ['FEATURES', 'HOST_FEATURES', 'FEATURES_I18N'].map(arrLen)
+  const measuredFeatures = lens.every((x) => typeof x === 'number' && x >= 0) ? lens.reduce((a, b) => a + b, 0) + 1 : null
+  const claims = [...read('AGENTS.md').matchAll(/（\s*(\d+)\s*项标记\s*）/g)].map((x) => Number(x[1]))
+  const bad = measuredFeatures === null || claims.length === 0 || claims.some((c) => c !== measuredFeatures)
+  chk(!bad,
+    `⑧ AGENTS.md 声称的特性标记数 = 实装（声称 ${claims.length ? claims.join('/') : '(未找到)'} · 实测 ${measuredFeatures ?? '(解析失败)'}；口径 = FEATURES+HOST_FEATURES+FEATURES_I18N+1，与运行期同式）`)
+}
+
 console.log(fail ? `\nFAIL（${fail} 项）` : '\nPASS（架构文档与实测一致）')
 process.exit(fail ? 1 : 0)
