@@ -492,10 +492,11 @@
         "preregistered": false,
         "preregisteredCriterion": null,
         "samples": 0,
-        "conclusion": "insufficient-data（未校准）",
-        "recheck": "J2",
+        "conclusion": "**2026-09-20 round 9 接线订正 —— 本项此前是「假旋钮」**：登记值 {R:1000,K:6} 在**所有实现面都零消费者** —— `panel-observe.ts` 写死 `const R = 1000`；`distill.ts` 的 DEFAULT_DISTILL_PROMPT 与 `deepsleep-core.ts` 的 DEEP_SLEEP_PROMPT 把 `> 1000 字 / > 6 条 / R=1000` **写死在模板串里** ⇒ 改注册表 + gen:criteria + 门禁全绿，而**提示词与面板判据零变化**。⚠ **为什么长期没被发现**：它的投影支 `criteria-gate.json#granularity` 明明在（gen-criteria 生成），而旧门禁判据是「键名是否在 gate JSON 里出现过」⇒ 顶层 `R`/`K`（= health 口径，**同名同值**）把它冒充掉了 —— 实测**把整个 granularity 支删掉仍判\"有\"** ⇒ 该判据**结构性恒真**（同族第 5 例：代理指标非判据）。**已修**：① 三个消费点全部改读 `criteria.ts#splitLawOf()`（注册表真源）；② `check-threshold-control` ③ 改为「按**生成器给出的归属支**验：支下有此键 + 值等于登记值 + 读者按该支路径取值」三条合取，反例自证 7 条含「同名键冒充」「读了别的支」「该行未投影」；③ 新增 ④ **运行期抵达**（`await import()` 编译产物，断言提示词含注册表值 —— 因为 tsc 不内联模板表达式，只 grep 源码会漏）。**先红→后绿**：门 ③ 接线前红（悬空：投影支 granularity · 键在但无人按该支路径读），接线后绿；**变异实证**：把注册表 R 改 1234 → build → 两处提示词运行期真含 1234（还原后字节级一致）。",
+        "recheck": "已接线并机检（本轮）；数值 R/K 校准仍属 J2（无分布依据前不动值）",
         "calibrator": null,
-        "rollback": "改注册表 → 重跑 gen-criteria"
+        "rollback": "改注册表 → 重跑 gen-criteria（消费点已全接读口，改值即改行为；三处消费点见 read）",
+        "read": "src/criteria.ts#splitLawOf() → paramOf('ingest.granularity.split-law','R'|'K')；消费点三处：src/panel-observe.ts（超限节统计）· src/distill.ts#DEFAULT_DISTILL_PROMPT（裂 ### 判据）· src/deepsleep-core.ts#DEEP_SLEEP_PROMPT（split 判据）"
       },
       {
         "id": "trigger.reviewIdleMs",

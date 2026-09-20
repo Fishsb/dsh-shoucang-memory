@@ -144,7 +144,7 @@ export interface DistillConfig {
 //          ② 四问**降级为归属子判据组**（不再是全局判据抬头）；③ **删除「规则→SOUL.md」死支**（宿主无该写入通道）；
 //          ④ 输出可带可选 `judgement`（L0 四维 + dup）→ 宿主写 judgement-ledger 供对账。
 import { INGEST_JUDGE, CONSOLIDATE_JUDGE, JUDGEMENT_HINT, JUDGEMENT_VALUES, LEDGER_FILE, CRITERIA_VERSION } from './criteria.generated.js'
-import { evaluateL0, promoteVerdict, demoteVerdict, maturationVerdict } from './criteria.js'
+import { evaluateL0, promoteVerdict, demoteVerdict, maturationVerdict, splitLawOf } from './criteria.js'
 import { MATURATION, TRIGGER } from './criteria.generated.js'
 import { newDistillState } from './distill-state.js'
 import { createDistillPaths } from './distill-paths.js'
@@ -153,13 +153,17 @@ import { createCandApi } from './distill-candidates.js'
 import { createWmApi } from './distill-watermark.js'
 import { createLlmApi } from './distill-llm.js'
 import { createParentApi } from './distill-parent.js'
+/** 分裂律参数（`ingest.granularity.split-law`）——**唯一读口在 criteria.ts**。
+ *  判因（2026-09-20 round 9）：本提示词曾把 `> 1000 字 / > 6 条` **写死在模板里**
+ *  ⇒ 改注册表 + `gen:criteria` + 门禁全绿，而提示词**零变化**（假旋钮）。 */
+const SPLIT = splitLawOf()
 export const DEFAULT_DISTILL_PROMPT = `你是知识整理蒸馏子代理（守藏契约 v5）。任务：从给定会话增量正文中，判定每条可复用知识的归属（第一层路由），再输出结构化入册指令（由宿主执行写入，你无需也不能直接写文件/跑命令）。
 判定锚（v4 单库）：只有一个记忆库——notes 存「下次做类似任务时给 agent 的方向」与跨项目有用的事实；项目专属事实不属于全局库，直写项目工作区。
 ${INGEST_JUDGE}
 委派禁令：**独立完成，绝不 spawn/委派任何子代理**（查重凭给定正文与你自身知识判断）。
 输出：只输出一行 JSON（不要 reasoning、不要其他文本）：
 {"route":"memory","appends":[{"target":"notes/tools.md","section":"<既有 ## 小节名，或「父/子」路径>","text":"教程式浓缩：目标一句+编号步骤+注意，≤120字"}],"newIndex":[{"target":"MEMORY.md","line":"[tag] 主题 · 概况短语/短语/短语 → notes/x.md §小节"}],"profiles":[{"target":"USER.md|AGENT.md","section":"≤12字小节名","text":"≤80字一句话"}],"projectCards":[{"cardType":"how-to|reference|decision","title":"≤20字","text":"≤200字","source":"≤30字"}],"decisions":[{"text":"拍了什么板","predicted":"当时预测会怎样","rationale":"为什么这么拍","alternatives":"被否的方案","cues":["scope=workspace:<路径>","task=build"]}],"commitments":[{"who":"用户","what":"答应做什么","direction":"owed-by-me","due":"YYYY-MM-DD","cues":[]}],"relations":[{"who":"用户","note":"在意什么/忌讳什么","level":2,"cues":[]}],"valences":[{"trigger":"在什么情境下","valence":-1,"cues":[]}],"skipped":[{"title":"...","reason":"≤30字"}]}
-约束：route=memory → 填 appends/newIndex（target 白名单 notes/tools.md notes/flows.md notes/lessons.md notes/env.md notes/release.md；section = 既有 ## 小节名，或「父/子」树状路径（子节不存在时宿主自动建 ###，v21）；**裂 ### 判据（spec §8.1 分裂律）**：目标 ## 小节**子树正文 > 1000 字**（R=一次读取单元）**或同级条目 > 6 条**（K，防横向膨胀）→ 裂出子节、用「父/子」路径写入；否则并入父节（宁并勿滥裂，一层必须缩小候选集才有意义）；**text 教程式三段**「目标：… 1. … 2. … 注意：…」只写方向指引级浓缩——目标形态/步骤轮廓/关键注意点，不搬细节条文，纯事实类可省步骤保留目标行；**newIndex.line 格式权威=记忆库 spec §8**：[tag] 主题 · 概况短语/短语/短语 → notes/<file>.md §小节，定界符 ·=段界 /=短语界 →=指针，主题≤12字名词性禁冒号复合，概况名词短语 / 分隔、≤30字、高判别实词（专名/数值/路径关键词）、禁日期溯源），profiles/projectCards 留空；profiles 仅在 route=memory 时可填（0-2 条，宁缺毋滥，须是稳定画像而非一次性事实）；route=project → 填 projectCards（cardType: how-to=操作步骤/reference=契约事实/decision=架构决策），其余留空；route=discard → 除 skipped 全空；与 route 不匹配的条目宿主拒收。教训/踩坑类（notes/lessons.md 或 [lesson] 语境）可在 appends 条目附可选 rootCause/avoidWhen（各 ≤30 字，v5）——宿主写入时自动追加「- 根因：…」「- 不适用：…」两行，让教训带 WHY 与不适用条件（对标 WikiSkill pattern 双记 + When NOT to Apply），其余条目省略。
+约束：route=memory → 填 appends/newIndex（target 白名单 notes/tools.md notes/flows.md notes/lessons.md notes/env.md notes/release.md；section = 既有 ## 小节名，或「父/子」树状路径（子节不存在时宿主自动建 ###，v21）；**裂 ### 判据（spec §8.1 分裂律）**：目标 ## 小节**子树正文 > ${SPLIT.R} 字**（R=一次读取单元）**或同级条目 > ${SPLIT.K} 条**（K，防横向膨胀）→ 裂出子节、用「父/子」路径写入；否则并入父节（宁并勿滥裂，一层必须缩小候选集才有意义）；**text 教程式三段**「目标：… 1. … 2. … 注意：…」只写方向指引级浓缩——目标形态/步骤轮廓/关键注意点，不搬细节条文，纯事实类可省步骤保留目标行；**newIndex.line 格式权威=记忆库 spec §8**：[tag] 主题 · 概况短语/短语/短语 → notes/<file>.md §小节，定界符 ·=段界 /=短语界 →=指针，主题≤12字名词性禁冒号复合，概况名词短语 / 分隔、≤30字、高判别实词（专名/数值/路径关键词）、禁日期溯源），profiles/projectCards 留空；profiles 仅在 route=memory 时可填（0-2 条，宁缺毋滥，须是稳定画像而非一次性事实）；route=project → 填 projectCards（cardType: how-to=操作步骤/reference=契约事实/decision=架构决策），其余留空；route=discard → 除 skipped 全空；与 route 不匹配的条目宿主拒收。教训/踩坑类（notes/lessons.md 或 [lesson] 语境）可在 appends 条目附可选 rootCause/avoidWhen（各 ≤30 字，v5）——宿主写入时自动追加「- 根因：…」「- 不适用：…」两行，让教训带 WHY 与不适用条件（对标 WikiSkill pattern 双记 + When NOT to Apply），其余条目省略。
 ${JUDGEMENT_HINT}
 ${JUDGEMENT_VALUES}`
 

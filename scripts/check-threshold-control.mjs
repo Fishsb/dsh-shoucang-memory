@@ -30,7 +30,7 @@
 // 退出码：0=PASS  1=FAIL
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const argv = process.argv.slice(2)
@@ -45,6 +45,57 @@ const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^
 /** 判定：某 id 的读口是否在 src（非生成物、已剥注释）里真实存在。 */
 export const hasReadPort = (id, srcText) =>
   new RegExp(`threshold(?:Value|Param)\\s*(?:<[^>]*>)?\\s*\\(\\s*['"]${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"]`).test(srcText)
+
+/** 判定：某 `registryPath` 行族登记项的参数**真的被脚本面按归属路径读到**吗（2026-09-20 round 9）。
+ *
+ *  ── 判因（本轮实测 · **③ 曾结构性恒真**）────────────────────────────────
+ *  旧实现 `keyInGate(k)` 在**整份 `criteria-gate.json` 里递归找键名** ⇒ 键名一旦与别处同名即误判。
+ *  真机形态：投影里**顶层 `R`/`K`**（= `reg.health.R`，体检用）与 **`granularity.R`/`granularity.K`**
+ *  （= 分裂律，`ingest.granularity.split-law` 的参数）**同名同值**。
+ *  实测（`_tmp-probe-gate3-collide.mjs` 实证）：查 `granularity` 的 `R` 命中顶层 `R`
+ *  ⇒ **把整个 `granularity` 支删掉仍判"有"** ⇒ 该分支**恒真** ⇒ 遮盖下面这个**真缺陷**：
+ *  **`granularity.R/K` 在 `src/` 与 `skill/scripts/` 里都零消费者**
+ *  （`panel-observe.ts:440` 是裸 `const R = 1000`；`distill.ts:162` 与 `deepsleep-core.ts:262`
+ *   两处 prompt 也把 `> 1000 字 / > 6 条` 写死在模板里）。
+ *
+ *  ── 怎么才算"被读到"（**归属不靠猜，靠生成器**）────────────────────────────
+ *  ⚠ 第一版修正曾用「路径深度 ≥2」区分归属 —— **那是代理指标**：`notesWarn` 是真消费者却恰在顶层，
+ *    而 `dedup.R` 与 `granularity.R` 同名同值时又会互相冒充（selftest 当场两条都判错）。
+ *  正解 = 问**生成器自己**：`scripts/gen-criteria.mjs#buildGate` 明确写着每一支取自哪一行的 `params`
+ *    （`granularity: … criteria.find(c => c.id === 'ingest.granularity.split-law').params`）。
+ *    本件解析该映射 ⇒ `行 id → 投影支名`，再要求读者写出**该支的路径取值**。
+ *  与被推翻的旧版相比**不是放宽**：从"整份 JSON 里有个同名键"收紧到
+ *    "该行确被投影到某支、该支下确有此键、键值等于登记值、且读者按该支路径取值"四条合取。
+ */
+export const gateBranchOf = (genSrc, rowId) => {
+  const s = strip(genSrc)
+  // 形如： granularity: { R: reg.ingest.criteria.find((c) => c.id === 'ingest.granularity.split-law').params.R, ... }
+  //   或： demote: reg.consolidate.criteria.find((c) => c.id === 'consolidate.demote.archive').params,
+  const out = new Map()
+  const re = /^\s*([A-Za-z_$][\w$]*)\s*:\s*([^\n]+)$/gm
+  let m
+  while ((m = re.exec(s))) {
+    const [, branch, rhs] = m
+    const idm = /c\.id\s*===\s*['"]([^'"]+)['"]/.exec(rhs)
+    if (idm && out.get(idm[1]) === undefined) out.set(idm[1], branch)
+  }
+  return out.get(rowId) || null
+}
+
+/** 该行族参数是否被脚本面**按归属支路径**读到（`atPath` 由 `gateBranchOf` 给出，不是猜的）。 */
+export const gateReadAt = (gateJson, readersText, branch, keys, wantObj) => {
+  if (!branch) return { ok: false, present: false, byPath: false, path: null, why: '该行未被 gen-criteria 投影到任何支' }
+  const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const head = gateJson?.[branch]
+  if (!head || typeof head !== 'object') return { ok: false, present: false, byPath: false, path: null, why: `投影无 ${branch} 支` }
+  const present = keys.every((k) => {
+    const v = head[k]
+    const want = wantObj && typeof wantObj === 'object' ? wantObj[k] : undefined
+    return v !== undefined && (want === undefined || JSON.stringify(v) === JSON.stringify(want))
+  })
+  const byPath = keys.some((k) => new RegExp(`\\b[A-Za-z_$][\\w$]*\\s*\\.\\s*${esc(branch)}\\s*\\.\\s*${esc(k)}\\b`).test(readersText))
+  return { ok: present && byPath, present, byPath, path: `${branch}.${keys.join('/')}`, why: present ? (byPath ? 'ok' : '键在但无人按该支路径读') : '支下缺该键或值不符' }
+}
 
 /* ── `--selftest`：反例自证（样例取自真机形态）────────────────────────────── */
 if (argv.includes('--selftest')) {
@@ -69,7 +120,49 @@ if (argv.includes('--selftest')) {
   }
   const negs = cases.filter(([l]) => l.includes('反例'))
   if (negs.length < 2) { bad++; console.log('❌ 反例不足（须含"无读口"与"注释里的读口"两类）') }
-  console.log(bad ? `\nFAIL（--selftest ${bad} 例）` : `\nPASS（判据自证可用：${cases.length} 例，含 ${negs.length} 条反例）`)
+
+  /* ── ③ 的**反例自证**（2026-09-20 round 9 补）：同名键不得冒充"投影里有读数" ────────
+   *  真机形态：`criteria-gate.json` 里 **顶层 `R`/`K`**（= `health.R/K`）与
+   *    **`granularity.R`/`granularity.K`**（= 分裂律）**同名同值**。
+   *  旧判据在**整份 JSON 里递归找键名** ⇒ 查 `granularity` 的 `R` 时被顶层 `R` 满足
+   *    ⇒ **恒真**（删掉 `granularity` 支仍判"有"）。⇒ 改为**按归属路径 + 值一致 + 读者按路径读**。 */
+  const gateCases = [
+    ['正例·行被投影到某支、键在、值符、读者按该支路径读（`proj.demote.coldDays` 形态）',
+      { gj: { demote: { coldDays: 90 } }, readers: 'const c = proj.demote.coldDays',
+        gen: `demote: reg.consolidate.criteria.find((c) => c.id === 'consolidate.demote.archive').params,`,
+        row: 'consolidate.demote.archive', want: { coldDays: 90 }, keys: ['coldDays'], expect: true }],
+    ['**反例**·同名键冒充：行被投影到 `granularity`，而读者只读顶层 `proj.R`（**真机恒真形态**）',
+      { gj: { R: 1000, granularity: { R: 1000 } }, readers: 'const R = proj.R',
+        gen: `granularity: reg.ingest.criteria.find((c) => c.id === 'ingest.granularity.split-law').params,`,
+        row: 'ingest.granularity.split-law', want: { R: 1000, K: 6 }, keys: ['R', 'K'], expect: false }],
+    ['正例·读者按归属支路径读（应改成的形态 `proj.granularity.R`）',
+      { gj: { R: 1000, granularity: { R: 1000, K: 6 } }, readers: 'const R = proj.granularity.R\nconst K = proj.granularity.K',
+        gen: `granularity: reg.ingest.criteria.find((c) => c.id === 'ingest.granularity.split-law').params,`,
+        row: 'ingest.granularity.split-law', want: { R: 1000, K: 6 }, keys: ['R', 'K'], expect: true }],
+    ['**反例**·值不一致（投影里该支的键值 ≠ 登记值 ⇒ 不是同一件事）',
+      { gj: { granularity: { R: 999 } }, readers: 'const R = proj.granularity.R',
+        gen: `granularity: reg.ingest.criteria.find((c) => c.id === 'ingest.granularity.split-law').params,`,
+        row: 'ingest.granularity.split-law', want: { R: 1000, K: 6 }, keys: ['R'], expect: false }],
+    ['**反例**·支在、读者在，但读者读的是**另一支**（`proj.dedup.R`）',
+      { gj: { granularity: { R: 1000 }, dedup: { R: 1000 } }, readers: 'const R = proj.dedup.R',
+        gen: `granularity: reg.ingest.criteria.find((c) => c.id === 'ingest.granularity.split-law').params,\ndedup: reg.ingest.criteria.find((c) => c.id === 'ingest.dedup.bigram').params,`,
+        row: 'ingest.granularity.split-law', want: { R: 1000 }, keys: ['R'], expect: false }],
+    ['**反例**·该行**根本未被投影**到任何支（生成器里找不到它）',
+      { gj: { granularity: { R: 1000 } }, readers: 'const R = proj.granularity.R',
+        gen: `granularity: reg.ingest.criteria.find((c) => c.id === 'ingest.granularity.split-law').params,`,
+        row: 'ingest.ghost.row', want: { R: 1000 }, keys: ['R'], expect: false }],
+  ]
+  for (const [label, c] of gateCases) {
+    const branch = gateBranchOf(c.gen, c.row)
+    const got = gateReadAt(c.gj, c.readers, branch, c.keys, c.want).ok
+    const okCase = got === c.expect
+    if (!okCase) bad++
+    console.log(`${okCase ? '✅' : '❌'} ${label} → 支=${branch || '(无)'} · 判${got ? '有' : '无'}（期望${c.expect ? '有' : '无'}）`)
+  }
+  negs.push(...gateCases.filter(([l]) => l.includes('反例')))
+  if (negs.length < 5) { bad++; console.log('❌ 反例不足（须含"无读口 / 注释里的读口 / 同名键冒充 / 值不一致 / 读了别的支 / 未投影"六类）') }
+
+  console.log(bad ? `\nFAIL（--selftest ${bad} 例）` : `\nPASS（判据自证可用：${cases.length + gateCases.length} 例，含 ${negs.length} 条反例）`)
   process.exit(bad ? 1 : 0)
 }
 
@@ -82,8 +175,24 @@ const entries = reg?.thresholds?.entries || []
 const S = join(root, 'src')
 // **排除生成物**：它是投影，不是消费者（真机正是靠"只在生成物里"被误认为有消费）
 const srcFiles = readdirSync(S).filter((f) => f.endsWith('.ts') && f !== 'criteria.generated.ts')
-const srcAll = srcFiles.map((f) => strip(readFileSync(join(S, f), 'utf8'))).join('\n')
+const srcTexts = srcFiles.map((f) => ({ f, t: strip(readFileSync(join(S, f), 'utf8')) }))
+const srcAll = srcTexts.map((x) => x.t).join('\n')
 console.log(`阈值传动核查（thresholds.entries ${entries.length} 项 · 扫描 ${srcFiles.length} 个**非生成物·已剥注释**的 src 文件）`)
+
+/** `paramOf('<rowId>', '<key>'` 的**别名感知**判定（2026-09-20 round 9）。
+ *  判因：`criteria.ts#demoteVerdict` 写的是 `const id = 'consolidate.demote.archive'`
+ *        再 `paramOf<number>(id, 'coldDays', 90)` —— **行 id 经局部别名传入**。
+ *  旧正则要求两个参数都是**字面量** ⇒ 判"无取值路径"（**假红**，会误报真消费者）。
+ *  ⇒ 先在该文件里收集绑定到该 rowId 字面量的**局部标识符**，再连带匹配。 */
+const escRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const viaParamOf = (rowId, keys) => srcTexts.some(({ t }) => {
+  const aliasRe = new RegExp(`(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*['"]${escRe(rowId)}['"]`, 'g')
+  const aliases = []
+  let m
+  while ((m = aliasRe.exec(t))) aliases.push(m[1])
+  const srcAlt = [`'${escRe(rowId)}'`, ...aliases.map((a) => `\\b${escRe(a)}\\b`)].join('|')
+  return keys.some((k) => new RegExp(`paramOf\\s*(?:<[^>]*>)?\\s*\\(\\s*(?:${srcAlt})\\s*,\\s*['"]${escRe(k)}['"]`).test(t))
+})
 
 // ── ① 字面量型登记项必须有活读口 ──
 const noPort = []
@@ -112,21 +221,21 @@ ok(portCalls > 0, `② 读口非孤儿：src 内 thresholdValue/thresholdParam �
  *    ⇒ 对 `ingest.criteria[...]` / `consolidate.criteria[...]` 这两族，取值**必须经由**：
  *      A) `paramOf('<行 id>', '<键>'`（src 侧读 CRITERIA_ROWS），或
  *      B) `thresholdValue('<项 id>'`，或
- *      C) 该键被投影进 `skill/engine/criteria-gate.json` **且**有脚本面读者
- *         （`granularity` / `dedup` / `format` / `demote` 四族 —— `memory_write_gate` / `memory_health_check` 读它）。
+ *      C) 该键被投影进 `skill/engine/criteria-gate.json` **且**被脚本面**按归属路径**读者取用
+ *         （`gateReadHit`；⚠ 2026-09-20 round 9 订正：旧版是"整份 JSON 里有个同名键"⇒ **恒真**，
+ *          实证见 `gateReadHit` 的判因段）。
  *    三者皆无 ⇒ 红。 */
 {
   const gateJson = (() => {
     try { return JSON.parse(readFileSync(join(root, 'skill', 'engine', 'criteria-gate.json'), 'utf8')) } catch { return null }
   })()
+  // **归属映射的唯一来源 = 生成器自己**（不另写一份表，否则又是一处漂移源）
+  const genSrc = (() => {
+    try { return readFileSync(join(root, 'scripts', 'gen-criteria.mjs'), 'utf8') } catch { return '' }
+  })()
+  if (!genSrc) { console.log('❌ 读不到 scripts/gen-criteria.mjs（归属映射的来源不可缺）'); process.exit(1) }
   const gateReaders = ['skill/scripts/memory_write_gate.mjs', 'skill/scripts/memory_health_check.mjs']
     .map((p) => { try { return strip(readFileSync(join(root, p), 'utf8')) } catch { return '' } }).join('\n')
-  const keyInGate = (k) => {
-    if (!gateJson || !k) return false
-    const hit = (o) => o && typeof o === 'object'
-      && (Object.prototype.hasOwnProperty.call(o, k) || Object.values(o).some((v) => hit(v)))
-    return hit(gateJson)
-  }
   const stranded = []
   let rowFamily = 0
   for (const e of entries) {
@@ -142,14 +251,65 @@ ok(portCalls > 0, `② 读口非孤儿：src 内 thresholdValue/thresholdParam �
       ? Object.keys(e.value)
       : [rp[rp.length - 1]]
     const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const viaParam = keys.some((k) => new RegExp(`paramOf\\s*(?:<[^>]*>)?\\s*\\(\\s*['"]${esc(rowId)}['"][^)]*['"]${esc(k)}['"]`).test(srcAll))
+    const viaParam = viaParamOf(rowId, keys)
     const viaPort = hasReadPort(String(e.id), srcAll)
-    const viaGate = keys.some((k) => keyInGate(k)) && gateReaders.length > 0
-    if (!viaParam && !viaPort && !viaGate) stranded.push(`${e.id}（行 ${rowId} 的键 ${keys.join('/')} 无取值路径）`)
+    /* C) 脚本面投影路：**归属支由生成器给出**（`gateBranchOf`），再要求"支下有此键 +
+     *    值等于登记值 + 读者按该支路径取值"三条合取。⚠ 归属**不靠猜深度/名字**——
+     *    第一版曾用"路径深度 ≥2"，而 `notesWarn` 恰在顶层（真消费者被判无）且
+     *    `dedup.R`/`granularity.R` 同名同值会互相冒充（selftest 两条都判错）。 */
+    const branch = gateBranchOf(genSrc, rowId)
+    const gateHit = gateReadAt(gateJson, gateReaders, branch, keys, e.value)
+    const viaGate = gateHit.ok
+    if (!viaParam && !viaPort && !viaGate) stranded.push(`${e.id}（行 ${rowId} 的键 ${keys.join('/')} 无取值路径：${branch ? `投影支 ${branch}` : '未投影'} · ${gateHit.why}）`)
   }
   ok(stranded.length === 0,
-    `③ 判据行型登记项（${rowFamily} 项）取值须经 paramOf / thresholdValue / criteria-gate.json 之一` +
+    `③ 判据行型登记项（${rowFamily} 项）取值须经 paramOf / thresholdValue / criteria-gate.json（**按归属路径**）之一` +
     (stranded.length ? ` —— 悬空：${stranded.join(' · ')}` : ''))
+}
+
+/** 在投影里为某行 id 的键**反查实际归属路径**，并核对读者是否按该路径取值。
+ *  做法：穷举投影的**路径**（不只是键名），挑出「叶键名 ∈ keys 且叶值 === 登记值」的那些路径，
+ *  再要求读者代码中至少有一条**该路径的取值**。⇒ 同名键不再冒充（路径不同即不算）。
+ *  实现在文件上方（`gatePathOf`，导出版）。此处仅留说明，避免第二份定义。 */
+
+/* ── ④ **运行期抵达**（2026-09-20 round 9 新增 · 补"接线 ≠ 抵达"型假绿）────────────────
+ *  判因：①②③ 查的都是**静态读口**（源码里有没有那行调用）——而 `distill.ts` 的
+ *    `DEFAULT_DISTILL_PROMPT` / `deepsleep-core.ts` 的 `DEEP_SLEEP_PROMPT` 是**模板字面量**，
+ *    `tsc` **不内联** `${SPLIT.R}`（实测编译产物里原样保留该表达式，运行期才展开）
+ *    ⇒ 只 grep 源码会**漏判**（同族教训：`check-l0-conflict-wiring` 曾 grep 编译产物里的字面量而假红，
+ *      正解是 `await import()` 编译模块取运行期值）。
+ *  本规则：**导入编译产物**，断言两处提示词真的含**注册表登记值**（不是源码里的表达式文本）。 */
+{
+  const libDir = join(root, 'lib')
+  const want = (() => {
+    const row = (() => {
+      try { return JSON.parse(readFileSync(join(root, 'skill/engine/criteria.json'), 'utf8')) } catch { return null }
+    })()
+    const c = row?.ingest?.criteria?.find((x) => x.id === 'ingest.granularity.split-law')
+    return c?.params || null
+  })()
+  if (!want) { console.log('❌ 注册表缺 ingest.granularity.split-law.params（事实源不可缺）'); process.exit(1) }
+  const imported = []
+  try {
+    const { DEFAULT_DISTILL_PROMPT } = await import(pathToFileURL(join(libDir, 'distill.js')).href)
+    const { DEEP_SLEEP_PROMPT } = await import(pathToFileURL(join(libDir, 'deepsleep-core.js')).href)
+    imported.push(['lib/distill.js#DEFAULT_DISTILL_PROMPT', DEFAULT_DISTILL_PROMPT])
+    imported.push(['lib/deepsleep-core.js#DEEP_SLEEP_PROMPT', DEEP_SLEEP_PROMPT])
+  } catch (e) {
+    console.log(`❌ 无法导入编译产物（lib/ 未构建？）: ${String(e?.message || e).slice(0, 100)}`)
+    process.exit(1)
+  }
+  const miss = imported.filter(([, text]) =>
+    !new RegExp(`>\\s*(?:R=)?${want.R}\\s*字`).test(String(text)))
+  if (miss.length) {
+    console.log(`❌ ④ 运行期抵达：以下提示词**不含**注册表值 R=${want.R} —— ${miss.map(([n]) => n).join(' · ')}`)
+    fail++
+  }
+  // ② K 维：只有 distill 提示词带同级条目上限
+  const kOk = new RegExp(`>\\s*${want.K}\\s*条`).test(String(imported.find(([n]) => n.includes('distill'))?.[1] || ''))
+  ok(miss.length === 0 && kOk,
+    '④ 运行期抵达：`lib/distill.js#DEFAULT_DISTILL_PROMPT` 与 `lib/deepsleep-core.js#DEEP_SLEEP_PROMPT` **运行期**含注册表值（R=' + want.R + (kOk ? ` · K=${want.K}` : '') + '）' +
+    (miss.length || !kOk ? ' —— 提示词仍写死或未展开' : ' —— **改注册表即改喂给模型的提示词**'))
 }
 
 // ── 报告：每项传动状态 ──

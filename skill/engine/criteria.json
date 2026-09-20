@@ -590,7 +590,6 @@
     "materialChunkChars": 52232,
     "manual": true,
     "note": "触发数据化（v2.1 §2.4 · B 档接线后为 runtime）：idleMs=全部根会话停滞阈值；probeAfterMs/probeWindowMs=卡住探测；**newTracesMin=窗口材料下限（⚠ 2026-09-20 round 9 名实订正：原写「窗口内最少新痕迹数」，而消费点比的其实是 `gatherDeepSleepTraces(...).length`，即**材料段字符数**；真机影响面：49 纪元中 46 个 `materialBytes=0`、其中 25 个仍入睡 ⇒ 若真按「痕迹文件数」判，这 25 轮**全不该入睡** ⇒ 名实差距是**行为级**的。见下「S-P1b″ 口径定案」）**；manual=面板「立即归纳一次」。**改这里即改行为**（scheduler zod 缺省直接读本块）。⚠ **2026-09-15 P0.1 实证订正**：本块原注释称「缺省 3h」，但**实际生效值是本块的 2700000ms（45min）**——`scheduler.ts` 的 zod `.default(TRIGGER.idleMs)` 取本块值，而**全仓 8 处** `|| 10800000`（3h）兜底因 zod 有 default 而是**死代码**（⚠ 首轮只报 4 处：检索用了大小写敏感的 `idleMs`，漏掉 `deepSleepIdleMs` 那 4 处 —— `deepsleep.ts` ×2 / `distill-hooks.ts` ×2 ⇒ 「模式派生集合先核对」的典型踩坑）。已修：**8 处全部**统一改引本块（**单一来源已下沉 `deepsleep-core#idleMsOf`**）+ 注释订正 + 护栏 `test-deepsleep-wiring` ⑦（可执行代码不得再出现该字面量），**数值未动**（P0 不改行为）。**数值本身待 P1 双维水位按预注册判据校准**。 **S-P2b（2026-09-20）**：deepSleepProbeConflictMax=证据冲突（agent 状态活跃但连续零输出）连续多少轮即按卡住处理——补 conflict 分支**无界**致活锁（真机 28f9f094 连续 23 次 / 跨 11 小时零触发）。 **S-P1b″ 口径定案（2026-09-20 round 9）**：内容水位的**正确轴**已定位并落地 —— 不用字节量（`windowMaterialBytes` 与真实材料非同源，实测 0 vs 46692），也不用 `materialChars`（有**地板效应**：min 已达中位 43%），而用 **`countWindowTraces`（窗口内痕迹文件数）**——它与「新增材料」同源、零额外 IO（复用 `enumerateWindowTraces` 同一遍枚举）、且已落审计 `traceFiles`。⚠ **改判定为文件数是行为变更**（会砍掉 51% 入睡纪元的输入面）⇒ 属 R3 须用户拍板；本轮只把它**变成可判定的事**（有轴、有读数、有判据），**未擅自改判定**。",
-
     "reviewIdleMs": 1800000,
     "reviewMinNewEntries": 3,
     "reviewMinNewEvents": 600,
@@ -901,10 +900,11 @@
         "preregistered": false,
         "preregisteredCriterion": null,
         "samples": 0,
-        "conclusion": "insufficient-data（未校准）",
-        "recheck": "J2",
+        "conclusion": "**2026-09-20 round 9 接线订正 —— 本项此前是「假旋钮」**：登记值 {R:1000,K:6} 在**所有实现面都零消费者** —— `panel-observe.ts` 写死 `const R = 1000`；`distill.ts` 的 DEFAULT_DISTILL_PROMPT 与 `deepsleep-core.ts` 的 DEEP_SLEEP_PROMPT 把 `> 1000 字 / > 6 条 / R=1000` **写死在模板串里** ⇒ 改注册表 + gen:criteria + 门禁全绿，而**提示词与面板判据零变化**。⚠ **为什么长期没被发现**：它的投影支 `criteria-gate.json#granularity` 明明在（gen-criteria 生成），而旧门禁判据是「键名是否在 gate JSON 里出现过」⇒ 顶层 `R`/`K`（= health 口径，**同名同值**）把它冒充掉了 —— 实测**把整个 granularity 支删掉仍判\"有\"** ⇒ 该判据**结构性恒真**（同族第 5 例：代理指标非判据）。**已修**：① 三个消费点全部改读 `criteria.ts#splitLawOf()`（注册表真源）；② `check-threshold-control` ③ 改为「按**生成器给出的归属支**验：支下有此键 + 值等于登记值 + 读者按该支路径取值」三条合取，反例自证 7 条含「同名键冒充」「读了别的支」「该行未投影」；③ 新增 ④ **运行期抵达**（`await import()` 编译产物，断言提示词含注册表值 —— 因为 tsc 不内联模板表达式，只 grep 源码会漏）。**先红→后绿**：门 ③ 接线前红（悬空：投影支 granularity · 键在但无人按该支路径读），接线后绿；**变异实证**：把注册表 R 改 1234 → build → 两处提示词运行期真含 1234（还原后字节级一致）。",
+        "recheck": "已接线并机检（本轮）；数值 R/K 校准仍属 J2（无分布依据前不动值）",
         "calibrator": null,
-        "rollback": "改注册表 → 重跑 gen-criteria"
+        "rollback": "改注册表 → 重跑 gen-criteria（消费点已全接读口，改值即改行为；三处消费点见 read）",
+        "read": "src/criteria.ts#splitLawOf() → paramOf('ingest.granularity.split-law','R'|'K')；消费点三处：src/panel-observe.ts（超限节统计）· src/distill.ts#DEFAULT_DISTILL_PROMPT（裂 ### 判据）· src/deepsleep-core.ts#DEEP_SLEEP_PROMPT（split 判据）"
       },
       {
         "id": "trigger.reviewIdleMs",
@@ -1079,14 +1079,46 @@
     "note": "内容类型契约（S0 · 2026-09-14）：把「信息类型 ↔ 生产/载体/消费」的映射收敛到唯一一处，补齐此前裂成三份且互不引用的定义（carriers.tags 管注入面 / record-store.kindOfLine 管 Record kind / targets 管 md 行形态）。reachable 是**可机检字段**：reachable=true ⇒ 消费侧必须存在对应通路（按 consumer.criterion 反查），由 scripts/check-content-types.mjs 守。producers 记录当前实际写入者；layer 采用人类三层（outer 任务级 / middle 行动级 / inner 认知级）。 结构性记录（不属信息类型、不注入）：不属「信息类型」，不注入（consumer.layer = none）。保留于此以便 check-content-types 的枚举完备性断言可覆盖 RecordKind 全集。",
     "vocab": {
       "note": "值域声明（Q1 · 2026-09-20）。**由来**：此前 layer/timing/criterion/budget 四列的取值域**只活在 `scripts/check-content-types.mjs` 的 `new Set` 里** —— 真源写错一个取值，门禁不动（实测 `due` 合法却 0 使用、`oneshot` 从未有类型挂载）。本段把值域搬回真源，门禁改读此处（唯一事实源原则）。**reserved 语义**：值合法但当前 0 使用 —— 标注而非删除，因为它们是**真实存在的槽或已声明目标**（`oneshot` = 真实注入槽；`mcl` 与 `situation.mcl` 既有消费相冲突故保留；`process` 随 Q4 门控改造在途；`due` 通路已接线 `ring-supply#dueSoon` 但暂无类型挂载）。**memClass**：认知类型轴（语义/情景/程序性），三类对位由此从文档句变成可执行断言；`none` 只给 `noteBody`（notes 正文本体是**载体形态**，不是第四类记忆，不进三类计数）。",
-      "layer": ["outer", "middle", "inner", "none"],
-      "timing": ["session-start", "task-start", "per-step", "on-demand", "none"],
-      "criterion": ["always", "relevance", "situation-key", "none"],
-      "budget": ["stable", "dynamic", "situation", "none"],
-      "memClass": ["semantic", "episodic", "procedural", "none"],
+      "layer": [
+        "outer",
+        "middle",
+        "inner",
+        "none"
+      ],
+      "timing": [
+        "session-start",
+        "task-start",
+        "per-step",
+        "on-demand",
+        "none"
+      ],
+      "criterion": [
+        "always",
+        "relevance",
+        "situation-key",
+        "none"
+      ],
+      "budget": [
+        "stable",
+        "dynamic",
+        "situation",
+        "none"
+      ],
+      "memClass": [
+        "semantic",
+        "episodic",
+        "procedural",
+        "none"
+      ],
       "reserved": {
-        "criterion": ["due"],
-        "budget": ["oneshot", "mcl", "process"]
+        "criterion": [
+          "due"
+        ],
+        "budget": [
+          "oneshot",
+          "mcl",
+          "process"
+        ]
       }
     },
     "types": {

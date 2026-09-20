@@ -28,6 +28,7 @@ import { relationCensus, trustOf } from './relation-ring.js'
 import { ringCensus } from './rings.js'
 import { RING_EVENT_FILE, parseEvents, reconcileRing } from './ring-events.js'
 import { CONSUMER_CHANNELS, createContentTypesApi } from './content-types.js'
+import { splitLawOf } from './criteria.js'
 
 export interface ObserveDeps {
   route: RouteFn
@@ -437,7 +438,9 @@ function cognitionReportRoute(d: ObserveDeps, _req: IncomingMessage, res: Server
     for (const n of ['MEMORY.md', 'USER.md', 'AGENT.md']) {
       try { idxRows += readFileSync(join(root, n), 'utf8').split('\n').filter((l) => /^\s*\[/.test(l)).length } catch { /* 缺件跳过 */ }
     }
-    const R = 1000
+    /* 分裂律读取单元 R（`ingest.granularity.split-law`）——
+     *   原为裸字面量 `1000`（2026-09-20 round 9 接线：改注册表即改本面板的超限节判据）。 */
+    const { R } = splitLawOf()
     const overR: Array<{ lvl: number; name: string; chars: number }> = []
     try {
       const own = (b: string): number => b.split('\n').slice(1).join('\n').replace(/\s/g, '').length

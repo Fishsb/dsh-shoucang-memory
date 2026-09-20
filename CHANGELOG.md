@@ -5,6 +5,14 @@
 ## [Unreleased]
 
 ### Changed
+- **🔴 「假旋钮」第 5 例 + 门禁自身恒真（2026-09-20 round 9）**：`ingest.granularity.splitLaw`（分裂律 `R`/`K`）**登记了、投影了、而在所有实现面都零消费者**；且守着它的那道判据是**结构性恒真**。
+  · **真缺陷**：登记值 `{R:1000, K:6}` 的消费点全是**裸字面量** —— `src/panel-observe.ts` 写死 `const R = 1000`（超限节统计）；`src/distill.ts#DEFAULT_DISTILL_PROMPT` 把 `> 1000 字 / > 6 条`、`src/deepsleep-core.ts#DEEP_SLEEP_PROMPT` 把 `R=1000` **写死在模板串里** ⇒ 改注册表 + `gen:criteria` + 门禁全绿，而**喂给模型的提示词与面板判据零变化**。
+  · **为什么长期没被发现（门禁的锅）**：`check-threshold-control` ③ 的旧判据是「键名在**整份** `criteria-gate.json` 里出现过」——而投影里**顶层 `R`/`K`**（= `reg.health.R/K`，体检口径）与 **`granularity.R/K`**（= 分裂律）**同名同值** ⇒ 实测**把整个 `granularity` 支删掉仍判"有"**（`_tmp-probe-gate3-collide.mjs` 实证：删支后 `keyInGate('R')` 仍 `true`，命中的是顶层那个）⇒ 该分支**结构性恒真**，恰好把真缺陷盖住。**同族第 5 例**（前 4：门4 零样本实为输入链断 · S-P1b′ 纪元 3/10 实为单档读 · `inject-dedup-probe` 写了从不跑 · J3/U1 上限<门槛恒真）。
+  · **修实现**：新增 `src/criteria.ts#splitLawOf()`（唯一读口，`paramOf` 读注册表真源），三个消费点全部改读它 —— 面板超限节统计、蒸馏提示词、深睡提示词。
+  · **修判据（③ 改按生成器归属支验）**：归属**不靠猜深度/名字**，问**生成器自己** —— 解析 `gen-criteria.mjs#buildGate` 的「支名 → 行 id」映射，再要求「该支下确有此键 + 键值等于登记值 + 读者按该支路径取值」三条合取。⚠ 第一版修正曾用「路径深度 ≥2」，**当场被 selftest 抓出两处判错**（`notesWarn` 是真消费者却恰在顶层 ⇒ 误判无；`dedup.R`/`granularity.R` 同名同值 ⇒ 互相冒充）⇒ 作废，改走生成器。反例自证 **7 条**（含「同名键冒充」「读了别的支」「该行未投影」「值不一致」「注释里的读口」）。
+  · **新增判据 ④ 运行期抵达**：`await import()` 编译产物，断言两处提示词**运行期**含注册表值 —— 因为 `tsc` **不内联**模板表达式（实测仍保留 `${SPLIT.R}` 文本），只 grep 源码会漏（同族：`check-l0-conflict-wiring` 曾因 grep 编译产物假红）。
+  · **先红→后绿**：门 ③ 接线前**红**（悬空：投影支 `granularity` · 键在但无人按该支路径读）⇒ 接线后**绿**。**变异实证**：注册表 `R` 改 `1234` → `gen:criteria` + `build:host` → 两处提示词运行期**真含 1234**；还原后注册表**字节级一致**。
+  · 判据：`check-threshold-control`（含 `--selftest` 11 例 / 7 反例）· `check-threshold-registry` 21/21 · `check-criteria` PASS · `check-runner` **188 pass / 0 fail**。
 - **🔴 J3/U1 归因链断链修复：不是「等样本」，是**结构性不可达**（2026-09-20 round 9）**：本条登记上长期写着「**已接线并真机跑通；一致率待样本积累**」，本轮读码把它戳穿。
   · **根因（两处字面量互相打架）**：`deepsleep-run.ts` 取样本 `samplesFromMclRows(missRows,`**`20`**`)` —— **上限 20**；同一函数判定 `if (samples.length <`**`30`**`)` —— **门槛 30**。⇒ **上限 20 永远不可能 ≥ 30** ⇒ 门槛分支**结构性恒真** ⇒ 后面那段**真调子代理**的代码（**整个 J3/U1 的目的**）**从未执行过一次**。
   · **真机证据**：跨档 **49** 深睡行 · **35** 带 `attribution*` 字段 ⇒ `attributionSamples` **min 0 / max 18**，**≥30 者 0 条**；出非 `insufficient` verdict 的 **0 条**。
