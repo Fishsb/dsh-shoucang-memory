@@ -514,7 +514,7 @@ export const THRESHOLDS: { note: string; entries: ThresholdEntry[] } = {
   ]
 }
 
-export const WIRING: { note: string; why: string; entryOk: readonly string[]; typeOnlyOk: readonly string[]; pending: ReadonlyArray<{ name: string; until: string; reason?: string }>; pendingNote?: string } = {
+export const WIRING: { note: string; why: string; entryOk: readonly string[]; typeOnlyOk: readonly string[]; pending: ReadonlyArray<{ name: string; until: string; reason?: string }>; pendingNote?: string; unreachableValues?: readonly string[]; unreachableValuesNote?: string } = {
   "note": "接线申报（2026-09-14 · 治「结构合法但运行时缺席」）。判据：`src/` 内扇入 0 的模块 = 没有运行时消费者，必须显式申报；落地后不删即 FAIL（棘轮）。判定实现在 scripts/audit-architecture.mjs（`--gate` 时生效，check-runner 已在跑该模式）。**只看 src/ 运行时消费者**：scripts/ 下的离线工具与单测一律不算（否则离线工具会让门白立）。",
   "why": "本仓 7 件架构机检全是负面约束（无环/无桥/行数/依赖宽度/符号漂移），没有一道问「这个模块有没有人在用」。实测后果：supply-assembly 与 record-address 功能完整、结构合法、单测全绿，但 src/ 内零消费者 —— 唯一消费者是离线 CLI 与单测。审计脚本**早已算出扇入**，只是只打印不判定。**2026-09-14 两件均已结清**：`supply-assembly` 已接线（P0a）；`record-address` **判定为死件并删除** —— 它服务的 `storeMode='record'` 档被 schema **明确拒收**（`z.union([const('md'), const('dual')])`，其注释原文：「'record' 档（md 降为纯投影）**尚未实现** ⇒ 本键不接受该值（防死开关）」），且两条配置通道（Config schema · `applySuiteConfigFile` 的派生白名单 + 逐键过 schema）都挡住它 ⇒ 该件**永无运行时接线的可能**，保留即纯堆叠。",
   "entryOk": [
@@ -525,7 +525,12 @@ export const WIRING: { note: string; why: string; entryOk: readonly string[]; ty
     "deepsleep-contract"
   ],
   "pending": [],
-  "pendingNote": "**零豁免（2026-09-14 起）**：本表为空 ⇒ 任何模块只要 `src/` 扇入为 0 且不在 entryOk / typeOnlyOk，接线门**当场 FAIL**。这是接线门的**最紧状态**，也是本表存在的意义（棘轮只许收紧）；将来若确需豁免，必须在此显式加回并写明 `until`。"
+  "pendingNote": "**零豁免（2026-09-14 起）**：本表为空 ⇒ 任何模块只要 `src/` 扇入为 0 且不在 entryOk / typeOnlyOk，接线门**当场 FAIL**。这是接线门的**最紧状态**，也是本表存在的意义（棘轮只许收紧）；将来若确需豁免，必须在此显式加回并写明 `until`。",
+  "unreachableValues": [
+    "days30",
+    "sessions"
+  ],
+  "unreachableValuesNote": "**`evaluateL0` 的不可达入参**（2026-09-20 · `check-l0-conflict-wiring` ② 的事实源）。判定口径：入参若**在所有调用点都不被传**，则它产生的取值（`days30>=2 ⇒ stability='cross-day'` · `sessions>=2 ⇒ reuse='cross-project'`）**结构性不可达**。实测：全仓 `evaluateL0` **只 1 处调用**（`distill-agent.ts`），从不传 `days30` / `sessions`；两者的数据源其实**现成存在**（`activity.ts:29/174` 有 `days30`/`hits30`），但**蒸馏调用点未接入活性表**——属跨链新增接线（改动面大于本轮），故**如实登记为不可达**而非假装可达。**until**：若蒸馏调用点接入 `activity.ts#days30` 与跨会话计数，**须删除本表对应项**（登记非豁免，是让断链**可见**）。⚠ **同批已修**：`supersedes` 原本也在此名单候选里 —— 本轮已把 `judgement.conflict` 校验后的值真的喂给 `evaluateL0.supersedes` ⇒ **已移出不可达名单**（`fact-ring#supersede()` 的落库接线仍待后续，见 `OPEN-ITEMS §0f`）。"
 }
 
 export const CRITERIA_ROWS = [

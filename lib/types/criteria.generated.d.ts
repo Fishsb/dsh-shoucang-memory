@@ -301,6 +301,8 @@ export declare const WIRING: {
         reason?: string;
     }>;
     pendingNote?: string;
+    unreachableValues?: readonly string[];
+    unreachableValuesNote?: string;
 };
 export declare const CRITERIA_ROWS: readonly [{
     readonly id: "ingest.route.r1";

@@ -321,10 +321,32 @@ const distillAgent = async (dep: AgentDeps, agent: any): Promise<void> => {
                   : ''
         dep.io.infra.audit({ sid, kind: 'distill-run', route, stop, fclass, llm: llmLabel, targetLib: disp.targetLib, added: disp.added, rejected: disp.rejected, failed: disp.undigested, undigested: disp.undigested, needsAnchor: disp.needsAnchor, pairedSkipped: disp.pairedSkipped, sectionMiss, supplySections: supply.sections, chunk: k + 1, chunkStart: chunk.startSeq, chunkEnd: chunk.endSeq, totalChunks: chunks.length, segKey: chunk.segKey, materialEvents: chunk.events, ...(failReason ? { reason: failReason } : {}) })
         // 判据台账（摄取域）：模型判据（可选 judgement）+ 宿主 L0 代理评估 + 决策与结果
+        /* ⚠ **本轮修复（2026-09-20 · 门4"零样本"的真根因）**：`evaluateL0` 此前**只收 `{text, traces}`**，
+         *   而它的 `supersedes` 入参**全仓零赋值** ⇒ `conflict` **恒为 `none`**
+         *   ⇒ 取值域里的 **`coexist` / `supersede` 永不产生** ⇒ 下游按 `'supersede'` 字面量匹配**永远落空**
+         *   ⇒ `fact-ring#supersede()` 在 `src/` 内**无调用方** ⇒ 真库 `validTo` 非空 **0/5860**。
+         *   ⚠ 所以门4 不是"零样本 ⇒ 等触发源"，而是**产生路径断在入参这一环**（登记已于本轮更正）。
+         *   ⚠ **另一处更上游的缺陷**：模型的 `judgement.conflict` **从未被校验** ——
+         *     真机 437 条带 judgement 的行里**合法率仅 89.9%**，非法样本形如
+         *     `0` / `1` / `无` / `false` / `整句话` / `replace-1` / `0.1` / `yes`
+         *     ⇒ **"声明一套、实际一套"**：模型判了冲突、却不按枚举写 ⇒ 下游按枚举匹配必然落空。
+         *   ⇒ 本处两件一起做：① **校验** `judgement.conflict`（越界即**归一为 `none`** 并在台账留证，
+         *     不假装合法）；② 把校验后的值**真的喂给** `evaluateL0.supersedes`
+         *     ⇒ `conflict` 维**首次具备可达的产生路径**。 */
+        const jd = (out && out.judgement) || null
+        const CONFLICT_VALUES = new Set(['none', 'coexist', 'supersede'])
+        const conflictRaw = jd ? String((jd as Record<string, unknown>).conflict ?? '') : ''
+        const conflictOk = CONFLICT_VALUES.has(conflictRaw)
+        const conflictNorm = conflictOk ? conflictRaw : 'none'
+        if (jd && conflictRaw && !conflictOk) {
+          // 越界取值**留证**（不静默丢弃）：让"模型不按枚举写"这件事**可见**
+          dep.io.infra.audit({ sid, kind: 'judgement-invalid', field: 'conflict', raw: conflictRaw.slice(0, 60), normalized: 'none' })
+        }
         dep.io.infra.ledger({
           domain: 'ingest', sid: sid.slice(0, 8), chunk: k + 1,
-          judgement: (out && out.judgement) || null,
-          l0After: evaluateL0({ text: String(chunk.text || '').slice(0, 400), traces: 1 }),
+          judgement: jd,
+          ...(jd ? { judgementChecked: { conflict: conflictOk } } : {}),
+          l0After: evaluateL0({ text: String(chunk.text || '').slice(0, 400), traces: 1, supersedes: conflictNorm === 'supersede' }),
           decision: { route, fclass, handledByHost: true },
           result: { added: disp.added, rejected: disp.rejected, failed: disp.failed, targetLib: disp.targetLib },
           // P4（2026-09-14）：enqueued 一并报**经历四通道**计数——否则「环记录落库了没」无据可查

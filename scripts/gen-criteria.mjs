@@ -58,7 +58,14 @@ const buildTs = () => {
   //   `readonly []` ⇒ 元素类型退化为 `never`，`pending.some((p) => p.name)` 直接编译不过
   //   （实测 `Property 'name' does not exist on type 'never'`）。
   //   **投影的类型不该随数据内容变化** —— 故显式标注稳定类型，空表与满表同形。
-  lines.push('export const WIRING: { note: string; why: string; entryOk: readonly string[]; typeOnlyOk: readonly string[]; pending: ReadonlyArray<{ name: string; until: string; reason?: string }>; pendingNote?: string } = ' + JSON.stringify(reg.wiring, null, 2))
+  /* ⚠ **投影串必须与 `criteria.json#wiring` 的字段集同步**（2026-09-20 实测坑，记档）：
+   *   本行原**硬编码**字段类型（note/why/entryOk/typeOnlyOk/pending/pendingNote）—— 新增
+   *   `unreachableValues` / `unreachableValuesNote` 后，`JSON.stringify(reg.wiring)` 把新键带进产物，
+   *   而类型注解**没有它** ⇒ `tsc` 报 **TS2353**（"Object literal may only specify known properties"）。
+   *   ⇒ 这与本仓已登记的「**schema 有、显式映射没有**」**同族**：改了真源、忘改投影声明 ⇒ 构建期才炸。
+   *   修法：给新键补齐类型（**保留显式声明** —— 它正是"注册表 ⟷ 投影"两侧一致性的编译期护栏；
+   *   改成 `Record<string, unknown>` 会把这护栏拆掉，等于放弃编译期对账）。 */
+  lines.push('export const WIRING: { note: string; why: string; entryOk: readonly string[]; typeOnlyOk: readonly string[]; pending: ReadonlyArray<{ name: string; until: string; reason?: string }>; pendingNote?: string; unreachableValues?: readonly string[]; unreachableValuesNote?: string } = ' + JSON.stringify(reg.wiring, null, 2))
   lines.push('')
   lines.push(`export const CRITERIA_ROWS = ${JSON.stringify([...reg.ingest.criteria, ...reg.consolidate.criteria].map((c) => ({ id: c.id, domain: c.id.split('.')[0], kind: c.kind, judgeKind: c.judgeKind, text: c.text, params: c.params })), null, 2)} as const`)
   lines.push('')

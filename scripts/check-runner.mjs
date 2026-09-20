@@ -647,6 +647,23 @@ const CHECKS = [
   //   （使"真没回引"与"取不到回复"**可分辨**——此前混为一谈，缺陷因此潜伏）。
   ['scripts/test-prev-text-source.mjs'],
   ['scripts/test-prev-text-source.mjs', '--selftest'],
+  // 「L0 取值可达性」（2026-09-20 · **真机取证驱动 · 推翻了门4 的"零样本"判断**）：
+  //   门4（时态剔除进注入链）原登记为"**零样本** ⇒ 缓，先造触发源"。本轮追触发源，实测
+  //   **它不是"等样本"，而是产生路径断在入参这一环**：
+  //     · `fact-ring#supersede()` 在 `src/` 内**无调用方**；
+  //     · `criteria.evaluateL0` 的 `input.supersedes` **全仓零赋值**（只在 `criteria.ts` 被读）；
+  //     · `evaluateL0` 全仓**只 1 处调用**且只传 `{text, traces}` ⇒ `conflict` **恒为 `none`**
+  //       ⇒ 取值域里的 **`coexist` / `supersede` 永不产生**。
+  //   为什么此前三方门禁全绿：① `wiring.pending` 为空 ⇒ `check-claim-alignment` F1 两边都是 0；
+  //     ② 该断链无"未接线"注释 ⇒ F1 的文本扫描也扫不到；③ 没有一道门问"**某取值是否可达**"。
+  //   **顺带挖到更上游的缺陷**：模型的 `judgement.conflict` **从未被校验** —— 真机 437 条合法率仅
+  //   **89.9%**（非法样本 `0`/`1`/`无`/`false`/整句/`replace-1`/`0.1`/`yes`）⇒ **"声明一套、实际一套"**。
+  //   本门四条：① 注册表声明的每个 L0 取值须有**产生式**（或在 `wiring.unreachableValues` 登记）；
+  //   ② `evaluateL0` 可选入参在调用点真的被传（否则须登记）；③ 存量合法率（报告态）；
+  //   ③′ 写侧校验生效后的行**全部合法**（硬判）。⚠ ③ 必须**跨档读**（首版单档读得"100% 合法"假绿，
+  //   跨档真值 89.9% —— 正是 G13 教训的又一次复现）。
+  ['scripts/check-l0-conflict-wiring.mjs'],
+  ['scripts/check-l0-conflict-wiring.mjs', '--selftest'],
   // **统一事件信封**单测（2026-09-13）：`{ at, ...o }` 的展开顺序允许调用方用 `at: undefined` 覆盖注入值，
   //   而 `JSON.stringify` 静默丢弃 undefined ⇒ 行里没有 `at`（实测 distill-audit 930 行里 1 行如此）。
   //   本件把「任何一行都必须有非空 `at` + `type`」钉死，覆盖 audit/episode/stub/ledger 四条写出路径。

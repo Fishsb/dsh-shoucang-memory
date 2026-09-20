@@ -2301,6 +2301,16 @@
 - **panel client 迁移到 slot 契约（2026-09-05，解冻前置）**：client.js 注入声明加 `'slots'`，入口从直插侧栏 footArea DOM 改为注册 `sidebar.footer.action` 插槽按钮（无 slots 环境保留直插兜底）；host+client 已注入运行（ef85e372），构建产物 lib/ 重建
 
 ### Fixed
+- **门4「零样本」判断被推翻：不是等样本，是产生路径断在入参（2026-09-20 · 真机取证驱动）**：门4（时态剔除进注入链）此前登记为"**零样本** ⇒ 缓，先造触发源"（依据：真库 `validTo` 非空 `0/5860`）。本轮追触发源，实测**该判断不成立** —— 断链在**产生路径**上，逐环可指认：
+  · `fact-ring#supersede()` 在 `src/` 内**无任何调用方**（除定义处）；`revive()` 同。
+  · `criteria.evaluateL0` 的 `input.supersedes` **全仓零赋值**（只在 `criteria.ts:89` 被**读**）。
+  · `evaluateL0` 全仓**只 1 处调用**（`distill-agent.ts`）且只传 `{ text, traces }` ⇒ `conflict` **恒为 `none`** ⇒ 取值域里的 **`coexist` / `supersede` 永不产生** ⇒ 下游按 `'supersede'` 字面量匹配**永远落空** ⇒ `validTo` 永远为 0。
+  · **为什么三方门禁全绿**（这才是最值得记的）：① `wiring.pending` 为空 ⇒ `check-claim-alignment` 的 F1（"未接线自称 == 待接条数"）**两边都是 0 ⇒ 恒绿**；② 该断链**没有**"未接线"类注释 ⇒ F1 的文本扫描也扫不到；③ `check-field-usage` / `check-criteria` **不问"某取值是否可达"**。⇒ **"没登记 = 看不见"**。
+  · **顺带挖到更上游的缺陷**：模型的 `judgement.conflict` **从未被校验** —— 真机 437 条带 judgement 的行里**合法率仅 89.9%**（非法样本：`0`·`1`·`无`·`false`·**整句话**·`replace-1`·`0.1`·`yes`）⇒ **"声明一套、实际一套"**：模型判了冲突却不按枚举写。
+  · **修复**：① 写侧**校验** `judgement.conflict`（越界**归一为 `none`** + 落 `judgement-invalid` 留证 + 台账带 `judgementChecked`），并把校验后的值**真的喂给** `evaluateL0.supersedes` ⇒ `conflict` 维**首次具备可达的产生路径**；② 注册表新增 `wiring.unreachableValues`（现登记 `days30`/`sessions` 两个**同族不可达入参**——数据源 `activity.ts:29/174` 现成，但蒸馏调用点未接入活性表，属跨链接线、改动面大于本轮，故**如实登记而非假装可达**，并写明 `until`）。
+  · **新增门禁 `scripts/check-l0-conflict-wiring.mjs`**（登记 `check-runner`，**181 → 183**）：① 注册表声明的每个 L0 取值须有**产生式**（或在 `wiring.unreachableValues` 登记）· ② `evaluateL0` 可选入参在调用点**真的被传** · ③ 存量合法率（报告态）· ③′ 校验生效后的行**全部合法**（硬判）。自证 3 例含 1 反例。
+  · ⚠ **本门自身也踩了 G13 又一遍**：③ 首版只读**主档** ⇒ 得"39/39 = **100% 合法**"（**假绿**）；改**跨档读**后真值 **393/437 = 89.9%**。**同族教训第 N 次复现** —— 已在代码注释里写明"必须跨档读"。
+  · ⚠ **另一处同族构建期坑**：`criteria.json#wiring` 新增键后 `tsc` 报 **TS2353** —— `gen-criteria` 的 TS 投影串**硬编码了字段类型列表**，改了真源忘改投影声明 ⇒ 构建期才炸（与「**schema 有、显式映射没有**」同族）。已补齐类型，并**保留显式声明**（它就是"注册表 ⟷ 投影"两侧一致性的编译期护栏，改成 `Record<string, unknown>` 等于拆掉护栏）。
 - **回引判定的输入恒空："机制正常、输入为零"型假绿（2026-09-20 · 真机驱动 · 门3「信号无判别力」的根因）**：`topicEcho`（上一步是否回引材料主题词）在真机**恒 `false`**（`true = 0 / 4865` 行）⇒ `nextZeroGain` 只能递增、**永不清零** ⇒ `shouldSwitchSource` 在阈值后**恒真**（实测 `switchSource=true` 占 **4604/4865 = 94.6%**）⇒ 该信号**无判别力**（`OPEN-ITEMS §0e` 门3 判"缓"的直接依据）。
   · **逐层排除，每步都有实测证据**（这正是本仓「先判边界再换挡」的做法）：① `topics` 恒空？**否**——4865 行里 **52.3% 非空**（样本 `["指针非限制","记忆体系分工",…]`）· ② `materialChars` 恒 0？**否**——全为非零 · ③ 判定点从未到达？**否**——`nudge=1` 有 **107 行**（再引导确实发出过）· ④ **判据本身失效？否**——重放实测：喂真实主题词 ⇒ `true`、喂无关句 ⇒ `false`（**判据是好的**）· ⑤ **⇒ 真因是 `prevText` 恒为 `''`**。
   · **根因**：原实现从 `decision.messages` 里找 assistant 回复，而**宿主的 `messages` 是"本步新认领的消息"**（`agent-loop` 的 `inbox.claim(target, turn)`；仓内 `OPEN-ITEMS §0d` **早已实证**该语义）⇒ **收尾步根本没有认领消息** ⇒ 取不到任何 assistant 文本 ⇒ `judge('') === false` 恒成立。⇒ 属**"机制正常、输入为零"**型假绿（与仓内已登记的「探针 PASS ≠ 生效」同族），**且因"真没回引"与"取不到回复"在审计上不可分辨而潜伏至今**。
