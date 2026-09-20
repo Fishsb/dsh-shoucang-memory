@@ -71,10 +71,18 @@ for (const r of rows) {
 const dupDropped = rows.length - uniq.length
 const withEpoch = uniq.filter((r) => r.sleepEpoch)
 const spans = withEpoch
-  .map((r) => ({ epoch: r.sleepEpoch, at: r.at, since: r.epochSince, hours: (Date.parse(r.at) - Number(r.epochSince)) / H, stop: r.stop, landed: r.landed, materialBytes: typeof r.materialBytes === 'number' ? r.materialBytes : null, materialChars: typeof r.materialChars === 'number' ? r.materialChars : null }))
+  .map((r) => ({ epoch: r.sleepEpoch, at: r.at, since: r.epochSince, hours: (Date.parse(r.at) - Number(r.epochSince)) / H, stop: r.stop, landed: r.landed, materialBytes: typeof r.materialBytes === 'number' ? r.materialBytes : null, materialChars: typeof r.materialChars === 'number' ? r.materialChars : null,
+    /* **2026-09-20 round 9（S-P1b″ 定案）新增第三口径：窗口内痕迹文件数** ——
+     *   它才是「该不该睡」的**同源量**（前两个各有硬反证：`materialBytes` 与真实材料**非同源**，
+     *   实测 0 vs 46692；`materialChars` 有**地板效应**，min 已达中位 43%，量的是装配固定开销）。
+     *   ⚠ **本字段只对"修复后"的纪元存在**（旧行没有 `traceFiles`）⇒ 必须**显式区分样本量与缺省**，
+     *     不得把 `null` 当 0 混入分布（那是"输入量不清晰"的老毛病）。 */
+    traceFiles: typeof r.traceFiles === 'number' ? r.traceFiles : null }))
   .filter((x) => Number.isFinite(x.hours) && x.hours >= 0)
 const pct = (a, p) => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.max(0, Math.round((p / 100) * (s.length - 1))))] }
 const hours = spans.map((s) => s.hours)
+/** **第三口径（S-P1b″ 定案）**：窗口内痕迹文件数 —— 只统计**真的带该字段**的纪元，且**显式报样本量**。 */
+const tf = spans.map((s) => s.traceFiles).filter((x) => typeof x === 'number')
 /** 只需**主档+旧卷**即可覆盖的判据（G13）：任一档有行而主档无行 ⇒ 正是"轮转失明"的形态 */
 const epochsDistinct = new Set(withEpoch.map((r) => r.sleepEpoch)).size
 
@@ -82,6 +90,10 @@ const out = {
   ledger, totalDeepSleepRows: uniq.length, linesRead, dedupDropped: dupDropped, epochs: withEpoch.length, epochsDistinct, minEpochs: MIN_EPOCHS,
   epochsWithoutId: uniq.length - withEpoch.length,
   spanHours: { p50: pct(hours, 50), p75: pct(hours, 75), p90: pct(hours, 90), min: hours.length ? Math.min(...hours) : null, max: hours.length ? Math.max(...hours) : null },
+  /* S-P1b″ 定案（2026-09-20 round 9）：**正确轴的分位** —— 痕迹文件数。
+   *   ⚠ `n` 与 `missing` 一并报出：缺字段的纪元是**修复前**的（该字段本轮才加），
+   *     不能当 0，也不能静静并进分布（否则又犯"输入量不可见"）。 */
+  traceFiles: { n: tf.length, missing: spans.length - tf.length, p25: pct(tf, 25), p50: pct(tf, 50), p75: pct(tf, 75), p90: pct(tf, 90), min: tf.length ? Math.min(...tf) : null, max: tf.length ? Math.max(...tf) : null },
   recent: spans.slice(-5),
   thresholds: { contentMinChars: tOf('trigger.contentMinChars').value ?? null, materialChunkChars: tOf('trigger.materialChunkChars').value ?? null },
   verdict: epochsDistinct >= MIN_EPOCHS ? 'calibratable' : 'insufficient-data',
@@ -97,6 +109,16 @@ if (spans.length) {
   for (const s of spans) console.log(`  ${s.epoch}  区间 ${s.hours.toFixed(2)}h  stop=${s.stop}  landed=${s.landed}`)
   console.log(`  区间分位：p50=${out.spanHours.p50?.toFixed(2)}h p75=${out.spanHours.p75?.toFixed(2)}h p90=${out.spanHours.p90?.toFixed(2)}h · min=${out.spanHours.min?.toFixed(2)} max=${out.spanHours.max?.toFixed(2)}`)
 } else console.log('（尚无带纪元的深睡行）')
+console.log('')
+/* **第三口径报告（S-P1b″ 定案）**：痕迹文件数 —— 这是「该不该睡」的**同源量**。
+ *   与上一行「区间分位」并列打印，让"用哪个口径"成为**当场可见的选择**，而不是埋在文档里。 */
+if (out.traceFiles.n) {
+  const t = out.traceFiles
+  console.log(`痕迹文件数分位（**S-P1b″ 定案口径**）：n=${t.n} · 缺字段 ${t.missing}（修复前纪元，不计入） · p25=${t.p25} p50=${t.p50} p75=${t.p75} p90=${t.p90} · min=${t.min} max=${t.max}`)
+  console.log('  ⇒ 该轴**与「新增材料」同源**（同一遍枚举）、零额外 IO；`contentMinChars` 若启用，应按本轴预注册取值。')
+} else {
+  console.log('痕迹文件数分位：**N=0 显式记 0**（`traceFiles` 字段自 2026-09-20 round 9 才落审计 ⇒ 须等新纪元；**旧纪元一律不计入**）')
+}
 console.log('')
 console.log(`阈值现况：contentMinChars=${JSON.stringify(out.thresholds.contentMinChars)}（null=关） · materialChunkChars=${JSON.stringify(out.thresholds.materialChunkChars)}（null=关）`)
 console.log('')
