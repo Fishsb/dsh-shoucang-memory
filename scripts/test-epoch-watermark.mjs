@@ -139,5 +139,22 @@ ok(planTriggerDim(0, IDLE, 1e9, 0) === 'none', '① **contentMin=0（关闭）�
   ok(/traceFiles[,:}\s]/.test(run) && /emitDeepSleepAudit/.test(run), '⑤′ 经 `emitDeepSleepAudit` 出账（不是只在 log 里）')
 }
 
+// ⑥ **判定用的是文件数，不是字符数**（2026-09-20 round 10 · S-P1b″ 行为变更落地）
+//   判因：round 9 只把真轴做成**可测量**（`countWindowTraces` → 审计 `traceFiles`），
+//     判定仍按 `traces.length`（材料**字符数**）⇒ 名实不符虽已登记，**行为仍是旧的**。
+//     round 10 经用户授权（「继续全部收尾」）把判定改为按**文件数**。
+//   ⇒ 本断言守两件事：① 判据右值取 `traceFiles`（**文件数轴**）；② **不得**再拿 `traces.length`
+//     与阈值比（防"改了注释没改行为"的假修 —— 那是本仓反复踩的形态）。
+//   ⚠ 断言读**编译产物**（`tsc` 会保留源码形态，故源码/产物同形），并**剥注释**后判定 ——
+//     否则注释里那句"此前比的是 traces.length"会把断言喂饱（假绿）。
+{
+  const run = readFileSync(join(root, 'lib', 'deepsleep-run.js'), 'utf8')
+  // 剥注释：行注释 + 块注释（本仓既有做法，见 check-* 系的「剥注释后判定」）
+  const code = run.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+  ok(/traceFiles\s*<\s*minTraces/.test(code), '⑥ 判定右值 = **痕迹文件数**（`traceFiles < minTraces`）—— 真轴已接管行为')
+  ok(!/traces\s*(&&\s*traces)?\.length\s*<\s*minTraces/.test(code), '⑥ 反向锁：**不再**用材料字符数比阈值（防假修 —— 只改注释不改行为）')
+  ok(/const\s+minTraces\s*=\s*Number\(TRIGGER\.newTracesMin/.test(code), '⑥ 阈值仍读注册表 `TRIGGER.newTracesMin`（未退化为字面量）')
+}
+
 console.log(`\n结果: ${pass} PASS / ${fail} FAIL`)
 process.exit(fail ? 1 : 0)
