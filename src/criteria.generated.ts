@@ -344,7 +344,7 @@ export const TRIGGER = {
   "probeWindowMs": 60000,
   "newTracesMin": 1,
   "contentMinChars": null,
-  "materialChunkChars": null,
+  "materialChunkChars": 52232,
   "manual": true,
   "note": "触发数据化（v2.1 §2.4 · B 档接线后为 runtime）：idleMs=全部根会话停滞阈值；probeAfterMs/probeWindowMs=卡住探测；newTracesMin=窗口内最少新痕迹数；manual=面板「立即归纳一次」。**改这里即改行为**（scheduler zod 缺省直接读本块）。⚠ **2026-09-15 P0.1 实证订正**：本块原注释称「缺省 3h」，但**实际生效值是本块的 2700000ms（45min）**——`scheduler.ts` 的 zod `.default(TRIGGER.idleMs)` 取本块值，而**全仓 8 处** `|| 10800000`（3h）兜底因 zod 有 default 而是**死代码**（⚠ 首轮只报 4 处：检索用了大小写敏感的 `idleMs`，漏掉 `deepSleepIdleMs` 那 4 处 —— `deepsleep.ts` ×2 / `distill-hooks.ts` ×2 ⇒ 「模式派生集合先核对」的典型踩坑）。已修：**8 处全部**统一改引本块（**单一来源已下沉 `deepsleep-core#idleMsOf`**）+ 注释订正 + 护栏 `test-deepsleep-wiring` ⑦（可执行代码不得再出现该字面量），**数值未动**（P0 不改行为）。**数值本身待 P1 双维水位按预注册判据校准**。 **S-P2b（2026-09-20）**：deepSleepProbeConflictMax=证据冲突（agent 状态活跃但连续零输出）连续多少轮即按卡住处理——补 conflict 分支**无界**致活锁（真机 28f9f094 连续 23 次 / 跨 11 小时零触发）。",
   "reviewIdleMs": 1800000,
@@ -360,10 +360,10 @@ export const THRESHOLDS: { note: string; entries: ThresholdEntry[] } = {
   "entries": [
     {
       "id": "trigger.materialChunkChars",
-      "value": null,
+      "value": 52232,
       "owner": "skill/engine/criteria.json#trigger.materialChunkChars",
-      "preregistered": false,
-      "samples": 0
+      "preregistered": true,
+      "samples": 44
     },
     {
       "id": "trigger.contentMinChars",

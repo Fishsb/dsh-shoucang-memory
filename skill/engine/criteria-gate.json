@@ -179,7 +179,7 @@
     "probeWindowMs": 60000,
     "newTracesMin": 1,
     "contentMinChars": null,
-    "materialChunkChars": null,
+    "materialChunkChars": 52232,
     "manual": true,
     "note": "触发数据化（v2.1 §2.4 · B 档接线后为 runtime）：idleMs=全部根会话停滞阈值；probeAfterMs/probeWindowMs=卡住探测；newTracesMin=窗口内最少新痕迹数；manual=面板「立即归纳一次」。**改这里即改行为**（scheduler zod 缺省直接读本块）。⚠ **2026-09-15 P0.1 实证订正**：本块原注释称「缺省 3h」，但**实际生效值是本块的 2700000ms（45min）**——`scheduler.ts` 的 zod `.default(TRIGGER.idleMs)` 取本块值，而**全仓 8 处** `|| 10800000`（3h）兜底因 zod 有 default 而是**死代码**（⚠ 首轮只报 4 处：检索用了大小写敏感的 `idleMs`，漏掉 `deepSleepIdleMs` 那 4 处 —— `deepsleep.ts` ×2 / `distill-hooks.ts` ×2 ⇒ 「模式派生集合先核对」的典型踩坑）。已修：**8 处全部**统一改引本块（**单一来源已下沉 `deepsleep-core#idleMsOf`**）+ 注释订正 + 护栏 `test-deepsleep-wiring` ⑦（可执行代码不得再出现该字面量），**数值未动**（P0 不改行为）。**数值本身待 P1 双维水位按预注册判据校准**。 **S-P2b（2026-09-20）**：deepSleepProbeConflictMax=证据冲突（agent 状态活跃但连续零输出）连续多少轮即按卡住处理——补 conflict 分支**无界**致活锁（真机 28f9f094 连续 23 次 / 跨 11 小时零触发）。",
     "reviewIdleMs": 1800000,
@@ -199,15 +199,15 @@
             "materialChunkChars"
           ]
         },
-        "value": null,
+        "value": 52232,
         "owner": "skill/engine/criteria.json#trigger.materialChunkChars",
-        "preregistered": false,
-        "preregisteredCriterion": null,
-        "samples": 0,
-        "conclusion": "**insufficient-data（维持关闭 = null）** —— S-P1c 分片**纯切分器已落地**（`deepsleep-core#splitByCap`：段边界即语义边界、永不切开单段、`cap<=0` 与改造前逐字等价），run 侧接线待做。阈值不可校准：截至 2026-09-15 仅 **1 个真实纪元**，单纪元材料分布未成形。⚠ **水位口径**：采取「**全片落地才推进**」而非方案册原写的「按片推进」—— 单一时间戳水位**表达不了片级进度**，片级推进会**永久排除失败片的材料**（正是 G-16/G-19 两次修掉的静默丢料）；片级进度改由 **ledger 留痕可见**，失败即整纪元回滚重试（写侧去重保证幂等）",
-        "recheck": "纪元累计 ≥10 个 ⇒ 取单纪元材料量分位定 cap（与 `trigger.contentMinChars` 同批校准）。**⚠ 2026-09-20 复检：门槛已满足** —— 校准器修掉「G13 轮转失明」后实测 **46 个不同纪元**（此前一直报 0，因只读主档）；分片上限可按单纪元材料量分位预注册取值（`node scripts/epoch-calibrate.mjs --json`）",
-        "calibrator": null,
-        "rollback": "置 `null`/`0` ⇒ 单片段（现行为）"
+        "preregistered": true,
+        "preregisteredCriterion": "取 cap 使**最大片数 ≤ 3**（单轮预算内可完成）且**永不切开单段**；在满足该约束的候选里取**最大** cap（片数最少 ⇒ LLM 调用最少）",
+        "samples": 44,
+        "conclusion": "**已校准（2026-09-20）· cap = 52232（= 单纪元 materialChars 的 p90）** —— 实测 **44 个不同纪元**（按纪元汇总，同纪元多片求和）。分布：min **35459** · p50 **42737** · p75 **46052** · p90 **52232** · max **108271**。按预注册判据（最大片数 ≤3）扫候选：cap=p50(42737) ⇒ 片数均值 1.50/**最大 3** · cap=p75(46052) ⇒ 1.25/**3** · **cap=p90(52232) ⇒ 1.11/最大 3** ⇒ 三者**均满足** ≤3 约束，按「取最大 cap（片数最少）」取 **p90 = 52232**。⚠ 依据前置：该结论**此前不可得**——校准器原只读主档 ⇒ 报「纪元 0」，真值 46（已随 G13 修复，`OPEN-ITEMS §0f`）。⚠ **水位口径不变**：「**全片落地才推进**」——单一时间戳水位表达不了片级进度，片级推进会永久排除失败片的材料（G-16/G-19 两次修掉的静默丢料）；片级进度由 ledger 留痕可见，失败即整纪元回滚重试（写侧去重保证幂等）",
+        "recheck": "**已校准（2026-09-20）**。复检触发：纪元数再增 **≥20**（现 44）⇒ 重取分位；或单纪元材料量分布 p90 变动 >15% ⇒ 复核",
+        "calibrator": "scripts/epoch-calibrate.mjs（**跨档读**，2026-09-20 修 G13 后可用）",
+        "rollback": "置 `null`/`0` ⇒ 单片段（改造前行为，逐字等价）"
       },
       {
         "id": "trigger.contentMinChars",
