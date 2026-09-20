@@ -14,6 +14,7 @@
 import { readFileSync, writeFileSync, mkdirSync, renameSync, existsSync } from 'node:fs'
 import { atomicWriteFile } from './section-rewrite.js'
 import { join, dirname } from 'node:path'
+import { thresholdValue, thresholdParam } from './criteria.js'
 
 export interface ActivityHooks {
   audit(o: Record<string, unknown>): void
@@ -73,17 +74,22 @@ function saveRows(file: string, rows: Map<string, ActivityRow>): void {
 /**
  * v7 条目活性聚合（A 步）。
  * 阈值经 opts 传入（UI 通道：面板「参数调节」→ /set → scheduler.json → distill 深睡巡检调用本函数）；
- * 缺省 14/44/90/5 与 scheduler zod 默认一致（activityWarmDays/activityColdDays/activityArchiveDays/activityHotHits）。
+ * 缺省**读登记表**（`activity.statusDays` 三键 + `activity.hotHits`）。
+ *
+ * ⚠ **round 8（2026-09-20）修正**：原先四行是**裸数值字面量** `?? 14 / ?? 44 / ?? 90 / ?? 23`
+ *   —— 与注册表构成**双源**，改注册表**零效果**（值恰好相等，所以行为看不出差别，属"假绿"）。
+ *   现改读 `thresholdValue` / `thresholdParam`（唯一读口）；字面量只作**注册表缺项兜底**，
+ *   由 `check-threshold-control` 守「登记项必有消费点」。
  */
 export async function activityAggregate(
   memRoot: string,
   hooks: ActivityHooks,
   opts?: Partial<{ warmDays: number; coldDays: number; archiveDays: number; hotHits: number }>,
 ): Promise<void> {
-  const warmDays = opts?.warmDays ?? 14 // active→warm 无命中天数
-  const coldDays = opts?.coldDays ?? 44 // warm→cold 无命中天数（= warm+30）
-  const archiveDays = opts?.archiveDays ?? 90 // cold 且最近命中超此天数 → 遗忘候选
-  const hotHits = opts?.hotHits ?? 23 // B：30 天窗命中阈值（方案 §8，UI 可调）
+  const warmDays = opts?.warmDays ?? thresholdParam<number>('activity.statusDays', 'warm', 14) // active→warm 无命中天数
+  const coldDays = opts?.coldDays ?? thresholdParam<number>('activity.statusDays', 'cold', 44) // warm→cold 无命中天数（= warm+30）
+  const archiveDays = opts?.archiveDays ?? thresholdParam<number>('activity.statusDays', 'archive', 90) // cold 且最近命中超此天数 → 遗忘候选
+  const hotHits = opts?.hotHits ?? thresholdValue<number>('activity.hotHits', 23) // B：30 天窗命中阈值（方案 §8，UI 可调）
   // ⚠ 2026-09-15 J2 校准：5 → 23。预注册判据 = **分布上四分位（p75）**（设计原则，非对样本拟合）。
   //   实测（scripts/activity-calibrate.mjs，n=46）：真实 hits30 p50=9 / p75=23 / p90=34 / max=58
   //   ⇒ 阈值 5 **低于 p50** ⇒ "hot 候选"含半数以上条目，判据意图（识别高频）失去区分度。
@@ -241,20 +247,25 @@ export async function activityAggregate(
       const ov = (a: Set<string>, b: Set<string>): number => { if (!a.size || !b.size) return 0; let n = 0; for (const x of a) if (b.has(x)) n++; return (2 * n) / (a.size + b.size) }
       const byFileNames = new Map<string, string[]>()
       for (const row of rows.values()) { if (row.retired) continue; const a = byFileNames.get(row.f) || []; a.push(row.s); byFileNames.set(row.f, a) }
+      // round 8（2026-09-20）：区间**读登记表** —— 原为裸字面量 `v >= 0.5 && v < 0.66`
+      //   （与注册表 `activity.interferenceBand` 构成双源：注册表象牙 + 代码字面量真牙 ⇒ 改注册表零效果）。
+      const band = thresholdValue<number[]>('activity.interferenceBand', [0.5, 0.66])
+      const bandLo = Number(band?.[0] ?? 0.5)
+      const bandHi = Number(band?.[1] ?? 0.66)
       const inter: string[] = []
       for (const [f, names] of byFileNames) {
         const g = names.map(bg)
         for (let i = 0; i < names.length && inter.length < 30; i++) {
           for (let j = i + 1; j < names.length && inter.length < 30; j++) {
             const v = ov(g[i], g[j])
-            if (v >= 0.5 && v < 0.66) inter.push(`| \`${f} §${names[i]}\` ↔ \`§${names[j]}\` | ${v.toFixed(2)} |`)
+            if (v >= bandLo && v < bandHi) inter.push(`| \`${f} §${names[i]}\` ↔ \`§${names[j]}\` | ${v.toFixed(2)} |`)
           }
         }
       }
       if (inter.length) {
         writeFileSync(join(auditDir, `activity-interference-${dayKey(now)}.md`), [
           '# 互抑候选（v8 · ' + dayKey(now) + '）', '',
-          '> 同文件小节名 bigram 重叠 ∈ [0.50, 0.66)：低于唯一门拒收阈值（0.66）故并存至今，但已高度重叠。深睡可经 `treeOps.merge` 并入或经 `pointerOps.update` 合并概况。**只建议，不改内容。**', '',
+          `> 同文件小节名 bigram 重叠 ∈ [${bandLo}, ${bandHi})：低于唯一门拒收阈值（${bandHi}）故并存至今，但已高度重叠。深睡可经 \`treeOps.merge\` 并入或经 \`pointerOps.update\` 合并概况。**只建议，不改内容。**`, '',
           '| 小节对 | 重叠 |', '|---|---|', ...inter, '', `共 ${inter.length} 对。`,
         ].join('\n') + '\n', 'utf8')
       }

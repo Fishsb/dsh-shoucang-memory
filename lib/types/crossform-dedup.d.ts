@@ -1,5 +1,8 @@
-/** 注入侧消重阈值（**登记表单一事实源**；`check-threshold-registry` 的 probe 锚点）。 */
-export declare const CROSS_FORM_DEDUP_SIM = 0.8;
+/** 注入侧消重阈值。
+ *  ⚠ **round 8（2026-09-20）修正**：原为**裸常量** `= 0.8`，与注册表 `inject.crossFormDedupSim`
+ *   构成**双源**（注册表象牙 + 代码常量真牙）⇒ 改注册表**零效果**。现改读**唯一读口** `thresholdValue`。
+ *   常量导出保留（`test-inject-dedup` 依赖它），但值**派生自注册表** —— 不再是第二份真源。 */
+export declare const CROSS_FORM_DEDUP_SIM: number;
 export interface DedupSkipReason {
     /** 被跳过的细粒度行（逐字）。 */
     line: string;

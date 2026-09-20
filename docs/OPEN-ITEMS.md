@@ -8,6 +8,55 @@
 
 ---
 
+## 0g. 🔴🔴 **我自己上一轮的「阈值假旋钮」分类被推翻：判据建立在代理指标上**（2026-09-20 round 8 · 最高优先）
+
+> **性质**：与 §0f 同族 —— 不是"新增待办"，而是**已有结论的真伪问题**。上一轮我新增门禁
+> `check-threshold-consumed.mjs`，把 9 项阈值分进「真死配置 / 命名不符 / 键名写错 / 消费点是字面量」**四类**，
+> 写进注册表 `thresholds.unconsumed` + `unconsumedNote`。**本轮逐项复核，四类里至少两类是错的。**
+
+| # | 我上一轮的结论 | **实测真况** | 性质 |
+|---|---|---|---|
+| **0g-①** | `mcl.fastGate` = **真死配置**（`minHits`/`ratio` 只出现在生成物里） | ❌ **错**。其 `probe.contains`（`hit / sg.length >= 0.6`）在 `mcl.ts` 里**确有一处** —— 但那是 **`judge()` 的词元覆盖率门**，**不是**快通道门（后者 = `sim >= familiarThreshold && hasHighConf`）。⇒ 判据**真实存在且可调**，只是**登记项贴错了名字** | **登记项名实不符**（非死配置） |
+| **0g-②** | `activity.statusDays` = **键名写错**（指向不存在的参数） | ❌ **错**。值是活的：`scheduler.ts` zod 缺省 → `deepsleep-run.ts` → `activity.ts` opts。只是 zod 缺省**硬编码 `14/44/90`** 而不读注册表 ⇒ 与其余同类，都是**双源** | **双源**（非键名错） |
+| **0g-③** | 其余 7 项分为「命名不符」与「消费点是字面量」两类 | ⚠ **分类本身无效**。那套判据的**代理是「键名是否在 src 里出现」**，而键名会被**注释、生成物、同名局部变量**同时左右 ⇒ 产出的是「**命名巧合表**」，**不是断链表** | 判据缺陷（同族：`[原则] 代理指标非判据`） |
+
+**机制级事实（上一轮整轮漏掉 · 这才是病灶）**：`THRESHOLDS`（整份阈值投影）在 `src/` 内 **零消费者** ——
+9 项登记项的 `probe` 指向代码里的**裸数值字面量**（`>= 0.66` / `>= 0.9` / `v >= 0.5 && v < 0.66` …）。
+⇒ **治本不是逐项改字面量，而是给投影一个读口**。为什么三方门禁全绿：`check-threshold-registry` 只判
+「**登记了没**」· `check-field-usage` 只看 `CRITERIA_ROWS` 系的**字段角色**（且其孤儿常量检测的名字表
+**写死了 14 个**，`THRESHOLDS` **天然不在监测面**）· `check-hardcode` 恰恰**希望**常量集中。
+
+**本轮已修（11 项全部接线 + 门禁换血）**：
+
+| 动作 | 落点 |
+|---|---|
+| **新增唯一读口** | `src/criteria.ts#thresholdValue(id, fallback)` + `#thresholdParam(id, key, fallback)` |
+| **9 项消费点改读读口** | `crossform-dedup.ts`（`inject.crossFormDedupSim`）· `activity.ts`（`activity.statusDays` 三键 + `activity.hotHits` + `activity.interferenceBand`）· `deepsleep-tree.ts`（`tree.indexSemanticSim` / `tree.sectionMergeSim`）· `distill-write.ts`（`ingest.dedup.bigram.threshold` / `write.semanticDupSim` / `write.cardSimilar`）· `mcl.ts`（**`mcl.fastGate` → `mcl.topicEchoGate`**，名实对齐后接线） |
+| **字面量降级** | 全部降为**注册表缺项兜底**（值与登记值一致，由 `check-threshold-registry` ④ 的 `read` 探针守**不漂移**） |
+| **门禁换血** | **删** `check-threshold-consumed.mjs`（判据建立于被推翻的分类上 ⇒ 留着=**把错判据固化成门**）；**新增** `check-threshold-control.mjs` |
+| **I1 棘轮** | `mcl.ts` 接线后 `registerMcl` 涨到 **126 行**（>120）⇒ 把 `judge` 提为模块级 `judgeTopicEcho`（仓内约定：实现函数在模块级），回落 0 违规 |
+
+**新门禁判据（建立在「读口」上，不是名字上）**：
+① 凡 `probe` 为**代码字面量形态**的登记项，必须带 `read` 声明**且该读口在 src 内真实存在**
+（**剥注释后**判定 —— 上一轮的假绿正是被注释喂出来的）；
+② 读口本身不得是孤儿（src 内 `thresholdValue`/`thresholdParam` 调用点 > 0）；
+③ **`registryPath` 型也不自动安全**（本轮新增）：`ingest.criteria[...]` 两族的取值须经
+`paramOf` / `thresholdValue` / `criteria-gate.json` 之一 —— 反例是真机 `ingest.dedup.bigram.threshold`
+（值确在注册表，而消费点当时写裸字面量 `>= 0.66` ⇒ 改注册表零效果）。
+
+**先红实证**：临时把 `crossform-dedup.ts` 的读口改回裸字面量 ⇒ 门禁 **exit 1**；还原 ⇒ **exit 0**；
+字节级还原 = true（脚本自证，非自述）。`--selftest` **5 例 · 3 条反例**（含「只有字面量无读口」
+「读口只出现在**注释**里」「读了**别的 id**」）。
+
+**验收（六层）**：typecheck 0 错 · build OK · **check-runner 185 pass / 0 fail** · 副本 **287/287** sha1 一致 ·
+热重载 fiber active · 特性 **82 项** · 注入对拍**逐字节一致（3 case）** · 公开树 PASS · 硬编码 PASS ·
+`ui-geo-regress` **121 PASS / 0 FAIL** · 契约 5 PASS + 产物新鲜（路由 44 条）。
+
+**⚠ 留下的教训（本轮最值钱的产出）**：我上一轮**自己写下**了「代理指标非判据」的原则，**同一轮又用它造了一道门**。
+⇒ 纪律加一条：**新建门禁时必须写明"这条判据的代理是什么、代理在哪里会失真"**；答不出 ⇒ 该门禁只是**噪声源**。
+
+---
+
 ## 0f. 🔴🔴 **G13「轮转失明」大面积漏网：三处结论被推翻**（2026-09-20 · 本轮最高优先）
 
 > **性质**：这不是"新增待办"，而是**已有结论的真伪问题**。台账 `audit/ledger.jsonl` 按大小轮转
@@ -270,7 +319,7 @@ calls=2 → bySid: sid=6b89a084 · qLen=2 · qHash=005c4d6f · lastReason=new ·
 | **S-P0** | ✅ **口径复验 + R1 预注册** | — | `node scripts/count-memory-lines.mjs` · 见 `docs/p0-report-and-preregistration-2026-09-15.md` | 报告已落盘且含三项实测结论 | 已完成 2026-09-15 |
 | **S-J0** | ✅ **judgeKind + thresholds 登记** | — | `node scripts/check-judge-kind.mjs` · `node scripts/check-threshold-registry.mjs` | 两条均 PASS（24/24 · 13 项） | 已完成 2026-09-15 |
 | **S-J1** | ✅ **阈值登记制与裁决机制机检** | — | `node scripts/check-runner.mjs` | `110 pass · 0 xfail · 0 skip` | 已完成 2026-09-15 |
-| **S-J2** | 🟡 **阈值逐个预注册 + 真实数据校准**（**4/13 已预注册**） | **9 项仍 `samples=0`**：`trigger.idleMs` · `ingest.dedup.bigram` · `tree.indexSemanticSim` · `tree.sectionMergeSim` · `write.semanticDupSim` · `write.cardSimilar` · `activity.interferenceBand` · `mcl.fastGate` · `ingest.granularity.splitLaw` | `node scripts/check-threshold-registry.mjs` · `node scripts/activity-calibrate.mjs`（活性族，已建） | 每项须有 预注册判据 + 真实样本分布 + 结论 + 回滚；**样本不足须写 `insufficient-data`（不猜方向）** | ✅ 活性族已校准（见下）；余 9 项可做（嵌入类需本地 bge） |
+| **S-J2** | 🟡 **阈值逐个预注册 + 真实数据校准**（**4/13 已预注册**） | **9 项仍 `samples=0`**：`trigger.idleMs` · `ingest.dedup.bigram` · `tree.indexSemanticSim` · `tree.sectionMergeSim` · `write.semanticDupSim` · `write.cardSimilar` · `activity.interferenceBand` · **`mcl.topicEchoGate`**（2026-09-20 由 `mcl.fastGate` 改名，见 §0g）· `ingest.granularity.splitLaw` | `node scripts/check-threshold-registry.mjs` · `node scripts/activity-calibrate.mjs`（活性族，已建） | 每项须有 预注册判据 + 真实样本分布 + 结论 + 回滚；**样本不足须写 `insufficient-data`（不猜方向）** | ✅ 活性族已校准（见下）；余 9 项可做（嵌入类需本地 bge）<br>✅ **2026-09-20 round 8：9 项「能否被改到」已全部核实并接线**（读口 `criteria.ts#thresholdValue`；门禁 `check-threshold-control`）—— 本项剩下的只是**校准**，不再是「改了没反应」 |
 | **S-J2a** | ✅ **活性族校准（`activity.hotHits` / `statusDays` / `demote.coldDays`）** | — | `node scripts/activity-calibrate.mjs` | 实测 n=46：**hotHits 5→23**（原值低于 p50 无区分度）；**statusDays 与 coldDays 登记 `insufficient-data`**（真实天距 max 6.2 天 ≪ 14/44/90，分布未覆盖阈值区间）；**假冷率复测 1/9=11.1%**（历史 26/49=53%）⇒ 聚合已由 harvest 接线修正 | 已完成 2026-09-15 |
 | **S-P1a** | ✅ **睡眠纪元身份（`sleepEpoch`）** | — | `node scripts/test-epoch-identity.mjs` · 真机 `POST /api/shoucang-panel/deepsleep/trigger` 后核审计 | 审计三处 `kind:'deep-sleep'` **全带** `sleepEpoch`+`epochSince`；`DeepSleepStatus.currentEpoch` 与审计**逐字一致**；判据双向变异实证（改名/删字段 ⇒ 0/3 红） | 已完成 2026-09-15（真机证据：`epoch-1789502907492` · 区间 ≈16.0h） |
 | **S-P1b** | ✅ **R0 内容水位（第二触发维）** | — | `node scripts/test-epoch-watermark.mjs` | 决策表穷举：时间到⇒time · 内容达阈⇒content · 都未到⇒none；**回归保护**：关闭时与纯时间判据逐分支等价（51 例）；判定顺序（已消化先于双维）修正并证等价；变异实证（内容分支置不可达⇒2 FAIL） | 已完成 2026-09-15 |

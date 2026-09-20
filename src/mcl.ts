@@ -29,6 +29,8 @@ import { nextZeroGain, shouldSwitchSource } from './recall-yield.js'
 import { envelopeEvent as envelope } from './event-envelope.js'
 // S-P5（2026-09-17 圆桌会议）：注入边界 `{{` 防护**单一实现**（与 panel-inject.ts 共用）。
 import { guardContextText } from './inject-guard.js'
+// round 8（2026-09-20）：登记阈值读口（本件 `mcl.topicEchoGate` 是唯一使用点）
+import { thresholdValue } from './criteria.js'
 
 export interface MclConfig {
   enabled: boolean
@@ -315,6 +317,36 @@ function materialOf(rows: RecallRow[], budget: number): { text: string; topics: 
   return { text, topics, signals }
 }
 
+/**
+ * **主题词回引判定**（缺陷3 修复）：三信号「或」——① 主题词全串 ② 主题词前缀（旧口径）③ 信号词元覆盖率
+ *   （≥minHits 个词元且覆盖率 ≥ratio）：容忍转述/省字，但要求**足够密度**，不能把"提了一句相关词"算命中。
+ * ⚠ IR1 附册 F2（2026-09-18）**命名诚实化**：本判据测的是「上一步是否**回引材料主题词**」（词面代理，
+ *   真机 true=0/3119）⇒ 审计键 `compliant` → **`topicEcho`**；真实收益信号已换源 `audit/yield-rounds.jsonl`。
+ * ⚠ round 8（2026-09-20）：实现在**模块级**（仓内约定；原为 `registerMcl` 内联箭头函数，接线后撞 I1 棘轮
+ *   `audit-wiring` ≤120 行）。同时**接通登记表**：第三信号的两个参数原为裸字面量 `2` / `0.6`，
+ *   而注册表把它们登记成 **`mcl.fastGate`** —— **名实不符**（它们**不是**快通道门；快通道门 =
+ *   `sim >= familiarThreshold && hasHighConf`，见 `decideTurn`）。⇒ 登记项已改名 `mcl.topicEchoGate`。
+ */
+export function judgeTopicEcho(text: string, topics: string[], signals: string[][] = []): boolean {
+  if (!text) return false
+  if (!topics.length && !signals.length) return false
+  const low = String(text).toLowerCase()
+  for (const t of topics) {
+    if (!t || t.length < 2) continue
+    if (low.includes(t.toLowerCase())) return true // ① 全串
+    if (low.includes(t.slice(0, 6).toLowerCase())) return true // ② 前缀（旧口径）
+  }
+  const echoGate = thresholdValue<{ minHits?: number; ratio?: number }>('mcl.topicEchoGate', { minHits: 2, ratio: 0.6 })
+  const minHits = Number(echoGate?.minHits ?? 2)
+  const ratio = Number(echoGate?.ratio ?? 0.6)
+  for (const sg of signals) { // ③ 词元覆盖率
+    if (!sg.length) continue
+    const hit = sg.filter((s) => low.includes(s)).length
+    if (hit >= minHits && hit / sg.length >= ratio) return true
+  }
+  return false
+}
+
 export function registerMcl(
   ctx: {
     on(event: string, handler: (payload: any, arg2?: any) => any): unknown
@@ -355,28 +387,9 @@ export function registerMcl(
   if (cfg.materialInSystem) mountMaterialBlock(ctx, cfg, state, counters)
   void loadMsgFactory()
 
-  /**
-   * **主题词回引判定**（缺陷3 修复）：三信号「或」——① 主题词全串 ② 主题词前缀（旧口径）③ 信号词元覆盖率
-   *   （≥2 个词元且覆盖率 ≥60%）：容忍转述/省字，但要求**足够密度**，不能把"提了一句相关词"算命中。
-   * ⚠ IR1 附册 F2（2026-09-18）**命名诚实化**：本判据测的是「上一步是否**回引材料主题词**」（词面代理，
-   *   真机 true=0/3119）⇒ 审计键 `compliant` → **`topicEcho`**；真实收益信号已换源 `audit/yield-rounds.jsonl`。
-   */
-  const judge = (text: string, topics: string[], signals: string[][] = []): boolean => {
-    if (!text) return false
-    if (!topics.length && !signals.length) return false
-    const low = String(text).toLowerCase()
-    for (const t of topics) {
-      if (!t || t.length < 2) continue
-      if (low.includes(t.toLowerCase())) return true // ① 全串
-      if (low.includes(t.slice(0, 6).toLowerCase())) return true // ② 前缀（旧口径）
-    }
-    for (const sg of signals) { // ③ 词元覆盖率
-      if (!sg.length) continue
-      const hit = sg.filter((s) => low.includes(s)).length
-      if (hit >= 2 && hit / sg.length >= 0.6) return true
-    }
-    return false
-  }
+  // 判据实现在**模块级** `judgeTopicEcho`（仓内约定：实现函数在模块级，依赖显式窄传）——
+  //   round 8 接线后本函数体变长，装配函数 `registerMcl` 撞 I1 棘轮（≤120 行），按既有出路提出来。
+  const judge = (text: string, topics: string[], signals: string[][] = []): boolean => judgeTopicEcho(text, topics, signals)
 
   const mkMsg = (text: string): AnyMsg => msgFactory!({ content: [{ type: 'text', text }], source: { kind: 'plugin', plugin: 'shoucang-mcl', form: 'recall' } })
 

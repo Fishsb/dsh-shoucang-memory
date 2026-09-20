@@ -396,7 +396,7 @@ export const THRESHOLDS: { note: string; entries: ThresholdEntry[] } = {
     {
       "id": "tree.indexSemanticSim",
       "value": 0.9,
-      "owner": "src/deepsleep-tree.ts:142",
+      "owner": "src/deepsleep-tree.ts:132",
       "preregistered": false,
       "samples": 0
     },
@@ -439,12 +439,12 @@ export const THRESHOLDS: { note: string; entries: ThresholdEntry[] } = {
       "samples": 0
     },
     {
-      "id": "mcl.fastGate",
+      "id": "mcl.topicEchoGate",
       "value": {
         "minHits": 2,
         "ratio": 0.6
       },
-      "owner": "src/mcl.ts:368",
+      "owner": "src/mcl.ts:364-386（judge 的词元覆盖率门）",
       "preregistered": false,
       "samples": 0
     },
@@ -455,14 +455,14 @@ export const THRESHOLDS: { note: string; entries: ThresholdEntry[] } = {
         "cold": 44,
         "archive": 90
       },
-      "owner": "src/activity.ts:82-85,184-196",
+      "owner": "src/activity.ts:83-85,184-196",
       "preregistered": true,
       "samples": 46
     },
     {
       "id": "activity.hotHits",
       "value": 23,
-      "owner": "src/activity.ts:85,196",
+      "owner": "src/activity.ts:87,archive",
       "preregistered": true,
       "samples": 46
     },

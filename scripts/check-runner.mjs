@@ -664,22 +664,28 @@ const CHECKS = [
   //   跨档真值 89.9% —— 正是 G13 教训的又一次复现）。
   ['scripts/check-l0-conflict-wiring.mjs'],
   ['scripts/check-l0-conflict-wiring.mjs', '--selftest'],
-  // 「阈值必须真被消费」（2026-09-20 · **真机取证驱动 · 假旋钮类缺陷**）：
-  //   `thresholds.entries` 登记 20 项阈值，而**登记了 ≠ 被实现读**。实测抓到 **9 项可疑**，
-  //   逐项实查后分**四类**（每类都已写进注册表 `thresholds.unconsumedNote`，含处置与 until）：
-  //     ① **真死配置**（改它零效果）：`mcl.fastGate` —— `minHits`/`ratio` 实测只出现在
-  //        `criteria.generated.ts`（**生成物**），`mcl.ts:501` 实际判据是 `sim>=familiarThreshold && hasHighConf`；
-  //     ② **命名不符**（常量在、不走注册表）：`inject.crossFormDedupSim`（实现是硬编码常量
-  //        `CROSS_FORM_DEDUP_SIM=0.8`）· `tree.sectionMergeSim` · `write.semanticDupSim`；
-  //     ③ **键名写错**：`activity.statusDays` —— `activity.ts:83-85` 实为 `warmDays`/`coldDays`/`archiveDays`；
-  //     ④ **消费点是硬编码字面量**（注册表象牙 + 代码字面量真牙，**改注册表同样零效果**）：
-  //        `ingest.dedup.bigram.threshold`(0.66) · `tree.indexSemanticSim`(0.90) · `activity.interferenceBand`([0.5,0.66])。
-  //   为什么三方门禁全绿：`check-threshold-registry` 判「**登记了没**」、`check-field-usage` 管字段角色、
-  //     `check-hardcode` 恰恰**希望**常量集中 ⇒ **没有一道问「这项阈值有没有被实现读」**。
-  //   判据：① 每项至少一个**消费点**（在非生成物 src 里；零消费须登记 `thresholds.unconsumed`）
-  //        ② 反例自证（样例取自真机 `mcl.fastGate` 形态）。
-  ['scripts/check-threshold-consumed.mjs'],
-  ['scripts/check-threshold-consumed.mjs', '--selftest'],
+  // 「阈值旋钮必须真的有传动」（2026-09-20 round 8 · **取代 check-threshold-consumed**）：
+  //   ⚠ **上一轮的门已删，因为它建在被推翻的判据上**。上一轮判据 = 「阈值项的**键名**在 src 里是否出现」，
+  //   据此分「真死配置/命名不符/键名写错/消费点是字面量」四类 —— 本轮逐项复核，**四类里至少两类是错的**：
+  //     · `mcl.fastGate` 判「真死配置」→ **错**：其 probe 对应的 `mcl.ts` 那处**确实存在**
+  //       （`hit / sg.length >= 0.6`），但它是 `judge()` 的**词元覆盖率门**，**不是**快通道门
+  //       （后者 = `sim >= familiarThreshold && hasHighConf`）⇒ 判据真实存在，**只是登记项贴错了名字**
+  //       （本轮已改名 `mcl.topicEchoGate` 并接线）。
+  //     · `activity.statusDays` 判「键名写错」→ **错**：值是活的（zod 缺省 → deepsleep-run → activity.ts），
+  //       只是 zod 缺省**硬编码**而不读注册表 ⇒ 与其余同类，都是**双源**。
+  //   根因：那套判据的**代理是「键名匹配」**，而键名会被**注释、生成物、同名局部变量**同时左右
+  //     ⇒ 产出「命名巧合表」而非「断链表」（同族教训 `[原则] 代理指标非判据`）。
+  //   **机制级事实（上一轮整轮漏掉）**：`THRESHOLDS` 投影在 `src/` 内 **零消费者** ——
+  //     8 项登记项的 probe 指向代码里的**裸数值字面量** ⇒ 改注册表 + `gen:criteria` + 门禁全绿，
+  //     而**行为零变化**（"假旋钮"）。
+  //   **本轮治本**：新增 `src/criteria.ts#thresholdValue` / `#thresholdParam` 作为**唯一读口**，
+  //     9 项消费点全部改读它（字面量降级为注册表缺项兜底）。
+  //   判据（本件）：① 代码字面量型登记项必须带 `read` 声明且该读口在 src 内**真实存在**
+  //                （**剥注释后**判定 —— 上一轮的假绿正是被注释喂出来的）；
+  //                ② 读口本身不得是孤儿（src 内调用点 > 0）。
+  //   反例自证 5 例，含「只有字面量无读口」「读口只出现在注释里」「读了别的 id」三条反例。
+  ['scripts/check-threshold-control.mjs'],
+  ['scripts/check-threshold-control.mjs', '--selftest'],
   // **统一事件信封**单测（2026-09-13）：`{ at, ...o }` 的展开顺序允许调用方用 `at: undefined` 覆盖注入值，
   //   而 `JSON.stringify` 静默丢弃 undefined ⇒ 行里没有 `at`（实测 distill-audit 930 行里 1 行如此）。
   //   本件把「任何一行都必须有非空 `at` + `type`」钉死，覆盖 audit/episode/stub/ledger 四条写出路径。

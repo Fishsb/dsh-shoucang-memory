@@ -190,19 +190,11 @@
   },
   "thresholds": {
     "note": "阈值登记制（J0 · 2026-09-15 · 依据 docs/judge-layering-plan-2026-09-15.md §4.2）。**规则**：任何影响「接受/拒绝/归类/取舍」判断的数值阈值都必须登记在此，且登记项必须含 `preregisteredCriterion` + `samples` + `conclusion` + `recheck`。机检 scripts/check-threshold-registry.mjs（未登记 ⇒ 红；登记了但缺预注册或样本数 ⇒ 红）。**范围界定**：不含格式门（归 ingest.format.index-line 的 params）、容量/预算（归 gate.caps / surface.*）、工程常量（超时/重试/熔断）。**样板**：mcl.familiarThreshold 是全仓**唯一**有完整预注册校准记录的阈值。⚠ **暴露出的真问题**：13 项里 **12 项 samples=0 / 未预注册** —— 其中 activity.statusDays 已**实证失真**（假冷 26 条，见 skill/scripts/harvest-access.mjs:6）。⚠ **2026-09-20 加检「消费侧」**（`scripts/check-threshold-consumed.mjs`）：登记了**不等于被实现读** —— 实测抓到 **1 项真死配置 + 3 项命名不符 + 1 项键名写错**，逐条见 `unconsumed`。",
-    "unconsumed": [
-      "mcl.fastGate",
-      "tree.sectionMergeSim",
-      "inject.crossFormDedupSim",
-      "write.semanticDupSim",
-      "activity.statusDays"
-    ],
-    "valueHardcoded": [
-      "ingest.dedup.bigram.threshold",
-      "tree.indexSemanticSim",
-      "activity.interferenceBand"
-    ],
-    "unconsumedNote": "**已核「在非生成物 src 里零消费点」的阈值项**（`check-threshold-consumed` ① 的事实源；逐项实查结论**分三类**，2026-09-20）。**登记不是豁免，是让断链可见**；每项须给处置与 `until`：<br>① **真死配置（改它零效果）** —— `mcl.fastGate`（`{minHits:2, ratio:0.6}`）：实测 `grep -w minHits src/*.ts` **只命中 `criteria.generated.ts`（生成物）**，而 `mcl.ts:501` 的快通道判据实际是 `sim >= familiarThreshold && hasHighConf` —— **根本不读这两个参数**。⇒ 属**假旋钮**（改注册表 + `gen:criteria` + 门禁全绿，而行为零变化）。**until**：要么在 `mcl.ts` 真的用上（并给判据），要么**删该登记项**（避免发布一个读不到的旋钮）。<br>② **命名不符（常量在、不走注册表）** —— `inject.crossFormDedupSim`（实现是 `crossform-dedup.ts:23` 的**硬编码常量** `CROSS_FORM_DEDUP_SIM = 0.8`，**不读注册表**）· `tree.sectionMergeSim`（零命中，合并相似度用别的手段）· `write.semanticDupSim`（零命中）。⇒ 属**双源**（注册表象牙 + 代码常量真牙）。**until**：实现改为 `paramOf(...)` 读取，或把常量删掉只留注册表。<br>③ **键名写错（注册表键与实现不符）** —— `activity.statusDays`：`activity.ts:83-85` 实际用的是 **`warmDays`(14) / `coldDays`(44) / `archiveDays`(90)**，**没有 `statusDays` 这个键**。⇒ 该登记项**指向一个不存在的参数**。**until**：改登记为三个真实键，或把实现改成读 `statusDays`。<br>④ **同族第四类：消费点存在但是硬编码字面量（注册表象牙 + 代码字面量真牙）** —— 实测三项，**均确认有消费点**，但**不读注册表**：`ingest.dedup.bigram.threshold`（`0.66` → `distill-write.ts:419/565` 硬编码 `>= 0.66`）· `tree.indexSemanticSim`（`0.90` → `deepsleep-tree.ts:134` 硬编码 `>= 0.9`）· `activity.interferenceBand`（`[0.5, 0.66]` → `activity.ts:250` 硬编码 `v >= 0.5 && v < 0.66`）。⇒ **改注册表这三项同样零效果**（与①同类病、只是「有个同名消费点」掩盖了它）。**until**：实现改为 `paramOf(...)` 读取。⚠ 本类**未计入 `unconsumed`**（判据 ① 只判「有没有消费点」），**但必须在此写明** —— 否则「有消费点」会被误读为「改它有效」。",
+    "unconsumed": [],
+    "valueHardcoded": [],
+    "readPort": "src/criteria.ts#thresholdValue",
+    "readPortNote": "**登记阈值的唯一运行时读口**（2026-09-20 round 8 立）。凡 `probe` 为**代码字面量形态**（`file` + `contains`）的登记项，都必须带 `read` 字段声明其读口，且该读口须在 `src/` 内**真实存在**（`thresholdValue('<id>'` 命中 ≥1）—— 由 `scripts/check-threshold-control.mjs` 机检，零命中 ⇒ 红。这是上一轮 `check-threshold-consumed.mjs` 的**替代品**：后者判「键名有没有在 src 里出现」，实测得到的是**命名巧合表**而非断链表（详见 `thresholds.note` 与 `docs/OPEN-ITEMS.md §0g`），已删。",
+    "unconsumedNote": "**（2026-09-20 round 8 · 表已清空；以下为上一轮原文，保留供对照 —— 勿当现行结论）** 本表上一轮登记了 5 项「零消费」+ 3 项「硬编码字面量」，并分成「真死配置/命名不符/键名写错/消费点是字面量」四类。**本轮实测推翻了那个分类本身**，三处订正见 `docs/OPEN-ITEMS.md §0g`：① 分类是**「键名是否在 src 里出现」这个代理的产物** —— 它同时被注释/生成物/同名局部变量左右 ⇒ 得到「命名巧合表」而非「断链表」；② `mcl.fastGate` **不是真死配置，是登记项贴错名字**（其 `probe.contains` 对应的 `mcl.ts` 那处是 `judge()` 的**词元覆盖率门**，不是快通道门）⇒ 已改名 `mcl.topicEchoGate` 并接线；③ `activity.statusDays` **不是键名写错**，值是活的（zod 缺省硬编码 ⇒ 属双源）。**上一轮整轮漏掉的机制级事实**：`THRESHOLDS` 投影在 `src/` 内**零消费者** ⇒ 治本是**给投影一个读口**，非逐项改字面量。11 项消费点已全部改读 `criteria.ts#thresholdValue` / `#thresholdParam`。<br>**—— 上一轮原文 ——**<br>**已核「在非生成物 src 里零消费点」的阈值项**（`check-threshold-consumed` ① 的事实源；逐项实查结论**分三类**，2026-09-20）。**登记不是豁免，是让断链可见**；每项须给处置与 `until`：<br>① **真死配置（改它零效果）** —— `mcl.fastGate`（`{minHits:2, ratio:0.6}`）：实测 `grep -w minHits src/*.ts` **只命中 `criteria.generated.ts`（生成物）**，而 `mcl.ts:501` 的快通道判据实际是 `sim >= familiarThreshold && hasHighConf` —— **根本不读这两个参数**。⇒ 属**假旋钮**（改注册表 + `gen:criteria` + 门禁全绿，而行为零变化）。**until**：要么在 `mcl.ts` 真的用上（并给判据），要么**删该登记项**。 <br>② **命名不符（常量在、不走注册表）** —— `inject.crossFormDedupSim`（实现是 `crossform-dedup.ts:23` 的**硬编码常量** `CROSS_FORM_DEDUP_SIM = 0.8`，**不读注册表**）· `tree.sectionMergeSim`（零命中）· `write.semanticDupSim`（零命中）。⇒ 属**双源**（注册表象牙 + 代码常量真牙）。**until**：实现改为读注册表，或把常量删掉只留注册表。<br>③ **键名写错（注册表键与实现不符）** —— `activity.statusDays`：`activity.ts:83-85` 实际用的是 **`warmDays`(14) / `coldDays`(44) / `archiveDays`(90)**，**没有 `statusDays` 这个键**。**until**：改登记为三个真实键，或把实现改成读 `statusDays`。<br>④ **同族第四类：消费点存在但是硬编码字面量** —— `ingest.dedup.bigram.threshold`（`0.66`）· `tree.indexSemanticSim`（`0.90`）· `activity.interferenceBand`（`[0.5, 0.66]`）。⇒ **改注册表这三项同样零效果**。**until**：实现改为读注册表。",
     "entries": [
       {
         "id": "trigger.materialChunkChars",
@@ -302,24 +294,26 @@
         "id": "tree.indexSemanticSim",
         "probe": {
           "file": "src/deepsleep-tree.ts",
-          "contains": "s >= 0.9"
+          "contains": "thresholdValue<number>('tree.indexSemanticSim'"
         },
+        "read": "src/deepsleep-tree.ts#thresholdValue('tree.indexSemanticSim')",
         "value": 0.9,
-        "owner": "src/deepsleep-tree.ts:142",
+        "owner": "src/deepsleep-tree.ts:132",
         "preregistered": false,
         "preregisteredCriterion": null,
         "samples": 0,
         "conclusion": "insufficient-data（未校准）",
         "recheck": "J2",
         "calibrator": null,
-        "rollback": "代码常量"
+        "rollback": "改注册表 → 重跑 gen-criteria（消费点读 thresholdValue ⇒ **改注册表即生效**）"
       },
       {
         "id": "tree.sectionMergeSim",
         "probe": {
           "file": "src/deepsleep-tree.ts",
-          "contains": "sim < 0.95"
+          "contains": "thresholdValue<number>('tree.sectionMergeSim'"
         },
+        "read": "src/deepsleep-tree.ts#thresholdValue('tree.sectionMergeSim')",
         "value": 0.95,
         "owner": "src/deepsleep-tree.ts:271",
         "preregistered": false,
@@ -328,14 +322,15 @@
         "conclusion": "insufficient-data（未校准）",
         "recheck": "J2",
         "calibrator": null,
-        "rollback": "代码常量"
+        "rollback": "改注册表 → 重跑 gen-criteria（消费点读 thresholdValue ⇒ **改注册表即生效**）"
       },
       {
         "id": "inject.crossFormDedupSim",
         "probe": {
           "file": "src/crossform-dedup.ts",
-          "contains": "CROSS_FORM_DEDUP_SIM = 0.8"
+          "contains": "thresholdValue<number>('inject.crossFormDedupSim'"
         },
+        "read": "src/crossform-dedup.ts#CROSS_FORM_DEDUP_SIM = thresholdValue('inject.crossFormDedupSim')",
         "value": 0.8,
         "owner": "src/crossform-dedup.ts",
         "preregistered": false,
@@ -350,8 +345,9 @@
         "id": "write.semanticDupSim",
         "probe": {
           "file": "src/distill-write.ts",
-          "contains": "s >= 0.8"
+          "contains": "thresholdValue<number>('write.semanticDupSim'"
         },
+        "read": "src/distill-write.ts#thresholdValue('write.semanticDupSim')",
         "value": 0.8,
         "owner": "src/distill-write.ts:263",
         "preregistered": false,
@@ -360,14 +356,15 @@
         "conclusion": "insufficient-data（未校准）",
         "recheck": "J2",
         "calibrator": null,
-        "rollback": "代码常量"
+        "rollback": "改注册表 → 重跑 gen-criteria（消费点读 thresholdValue ⇒ **改注册表即生效**）"
       },
       {
         "id": "write.cardSimilar",
         "probe": {
           "file": "src/distill-write.ts",
-          "contains": "cardSimilar(title, ex) >= 0.42"
+          "contains": "thresholdValue<number>('write.cardSimilar'"
         },
+        "read": "src/distill-write.ts#thresholdValue('write.cardSimilar')",
         "value": 0.42,
         "owner": "src/distill-write.ts:343,401",
         "preregistered": false,
@@ -376,14 +373,15 @@
         "conclusion": "insufficient-data（未校准）",
         "recheck": "J2",
         "calibrator": null,
-        "rollback": "代码常量"
+        "rollback": "改注册表 → 重跑 gen-criteria（消费点读 thresholdValue ⇒ **改注册表即生效**）"
       },
       {
         "id": "activity.interferenceBand",
         "probe": {
           "file": "src/activity.ts",
-          "contains": "v >= 0.5 && v < 0.66"
+          "contains": "thresholdValue<number[]>('activity.interferenceBand'"
         },
+        "read": "src/activity.ts#thresholdValue('activity.interferenceBand')",
         "value": [
           0.5,
           0.66
@@ -392,42 +390,44 @@
         "preregistered": false,
         "preregisteredCriterion": null,
         "samples": 0,
-        "conclusion": "insufficient-data（未校准；且为**双阈值硬编码**，无任何来源说明）",
+        "conclusion": "insufficient-data（未校准；且为**双阈值**，无任何来源说明）",
         "recheck": "J2",
         "calibrator": null,
-        "rollback": "代码常量"
+        "rollback": "改注册表 → 重跑 gen-criteria（消费点读 thresholdValue ⇒ **改注册表即生效**）"
       },
       {
-        "id": "mcl.fastGate",
+        "id": "mcl.topicEchoGate",
         "probe": {
           "file": "src/mcl.ts",
-          "contains": "hit / sg.length >= 0.6"
+          "contains": "thresholdValue<{ minHits?: number; ratio?: number }>('mcl.topicEchoGate'"
         },
+        "read": "src/mcl.ts#thresholdValue('mcl.topicEchoGate')",
         "value": {
           "minHits": 2,
           "ratio": 0.6
         },
-        "owner": "src/mcl.ts:368",
+        "owner": "src/mcl.ts:364-386（judge 的词元覆盖率门）",
         "preregistered": false,
         "preregisteredCriterion": null,
         "samples": 0,
-        "conclusion": "insufficient-data（未校准）",
-        "recheck": "J2",
+        "conclusion": "**2026-09-20 round 8 改名**（原名 `mcl.fastGate`，**名实不符**）：原 id 会让人以为它管**快通道门**（真实快通道门 = `sim >= familiarThreshold && hasHighConf`，见 `mcl.ts:501`，**另由 `mcl.familiarThreshold` 登记**），而它的 `probe.contains` 对应的是本判据 —— `judge()` 里「**上一步是否回引材料主题词**」的信号词元覆盖率门（`hit >= minHits && hit / sigLen >= ratio`）。⇒ 上一轮我据「`minHits`/`ratio` 只在生成物里出现」判它「真死配置」，是**误判**：判据真实存在且可调，只是**名字骗人**（代理指标 = 键名匹配）。`insufficient-data`：本值**未校准**，但**非阻塞** —— `judge()` 的产出（`topicEcho`）**只进审计、不反馈选行**（见 OPEN-ITEMS §0e 门3），故它当前是**可观测面**而非行为面；接进选行前须先看真实回引率。",
+        "recheck": "门3 接线前（新 compliance 行 ≥30 且 `topicEcho=true` 占比落在 (0%, 95%)）",
         "calibrator": null,
-        "rollback": "代码常量"
+        "rollback": "改注册表 → 重跑 gen-criteria（消费点读 thresholdValue ⇒ **改注册表即生效**）"
       },
       {
         "id": "activity.statusDays",
         "probe": {
           "file": "src/activity.ts",
-          "contains": "warmDays ?? 14"
+          "contains": "thresholdParam<number>('activity.statusDays', 'warm'"
         },
+        "read": "src/activity.ts#thresholdParam('activity.statusDays','warm'|'cold'|'archive')",
         "value": {
           "warm": 14,
           "cold": 44,
           "archive": 90
         },
-        "owner": "src/activity.ts:82-85,184-196",
+        "owner": "src/activity.ts:83-85,184-196",
         "preregistered": true,
         "preregisteredCriterion": "天距分位：warm=p50 · cold=p75 · archive=p90（从**真实**命中天距分布取，不拍脑袋）",
         "samples": 46,
@@ -440,14 +440,15 @@
         "id": "activity.hotHits",
         "probe": {
           "file": "src/activity.ts",
-          "contains": "hotHits ?? 23"
+          "contains": "thresholdValue<number>('activity.hotHits'"
         },
+        "read": "src/activity.ts#thresholdValue('activity.hotHits')",
         "value": 23,
-        "owner": "src/activity.ts:85,196",
+        "owner": "src/activity.ts:87,archive",
         "preregistered": true,
         "preregisteredCriterion": "hot = 分布**上四分位**（p75）（设计原则：hot 的定义就是「高频尾部」，非对样本拟合）",
         "samples": 46,
-        "conclusion": "**已调整：5 → 23**。2026-09-15 J2 实测：真实 hits30 p50=**9** / p75=23 / p90=34 / max=58 ⇒ 原阈值 5 **低于 p50** ⇒ 「hot 候选」含半数以上条目，判据意图（识别**高频**小节）**已失去区分度**。按预注册判据取 p75=23。四处默认位点已同步（activity.ts / scheduler.ts / panel-config.ts / deepsleep-run.ts）",
+        "conclusion": "**已调整：5 → 23**。2026-09-15 J2 实测：真实 hits30 p50=**9** / p75=23 / p90=34 / max=58 ⇒ 原阈值 5 **低于 p50** ⇒ 「hot 候选」含半数以上条目，判据意图（识别**高频**小节）**已失去区分度**。按预注册判据取 p75=23。**2026-09-20 round 8**：消费点由裸字面量 `?? 23` 改为 `thresholdValue('activity.hotHits')` ⇒ 改注册表**真的生效**（此前四处默认位点各自硬编码，只有 zod 那一处可经 UI 调）。",
         "recheck": "样本翻倍时重跑 scripts/activity-calibrate.mjs",
         "calibrator": "scripts/activity-calibrate.mjs",
         "rollback": "面板 `/set activityHotHits 5`（热生效）"

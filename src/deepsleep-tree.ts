@@ -8,6 +8,7 @@ import { envelopeEvent as envelope } from './event-envelope.js'
 import { atomicWriteFile } from './section-rewrite.js'
 import { biContains, coreName } from './treeops.js'
 import { semanticSim } from './vec.js'
+import { thresholdValue } from './criteria.js'
 
 import type { EmbedCfg } from './vec.js'
 
@@ -126,12 +127,15 @@ export async function consolidateTree(d: TreeDeps, memRoot: string): Promise<{ i
             if (g.length < 2 || embedBudget <= 0) continue
             const sp = g.map((_, k) => k)
             const sfind = (x: number): number => { while (sp[x] !== x) { sp[x] = sp[sp[x]]; x = sp[x] } return x }
+            // round 8（2026-09-20）：门槛**读登记表** —— 原为裸字面量 `s >= 0.9`
+            //   （与注册表 `tree.indexSemanticSim` 构成双源 ⇒ 改注册表零效果）。
+            const idxSemSim = thresholdValue<number>('tree.indexSemanticSim', 0.9)
             for (let i = 0; i < g.length && embedBudget > 0; i++) {
               for (let j = i + 1; j < g.length && embedBudget > 0; j++) {
                 embedBudget--
                 let s: number | null = null
                 try { s = await semanticSim(rows[g[i]].front, rows[g[j]].front, ecfg) } catch { s = null } // sim 失败=跳过该对
-                if (s !== null && s >= 0.9) sp[sfind(i)] = sfind(j)
+                if (s !== null && s >= idxSemSim) sp[sfind(i)] = sfind(j)
               }
             }
             const comps = new Map<number, number[]>()
@@ -262,7 +266,10 @@ export async function consolidateTree(d: TreeDeps, memRoot: string): Promise<{ i
                 embedBudget--
                 try { sim = await semanticSim(`${coreName(x.title)}\n${xBody}`, `${coreName(y.title)}\n${yBody}`, ecfg) } catch { sim = null }
               }
-              if (sim === null || sim < 0.95) continue // sim 不可用/未达标：跳过语义（正文全同已在上方直并）
+              // round 8（2026-09-20）：合并门槛**读登记表** —— 原为裸字面量 `sim < 0.95`
+              //   （与注册表 `tree.sectionMergeSim` 构成双源 ⇒ 改注册表零效果）。
+              const secMergeSim = thresholdValue<number>('tree.sectionMergeSim', 0.95)
+              if (sim === null || sim < secMergeSim) continue // sim 不可用/未达标：跳过语义（正文全同已在上方直并）
               // canonical=正文较长者；等长且正文不同 → 无法唯一确定 canonical → 跳过；等长正文全同 → 取文件序更早
               let c: Section; let o: Section
               if (xBody.length > yBody.length) { c = x; o = y }

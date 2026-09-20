@@ -12,6 +12,8 @@ import { runNode, textOf } from './distill-proc.js'
 import type { RunResult } from './distill-proc.js'
 import { semanticSim } from './vec.js'
 import { admitIndexRow, pointersOfRow, sectionCore } from './section-ref.js'
+// round 8（2026-09-20）：登记阈值的**唯一读口**（原三处裸字面量 0.66/0.8/0.42 ⇒ 与注册表双源）
+import { thresholdValue } from './criteria.js'
 // 待认领队列（单一实现）：卡命名与「未落地知识回退」共用同一函数（本件只转发导出，勿再写第二份）
 import { knowledgeDeferFileOf } from './pointer-deficits.js'
 import { atomicWriteFile } from './section-rewrite.js'
@@ -416,7 +418,9 @@ const writeDispatch = async (dep: WriteDeps, sid: string, out: any, route: strin
             if (tn.length >= 2 && to.length >= 2) {
               const inter = tn.filter((x) => to.includes(x)).length
               const union = new Set([...tn, ...to]).size
-              if (union > 0 && inter / union >= 0.66) { dup = 'approx'; break }
+              // round 8（2026-09-20）：词法相似门槛**读登记表** `ingest.dedup.bigram.threshold`（原裸字面量 0.66）
+              const bigramThr = thresholdValue<number>('ingest.dedup.bigram.threshold', 0.66)
+              if (union > 0 && inter / union >= bigramThr) { dup = 'approx'; break }
             }
             sameTagLines.push(ol.trim())
           }
@@ -427,11 +431,13 @@ const writeDispatch = async (dep: WriteDeps, sid: string, out: any, route: strin
           try {
             const ecfg = dep.embedCfgOf()
             if (ecfg.enabled) {
+              // round 8（2026-09-20）：语义拒并门槛**读登记表** `write.semanticDupSim`（原裸字面量 0.8）
+              const semDupSim = thresholdValue<number>('write.semanticDupSim', 0.8)
               const headOf = (l: string): string => { const i = l.indexOf('→'); return (i >= 0 ? l.slice(0, i) : l).trim() }
               const qText = headOf(nl)
               for (const ol of sameTagLines) {
                 const s = await semanticSim(qText, headOf(ol), ecfg)
-                if (s !== null && s >= 0.8) { dup = 'sem'; break }
+                if (s !== null && s >= semDupSim) { dup = 'sem'; break }
               }
             }
           } catch { /* 语义拒并失败=按既有词法结论 */ }
@@ -572,9 +578,11 @@ const writeDispatch = async (dep: WriteDeps, sid: string, out: any, route: strin
     })()
     const cardDupOf = (title: string): string | null => {
       if (dep.cand.cardTokens(title).length < 2) return null
+      // round 8（2026-09-20）：卡判重门槛**读登记表** `write.cardSimilar`（原裸字面量 0.42）
+      const cardSim = thresholdValue<number>('write.cardSimilar', 0.42)
       for (const ex of existingCardTitles) {
         if (ex === title) return ex
-        if (dep.cand.cardSimilar(title, ex) >= 0.42) return ex
+        if (dep.cand.cardSimilar(title, ex) >= cardSim) return ex
       }
       return null
     }
@@ -626,13 +634,15 @@ const flushDeferCards = async (dep: WriteDeps, ): Promise<{ written: number; kep
       // 2026-09-10：语义判重（防同主题重复卡，与蒸馏直写同口径）——近似既有卡则只清 pending 不重复写
       const dupTitle = ((): string | null => {
         if (dep.cand.cardTokens(title).length < 2) return null
+        // round 8（2026-09-20）：同 `cardDupOf` —— 卡判重门槛**读登记表** `write.cardSimilar`
+        const cardSim = thresholdValue<number>('write.cardSimilar', 0.42)
         try {
           for (const ef of readdirSync(dir).filter((x) => x.endsWith('.md'))) {
             const m = readFileSync(join(dir, ef), 'utf8').match(/^#\s*\[项目事实\][^·]*·\s*(.+)$/m)
             if (!m) continue
             const ex = m[1].trim()
             if (ex === title) return ex
-            if (dep.cand.cardSimilar(title, ex) >= 0.42) return ex
+            if (dep.cand.cardSimilar(title, ex) >= cardSim) return ex
           }
         } catch { /* 读取失败=不判重 */ }
         return null

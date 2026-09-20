@@ -12,6 +12,25 @@
  */
 import { CRITERIA_VERSION } from './criteria.generated.js';
 export { CRITERIA_VERSION };
+/**
+ * **登记阈值的运行时读口**（2026-09-20 round 8）。
+ *
+ * 判因（真机实测，推翻我当时自己的分类）：`THRESHOLDS` 投影在 `src/` 内**零消费者** ——
+ *   8 项登记项的 `probe` 指向**代码里的裸数值字面量**（`distill-write.ts` 的 `>= 0.66` /
+ *   `deepsleep-tree.ts` 的 `>= 0.9` / `activity.ts` 的 `v >= 0.5 && v < 0.66` …）。
+ *   ⇒ 改了注册表、跑了 `gen:criteria`、门禁全绿，而**行为零变化** —— 这正是「假旋钮」。
+ *   （`check-hardcode` 恰恰**希望**常量集中，`check-threshold-registry` 只问「登记了没」，
+ *    `check-field-usage` 只看 `CRITERIA_ROWS` 系的字段角色 ⇒ 三方**都不问"这个值被读了吗"**。）
+ *
+ * ⇒ 本函数是这类登记项**唯一合法的读口**：probe 必须能命中一处 `thresholdValue('id', …)` 调用，
+ *   由 `scripts/check-threshold-control.mjs` 机检（零命中 ⇒ 红）。
+ * ⚠ **不写第二份缺省**：`fallback` 只用于「注册表缺项/关闭态（null）」，其值须与注册表登记值一致
+ *   （由 `check-threshold-registry` ④ 的 `read` 漂移检测守）。
+ */
+export declare function thresholdValue<T = unknown>(id: string, fallback: T): T;
+/** 对象型阈值的取键读口（如 `activity.statusDays` 的 `warm`/`cold`/`archive`）。
+ *  对象整值也有 `thresholdValue`，但消费点通常只需要其中一维 —— 本函数避免每处各写一遍取键与兜底。 */
+export declare function thresholdParam<T = unknown>(id: string, key: string, fallback: T): T;
 export type L0Reuse = 'cross-task' | 'cross-project' | 'session-only';
 export type L0Generality = 'direction' | 'contract-fact' | 'detail';
 export type L0Stability = 'once' | 'same-day-repeat' | 'cross-day';

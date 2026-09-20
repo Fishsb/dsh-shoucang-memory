@@ -5,7 +5,17 @@
 ## [Unreleased]
 
 ### Changed
-- **阈值"假旋钮"：登记了 ≠ 被实现读（2026-09-20 · 真机取证驱动）**：`thresholds.entries` 登记 **20 项**阈值，而**"登记了"不等于"被实现读"**。新增核查抓到 **9 项可疑**，逐项实查后分**四类**（每类都写进注册表 `thresholds.unconsumedNote`，含处置与 `until`）：
+- **🔴 自我推翻：上一轮的「阈值假旋钮」分类建立在代理指标上，两类结论是错的（2026-09-20 round 8）**：上一轮把 9 项登记阈值分进「真死配置 / 命名不符 / 键名写错 / 消费点是字面量」**四类**并写进注册表。**本轮逐项复核，四类里至少两类被推翻**：
+  · **① `mcl.fastGate` 判「真死配置」→ 错**。其 `probe.contains`（`hit / sg.length >= 0.6`）在 `mcl.ts` 里**确有一处**，但那是 **`judge()` 的词元覆盖率门**，**不是**快通道门（后者 = `sim >= familiarThreshold && hasHighConf`）。⇒ 判据**真实存在且可调**，只是**登记项贴错了名字**。已改名 **`mcl.topicEchoGate`** 并接上读口。
+  · **② `activity.statusDays` 判「键名写错」→ 错**。值是**活的**：`scheduler.ts` zod 缺省 → `deepsleep-run.ts` → `activity.ts` opts。只是 zod 缺省**硬编码 `14/44/90`** 而不读注册表 ⇒ 与其余同类，**都是"双源"**。
+  · **③ 分类本身无效**：那套判据的**代理是「键名是否在 `src/` 里出现」**，而键名会被**注释、生成物、同名局部变量**同时左右 ⇒ 产出的是「**命名巧合表**」，**不是断链表**。（同族教训：`[原则] 代理指标非判据` —— 我上一轮**自己写下**了这条原则，**同一轮又用它造了一道门**。）
+- **病灶（上一轮整轮漏掉 · 这才是本轮的机制级发现）**：`THRESHOLDS`（整份阈值投影）在 `src/` 内**零消费者** —— 9 项登记项的 `probe` 指向代码里的**裸数值字面量**（`>= 0.66` / `>= 0.9` / `v >= 0.5 && v < 0.66` …）⇒ 改注册表 + `gen:criteria` + 门禁全绿，而**行为零变化**。⇒ **治本不是逐项改字面量，而是给投影一个读口**。为什么三方门禁全绿：`check-threshold-registry` 只判「**登记了没**」· `check-field-usage` 只看 `CRITERIA_ROWS` 系的**字段角色**（其孤儿常量名字表**写死 14 个**，`THRESHOLDS` **天然不在监测面**）· `check-hardcode` 恰恰**希望**常量集中。
+  · **新增唯一读口** `src/criteria.ts#thresholdValue(id, fallback)` + `#thresholdParam(id, key, fallback)`；**9 项消费点全部改读它** —— `crossform-dedup.ts`（`inject.crossFormDedupSim`）· `activity.ts`（`activity.statusDays` 三键 + `activity.hotHits` + `activity.interferenceBand`）· `deepsleep-tree.ts`（`tree.indexSemanticSim` / `tree.sectionMergeSim`）· `distill-write.ts`（`ingest.dedup.bigram.threshold` / `write.semanticDupSim` / `write.cardSimilar`）· `mcl.ts`（`mcl.topicEchoGate`）。字面量降级为**注册表缺项兜底**（值与登记值一致，由 `check-threshold-registry` ④ 的 `read` 探针守**不漂移**）。⇒ **改注册表真的生效**。
+  · **门禁换血**：**删** `check-threshold-consumed.mjs`（判据建立于被推翻的分类上 ⇒ 留着 = **把错判据固化成门**）；**新增** `check-threshold-control.mjs`（登记 `check-runner`，**185 件**）。判据建立在**读口**上而非名字上：① 代码字面量型登记项必须带 `read` 声明**且该读口在 src 内真实存在**（**剥注释后**判定 —— 上一轮的假绿正是被注释喂出来的）· ② 读口不得是孤儿（调用点 > 0）· ③ **`registryPath` 型也不自动安全**（`ingest.criteria[...]` 两族取值须经 `paramOf`/`thresholdValue`/`criteria-gate.json` 之一 —— 反例是真机 `ingest.dedup.bigram.threshold`：值确在注册表，而消费点当时写裸字面量）。
+  · **先红实证**：临时把 `crossform-dedup.ts` 读口改回裸字面量 ⇒ 门禁 **exit 1**；还原 ⇒ **exit 0**；**字节级还原 = true**。`--selftest` **5 例 · 3 条反例**（含「只有字面量无读口」「读口只出现在**注释**里」「读了**别的 id**」）。
+  · **棘轮碰撞（顺带修）**：`mcl.ts` 接线后装配函数 `registerMcl` 涨到 **126 行**（`audit-wiring` I1 限 120）⇒ 按仓内既有出路把 `judge` 提为**模块级** `judgeTopicEcho`（「实现函数在模块级」），回落 0 违规。
+  · 验收（六层）：typecheck 0 错 · build OK · **check-runner 185 pass / 0 fail** · 副本 **287/287** sha1 一致 · 热重载 fiber active · 特性 **82 项** · 注入对拍**逐字节一致（3 case）** · 公开树 PASS · 硬编码 PASS · `ui-geo-regress` **121 PASS / 0 FAIL** · 契约 5 PASS + 产物新鲜（路由 44 条）。
+- **阈值"假旋钮"：登记了 ≠ 被实现读（2026-09-20 · 真机取证驱动 · ⚠ 分类已被上方 round 8 推翻，本节保留供对照）**：`thresholds.entries` 登记 **20 项**阈值，而**"登记了"不等于"被实现读"**。新增核查抓到 **9 项可疑**，逐项实查后分**四类**（每类都写进注册表 `thresholds.unconsumedNote`，含处置与 `until`）：
   · ① **真死配置（改它零效果）**——`mcl.fastGate`（`{minHits:2, ratio:0.6}`）：实测 `minHits` **只出现在 `criteria.generated.ts`（生成物）**，而 `mcl.ts:501` 的快通道判据实际是 `sim >= familiarThreshold && hasHighConf` ⇒ **根本不读这两个参数**。改了注册表 + 跑 `gen:criteria` + 门禁全绿，而**行为零变化**——正是本仓已登记的「假旋钮」类（先例：`alphaVal` 恒 0 被放弃）。
   · ② **命名不符（常量在、不走注册表）**——`inject.crossFormDedupSim`（实现是 `crossform-dedup.ts:23` 的**硬编码常量** `CROSS_FORM_DEDUP_SIM = 0.8`）· `tree.sectionMergeSim` · `write.semanticDupSim`。（**注册表象牙 + 代码常量真牙**）
   · ③ **键名写错**——`activity.statusDays`：`activity.ts:83-85` 实为 **`warmDays`(14) / `coldDays`(44) / `archiveDays`(90)**，**根本没有 `statusDays` 这个键** ⇒ 该登记项**指向一个不存在的参数**。

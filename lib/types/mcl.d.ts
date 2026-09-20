@@ -91,6 +91,17 @@ type AnyMsg = {
     }>;
     source: Record<string, unknown>;
 };
+/**
+ * **主题词回引判定**（缺陷3 修复）：三信号「或」——① 主题词全串 ② 主题词前缀（旧口径）③ 信号词元覆盖率
+ *   （≥minHits 个词元且覆盖率 ≥ratio）：容忍转述/省字，但要求**足够密度**，不能把"提了一句相关词"算命中。
+ * ⚠ IR1 附册 F2（2026-09-18）**命名诚实化**：本判据测的是「上一步是否**回引材料主题词**」（词面代理，
+ *   真机 true=0/3119）⇒ 审计键 `compliant` → **`topicEcho`**；真实收益信号已换源 `audit/yield-rounds.jsonl`。
+ * ⚠ round 8（2026-09-20）：实现在**模块级**（仓内约定；原为 `registerMcl` 内联箭头函数，接线后撞 I1 棘轮
+ *   `audit-wiring` ≤120 行）。同时**接通登记表**：第三信号的两个参数原为裸字面量 `2` / `0.6`，
+ *   而注册表把它们登记成 **`mcl.fastGate`** —— **名实不符**（它们**不是**快通道门；快通道门 =
+ *   `sim >= familiarThreshold && hasHighConf`，见 `decideTurn`）。⇒ 登记项已改名 `mcl.topicEchoGate`。
+ */
+export declare function judgeTopicEcho(text: string, topics: string[], signals?: string[][]): boolean;
 export declare function registerMcl(ctx: {
     on(event: string, handler: (payload: any, arg2?: any) => any): unknown;
     logger?: {
