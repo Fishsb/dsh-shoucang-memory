@@ -35,7 +35,7 @@
 // 运行行为：· 逐件运行并按其退出码归类；· 打印统一摘要（xfail 单独成段）；
 //   · 任一 fail ⇒ 自身 exit 1；全 pass/skip/**xfail** ⇒ exit 0（xfail 不判失败）。
 // 用法: node scripts/check-runner.mjs [--json] [--list] [--only <子串>[,<子串>...]] [--fast]
-import { writeFileSync } from 'node:fs'
+import { writeFileSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { tmpdir } from 'node:os'
@@ -952,6 +952,47 @@ const REQUIRED_CHECKS = [
     console.error('   （i18n 能力已落地但验收件不在册 ⇒ 等于没写；请登记后重跑）')
     process.exit(1)
   }
+}
+/* ── **「未登记 = 等于没写」的通用自查**（2026-09-20 round 9 立 · 治 S-P4d 那一类）──
+ *  判因（本轮实测）：`inject-dedup-probe.mjs` **文件早已存在且能跑（exit 0），却从未登记进 `CHECKS`**
+ *    ⇒ 它从未在 `npm test` 里跑过。这不是孤例 —— 仓规则 6 的原文教训正是
+ *    `test-deepsleep-verdict` / `test-watermark-guard` / `test-atomic-write` 三件「写了从不运行」。
+ *  ⇒ 上面那段只硬编了一张**i18n 专用**名单（`REQUIRED_CHECKS`）⇒ **只守一个领域**，别处照样漏。
+ *  本段把它推广成**领域无关**的机检：凡 `scripts/` 下 **`test-*` 前缀的件**，
+ *    必须**要么登记进 `CHECKS`**、**要么出现在下面的显式豁免表**（带理由）。
+ *  ⚠ `check-*` 前缀**不纳入**：其中相当一部分是**生成器/一次性体检**（如 `check-hardcode` 的兄弟件），
+ *    约定不一律入 `CHECKS`；只把「测试件」这一最易漏的类别封住。
+ *  ⚠ 豁免必须**逐条写理由**（防「豁免表变成永久后门」—— 同 `HARD_CAP_EXEMPT` 的留痕要求）。 */
+const TEST_FILE_EXEMPT = {
+  // 供 `test-scheduler-wiring.mjs` 使用的 **ESM 解析钩子**（非测试本体）：
+  //   它导出 `resolve()`，由 `node --import` 注入，**不被单独执行** ⇒ 登记进 CHECKS 会变成一个空跑。
+  'scripts/test-dsh-tools-hook.mjs': 'loader 钩子（非测试本体），由 test-scheduler-wiring.mjs 经 --import 消费',
+}
+{
+  const registered = new Set(CHECKS.map((entry) => entry[0]))
+  /* ⚠ **不要用 `catch {}` 吞掉目录读失败** —— 本段首版写成
+   *   `try { dirFiles = readdirSync(...) } catch {}`，而当时 `readdirSync` **根本没 import**
+   *   ⇒ 抛 ReferenceError ⇒ 被 catch 吞成空数组 ⇒ 打印「已登记或已豁免（**0 件**）」并 **PASS**。
+   *   **这是"假绿"的教科书形态**：判据没跑，却报了绿灯。（同族纪律：静默失效查被吞异常。）
+   *   ⇒ 现在**不吞**：读失败即抛出并判红。 */
+  const dirFiles = readdirSync(join(root, 'scripts')).filter((f) => f.endsWith('.mjs'))
+  const unreg = dirFiles
+    .filter((f) => f.startsWith('test-'))
+    .map((f) => 'scripts/' + f)
+    .filter((p) => !registered.has(p) && !(p in TEST_FILE_EXEMPT))
+  if (unreg.length) {
+    console.error(`❌ check-runner 自身断言：以下 **test- 件既未登记也未豁免**：${unreg.join(', ')}`)
+    console.error('   （按仓规则 6「未登记 = 等于没写」：写了从不运行的测试等于不存在。')
+    console.error('    登记进 CHECKS；若确非测试本体（如 loader 钩子），加进 TEST_FILE_EXEMPT 并写明理由。）')
+    process.exit(1)
+  }
+  const testish = dirFiles.filter((f) => f.startsWith('test-'))
+  /* 防退化：扫描面为 0 通常意味着**路径/过滤写错**（本段首版就是这样），不是"没有测试件" */
+  if (testish.length === 0) {
+    console.error('❌ check-runner 自身断言：扫描面为 0 件 test-*.mjs —— 路径或过滤有误（拒绝以"空集"冒充通过）')
+    process.exit(1)
+  }
+  console.log(`✅ check-runner 自身断言：scripts/test-*.mjs 全部已登记或已豁免（${testish.length} 件，豁免 ${Object.keys(TEST_FILE_EXEMPT).length} 件）`)
 }
 /* 子集选择（2026-09-18）：ONLY 为空 ⇒ selected 就是 CHECKS 本体（全量，行为不变）。
  *   显式点名命中 0 件 ⇒ **当场 fail 并列出可用件**，绝不静默跑 0 件当作通过
