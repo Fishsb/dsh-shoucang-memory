@@ -5,12 +5,15 @@ export interface L2Proposal {
     reviewedSeq?: number;
     opHash: string;
     op: string;
-    /** **相对库根的路径**（如 `notes/env.md`）；绝对路径 / 越出库根 ⇒ 拒执行。 */
+    /** **相对库根的路径**（如 `notes/env.md`）；绝对路径 / 越出库根 ⇒ 拒执行。
+     *  `op='settle'` 时不用本字段（目标是**承诺记录**，不是文件）。 */
     target?: string;
     section?: string;
     before?: string;
     after?: string;
     why?: string;
+    evidence?: string;
+    settledBy?: 'user' | 'rule' | 'agent-proposal' | 'cli';
 }
 export declare const proposalDirOf: (bankRoot: string) => string;
 /** 已执行账（幂等键来源；只增不改）。 */

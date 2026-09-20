@@ -121,11 +121,15 @@ if (has('--decide')) {
 } else if (has('--settle')) {
   const id = argOf('--settle', '')
   const status = has('--kept') ? 'kept' : has('--broken') ? 'broken' : ''
-  if (!id || !status) { console.log('❌ 用法：--settle <commitmentId> --kept|--broken [--note s]'); process.exit(1) }
-  const r = G.settleCommitment(cur.records, id, { status, note: argOf('--note', ''), at })
+  if (!id || !status) { console.log('❌ 用法：--settle <commitmentId> --kept|--broken --evidence "凭什么是这个结论" [--note s]'); process.exit(1) }
+  /* 册一（2026-09-20）**结必有证**：`evidence` 必填（`settleCommitment` 内部校验，单一实现）。
+   * 为什么在 CLI 也显式提示：这是唯一的人工结算入口 —— 不提示的话，用户只会在
+   * `❌ 结清失败：结算必须带证据` 之后才第一次知道有这条规矩。 */
+  const evidence = argOf('--evidence', '')
+  const r = G.settleCommitment(cur.records, id, { status, evidence, settledBy: 'cli', note: argOf('--note', ''), at })
   if (!r.ok) { console.log(`❌ 结清失败：${r.reason}`); process.exit(1) }
   commit(r.records)
-  console.log(`✅ 已结清 ${id} · ${status === 'kept' ? '兑现' : '未兑现'}`)
+  console.log(`✅ 已结清 ${id} · ${status === 'kept' ? '兑现' : '未兑现'}（证据：${evidence.slice(0, 60)}）`)
 } else if (has('--commitments')) {
   const who = argOf('--commitments', '')
   const q = G.openCommitments(cur.records, who || undefined)

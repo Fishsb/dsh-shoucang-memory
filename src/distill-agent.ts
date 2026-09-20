@@ -17,6 +17,8 @@ import { DISCARD_SNAPSHOT_CB_N, SKIP_HOLD_MAX, planSegmentWatermark, planSkipWat
 // 册二（2026-09-19）：准入判定单一实现（扫尾 / idle 入口 / 手动入口三处共用）
 import { planIngestAdmission, quiescenceOf } from './ingest-admission.js'
 import { countRingChannels } from './ring-commit.js'
+import { applySupersedeOps, planSupersedeOps } from './fact-supersede-apply.js'
+import { dshHome } from './targets.js'
 import type { EmbedCfg } from './vec.js'
 import type { InfraApi } from './distill-infra.js'
 import type { CandApi } from './distill-candidates.js'
@@ -75,6 +77,67 @@ const retryAttemptFor = (dep: AgentDeps, sid: string, segKey: string): number =>
 const retryRowHeld = (dep: AgentDeps, sid: string): boolean => {
   try { return dep.wm.wm.readSegFlowState(sid)?.phase === 'retry' } catch { return false }
 }
+
+/**
+ * 门4 册B（2026-09-20）：时态剔除落地开关 —— **默认关闭**，**实时读取**（改完即生效，不必重载）。
+ *
+ * 与 `deepsleep-run#liveAutoSwitch` 同族纪律（`releaseAuto` / `proposalApply` 先例）：
+ *   ① 持久配置 `~/.dsh/suite/scheduler.json` 的 `supersedeApply`（面板同一通道 ⇒ 用户可在 UI 改）；
+ *   ② 进程 env `SHOUCANG_SUPERSEDE_APPLY=1`（部署侧临时开启）。
+ * ⚠ 读不到 / 非法值一律 `false`（fail-closed：宁可零剔除，也不误标真事实失效）。
+ * ⚠ **本函数与 `deepsleep-run` 的同名逻辑各自实现**：两件分属不同领域、依赖面已冻结
+ *   （`deepsleep-run` 不得被 `distill-agent` 反向依赖），复制这 6 行优于制造一条跨领域反向依赖。
+ *   若第三处需要，须抽模块级单一实现（仓内「三处即抽」纪律）。
+ */
+const liveSupersedeSwitch = (): boolean => {
+  if (process.env.SHOUCANG_SUPERSEDE_APPLY === '1') return true
+  try {
+    const s = JSON.parse(readFileSync(join(dshHome(), 'suite', 'scheduler.json'), 'utf8')) as Record<string, unknown>
+    return s.supersedeApply === true
+  } catch { return false /* 配置不可读 ⇒ 关闭（fail-closed） */ }
+}
+
+/**
+ * 门4 册B（2026-09-20）：**蒸馏产线的时态剔除通道**（模块级；`distillAgent` 受函数跨度棘轮约束故外移）。
+ *
+ * 为什么需要它：`fact-ring#supersede()` 是纯函数且**全仓零调用方** ⇒ 真库 `validTo` 非空长期 0/6037
+ *   ⇒ 旧断言永不失效、与新断言并存，模型在两份矛盾记忆间随机选（`fact-ring.ts` 抬头所称的"库内污染"）。
+ *
+ * 三重 fail-closed（与 release / proposalApply 同族纪律）：
+ *   ① **默认关闭**：`supersedeApply:true` 或 env `SHOUCANG_SUPERSEDE_APPLY=1` 才执行；
+ *   ② **幻觉门**（`planSupersedeOps`）：目标正文必须逐字出现在本段**真的给过模型**的材料里——
+ *      否则模型编一条"看起来像既有行"的文本就可能误标真事实失效（比不标更坏）；
+ *   ③ 落地层第二道（`applySupersedeOps`）：再按**当下库状态**逐字唯一定位，多命中/0 命中均拒。
+ *
+ * ⚠ **不进 `otherChannels`**（G-19 landed 判据同源纪律）：本动作属**维护性收紧**而非本轮知识落地，
+ *   计入会让"本段材料全被拒收"的轮次被误判 landed ⇒ 水位推进 ⇒ 静默丢料。
+ */
+const runSupersedeChannel = (
+  dep: AgentDeps,
+  a: { sid: string; chunkIdx: number; out: unknown; stop: string; seenLines: readonly string[] },
+): void => {
+  const sup = (a.out as { supersedes?: unknown } | null)?.supersedes
+  if (a.stop !== 'completed' || !Array.isArray(sup)) return
+  const sp = planSupersedeOps(sup, a.seenLines)
+  if (sp.rejected) {
+    dep.io.infra.audit({ sid: a.sid, kind: 'supersede-plan-rejected', rejected: sp.rejected, accepted: sp.accepted, reasons: sp.reasons.slice(0, 4) })
+  }
+  if (!sp.ops.length) return
+  const sr = applySupersedeOps(
+    { root: memoryLibRoot(), at: new Date().toISOString(), log: (m) => dep.io.infra.log(m), audit: (o) => dep.io.infra.audit({ sid: a.sid, ...o }) },
+    sp.ops,
+    { enabled: liveSupersedeSwitch() },
+  )
+  dep.io.infra.ledger({
+    type: 'write.supersede', domain: 'ingest', sid: a.sid.replace(/^session-/, '').slice(0, 8), chunk: a.chunkIdx,
+    channel: 'supersedes', carrier: 'gated:fact', targetKind: 'library',
+    verdict: sr.applied > 0 ? 'written' : (sr.ran ? 'rejected' : 'skipped'),
+    attempted: sp.ops.length, written: sr.applied, rejected: sr.skipped, archived: sr.archived,
+    ...(sr.reasons.length ? { reason: sr.reasons[0].slice(0, 120) } : {}),
+  })
+  if (sr.applied > 0) dep.io.infra.log(`distill: ${dep.io.infra.sidShort(a.sid)} 时态剔除 ${sr.applied} 条（旧的已失效，读者不再见到）`)
+}
+
 
 const distillAgent = async (dep: AgentDeps, agent: any): Promise<void> => {
   const sid = agent.id as string
@@ -252,12 +315,27 @@ const distillAgent = async (dep: AgentDeps, agent: any): Promise<void> => {
           const rres = await recallRanked(memoryLibRoot(), chunk.text.slice(0, 512), 5, 'all', dep.llm.embedCfgOf())
           if (rres.rows.length) relMemLines = rres.rows.map((r) => `- ${r.line}`).join('\n')
         } catch { /* 相关记忆上下文失败=省略 */ }
+        /* ⚠ **门4 册B（2026-09-20）：`supersedes` 通道的目标只能来自"真的给过模型的材料"**。
+         *   本轮实测三次推翻方案档的假设，此处是第三处的落地形态：
+         *     · 方案档 §2.3 写「在 `l0After.conflict === 'supersede'` 的行上，把该裁决转成 `SupersedeOp`」；
+         *     · 但**模型侧的 schema 里根本没有"目标"字段**（实测：蒸馏输出的顶层键为
+         *       appends/newIndex/profiles/projectCards/decisions/commitments/relations/valences/skipped，
+         *       `supersedes`/`match` **命中 0**）⇒ `judgement.conflict='supersede'` 只说明"有取代发生"，
+         *       **说不出取代了谁** ⇒ 拿它去调 `supersede(id)` 无从下手。
+         *   ⇒ 故本册的通道形状是【模型给目标正文，宿主按正文唯一命中】：目标**逐字**抄自本段材料里
+         *     真的出现过的行（`relMemLines` 的召回行 + `manifest` 的同轮清单）。
+         *     这与既有 `replace`（深睡 principles / profileOps）**同口径**——仓里那条路早就这么做了。 */
+        const seenSupersedeLines: string[] = [
+          ...relMemLines.split('\n'),
+          ...manifest.split('\n'),
+        ].map((l) => l.replace(/^-\s*/, '').trim()).filter(Boolean)
         const userInput = buildDistillUserInput({
           sid, startSeq: chunk.startSeq, endSeq: chunk.endSeq, totalChunks: chunks.length, index: k + 1,
           body: chunk.text, manifest, relMemLines,
           candidates: candIncluded.length ? `## 待固化候选（pending/ 中 ${candIncluded.length}/${candFiles.length} 个，预算 ${CAND_BUDGET} 字符内）\n${candText}` : (candFiles.length ? '（待固化候选超预算，本轮不携带；候选保留 pending 待下轮）' : '（无待固化候选）'),
           addressLines: supply.lines,
         })
+
 
         // 阶段 2：**spawn 前落 phase** —— 原实现只在段末写审计，spawn 卡住（最长 10min 超时）时
         //   外界无从判断"正在蒸"还是"已经卡死"。
@@ -353,6 +431,14 @@ const distillAgent = async (dep: AgentDeps, agent: any): Promise<void> => {
           //   （仓内教训：写通道不计数 = 静默；`attempted` 类指标缺失曾让"全数失败"被误判为成功）。
           enqueued: { appends: (out?.appends || []).length, newIndex: (out?.newIndex || []).length, profiles: (out?.profiles || []).length, projectCards: (out?.projectCards || []).length, skipped: (out?.skipped || []).length, ...countRingChannels(out) },
         })
+
+        /* ═══ 门4 册B（2026-09-20）：**时态剔除落库接线**（蒸馏产线） ═══════════════════════
+         *  把"旧断言退出"这一步真的接上：`fact-ring#supersede()` 此前**全仓零调用方**
+         *  ⇒ 真库 `validTo` 非空 0/6037 ⇒ 旧事实与新事实并存、模型在两份矛盾记忆间随机选。
+         *  实现已抽到模块级 `runSupersedeChannel`（**函数跨度棘轮**：`distillAgent` 曾顶格，
+         *  就地内联会破 400 行硬线）——判因与三重 fail-closed 见该函数抬头。 */
+        runSupersedeChannel(dep, { sid, chunkIdx: k + 1, out, stop, seenLines: seenSupersedeLines })
+
         if (disp.added > 0 || (out?.newIndex || []).length > 0) void dep.write.bankSnapshot('distill') // v2：写后库快照（best-effort，不阻塞）
         // v2.1 M2：摄取侧**写入回执**（write.ingest）
         /* ⚠ **`targetKind` 显式声明（2026-09-20 加）**：`target` 字段在 `write.*` 里**两种语义并存**

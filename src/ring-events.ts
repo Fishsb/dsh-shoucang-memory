@@ -17,6 +17,7 @@
  */
 import { openDecision, collectOutcome, recordValence } from './decision-ring.js'
 import { assertRelation, openCommitment, settleCommitment } from './relation-ring.js'
+import type { SettlementBy } from './relation-ring.js'
 import { recordCollision, markAccepted, landCollision } from './association-ring.js'
 import type { MemRecord } from './record-store.js'
 
@@ -98,7 +99,21 @@ export function replayEvents(events: readonly RingEvent[]): ReplayResult {
           recs = openCommitment(recs, { id: e.id, text: e.data.text, who: e.data.who, what: e.data.what, direction: e.data.direction as 'owed-by-me' | 'owed-to-me', due: e.data.due, evidence: e.data.evidence, cues: e.data.cues, at: e.at }).records
           break
         case 'commitment.settle': {
-          const r = settleCommitment(recs, e.data.commitmentId, { status: e.data.status as 'kept' | 'broken', note: e.data.note, at: e.at })
+          /* ⚠ **重放豁免证据门**（册零/册一 · 2026-09-20）：`settleCommitment` 现在要求 `evidence` 必填，
+           *   但**历史事件**的载荷里没有该字段（它是本轮才加的）—— 若不给豁免，全库既有 1022 条事件
+           *   将**再也重放不出来**（对账恒红，且"补写历史"等于改历史）。
+           *   `replay:true` 的语义 = **跳过证据门，且只写载荷里真有的键**（见 `SettlementInit.replay`）：
+           *     · 旧事件（无 evidence/settledBy）⇒ 重建出无这两个键的记录 = 与存量 store 逐字一致；
+           *     · 新事件（带 evidence）⇒ 照常重建出带证据的记录。
+           *   这样**新老各自对账都成立**，不需要改写任何历史。 */
+          const r = settleCommitment(recs, e.data.commitmentId, {
+            status: e.data.status as 'kept' | 'broken',
+            evidence: e.data.evidence ?? '',
+            ...(e.data.settledBy ? { settledBy: e.data.settledBy as SettlementBy } : {}),
+            replay: true,
+            note: e.data.note,
+            at: e.at,
+          })
           if (!r.ok) { errors.push(`${e.op} ${e.id}: ${r.reason}`); break }
           recs = r.records
           break
@@ -190,7 +205,7 @@ export function eventsFromDiff(prev: readonly MemRecord[], next: readonly MemRec
         if (M(r).landed === '1' || M(r).landed === '0-') push('collision.land', r.id, { collisionId: r.id, landed: M(r).landed === '1' ? '1' : '0', note: M(r).note ?? '' }, atOfTransition(r, 'landedAt'))
       }
       if (r.kind === 'commitment' && M(r).status && M(r).status !== 'pending') {
-        push('commitment.settle', r.id, { commitmentId: r.id, status: M(r).status, note: M(r).note ?? '' }, atOfTransition(r, 'settledAt'))
+        push('commitment.settle', r.id, { commitmentId: r.id, status: M(r).status, note: M(r).note ?? '', ...(M(r).evidence ? { evidence: M(r).evidence } : {}), ...(M(r).settledBy ? { settledBy: M(r).settledBy } : {}) }, atOfTransition(r, 'settledAt'))
       }
       continue
     }
@@ -202,7 +217,7 @@ export function eventsFromDiff(prev: readonly MemRecord[], next: readonly MemRec
       push('collision.land', r.id, { collisionId: r.id, landed: M(r).landed === '1' ? '1' : '0', note: M(r).note ?? '' }, atOfTransition(r, 'landedAt'))
     }
     if (r.kind === 'commitment' && M(b).status === 'pending' && M(r).status !== 'pending') {
-      push('commitment.settle', r.id, { commitmentId: r.id, status: M(r).status ?? '', note: M(r).note ?? '' }, atOfTransition(r, 'settledAt'))
+      push('commitment.settle', r.id, { commitmentId: r.id, status: M(r).status ?? '', note: M(r).note ?? '', ...(M(r).evidence ? { evidence: M(r).evidence } : {}), ...(M(r).settledBy ? { settledBy: M(r).settledBy } : {}) }, atOfTransition(r, 'settledAt'))
     }
   }
   return out

@@ -22,12 +22,14 @@ import { demoteVerdict, promoteVerdict } from './criteria.js'
 import { DEEP_SLEEP_PROMPT, deepSleepLanded, liveFailPolicy, planDeepSleepVerdict, DeepSleepOtherChannels, splitByCap, windowMaterialBytes } from './deepsleep-core.js'
 import { gatherDeepSleepTraces, countWindowTraces, type TraceDeps } from './deepsleep-traces.js'
 import { consolidateTree, type TreeDeps } from './deepsleep-tree.js'
+import type { EmbedCfg } from './vec.js'
 import { applyPrinciples, applyPointerOps, applyNarratives, type ApplyDeps } from './deepsleep-apply.js'
 import { commitRingChannels } from './ring-commit.js'
 import { gatherMaterials } from './deepsleep-materials.js'
 import { carrierFiles, mirrorAll } from './record-shadow.js'
 import { renderAssocBlock, supplyAssociations } from './association-supply.js'
 import { applySessionProposals } from './proposal-apply.js'
+import { applySupersedeOps, planSupersedeOps } from './fact-supersede-apply.js'
 import { DeepSleepCtx, SleepState } from './deepsleep-contract.js'
 import { applyConvergeOps } from './sectionops.js'
 import { convergeCandidates } from './converge-candidates.js'
@@ -344,7 +346,7 @@ function writeDawnDelta(env: { kRoot: string; root: string; M: any; log: (s: str
  *      （**面板 /deepsleep/config 同一通道** ⇒ 用户可在 UI 改；schema 亦有同名键做缺省与白名单）；
  *   ② 进程 env `SHOUCANG_RELEASE_AUTO=1` / `SHOUCANG_PROPOSAL_APPLY=1`（部署侧临时开启）。
  *  ⚠ 读不到 / 非法值一律 `false`（fail-closed：宁可零释放，也不误改用户库）。 */
-function liveAutoSwitch(key: 'releaseAuto' | 'proposalApply', envName: string): boolean {
+function liveAutoSwitch(key: 'releaseAuto' | 'proposalApply' | 'supersedeApply', envName: string): boolean {
     if (process.env[envName] === '1') return true
     try {
         const s = JSON.parse(readFileSync(join(dshHome(), 'suite', 'scheduler.json'), 'utf8')) as Record<string, unknown>
@@ -353,6 +355,87 @@ function liveAutoSwitch(key: 'releaseAuto' | 'proposalApply', envName: string): 
     catch { return false }
 }
 function releaseAutoOn(): boolean { return liveAutoSwitch('releaseAuto', 'SHOUCANG_RELEASE_AUTO') }
+
+/**
+ * **深睡前置维护三步**（模块级；自 `runDeepSleep` 抽出以解函数跨度棘轮 400 行）。
+ *
+ * 三步**同一收敛策略**：**失败仅 log，绝不阻断深睡**——故聚在一处，也免得调用点被 try/catch 撑大。
+ *   ① **consolidation**（v1 · 2026-09-10）：停滞≥3h 窗口先向量去重整合再归纳
+ *      （A 索引精确重复 / B 语义近重 / C 小节内行去重 / D 叶子小节合并），
+ *      收敛树状记忆「只增不修」的重复指针/重复详情；旧内容已归档可回滚。
+ *   ② **真实读采集**（ACT-023）：`access.log` 只覆盖 `read_section` 路径，agent 的真实读
+ *      （read/grep/glob/pwsh 命中记忆库）零埋点 ⇒ 活性/遗忘/回想强度三模型失真（假冷）。
+ *      由 `harvest-access.mjs` 从会话转录按「会话 seq 水位」增量采集真实读到 `access-real.jsonl`。
+ *   ③ **活性聚合**（v7 A 步）：命中聚合 → ACT-R 式状态迁移（active/warm/cold）→ 遗忘候选清单
+ *      （只建议不删除）。阈值走 `scheduler.json`（UI 可调），缺省 14/44/90/23。
+ */
+async function runSleepMaintenance(env: {
+    resolved: string
+    config: any
+    capEnv(): Record<string, string>
+    runNode(nodeBin: string, script: string, args: string[], opts?: { env?: Record<string, string>; timeout?: number }): Promise<unknown>
+    log: (s: string) => void
+    audit: (o: any) => void
+    /** 嵌入配置取用（**必须透传**：stub 会让树整合的语义近重去重静默失效） */
+    embedCfgOf(): EmbedCfg
+}): Promise<void> {
+    const { resolved, config, capEnv, runNode, log, audit, embedCfgOf } = env
+    const brief = (e: unknown) => String((e as Error)?.message || e).slice(0, 120)
+    try {
+        await consolidateTree({ log, audit, embedCfgOf }, resolved)
+    } catch (e) { log(`deep sleep: consolidation 失败（跳过，继续深睡）: ${brief(e)}`) }
+    try {
+        await runNode(config.nodeBin, join(resolved, 'scripts', 'harvest-access.mjs'), [], {
+            env: { MEMORY_ROOT: resolved, ...capEnv() },
+            timeout: 120000,
+        })
+    } catch (e) { log(`deep sleep: 真实读采集失败（跳过，按既有日志聚合）: ${brief(e)}`) }
+    try {
+        await activityAggregate(resolved, { audit, log }, {
+            warmDays: Number(config.activityWarmDays) || 14,
+            coldDays: Number(config.activityColdDays) || 44,
+            archiveDays: Number(config.activityArchiveDays) || 90,
+            hotHits: Number(config.activityHotHits) || 23,
+        })
+    } catch (e) { log(`deep sleep: activity 聚合失败（跳过，继续深睡）: ${brief(e)}`) }
+}
+
+
+/**
+ * 门4 册C（2026-09-20）：**深睡产线的时态剔除通道**（模块级；`runDeepSleep` 受函数跨度棘轮约束故外移）。
+ *
+ * 与册B（蒸馏）**同一个落库实现**（`fact-supersede-apply` = 单一实现），只是触发面不同：
+ *   深睡看到的是**全库材料**（含「现行画像」与「现行树节清单」），
+ *   正是判"哪条旧断言已被取代"最合适的地方（蒸馏只看单段会话增量）。
+ *
+ * 三重 fail-closed（与上方 release / proposalApply **逐条同构**）：
+ *   ① **默认关闭**：`supersedeApply:true` 或 env `SHOUCANG_SUPERSEDE_APPLY=1`；
+ *   ② **幻觉门**：`target` 必须逐字出现在**本轮真的给过模型**的核验清单里（`profiles` + `treeSections`）
+ *      ——本仓已因"模型编小节名"吃过一次亏（真机抽查 5 个悬空名在 334 个真实小节中 **0 命中**）；
+ *   ③ 落地层第二道：逐字唯一定位，多命中/0 命中均拒（`applySupersedeOps` 内）。
+ *
+ * ⚠ **不进 `otherChannels`**：与 `release` 同族理由（G-19）——本动作来自**全库计划**而非本轮材料，
+ *   计入会让"本轮材料全被拒收"的轮次被误判 landed ⇒ 水位推进 ⇒ 静默丢料。
+ */
+function runSupersedeChannelSleep(
+    env: { root: string; out: any; stop: unknown; profiles: string; treeSections: string; log: (s: string) => void; audit: (o: any) => void },
+): { applied: number; skipped: number; archived: number; ran: boolean; reasons: string[] } {
+    const zero = { applied: 0, skipped: 0, archived: 0, ran: false, reasons: [] as string[] }
+    const sup = env.out && (env.out as { supersedes?: unknown }).supersedes
+    if (env.stop !== 'completed' || !Array.isArray(sup)) return zero
+    const seen = [env.profiles, env.treeSections]
+        .filter((s) => typeof s === 'string' && s.trim())
+        .join('\n').split('\n').map((l) => l.replace(/^-\s*/, '').trim()).filter(Boolean)
+    const plan = planSupersedeOps(sup, seen)
+    if (plan.rejected) env.audit({ kind: 'supersede-plan-rejected', rejected: plan.rejected, accepted: plan.accepted, reasons: plan.reasons.slice(0, 4) })
+    if (!plan.ops.length) return { ...zero, reasons: plan.reasons }
+    return applySupersedeOps(
+        { root: env.root, at: new Date().toISOString(), log: env.log, audit: env.audit },
+        plan.ops,
+        { enabled: liveAutoSwitch('supersedeApply', 'SHOUCANG_SUPERSEDE_APPLY') },
+    )
+}
+
 async function runRelease(env: { root: string; relReview: any; log: (s: string) => void; audit: (o: any) => void }): Promise<any> {
     const { root, relReview, log, audit } = env
     const zero = { released: 0, skipped: 0, reasons: [] as string[], ran: false, executed: false }
@@ -473,43 +556,10 @@ export async function runDeepSleep(d: RunDeps, sinceArg?: number): Promise<'done
             log('deep sleep: 记忆库缺席（部署残缺），跳过')
             return 'failed'
         }
-        // consolidation v1 并入深睡巡检（2026-09-10 用户拍板：停滞≥3h 窗口先向量去重整合再归纳）——
-        // 在痕迹归纳之前先做确定性/高置信去重整合（A 索引精确重复 / B 语义近重 / C 小节内行去重 / D 叶子小节合并），
-        // 收敛树状记忆「只增不修」的重复指针/重复详情；旧内容已归档可回滚；失败仅 log，绝不影响后续深睡流程。
-        try {
-            await consolidateTree(treeDeps, resolved.root)
-        }
-        catch (e) {
-            log(`deep sleep: consolidation 失败（跳过，继续深睡）: ${String((e as Error)?.message || e).slice(0, 120)}`)
-        }
-        // 真实读采集（2026-09-10 ACT-023）：`access.log` 只覆盖 read_section 路径，agent 的真实读
-        // （read/grep/glob/pwsh 命中记忆库）零埋点 ⇒ 活性/遗忘/回想强度三模型失真（假冷）。
-        // 先由 harvest-access.mjs 从**会话转录**按「会话 seq 水位」增量采集真实读到 `access-real.jsonl`，
-        // 再由 activityAggregate 合并两源（聚合是每轮按日志全量重算，故无需改判定逻辑）。
-        // 失败仅 log，绝不阻断深睡（同 below 各步的收敛策略）。
-        try {
-            await runNode(config.nodeBin, join(resolved.root, 'scripts', 'harvest-access.mjs'), [], {
-                env: { MEMORY_ROOT: resolved.root, ...capEnv() },
-                timeout: 120000,
-            })
-        }
-        catch (e) {
-            log(`deep sleep: 真实读采集失败（跳过，按既有日志聚合）: ${String((e as Error)?.message || e).slice(0, 120)}`)
-        }
-        // v7 A 步：条目活性聚合（2026-09-10，方案 docs/memory-activity-model.md）——consolidation 之后、归纳之前：
-        // 命中聚合 → ACT-R 式状态迁移（active/warm/cold）→ 遗忘候选清单（只建议不删除）；失败仅 log。
-        // 阈值走 scheduler.json（activityWarmDays/ColdDays/ArchiveDays/HotHits，UI 可调），缺省 14/44/90/5。
-        try {
-            await activityAggregate(resolved.root, { audit: io.audit, log: io.log }, {
-                warmDays: Number(config.activityWarmDays) || 14,
-                coldDays: Number(config.activityColdDays) || 44,
-                archiveDays: Number(config.activityArchiveDays) || 90,
-                hotHits: Number(config.activityHotHits) || 23,
-            })
-        }
-        catch (e) {
-            log(`deep sleep: activity 聚合失败（跳过，继续深睡）: ${String((e as Error)?.message || e).slice(0, 120)}`)
-        }
+        // 深睡前置维护三步（consolidation / 真实读采集 / 活性聚合）——实现抽到模块级
+        //   `runSleepMaintenance`（**函数跨度棘轮**：`runDeepSleep` 曾顶格 408 行；三步全是
+        //   "失败仅 log、绝不阻断"的同一收敛策略，聚在一处也更可读）。
+        await runSleepMaintenance({ resolved: resolved.root, config, capEnv, runNode, log, audit: io.audit, embedCfgOf: housekeep.embedCfgOf })
         const traces = gatherDeepSleepTraces(traceDeps, resolved.root, since)
         // 无痕迹=无事可归纳，不调用 LLM、不留审计（防每巡检周期一条 no-traces 的膨胀与空转感）——
         // 「没有材料就不需要睡眠」：窗口直接滑到当前，未来痕迹 mtime 必然晚于水位，永不丢失。
@@ -731,6 +781,25 @@ export async function runDeepSleep(d: RunDeps, sinceArg?: number): Promise<'done
              *  （持久配置 `proposalApply:true` 或 env `SHOUCANG_PROPOSAL_APPLY=1`）——执行面默认开就在生产上改写用户库。
              *  判据与不变量（逐字行级校正 / 先留档再改 / 幂等 / 逐条裁决）见 `proposal-apply.ts` 抬头。 */
             const propRes = applySessionProposals({ bankRoot: resolved.root, log, audit, enabled: liveAutoSwitch('proposalApply', 'SHOUCANG_PROPOSAL_APPLY') })
+            /* ═══ 门4 册C（2026-09-20）：**时态剔除落库**（深睡产线） ═══════════════════════════
+             *  与册B（蒸馏）**同一个落库实现**（`fact-supersede-apply` = 单一实现），只是触发面不同：
+             *  深睡看到的是**全库材料**（含「现行原则/路径」清单与相关既有记忆），
+             *  正是判"哪条旧断言已被取代"最合适的地方（蒸馏只看单段会话增量）。
+             *
+             *  三重 fail-closed（与上方 release / proposalApply **逐条同构**）：
+             *    ① **默认关闭**：`supersedeApply:true` 或 env `SHOUCANG_SUPERSEDE_APPLY=1`；
+             *    ② **幻觉门**：`target` 必须逐字出现在**本轮真的给过模型**的核验清单里（`currentProfiles`
+             *       + `currentTreeSections`）——本仓已因"模型编小节名"吃过一次亏
+             *       （真机抽查 5 个悬空名在 334 个真实小节中 **0 命中**）；
+             *    ③ 落地层第二道：逐字唯一定位，多命中/0 命中均拒（`applySupersedeOps` 内）。
+             *
+             *  ⚠ **不进 `otherChannels`**：与 `release` 同族理由（G-19）——本动作来自**全库计划**而非本轮材料，
+             *    计入会让"本轮材料全被拒收"的轮次被误判 landed ⇒ 水位推进 ⇒ 静默丢料。 */
+            /* 门4 册C（2026-09-20）：**时态剔除落库**（深睡产线）——实现抽到模块级
+             *  `runSupersedeChannelSleep`（**函数跨度棘轮**：`runDeepSleep` 曾顶格 414 行；
+             *  判因与三重 fail-closed 见该函数抬头）。 */
+            const supRes = runSupersedeChannelSleep({ root: resolved.root, out, stop, profiles: M.currentProfiles, treeSections: M.currentTreeSections, log, audit })
+
             const otherChannels = {
                 tried: profileTried + ptrRes.skipped + treeRes.skipped + forgetRes.skipped + outcTried + epiTried + conv.skipped + conv.applied,
                 done: profileAdded + ptrRes.updated + treeRes.applied + forgetRes.archived + ringRes.outcomes + ringRes.episodes + conv.applied,

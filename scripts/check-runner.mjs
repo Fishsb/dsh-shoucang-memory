@@ -777,6 +777,12 @@ const CHECKS = [
   //   与 lifecycle **正交**（真伪 ≠ 活性）· 双时间戳进走形判定 ·
   //   **镜像承接状态位**（否则标了失效、下次镜像就复活；命中统计此前会被静默清零）。
   ['scripts/test-fact-ring.mjs'],
+  // 门4 册A（2026-09-20）**时态剔除的落库接线**：`fact-ring#supersede()` 此前**全仓零调用方**
+  //   ⇒ 真库 `validTo` 非空长期 0/6037（旧断言永不失效、与新断言并存）。
+  //   本件守四类"看着接上了"的失败形态：**默认关闭零写入（含 sha 实证）** · 目标定位
+  //   （id / 逐字 / **多命中与 0 命中均拒**）· 幂等（既有失效时刻不被覆盖）· **留档失败 ⇒ 整批拒改**；
+  //   另加**幻觉门**（提案目标必须逐字来自给定材料）与边界（**不进环事件流**，`RING_OPS` 仍 9 种）。
+  ['scripts/test-fact-supersede.mjs'],
   // 来源过滤回归（2026-09-13 深层归因）：蒸馏材料/episode.intent 曾被宿主注入块污染 75%；
   //   本件锁死四处统一口径（distill-chunks / distill-activation / mcl / panel-inject 同判 `source.kind`）。
   ['scripts/test-distill-source-filter.mjs'],

@@ -45,7 +45,13 @@ L4 交互（DSH Web GUI）
 | **M10 自省** | `assistant_capabilities` | 能力面查询 | 只读，无 token |
 
 > **载体归属口径（2026-09-12 根治 A–D 后；2026-09-14 P1 订正）**：
-> `src/` 共 **94 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> `src/` 共 **96 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> **2026-09-20 新增 `fact-supersede-apply.ts` / `due-window.ts`** ⇒ 94 → 96：门4**时态剔除接线** + 承诺结算链。
+> `fact-supersede-apply.ts` = 时态剔除的**落库唯一出口**（`fact-ring#supersede()` 此前**全仓零调用方**
+> ⇒ 真库 `validTo` 非空长期 0/6037 ⇒ 旧断言永不失效、与新断言并存；三重 fail-closed：默认关闭 +
+> 幻觉门（目标须逐字来自真的给过模型的材料）+ 落地层逐字唯一定位（多命中/0 命中均拒）；先留档再改）；
+> `due-window.ts` = 期限窗口判据**单一实现**（自 `ring-supply` 按领域接缝抽出——`relation-ring → ring-supply`
+> 是**逆向**依赖，实测把运行时分层深度顶到 13 > 10，`audit-architecture --gate` 当场红；`ring-supply` 再导出保 API 零迁移）。
 > **2026-09-20 新增 `probe-config.ts` / `probe-plan.ts` / `trigger-plan.ts`** ⇒ 91 → 94：深睡/蒸馏**触发链**
 > 四册（S-P2a..P4）。`probe-config.ts` = 探测域（8 键）配置**单一事实源**（schema 与显式映射同处一文件，
 > 防「schema 有 ≠ 运行时 config 有」），按**领域接缝**自 `scheduler.ts` 抽出（解其冻结棘轮）；

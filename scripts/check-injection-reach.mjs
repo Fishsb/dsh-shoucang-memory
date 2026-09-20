@@ -195,7 +195,15 @@ ok(runBuildsCandidates && segsPushCandidates,
  *   两个缺陷叠加 = 「机制在、通路无、样本零」，且**注释宣称与实况相反**（诊断者会据此以为已闭环）。
  *   ⇒ 本断言把**实况钉住**（正面：消费者集合就是那两个离线件；**反向**：一旦接线，本断言翻红并要求改表）。
  *   ⚠ `buildCandidates` 出现在 `ring-supply.ts` **仅注释**（`// 与 buildCandidates 同纪律`）⇒ 判据必须**先剥注释**，
- *     否则注释一条就"接线了"（仓内既有先例：`check-carriers` 的「先剥注释再匹配」）。 */
+ *     否则注释一条就"接线了"（仓内既有先例：`check-carriers` 的「先剥注释再匹配」）。
+ *   ★ **门4 册A–C（2026-09-20）落地后的实况更新**：本仓已把 `fact-ring#supersede()` 接上落库
+ *     （新件 `fact-supersede-apply.ts`，蒸馏与深睡两条产线各一处接线，各自独立开关）⇒
+ *     真库 `validTo` 将**首次非 0**。但**本断言描述的读侧通路状态一字未变**：
+ *     接线解决的是「没人标失效」，**没有**解决「标了之后索引行仍进注入面」。
+ *     实测（`test-fact-supersede.mjs` §J 分层实证）：环记录（`file===''`）经 `ring-supply#isLive`
+ *     门 ⇒ situation 块消失 = **真抵达**；索引行（`file!==''`，即绝大多数旧断言）走 md 原文
+ *     ⇒ `validTo` **对注入面零影响** = **无抵达**。
+ *     ⇒ 集合仍为空是对的；**不要把"已接线"读成"已抵达"** —— 两件事在本仓被反复证明是分开的。 */
 {
   /* ⚠ 工程坑（先红自证抓到的，记档）：本块首版写 `read(join(root, f))`，而 `read()` 内部已是
    *   `readFileSync(join(root, p))` ⇒ **root 被拼两次** ⇒ 每件都 ENOENT ⇒ `read` 的 try/catch
@@ -211,7 +219,25 @@ ok(runBuildsCandidates && segsPushCandidates,
   }
   const expected = []
   ok(JSON.stringify(consumers.sort()) === JSON.stringify(expected),
-    `⑫ 时态剔除抵达面**如实登记**：\`buildCandidates\` 的 \`src/\` 内消费者 = [${consumers.join(', ') || '无'}]（\`validTo\` 到注入面**无通路**；真库样本 0/5777）—— 接线后此断言翻红 ⇒ 同步改本表与 OPEN-ITEMS`)
+    `⑫ 时态剔除抵达面**如实登记**：\`buildCandidates\` 的 \`src/\` 内消费者 = [${consumers.join(', ') || '无'}]（写入侧**已接线**：见 fact-supersede-apply；但索引行的 \`validTo\` 到注入面**仍无通路**——注入面读 md 原文）—— 读侧接线后此断言翻红 ⇒ 同步改本表与 OPEN-ITEMS`)
+}
+/* ⑬ **时态剔除**的通道锁（门4 册C · 2026-09-20）——与 ⑩ 同规格：
+ *   新件 `fact-supersede-apply` 落地并接线，**不等于**该通道可达。若两处 prompt 从不声明
+ *   `supersedes`，则**没有任何模型会产出它** ⇒ 应用面恒空（与 H-1 / S-P4b「判据在、通道无」同族）。
+ *   ⇒ 同时要求：**两处 prompt 均声明** 且 **两条产线均已接线**（任一为假 ⇒ 通道不可达）。
+ *   ⚠ 与 ⑩ 的差别：本通道是**跨产线共用一件**（`fact-supersede-apply` 为两条产线的单一实现），
+ *     故要查**两处**接线点，只接一处即判红（否则"接了但另一条产线永远不触发"没人看得见）。 */
+{
+  const distillSrcR = read('src/distill.ts')
+  const declaresDistill = /supersedes/.test(distillSrcR)
+  const declaresSleep = /supersedes/.test(coreSrc)
+  const runSupersede = /applySupersedeOps\s*\(/.test(runSrc)
+  const agentSrc = read('src/distill-agent.ts')
+  const agentSupersede = /applySupersedeOps\s*\(/.test(agentSrc)
+  ok(declaresDistill && declaresSleep,
+    `⑬ 通道锁（声明侧）：\`supersedes\` 已被**两处** prompt 声明 —— 蒸馏=${declaresDistill} · 深睡=${declaresSleep}（任一为假 ⇒ 该产线永远不产此通道）`)
+  ok(runSupersede && agentSupersede,
+    `⑬′ 通道锁（接线侧）：**两条产线**均调 \`applySupersedeOps\` —— 深睡=${runSupersede} · 蒸馏=${agentSupersede}（只接一处 ⇒ 另一条产线形同未接）`)
 }
 for (const r of REACH) console.log(`   · ${r.reaches.padEnd(7)} ${r.module}#${r.symbol} —— ${r.path}`)
 const part = REACH.filter((r) => r.reaches !== 'full').length

@@ -1,8 +1,27 @@
 # 承诺结算链方案（承诺只进不出 → 三源可结）
 
-> **态标签（R5）**：本档 = **决策态**（仅方案 + 验收成对，**不动任何代码/记录**）。
-> 授权来源：用户在「A 只出方案+验收成对」中具名选择 A。
-> 复跑口径：本文所有读数均为 2026-09-19 本机实测，**不用自述**；命令见 §9。
+> **态标签（R5）**：本档 = **决策态 + 施工记录**（§13 起为本轮施工回填）。
+> 授权来源：册零/一/二/三/四 = 用户 2026-09-20 指令「**剩余两条全部推进完成**」（具名授权）。
+> 复跑口径：本文所有读数均为本机实测，**不用自述**；命令见 §9。
+
+## 0 施工回填索引（2026-09-20 本轮落地，详见 §13）
+
+| 册 | 状态 | 落点 |
+|---|---|---|
+| **册零** | ✅ 落地（**并入册一同一处**，见 §13.1） | `SettlementInit` 加 `evidence`（必填）/`settledBy`；**重放豁免位** `replay` |
+| **册一** | ✅ 落地 | `settleCommitment` 证据门（空/空白拒结）+ `meta.evidence`/`settledBy` 落库 |
+| **册二** | ✅ 落地 | `proposal-apply` 增 `op='settle'` 执行面（默认关 + 逐字唯一 + 先留档 + 幂等 + 只结不建） |
+| **册三** | ✅ 落地 | `relation-ring#overdueCommitments`（**纯读**）+ `/rings` 路由 `pendingAdjudication` |
+| **册四** | ✅ 落地 | `TrustScore` 加 6 字段（pending / overdue / evidenceMissing）⇒ `0` 的两义可辨 |
+| **册五** | ✅ 早前已落（§13.1 旧记录） | 存量 10 条落库 |
+
+⚠ **两处与原文口径不同的落地决定**（都是实测逼出来的，不是图省事）：
+1. **册零与册一合并在同一处实现**（原文分列两册）：`evidence` 必填的**编译期**约束与**运行时**校验
+   是同一件事的两半（类型 + 判空），拆成两册只会让同一语义有两处可漂移。
+2. **重放豁免不是"跳过校验"，而是"按载荷重建"**（原文未预见）：见 §13.2 ——
+   这是保住「事件流重放必须能重建 store」这条**对账不变式**的关键，也是本轮唯一一个
+   "照原文做就会改历史"的地方。
+
 
 ## 1 问题定位（一句话根本决策）
 
@@ -364,3 +383,70 @@ node scripts/test-relation-ring.mjs && node scripts/test-ring-events.mjs
 
 > **更新（2026-09-19）**：用户已下令「落」⇒ **册五落库已执行**（10 条，详见 §13.1）。
 > 余 3 条 B 类因**缺"作废"语义**未落（理由见 §13.1，含 KPI 污染论证）。
+
+---
+
+## 15 施工记录 · 本轮（2026-09-20 · 册零/一/二/三/四）
+
+**态标签（R5）**：施工态。授权 = 用户本轮指令「剩余两条全部推进完成」（点名推进剩余两条）。
+
+### 15.1 册零 + 册一：结必有证（**同一处实现**）
+
+| 项 | 落地 |
+|---|---|
+| 编译期 | `SettlementInit` 改为**两态判别式**：活路径 `evidence: string`（**必填**，`tsc` 强制）；重放路径 `SettlementReplay`（`replay: true`） |
+| 运行时 | `settleCommitment` 对空/空白 `evidence` **拒结**（`{ok:false}`，状态不变）——单一迁移点，不在调用处各写一遍 |
+| 可追溯 | 落 `meta.evidence` + `meta.settledBy`（`user`/`rule`/`agent-proposal`/`cli`）；**只增字段**，不动既有 `note` |
+| 不变量 | 状态枚举**不扩**（仍 `pending → kept｜broken`）；幂等不变（重复结清仍拒） |
+| CLI | `record-ring.mjs --settle <id> --kept|--broken **--evidence "…"**`（用法提示同步） |
+
+**判据**：`test-relation-ring.mjs` §C′（空证据拒 / 纯空白拒 / 被拒时状态不变 / 证据与执行者落库 /
+缺省不写 `settledBy` / 重放两向都成立）+ `test-ring-events.mjs` 全绿（28 条，含对账）。
+
+### 15.2 ⚠ **重放豁免**：原文未预见，照原文做就会**改历史**
+
+原文只说"结必有证"，**没有**考虑事件重放：`ring-events#replayEvents` 用同一个 `settleCommitment`
+重建历史状态，而**历史事件的载荷里没有 `evidence`**（本轮才加的字段）。
+
+- 若不给豁免 ⇒ 全库既有 **1022 条事件再也重放不出来**（对账恒红）；
+- 若豁免 = "跳过校验但补写新键" ⇒ 重放会**给存量记录补上 `evidence`/`settledBy`**，
+  而存量 store 里**本来就没有**这两个键 ⇒ `reconcileRing` 比 `meta` 全等 ⇒ `commitment:*` 切片
+  从"零漂移"变成 **11 条相异** —— 那是**判据自己制造的红灯**，不是真缺陷。
+
+**⇒ 落地的语义（两向都成立，且不改任何历史）**：
+`replay:true` = **跳过证据门，且只写载荷里真有的键**。
+- 旧事件（无 `evidence`）⇒ 重建出无该键的记录 = 与存量 store **逐字一致**；
+- 新事件（带 `evidence`，由 `eventsFromDiff` 从 `meta` 透传）⇒ 照常重建出带证据的记录。
+
+于是「这条结清有没有证据」的判法变成：**`meta.evidence` 存在 ⇒ 新式；缺失 ⇒ 存量无据**
+—— 不需要凭空补字段也能如实显示（`evidenceMissing` 正是这么算的，见 §15.4）。
+
+### 15.3 册二：`op='settle'` 执行面（`proposal-apply`）
+
+- **配方与 `ring-commit` 逐字一致**：改纯函数 → 先事件流（不可变历史）→ 后 store（当前状态）。
+- 四道门：**默认关闭**（`SHOUCANG_PROPOSAL_APPLY=1`）/ **逐字唯一命中**（0 命中=陈旧、多命中=歧义，均拒）
+  / **先留档再改**（`settle-rollback.jsonl` 含被改承诺原文；留档失败 ⇒ 整批拒改）/ **只结不建 + 不扩枚举**。
+- **证据门在册一**（本层不重复实现判据，遇拒只如实转述理由）。
+- 新观测流 `settle-rollback.jsonl` 已登记进 `check-observability` STREAMS（**该门本轮真的抓到了这次新增**）。
+- 判据：`test-proposal-apply.mjs` §C（C1 默认关闭 store+事件流逐字节不变 / C2 结算成立 + 事件流恰 1 条
+  `commitment.settle` / **C2′ 对账不变式：重放能重建 store** / C3 幂等 / C4 无证据被册一拦下 / C5 只结不建 / C5′ 不扩枚举）。
+
+### 15.4 册三 + 册四：待裁决队列（**纯读**）+ KPI 三态可辨
+
+- **册三** `relation-ring#overdueCommitments(records, at)`：`dueSoon` **同一 7 天窗**（口径唯一）∧ `pending`
+  ⇒ 逾期队列；**绝不自动 broken**（红线：逾期不证明没做）。`/rings` 路由出 `pendingAdjudication`。
+- **册四** `TrustScore` **只增 6 字段**（`minePending`/`theirsPending`/`mineOverdue`/`theirsOverdue`/
+  `mineEvidenceMissing`/`theirsEvidenceMissing`）；**分母口径写死不变**（`kept/(kept+broken)`，pending 不进分母）。
+- 判据：`test-relation-ring.mjs` §D′（两种 `0` 输出不同 / pending 不进分母 / 方向不合成的反例 /
+  `evidenceMissing` 可见 / 逾期缺省与显式两态）+ §D″（队列成员逐例 + **零副作用**：
+  连跑两次记录集逐字节不变 + **从未自动 broken**）。
+
+### 15.5 本轮顺带修的架构问题（**非本方案范围，但不修就过不了门**）
+
+- `relation-ring → ring-supply`（`dueSoon`）是**逆向**依赖，实测把**运行时分层深度顶到 13 > 10**
+  （`audit-architecture --gate` 当场红）⇒ 按仓内既有出路把判据下移到**双方都能依赖的低层**：
+  新建 `src/due-window.ts`，`ring-supply` **再导出**保既有 API 与调用点零迁移（纯移动，语义逐字不变）。
+- **函数跨度棘轮**（>400 行基线 0）与 **I1 装配函数 ≤120 行**被本轮新增代码顶破 ⇒ 按仓内纪律抽模块级函数
+  （`runSupersedeChannel` / `runSupersedeChannelSleep` / `runSettleBatch` / `judgeOps` / `locate` /
+  `runSleepMaintenance`），**不抬基线**（抬基线属 R3 须用户拍板）。
+

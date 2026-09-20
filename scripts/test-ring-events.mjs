@@ -36,7 +36,7 @@ function buildState() {
   recs = G.assertRelation(recs, { who: '用户', note: '在意磁盘', level: 2, at: AT }).records
   const c = G.openCommitment(recs, { who: '用户', what: '先出迁移路径', direction: 'owed-by-me', due: '2026-09-20', at: AT })
   recs = c.records
-  recs = G.settleCommitment(recs, c.id, { status: 'kept', note: '已出', at: AT2 }).records
+  recs = G.settleCommitment(recs, c.id, { status: 'kept', evidence: '迁移路径已写入 notes/flows.md §切源', note: '已出', at: AT2 }).records
   const col = A.recordCollision(recs, { a: 'notes/x.md §甲', b: 'notes/y.md §乙', context: '做 P4 时', insight: '同型判据', accepted: true, evidence: 's3', at: AT })
   recs = col.records
   recs = A.landCollision(recs, col.id, { landed: true, note: '写进门禁', at: AT2 }).records

@@ -82,7 +82,11 @@ const CHANNELS = [
     // 读写两侧都只 import 常量 `RING_EVENT_FILE`（字面量仅存在于 ring-events.ts 的定义处）
     alias: ['RING_EVENT_FILE'],
     what: '环事件流（9 op 可重放重建状态）—— 目前仅对账消费，无业务订阅',
-    writers: ['ring-commit.ts'],
+    // 承诺结算链 · 册二（2026-09-20）：**`proposal-apply.ts` 成为第二个写者** ——
+    //   结算提案（`op='settle'`）落地时按 `ring-commit` 同一配方追加 `commitment.settle`。
+    //   本门在这里的价值正在于此：**新写者一出现就提醒登记**（否则"谁在写事件流"就靠人记）。
+    //   它**不是**第二份实现：差额推导与序列化仍只走 `ring-events` 的单一实现。
+    writers: ['ring-commit.ts', 'proposal-apply.ts'],
     readers: ['panel-observe.ts'],
     mentions: [
       { mod: 'ring-events.ts', why: 'RING_EVENT_FILE 常量的**单一定义处**（其余模块 import 它，不写字面量）' },

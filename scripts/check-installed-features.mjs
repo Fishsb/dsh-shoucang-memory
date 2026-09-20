@@ -96,6 +96,19 @@ const HOST_FEATURES = [
   ['五环注册表（kind→环唯一声明 + RING_KPI）', 'lib/rings.js', 'RING_OF_KIND'],
   ['决策环（后果回收 scorecardOf）', 'lib/decision-ring.js', 'scorecardOf'],
   ['关系环（双向兑现率 trustOf）', 'lib/relation-ring.js', 'trustOf'],
+  // 门4 册A–C（2026-09-20）：**装上去的那份带着本轮能力** —— 只查符号名不查行为，
+  //   行为由 `test-fact-supersede.mjs`（50 条）守；此处确保**部署面**没漏件。
+  ['门4 时态剔除落库（applySupersedeOps）', 'lib/fact-supersede-apply.js', 'applySupersedeOps'],
+  ['门4 幻觉门（planSupersedeOps）', 'lib/fact-supersede-apply.js', 'planSupersedeOps'],
+  ['门4 蒸馏产线接线（runSupersedeChannel）', 'lib/distill-agent.js', 'runSupersedeChannel'],
+  ['门4 深睡产线接线（runSupersedeChannelSleep）', 'lib/deepsleep-run.js', 'runSupersedeChannelSleep'],
+  ['门4 开关（supersedeApply）', 'lib/scheduler.js', 'supersedeApply'],
+  // 承诺结算链（2026-09-20）：册零/一证据门 + 册三待裁决队列 + 册四三态可辨。
+  ['承诺册一 执行者可溯（settledBy）', 'lib/relation-ring.js', 'settledBy'],
+  ['承诺册三 待裁决队列（overdueCommitments）', 'lib/relation-ring.js', 'overdueCommitments'],
+  ['承诺册四 KPI 三态（evidenceMissing）', 'lib/relation-ring.js', 'evidenceMissing'],
+  ['承诺册二 结算执行面（op=settle）', 'lib/proposal-apply.js', "op === 'settle'"],
+  ['期限窗口判据单一实现（due-window）', 'lib/due-window.js', 'dueSoon'],
   ['联想环（落地率 associationCensus）', 'lib/association-ring.js', 'associationCensus'],
   ['事实环（时态失效 factCensus）', 'lib/fact-ring.js', 'factCensus'],
   ['环事件流（重放 + 对账）', 'lib/ring-events.js', 'reconcileRing'],

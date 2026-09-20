@@ -106,5 +106,111 @@ const D = (enabled) => ({ bankRoot: bank, log: (m) => logs.push(m), audit: (o) =
     ? ok('B6 歧义拒改：`before` 命中多处 ⇒ 跳过（唯一性先于便利）') : bad(`B6 ${JSON.stringify({ applied: r.applied, reason: v.reason })}`)
 }
 rmSync(bank, { recursive: true, force: true })
+
+/* ── 册二（2026-09-20）：`op='settle'` **承诺结算**执行面 ───────────────────────────────
+ *  判据同 revise 四要素（默认关闭 / 逐字唯一 / 先留档 / 幂等），额外两条本册专属：
+ *    ① **只结不建**（提案试图新增/删除承诺 ⇒ 拒）；② **证据门在册一**（执行面不重复实现判据）。 */
+console.log('  ── C. 册二：承诺结算执行面（`op=settle`） ──')
+{
+  const S = await import(new URL('../lib/record-store.js', import.meta.url).href)
+  const H = await import(new URL('../lib/record-shadow.js', import.meta.url).href)
+  const E = await import(new URL('../lib/ring-events.js', import.meta.url).href)
+
+  const bank2 = mkdtempSync(join(tmpdir(), 'sc-settle-'))
+  mkdirSync(join(bank2, 'audit', 'session-review'), { recursive: true })
+  const props = join(bank2, 'audit', 'session-review', 'proposals-s1.jsonl')
+  const AT = '2026-09-20T10:00:00.000Z'
+  /** 造库：一条 pending 承诺（**无 md 投影**，环记录形态）。
+   *  ⚠ **必须连同 `commitment.open` 一起造**（用 `eventsFromDiff([], [rec])` 补发创建事件）——
+   *    真机里承诺是 `ring-commit` 开的（事件流里必然先有 open）；只造 store 不造事件
+   *    会让 C2′ 的对账**结构性红**，那是**夹具失真**不是真缺陷（同一坑：`test-fact-ring` §I 的边界注释）。 */
+  const mkBank = () => {
+    const rec = S.stampRecord(S.makeRecord({
+      id: 'commitment:c1', kind: 'commitment', file: '', text: '[承诺] 我欠 用户：先出迁移路径',
+      meta: { who: '用户', what: '先出迁移路径', direction: 'owed-by-me', status: 'pending' },
+    }), AT)
+    H.saveStoreRecords(bank2, [rec])
+    const evPath0 = join(bank2, '.records', 'ring-events.jsonl')
+    mkdirSync(join(bank2, '.records'), { recursive: true })
+    writeFileSync(evPath0, E.serializeEvents(E.eventsFromDiff([], [rec], AT, 1)), 'utf8')
+    return rec
+  }
+  const D2 = (enabled) => ({ bankRoot: bank2, log: () => { }, audit: () => { }, enabled })
+  const P2 = (o) => JSON.stringify({ sid: 's1', op: 'settle', ...o })
+  const readStatus = () => H.loadStore(bank2).records.find((x) => x.id === 'commitment:c1').meta.status
+
+  // C1 **默认关闭**：不设 enabled ⇒ 零写入（记录与事件流**逐字节不变**）
+  {
+    const rec = mkBank()
+    const evPath0 = join(bank2, '.records', 'ring-events.jsonl')
+    const evBefore = readFileSync(evPath0, 'utf8')
+    const stBefore = readFileSync(join(bank2, '.records', 'records.jsonl'), 'utf8')
+    writeFileSync(props, P2({ opHash: 's1', before: rec.text, after: 'kept', evidence: '交付物已存在' }) + '\n', 'utf8')
+    const r = M.applySessionProposals(D2(false))
+    r.applied === 0 && readStatus() === 'pending'
+      && readFileSync(join(bank2, '.records', 'records.jsonl'), 'utf8') === stBefore
+      && readFileSync(evPath0, 'utf8') === evBefore
+      ? ok('C1 默认关闭：不设开关 ⇒ `applied=0` · 承诺仍 pending · **store 与事件流逐字节不变**（fail-closed）')
+      : bad(`C1 ${JSON.stringify({ applied: r.applied, status: readStatus() })}`)
+  }
+  // C2 开启 + 逐字唯一命中 ⇒ 结算生效 + 留档 + 事件流恰好 2 条（open + settle）
+  {
+    rmSync(join(bank2, '.records'), { recursive: true, force: true })
+    rmSync(join(bank2, 'audit', 'session-review', 'rollback'), { recursive: true, force: true })
+    rmSync(join(bank2, 'audit', 'session-review', 'applied.jsonl'), { force: true })
+    const rec = mkBank()
+    writeFileSync(props, P2({ opHash: 's1', before: rec.text, after: 'kept', evidence: '交付物已存在' }) + '\n', 'utf8')
+    const r = M.applySessionProposals(D2(true))
+    const after = H.loadStore(bank2).records.find((x) => x.id === 'commitment:c1')
+    const rbPath = join(bank2, 'audit', 'session-review', 'rollback', 'settle-rollback.jsonl')
+    const rb = existsSync(rbPath) ? readFileSync(rbPath, 'utf8') : ''
+    const evPath = join(bank2, '.records', 'ring-events.jsonl')
+    const evs = existsSync(evPath) ? E.parseEvents(readFileSync(evPath, 'utf8')) : []
+    const settles = evs.filter((e) => e.op === 'commitment.settle')
+    r.applied === 1 && after.meta.status === 'kept' && after.meta.evidence === '交付物已存在'
+      && rb.includes(rec.text) && settles.length === 1 && evs.length === 2
+      ? ok('C2 结算成立：命中⇒`kept` + 证据落库 + 留档含原文 + 事件流恰 1 条 `commitment.settle`（+ 既有 open = 2 条）')
+      : bad(`C2 ${JSON.stringify({ applied: r.applied, status: after.meta.status, ev: after.meta.evidence, rbHasText: rb.includes(rec.text), settles: settles.length, total: evs.length })}`)
+    // C2′ **对账不变式**：事件流重放必须能重建 store 的该条记录
+    const recon = E.reconcileRing(H.loadStore(bank2).records, evs)
+    recon.ok ? ok('C2′ 对账不变式：事件流重放**能重建** store（承诺面零漂移）') : bad(`C2′ ${JSON.stringify(recon).slice(0, 200)}`)
+  }
+  // C3 幂等：同 (sid,opHash) 复跑 ⇒ no-op
+  {
+    const before = readFileSync(join(bank2, '.records', 'records.jsonl'), 'utf8')
+    const r = M.applySessionProposals(D2(true))
+    const after = readFileSync(join(bank2, '.records', 'records.jsonl'), 'utf8')
+    r.applied === 0 && before === after
+      ? ok('C3 幂等：同 `(sid,opHash)` 复跑 ⇒ `applied=0` 且记录**逐字节不变**')
+      : bad(`C3 ${JSON.stringify({ applied: r.applied, same: before === after })}`)
+  }
+  // C4 **证据门在册一**：无证据的结算提案 ⇒ 被拦下（执行面不重复实现判据）
+  {
+    rmSync(join(bank2, '.records'), { recursive: true, force: true })
+    rmSync(join(bank2, 'audit', 'session-review', 'applied.jsonl'), { force: true })
+    const rec = mkBank()
+    writeFileSync(props, P2({ opHash: 's2', before: rec.text, after: 'kept', evidence: '' }) + '\n', 'utf8')
+    const r = M.applySessionProposals(D2(true))
+    r.applied === 0 && readStatus() === 'pending' && /证据/.test(r.reasons.join(' '))
+      ? ok('C4 **无证据 ⇒ 被册一拦下**（执行面零通过；理由如实转述 ⇒ 「模型自批」路径被堵）')
+      : bad(`C4 ${JSON.stringify({ applied: r.applied, status: readStatus(), reasons: r.reasons })}`)
+  }
+  // C5 **只结不建** + 状态枚举不扩
+  {
+    writeFileSync(props, P2({ opHash: 's3', before: '- 凭空新增的承诺', after: 'kept', evidence: 'e' }) + '\n', 'utf8')
+    const r1 = M.applySessionProposals(D2(true))
+    r1.applied === 0 && r1.verdicts.some((x) => x.reason === 'stale')
+      ? ok('C5 **只结不建**：目标不存在 ⇒ `stale` 拒（不给"顺手建一条"留口子）')
+      : bad(`C5 ${JSON.stringify(r1.verdicts)}`)
+    const rec = H.loadStore(bank2).records.find((x) => x.id === 'commitment:c1')
+    writeFileSync(props, P2({ opHash: 's4', before: rec.text, after: 'expired', evidence: 'e' }) + '\n', 'utf8')
+    const r2 = M.applySessionProposals(D2(true))
+    r2.applied === 0 && r2.verdicts.some((x) => x.reason === 'bad-status')
+      ? ok('C5′ **不扩状态枚举**：`after=expired` ⇒ 拒（状态机仍只 `pending→kept|broken`）')
+      : bad(`C5′ ${JSON.stringify(r2.verdicts)}`)
+  }
+  rmSync(bank2, { recursive: true, force: true })
+}
+
 console.log(`\n结果: ${pass} PASS / ${fail} FAIL`)
 process.exit(fail ? 1 : 0)
