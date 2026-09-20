@@ -189,7 +189,20 @@
     "deepSleepProbeConflictMax": 3
   },
   "thresholds": {
-    "note": "阈值登记制（J0 · 2026-09-15 · 依据 docs/judge-layering-plan-2026-09-15.md §4.2）。**规则**：任何影响「接受/拒绝/归类/取舍」判断的数值阈值都必须登记在此，且登记项必须含 `preregisteredCriterion` + `samples` + `conclusion` + `recheck`。机检 scripts/check-threshold-registry.mjs（未登记 ⇒ 红；登记了但缺预注册或样本数 ⇒ 红）。**范围界定**：不含格式门（归 ingest.format.index-line 的 params）、容量/预算（归 gate.caps / surface.*）、工程常量（超时/重试/熔断）。**样板**：mcl.familiarThreshold 是全仓**唯一**有完整预注册校准记录的阈值。⚠ **暴露出的真问题**：13 项里 **12 项 samples=0 / 未预注册** —— 其中 activity.statusDays 已**实证失真**（假冷 26 条，见 skill/scripts/harvest-access.mjs:6）。",
+    "note": "阈值登记制（J0 · 2026-09-15 · 依据 docs/judge-layering-plan-2026-09-15.md §4.2）。**规则**：任何影响「接受/拒绝/归类/取舍」判断的数值阈值都必须登记在此，且登记项必须含 `preregisteredCriterion` + `samples` + `conclusion` + `recheck`。机检 scripts/check-threshold-registry.mjs（未登记 ⇒ 红；登记了但缺预注册或样本数 ⇒ 红）。**范围界定**：不含格式门（归 ingest.format.index-line 的 params）、容量/预算（归 gate.caps / surface.*）、工程常量（超时/重试/熔断）。**样板**：mcl.familiarThreshold 是全仓**唯一**有完整预注册校准记录的阈值。⚠ **暴露出的真问题**：13 项里 **12 项 samples=0 / 未预注册** —— 其中 activity.statusDays 已**实证失真**（假冷 26 条，见 skill/scripts/harvest-access.mjs:6）。⚠ **2026-09-20 加检「消费侧」**（`scripts/check-threshold-consumed.mjs`）：登记了**不等于被实现读** —— 实测抓到 **1 项真死配置 + 3 项命名不符 + 1 项键名写错**，逐条见 `unconsumed`。",
+    "unconsumed": [
+      "mcl.fastGate",
+      "tree.sectionMergeSim",
+      "inject.crossFormDedupSim",
+      "write.semanticDupSim",
+      "activity.statusDays"
+    ],
+    "valueHardcoded": [
+      "ingest.dedup.bigram.threshold",
+      "tree.indexSemanticSim",
+      "activity.interferenceBand"
+    ],
+    "unconsumedNote": "**已核「在非生成物 src 里零消费点」的阈值项**（`check-threshold-consumed` ① 的事实源；逐项实查结论**分三类**，2026-09-20）。**登记不是豁免，是让断链可见**；每项须给处置与 `until`：<br>① **真死配置（改它零效果）** —— `mcl.fastGate`（`{minHits:2, ratio:0.6}`）：实测 `grep -w minHits src/*.ts` **只命中 `criteria.generated.ts`（生成物）**，而 `mcl.ts:501` 的快通道判据实际是 `sim >= familiarThreshold && hasHighConf` —— **根本不读这两个参数**。⇒ 属**假旋钮**（改注册表 + `gen:criteria` + 门禁全绿，而行为零变化）。**until**：要么在 `mcl.ts` 真的用上（并给判据），要么**删该登记项**（避免发布一个读不到的旋钮）。<br>② **命名不符（常量在、不走注册表）** —— `inject.crossFormDedupSim`（实现是 `crossform-dedup.ts:23` 的**硬编码常量** `CROSS_FORM_DEDUP_SIM = 0.8`，**不读注册表**）· `tree.sectionMergeSim`（零命中，合并相似度用别的手段）· `write.semanticDupSim`（零命中）。⇒ 属**双源**（注册表象牙 + 代码常量真牙）。**until**：实现改为 `paramOf(...)` 读取，或把常量删掉只留注册表。<br>③ **键名写错（注册表键与实现不符）** —— `activity.statusDays`：`activity.ts:83-85` 实际用的是 **`warmDays`(14) / `coldDays`(44) / `archiveDays`(90)**，**没有 `statusDays` 这个键**。⇒ 该登记项**指向一个不存在的参数**。**until**：改登记为三个真实键，或把实现改成读 `statusDays`。<br>④ **同族第四类：消费点存在但是硬编码字面量（注册表象牙 + 代码字面量真牙）** —— 实测三项，**均确认有消费点**，但**不读注册表**：`ingest.dedup.bigram.threshold`（`0.66` → `distill-write.ts:419/565` 硬编码 `>= 0.66`）· `tree.indexSemanticSim`（`0.90` → `deepsleep-tree.ts:134` 硬编码 `>= 0.9`）· `activity.interferenceBand`（`[0.5, 0.66]` → `activity.ts:250` 硬编码 `v >= 0.5 && v < 0.66`）。⇒ **改注册表这三项同样零效果**（与①同类病、只是「有个同名消费点」掩盖了它）。**until**：实现改为 `paramOf(...)` 读取。⚠ 本类**未计入 `unconsumed`**（判据 ① 只判「有没有消费点」），**但必须在此写明** —— 否则「有消费点」会被误读为「改它有效」。",
     "entries": [
       {
         "id": "trigger.materialChunkChars",

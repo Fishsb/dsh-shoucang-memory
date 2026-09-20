@@ -5,6 +5,14 @@
 ## [Unreleased]
 
 ### Changed
+- **阈值"假旋钮"：登记了 ≠ 被实现读（2026-09-20 · 真机取证驱动）**：`thresholds.entries` 登记 **20 项**阈值，而**"登记了"不等于"被实现读"**。新增核查抓到 **9 项可疑**，逐项实查后分**四类**（每类都写进注册表 `thresholds.unconsumedNote`，含处置与 `until`）：
+  · ① **真死配置（改它零效果）**——`mcl.fastGate`（`{minHits:2, ratio:0.6}`）：实测 `minHits` **只出现在 `criteria.generated.ts`（生成物）**，而 `mcl.ts:501` 的快通道判据实际是 `sim >= familiarThreshold && hasHighConf` ⇒ **根本不读这两个参数**。改了注册表 + 跑 `gen:criteria` + 门禁全绿，而**行为零变化**——正是本仓已登记的「假旋钮」类（先例：`alphaVal` 恒 0 被放弃）。
+  · ② **命名不符（常量在、不走注册表）**——`inject.crossFormDedupSim`（实现是 `crossform-dedup.ts:23` 的**硬编码常量** `CROSS_FORM_DEDUP_SIM = 0.8`）· `tree.sectionMergeSim` · `write.semanticDupSim`。（**注册表象牙 + 代码常量真牙**）
+  · ③ **键名写错**——`activity.statusDays`：`activity.ts:83-85` 实为 **`warmDays`(14) / `coldDays`(44) / `archiveDays`(90)**，**根本没有 `statusDays` 这个键** ⇒ 该登记项**指向一个不存在的参数**。
+  · ④ **消费点是硬编码字面量（改注册表同样零效果）**——`ingest.dedup.bigram.threshold`（`0.66` 硬编码在 `distill-write.ts:419/565`）· `tree.indexSemanticSim`（`0.90` 硬编码在 `deepsleep-tree.ts:134`）· `activity.interferenceBand`（`[0.5, 0.66]` 硬编码在 `activity.ts:250`）。⇒ 与①**同类病**，只是"有个同名消费点"**掩盖**了它。
+  · **为什么三方门禁全绿**：`check-threshold-registry` 判「**登记了没**」· `check-field-usage` 管**字段角色** · `check-hardcode` 恰恰**希望**常量集中 ⇒ **没有一道问「这项阈值有没有被实现读」**。⇒ 与「接线 ≠ 抵达」「schema 有、显式映射没有」**同族**，这次断点在**阈值 → 实现**。
+  · **新增门禁 `scripts/check-threshold-consumed.mjs`**（登记 `check-runner`，**183 → 185**）：① 每个阈值项至少一个**消费点**（在**非生成物** src 里；零消费须登记 `thresholds.unconsumed`）· ② 反例自证（样例取自真机 `mcl.fastGate` 形态）。**排除生成物**是关键——真机 `mcl.fastGate` 正是靠"只在生成物里"被误认为有消费。
+  · ⚠ **本门自身两轮过度报红，都记档**：首版按"项对象自有键"取参数名 ⇒ 把 `preregisteredCriterion`/`recheck` 等**登记元数据**当参数字面量 ⇒ **20/20 全假红**；次版改用 `probe.registryPath` 末段（**参数名的唯一权威来源**）⇒ 降到 8 项；再加**双通道**（参数键名 + `id` 尾段 + Config 驼峰形如 `deepSleepContentMinChars`）⇒ 降到实查确认的 5 项零消费 + 3 项硬编码。**判据的形态学要按"真机命名习惯"设计，不能按"我以为的键名"。**
 - **S-P1c′ 分片上限完成校准：`materialChunkChars = 52232`（2026-09-20 · G13 修复后首次可算）**：该阈值此前登记为 `insufficient-data`（`value=null`，关闭），理由"仅 1 个真实纪元"。**该理由不成立** —— 校准器原只读主档 ⇒ 一直报「纪元 **0**」，真值 **46 个不同纪元**（已随 G13 轮转失明修复）。
   · **按预注册判据取值**（判据写在登记表 `preregisteredCriterion`，**先定判据后取数**）：取 cap 使**最大片数 ≤ 3**（单轮预算内可完成）且**永不切开单段**；在满足约束的候选里取**最大** cap（片数最少 ⇒ LLM 调用最少）。
   · **实测 44 个纪元**（按纪元汇总，同纪元多片求和）：min **35459** · p50 **42737** · p75 **46052** · **p90 52232** · max 108271。扫候选：cap=p50 ⇒ 片数均值 1.50/**最大 3**；cap=p75 ⇒ 1.25/**3**；**cap=p90 ⇒ 1.11/最大 3** ⇒ 三者均满足 ≤3 约束，按「取最大 cap」取 **p90 = 52232**。

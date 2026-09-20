@@ -664,6 +664,22 @@ const CHECKS = [
   //   跨档真值 89.9% —— 正是 G13 教训的又一次复现）。
   ['scripts/check-l0-conflict-wiring.mjs'],
   ['scripts/check-l0-conflict-wiring.mjs', '--selftest'],
+  // 「阈值必须真被消费」（2026-09-20 · **真机取证驱动 · 假旋钮类缺陷**）：
+  //   `thresholds.entries` 登记 20 项阈值，而**登记了 ≠ 被实现读**。实测抓到 **9 项可疑**，
+  //   逐项实查后分**四类**（每类都已写进注册表 `thresholds.unconsumedNote`，含处置与 until）：
+  //     ① **真死配置**（改它零效果）：`mcl.fastGate` —— `minHits`/`ratio` 实测只出现在
+  //        `criteria.generated.ts`（**生成物**），`mcl.ts:501` 实际判据是 `sim>=familiarThreshold && hasHighConf`；
+  //     ② **命名不符**（常量在、不走注册表）：`inject.crossFormDedupSim`（实现是硬编码常量
+  //        `CROSS_FORM_DEDUP_SIM=0.8`）· `tree.sectionMergeSim` · `write.semanticDupSim`；
+  //     ③ **键名写错**：`activity.statusDays` —— `activity.ts:83-85` 实为 `warmDays`/`coldDays`/`archiveDays`；
+  //     ④ **消费点是硬编码字面量**（注册表象牙 + 代码字面量真牙，**改注册表同样零效果**）：
+  //        `ingest.dedup.bigram.threshold`(0.66) · `tree.indexSemanticSim`(0.90) · `activity.interferenceBand`([0.5,0.66])。
+  //   为什么三方门禁全绿：`check-threshold-registry` 判「**登记了没**」、`check-field-usage` 管字段角色、
+  //     `check-hardcode` 恰恰**希望**常量集中 ⇒ **没有一道问「这项阈值有没有被实现读」**。
+  //   判据：① 每项至少一个**消费点**（在非生成物 src 里；零消费须登记 `thresholds.unconsumed`）
+  //        ② 反例自证（样例取自真机 `mcl.fastGate` 形态）。
+  ['scripts/check-threshold-consumed.mjs'],
+  ['scripts/check-threshold-consumed.mjs', '--selftest'],
   // **统一事件信封**单测（2026-09-13）：`{ at, ...o }` 的展开顺序允许调用方用 `at: undefined` 覆盖注入值，
   //   而 `JSON.stringify` 静默丢弃 undefined ⇒ 行里没有 `at`（实测 distill-audit 930 行里 1 行如此）。
   //   本件把「任何一行都必须有非空 `at` + `type`」钉死，覆盖 audit/episode/stub/ledger 四条写出路径。
