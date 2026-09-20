@@ -1,12 +1,14 @@
 # 待办总表（OPEN ITEMS）
 
 > **用途**：本仓**唯一的待办入口** —— 任何"还没做完的事"都必须在此登记一行，否则视为未登记。
-> **当前状态（2026-09-20 round 10 复核 · 机检）**：五阶段（S0–S4）+ S4R + S4X + S4Y + IR1 + S1R + S2S3 + **UI1 面板架构整理** 的**可施工项均已完成**；
-> `node scripts/verify-open-items.mjs` ⇒ **3/3**；`check-runner` **188 → 191 pass / 0 fail**。
-> **本轮另落地两项行为变更**（A1 阈值 0.58 · A2 水位判定轴改痕迹文件数），故「待拍板」只剩 A3/A4 两条。
-> **仍开口的三类**（逐条见文末「§12 开口项汇总」）：① 待拍板的行为变更（仅 A3/A4） · ② 待真机样本落账 · ③ 长期校准欠账。
+> **当前状态（2026-09-20 round 11 复核 · 机检）**：五阶段（S0–S4）+ S4R + S4X + S4Y + IR1 + S1R + S2S3 + **UI1 面板架构整理** 的**可施工项均已完成**；
+> `node scripts/verify-open-items.mjs` ⇒ **3/3**；`check-runner` **188 → 192 pass / 0 fail**。
+> **🔴 round 11（用户授权「剩余两条全部推进完成」）把 A3/A4 两条「待具名授权」全部落地** —— 授权已取得，故
+> **「待拍板」类清零**（§12-A 无剩余行）。同时本轮的**方案档前提被四条实测证伪**（见 §0p），四条均已落档而非掩盖。
+> **仍开口的两类**（逐条见文末「§12 开口项汇总」）：① 待真机样本落账 · ② 长期校准欠账。
 
-**最后更新**：2026-09-20（round 10：§0m 缺陷已修 + 带门；**§0n/§0o 三条门自身与配置读取的假绿链已修**；A1/A2 两项行为变更落地；五层验收全绿）
+**最后更新**：2026-09-20（round 11：**A3 门4 时态剔除真落库 + A4 承诺结算链五册落地**（授权「剩余两条全部推进完成」）；
+方案档四条前提证伪并落档；新增「门禁 ① 自身假绿」登记 §0p；五层验收全绿）
 
 ---
 
@@ -30,6 +32,29 @@
 **新门五条判据**：① 本机实际配置**可解析**且**无 BOM**（= 事故直接检测器）② 两处失败分支**必须留痕**（**剥注释后判定**，防"只改注释不改行为"）③ 写侧不产 BOM（`'utf8'` 写 + 无 `\uFEFF` 字面量）④ 反例自证：带 BOM 的 JSON **必抛**、剥 BOM 后**值不变** ⑤ **仓内文本件字节级无 BOM** 扫描 + 检测器自证。
 **先红→后绿（两处独立实证）**：给真机 `scheduler.json` 注入 BOM ⇒ **exit 1**；还原 ⇒ **exit 0（11 PASS）**。仓内造一个带 BOM 的 `.md` ⇒ ⑤ **命中并红**；删除 ⇒ 绿。
 **⚠ 未做（环境侧）**：lock / `.modules.yaml` 归位需在 profile 跑 `pnpm install`（会顺带归位所有"声明领先"的依赖）—— 与 §0n 同一条，本轮不动。
+
+---
+
+## 0p. 🔴 **门禁 ① 自身假绿：`coexist` 无任何产生路径，而 `produces()` 判绿 —— 被判的是「类型声明里出现过字面量」**（2026-09-20 round 11 · **已登记，未修**）
+
+> **性质**：与 §0n（`check-version-pin` 自身假绿）**同族** —— **门在，判据也在，但它判的对象不是它声称的对象**。
+> **来源**：本轮的方案档前提复核（**四条证伪的第 4 条**，见 `docs/specs/gate4-supersede-plan.md` §0）。
+> **态**：**已登记、未修** —— 修它属独立一轮（见文末处置建议），本轮授权范围为「门4 落库接线 + 承诺结算链」，
+> 不在其内；按仓规「未登记 = 视为未登记」，故**如实登记而非顺手改**（改动判据即改门禁语义）。
+
+| 面 | 事实（逐条实测，round 11） |
+|---|---|
+| **门声称什么** | `check-l0-conflict-wiring` ① 断言「注册表声明的**每个** L0 取值都有**产生式**」（注释明写：*"仅出现在 `l0Pick('<dim>','<v>')` 的第二实参里**不算产生**"*，`scripts/check-l0-conflict-wiring.mjs:85-93`） |
+| **真缺陷** | `L0Conflict = 'none' \| 'coexist' \| 'supersede'`（`src/criteria.ts:73`）里 **`coexist` 在全仓零产生路径**：`CONF.coexist`（`criteria.ts:117`）**剥注释后出现 0 次**（实测），`evaluateL0` 的 `conflict` 只能算出 **`none` / `supersede`** 两个值（`criteria.ts:142`：`input.supersedes ? CONF.supersede : CONF.none`）⇒ 取值域**声明的三个值里有一个永不可达** |
+| **门为何判绿（根因）** | `produces()` 的 `asValue` / `inTernary` 两条正则**在类型声明行上就命中** —— 实测命中处：`criteria.ts:32`（即 `export type L0Conflict = 'none' \| 'coexist' \| 'supersede'`）与 `criteria.ts:75`（`CONF = {…}` 行）。`:\s*[^\n;]{0,60}'coexist'[^\n;]{0,60}(?:\)\|,\|;)` 的 `:\s*` 把 **`type X =` 之后的联合类型**当成了「赋值右值」。⇒ **判据抓的是"字面量在类型里被声明"，恰是注释里被明确排除的那一类** |
+| **复现（可直接跑）** | 门自身 **PASS**（`node scripts/check-l0-conflict-wiring.mjs` ⇒ ① 绿），而同一条取值 `CONF.coexist` 在 `src/`（剥注释）**零出现**。两者**同时成立**即假绿 |
+| **为什么危险** | ① **取值域不可达的那一个值，恰恰是本轮门4落地语义的邻居** —— `coexist`（与既有并存）与 `supersede`（取代既有）是提示词里**被并列举出并要求模型分清**的三义之二（`JUDGEMENT_VALUES`：*"`coexist`=与既有并存（**不取代**）· `supersede`=**取代既有**"*）；模型可能判出 `coexist`，而下游 `evaluateL0` **无此产出路径** ⇒ **判了也不落库**。② 门的注释**自称已经修掉了这个坑**（"首版只查字面量…于是'声明了但无人产生'照样判绿"）⇒ **读者会以为此处已受保护**，比没有这条注释更坏。 |
+| **与既有形态的关系** | 「宣称判 A、实际判 B」在本仓已是**可复用判据形态**：**凡正则式判据，须先证"它能被反例推翻"** —— 即喂一个**只有声明、没有产生**的最小变体，门必须红。本件的自证反例（`:47`「正例」）**恰好只用了"有产生路径"的样本**，缺"类型里声明了但无产生"这一类 ⇒ 反例集**漏了正中间那一格**。 |
+| **处置建议（下一轮，需用户点头）** | 二选一，**均属改门禁语义/改评级语义，按 R1/R3 须具名授权**：<br>**A. 修门**（推荐）：`produces()` **先剥掉类型声明行**（`export type X = …` / `interface`）再判，并补自证反例「类型里声明 + `l0Pick` 声明 + 无产生式 ⇒ 必红」；若 `coexist` 确应有产生路径，则本修**当场把它判红**，暴露真缺陷。<br>**B. 收窄声明**：若 `coexist` 本就是**有意未接线**（既无产生路径也无消费需求），把它登记进注册表 `wiring.unreachableValues`（门已支持该豁免通道），并**删除 `criteria.ts:73` 类型联合里的该成员** ⇒ 声明与可达性一致。**不可只做 `l0Pick` 那一半**（那正是本次假绿的形状）。 |
+
+**复验命令**：`node scripts/check-l0-conflict-wiring.mjs`（现 PASS）·
+`Select-String -Path src\*.ts -Pattern 'CONF\.coexist'`（现 **0 命中**，剥注释同）·
+`node -e "…"` 复刻 `produces('coexist')` ⇒ `{asValue:true, inTernary:true, pass:true}`。
 
 ---
 
@@ -163,10 +188,10 @@ T      sim 过线        其中快通道   被标签门挡掉
 `DEFAULT_DISTILL_PROMPT` 在 `tsc` 产物里是**模板表达式**（`${JUDGEMENT_VALUES}`），字面量只在**运行时**展开。
 ⇒ 改为 **import 模板常量求值**。教训：**判「文本里有没有」之前，先确认读的是「已求值的文本」还是「生成它的文本」**。
 
-**剩余段（门4 的真正接线）**：`fact-ring#supersede()` 的落库调用 —— **方案与验收成对**见
-**`docs/specs/gate4-supersede-plan.md`**（**决策态 · 待具名授权**，R1）：
-4 册分批（新件+单测 / 蒸馏落点 / 深睡落点+通道锁 / 读取侧实证），每册判据与复验命令齐全；
-**前置门语义已改变** —— 不再是「等一个不可能出现的取值」，而是「看修复后新落账的分布」。
+**剩余段（门4 的真正接线）**：`fact-ring#supersede()` 的落库调用 —— **✅ 已于 round 11 落地**（授权「剩余两条全部推进完成」）：
+**`docs/specs/gate4-supersede-plan.md`**（**施工态 · 已落地**）；新件 `src/fact-supersede-apply.ts`（时态剔除**落库唯一出口**，三重 fail-closed），
+判据 `scripts/test-fact-supersede.mjs`（**50 条**，含**分层抵达实证**）。⚠ 该档 **4 条前提被实测证伪**（详见 §0p），
+落地形态按实测调整而非照抄方案。
 
 ---
 
@@ -320,7 +345,7 @@ T      sim 过线        其中快通道   被标签门挡掉
 
 | 项 | 现状（实测） | 卡在哪 | 触发条件（谁满足了就该做） |
 |---|---|---|---|
-| **门4 时态剔除进注入链** | **⚠ 登记已于 2026-09-20 两度更正 —— round 9 第三度更正：真因是「取值域从未抵达 prompt」（已修）**。见下「§0i」 | **根因（本轮定位）**：prompt 只带 `JUDGEMENT_HINT`（原文「取值见 criteria 注册表」），而**模型读不到注册表** ⇒ 实测两处 prompt 常量里 `supersede`/`coexist`/`cross-task` **命中 0** ⇒ 模型自造取值（真机 `无`/`0`/`false`/`0.1`/整句）⇒ 台账 551 行 `l0After` **全 `none`** ⇒ **`supersede` 产量 0**。**与 `formatConstraintLine()` 同族**（「模型不知道有上限」）。**已修**：`gen-criteria#l0EnumLine()` 派生取值域 → `JUDGEMENT_VALUES` → 接入**两处 prompt**；判据 `check-l0-conflict-wiring` ④（3 断言 + 先红实证）。**剩余段**：`fact-ring#supersede()` 落库接线 → **方案与验收成对**见 **`docs/specs/gate4-supersede-plan.md`**（决策态 · **待具名授权**，R1） | ① 修复后新落账出现 `l0After.conflict='supersede'` 行 · ② 取得该裁决的**具名授权**后补落库接线 ⇒ 真库 `validTo` 非空 ≥1 ⇒ 门4 全链可验收 |
+| **门4 时态剔除进注入链** | **⚠ 登记已三度更正 —— round 9 真因＝「取值域从未抵达 prompt」（已修）；round 11 落库接线已落地**。见「§0i」 | **根因（round 9 定位）**：prompt 只带 `JUDGEMENT_HINT`（原文「取值见 criteria 注册表」），而**模型读不到注册表**（它是构建期投影）⇒ 实测两处 prompt 常量里 `supersede`/`coexist`/`cross-task` **命中 0** ⇒ 模型自造取值（真机 `无`/`0`/`false`/`0.1`/整句）⇒ 台账 551 行 `l0After` **全 `none`** ⇒ **`supersede` 产量 0**。**与 `formatConstraintLine()` 同族**（「模型不知道有上限」）。**已修**：`gen-criteria#l0EnumLine()` 派生取值域 → `JUDGEMENT_VALUES` → 接入**两处 prompt**；判据 `check-l0-conflict-wiring` ④。<br>**✅ 剩余段（落库接线）已落地（round 11）**：`src/fact-supersede-apply.ts` 为**唯一出口**，见 **`docs/specs/gate4-supersede-plan.md`**（施工态）。⚠ 该档 **4 条前提被实测证伪**（含本条**门自身假绿**，见 §0p） | **✅ 已接线** ⇒ 待**新落账**出现 `l0After.conflict='supersede'` 行，即可验真库 `validTo` 非空 ≥1 ⇒ 门4 **全链**可验收（现仍为 0：该取值此前从未产出） |
 | **门3 淘汰门（行为回灌）** | **✅ 判据已满足（2026-09-20 round 9 实测）—— 详见 §0h**：修复后带 `prevTextSrc` 的 compliance 行 **112 条**（≥30 ✅），其中 `topicEcho=true` **9** ⇒ 回引率 **8.0%**，落在 **(0%, 95%)** ✅。两类失败可分辨（`events` 100 / `events-empty` 12）。对照修复前 **0/1847 = 0%**。⚠ **但 `switchSource` 在修复后样本上仍 84.8% 恒真**——`topicEcho` 与 `switchSource` **不是同一个信号**，不可因前者转绿就顺手接后者；接线本身亦属行为变更，本轮**只出结论不动行为**。**根因（本轮之前已修）**：`switchSource` 恒真的根因链 —— `topicEcho` 恒 `false` ← **`prevText` 恒空**（原实现从 `decision.messages` 找 assistant 回复，而那是**"本步新认领的消息"**，收尾步恒空；`OPEN-ITEMS §0d` 早已实证该语义）。**改**为从 `agent.session.snapshotEvents()` 取 `assistant/message` 的 text 片 + 降级保护 + 审计 `prevTextSrc`（**两类失败可分辨**）。判据 `test-prev-text-source`（登记 **179 → 181**）。<br>⚠ **但"真实回引率是否落在有判别力区间"仍待真机样本**：修复后须新 compliance 行落账才可测（探针实测**当前 0 行**，如实记）。判定结果**仍只进审计、不反馈选行** | **接线前须先看真实回引率**：恒真已从**根因**上消除，但"回引率是否有判别力"须等真机行 | 新 compliance 行 **≥30** 且 `topicEcho=true` 占比落在 **(0%, 95%)** 区间 ⇒ 此时"信号接选行"才有意义 |
 
 **已落地部分**（详见 `CHANGELOG`）：读数口径四件套（`check-observability --parsability`）· `buildCandidates` 闭环自述如实化 + 抵达面钉住 ⑫ · `adviseFromMissCounts` 定位锁定 · Letta 许可证标签更正。
@@ -777,8 +802,8 @@ calls=2 → bySid: sid=6b89a084 · qLen=2 · qHash=005c4d6f · lastReason=new ·
 |---|---|---|---|---|
 | ~~A1~~ | ~~**OPEN-1 阈值**~~ | ✅ **已落地（2026-09-20 round 10 · 用户授权「继续全部收尾」）**：4217 条样本下 0.55 过冲 14.6pp ⇒ 改为 **0.58**（27.7%，距目标 0.2pp）。**注册表 + 运行态 scheduler.json 两处同改**（只改注册表不动真机行为） | ~~0.55~~ → **0.58**（已生效） | `node scripts/mcl-calibrate.mjs` ⇒ 「当前值 0.58（判据源）· 保持当前值」 |
 | ~~A2~~ | ~~**S-P1b″ 内容水位判定轴**~~ | ✅ **已落地（同轮）**：判定改为**痕迹文件数**（`traceFiles < minTraces`）；代价已具名（砍掉约 51% 入睡纪元输入面，25 轮不再入睡）；不丢数据（滑窗后新文件 mtime 必晚于水位） | 旧轴（材料字符数）→ **新轴（痕迹文件数）**（已生效） | `node scripts/test-epoch-watermark.mjs`（**27 PASS**，含 ⑥ 3 断言）· 变异实证：改回旧轴 ⇒ exit 1 |
-| A3 | **门4 `supersede` 落库接线** | 根因（取值域未抵达 prompt）**已修**；剩余段 = `fact-ring#supersede()` 的调用接线 | 方案+验收成对：`docs/specs/gate4-supersede-plan.md`（4 册）· **待具名授权** | 见该档 §5 逐册命令 |
-| A4 | **承诺结算册零～册四** | 册五（存量 10 条）已落库；其余四册**未授权** | 方案+验收成对：`docs/promise-settlement-plan.md` §11/§12 | 见该档 |
+| ~~A3~~ | ~~**门4 `supersede` 落库接线**~~ | ✅ **已落地（2026-09-20 round 11 · 用户授权「剩余两条全部推进完成」）**：新件 `src/fact-supersede-apply.ts`（**落库唯一出口**，三重 fail-closed：默认关闭 / 幻觉门 / 逐字唯一定位 + 先留档再改）。⚠ 方案档 **4 条前提被实测证伪**（见 §0p 与方案档 §0）⇒ 落地形态按实测调整 | 决策态 → **施工态**（已生效） | `node scripts/test-fact-supersede.mjs`（**50 PASS**，含分层抵达实证）· 五层验收见 §12-E |
+| ~~A4~~ | ~~**承诺结算册零～册四**~~ | ✅ **已落地（同轮同一授权）**：册零/一/二/三/四全部落地；册零+册一**合并实现**（编译期 `evidence` 必填 ⟷ 运行期非空校验是同一条规则的两半，拆开会让语义在两处漂移）。**重放不造字段**：历史事件无 `evidence` ⇒ `replay:true` 跳过证据门且**只重建 payload 里真有的键**（否则会对 11 条已结算记录凭空补键 ⇒ 与库比对翻红） | 未授权 → **已落地**（已生效） | `node scripts/test-relation-ring.mjs`（**66 PASS**）· `test-proposal-apply`（16）· `test-ring-events`（28） |
 
 ### B. 等真机样本 / 等时间（无代码动作）
 
@@ -815,7 +840,13 @@ calls=2 → bySid: sid=6b89a084 · qLen=2 · qHash=005c4d6f · lastReason=new ·
 | E5 | **`check-version-pin` 自身假绿**（防"pin 脱钩"的那道门，在声明侧失读时**静默降级**为两处比对仍报"三处一致"） | ✅ **已修 + 2 反例自证**（见 §0n） | `node scripts/check-version-pin.mjs --selftest`（含带 BOM 反例） |
 | E6 | **运行态配置读取整体静默**（一个 BOM ⇒ `scheduler.json` 16 键全丢且不留痕；面板读侧同病；探针"平凡通过"；仓内文件 BOM） | ✅ **已修 + 新门 `check-suite-config-read`**（`CHECKS` 190→191，11 PASS） | `node scripts/check-suite-config-read.mjs`（详见 §0o） |
 
-> ⚠ **A3/A4 仍待具名授权**：这是本轮之后**仅剩**的两条「结论已明确、只等授权」的项。
+| E7 | **A3 门4 时态剔除真落库**（原 §12-A3 待授权项） | ✅ **已授权落地** —— `fact-supersede-apply.ts` 为**唯一落库出口**（旧路径 `fact-ring#supersede()` 此前**全仓零调用**）；默认关闭 + 幻觉门 + 逐字唯一定位 + 先留档再改。**分层抵达已实证**：环记录失效后**真从 situation 块消失**（抵达 ✅），索引行走 md 原文（**无抵达**，如实登记） | `node scripts/test-fact-supersede.mjs`（**50 PASS**） |
+| E8 | **A4 承诺结算链册零～册四**（原 §12-A4 未授权项） | ✅ **已授权落地** —— `evidence` 编译期必填 + 运行期非空；重放**只重建已有键**（不造假字段）；`dueSoon` 抽 `due-window.ts` 解分层深度 13>10；`overdueCommitments` 纯读 + KPI 三新维 | `node scripts/test-relation-ring.mjs`（**66 PASS**） |
+| E9 | **门4/承诺链的「方案档前提」四条证伪**（**新增登记**，不属缺陷修复而属**认知订正**） | ✅ 已落档（方案档 §0 + §0p）：① §4.3 前置条件**永不可达**（564 行 `l0After` 全 `none`）② 模型 schema **无 target 字段**（接线点原假定其存在）③ 册D「已不在注入面」只对环记录成立 ④ **`check-l0-conflict-wiring` ① 自身假绿**（`coexist` 零产生路径仍判绿）—— ④ 单独登记为 **§0p，未修** | 方案档 §0 逐条 · §0p 复现命令 |
+
+> ✅ **A3/A4 已于 round 11 全部落地**（用户授权「剩余两条全部推进完成」）—— 本轮之后
+> **「待具名授权」类清零**；新开口的**唯一**一条是 **§0p 门禁 ① 自身假绿**（**已登记、未修**，
+> 属独立一轮，需具名授权 —— 见 §0p 处置建议 A/B）。
 
 ---
 

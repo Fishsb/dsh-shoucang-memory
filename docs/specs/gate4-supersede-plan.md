@@ -17,7 +17,7 @@
 | **①** | §4.3 前置门：「台账出现 **≥1 行** `l0After.conflict='supersede'`；若长期为 0 ⇒ 本条**正确处置是维持登记、不开工**」 | 跨档台账（`ledger.jsonl` + `.1`）**564 行 `l0After`，`none` 564 · `supersede` 0 · `coexist` 0**；带 `judgementChecked`（写侧校验生效后）的新行 **10 条**，其中 `supersede` **仍 0** | 前置门**未满足**。但真正的原因不是"等样本"，而是下面 ② ③ —— 即**该门本身问错了问题** |
 | **②** | §2.3 接线点：「在 `l0After.conflict === 'supersede'` 的行上，把该裁决转成 `SupersedeOp`」 | **模型输出的 schema 里根本没有"目标"字段**：实测蒸馏 prompt 顶层键 = `appends/newIndex/profiles/projectCards/decisions/commitments/relations/valences/skipped`，`supersedes`/`match` **命中 0**；深睡 schema 有 `match`（给 principles 的 replace 用）但**同样没有** supersedes 的目标通道 | `conflict='supersede'` 只说明「有取代发生」，**说不出取代了谁** ⇒ 照原文实现，`SupersedeOp` 拿不到目标，接了也永不触发 |
 | **③** | §4.1 册 D：「`supply-assembly` 的 `out.expired` 出现该 id，且**注入面**里不再有它（这是门4的**终极目的**）」 | **只有一半成立，分界线是 `file` 字段不是 kind**（见 §5 实测）：环记录（`file===''`）经 `ring-supply#isLive` 门 ⇒ situation 块消失 = **真抵达**；索引行（`file!==''`，即绝大多数"旧断言"）唯一看 `validTo` 的读侧是 `buildCandidates`，而它在 `src/` 内**零消费者**（`check-injection-reach` ⑫ 早已机检此事实），注入面读 **md 原文** ⇒ **无抵达** | 册 D 的验收**不能写成"注入面里不再有它"**（对索引行不成立）；已改为**分层实证**（哪一半通、哪一半不通，逐条机检钉住） |
-| **④**（顺带发现） | `check-l0-conflict-wiring` ① 声称守「每个 L0 取值都有**产生式**」 | `coexist` **无产生式**（`evaluateL0` 实测只能产出 `none`/`supersede`），而门判**绿** —— 其 `asValue` 正则被 `types` 里的 `= 'none' \| 'coexist'` 与 `l0Pick(...)` 行**误命中**（**假绿，且该门存在的唯一目的就是抓这个**） | 已如实登记，修法与影响见 §6 |
+| **④**（顺带发现） | `check-l0-conflict-wiring` ① 声称守「每个 L0 取值都有**产生式**」 | `coexist` **无产生式**（`evaluateL0` 实测只能产出 `none`/`supersede`），而门判**绿** —— 其 `asValue` 正则被 `types` 里的 `= 'none' \| 'coexist'` 与 `l0Pick(...)` 行**误命中**（**假绿，且该门存在的唯一目的就是抓这个**） | 已如实登记，修法与影响见 §6.4 + `docs/OPEN-ITEMS.md §0p` |
 
 **⇒ 对"是否该开工"的结论**：原文那条前置门（等 `supersede` 样本）**永远等不到**，因为
 ② 的"目标通道缺失"意味着即使模型每次都判对，宿主也**拿不到可执行的目标**。
@@ -242,8 +242,16 @@ node scripts/shadow-sim.mjs
 
 ### 6.4 ④ `check-l0-conflict-wiring` ① 假绿（登记，**未修**）
 
-实测：`coexist` 无产生式而门判绿（`asValue` 正则命中 `l0Pick(...)` 行）。
-判据已具备的**事实源是** `wiring.unreachableValues`；正确修法是让 ① 认"入参不可达 ⇒ 其取值登记豁免"，
-并**同步登记 `coexist`**。本轮**未修**，理由是它属另一条判据链（不属于"门4 落地"的授权范围），
-如实登记在 `docs/OPEN-ITEMS.md`，不夹带施工。
+实测：`coexist` **无产生式**（`CONF.coexist` 剥注释后在 `src/` **零出现**；`evaluateL0` 的 `conflict`
+只能算出 `none`/`supersede`）**而门判绿**。
+
+**根因（round 11 精确定位，比首版更窄）**：`produces()` 的 `asValue` / `inTernary` 两条正则在
+**类型声明行**上就命中 —— 命中的是 `criteria.ts:32` 的 `export type L0Conflict = 'none' | 'coexist' | 'supersede'`
+（`:\s*[^\n;]{0,60}'coexist'[^\n;]{0,60}(?:\)|,|;)` 里的 `:\s*` 把 `type X =` 之后的**联合类型**当成了
+"赋值右值"），以及 `criteria.ts:75` 的 `CONF = {…}` 行。⇒ 门抓到的**恰是它注释里明确排除的那一类**
+（"仅出现在 `l0Pick` 第二实参里不算产生"）。
+
+判据已具备的**事实源是** `wiring.unreachableValues`；正确修法见 `docs/OPEN-ITEMS.md §0p` 处置建议 A/B。
+本轮**未修**，理由是它属另一条判据链（不属于"门4 落地"的授权范围），
+如实登记在 `docs/OPEN-ITEMS.md §0p`（含可直接跑的复现命令），不夹带施工。
 
