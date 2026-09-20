@@ -697,6 +697,18 @@ const CHECKS = [
   //   反例自证 5 例，含「只有字面量无读口」「读口只出现在注释里」「读了别的 id」三条反例。
   ['scripts/check-threshold-control.mjs'],
   ['scripts/check-threshold-control.mjs', '--selftest'],
+  // **归因样本可达性**（2026-09-20 round 9）：`deepsleep-run.ts` 里**两处字面量互相打架** ——
+  //   取样本 `samplesFromMclRows(missRows, 20)` 上限 **20**，判定 `if (samples.length < 30)` 门槛 **30**
+  //   ⇒ 门槛分支**结构性恒真** ⇒ 后面那段**真调子代理**的代码（整个 J3/U1 的目的）**从未执行过一次**。
+  //   而它在面板/台账上**读起来像"样本不足、在积累"**（N = 6/10/11/14/17，一串看着在涨的数）。
+  //   真机证据：带 `attribution*` 字段的 35 条深睡行里 `attributionSamples` **min 0 / max 18 / ≥30 者 0**，
+  //     出非 `insufficient` verdict 的 **0 条**。
+  //   判据（本件）：① `ATTRIBUTION_SAMPLE_LIMIT >= ATTRIBUTION_MIN_SAMPLES`（**从源码取值解析，不采信注释**）
+  //                ② 门槛分支之后**确有** `subagents.start(` —— 防"把恒真分支改成恒假分支"的假修。
+  //   反例自证 4 例，含「上限<门槛（真机修前 20/30）」与「上限远小于门槛（5/30）」两条反例。
+  //   ⚠ 先红实证：变异 `LIMIT 30→20` ⇒ 本件 exit 1；还原 ⇒ exit 0 且**字节级还原**（`_tmp-mut-j3.mjs`，已删）。
+  ['scripts/check-attribution-samples.mjs'],
+  ['scripts/check-attribution-samples.mjs', '--selftest'],
   // **统一事件信封**单测（2026-09-13）：`{ at, ...o }` 的展开顺序允许调用方用 `at: undefined` 覆盖注入值，
   //   而 `JSON.stringify` 静默丢弃 undefined ⇒ 行里没有 `at`（实测 distill-audit 930 行里 1 行如此）。
   //   本件把「任何一行都必须有非空 `at` + `type`」钉死，覆盖 audit/episode/stub/ledger 四条写出路径。
