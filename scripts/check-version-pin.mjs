@@ -84,6 +84,22 @@ if (SELFTEST) {
     if (!okCase) bad++
     console.log(`${okCase ? '✅' : '❌'} 一致性判据 · ${name} → ${got ? '一致' : '不一致'}（期望 ${want ? '一致' : '不一致'}）`)
   }
+  // **声明侧 BOM 反例**（2026-09-20 round 10）：带 BOM 的 JSON.parse 必抛 ⇒ 必须被判为"解析失败"
+  //   而不是被静默排除出三处判定（后者会让本门在声明侧失读时**降级为两处比对仍报 PASS**）。
+  {
+    const withBom = '\uFEFF{"dependencies":{"x":"github:y#abcdef1"}}'
+    let threw = false
+    try { JSON.parse(withBom) } catch { threw = true }
+    const okCase = threw === true
+    if (!okCase) bad++
+    console.log(`${okCase ? '✅' : '❌'} 反例自证 · 带 UTF-8 BOM 的 JSON **必须**解析失败（否则修法无意义）`)
+    // 正例：去掉 BOM 后可解析（证明修法是"去 BOM"而非"放弃解析"）
+    let parsed = null
+    try { parsed = JSON.parse(withBom.replace(/^\uFEFF/, '')) } catch { /* 不应发生 */ }
+    const okFix = parsed !== null
+    if (!okFix) bad++
+    console.log(`${okFix ? '✅' : '❌'} 反例自证 · 剥 BOM 后可正常解析（修法有效）`)
+  }
   console.log(bad ? `\nFAIL（${bad} 例）` : '\nPASS（抽取器自证可用）')
   process.exit(bad ? 1 : 0)
 }
@@ -117,6 +133,24 @@ for (const [file, role] of [['pnpm-lock.yaml', '锁定'], [join('node_modules', 
 const broken = sources.filter((s) => s.parseMiss)
 if (broken.length) {
   console.log(`❌ 解析器失效：${broken.map((s) => s.file).join(', ')} 含依赖名但未抽出 SHA —— 这是代码问题（非环境问题），不判跳过`)
+  process.exit(1)
+}
+
+/* ⚠ **2026-09-20 round 10 修假绿**（本件自身缺陷，实测踩到）：
+ *   病征：profile `package.json` 被写入 **UTF-8 BOM**（一次改 pin 的副作用）⇒ `JSON.parse` 抛
+ *     `Unexpected token ''` ⇒ 声明侧 `shas: []` + `error` 被记进 sources，**但判定只取 `all = flatMap(shas)`**
+ *     ⇒ 声明侧**整侧被静默排除**，剩下 lock + .modules.yaml 两处一致 ⇒ 打印
+ *     **「PASS（三处一致 @ …）」** —— 「三处」实际只读了两处，**关键的那一处在报错中被吞掉**。
+ *   这正是本仓反复剿的形态：**把"坏掉了"显示成"没那么坏"**；且此门恰是防"声明领先于 lock"的那道，
+ *   声明侧失读时它静默失能 = 门自己变成假绿来源。
+ *   修法：**声明侧解析失败 ⇒ 立即 exit 1（代码/文件问题，非环境问题）**，不再降级为"少读一处仍判一致"。
+ *   （与上方 `parseMiss` 分支同旨：先把"读不到"和"真的没有"分开，再谈一致性。）
+ */
+const declaredBroken = sources.filter((s) => s.error)
+if (declaredBroken.length) {
+  console.log(`❌ 声明侧解析失败：${declaredBroken.map((s) => `${s.file}（${s.error}）`).join(', ')}`)
+  console.log('  · 常见成因：`package.json` 带 **UTF-8 BOM**（某些写入方式默认加 BOM）⇒ JSON.parse 失败。')
+  console.log('  · 为何不判环境跳过：读不到声明值 ≠ 声明值一致；降级判定会把「三处」悄悄变成两处仍报 PASS。')
   process.exit(1)
 }
 

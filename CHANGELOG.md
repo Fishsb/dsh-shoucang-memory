@@ -2408,6 +2408,11 @@
 - **panel client 迁移到 slot 契约（2026-09-05，解冻前置）**：client.js 注入声明加 `'slots'`，入口从直插侧栏 footArea DOM 改为注册 `sidebar.footer.action` 插槽按钮（无 slots 环境保留直插兜底）；host+client 已注入运行（ef85e372），构建产物 lib/ 重建
 
 ### Fixed
+- **🔴 `check-version-pin` 自身假绿修复：声明侧解析失败时它静默降级为「两处一致仍报 PASS」（2026-09-20 round 10）**：本轮改 profile pin 时踩到，根因与修法一并记档。
+  · **病症**：profile `package.json` 被写入 **UTF-8 BOM**（一次改 pin 的副作用）⇒ `JSON.parse` 抛 `Unexpected token ''` ⇒ 声明侧 `shas: []` 且带 `error` **被记进 sources**，但判定只取 `all = flatMap(shas)` ⇒ **声明侧整侧被静默排除**，剩 lock + `.modules.yaml` 两处一致 ⇒ 打印 **「PASS（三处一致 @ f802ab77）」**。**「三处」实际只读了两处，而失读的恰是防"声明领先于 lock"的那一处在报错里被吞掉** —— 本仓反复剿的形态：**把"坏掉了"显示成"没那么坏"**。
+  · **修**：声明侧解析失败 ⇒ **立即 exit 1**（文件/代码问题，非环境问题），不再降级判定；`--selftest` 增 **2 例**（带 BOM 的 JSON 必须解析失败 + 剥 BOM 后可解析 ⇒ 证明修法是「去 BOM」而非「放弃解析」）。
+  · **修后如实报真况**（不再假 PASS）：`声明 8ebf797c / 锁定 f802ab77 / 实装 f802ab77` ⇒ **⚠ 三处不一致**（与 `AGENTS.md` 记的"每次推送后声明领先 lock"结构性现象一致；报告态 exit 0，`--strict` 才红）。
+  · 同时**自愈**：已剥离 profile `package.json` 的 BOM（7B 0A 20 20），pin 值本身正确。
 - **修两处「注释与实现不符」（2026-09-20 round 9 · `essence-release.ts`）**：本件头注原写「只做候选与计划这一半，**不做不可逆释放**」并列出「三件保护**尚未实现**」；`applyRelease` 上方又写「**语义门仍未实现**」。**三件保护此后均已落地**（同日 S-P5c 系列）：语义复核（`buildSemanticReviewRequest`/`parseSemanticReview`/`semanticApprovedRows`/`intersectApprovals`，真机跑通「字面 49 → 语义通过 19」）· 归档可回滚（`applyRelease` 复用 `forgetops` archive+stub）· 未自足者零释放。
   · ⇒ 两处注释改为**描述现状**（遵 `[原则] 契约须描述现状`）：本件**具备**完整释放能力，唯一"关"的是**自动执行开关**（`releaseAuto` 默认 `false`），那是**接线决策**（待波动收敛到 Jaccard ≥ 0.8），**不是"能力未实现"**。
   · ⚠ **这处注释漂移的代价是可指的**：`S-P5c-执行侧` 的登记**照抄了它**（写「语义门未实现」）并长期挂在待办表上 ⇒ 注释与实现不符会让后来人据注释做出**错误决策**。⇒ 纪律重申：**改实现后必须同批改注释**。
