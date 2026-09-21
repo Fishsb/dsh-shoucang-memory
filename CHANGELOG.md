@@ -3185,6 +3185,31 @@
   · **新增门禁 `scripts/check-write-receipts.mjs`**（登记 `check-runner`，**175 → 177**）：① 每个写载体所在文件必须有 `write.*` 回执 · ② 同 type 下 target **字面量**语义单一 · **②″ 运行期**（扫真库跨档台账）target 形态不得混用（`.md` 尾 vs 库标识尾）· ③ 每条回执带 `attempted` + `written`。
     ⚠ **②″ 的由来（先红自证抓到的判据盲区，值得记档）**：把 `write.profile` 改成 `write.ingest` **制造真矛盾**后，② **不翻红** —— 因为两处 `target` 都是**表达式**，静态看不到运行期取值。⇒ 补 **②″ 运行期判据**（扫真库：已落库的取值是事实），并为其加 `--kroot` 覆盖口使**可先红自证**：注入矛盾行 ⇒ **exit 1**（`write.test 文件名 1 行 + 库标识 1 行`）；真库 ⇒ 绿（`write.consolidate` 文件名 65/0 · `write.ingest` 库标识 537/0）。**静态抓不到的形态必须由运行期判据兜 —— 本门自身即该通例的实例。**
 
+- **MCL 幂等闸竞态（E-05）真机修复：同一轮判定被执行两次 —— 实测 1859 组 / 1655 会话 / 3997 次多跑，且当日仍在发生**（2026-09-21 · 取证见 `docs/OPEN-ITEMS.md` §0q）
+  · **竞态在哪**：`decideTurn` 的幂等闸原为 `if (st.channel) return none`，而 `st.channel` 直到**函数尾部**才赋值 ——
+    中间隔着**两个 await**（融合召回 + 语义相似度）⇒ 两条入口（`session/event` 的**早判** fire-and-forget /
+    `agent/pre-step` 的 `if (!st.channel)`）**同时越过**闸门（JS 单线程只在 await 处让出 ⇒ check-then-act 跨 await 即非原子）。
+  · **真机判据**：「同 sid + 同 `sim` + 时间 ≤2s」= 同一次计算跑两次。**这推翻了方案档旧记载「窗口存在但真机未撞上」**——
+    实测 **1859 组 / 3997 次多跑**，按日分布自 09-13 起持续，**直到当日（09-21）923 次仍在发生**
+    （最近一次在最新台账行前 10 分钟）⇒ 现行缺陷，非历史遗迹。⚠ 判据设计也有教训：初版用「同 `(sid,step)` 多行」
+    **不具区分力**（`step` 按轮重置，长会话每轮都有 step=1），改用时间间隔才把信号分离出来。
+  · **真危害 = 0（如实标注）**：**双注入 0 组** —— 被 `SupplyLedger` 增量台账兜住（后到者 `freshRows=0`）。
+    代价是**每次多跑一遍融合召回 + 嵌入相似度**与**计数器失真**（`counters.slow++` 等 +2 ⇒ `/mcl/status` 与审计计数偏高）。
+  · **修法**：幂等闸改「**同址检查 + 置位**」——`if (st.channel || st.deciding) return none; st.deciding = true`；
+    判定主体抽到 `decideTurnInner`，`finally` 释放占位（异常/提前 return 也释放，不会把会话永久锁死）。
+    ✅ 顺带订正一条**误标**：`src/mcl.ts` **不是冻结件** —— 实测 `check-module-growth` 冻结名单仅 3 件
+    （`styles.js`/`body.js`/`scheduler.ts`），该门口径是**代码行数**，mcl.ts 实测 **456 < 600**（物理 682 行里 226 行注释）
+    ⇒ **增行不触发棘轮**，此前「改冻结件须抬基线（R3）」的表述不成立。
+  · **判据**：新增 `scripts/test-mcl-race.mjs`（**9 条**，登记 `CHECKS` 197→**198**）—— 主判据是**同步连调两次 `decideTurn`**
+    （第二次调用必然落在第一次首个 await 之前）⇒ **先红确定性**（修复前实得 `slow=2`）；端到端触发**复现不了**竞态
+    （实测修复前也 PASS，微任务时序使然），故只作防回归。`check-installed-features` 增 1 条标记（114→**115**，纯 ASCII needle）。
+  · **回归**：`test-mcl.mjs` **47 PASS / 0 FAIL** · typecheck 0 错 · build OK · `check-arch-sync` / `check-module-growth` /
+    `audit-fnspan`（>400 行函数 0）/ `audit-wiring`（违规 0）/ `audit-architecture` 全 PASS。
+  · **全量套件实况（不隐）**：`check-runner` **195 pass · 0 skip · 3 fail** —— 两红为**既有**（`inject-baseline-diff`
+    活库自变 · `eval-gate` 活模型非确定性），第三红 `check-record-parity`（`notes/lessons.md` 影子库投影 119384B vs
+    md 119688B，差 304B）属**活库写入期分歧**：该门**只 import node 内建**（`fs`/`os`/`path`/`url`）、**零 `mcl` 引用**
+    ⇒ 与本次改动**构造无关**（真库 `lessons.md` 的 mtime 落在本次会话期间）。**留待单独归因，未在此处顺手改。**
+
 ### Added
 - **可配置评估通道「面板化 + 可设置模型」（2026-09-21 · ACT-295 · 用户指令「面板里按需开，并且调整为可设置模型，模型设置参考 DSH 输入框的模型选项卡，其他几个项目也有同样的设置模块」）**：把 M1–M4 只有后端的那条通道**开出面板写着面**，并把仓内**三套各写一份**的模型下拉收敛成**一个共享件**。
   · **面板里按需开**：参数页「③ 模型与向量」新增**评估通道卡**（`src-client/panes-eval.js`，单独成件——`panes-toggles.js` 实测 568 行，而 `check-module-growth` 的冻结阈是 600，整块塞进去必越线，抬基线属 R3）。含 `evalEnabled` 开关 · 模型 · 端点 · 档位 · **出网许可**（与开关分离的第二项授权）· 连通性测试。此前**用户只能手写 `~/.dsh/suite/scheduler.json`**，且观测页那句「到「参数调节」开启 evalEnabled」**指向一个并不存在的控件**（本轮补齐）。

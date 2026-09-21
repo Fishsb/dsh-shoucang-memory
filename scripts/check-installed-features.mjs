@@ -118,6 +118,8 @@ const HOST_FEATURES = [
   ['深睡档位真进 spawn（withEffort 调用点）', 'lib/deepsleep-run.js', 'withEffort'],
   ['宿主模型目录含档位富化（createLlmCatalog）', 'lib/llm-catalog.js', 'createLlmCatalog'],
   ['任务归类纯函数（classifySegment）', 'lib/distill-agent.js', 'classifySegment'],
+  // E-05（2026-09-21）：装上去的那份带着**幂等闸原子占位**（判据 `test-mcl-race.mjs` 9 条守行为；此处守部署面）。
+  ['MCL 幂等闸原子占位（E-05 判定在飞标志）', 'lib/mcl.js', 'st.deciding'],
   ['S-P3 段级流程状态读口（readSegFlowState）', 'lib/distill-watermark.js', 'readSegFlowState'],
   ['S-P4 自检节拍持久判据（dueSelfCheck）', 'lib/trigger-plan.js', 'dueSelfCheck'],
   ['S-P2b 探测域配置单一事实源（probeConfigSchema）', 'lib/probe-config.js', 'probeConfigSchema'],

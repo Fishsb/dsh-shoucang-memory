@@ -262,6 +262,10 @@ const CHECKS = [
   ['scripts/test-forgetops.mjs'],
   ['scripts/test-treeops-split.mjs'],
   ['scripts/test-mcl.mjs'],
+  // E-05（2026-09-21）：MCL 幂等闸**原子性**回归 —— 主判据是**同步连调两次 `decideTurn`**
+  //   （第二次必然落在第一次的首个 await 之前）⇒ 闸门若不原子则必判两次，**先红确定性**。
+  //   端到端触发复现不了竞态（修复前也 PASS，微任务时序使然），故只作防回归。
+  ['scripts/test-mcl-race.mjs'],
   ['scripts/test-deepsleep-verdict.mjs'],
   // 深睡层接线契约（P1 一/二期拆分后的行为安全网）：typecheck 只证明类型对，
   //   证明不了「东西还在、还跑得起来」。本件用全 mock ctx 装配 createDeepSleep，

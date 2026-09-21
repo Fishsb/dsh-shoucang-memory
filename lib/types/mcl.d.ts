@@ -80,6 +80,9 @@ interface SessMcl {
     materialStep?: number;
     /** S4/D1（2026-09-14）：**连续零增益计数** —— 材料连投却始终未被引用即"线索变弱"，达阈值出换向信号 */
     zeroGain?: number;
+    /** **E-05（2026-09-21）判定在飞标志** —— 与 `channel` 合成**原子幂等闸**（`decideTurn` 头，
+     *  检查与置位之间无 await）。缺了它，两条入口会在两个 await 之间同时越过闸门 ⇒ 同一轮判两次。 */
+    deciding?: boolean;
 }
 /** 消息工厂（DSH 官方 `createUserMessage` 动态加载；宿主/装配副本可解析，仓内无该包故不入静态 import → 手构兜底） */
 type AnyMsg = {

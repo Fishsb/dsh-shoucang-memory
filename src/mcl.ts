@@ -114,6 +114,9 @@ interface SessMcl {
   materialStep?: number
   /** S4/D1（2026-09-14）：**连续零增益计数** —— 材料连投却始终未被引用即"线索变弱"，达阈值出换向信号 */
   zeroGain?: number
+  /** **E-05（2026-09-21）判定在飞标志** —— 与 `channel` 合成**原子幂等闸**（`decideTurn` 头，
+   *  检查与置位之间无 await）。缺了它，两条入口会在两个 await 之间同时越过闸门 ⇒ 同一轮判两次。 */
+  deciding?: boolean
 }
 
 /** 消息工厂（DSH 官方 `createUserMessage` 动态加载；宿主/装配副本可解析，仓内无该包故不入静态 import → 手构兜底） */
@@ -490,7 +493,22 @@ export async function decideTurn(d: DecideDeps, sid: string, step: number): Prom
   let st = d.state.get(sid)
   if (!st) { st = { nudges: 0, topics: [], signals: [], channel: '', sim: 0, materialText: '' }; d.state.set(sid, st) }
   const none: DecideResult = { decided: false, channel: '', material: null, fresh: null, dupSkipped: 0, hit: '', st }
-  if (st.channel) return none // 本轮已判定 ⇒ 幂等
+  /* ★**E-05 修复（2026-09-21）**：幂等闸必须「**同址检查 + 置位**」，中间**不得有 await**。
+   *   旧写法 `if (st.channel) return none` 与 `st.channel = fast ? … : …`（本函数尾部）之间隔着**两个 await**
+   *   （`:497` 融合召回 + `:504` 语义相似度）⇒ 两条入口可**同时越过**闸门：
+   *     ① `session/event` 的 `user/message` **早判**（`:408` fire-and-forget `void`，step 硬编码 1）
+   *     ② `agent/pre-step`（`:601` 的 `if (!st.channel)` 同样跨 await）
+   *   **真机实测（推翻「未撞上」旧记）**：1859 组重复判定 / 1655 个 sid / **3997 次多跑**，且**当日仍在发生**
+   *   —— 判据「同 sid + 同 sim + ≤2s」，取证件 `_memory/audit/e05-race-probe4.mjs`；危害被 `SupplyLedger`
+   *   增量台账兜住（**双注入 0 组**），代价是每次多跑一遍召回+嵌入与计数器失真（详见 `docs/OPEN-ITEMS.md` §0q）。
+   *   JS 单线程 ⇒ 检查与置位之间无 await 即**原子**；`finally` 保证异常/提前 return 也释放占位。 */
+  if (st.channel || st.deciding) return none
+  st.deciding = true
+  try { return await decideTurnInner(d, sid, step, st, none) } finally { st.deciding = false }
+}
+
+/** `decideTurn` 的**判定主体**（自其抽出：只为让**幂等闸**留在无 await 的外层，见 `decideTurn` 的 E-05 注）。 */
+async function decideTurnInner(d: DecideDeps, sid: string, step: number, st: SessMcl, none: DecideResult): Promise<DecideResult> {
   const text = d.taskText.get(sid) || ''
   if (!text) return none
   const short = sid.replace(/^session-/, '').slice(0, 8)
