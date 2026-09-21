@@ -177,6 +177,25 @@ console.log('== I. 影子写与对账（真夹具库：record-shadow）==')
   writeFileSync(join(root2, '.records', 'records.jsonl'), '{坏行\n', 'utf8')
   ok(typeof H.loadStore(root2).error === 'string', '影子库损坏 ⇒ 返回 error 而非抛异常')
   ok(H.parityOf(root2, ['MEMORY.md'])[0].ok === false, '影子库损坏 ⇒ 对账 FAIL（不静默通过）')
+
+  /* I5 **镜像失败分类**（纯函数 · 2026-09-21 修「失步不可观测」）
+   *   判因：`distill-write` 的整趟镜像原为 `catch{空吞}` **且丢弃返回值** ⇒
+   *     失败不可观测，唯一症状是后来某次对账红，而"库失步"与"机制坏了"在账上不可分辨。
+   *   ⚠ 最关键的形状是 **`ok:true` 但 `roundTrip:false`** —— 原实现只吞不报的正是这一格。 */
+  ok(H.mirrorFailuresOf([]).length === 0, 'I5a 全成功 ⇒ 失败清单为空（不凑数）')
+  ok(H.mirrorFailuresOf([{ file: 'a', ok: true, records: 1, bytes: 1, roundTrip: true }]).length === 0, 'I5b ok+roundTrip ⇒ 不算失败')
+  const f1 = H.mirrorFailuresOf([{ file: 'a', ok: false, records: 0, bytes: 0, roundTrip: false, error: 'boom' }])
+  ok(f1.length === 1 && f1[0].includes('a') && f1[0].includes('boom'), `I5c ok:false ⇒ 报出（${f1[0]}）`)
+  const f2 = H.mirrorFailuresOf([{ file: 'b', ok: true, records: 3, bytes: 9, roundTrip: false }])
+  ok(f2.length === 1 && f2[0].includes('往返不一致'), `I5d **ok:true 但往返不一致也必须报**（${f2[0]}）`)
+  ok(H.mirrorFailuresOf([{ file: 'x', ok: true, records: 0, bytes: 0, roundTrip: true }, { file: 'y', ok: false, records: 0, bytes: 0, roundTrip: true, error: 'md 缺席' }]).length === 1, 'I5e 混合批次只报坏的那件')
+  /* I5f/I5g **消费面**（「接线≠抵达」）：光有分类函数不算修好 —— 必须证明整趟镜像**真调了它**，
+   *   且旧的「空吞 + 丢弃返回值」写法**确已消失**（防回退）。 */
+  {
+    const dw = readFileSync(join(repoRoot, 'lib', 'distill-write.js'), 'utf8')
+    ok(dw.includes('mirrorFailuresOf'), 'I5f distill-write 整趟镜像**真用** mirrorFailuresOf（接线≠抵达）')
+    ok(!/catch\s*\{\s*\/\*\s*镜像失败不影响主流程\s*\*\/\s*\}/.test(dw), 'I5g 旧的空吞写法已消失（防回退）')
+  }
 }
 
 console.log('== K. M3 写时自证计数（落盘可事后核 · 分歧必须可数）==')

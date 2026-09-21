@@ -17,7 +17,7 @@ import { thresholdValue } from './criteria.js'
 // 待认领队列（单一实现）：卡命名与「未落地知识回退」共用同一函数（本件只转发导出，勿再写第二份）
 import { knowledgeDeferFileOf } from './pointer-deficits.js'
 import { atomicWriteFile } from './section-rewrite.js'
-import { carrierFiles, mirrorAll, mirrorFile } from './record-shadow.js'
+import { carrierFiles, mirrorAll, mirrorFailuresOf, mirrorFile } from './record-shadow.js'
 import { commitRingChannels } from './ring-commit.js'
 // B（2026-09-17 圆桌会议册一）：内容级凭据准入**单一实现**（与 gate 内联表同源，改一处须同步）。
 import { findSecrets } from './secret-redact.js'
@@ -546,7 +546,19 @@ const writeDispatch = async (dep: WriteDeps, sid: string, out: any, route: strin
     //   与深睡链同一形状：**一趟末尾单点覆盖**（频率=蒸馏频率，代价可接受）。
     //   ⚠ 上方两处窄镜像**保留**：中途异常中断时它们已给出**部分**覆盖（端到端覆盖的兜底在下行整趟镜像）。
     if (dep.config.storeMode === 'dual') {
-      try { mirrorAll(resolved.root, new Date().toISOString(), carrierFiles(resolved.root)) } catch { /* 镜像失败不影响主流程 */ }
+      /* ⚠ **失败必须留痕**（2026-09-21 修）：原实现是 `catch{空吞}`，**且 `mirrorAll` 的返回值被整个丢弃**
+       *   ⇒ 镜像失败 / 往返不一致**不可观测** —— 唯一症状是**后来某次对账红**，而账面指向"库失步"，
+       *   与"机制坏了"**不可分辨**。实测踩到：`notes/lessons.md` 少 2 张教训卡（6 行），
+       *   同时镜像自证 `writes:6709 / diverged:0`、往返闸全绿 —— 从账上判不出是哪一种。
+       *   本修**不改镜像语义、不改主流程成败**（仍"零抛出、不影响主写入链路"），只把失败报出来。 */
+      try {
+        const res = mirrorAll(resolved.root, new Date().toISOString(), carrierFiles(resolved.root))
+        const bad = mirrorFailuresOf(res)
+        if (bad.length) {
+          dep.infra.log(`record-shadow 整趟镜像异常 ${bad.length}/${res.length} 件：${bad.slice(0, 3).join(' | ')}`)
+          dep.infra.audit({ sid, kind: 'record-shadow-fail', phase: 'mirror', failed: bad.length, total: res.length, items: bad.slice(0, 8) })
+        }
+      } catch (e) { dep.infra.log(`record-shadow 整趟镜像抛错：${String((e as Error).message).slice(0, 120)}`) }
     }
     dep.infra.audit({ sid, kind: 'distill-run', route, lib: resolved.library, wlSource: source, added, rejected, failed: undigested, undigested, needsAnchor, pairedSkipped, ...(items.length ? { failedItems: items } : {}) })
     return { added, rejected, failed: undigested, undigested, needsAnchor, pairedSkipped, items, targetLib: resolved.library }

@@ -68,20 +68,22 @@
 > **性质**：与前三条**同族、方向相反** —— §0n/§0p/§0q 是"判据没判到它该判的"，本条是**判据要求了一件实现根本不做的事**：
 > `check-record-parity`（P4 事实源切换的常驻门禁）要求 `notes/*.md` 也逐字节对账，而该门注释自承
 > 「2026-09-13：切源前置要求**详情载体也有记录表示**，故往返/对账闸一并覆盖」——**意图是对的，实现漏了**。
-> **态**：**已定位到行号，未修**。两个候选修法都要**写记忆库的 `.records/`**（真源数据）⇒ 按 **R2 ③** 不可自主施工。
+> **态**：**已定位 → 已修 + 存量已对齐（2026-09-21）**。⚠ **本条初版的根因两度写错，据实撤回**（见下「根因」行）；
+> 真缺陷是**失步不可观测**，不是"镜像缺失" —— 修法已落，且**存量缺口已用仓内自带工具对齐、对账闸已转绿**。
 
 | 面 | 事实（逐条实测 · 2026-09-21） |
 |---|---|
 | **现象** | 套件第三红 `check-record-parity`：`notes/lessons.md 对账 md 119688B / store 119384B` |
 | **差在哪（精确到行）** | 差分探针 `_memory/audit/parity-diff{,2}.mjs` ⇒ **md 独有非空行恰为 6 行 = 2 张教训卡**（每张 3 行 `目标/根因/不适用`），其余 **2321 行逐行一致**。缺的两张正是**本会话产出的教训**：「回归基线须是冻结样本」与「并发重复执行的判据须具区分力」。 |
 | **⚠ 口径误标（同型第二处）** | 该门字段名 `mdBytes`/`storeBytes` 实为 **`raw.length`/`rendered.length` ⇒ 字符数，不是字节**（真库 `notes/lessons.md` **字节 281287** / 字符 119688；中文 3 字节/字符）。⇒ 报"119688B"会让人误以为文件被截断。**与 `check-module-growth --print` 把"代码行"写成"物理行"是同型缺陷。** |
-| **根因（读码到行）** | `mirrorShadow`（`src/distill-write.ts:117-123`，**增量**镜像单文件）**全仓仅 2 个调用点**：`:188`（USER/AGENT 画像行）与 `:506`（MEMORY.md 索引行）。**`notes/*.md` 的 `appends` 通道（追加「- 根因／- 不适用」就在同文件 `:365-368`）零镜像调用**；`notes/*` 只靠**批量** `mirrorAll`：`deepsleep-run.ts:861`（深睡收尾）与 `distill-write.ts:549`（蒸馏收尾）。⇒ **每次 append 到下一次批量镜像之间，store 必然落后 md**。 |
-| **时间戳佐证** | `.records/records.jsonl` mtime `02:25:19` **早于** `notes/lessons.md` mtime `02:25:20` ⇒ 最近一次事件是"镜像在前、append 在后"，与该结构完全吻合。 |
-| **排除项（诚实标注）** | ① 该门注释曾把抖动源归为 `test-forgetops.mjs`：本件实核，它用 `mkdtempSync(tmpdir())` 作业、**不读真库** ⇒「夹具隔离」成立，**不是**本因；② 两次连跑数值**稳定为差 304 字符**（非瞬时漂移）⇒ 也不是"并发写竞态"。 |
-| **为什么不能自行修** | 两个候选修法都写记忆库 `.records/records.jsonl` ⇒ **R2 ③「不改真源数据」不满足**，须具名授权。 |
-| **修法 A（推荐 · 让实现追上判据）** | 在 `notes/*` append 成功后**复用既有 `mirrorShadow(dep, root, file)`**（`file` = 本次所写那个 notes 文件）。理由：这正是门注释声明的 P4 意图（详情载体也要有记录表示）；复用既有函数 ⇒ **零新语义**；`storeMode !== 'dual'` 时自动不动作 ⇒ **缺省零行为变化**。**判据**：`check-record-parity` 转绿 + 新增"append 后立即对账"断言（先红→后绿）。 |
-| **修法 B（收窄判据 · 承认窗口）** | 把 `notes/*.md` 对账改为**报告态/允许待镜像窗口**，并在门里显式打印"待下次 `mirrorAll`"。⚠ **弱**：等于承认"详情载体没有记录表示"，与切源前置冲突，且会把真漂移一并放过（本仓明令「**未证实的容错＝掩盖真漂移**」）。 |
-| **复验命令** | `node scripts/check-record-parity.mjs`（现 `notes/lessons.md` 红）· `node _memory/audit/parity-diff2.mjs`（打印缺失的那 6 行） |
+| **根因（读码 + 台账双证）** | **镜像链本身是好的**：`src/distill-write.ts:542-550` 的「**一趟末尾统一镜像**」正是 2026-09-13 补的覆盖修复 —— 其源码注释自陈「原实现只在两处镜像…而 `appends` 循环写的 `notes/*.md` 与 `notes/INDEX.md` 的更新**无人镜像** ⇒ 最常见 notes 追加会让影子库失步」；`storeMode` 运行态实测 `dual`（开关是活的）；`mirrorFile` 走的 `parseMdFile` 用的就是往返闸同款 `parseRecords`（**同一实现，非两套**）。⇒ **真缺陷是「失步不可观测」**：该处原为 `catch{空吞}` **且 `mirrorAll` 的返回值被整个丢弃** ⇒ 镜像失败/往返不一致**不留任何痕迹**，唯一症状是**后来某次对账红**，而**"库失步"与"机制坏了"在账上不可分辨**（实测两者同时成立：少 6 行 + 自证 `writes:6709/diverged:0` + 往返闸全绿）。 |
+| **台账佐证（谁写的这两张卡）** | `{"type":"write.ingest-file","channel":"appends+newIndex","target":"notes/lessons.md","verdict":"written","attempted":2,"written":2,"at":"2026-09-21T18:24:10.115Z"}` ⇒ 正是经**蒸馏路径**写的 2 条（与差分出的"2 张卡"数量吻合）。 |
+| **⚠ 我两度写错的根因（撤回留档）** | ① 初版称「`notes/*` 的 appends **零镜像调用** ⇒ 固有窗口」—— **错**：run-end `mirrorAll` 就是覆盖它的，且这正是 2026-09-13 补过的修复；② 二版怀疑「后到的 `ring-commit#saveStoreRecords` 用陈旧快照整片覆盖掉了」—— **也错**：`commitRingChannels` 的 `loadStore`（`:116`）与 `saveStoreRecords`（`:231`）在**同一个同步函数**内，**没有陈旧快照窗口**。两次都是**读码不完整就下结论**（与 §0q 那次同型）。 |
+| **排除项（诚实标注）** | ① 该门注释曾把抖动源归为 `test-forgetops.mjs`：实核其用 `mkdtempSync(tmpdir())` 作业、**不读真库** ⇒「夹具隔离」成立，不是本因；② 两次连跑差值**稳定为 304 字符**（非瞬时漂移）⇒ 也不是"并发写竞态"。 |
+| **修法（已实施）** | **不改镜像链**（它是对的），**只把失败变成可观测**：新增纯函数 `record-shadow#mirrorFailuresOf(res)`（**可机检**，`ok:false` 与 **`ok:true` 但 `roundTrip:false`** 两格都报）+ 在整趟镜像处逐条 `log` 与一条 `record-shadow-fail` 审计行。**不改镜像语义、不改主流程成败**（仍零抛出、不影响主写入链路）。 |
+| **存量对齐（已做 · 写记忆库）** | `node scripts/record-sync.mjs --import`（**仓内自带同步器**，非新造；`md → store` 是双写期被认可的单一方向：「只镜像、绝不回写 md」）⇒ 11 载体**全部往返逐字节一致**（`notes/lessons.md` **2327 记录 / 119688B**），对账闸**转绿**：`PASS（事实源切换前置条件成立）`。⚠ 教训：`record-sync` **缺省是 `--check`（只读）**，不加 `--import` 不会写 —— 我第一遍就栽在这里并据此得出了错误结论。 |
+| **判据** | `test-record-store.mjs` 增 **I5a–I5g**（含**消费面**断言：`distill-write` 真用该分类 + 旧空吞写法已消失，防回退）⇒ **84 pass / 0 fail**。 |
+| **复验命令** | `node scripts/check-record-parity.mjs`（现 **PASS**）· `node scripts/test-record-store.mjs`（84 条）· `node _memory/audit/parity-diff2.mjs`（差异应为 0 行） |
 
 ---
 

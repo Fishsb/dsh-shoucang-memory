@@ -3185,6 +3185,23 @@
   · **新增门禁 `scripts/check-write-receipts.mjs`**（登记 `check-runner`，**175 → 177**）：① 每个写载体所在文件必须有 `write.*` 回执 · ② 同 type 下 target **字面量**语义单一 · **②″ 运行期**（扫真库跨档台账）target 形态不得混用（`.md` 尾 vs 库标识尾）· ③ 每条回执带 `attempted` + `written`。
     ⚠ **②″ 的由来（先红自证抓到的判据盲区，值得记档）**：把 `write.profile` 改成 `write.ingest` **制造真矛盾**后，② **不翻红** —— 因为两处 `target` 都是**表达式**，静态看不到运行期取值。⇒ 补 **②″ 运行期判据**（扫真库：已落库的取值是事实），并为其加 `--kroot` 覆盖口使**可先红自证**：注入矛盾行 ⇒ **exit 1**（`write.test 文件名 1 行 + 库标识 1 行`）；真库 ⇒ 绿（`write.consolidate` 文件名 65/0 · `write.ingest` 库标识 537/0）。**静态抓不到的形态必须由运行期判据兜 —— 本门自身即该通例的实例。**
 
+- **影子库失步「不可观测」修复 + 存量对齐（`check-record-parity` 第三红已收口）**（2026-09-21 · 归因见 `docs/OPEN-ITEMS.md` §0r）
+  · **现象**：对账闸红 —— `notes/lessons.md` 的影子库投影比 md 少 **6 行 = 2 张教训卡**（其余 2321 行**逐行一致**）。
+  · **根因（读码 + 台账双证）**：**镜像链本身是好的** —— `distill-write.ts:542-550` 的「一趟末尾统一镜像」正是
+    2026-09-13 补的覆盖修复（源码注释自陈"原实现 notes 追加无人镜像"），`storeMode=dual` 运行态实测生效；
+    `mirrorFile` 走的 `parseMdFile` 用的就是往返闸同款 `parseRecords`。**坏的是失败不可观测**：
+    该处原为 `catch{空吞}` **且 `mirrorAll` 的返回值被整个丢弃** ⇒ 镜像失败/往返不一致**没有任何痕迹**，
+    唯一症状是**后来某次对账红**，而**"库失步"与"机制坏了"在账上不可分辨**（实测：`notes/lessons.md` 少 6 行，
+    同时镜像自证 `writes:6709 / diverged:0`、往返闸全绿 —— 两者同时成立）。
+  · **修**：新增纯函数 `record-shadow#mirrorFailuresOf(res)`（**可机检**）+ 在整趟镜像处**逐条留痕**
+    （`log` + 一条 `record-shadow-fail` 审计行）；**不改镜像语义、不改主流程成败**（仍零抛出、不影响主写入链路）。
+  · **存量对齐**：跑仓内自带 `node scripts/record-sync.mjs --import` ⇒ 11 个载体**全部往返逐字节一致**
+    （`notes/lessons.md` 2327 记录 / 119688B），对账闸**转绿**：`PASS（事实源切换前置条件成立）`。
+  · **判据**：`test-record-store.mjs` 增 **I5a–I5g**（含**消费面**断言：`distill-write` 真用该分类 + 旧空吞写法已消失，
+    防回退）⇒ **84 pass / 0 fail**。
+  · ⚠ **同一轮我连踩三次同一个坑（值得记）**：注释里写了 `catch { /* 空吞 */ }` ⇒ **其中的注释终止符提前闭合了外层注释块**，
+    造成 TS1005/TS1127 与 `unterminated template literal`。**注释里引用危险字面量必须拆词** —— 与仓内既有
+    「注释里引用被禁字面量须拆词」（`test-fold-state` 那次）**是同型缺陷，且这次是我自己犯的**。
 - **MCL 幂等闸竞态（E-05）真机修复：同一轮判定被执行两次 —— 实测 1859 组 / 1655 会话 / 3997 次多跑，且当日仍在发生**（2026-09-21 · 取证见 `docs/OPEN-ITEMS.md` §0q）
   · **竞态在哪**：`decideTurn` 的幂等闸原为 `if (st.channel) return none`，而 `st.channel` 直到**函数尾部**才赋值 ——
     中间隔着**两个 await**（融合召回 + 语义相似度）⇒ 两条入口（`session/event` 的**早判** fire-and-forget /

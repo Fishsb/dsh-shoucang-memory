@@ -144,6 +144,8 @@ const HOST_FEATURES = [
   ['环事件流（重放 + 对账）', 'lib/ring-events.js', 'reconcileRing'],
   ['Record 事实源（双时间戳 validTo）', 'lib/record-store.js', 'validTo'],
   ['影子写与对账（saveStoreRecords）', 'lib/record-shadow.js', 'saveStoreRecords'],
+  // §0r（2026-09-21）：镜像失败**可观测**（原为 `catch{空吞}` + 丢弃返回值 ⇒ 失步与"机制坏了"不可分辨）。
+  ['影子镜像失败分类（mirrorFailuresOf）', 'lib/record-shadow.js', 'mirrorFailuresOf'],
   ['读侧候选集（时态剔除 buildCandidates）', 'lib/supply-assembly.js', 'buildCandidates'],
   ['composition root（createComposition）', 'lib/composition.js', 'createComposition'],
   ['P2b 材料块计数（sysBlockCalls）', 'lib/mcl.js', 'sysBlockCalls'],
