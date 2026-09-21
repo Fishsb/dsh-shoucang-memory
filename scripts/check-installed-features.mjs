@@ -120,6 +120,8 @@ const HOST_FEATURES = [
   ['任务归类纯函数（classifySegment）', 'lib/distill-agent.js', 'classifySegment'],
   // E-05（2026-09-21）：装上去的那份带着**幂等闸原子占位**（判据 `test-mcl-race.mjs` 9 条守行为；此处守部署面）。
   ['MCL 幂等闸原子占位（E-05 判定在飞标志）', 'lib/mcl.js', 'st.deciding'],
+  // M3a/M3b（2026-09-21 · 频率分离）：每步轻判定（零嵌入）+ 环内换向出口，单一实现。
+  ['MCL 每步轻判定（planStepJudgement · 零嵌入）', 'lib/mcl.js', 'planStepJudgement'],
   ['S-P3 段级流程状态读口（readSegFlowState）', 'lib/distill-watermark.js', 'readSegFlowState'],
   ['S-P4 自检节拍持久判据（dueSelfCheck）', 'lib/trigger-plan.js', 'dueSelfCheck'],
   ['S-P2b 探测域配置单一事实源（probeConfigSchema）', 'lib/probe-config.js', 'probeConfigSchema'],

@@ -325,5 +325,34 @@ const baseCfg = { enabled: true, familiarThreshold: 0.65, maxNudges: 1, budgetCh
   ok(t.includes('认知环·慢通道'), `Q1 **cap 晚到不得抹掉材料**（本机真机根因的回归闸；实测 ${t.length} 字符）`)
 }
 
+// ── 场景 M3（2026-09-21 · 频率分离）：**每步判定 / 注入仅首步 / 环内换向出口幂等** ──
+//   架构：完整判定（带嵌入、定通道）每轮一次 ⟷ 轻判定（零嵌入、折收益/换向）每步一次。
+//   判据对应方案档 §12-A-M3-2（判定每步 · 注入仅首步）与 A-M3-3（换向出口端到端 · 同轮不重复）。
+{
+  const audit = []
+  const { ctx, emit, fire } = mkCtx()
+  const mcl = registerMcl(ctx, { ...baseCfg, maxNudges: 3 }, { audit: (o) => audit.push(o), log: () => { /* */ } })
+  const sid = 'sess-m3-1'
+  const txt = '指针 分裂 结构 怎么搭树'
+  const noEcho = '好的，我先看看代码。' // 不回引主题词 ⇒ topicEcho=false ⇒ zeroGain 递增
+  emit('session/event', { id: sid }, { type: 'user/message', data: { source: { kind: 'user' }, content: [{ type: 'text', text: txt }] } })
+  // step1 注入；step2/3/4 每步都判（assistant 均不回引）
+  for (const step of [1, 2, 3, 4]) {
+    const msgs = step === 1 ? [userMsg(txt)] : [userMsg(txt), asstMsg(noEcho)]
+    await fire('agent/pre-step', { agent: { id: sid, session: { header: {} } }, messages: msgs, step }, async () => ({ kind: 'allow', messages: msgs }))
+  }
+  const judgeRows = audit.filter((r) => r.kind === 'mcl-step' && r.phase === 'judge')
+  const injectRows = audit.filter((r) => r.kind === 'mcl-step' && r.phase === 'inject')
+  const nudgeRows = audit.filter((r) => r.kind === 'mcl-step' && r.phase === 'compliance' && r.nudge === 1)
+  const switchRows = audit.filter((r) => r.kind === 'mcl-switch')
+  ok(judgeRows.length >= 4, `M3-1 **每步都有判定行**（judge 行 ${judgeRows.length} ≥ 4 步）`)
+  ok(injectRows.length === 1, `M3-2 **注入频率不动**（inject 行 ${injectRows.length} = 1，仅首步）`)
+  ok(judgeRows.every((r) => typeof r.note === 'string' && r.note.length > 0), 'M3-3 每条判定行都带原因（不得只报数不报因）')
+  ok(switchRows.length === 1, `M3-4 **环内换向出口有且仅一行**（mcl-switch ${switchRows.length}，期望 1）`)
+  if (switchRows.length) ok(Number(switchRows[0].zeroGain) >= 2, `M3-5 出口触发于 zeroGain 达阈（实测 ${switchRows[0].zeroGain} ≥ 2）`)
+  ok(nudgeRows.length <= 2, `M3-6 出过换向 ⇒ **不再对同源材料再引导**（nudge 行 ${nudgeRows.length} ≤ 2；原上限 3）`)
+  ok(mcl.status().steps === 4, `M3-7 主链未被打断（steps=${mcl.status().steps}）`)
+}
+
 console.log(`\n结果: ${pass} PASS / ${fail} FAIL`)
 process.exit(fail ? 1 : 0)

@@ -117,6 +117,13 @@ interface SessMcl {
   /** **E-05（2026-09-21）判定在飞标志** —— 与 `channel` 合成**原子幂等闸**（`decideTurn` 头，
    *  检查与置位之间无 await）。缺了它，两条入口会在两个 await 之间同时越过闸门 ⇒ 同一轮判两次。 */
   deciding?: boolean
+  /** **M3a（2026-09-21 · 频率分离）每步轻判定结果** —— 完整判定（定通道，含嵌入）每轮一次；
+   *  轻判定（折收益/判"线索是否变弱"，**零嵌入零召回**）每步一次。本字段存后者，供观测与出口用。 */
+  lastJudge?: { step: number; zeroGain: number; switchSource: boolean; topicEcho: boolean | null }
+  /** **M3b 换向出口幂等位**：同一轮只出一次 `mcl-switch`（否则每步都喊"该换向"＝噪音）。 */
+  switchEmitted?: boolean
+  /** **M3b 该源已停**：出过换向 ⇒ 不再对同一份材料出**再引导**（材料连续两轮未被回引 ⇒ 再劝是噪音）。 */
+  switchStop?: boolean
 }
 
 /** 消息工厂（DSH 官方 `createUserMessage` 动态加载；宿主/装配副本可解析，仓内无该包故不入静态 import → 手构兜底） */
@@ -246,6 +253,10 @@ function captureTaskText(
       st0.nudges = 0
       st0.sim = 0
       st0.lateLogged = false
+      // M3b（2026-09-21）：换向出口的**轮级**幂等位一并清 —— 新任务＝新线索，旧轮的"该离开该源"不该跨轮继承。
+      st0.switchEmitted = false
+      st0.switchStop = false
+      st0.lastJudge = undefined
     }
     pushTrace(d.counters, 'cap', sid, text.length)
   } catch { /* 捕获失败静默 */ }
@@ -489,6 +500,31 @@ export interface PreStepDeps {
 export interface DecideDeps { cfg: PreStepDeps['cfg']; counters: PreStepDeps['counters']; state: Map<string, SessMcl>; taskText: Map<string, string>; ledger: SupplyLedger; hooks: MclHooks; tools: PreStepDeps['tools'] }
 export interface DecideResult { decided: boolean; channel: '' | 'fast' | 'slow'; material: { text: string; topics: string[]; signals: string[][] } | null; fresh: RecallRow | null; dupSkipped: number; hit: string; st: SessMcl }
 
+/**
+ * **M3a/M3b（2026-09-21 · 频率分离）轻判定** —— 每步一次，**零 IO、零召回、零嵌入**（纯函数 · 可机检）。
+ *
+ * **架构判因（为什么不是"每步完整判定 + 成本护栏"）**：M3 要把判定频率提到每步，而**完整判定**
+ *   （`decideTurn`：融合召回 + 可选嵌入相似度）成本高 ⇒ 若把整条链提到每步，就得靠"每 K 步带嵌入"
+ *   之类的**护栏补丁**去救。正解是**分解频率**：
+ *     · **完整判定**（定通道 fast/slow，可带嵌入）：**每轮一次**（不变）
+ *     · **轻判定**（折收益、判"线索是否变弱"）：**每步一次**，只吃**已有状态** ⇒ 频率提高**零新开销**
+ *   ⇒ 高频的那一半被设计成廉价的，护栏项**从架构上消失**（不是被调小）。
+ *
+ * **判据复用**：`nextZeroGain` / `shouldSwitchSource` 一律取自 `recall-yield`（**不重造第二份**）。
+ * **边界**（照 `recall-yield:11-12`）：本件只出「是否离开**当前源**」的信号，**不决定换到哪**
+ *   （选行归 `ring-supply` / `recallIndex`）。
+ *
+ * @param topicEcho 上一步回复是否回引了材料主题词（**词面代理**，非"材料被用上"；口径见 mcl 审计 `topicEcho`）
+ * @param hasTopics 本轮是否**投过材料** —— 无材料（快通道/空主题）时不谈"离开该源"（否则会凭空产生换向）
+ * @param switchEmitted 本轮是否已出过换向出口（**幂等**：同一轮只喊一次）
+ */
+export function planStepJudgement(input: { topicEcho: boolean; zeroGain: number | undefined; hasTopics: boolean; switchEmitted: boolean }): { zeroGain: number; switchSource: boolean; emitSwitch: boolean; stopSource: boolean } {
+  const zeroGain = nextZeroGain(input.zeroGain, input.topicEcho)
+  const switchSource = input.hasTopics && shouldSwitchSource(zeroGain)
+  const emitSwitch = switchSource && !input.switchEmitted
+  return { zeroGain, switchSource, emitSwitch, stopSource: input.switchEmitted || switchSource }
+}
+
 export async function decideTurn(d: DecideDeps, sid: string, step: number): Promise<DecideResult> {
   let st = d.state.get(sid)
   if (!st) { st = { nudges: 0, topics: [], signals: [], channel: '', sim: 0, materialText: '' }; d.state.set(sid, st) }
@@ -615,25 +651,35 @@ export async function handlePreStep(payload: any, next: () => Promise<any>, dep:
         return decision
       }
 
+      /* M3a（2026-09-21 · 频率分离）：**每步都落一条轻判定行**（`phase:'judge'`），让"判定频率→每步"**可观测**。
+       *   本行**零 IO 零嵌入**（只记通道 + 本步处于哪个分支 + 已有收益态）——与完整判定
+       *   （`decideTurn`：融合召回 + 可选嵌入）**分层**：完整判定定通道（每轮一次），轻判定折收益（每步）。
+       *   ⇒ 频率提高**不产生任何新开销**（架构分解，而非给高频路径加"成本护栏"补丁）。
+       *   ⚠ 范围：**通过 late-step 门**的步才判（被该门挡掉的步属"不中途打断"的既有裁决，**不落行是对的**）。 */
+      const auditJudge = (echo: boolean | null, note: string): void => {
+        dep.hooks.audit({ kind: 'mcl-step', sid: sid.replace(/^session-/, '').slice(0, 8), step, channel: st.channel || 'none', phase: 'judge', echo, note, zeroGain: st.zeroGain ?? 0, switchSource: st.lastJudge?.switchSource === true, switchStop: st.switchStop === true, topicsN: st.topics.length })
+      }
       // ① 通道判定（**单一实现** = decideTurn；本次 pre-step 是**兜底触发**——消息到达时已可能判过）
       if (!st.channel) {
         const res = await decideTurn(dep, sid, step)
-        if (!res.decided || res.channel !== 'slow' || !res.material) return decision
+        if (!res.decided || res.channel !== 'slow' || !res.material) { auditJudge(null, 'decide-none'); return decision }
         // 消息面注入（system 段模式已在 decideTurn 内落账并返回 null material）
         await loadMsgFactory()
         const idx = messages.lastIndexOf(res.fresh)
         const entered = idx >= 0 ? messages.slice(0, idx + 1).concat([dep.tools.mkMsg(res.material.text)], messages.slice(idx + 1)) : messages.concat([dep.tools.mkMsg(res.material.text)])
         dep.hooks.audit({ kind: 'mcl-step', sid: sid.replace(/^session-/, '').slice(0, 8), step, channel: 'slow', phase: 'inject', sim: Number(res.st.sim.toFixed(3)), hit: res.hit, topics: res.material.topics, injected: res.material.text.length, dupSkipped: res.dupSkipped, nudge: 0 })
         dep.hooks.log(`mcl: ${sid.slice(0, 8)} 慢通道 → 首步注入 ${res.material.text.length} 字符 / ${res.material.topics.length} 主题（sim=${res.st.sim.toFixed(3)}）`)
+        auditJudge(null, 'inject-msg')
         return { ...decision, messages: entered }
       }
-      // ② 快通道：零材料零往返
-      if (st.channel === 'fast') return decision
+      // ② 快通道：零材料零往返 —— **仍落判定行**（结论：本步无可判材料 ⇒ 不出换向）
+      if (st.channel === 'fast') { auditJudge(null, 'fast'); return decision }
 
       // ③ 慢通道后续步：合规机检（是否引用注入材料的主题词）→ 有界再引导
       //   ★闸（2026-09-13 §70）：材料若**落在本步**（含"消息到达即判定"把材料放进 system 段的情形），
       //   本步**不判合规**——模型还没有机会使用它；否则会在第 1 步就误发再引导（实测 F3 回归）。
-      if (step <= Number(st.materialStep || 0)) return decision
+      //   ⚠ M3a：本步**仍落判定行**（`echo:null` + 原因）——否则"每步都有判定"不成立。
+      if (step <= Number(st.materialStep || 0)) { auditJudge(null, 'material-step'); return decision }
       /* ⚠ **`prevText` 取值方式修正（2026-09-20 · 真机实测缺陷）**：
        *   原实现从 `decision.messages` 里找 assistant 回复 —— 而**宿主的 `messages` 是"本步新认领的消息"**
        *   （`agent-loop` 的 `inbox.claim(target, turn)`；仓内 `OPEN-ITEMS §0d` 已实证该语义）。
@@ -671,24 +717,37 @@ export async function handlePreStep(payload: any, next: () => Promise<any>, dep:
         }
       }
       const topicEcho = dep.tools.judge(prevText, st.topics, st.signals)
-      st.zeroGain = nextZeroGain(st.zeroGain, topicEcho) // S4/D1：折收益（回引归零、未回引递增）
-      if (!topicEcho && st.nudges < dep.cfg.maxNudges && st.topics.length) {
+      /* **M3a/M3b（2026-09-21 · 频率分离）**：折收益与换向出口一律走**单一实现** `planStepJudgement`
+       *   （纯函数 · 复用 `recall-yield` 的 `nextZeroGain`/`shouldSwitchSource`，**不重造第二份**）。
+       *   `emitSwitch` **幂等**（同一轮只喊一次，否则每步都喊＝噪音）；出过换向 ⇒ `switchStop`
+       *   **抑制对同一份材料的再引导**（材料连续未回引仍再劝＝噪音，与"错记忆是噪音"同旨）。 */
+      const jr = planStepJudgement({ topicEcho, zeroGain: st.zeroGain, hasTopics: st.topics.length > 0, switchEmitted: st.switchEmitted === true })
+      st.zeroGain = jr.zeroGain
+      st.lastJudge = { step, zeroGain: jr.zeroGain, switchSource: jr.switchSource, topicEcho }
+      if (jr.emitSwitch) {
+        st.switchEmitted = true
+        dep.hooks.audit({ kind: 'mcl-switch', sid: sid.replace(/^session-/, '').slice(0, 8), step, channel: 'slow', zeroGain: jr.zeroGain, note: '线索变弱：连续未回引达阈 ⇒ 离开当前源（**不决定换到哪**，选行归 ring-supply/recallIndex）', topics: st.topics.slice(0, 3) })
+        dep.hooks.log(`mcl: ${sid.slice(0, 8)} 慢通道 → **换向出口**（zeroGain=${jr.zeroGain}）⇒ 停止对同源材料的再引导`)
+      }
+      st.switchStop = jr.stopSource
+      auditJudge(topicEcho, 'slow')
+      if (!topicEcho && st.nudges < dep.cfg.maxNudges && st.topics.length && !st.switchStop) {
         st.nudges++
         dep.counters.nudged++
         await loadMsgFactory()
         const nudge = `【认知环·再引导 ${st.nudges}/${dep.cfg.maxNudges}】上一步未引用本任务相关的经验（${st.topics.slice(0, 3).join(' / ')}）。请用一句话补上：任务类型与目标 + 你要引用的一条 \`[路径]\`/\`[原则]\`（指针见上一步材料），然后继续。`
-        dep.hooks.audit({ kind: 'mcl-step', sid: sid.replace(/^session-/, '').slice(0, 8), step, channel: 'slow', phase: 'compliance', materialChars: (st.materialText || '').length, materialStep: st.materialStep || 0, sim: Number(st.sim.toFixed(3)), topicEcho: false, prevTextSrc, prevTextLen: prevText.length, nudge: 1, zeroGain: st.zeroGain, switchSource: shouldSwitchSource(st.zeroGain), topics: st.topics })
+        dep.hooks.audit({ kind: 'mcl-step', sid: sid.replace(/^session-/, '').slice(0, 8), step, channel: 'slow', phase: 'compliance', materialChars: (st.materialText || '').length, materialStep: st.materialStep || 0, sim: Number(st.sim.toFixed(3)), topicEcho: false, prevTextSrc, prevTextLen: prevText.length, nudge: 1, zeroGain: jr.zeroGain, switchSource: jr.switchSource, topics: st.topics })
         dep.hooks.log(`mcl: ${sid.slice(0, 8)} 慢通道 → 再引导 ${st.nudges}/${dep.cfg.maxNudges}`)
         return { ...decision, messages: messages.concat([dep.tools.mkMsg(nudge)]) }
       }
       if (!topicEcho) {
-        dep.hooks.audit({ kind: 'mcl-step', sid: sid.replace(/^session-/, '').slice(0, 8), step, channel: 'slow', phase: 'compliance', materialChars: (st.materialText || '').length, materialStep: st.materialStep || 0, sim: Number(st.sim.toFixed(3)), topicEcho: false, prevTextSrc, prevTextLen: prevText.length, nudge: 0, nudges: st.nudges, zeroGain: st.zeroGain, switchSource: shouldSwitchSource(st.zeroGain), topics: st.topics })
+        dep.hooks.audit({ kind: 'mcl-step', sid: sid.replace(/^session-/, '').slice(0, 8), step, channel: 'slow', phase: 'compliance', materialChars: (st.materialText || '').length, materialStep: st.materialStep || 0, sim: Number(st.sim.toFixed(3)), topicEcho: false, prevTextSrc, prevTextLen: prevText.length, nudge: 0, nudges: st.nudges, zeroGain: jr.zeroGain, switchSource: jr.switchSource, switchStop: st.switchStop === true, topics: st.topics })
       } else {
         // **回引步也落账**（2026-09-13 补）：原实现只在「未回引」分支写审计行 ⇒ 该率**没有分母**
         //   （实测 mcl-audit 803 条全为 false、true 0 行）⇒ 方案档 §12 风险 1 的放行判据**无法执行**。
         //   补上这一行才有前后可比 —— 「机制必须有仪表盘」的又一例。（键名 2026-09-18 由 `compliant`
         //   更名为 `topicEcho`：它测的是**主题词回引**，不是"材料被用上了"。）
-        dep.hooks.audit({ kind: 'mcl-step', sid: sid.replace(/^session-/, '').slice(0, 8), step, channel: 'slow', phase: 'compliance', materialChars: (st.materialText || '').length, materialStep: st.materialStep || 0, sim: Number(st.sim.toFixed(3)), topicEcho: true, prevTextSrc, prevTextLen: prevText.length, nudge: 0, nudges: st.nudges, zeroGain: st.zeroGain, switchSource: shouldSwitchSource(st.zeroGain), topics: st.topics })
+        dep.hooks.audit({ kind: 'mcl-step', sid: sid.replace(/^session-/, '').slice(0, 8), step, channel: 'slow', phase: 'compliance', materialChars: (st.materialText || '').length, materialStep: st.materialStep || 0, sim: Number(st.sim.toFixed(3)), topicEcho: true, prevTextSrc, prevTextLen: prevText.length, nudge: 0, nudges: st.nudges, zeroGain: jr.zeroGain, switchSource: jr.switchSource, switchStop: st.switchStop === true, topics: st.topics })
       }
       return decision
     } catch (e) {

@@ -83,6 +83,18 @@ interface SessMcl {
     /** **E-05（2026-09-21）判定在飞标志** —— 与 `channel` 合成**原子幂等闸**（`decideTurn` 头，
      *  检查与置位之间无 await）。缺了它，两条入口会在两个 await 之间同时越过闸门 ⇒ 同一轮判两次。 */
     deciding?: boolean;
+    /** **M3a（2026-09-21 · 频率分离）每步轻判定结果** —— 完整判定（定通道，含嵌入）每轮一次；
+     *  轻判定（折收益/判"线索是否变弱"，**零嵌入零召回**）每步一次。本字段存后者，供观测与出口用。 */
+    lastJudge?: {
+        step: number;
+        zeroGain: number;
+        switchSource: boolean;
+        topicEcho: boolean | null;
+    };
+    /** **M3b 换向出口幂等位**：同一轮只出一次 `mcl-switch`（否则每步都喊"该换向"＝噪音）。 */
+    switchEmitted?: boolean;
+    /** **M3b 该源已停**：出过换向 ⇒ 不再对同一份材料出**再引导**（材料连续两轮未被回引 ⇒ 再劝是噪音）。 */
+    switchStop?: boolean;
 }
 /** 消息工厂（DSH 官方 `createUserMessage` 动态加载；宿主/装配副本可解析，仓内无该包故不入静态 import → 手构兜底） */
 type AnyMsg = {
@@ -185,6 +197,35 @@ export interface DecideResult {
     hit: string;
     st: SessMcl;
 }
+/**
+ * **M3a/M3b（2026-09-21 · 频率分离）轻判定** —— 每步一次，**零 IO、零召回、零嵌入**（纯函数 · 可机检）。
+ *
+ * **架构判因（为什么不是"每步完整判定 + 成本护栏"）**：M3 要把判定频率提到每步，而**完整判定**
+ *   （`decideTurn`：融合召回 + 可选嵌入相似度）成本高 ⇒ 若把整条链提到每步，就得靠"每 K 步带嵌入"
+ *   之类的**护栏补丁**去救。正解是**分解频率**：
+ *     · **完整判定**（定通道 fast/slow，可带嵌入）：**每轮一次**（不变）
+ *     · **轻判定**（折收益、判"线索是否变弱"）：**每步一次**，只吃**已有状态** ⇒ 频率提高**零新开销**
+ *   ⇒ 高频的那一半被设计成廉价的，护栏项**从架构上消失**（不是被调小）。
+ *
+ * **判据复用**：`nextZeroGain` / `shouldSwitchSource` 一律取自 `recall-yield`（**不重造第二份**）。
+ * **边界**（照 `recall-yield:11-12`）：本件只出「是否离开**当前源**」的信号，**不决定换到哪**
+ *   （选行归 `ring-supply` / `recallIndex`）。
+ *
+ * @param topicEcho 上一步回复是否回引了材料主题词（**词面代理**，非"材料被用上"；口径见 mcl 审计 `topicEcho`）
+ * @param hasTopics 本轮是否**投过材料** —— 无材料（快通道/空主题）时不谈"离开该源"（否则会凭空产生换向）
+ * @param switchEmitted 本轮是否已出过换向出口（**幂等**：同一轮只喊一次）
+ */
+export declare function planStepJudgement(input: {
+    topicEcho: boolean;
+    zeroGain: number | undefined;
+    hasTopics: boolean;
+    switchEmitted: boolean;
+}): {
+    zeroGain: number;
+    switchSource: boolean;
+    emitSwitch: boolean;
+    stopSource: boolean;
+};
 export declare function decideTurn(d: DecideDeps, sid: string, step: number): Promise<DecideResult>;
 export declare function handlePreStep(payload: any, next: () => Promise<any>, dep: PreStepDeps): Promise<any>;
 export {};
