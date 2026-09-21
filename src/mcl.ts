@@ -215,6 +215,22 @@ function pushTrace(counters: { trace?: string[] } | undefined, tag: string, sid:
  * （口径同 ACT-024）。⚠ 实测（2026-09-13 轨迹）：该事件**可能晚于当轮 step 1 的 pre-step 到达**
  * ⇒ 那一步读不到任务文本，而判定被 `step !== 1` 挡住 ⇒ **整轮不判定**（见 §68 的时序轨迹）。
  */
+/**
+ * **轮级重置判据**（纯函数 · 可机检）：**同一任务的重复捕获不得重置轮级态**。
+ *
+ * 判因（2026-09-21 · P2 真机归因）：本机宿主把 `user/message` **落在当轮 `pre-step` 之后**是常态
+ *   （本文件下方注释与 `/mcl/status` 的 `trace` 均记载）。若按"每次捕获 = 新任务"重置 `channel`，
+ *   则**刚判定的通道被清空** ⇒ 早判入口**再判一次** ⇒ 同一轮两条 `inject` 行。
+ *   真机实证：`20:06:47.403 / .537`（同 sid·step·sim=0.589，134ms 差）与 `19:37:38.246 / .367` 同形；
+ *   **两对都落在 step 1**、`mcl-ready` 只一条 ⇒ **顺序性重复**，非并发竞态（E-05 的 `deciding` 闸对它无效）。
+ * ⇒ 判据取「文本是否与当前任务相同」：**相同 ⇒ 同一任务的重复捕获 ⇒ 不重置**。
+ *   同因的另两处副作用一并收口：不推 `taskTextAt`（否则下一步 `freshTurn` 再为真 ⇒ 又判一次）、
+ *   不推 `ledger.newTask`（否则增量去重窗口白走一轮）。
+ */
+export function shouldResetTurn(prevTaskText: string | undefined, taskText: string): boolean {
+  return prevTaskText !== taskText
+}
+
 function captureTaskText(
   d: { state: Map<string, SessMcl>; taskText: Map<string, string>; taskTextAt: Map<string, number>; lastStepAt: Map<string, number>; ready: Set<string>; ledger: { newTask(sid: string): void }; counters?: { trace?: string[] } },
   session: any,
@@ -232,7 +248,13 @@ function captureTaskText(
     // P1 硬上界（原先 state/taskText/ready 三张 Map 除 state 外从无清理 ⇒ 长跑进程按会话数线性增长）
     // D-M5（2026-09-17）：原清理**漏了 `lastStepAt`**（:572 每轮 pre-step 写入、全库无清零点）⇒ 一并清。
     if (d.state.size > 256) { d.state.clear(); d.taskText.clear(); d.taskTextAt.clear(); d.ready.clear(); d.lastStepAt.clear() }
+    /* ⚠ **同一任务的重复捕获不得重置轮级态**（2026-09-21 · P2 真机归因 · 判据见 `shouldResetTurn`）：
+     *   本机宿主的 `user/message` **落在当轮 pre-step 之后**是常态（见下方既有注释）⇒ 若"每次捕获都重置"，
+     *   刚判定的 `channel` 被清空 ⇒ **早判入口再判一次** ⇒ 同一轮两条 `inject` 行（真机实证见 `shouldResetTurn`）。
+     *   ⇒ 重复捕获**直接返回**：不重置、不推 `taskTextAt`、不推 `ledger.newTask` —— 三处同因，一处收口。 */
+    const dupCapture = !shouldResetTurn(d.taskText.get(sid), text)
     d.taskText.set(sid, text)
+    if (dupCapture) { pushTrace(d.counters, 'cap-dup', sid, text.length); return }
     // **消息到达时刻**（2026-09-13 · 修判定门竞态）：判定时机改为"消息到达后的第一个 pre-step"，
     //   故必须记下到达时间。实测：子代理会话的 `cap` 可能落在当轮 step 1 的 pre-step **之后**
     //   ⇒ 旧门（只认 `step === 1`）让**整轮不判定**（`slow=0 fast=0`）。

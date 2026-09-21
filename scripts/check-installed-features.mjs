@@ -122,6 +122,8 @@ const HOST_FEATURES = [
   ['MCL 幂等闸原子占位（E-05 判定在飞标志）', 'lib/mcl.js', 'st.deciding'],
   // M3a/M3b（2026-09-21 · 频率分离）：每步轻判定（零嵌入）+ 环内换向出口，单一实现。
   ['MCL 每步轻判定（planStepJudgement · 零嵌入）', 'lib/mcl.js', 'planStepJudgement'],
+  // P2（2026-09-21）：**同一任务的重复捕获不得重置轮级态**（治「先判后 cap」的顺序性重复判定）。
+  ['MCL 同轮重复捕获守卫（shouldResetTurn）', 'lib/mcl.js', 'shouldResetTurn'],
   ['S-P3 段级流程状态读口（readSegFlowState）', 'lib/distill-watermark.js', 'readSegFlowState'],
   ['S-P4 自检节拍持久判据（dueSelfCheck）', 'lib/trigger-plan.js', 'dueSelfCheck'],
   ['S-P2b 探测域配置单一事实源（probeConfigSchema）', 'lib/probe-config.js', 'probeConfigSchema'],

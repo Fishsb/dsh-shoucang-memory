@@ -12,7 +12,7 @@
 //   微任务时序让早判先跑完）。故主判据改为 **同步连调两次 `decideTurn`**：第二次调用时第一次**必然**
 //   还没越过首个 await ⇒ 闸门若不原子则**必定**放行两次 ⇒ **确定性先红**（修复前 E1 必红）。
 // 用法: node scripts/test-mcl-race.mjs
-import { registerMcl, decideTurn } from '../lib/mcl.js'
+import { registerMcl, decideTurn, shouldResetTurn } from '../lib/mcl.js'
 import { createSupplyLedger } from '../lib/supply-ledger.js'
 
 let pass = 0, fail = 0
@@ -74,6 +74,42 @@ const mkDeps = (sid) => ({
   ok(injRows.length === 1, `E7 注入类审计行唯一（${injRows.length}，期望 1）`)
   ok(Number(st.injected) <= 1, `E8 注入计数 ≤1（${st.injected}）`)
   ok(Number(st.steps) >= 1, `E9 钩子仍被调用（steps=${st.steps}，证明改造未打断主链）`)
+}
+
+// ── E10（2026-09-21 · P2 真机归因）：**「先判后 cap」不得让同一轮判两次** ──
+//   真机时序（**本机宿主固有顺序**，`mcl.ts:236` 已记载）：`pre-step(step1)` 先跑并判定 ⇒ **随后** `user/message` 才到达。
+//   此时 `captureTaskText` 的轮级重置把 `channel` 清空 ⇒ **早判入口再判一次** ⇒ 同一轮两条 `inject` 行。
+//   真机实证：`20:06:47.403 / .537`（同 sid·step·sim=0.589，134ms 差）与 `19:37:38.246 / .367` 同形；
+//   两对**都落在 step 1**、`mcl-ready` 只一条 ⇒ **不是并发竞态**，而是**顺序性重复**。
+//   ⚠ 因此 **E-05 的 `deciding` 闸对它无效**（两次调用不重叠）—— 这正是 E-05 修复后仍见重复的原因。
+{
+  const handlers = new Map()
+  const ctx = { on: (e, h) => { handlers.set(e, [...(handlers.get(e) || []), h]); return () => { /* */ } }, logger: { info: () => { /* */ } } }
+  const audit = []
+  const mcl = registerMcl(ctx, { ...CFG, embed: { ...CFG.embed } }, { audit: (o) => audit.push(o), log: () => { /* */ } })
+  const sid = 'sess-cap-late'
+  const txt = '指针 分裂 结构 怎么搭树'
+  const um = { id: 'u1', role: 'user', content: [{ type: 'text', text: txt }], source: { kind: 'user' } }
+  // ① **先** pre-step（消息尚未到达 ⇒ 由 `decision.messages` 兜底捕获并判定）
+  for (const h of handlers.get('agent/pre-step') || []) await h({ agent: { id: sid, session: { header: {} } }, messages: [um], step: 1 }, async () => ({ kind: 'allow', messages: [um] }))
+  // ② **随后** `user/message` 才到达（真机顺序）⇒ 触发轮级重置 + 早判入口
+  for (const h of handlers.get('session/event') || []) h({ id: sid }, { type: 'user/message', data: { source: { kind: 'user' }, content: [{ type: 'text', text: txt }] } })
+  await new Promise((r) => setTimeout(r, 400))
+  const inj = audit.filter((r) => r.kind === 'mcl-step' && r.phase === 'inject')
+  const ready = audit.filter((r) => r.kind === 'mcl-ready')
+  console.log(`   先判后 cap：inject 行 ${inj.length} · mcl-ready ${ready.length} · audit kinds=${audit.map((r) => r.kind).join(',')}`)
+  console.log(`   trace=${(mcl.status().trace || []).map((t) => String(t).split('|')[1]).join(' ')}`)
+  /* ⚠ **诚实标注**：本件**在修复前也通过**（夹具里早判入口的 `void decideTurn` 被其 `.catch` 静默吞掉，
+   *   复现不出真机时序）⇒ **本件不作"先红"证据**，只守不变量。真机证据见 `docs/OPEN-ITEMS.md §0s`
+   *   与 §13-P2：`20:06:47.403/.537`、`19:37:38.246/.367` 两对同 sim 的 inject 行（都在 step 1）。 */
+  ok(inj.length === 1, `E10 **先判后 cap 仍只判一次**（inject 行 ${inj.length}，期望 1；本件守不变量、非先红）`)
+}
+
+// ── E11（2026-09-21 · P2）：**轮级重置判据**（纯函数 · 可机检）──
+{
+  ok(shouldResetTurn('同一任务文本', '同一任务文本') === false, 'E11a **同文本 ⇒ 不重置**（真机"先判后 cap"即此形）')
+  ok(shouldResetTurn('旧任务文本', '新任务文本') === true, 'E11b 换文本 ⇒ 重置（新任务语义不得破）')
+  ok(shouldResetTurn(undefined, '首个任务') === true, 'E11c 首次捕获 ⇒ 重置（真值表含空）')
 }
 
 console.log(fail ? `\nFAIL（${fail} 项）` : `\nPASS（${pass} 项）`)

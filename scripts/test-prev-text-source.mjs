@@ -48,8 +48,11 @@ function usesEventStream(src) {
   const s = strip(src)
   const hasSnapshot = /snapshotEvents\s*\(/.test(s)
   // 主源判据：取 prevText 的那一段里出现 snapshotEvents（而非仅靠 messages）
+  /* ⚠ **锚点必须具体**（2026-09-21 修 · 实测踩到）：原锚是 `indexOf('prevText')` ——
+   *   只要**更靠前**出现任意含 `prevText` 的标识符（实测：`shouldResetTurn(prevText, …)` 的参数名），
+   *   窗口就落到**无关代码**上 ⇒ **假红**（判据被无关文本左右）。⇒ 锚改为**赋值语句** `let prevText`。 */
   const seg = (() => {
-    const i = s.indexOf('prevText')
+    const i = s.indexOf('let prevText')
     return i < 0 ? '' : s.slice(i, i + 1800)
   })()
   return hasSnapshot && /snapshotEvents\s*\(/.test(seg)
@@ -57,7 +60,7 @@ function usesEventStream(src) {
 /** 是否**只**认 reasoning（错口径）——应为"只取 text" */
 function takesReasoningOnly(src) {
   const s = strip(src)
-  const seg = (() => { const i = s.indexOf('prevText'); return i < 0 ? '' : s.slice(i, i + 1800) })()
+  const seg = (() => { const i = s.indexOf('let prevText'); return i < 0 ? '' : s.slice(i, i + 1800) })()
   return /type\s*===\s*'reasoning'/.test(seg) && !/type\s*===\s*'text'/.test(seg)
 }
 

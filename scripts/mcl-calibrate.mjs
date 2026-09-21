@@ -115,6 +115,27 @@ Object.assign(out, {
   target: TARGET, bestT: best.T, bestRate: best.rate, current: cur.v, currentFrom: cur.from, verdict,
   fine, recoverable: { belowThreshold: bt.length, noHighConf: noHigh, byT: recover },
 })
+/* ── **稳定性自证**（2026-09-21 补 · `docs/OPEN-ITEMS.md §0t`）─────────────────────────
+ * 判因（实测）：**同一 T，样本一换读数就漂** —— `T=0.58` 在 4217 样本时过线 **27.7%**，
+ *   5916 样本时 **33.5%**（**+5.8pp**）；而 `0.58→0.60` 的差只值 **6.6pp** ⇒「最优 T」落在**噪声带**内。
+ *   ⇒ 本器**先自证稳定、再给结论**：同一 T 在「全样本 / 前半 / 后半 / 最近窗口」四条子样本上的
+ *     过线率并列 + **带宽**（极差）。带宽 > 与目标的距离 ⇒ 明示「**不宜据此调值**」。
+ *   ⚠ 本块**只加读数、不改口径**（`TARGET` 与"最接近者"算法一字未动）—— 与 :84「目标值不得事后调整」一致。 */
+const byAt = [...steps].sort((a, b) => String(a.at || '').localeCompare(String(b.at || '')))
+const half = Math.floor(byAt.length / 2)
+const WIN = Math.min(byAt.length, 1500)
+const SUBSETS = [['全样本', byAt], ['前半', byAt.slice(0, half)], ['后半', byAt.slice(half)], [`最近${WIN}`, byAt.slice(-WIN)]]
+const rateAt = (arr, T) => (arr.length ? Number((arr.filter((r) => r.sim >= T).length / arr.length).toFixed(4)) : null)
+const watched = [...new Set([cur.v, best.T].filter((x) => typeof x === 'number'))]
+const stability = watched.map((T) => {
+  const rows = SUBSETS.map(([n, a]) => [n, rateAt(a, T)])
+  const vals = rows.map(([, v]) => v).filter((v) => v !== null)
+  return { T, rows, spread: vals.length ? Number((Math.max(...vals) - Math.min(...vals)).toFixed(4)) : null }
+})
+/** 稳定判据：**任一被观察 T 的带宽 > 该 T 与目标的距离** ⇒ 结论不稳（噪声带里） */
+const unstable = stability.filter((s) => s.spread !== null && Math.abs((rateAt(byAt, s.T) ?? 0) - TARGET) < s.spread)
+Object.assign(out, { stability, stable: unstable.length === 0 })
+
 if (AS_JSON) { console.log(JSON.stringify(out, null, 2)); process.exit(0) }
 
 console.log(`MCL 通道标定（离线 · 数据源 legacy ∪ 台账 mcl*）`)
@@ -138,3 +159,13 @@ console.log(`  当前值 ${cur.v ?? '—'}（${cur.from}）`)
 console.log(`  🧭 结论：**${verdict === 'KEEP' ? '保持当前值' : verdict === 'LOWER' ? '应下调至 ' + best.T : verdict === 'RAISE' ? '应上调至 ' + best.T : '无法判定（未取到当前值）'}**`)
 console.log(`  真实可救回集：\`below-threshold\` **${bt.length}** 条（可救）· \`no-highconf\` **${noHigh}** 条（**阈值动不了** ⇒ 属召回层）`)
 console.log(`    降阈值代价：${[0.54, 0.53, 0.52, 0.51].map((T) => `t=${T}⇒救回 ${recover[T]}/${bt.length} 且总过线率 ${(fine.find((f) => f.T === T)?.rate * 100).toFixed(1)}%${(fine.find((f) => f.T === T)?.rate ?? 0) > TARGET + 0.05 ? '⚠过冲' : ''}`).join(' · ')}`)
+
+/* ── 稳定性读数（先自证稳定，再谈调值）── */
+console.log(`\n稳定性自证（同一 T 在四条子样本上的过线率 · 目标 ${(TARGET * 100).toFixed(1)}%）：`)
+console.log(`  T       ${SUBSETS.map(([n]) => n.padStart(8)).join('')}   带宽      判定`)
+for (const s of stability) {
+  const dist = Math.abs((rateAt(byAt, s.T) ?? 0) - TARGET)
+  const band = s.spread !== null && dist < s.spread
+  console.log(`  ${s.T.toFixed(2)}    ${s.rows.map(([, v]) => ((v === null ? '—' : (v * 100).toFixed(1) + '%')).padStart(8)).join('')}   ${((s.spread ?? 0) * 100).toFixed(1).padStart(5)}pp   ${band ? '⚠ **落在噪声带**（带宽 > 距目标）' : '✅ 稳定'}`)
+}
+console.log(`  ⇒ ${unstable.length ? '⚠ **结论不稳**：带宽 > 该 T 与目标的距离 ⇒ **不宜据此调值**（同 §0t：样本一换读数就漂）' : '✅ 结论稳定：各子样本带宽均小于距目标距离'}`)
