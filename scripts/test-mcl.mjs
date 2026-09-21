@@ -354,5 +354,35 @@ const baseCfg = { enabled: true, familiarThreshold: 0.65, maxNudges: 1, budgetCh
   ok(mcl.status().steps === 4, `M3-7 主链未被打断（steps=${mcl.status().steps}）`)
 }
 
+// ── 场景 M3-EMBED（2026-09-21）：**轻判定零嵌入的机检实证**（方案档 §12-B1 的可核验形式）──
+//   判据设计：**起一个本地计数服务器**当嵌入端点，比较「完整判定那一步」与「后续轻判定步」的**请求增量**。
+//   为什么必须这样测：M3c 的架构主张是「高频那一半**零嵌入**」——
+//   该主张只能由**请求计数**来证，**不能**靠"代码看起来没调"（代理指标）或"真机没观测到"（N=0 ⇒ 未取证）。
+{
+  const { createServer } = await import('node:http')
+  let hits = 0
+  const srv = createServer((req, res) => { hits++; res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ data: [{ embedding: new Array(8).fill(0.1) }] })) })
+  await new Promise((r) => srv.listen(0, '127.0.0.1', r))
+  const port = srv.address().port
+  const audit = []
+  const { ctx, emit, fire } = mkCtx()
+  registerMcl(ctx, { ...baseCfg, maxNudges: 3, embed: { enabled: true, baseUrl: `http://127.0.0.1:${port}/v1`, model: 'm', apiKeyEnv: 'NOPE' } }, { audit: (o) => audit.push(o), log: () => { /* */ } })
+  const sid = 'sess-m3-embed'
+  const txt = '指针 分裂 结构 怎么搭树'
+  const msgsOf = (step) => (step === 1 ? [userMsg(txt)] : [userMsg(txt), asstMsg('好的，我先看看代码。')])
+  emit('session/event', { id: sid }, { type: 'user/message', data: { source: { kind: 'user' }, content: [{ type: 'text', text: txt }] } })
+  await fire('agent/pre-step', { agent: { id: sid, session: { header: {} } }, messages: msgsOf(1), step: 1 }, async () => ({ kind: 'allow', messages: msgsOf(1) }))
+  await new Promise((r) => setTimeout(r, 200))
+  const afterStep1 = hits
+  for (const step of [2, 3, 4]) await fire('agent/pre-step', { agent: { id: sid, session: { header: {} } }, messages: msgsOf(step), step }, async () => ({ kind: 'allow', messages: msgsOf(step) }))
+  await new Promise((r) => setTimeout(r, 250))
+  const delta = hits - afterStep1
+  const judgeRows = audit.filter((r) => r.kind === 'mcl-step' && r.phase === 'judge')
+  console.log(`   嵌入端点请求：完整判定那步后 ${afterStep1} 次 · 后续 3 步合计 **${delta}**（判定行 ${judgeRows.length}）`)
+  ok(judgeRows.length >= 4, `M3E-1 判定行覆盖每步（${judgeRows.length} ≥ 4）`)
+  ok(delta === 0, `M3E-2 **后续每步判定零嵌入**（增量 ${delta} = 0）← M3c 的架构主张由**请求计数**实证`)
+  await new Promise((r) => srv.close(r))
+}
+
 console.log(`\n结果: ${pass} PASS / ${fail} FAIL`)
 process.exit(fail ? 1 : 0)
