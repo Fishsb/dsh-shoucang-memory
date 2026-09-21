@@ -40,7 +40,7 @@
 
 ---
 
-## 0p. 🔴 **门禁 ① 自身假绿：`coexist` 无任何产生路径，而 `produces()` 判绿 —— 被判的是「类型声明里出现过字面量」**（2026-09-20 round 11 · **已登记，未修**）
+## 0p. ✅ **门禁 ① 自身假绿：`coexist` 无任何产生路径，而 `produces()` 判绿 —— **已修（2026-09-21 · §13-P5）**（2026-09-20 round 11 登记 → 2026-09-21 收口）
 
 > **性质**：与 §0n（`check-version-pin` 自身假绿）**同族** —— **门在，判据也在，但它判的对象不是它声称的对象**。
 > **来源**：本轮的方案档前提复核（**四条证伪的第 4 条**，见 `docs/specs/gate4-supersede-plan.md` §0）。
@@ -60,6 +60,16 @@
 **复验命令**：`node scripts/check-l0-conflict-wiring.mjs`（现 PASS）·
 `Select-String -Path src\*.ts -Pattern 'CONF\.coexist'`（现 **0 命中**，剥注释同）·
 `node -e "…"` 复刻 `produces('coexist')` ⇒ `{asValue:true, inTernary:true, pass:true}`。
+
+**✅ 2026-09-21 收口（§13-P5 · 按 §0p 的推荐修法 A）**：
+
+| 步 | 做了什么 | 判据/证据 |
+|---|---|---|
+| **① 修门** | `produces()` 由**整行剔除**改为**精确中和三类"声明态"**：类型/接口声明行 · `l0Pick(...)` 调用（注册表常量表） · `new Set([...])`（校验白名单）—— 它们分别是**声明 / 一致性校验 / 合法性校验**，**都不是产生式** | 自证 **5 例含 3 反例**全过（正例·三元字面量算出 / **反例·只有类型+`l0Pick` 声明**（§0p 的假绿形状）/ 反例·只在类型行 / 反例·只在 `new Set` / 正例·入参实参） |
+| **② 修后门如实报出真缺陷** | 修好后 ① 当场转红并列出**四个维度 6 个取值零产生路径**：`reuse` 的 `cross-task`/`session-only` · `generality` 的 `contract-fact`/`detail` · `stability` 的 `same-day-repeat` · `conflict` 的 **`coexist`** —— **比 §0p 原记录（只 `coexist`）更大** | 实跑输出（转红） |
+| **③ 显式登记（让断链可见）** | 6 项写入 `criteria.json#wiring.unreachableValues` + 说明**「这不是"有意不可达"，而是断链被显式登记」** + `until`（取得产生路径后须删项）；生成物重生成（`gen-criteria` 五处投影一致） | 门复跑 **PASS**（**但不再是假绿** —— 是显式登记）；`check-criteria` / `check-threshold-registry` / `check-claim-alignment` 全 PASS |
+| **④ 残留语义问题（未决 · 不属本轮）** | `JUDGEMENT_VALUES` 的 prompt **要求模型分清 `coexist`（与既有并存）与 `supersede`（取代既有）**，而 `evaluateL0` **只能算出 `none`/`supersede`** ⇒ **模型判了 `coexist` 也无处落**（§0p 原话「判了也不落库」）。修它 = **给 L0 冲突语义补一条产生路径**（行为变更）⇒ 须用户拍板 | 已写进 `unreachableValuesNote` |
+| **⑤ 同批抓到的判据缺陷** | `test-prev-text-source` 用 `indexOf('prevText')` 开窗 ⇒ 被新函数**形参名**命中 ⇒ **假红**；已改为具体锚 `let prevText`（并给形参更准确命名 `prevTaskText`） | `--selftest` + 实跑均 PASS |
 
 ---
 

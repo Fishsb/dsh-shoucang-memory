@@ -1080,9 +1080,15 @@
     "pendingNote": "**零豁免（2026-09-14 起）**：本表为空 ⇒ 任何模块只要 `src/` 扇入为 0 且不在 entryOk / typeOnlyOk，接线门**当场 FAIL**。这是接线门的**最紧状态**，也是本表存在的意义（棘轮只许收紧）；将来若确需豁免，必须在此显式加回并写明 `until`。",
     "unreachableValues": [
       "days30",
-      "sessions"
+      "sessions",
+      "cross-task",
+      "session-only",
+      "contract-fact",
+      "detail",
+      "same-day-repeat",
+      "coexist"
     ],
-    "unreachableValuesNote": "**`evaluateL0` 的不可达入参**（2026-09-20 · `check-l0-conflict-wiring` ② 的事实源）。判定口径：入参若**在所有调用点都不被传**，则它产生的取值（`days30>=2 ⇒ stability='cross-day'` · `sessions>=2 ⇒ reuse='cross-project'`）**结构性不可达**。实测：全仓 `evaluateL0` **只 1 处调用**（`distill-agent.ts`），从不传 `days30` / `sessions`；两者的数据源其实**现成存在**（`activity.ts:29/174` 有 `days30`/`hits30`），但**蒸馏调用点未接入活性表**——属跨链新增接线（改动面大于本轮），故**如实登记为不可达**而非假装可达。**until**：若蒸馏调用点接入 `activity.ts#days30` 与跨会话计数，**须删除本表对应项**（登记非豁免，是让断链**可见**）。⚠ **同批已修**：`supersedes` 原本也在此名单候选里 —— 本轮已把 `judgement.conflict` 校验后的值真的喂给 `evaluateL0.supersedes` ⇒ **已移出不可达名单**（`fact-ring#supersede()` 的落库接线仍待后续，见 `OPEN-ITEMS §0f`）。"
+    "unreachableValuesNote": "**`evaluateL0` 不可达面**（`check-l0-conflict-wiring` ② 的事实源）——两类，**均属「声明了但无人产生」**：<br>【一类·入参不可达（2026-09-20）】判定口径：入参若**在所有调用点都不被传**，则它产生的取值（`days30>=2 ⇒ stability='cross-day'` · `sessions>=2 ⇒ reuse='cross-project'`）**结构性不可达**。实测：全仓 `evaluateL0` **只 1 处调用**（`distill-agent.ts`），从不传 `days30` / `sessions`；两者数据源**现成存在**（`activity.ts:29/174`），但**蒸馏调用点未接入活性表**（改动面大于本轮）⇒ 如实登记。**until**：接入后**须删除本表对应项**。<br>【二类·取值无产生式（**2026-09-21 新增** · `OPEN-ITEMS §0p`）】**6 个取值在可执行代码里零产生路径**：`reuse` 的 `cross-task`/`session-only` · `generality` 的 `contract-fact`/`detail` · `stability` 的 `same-day-repeat` · `conflict` 的 `coexist`。⚠ **这不是「有意不可达」，而是断链被显式登记** —— 门此前一直**假绿**：`produces()` 的正则含「冒号后跟空白」那一路匹配，会命中 **`CONF` 常量表**（`coexist: l0Pick('conflict','coexist')`）与**类型声明行**，于是「声明了但无人产生」照样判绿（`distill-agent.ts:435` 的注释**早已写着**「`coexist`/`supersede` 永不产生」）。**2026-09-21 已修门**（三类声明态中和：类型/接口行 · `l0Pick(...)` 调用 · `new Set([...])` 白名单），修后**门如实报出这 6 项** ⇒ 据「登记非豁免，是让断链可见」登记于此。<br>⚠ **残留语义问题（未决 · 属 L0 语义变更，须拍板）**：`JUDGEMENT_VALUES` 的 prompt **要求模型分清 `coexist`（与既有并存）与 `supersede`（取代既有）**，而 `evaluateL0` **只能算出 `none`/`supersede`** ⇒ **模型判了 `coexist` 也无处落**（§0p 原话：「判了也不落库」）。修它=**给 L0 冲突语义补一条产生路径**（行为变更）⇒ 不在本轮范围。<br>**until**：本表任一项取得产生路径后**须删除该项**（棘轮只许收紧）。"
   },
   "antiScope": [
     "实体图/图数据库（用 INDEX 元数据表「关联主题」列弱关联替代）",

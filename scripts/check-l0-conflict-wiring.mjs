@@ -41,27 +41,33 @@ const ok = (c, m) => { console.log(`${c ? '✅' : '❌'} ${m}`); if (!c) fail++ 
 /** 剥注释（仓内既有先例：`check-carriers` / `check-observability` 的「先剥注释再匹配」） */
 const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1')
 
-/* ── `--selftest`：反例自证（样例取自真机形态：取值域声明了但无人产生）────── */
+/* ── `--selftest`：反例自证（样例取自真机形态：取值域声明了但无人产生）──────
+ * ⚠ **2026-09-21 修（`OPEN-ITEMS §0p`）**：首版自证用的是**较弱的判据**（只看"字面量是否出现"），
+ *   与实跑的 `produces()`（要求出现在"赋值/返回/入参"位置）**不是同一判据** ⇒ 自证测的**不是真身**
+ *   （与本仓 `test-inject-baseline-normalize` 的「原样提取」纪律相悖）。
+ *   ⇒ 本版自证**直接调实跑的 `produces()`**，并**补上原反例集漏掉的正中间那一格**：
+ *      「**类型里声明 + `l0Pick` 声明 + 无产生式** ⇒ 必红」—— 那正是 §0p 记录的假绿形状。 */
 if (argv.includes('--selftest')) {
+  const TYPED = "export type L0Conflict = 'none' | 'coexist' | 'supersede'\nconst CONF = { none: l0Pick('conflict','none'), coexist: l0Pick('conflict','coexist'), supersede: l0Pick('conflict','supersede') }\n"
   const cases = [
-    ['正例·取值有产生路径（`coexist` 由 `l0Pick` 常量 + 三元产生）',
-      { values: ['none', 'coexist', 'supersede'], src: `const CONF = { none: l0Pick('conflict','none'), coexist: l0Pick('conflict','coexist'), supersede: l0Pick('conflict','supersede') }\nconst conflict = input.supersedes ? CONF.supersede : CONF.none`, unreachable: [], dim: 'conflict' }, true],
-    ['**反例**·取值声明了但无人产生（真机修前形态）',
-      { values: ['none', 'coexist', 'supersede'], src: `const conflict = CONF.none`, unreachable: [], dim: 'conflict' }, false],
-    ['正例·不可达但**已显式登记**（豁免生效）',
-      { values: ['none', 'coexist', 'supersede'], src: `const conflict = CONF.none`, unreachable: ['coexist', 'supersede'], dim: 'conflict' }, true],
+    ['正例·确有产生式（三元里**以字面量**算出 `coexist`）',
+      TYPED + "const conflict = input.coexists ? 'coexist' : (input.supersedes ? 'supersede' : 'none')", 'coexist', true],
+    ['**反例**·只有类型声明 + `l0Pick` 常量表声明（**无产生式**）—— §0p 的假绿形状',
+      TYPED + 'const conflict = input.supersedes ? CONF.supersede : CONF.none', 'coexist', false],
+    ['**反例**·字面量只出现在**类型声明行**里',
+      "export type X = 'coexist'\nconst y = 1", 'coexist', false],
+    ['**反例**·字面量只在**校验白名单**里（`new Set([...])` 不算产生）',
+      "export type X = 'coexist'\nconst OK = new Set(['coexist','none'])\nconst y = 1", 'coexist', false],
+    ['正例·作为入参实参（`k: \'coexist\'`）',
+      TYPED + "emit({ k: 'coexist' })", 'coexist', true],
   ]
   let bad = 0
-  for (const [label, c, want] of cases) {
-    // 判据：values 里每个取值，要么 src 里出现其字面量或 l0Pick 引用，要么在 unreachable 里登记
-    const missing = c.values.filter((v) => {
-      if (c.unreachable.includes(v)) return false
-      return !new RegExp(`['"]${v}['"]|\\b${v}\\b`).test(c.src)
-    })
-    const got = missing.length === 0
+  for (const [label, src, v, want] of cases) {
+    // **直接调实跑判据的函数**（它内部自己做三类"声明态"中和 —— 与实跑同口径，不另抄一份）
+    const got = produces(v, src)
     const okCase = got === want
     if (!okCase) bad++
-    console.log(`${okCase ? '✅' : '❌'} ${label} → 判${got ? '绿' : '红'}（期望${want ? '绿' : '红'}）${missing.length ? ' 缺：' + missing.join(',') : ''}`)
+    console.log(`${okCase ? '✅' : '❌'} ${label} → 判${got ? '可达' : '不可达'}（期望${want ? '可达' : '不可达'}）`)
   }
   const negs = cases.filter(([l]) => l.includes('反例'))
   if (!negs.length) { bad++; console.log('❌ 自证不含反例 —— 恒真断言不得进验收') }
@@ -80,6 +86,14 @@ const S = join(root, 'src')
 const srcAll = readdirSync(S).filter((f) => f.endsWith('.ts'))
   .map((f) => strip(readFileSync(join(S, f), 'utf8'))).join('\n')
 
+/** **产生式判据只看"可执行代码"**（2026-09-21 修 · `OPEN-ITEMS §0p` · 推荐修法 A）。
+ *  判因（**实证**）：`asValue` 的正则含 `=|\:`，会命中 `export type L0Conflict = 'none' | 'coexist' | …`
+ *  这类**类型声明行** ⇒ 「**声明了但无人产生**」**照样判绿** —— 而这恰是本门注释自称"已修掉"、
+ *  实则仍在的那一格（与 §0p 记录的同一形态：**判据抓的是"字面量在类型里被声明"**）。
+ *  ⇒ 先剥**类型声明行**（`type …` / `interface …`，含 `export` 前缀）再判产生式。
+ *  ⚠ 类型联合的**续行**（形如 `  | 'coexist'`）本就不含 `?`/`:`/`=` ⇒ 不构成产生式，无需额外处理。 */
+const srcProd = srcAll.split('\n').filter((l) => !/^\s*(export\s+)?(type|interface)\b/.test(l)).join('\n')
+
 console.log('L0 取值可达性（注册表声明 ⟷ src 实际产生路径）')
 const unreachableReg = new Set(reg?.wiring?.unreachableValues || [])
 /** **取值可达**的正判据（不只是"字面量存在"）──
@@ -91,14 +105,28 @@ const unreachableReg = new Set(reg?.wiring?.unreachableValues || [])
  *     或作为**入参实参**（`x: 'coexist'`）。
  *    仅出现在 `l0Pick('<dim>','<v>')` 的**第二实参**里**不算产生** —— 那是注册表一致性校验，
  *    不是"这条取值会被算出来"。 */
-const produces = (v) => {
+/* ⚠ 用**函数声明**（**可提升**）：`--selftest` 块在其上方执行，而它必须调**真身判据**（2026-09-21 修）。
+ *   `srcProd` 的缺省改在**函数体内**取 —— 只在调用方**未传 src** 时求值，故自证路径不碰它的 TDZ。 */
+function produces(v, src) {
+  const s = src === undefined ? srcProd : src
   const lit = `['"]${String(v).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"]`
+  /* ⚠ **三处"声明态"必须排除**（2026-09-21 · `OPEN-ITEMS §0p` · 修法 A 的完整形态）——
+   *   实测（剥注释后 `coexist` 的全部出现）：① 类型声明 `export type L0Conflict = …`；
+   *   ② **`l0Pick` 常量表** `const CONF = { coexist: l0Pick('conflict','coexist') }`；
+   *   ③ **校验白名单** `new Set(['none','coexist','supersede'])`。
+   *   三者都**不是产生式**（分别是声明 / 注册表一致性校验 / 合法性校验），
+   *   而旧 `asValue` 的 `:\s*` 会命中 ② ⇒「**声明了但无人产生**」照样判绿（§0p 的假绿形状）。
+   *   ⇒ 逐行剔除这三类，只在**可执行表达式**里判产生。 */
+  const prod = s
+    .replace(/\bl0Pick\s*\([^)]*\)/g, ' __l0pick__ ')              // ② 注册表常量表**调用**（声明）
+    .replace(/new\s+Set\s*\(\s*\[[^\]]*\]\s*\)/g, ' __set__ ')    // ③ 校验白名单字面量（校验，非产生）
+    .split('\n').filter((l) => !/^\s*(export\s+)?(type|interface)\b/.test(l)).join('\n') // ① 类型/接口声明
   // ① 作为对象字段的**值**：`xxx: <...'v'...>` 或 `xxx: CONF.v` / `= ...'v'`
-  const asValue = new RegExp(`(?:\\?|:|=|return\\s*)\\s*[^\\n;]{0,80}${lit}`).test(srcAll)
+  const asValue = new RegExp(`(?:\\?|:|=|return\\s*)\\s*[^\\n;]{0,80}${lit}`).test(prod)
   // ② 作为三元的分支（`a ? 'v' : 'w'` 任一侧）
-  const inTernary = new RegExp(`\\?\\s*[^\\n;]{0,60}${lit}[^\\n;]{0,60}:`).test(srcAll) || new RegExp(`:\\s*[^\\n;]{0,60}${lit}[^\\n;]{0,60}(?:\\)|,|;)`).test(srcAll)
+  const inTernary = new RegExp(`\\?\\s*[^\\n;]{0,60}${lit}[^\\n;]{0,60}:`).test(prod) || new RegExp(`:\\s*[^\\n;]{0,60}${lit}[^\\n;]{0,60}(?:\\)|,|;)`).test(prod)
   // ③ 作为入参实参：`key: 'v'`
-  const asArg = new RegExp(`\\b\\w+\\s*:\\s*${lit}`).test(srcAll) && !new RegExp(`l0Pick\\(\\s*${lit}`).test(srcAll)
+  const asArg = new RegExp(`\\b\\w+\\s*:\\s*${lit}`).test(prod)
   return asValue || inTernary || asArg
 }
 const badDims = []
