@@ -17,6 +17,8 @@ import { DISCARD_SNAPSHOT_CB_N, SKIP_HOLD_MAX, planSegmentWatermark, planSkipWat
 // 册二（2026-09-19）：准入判定单一实现（扫尾 / idle 入口 / 手动入口三处共用）
 import { planIngestAdmission, quiescenceOf } from './ingest-admission.js'
 import { countRingChannels } from './ring-commit.js'
+// ACT-295：档位并进 agentOptions 的**唯一实现**（蒸馏/深睡共用；避免两处各写一份条件展开）
+import { withEffort } from './model-config.js'
 import { applySupersedeOps, planSupersedeOps } from './fact-supersede-apply.js'
 import { dshHome } from './targets.js'
 import type { EmbedCfg } from './vec.js'
@@ -139,6 +141,40 @@ const runSupersedeChannel = (
 }
 
 
+/**
+ * 段结果**归类**（纯函数 · ACT-295 自 `distillAgent` 抽出为模块级）。
+ *
+ * 抽出的硬理由：`distillAgent` 受 `audit-fnspan` 的「**>400 行的函数 ≤ 0 个**」棘轮约束，
+ *   本链内联后实测 **406 行** ⇒ 就地即破。抽出后 ① 回到棘轮内；② 同一判据可单测（纯输入→枚举）。
+ *
+ * 语义与抽出前**逐字一致**（顺序敏感，不可重排）：
+ *   无输出 ⇒ json-parse；未完成 ⇒ provider-fail/agent-stop；discard ⇒ discard；
+ *   未消化 ⇒ dispatch-failed；缺锚 ⇒ needs-anchor；被拒 ⇒ gate-reject；否则 ok。
+ * `failReason` 落**最小可诊断集**（计数/目标库/stop）—— 起因：实测 113 条失败审计行**零成因字段**，
+ *   45% 失败率却不可诊断（判据 `test-fail-taxonomy` 系）。
+ */
+export function classifySegment (i: {
+  hasOut: boolean; stop: string; useProvider: boolean; route: string
+  undigested: number; added: number; rejected: number; needsAnchor: number
+  targetLib: string; llmLabel: string
+}): { fclass: string; failReason: string } {
+  const fclass = !i.hasOut ? 'json-parse'
+    : i.stop !== 'completed' ? (i.useProvider ? 'provider-fail' : 'agent-stop')
+      : i.route === 'discard' ? 'discard'
+        : i.undigested > 0 ? 'dispatch-failed'
+          : i.needsAnchor > 0 ? 'needs-anchor'
+            : i.rejected > 0 ? 'gate-reject'
+              : 'ok'
+  const failReason = fclass === 'dispatch-failed' ? `undigested=${i.undigested} added=${i.added} target=${i.targetLib}`
+    : fclass === 'needs-anchor' ? `needsAnchor=${i.needsAnchor} target=${i.targetLib}`
+      : fclass === 'gate-reject' ? `gate rejected=${i.rejected} target=${i.targetLib}`
+        : fclass === 'json-parse' ? `json-parse stop=${i.stop}`
+          : (fclass === 'provider-fail' || fclass === 'agent-stop') ? `agent stop=${i.stop} llm=${i.llmLabel}`
+            : ''
+  return { fclass, failReason }
+}
+
+/** 蒸馏子代理（段循环 + 派单 + 写回 + 审计）。 */
 const distillAgent = async (dep: AgentDeps, agent: any): Promise<void> => {
   const sid = agent.id as string
   if (dep.wm.st.distilling.has(sid)) return // 并发守卫（本 fiber 内）：蒸馏在途（最长 10min）内再触发直接跳过
@@ -294,7 +330,10 @@ const distillAgent = async (dep: AgentDeps, agent: any): Promise<void> => {
     // 段失败 → 记录 log/审计并 break：水位停在失败段前（已成功段已推进）→ 下一触发从失败段断点续传，前段不重蒸。
     const resolvedLlm = dep.llm.llm.resolveLlm(dep.env.config.distillProvider, dep.env.config.distillModel)
     const useProvider = !!resolvedLlm && dep.llm.llmState.providerFailCount < 2
-    const agentOptions = useProvider ? { provider: resolvedLlm!.provider, model: resolvedLlm!.model } : undefined
+    /* ACT-295：档位随路由透传；组装走 `withEffort` **唯一实现**（空串不带字段，沿用模型默认）。 */
+    const agentOptions = useProvider
+      ? withEffort({ provider: resolvedLlm!.provider, model: resolvedLlm!.model }, dep.env.config.distillEffort)
+      : undefined
     const segLimit = Math.min(chunks.length, MAX_CHUNKS_PER_RUN)
     const MANIFEST_CAP = 1500 // 同轮前段固化清单字符上限（超出丢最早行；只服务同轮后段查重/合并）
     let manifest = ''
@@ -381,22 +420,14 @@ const distillAgent = async (dep: AgentDeps, agent: any): Promise<void> => {
         dep.io.infra.log(`distill: ${dep.io.infra.sidShort(sid)} 段${k + 1}/${segLimit}（seq ${chunk.startSeq}→${chunk.endSeq}）stop=${stop} route=${route} → ${disp.targetLib} 入册 ${disp.added} / 拒收 ${disp.rejected} / 失败 ${disp.failed}`)
         // WikiSkill 借鉴：失败归类 fclass（供审计聚合/深睡根因回流）+ LLM 指纹（大小模型蒸馏质量实证的数据底座）
         const llmLabel = useProvider && resolvedLlm ? `${resolvedLlm.provider}/${resolvedLlm.model}` : 'inherited'
-        const fclass = !out ? 'json-parse'
-          : stop !== 'completed' ? (useProvider ? 'provider-fail' : 'agent-stop')
-          : route === 'discard' ? 'discard'
-          : disp.undigested > 0 ? 'dispatch-failed'
-          : disp.needsAnchor > 0 ? 'needs-anchor'
-          : disp.rejected > 0 ? 'gate-reject'
-          : 'ok'
-        // v18：审计行与 raw-stub 均带分段标记（chunk/chunkStart/chunkEnd/totalChunks）；stub watermark=该段推进区间（同步用该段 endSeq）
-        // #3（2026-09-13 深层归因）：**失败留成因** —— 实测 113 条 dispatch-failed/gate-reject 审计行**零成因字段**，
-        //   45% 失败率却不可诊断。此处按 fclass 落最小可诊断集（计数/目标库/stop）。
-        const failReason = fclass === 'dispatch-failed' ? `undigested=${disp.undigested} added=${disp.added} target=${disp.targetLib}`
-          : fclass === 'needs-anchor' ? `needsAnchor=${disp.needsAnchor} target=${disp.targetLib}`
-            : fclass === 'gate-reject' ? `gate rejected=${disp.rejected} target=${disp.targetLib}`
-              : fclass === 'json-parse' ? `json-parse stop=${stop}`
-                : (fclass === 'provider-fail' || fclass === 'agent-stop') ? `agent stop=${stop} llm=${llmLabel}`
-                  : ''
+        /* ⚠ **本链已抽成模块级纯函数 `classifySegment`**（ACT-295 抽出）：它是纯决策（输入→枚举），
+         *   内联时把 `distillAgent` 顶到 406 行、破 `audit-fnspan` 的「>400 行 ≤0」棘轮；
+         *   抽出后同一判据可单测，且函数体回到棘轮内。 */
+        const { fclass, failReason } = classifySegment({
+          hasOut: !!out, stop, useProvider, route,
+          undigested: disp.undigested, added: disp.added, rejected: disp.rejected,
+          needsAnchor: disp.needsAnchor, targetLib: disp.targetLib, llmLabel,
+        })
         dep.io.infra.audit({ sid, kind: 'distill-run', route, stop, fclass, llm: llmLabel, targetLib: disp.targetLib, added: disp.added, rejected: disp.rejected, failed: disp.undigested, undigested: disp.undigested, needsAnchor: disp.needsAnchor, pairedSkipped: disp.pairedSkipped, sectionMiss, supplySections: supply.sections, chunk: k + 1, chunkStart: chunk.startSeq, chunkEnd: chunk.endSeq, totalChunks: chunks.length, segKey: chunk.segKey, materialEvents: chunk.events, ...(failReason ? { reason: failReason } : {}) })
         // 判据台账（摄取域）：模型判据（可选 judgement）+ 宿主 L0 代理评估 + 决策与结果
         /* ⚠ **本轮修复（2026-09-20 · 门4"零样本"的真根因）**：`evaluateL0` 此前**只收 `{text, traces}`**，

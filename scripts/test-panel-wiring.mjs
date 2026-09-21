@@ -38,6 +38,8 @@ const ROUTES = [
   '/inject/preview', '/inject/stats', '/vector/status2', '/embed/config', '/embed/test', '/vector/cache/clear',
   // 架构观测与调节面（panel-arch · 2026-09-13 重构后新增）
   '/arch/records', '/arch/graph', '/arch/observability', '/arch/assembly', '/mcl/config',
+  // M1/M2（ACT-283）可配置评估通道（`panel-eval.ts` 领域面）
+  '/eval/config', '/eval/test', '/eval/stats',
 ]
 
 const Ctx = (over = {}) => {

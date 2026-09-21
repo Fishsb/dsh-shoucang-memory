@@ -14,6 +14,16 @@ export interface WriteDeps {
     llm: LlmApi;
     st: DistillState;
     config: any;
+    /**
+     * ACT-293 · 评估通道消费面（**可选**）：
+     *   `undefined` ⇒ 不接（缺省；评估关闭时装配层不传）⇒ 行为与改造前逐字节一致。
+     *   接线点 = 索引行**落盘成功后**（只读复核，**不阻断写入**）。
+     *   能力依据见 `_memory/audit/consumer-compare.mjs`（三模型对照：假阳性 15–50%）。
+     */
+    auditIndexLine?(line: string, at: {
+        sid: string;
+        target: string;
+    }): Promise<void>;
 }
 export declare function createWriteApi(dep: WriteDeps): {
     liveCaps: () => {

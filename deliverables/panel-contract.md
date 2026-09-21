@@ -3,7 +3,7 @@
 > **生成物 · 禁手写** —— 源 = `src/panel-contract.ts`；生成 = `node scripts/gen-panel-contract.mjs`（已挂在 `build:client` 前置）。
 > 新鲜度由 `scripts/check-panel-contract.mjs` 守着：重生成与磁盘不一致即门禁翻红。
 
-前缀：`/api/shoucang-panel` · 路由 **44** 条
+前缀：`/api/shoucang-panel` · 路由 **47** 条
 
 | 路径 | 说明 | 必填字段 | 请求体字段（类型 · `?`=可选） |
 |---|---|---|---|
@@ -35,10 +35,13 @@
 | `/deepsleep/trigger` | 手动触发深睡 | — | — |
 | `/distill/run` | 手动触发蒸馏 | — | — |
 | `/deepsleep/config` | 深睡配置读写（白名单补丁） | — | `enableDeepSleep`?:any · `deepSleepProbe`?:any · `deepSleepIdleMs`?:any · `deepSleepProbeAfterMs`?:any · `deepSleepProbeWindowMs`?:any |
-| `/distill/config` | 蒸馏配置读写（白名单补丁） | — | `enableDistill`?:any · `idleWakeMs`?:any · `minTurnChars`?:any · `distillPrescan`?:any · `llmProvider`?:any · `llmModel`?:any · `distillProvider`?:any · `distillModel`?:any · `sleepProvider`?:any · `sleepModel`?:any |
+| `/distill/config` | 蒸馏配置读写（白名单补丁） | — | `enableDistill`?:any · `idleWakeMs`?:any · `minTurnChars`?:any · `distillPrescan`?:any · `llmProvider`?:any · `llmModel`?:any · `distillProvider`?:any · `distillModel`?:any · `distillEffort`?:any · `sleepProvider`?:any · `sleepModel`?:any · `sleepEffort`?:any |
 | `/vector/status2` | 向量档状态 | — | — |
 | `/embed/config` | 嵌入配置读写（白名单补丁） | — | `embedEnabled`?:any · `embedBaseUrl`?:any · `embedModel`?:any · `embedApiKeyEnv`?:any |
 | `/embed/test` | 嵌入连通性测试 | baseUrl | `baseUrl`?:string · `apiKey`?:string |
+| `/eval/config` | 评估通道配置读写（白名单补丁） | — | `evalEnabled`?:any · `evalBaseUrl`?:any · `evalModel`?:any · `evalApiKeyEnv`?:any · `evalTier`?:any · `evalEgressAllow`?:any |
+| `/eval/test` | 评估通道连通性测试（只读；不落库） | — | — |
+| `/eval/stats` | 评估通道判定统计（只读；折统一台账 type=eval.decision） | — | — |
 | `/vector/cache/clear` | 清向量缓存 | rel, section | `rel`:string · `section`:string · `newBody`?:string |
 | `/memory/section-edit` | 改写小节正文 | rel, section | `rel`:string · `section`:string · `newBody`?:string |
 | `/memory/edit` | 行级编辑 | file, line, newText | `file`:string · `line`:string · `newText`:string |

@@ -11,6 +11,8 @@ import { el } from './dom.js'
 import { Derive, fmtTime } from './derive.js'
 import { appState } from './app-state.js'
 import { lang, tr } from './i18n.js'
+import { modelPicker } from './model-picker.js'
+import { renderEvalCard } from './panes-eval.js'
 
 function renderViewToggles(view, parsed, global) {
   view.textContent = '';
@@ -237,6 +239,10 @@ function renderTogglesModel(host) {
   // 数据源：GET /vector/status2（运行态+provider+缓存）+ GET/POST /embed/config（scheduler.json，重载生效）。
   renderTogglesModelVec(host);
   renderTogglesModelLlm(host);
+  /* ACT-295（2026-09-21）：「评估通道」卡 —— 用户口径「面板里按需开 + 可设置模型」。
+   *   ⚠ 单独成件（`panes-eval.js` 而非就地写）：本件实测 568 行，而 `check-module-growth` 的
+   *   `FREEZE_THRESHOLD = 600`（≥600 即须登记基线冻结、只许降）⇒ 整块塞进来必越线，抬基线属 R3。 */
+  renderEvalCard(host);
 }
 
 function renderTogglesModelVec(host) {
@@ -438,75 +444,66 @@ function renderTogglesModelVec(host) {
 
 function renderTogglesModelLlm(host) {
   // ── LLM 模型配置（2026-09-10 用户拍板：蒸馏/深睡模型直接用 Harness 宿主模型体系，各自独立可选）──
-  // 数据源 GET /llm/models（宿主 listProviders→listModels）；「继承主会话」= 空键。
-  // 仿 AnythingLLM LLMProviderModelPicker：provider→model 两级联动 + 空=继承。
+  // 数据源 GET /llm/models（宿主 listProviders→listModels→resolveModelInfo）；「继承主会话」= 空键。
+  // ★ 2026-09-21（ACT-295）：本处**原为自建两参下拉**（provider/model，无档位）——现改走
+  //   `src-client/model-picker.js` 的**共享三级实现**（服务 → 模型 → 档位）。改写理由有二：
+  //     ① 用户口径「模型设置参考 DSH 输入框的模型选项卡，其他几个项目也有同样的设置模块」⇒ 三处同源；
+  //     ② **档位是真的**：蒸馏/深睡走 `ctx.subagents.start('spawn', {agentOptions})`，而宿主
+  //        `AgentOptions.reasoningEffort` 是**真字段**（`@deepseek-ai/dsh-agent` 类型实证）⇒
+  //        此前"选不了档位"是**能力缺口**，不是设计取舍。
   host.appendChild(el('div', 'sc-h3', tr("蒸馏 / 深睡模型")));
-  host.appendChild(el('div', 'sc-desc', tr("蒸馏与深度睡眠各自可选宿主模型（直接用 DeepSeek Harness 模型——先在 Harness 配置好模型，这里下拉选即可）。「继承主会话」= 不指定，跟随当前会话模型。改动写 scheduler.json，需重载生效。")));
+  host.appendChild(el('div', 'sc-desc', tr("蒸馏与深度睡眠各自可选宿主模型（直接用 DeepSeek Harness 模型——先在 Harness 配置好模型，这里下拉选即可）。「继承主会话」= 不指定，跟随当前会话模型。档位（reasoning effort）由模型适配器声明，未声明则沿用模型默认。改动写 scheduler.json，需重载生效。")));
   var llmCard = el('div');
-  var hostModels = null; // GET /llm/models 缓存 [{provider,id,name}]
-  var llmVal = {}; // 当前持久值 {distillProvider,distillModel,sleepProvider,sleepModel}
-  // LLM 模型单下拉（2026-09-10 用户拍板：仿 Harness 对话模型选择——一个下拉框，'跟随主模型'作为默认选项）
-  function renderLlmSelect(container, keyP, keyM, label, desc) {
+  host.appendChild(llmCard);
+
+  function renderLlmSelect(container, keyP, keyM, keyE, label, desc) {
     var item = el('div', 'setting-item');
     var info = el('div', 'setting-item-info');
     info.appendChild(el('div', 'setting-item-name', label));
     info.appendChild(el('div', 'setting-item-desc', desc));
     item.appendChild(info);
-    var wrap = el('div', 'sc-row');
-    var sel = el('select', 'sc-input sc-w-lg'); sel.title = keyP + '/' + keyM;
-    var inherit = (llmVal[keyP] || '') === '';
-    function rebuild() {
-      sel.textContent = '';
-      var optMain = el('option'); optMain.value = ''; optMain.textContent = tr("跟随主模型（默认）");
-      optMain.selected = inherit; sel.appendChild(optMain);
-      var seen = {};
-      (hostModels || []).forEach(function (m) {
-        var combo = m.provider + '/' + m.id;
-        if (!seen[combo]) { seen[combo] = 1; var o = el('option'); o.value = combo; o.textContent = combo; if (!inherit && m.provider === llmVal[keyP] && m.id === llmVal[keyM]) o.selected = true; sel.appendChild(o); }
-      });
-      if (!sel.value) sel.value = ''; // 无匹配时落跟随主模型
-    }
-    sel.addEventListener('change', function () {
-      var v = sel.value;
-      var patch = {};
-      if (!v) { patch[keyP] = ''; patch[keyM] = ''; llmVal[keyP] = ''; llmVal[keyM] = ''; }
-      else {
-        var sp = v.indexOf('/');
-        var prov = v.slice(0, sp), model = v.slice(sp + 1);
-        patch[keyP] = prov; patch[keyM] = model; llmVal[keyP] = prov; llmVal[keyM] = model;
+    var p = modelPicker({
+      provider: llmVal[keyP] || '',
+      model: llmVal[keyM] || '',
+      effort: llmVal[keyE] || '',
+      labels: { inherit: tr("继承主会话（默认）"), provider: tr("服务"), model: tr("模型"), effort: tr("档位") },
+      onChange: function (patch) {
+        var toPost = {};
+        if (patch.provider !== undefined || patch.model !== undefined) {
+          toPost[keyP] = patch.provider || ''; toPost[keyM] = patch.model || '';
+          llmVal[keyP] = toPost[keyP]; llmVal[keyM] = toPost[keyM];
+        }
+        if (patch.effort !== undefined) { toPost[keyE] = patch.effort || ''; llmVal[keyE] = toPost[keyE]; }
+        if (!Object.keys(toPost).length) return;
+        appState.api('/distill/config', { method: 'POST', body: JSON.stringify(toPost) })
+          .then(function () {
+            var combo = (llmVal[keyP] && llmVal[keyM]) ? llmVal[keyP] + '/' + llmVal[keyM] : tr("继承主会话");
+            appState.statusFn('✓ ' + label + tr(" 已设") + '：' + combo + (llmVal[keyE] ? ' @' + llmVal[keyE] : '') + tr("——重载后生效"));
+          })
+          .catch(appState.failFn);
       }
-      appState.api('/distill/config', { method: 'POST', body: JSON.stringify(patch) })
-        .then(function () { appState.statusFn('✓ ' + label + tr(" 已设") + (v ? '：' + v : tr("（跟随主模型）")) + tr("——重载后生效")); })
-        .catch(appState.failFn);
     });
-    rebuild();
-    wrap.appendChild(sel);
-    item.appendChild(wrap);
+    item.appendChild(p.box);
     container.appendChild(item);
+    return p;
   }
 
-  function renderLlmCard() {
-    llmCard.textContent = '';
-    // 两用途：蒸馏 / 深睡（独立键，空=回落 llmProvider/llmModel→继承）
-    renderLlmSelect(llmCard, 'distillProvider', 'distillModel', tr("蒸馏模型"), tr("事件蒸馏（会话闲置提炼可复用知识）用的模型。继承=跟随主会话。"));
-    renderLlmSelect(llmCard, 'sleepProvider', 'sleepModel', tr("深睡归纳模型"), tr("深度睡眠（离线回想提炼 [原则]/[路径] 画像成长）用的模型。继承=跟随主会话。"));
-    var note = el('div', 'sc-mem-sub muted'); note.textContent = hostModels ? tr("宿主可用 ") + hostModels.length + tr(" 个模型") : tr("读取宿主模型…");
-    llmCard.appendChild(note);
-  }
-  appState.api('/llm/models').then(function (r) {
-    hostModels = (r && r.models) || [];
-    llmCard.textContent = '';
-    // 读当前持久值
+  var llmVal = {}; // 当前持久值 {distillProvider,distillModel,distillEffort,…}
+  appState.api('/llm/models').then(function () {
     return appState.api('/distill/config').then(function (d) {
       var run = (d && d.running) || {}, p = (d && d.persisted) || {};
-      llmVal.distillProvider = run.distillProvider != null ? run.distillProvider : (p.distillProvider || '');
-      llmVal.distillModel = run.distillModel != null ? run.distillModel : (p.distillModel || '');
-      llmVal.sleepProvider = run.sleepProvider != null ? run.sleepProvider : (p.sleepProvider || '');
-      llmVal.sleepModel = run.sleepModel != null ? run.sleepModel : (p.sleepModel || '');
-      renderLlmCard();
+      ['distill', 'sleep'].forEach(function (k) {
+        var P = k + 'Provider', M = k + 'Model', E = k + 'Effort';
+        llmVal[P] = run[P] != null ? run[P] : (p[P] || '');
+        llmVal[M] = run[M] != null ? run[M] : (p[M] || '');
+        llmVal[E] = run[E] != null ? run[E] : (p[E] || '');
+      });
+      llmCard.textContent = '';
+      // 两用途：蒸馏 / 深睡（独立键，空=回落 llmProvider/llmModel→继承）
+      renderLlmSelect(llmCard, 'distillProvider', 'distillModel', 'distillEffort', tr("蒸馏模型"), tr("事件蒸馏（会话闲置提炼可复用知识）用的模型。继承=跟随主会话。"));
+      renderLlmSelect(llmCard, 'sleepProvider', 'sleepModel', 'sleepEffort', tr("深睡归纳模型"), tr("深度睡眠（离线回想提炼 [原则]/[路径] 画像成长）用的模型。继承=跟随主会话。"));
     });
   }).catch(function () { llmCard.appendChild(el('div', 'sc-desc', tr("⚠ 宿主模型不可用"))); });
-  host.appendChild(llmCard);
 }
 
 function renderTogglesSched(host, g) {

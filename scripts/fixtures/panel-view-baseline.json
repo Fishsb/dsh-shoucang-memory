@@ -77,8 +77,33 @@
     },
     {
       "pane": "model",
+      "name": "档位 evalTier",
+      "kind": "select"
+    },
+    {
+      "pane": "model",
+      "name": "服务地址（OpenAI 兼容 /v1 根）与 key 环境变量",
+      "kind": "text"
+    },
+    {
+      "pane": "model",
       "name": "服务地址（OpenAI 兼容 /v1 根）",
       "kind": "select"
+    },
+    {
+      "pane": "model",
+      "name": "连通性测试",
+      "kind": "none"
+    },
+    {
+      "pane": "model",
+      "name": "评估模型",
+      "kind": "select"
+    },
+    {
+      "pane": "model",
+      "name": "启用评估通道 evalEnabled",
+      "kind": "checkbox"
     },
     {
       "pane": "model",
@@ -98,6 +123,11 @@
     {
       "pane": "model",
       "name": "语义召回开关 embedEnabled",
+      "kind": "checkbox"
+    },
+    {
+      "pane": "model",
+      "name": "允许出网 evalEgressAllow",
       "kind": "checkbox"
     },
     {
@@ -224,5 +254,5 @@
     }
   ],
   "note": "面板视图契约基线（真机渲染快照）",
-  "at": "2026-09-19T14:45:34.923Z"
+  "at": "2026-09-21T13:10:30.324Z"
 }

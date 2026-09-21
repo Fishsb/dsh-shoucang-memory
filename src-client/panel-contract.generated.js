@@ -7,7 +7,7 @@ export const PANEL_CONTRACT = {
   "$comment": "生成物（npm run build:host && node scripts/gen-panel-contract.mjs）—— 勿手改；源 = src/panel-contract.ts",
   "plugin": "dsh-shoucang-memory",
   "prefix": "/api/shoucang-panel",
-  "routeCount": 44,
+  "routeCount": 47,
   "routes": [
     {
       "path": "/roots",
@@ -302,12 +302,22 @@ export const PANEL_CONTRACT = {
           "optional": true
         },
         {
+          "name": "distillEffort",
+          "type": "any",
+          "optional": true
+        },
+        {
           "name": "sleepProvider",
           "type": "any",
           "optional": true
         },
         {
           "name": "sleepModel",
+          "type": "any",
+          "optional": true
+        },
+        {
+          "name": "sleepEffort",
           "type": "any",
           "optional": true
         }
@@ -364,6 +374,55 @@ export const PANEL_CONTRACT = {
           "optional": true
         }
       ]
+    },
+    {
+      "path": "/eval/config",
+      "summary": "评估通道配置读写（白名单补丁）",
+      "required": [],
+      "fields": [
+        {
+          "name": "evalEnabled",
+          "type": "any",
+          "optional": true
+        },
+        {
+          "name": "evalBaseUrl",
+          "type": "any",
+          "optional": true
+        },
+        {
+          "name": "evalModel",
+          "type": "any",
+          "optional": true
+        },
+        {
+          "name": "evalApiKeyEnv",
+          "type": "any",
+          "optional": true
+        },
+        {
+          "name": "evalTier",
+          "type": "any",
+          "optional": true
+        },
+        {
+          "name": "evalEgressAllow",
+          "type": "any",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "path": "/eval/test",
+      "summary": "评估通道连通性测试（只读；不落库）",
+      "required": [],
+      "fields": null
+    },
+    {
+      "path": "/eval/stats",
+      "summary": "评估通道判定统计（只读；折统一台账 type=eval.decision）",
+      "required": [],
+      "fields": null
     },
     {
       "path": "/vector/cache/clear",

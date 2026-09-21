@@ -10,7 +10,11 @@ export interface RouteSpec {
 export declare const DEEPSLEEP_CONFIG_KEYS: readonly ["enableDeepSleep", "deepSleepProbe", "deepSleepIdleMs", "deepSleepProbeAfterMs", "deepSleepProbeWindowMs"];
 /** 嵌入配置补丁白名单（与 panel-inject 的 EMBED_CONFIG_KEYS 一致；门禁比对防漂移） */
 export declare const EMBED_CONFIG_KEYS: readonly ["embedEnabled", "embedBaseUrl", "embedModel", "embedApiKeyEnv"];
-export declare const DISTILL_CONFIG_KEYS: readonly ["enableDistill", "idleWakeMs", "minTurnChars", "distillPrescan", "llmProvider", "llmModel", "distillProvider", "distillModel", "sleepProvider", "sleepModel"];
+/** 评估通道配置补丁白名单（M1 · ACT-283；与 panel-inject 的 EVAL_CONFIG_KEYS 一致；门禁比对防漂移）。
+ *  ⚠ 与 embed 同族但**多两键**：`evalTier`（档位，const union 防死开关）· `evalEgressAllow`（**出网许可**，
+ *    与 `evalEnabled` **分离**——「允许装外部服务」≠「允许记忆内容出机」）。 */
+export declare const EVAL_CONFIG_KEYS: readonly ["evalEnabled", "evalBaseUrl", "evalModel", "evalApiKeyEnv", "evalTier", "evalEgressAllow"];
+export declare const DISTILL_CONFIG_KEYS: readonly ["enableDistill", "idleWakeMs", "minTurnChars", "distillPrescan", "llmProvider", "llmModel", "distillProvider", "distillModel", "distillEffort", "sleepProvider", "sleepModel", "sleepEffort"];
 /** 认知环（MCL）**旋钮白名单**（与 scheduler.Config 的 mcl* 键同源；面板 `/mcl/config` 只认这些）
  *  —— 2026-09-13 架构重构后补：此前 MCL 只有 deepsleep/distill/embed 三家有写入口，MCL 五键在界面上不可调。 */
 export declare const MCL_CONFIG_KEYS: readonly ["mclEnabled", "mclFamiliarThreshold", "mclMaxNudges", "mclBudgetChars", "mclTopK", "mclAudit", "mclMaterialInSystem", "enableRemPass"];

@@ -26,6 +26,12 @@ import { renderAssocBlock, supplyAssociations } from './association-supply.js'
 import { TRIGGER, SURFACE, SCORE, MATURATION } from './criteria.generated.js'
 // S-P2b（2026-09-20）：探测域（8 键）按**领域接缝**抽出 —— schema 与显式映射同处一文件，单一事实源。
 import { probeConfigSchema, probeOptionsOf, type ProbeConfigFields } from './probe-config.js'
+// ACT-295（2026-09-21）：子代理路由域（8 键，含**档位**）按同一接缝抽出 —— 解本件冻结棘轮。
+import { modelConfigSchema, modelOptionsOf, resolveRoute, type ModelConfigFields } from './model-config.js'
+// ACT-295（2026-09-21）：宿主模型目录（含 efforts/defaultEffort）的**单一实现**，本件只委托。
+import { createLlmCatalog } from './llm-catalog.js'
+// M1（ACT-283）评估通道配置域：按领域接缝抽出（同 probe-config 先例）。
+import { evalConfigSchema, evalOptionsOf, type EvalConfigFields } from './eval-config.js'
 import { registerDistill } from './distill.js'
 import type { CompositionHandles, SchedulerApi } from './composition.js'
 import { registerMcl } from './mcl.js'
@@ -53,7 +59,7 @@ const SELF_MEMBER: SuiteMember = {
 const memberSpecsOf = (config: Config): SuiteMember[] =>
   (Array.isArray(config.members) && config.members.length ? config.members : [SELF_MEMBER])
 
-export interface Config extends ProbeConfigFields {
+export interface Config extends ProbeConfigFields, EvalConfigFields, ModelConfigFields {
   members: SuiteMember[]
   verify_enabled: boolean // G30 证据计数（#5，审计 §8 Q3 兼容）
   // ═══ ADR-0002 阶段 2：蒸馏器配置（蒸馏配置归守藏，承接原记忆仓 F-001/F-002）═══
@@ -65,11 +71,10 @@ export interface Config extends ProbeConfigFields {
   distillPrompt: string // 蒸馏子代理 persona 覆盖（缺省内建 v5 契约）
   llmProvider: string // 子代理 provider 缺省（空=继承主会话模型）——distill/sleep 未单独指定时回落
   llmModel: string // 子代理 model 缺省（空=继承主会话模型）
-  // 2026-09-10 用户拍板：蒸馏/深睡各自独立模型（直接用 Harness 模型体系）
-  distillProvider: string // 蒸馏子代理 provider（空=回落 llmProvider→继承主会话）
-  distillModel: string
-  sleepProvider: string // 深睡归纳子代理 provider（空=回落 llmProvider→继承主会话）
-  sleepModel: string
+  // ACT-295（2026-09-21）：本族 8 键（llm*/distill*/sleep*，**含新增两枚档位** distillEffort/sleepEffort）
+  //   已按**领域接缝**抽到 `model-config.ts`（类型经上方 `extends ModelConfigFields` 继承，
+  //   schema 经下方 `...modelConfigSchema` 展开引入；回落规则由 `resolveRoute` 单一实现）。
+  //   2026-09-10 用户拍板：蒸馏/深睡各自独立模型（直接用 Harness 模型体系）。
   // 2026-09-10：记忆库容量门（写门用）
   capAgent: number
   capUser: number
@@ -170,13 +175,9 @@ export const Config: any = z.object({
   distillPrescan: z.boolean().default(true).description('预筛：无信号词且无 pending 候选则不唤醒 LLM 子代理'),
   prescanMinChars: z.number().min(0).default(4000).description('大段强制蒸馏阈值（字符）：增量 ≥ 此值跳过预筛直接蒸馏（2026-09-10 用户拍板；缺省 4000）'),
   distillPrompt: z.string().default('').description('蒸馏子代理 persona 覆盖（缺省内建 v5 契约）'),
-  llmProvider: z.string().default('').description('子代理 provider 缺省（空=继承主会话模型）——distill/sleep 未单独指定时回落此键'),
-  llmModel: z.string().default('').description('子代理 model 缺省（空=继承主会话模型）——distill/sleep 未单独指定时回落此键'),
-  // 2026-09-10 用户拍板：蒸馏/深睡模型各自独立配置（直接用 Harness 模型体系，下拉选宿主模型）
-  distillProvider: z.string().default('').description('蒸馏子代理 provider（空=回落 llmProvider → 继承主会话）'),
-  distillModel: z.string().default('').description('蒸馏子代理 model（空=回落 llmModel → 继承主会话）'),
-  sleepProvider: z.string().default('').description('深睡归纳子代理 provider（空=回落 llmProvider → 继承主会话）'),
-  sleepModel: z.string().default('').description('深睡归纳子代理 model（空=回落 llmModel → 继承主会话）'),
+  // ACT-295（2026-09-21）：子代理路由域 8 键（llm*/distill*/sleep*，**含两枚新增档位**）已抽到
+  //   `model-config.ts`（声明与映射与回落规则同处一文件 ⇒ 单一事实源；解本件冻结棘轮）。
+  ...modelConfigSchema,
   // 2026-09-10：记忆库容量门（写门 SHOUCANG_CAP_* 的 UI 源）——控制蒸馏/扩增能长多大；注入不裁（执行时总看完整画像+记忆）
   // 2026-09-11 用户拍板：默认值 = 画像 3,000（AGENT/USER 各一）/ 记忆 5,000（原 AGENT 3000 · USER 2000 · MEMORY 3000）
   capAgent: z.number().min(100).default(3000).description('AGENT.md 容量门（字符，写门强制；缺省 3000）'),
@@ -195,6 +196,8 @@ export const Config: any = z.object({
   deepSleepIdleMs: z.number().min(600000).default(TRIGGER.idleMs).description('停滞判定阈值（毫秒）：无任何会话活动持续满此时长触发深度睡眠归纳（缺省读注册表 TRIGGER.idleMs = 2700000ms 即 45min；⚠ 2026-09-15 P0.1 实证订正：此处原描述误称 3 小时）'),
   // ═══ 会话活跃状态机（2026-09-08 重构）：探测域 schema 展开（S-P2b 抽出到 probe-config.ts）═══
   ...probeConfigSchema,
+  // ═══ 可配置评估通道（M1 · ACT-283）：评估域 schema 展开（eval-config.ts）═══
+  ...evalConfigSchema,
   deepSleepDaemonParent: z.boolean().default(false).description('无会话场景兜底：自建守护 parent 承载归纳子代理（宿主新建空 agent 路径未经验证，默认关）'),
   activationShadow: z.boolean().default(true).description('路线④ 打扰度影子观察：每轮 user 消息按词法打分（recallIndex），滞回+冷却，只落**统一台账** <knowledgeRoot>/audit/ledger.jsonl（	ype=activation.shadow），不注入上下文——默认开，攒样本校准阈值'),
   activationPrefetch: z.boolean().default(false).description('路线④ active 注入（缺省关）：影子校准满意后开启；注入接线为后续档'),
@@ -305,28 +308,15 @@ function applySuiteConfigFile(config: Config, warn?: (m: string) => void): void 
   }
 }
 
+/** 模型目录项（**向后兼容**：`llm-catalog.ts` 的 `LlmModelEntry` 是本形状的超集，
+ *  多出 `efforts`/`defaultEffort`/`contextWindow` ⇒ 旧消费方零迁移）。 */
 type LlmModelsFn = () => Promise<Array<{ provider: string; id: string; name: string }>>
 
-/** LLM 模型枚举（2026-09-10：直接用 Harness 模型体系——listProviders→listModels 扁平；供蒸馏/深睡下拉） */
-const llmModelsOf = (ctx: Context) => async (): Promise<Array<{ provider: string; id: string; name: string }>> => {
-  const out: Array<{ provider: string; id: string; name: string }> = []
-  try {
-    const llm = (ctx as { llm?: unknown }).llm as { listProviders?: () => unknown[]; listModels?: (p: string) => Promise<Array<{ id: string; name?: string }>> } | undefined
-    if (!llm || typeof llm.listProviders !== 'function') return out
-    const providers = llm.listProviders() || []
-    for (const p of providers) {
-      const pid = String((p as { id?: string; provider?: string; name?: string })?.id ?? (p as { provider?: string })?.provider ?? (p as { name?: string })?.name ?? '')
-      if (!pid) continue
-      if (typeof llm.listModels === 'function') {
-        try {
-          const ms = await llm.listModels(pid)
-          for (const m of ms || []) out.push({ provider: pid, id: m.id, name: m.name || m.id })
-        } catch { /* 单 provider 枚举失败跳过 */ }
-      }
-    }
-  } catch { /* 宿主 llm 不可用=空 */ }
-  return out
-}
+/** LLM 模型枚举（2026-09-10 起：直接用 Harness 模型体系；**2026-09-21 ACT-295 起委托 `src/llm-catalog.ts`**）。
+ *  为什么搬家：本件原内联 20 行只回 `{provider,id,name}` ⇒ 面板**选不了档位**（reasoning effort），
+ *    而宿主 `AgentOptions.reasoningEffort` 是真字段。档位富化需 `resolveModelInfo` 逐模型调用，
+ *    塞回此处必撞本件冻结棘轮（基线 606）⇒ 按领域接缝抽到 `llm-catalog.ts`。 */
+const llmModelsOf = (ctx: Context) => createLlmCatalog(ctx)
 
 /** shoucang_suite：suite 只读装配检测（矩阵单一实现在 targets.ts） */
 function suiteTool(config: Config) {
@@ -651,12 +641,8 @@ function distillOptionsOf(config: Config) {
   distillPrescan: config.distillPrescan,
   prescanMinChars: config.prescanMinChars,
   distillPrompt: config.distillPrompt,
-  llmProvider: config.llmProvider,
-  llmModel: config.llmModel,
-  distillProvider: config.distillProvider,
-  distillModel: config.distillModel,
-  sleepProvider: config.sleepProvider,
-  sleepModel: config.sleepModel,
+  // ACT-295：路由域 8 键（含档位）经 `modelOptionsOf` **显式映射**（与 schema 同文件，单一事实源）。
+  ...modelOptionsOf(config),
   enableDeepSleep: config.enableDeepSleep,
   enableRemPass: config.enableRemPass,
   deepSleepIdleMs: config.deepSleepIdleMs,
@@ -664,6 +650,8 @@ function distillOptionsOf(config: Config) {
   //   ⚠ 本件下方两行注释记的「schema 有 ≠ 运行时 config 有」正是本形态最容易漏的坑：
   //   新增键必须**在 probe-config.ts 内两处都加**（schema + 映射），**不要**回到本文件散着写。
   ...probeOptionsOf(config),
+  // M1（ACT-283）：评估域 6 键经 `evalOptionsOf` 显式映射（同 probe 域法，防「schema 有 ≠ config 有」）。
+  ...evalOptionsOf(config),
   // ⚠ 2026-09-16 补：这两个键**此前只在 zod schema 里、没进本映射** ⇒ 白名单不报警（schema 认得），
   //   但下游 `config` 里**永远是 undefined** ⇒ 功能"接线了却开不了"（实测：置 cap=30000 后仍 `chunk=0/1`）。
   //   教训：**schema 有 ≠ 运行时 config 有** —— 本件是"显式映射"形态，新增键必须**两处都加**。
@@ -712,12 +700,8 @@ function schedulerShareApiOf(config: Config, llmModels: LlmModelsFn): SchedulerA
       idleWakeMs: config.idleWakeMs,
       minTurnChars: config.minTurnChars,
       distillPrescan: config.distillPrescan,
-      llmProvider: config.llmProvider,
-      llmModel: config.llmModel,
-      distillProvider: config.distillProvider,
-      distillModel: config.distillModel,
-      sleepProvider: config.sleepProvider,
-      sleepModel: config.sleepModel,
+      // ACT-295：路由域经 `modelOptionsOf` 单一映射（含 distillEffort / sleepEffort）
+      ...modelOptionsOf(config),
     }),
     llmModels,
   }

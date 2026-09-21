@@ -3186,6 +3186,44 @@
     ⚠ **②″ 的由来（先红自证抓到的判据盲区，值得记档）**：把 `write.profile` 改成 `write.ingest` **制造真矛盾**后，② **不翻红** —— 因为两处 `target` 都是**表达式**，静态看不到运行期取值。⇒ 补 **②″ 运行期判据**（扫真库：已落库的取值是事实），并为其加 `--kroot` 覆盖口使**可先红自证**：注入矛盾行 ⇒ **exit 1**（`write.test 文件名 1 行 + 库标识 1 行`）；真库 ⇒ 绿（`write.consolidate` 文件名 65/0 · `write.ingest` 库标识 537/0）。**静态抓不到的形态必须由运行期判据兜 —— 本门自身即该通例的实例。**
 
 ### Added
+- **可配置评估通道「面板化 + 可设置模型」（2026-09-21 · ACT-295 · 用户指令「面板里按需开，并且调整为可设置模型，模型设置参考 DSH 输入框的模型选项卡，其他几个项目也有同样的设置模块」）**：把 M1–M4 只有后端的那条通道**开出面板写着面**，并把仓内**三套各写一份**的模型下拉收敛成**一个共享件**。
+  · **面板里按需开**：参数页「③ 模型与向量」新增**评估通道卡**（`src-client/panes-eval.js`，单独成件——`panes-toggles.js` 实测 568 行，而 `check-module-growth` 的冻结阈是 600，整块塞进去必越线，抬基线属 R3）。含 `evalEnabled` 开关 · 模型 · 端点 · 档位 · **出网许可**（与开关分离的第二项授权）· 连通性测试。此前**用户只能手写 `~/.dsh/suite/scheduler.json`**，且观测页那句「到「参数调节」开启 evalEnabled」**指向一个并不存在的控件**（本轮补齐）。
+  · **`src-client/model-picker.js`——模型选择器单一实现**（服务 → 模型 → 档位）。判据：仓内已有 `renderLlmSelect`（蒸馏/深睡，两参无档位）与 embed 的浏览器直连枚举块各写一份 ⇒ 用户要「其他几个项目也有同样的设置模块」。**复刻官方契约而不挂其组件**：实测 `dsh-client-ui-model-selection` 的 `ModelSelect` 是 React + `ctx.modelDirectories` + `SessionId`，且 `available=false` 时**直接渲染 null** ⇒ 本面板（纯 DOM / esbuild 单 IIFE）物理不可复用（与记忆 `notes/tools.md §DSH 插件生态调研` 的既有裁决一致）。
+  · **★ 档位是真字段，且只在真支持处出现**（本轮的诚实点，两个方向都踩过）：① 蒸馏/深睡走 `ctx.subagents.start('spawn', {agentOptions})`，宿主 `AgentOptions.reasoningEffort` **是真字段**（`@deepseek-ai/dsh-agent` 类型实证）⇒ 新增 `distillEffort`/`sleepEffort` 两键并**真接线**，空档位**不带该字段**（沿用模型默认），**不塞空串**（会被 adapter 当非法档位拒call）；② **评估通道刻意不设 effort 旋钮** —— 它走裸 `node:http` 发 OpenAI 兼容 / Ollama 原生 `/api/chat`，**请求体里没有该字段**，设了就是本仓明令禁止的**假旋钮**；该路的档位是早已存在且真被消费的 `evalTier`（决定**超时预算**与**置信阈值口径**）。
+  · **新增两模块（101→103）**：`model-config.ts`（子代理路由域 8 键**单一事实源**：schema / 显式映射 / **回落规则 `resolveRoute`** / **`withEffort`** 同处一文件）+ `llm-catalog.ts`（宿主模型目录单一实现：`listProviders → listModels → resolveModelInfo` 富化出每模型的 `efforts`/`defaultEffort`/`contextWindow`；`scheduler.ts#llmModelsOf` 改委托，返回形状是旧 `{provider,id,name}` 的**超集**⇒ 旧消费方零迁移）。两件抽出后 `scheduler.ts` **613 → 578 行**，冻结基线按棘轮纪律**随之下调**（是收紧不是放宽）。
+  · **门禁抓到的四处真缺陷（都已修，值得记档）**：① `panes-eval.js` 在**装载期**调 `tr()` ⇒ 中文被冻死、切英文不生效（`check-i18n-redlines` R4 抓到）；② `model-picker.js` 注释里写出禁用的 toggle 字面量 ⇒ 被 `test-fold-state` 的反模式锁**按文本**判红（本仓「断言匹配到注释」型缺陷，本轮实测踩到）；③ 档位内联展开把 `distillAgent` 顶到 **406 行**、破 `audit-fnspan` 的「>400 行函数 ≤0」⇒ 抽出 `withEffort` + `classifySegment`（顺带把失败归类变成可单测的纯函数）；④ 特性探针用中文 needle 恒不命中（esbuild 把产物 CJK 转义成 `\uXXXX`）⇒ 改纯 ASCII 探针。
+  · **判据**：新增 `scripts/test-model-config.mjs`（**38 条**，登记 `CHECKS` 197 件），含「空档位不带字段 / 成对回落规则 / schema＝投影键集 / 两处调用点真用共享实现 / 面板白名单放行两键 / 目录降级不抛」；`check-installed-features` 增 **12 项**出口符号级标记（102→114）。
+  · **五层核验**：typecheck 0 错 · build OK · 全量 `check-runner` **194 pass**（余 3 项红为**既有/环境**：`inject-baseline-diff` 因活库自变、`check-installed-sync` 部署前态、`eval-gate` 需本机模型后端）· `ui-geo-regress` **121 PASS / 0 FAIL** · 副本 **314/314 sha1 一致** · 热重载 fiber active · 探针 114 项齐全。
+- **可配置评估通道 M1 落地（2026-09-21 · ACT-283 · 用户授权「执行落地」）**：新增**三个模块**（96→99）+ 两条只读路由 + 面板入口。补 **Rasmussen SRK 的 rule-based 中层**（自动化层 `planXxx` 与推理层 LLM 子代理本已齐，中间那层是空位）。
+  · **`eval-config.ts`**：评估域**配置单一事实源**（6 键 schema 与显式映射同文件——沿 `probe-config` 先例；档位 **const union** 防死开关，先例 `scheduler.storeMode`）。含**出网判据 `isLoopbackUrl`/`egressAllowed`**：判因是仓内**两份 `isLocal` 实现各有漏法**（`vec.ts:243` 漏 `127.0.0.2`/`[::1]`/无尾斜杠/大写；`panel-shared.ts:803` 的 `isLocalBase` **会把 `127.0.0.1.evil.com` 判成 LOCAL**），故出网判定**一律走解析后的 hostname**。
+  · **`eval-channel.ts`**：运行时。**七态归因**（`ok`/`off`/`egress-denied`/`key-missing`/`unreachable`/`bad-body`/`type-violation`）—— 治 `vec.ts:240-260` 把六类失败**全塌缩成 `null`** 致真机 `embed-off`=0（"调了但失败"与"没调"**账上同形**）。state 白名单（只收已提炼断言，**拒项如实计数**）；严格解析（值越域/NaN 一律拒）；**`node:http` 直连** —— 因仓内实测**宿主全局 `fetch` 被 DSH patch**（`panel-inject.ts:211-212` 原文「11434 经 fetch 不通、node:http 通」）。
+  · **`panel-eval.ts`**：面板面（配置读写 + 连通性测试）。**按门禁指路切分**——初版加在 `panel-inject.ts` 使其 **624 行 ≥600**，`check-module-growth` 原文「**新功能应落新模块，而不是堆大旧模块**」；抬基线属 R3，故走切分。
+  · **默认关闭**（fail-closed）+ **出网许可与开关分离**（`evalEgressAllow` 缺省 false —— 「允许装外部服务」≠「允许记忆内容出机」，**两项独立授权**）。
+  · **真机端到端实证**（非接口自述）：/eval/config 200 · 关闭态 `/eval/test` → `outcome:"off"`/`latencyMs:0`（**零网络**）· 开启后 → **`outcome:"ok"`/`latencyMs:10997`**（证明 `node:http` 确绕开被 patch 的 fetch）· 测后已恢复关闭态。
+  · **实测抓出一处真缺陷**：初版超时照抄 `vec.ts` 的云端 8s ⇒ 本机 `qwen3:8b` 单次实测 **8459ms** ⇒ `unreachable·timeout`。⇒ 改为**按端点分层**（本机 60s 含模型加载 / 远端 15s）。**43 条判据全绿也没抓到它——只有真机端到端跑才暴露**。
+  · 判据：`test-eval-channel`（86 条，已登记 `CHECKS` 194 件）+ `eval-gate`（G2 闸门：中文类型化 **19/20=95%** vs 基线 17/20=85%，G2-a/G2-b 均 PASS）。
+- **可配置评估通道 M2：判定落账 + 阈值随档（2026-09-21 · ACT-283 续）**：新增 `src/eval-ledger.ts`（99→100 模块）+ 只读 `/eval/stats`，判据 86 条。
+  · **落账分态**（治会审认定的最重技术缺陷 `E-02 归因塌缩`）：本仓 `vec.ts:240-260` 把**六类失败全塌缩成 `null`**、归因只看配置位 ⇒ 真机 `missReason` 里 **`embed-off`=0**（"调了但失败"与"没调"**账上同形**）。本件落 `type=eval.decision` 行带**七态 outcome**；真机实证 **`distinctOutcomes=2`**（`ok:1` + `off:1`）。
+  · **只落形态不落内容**（沿 `yield-rounds` 的既有隐私决定）：行内只有 `stateChars` + `stateSha8` + `qTypes`，**无 state/题目原文** —— 台账直读已验。
+  · **阈值随档、不共用一套**：`native`（TypeSafe，官方唯一提供**原生校准概率**）用 `0.9/0.5`；其余（适配器/本地）用保守 `0.95/0.7`——官方原文明确适配器「**not guaranteed to be calibrated**」。**无置信度一律 `review`**（不放行）。
+  · **并入既有统一台账** `ledger.jsonl`（与 `score.shadow` 同文件），**不新开 `.jsonl` 流**——`check-observability` 的观测流登记表**只许减不许增**（会审 impl B6）。
+  · **四问可答**：谁做的（`source`）· 有无回落（`fellBack`）· **去向哪里**（`destHost`+`destLoopback`）· 置信多少（`confidenceMin`）。
+  · **一处判据写错被门禁抓出**：`G6` 原本断言"0.95@local ⇒ review"，实为我把 `>=` 误当 `>`（0.95 恰达 `weak.high`，判 accept 是对的）⇒ 改判据为「取两档之间的 0.92 验证**同置信度不同档不同处置**」。
+  · **另一处设计错被门禁抓出**：UI 文案初版做**语序片段拼接**（`共 `/`N 条`/`分态`），被 `check-i18n-keys` 的「词表内重复键」当场判红 ⇒ 改为数字在前、标签自包含。
+- **可配置评估通道 M4：观测面明细（2026-09-21 · ACT-283 续）**：判据 86 → **98 条**；`check-installed-features` 增 **10 条出口符号级标记**（92→102 项）。
+  · **为什么不新增端点**（设计判断）：M2 已建 `/eval/stats`，其聚合正答四问之前三问；方案 §4-M4 原写的 `/eval/status` 若另开，会与它**语义重叠**。⇒ 把 M4 意图**折入 `/eval/stats`**，补 `recent[]` **逐条明细**——四问本是**单条**属性，聚合答不了"**哪一条**回落了、去了哪"。
+  · **接口**：`GET /eval/stats?recent=N`（缺省 20，上限 100）；`recent=0` ⇒ 空明细（**不假装有明细**），且**聚合仍全量**（截断只影响明细，不影响分母）。
+  · **明细同样只落形态**：`source/tier/outcome/why/modelId/destHost/destLoopback/qCount/confidenceMin/fellBack/latencyMs/point` —— **无 state 原文**（判据 I10 正面断言）。
+  · **真机实证**：`recent=5` ⇒ 2 条明细逐条可读（`ok conf=1 8402ms` / `off conf=- 0ms`）；`recent=0` ⇒ `recentCount=0 · total=2`（聚合未受影响）。
+  · **本步零新模块**（仍 100）：只扩 `eval-ledger.ts` 的 `statsOfLines` 签名 + `/eval/stats` 读参 + UI 明细显示。
+- **方案档：承诺结算链（2026-09-19 · `docs/promise-settlement-plan.md` · 用户选「A 只出方案+验收成对」）**：
+  · **为什么先做闸门**：方案首要未知量是「把记忆库的**中文**材料交给类型化决策通道，中文精度够不够」—— 官方对 Jev 只说 CJK "handled but **not equally well**"，全仓与全网**零中文实测**，属不可推断、只能实测。
+  · **本机实测（`qwen3:8b` @ 本机 Ollama，**无需任何 API key**）**：类型化形态（choice/boolean + confidence）**19/20 = 95.0%**；基线（同批样本、同后端、自由作答）17/20 = 85.0%；**G2-a PASS**（95% ≥ 85%×90%）· **G2-b PASS**（高置信 100% vs 低置信 83.3%）。唯一错例 `T3-1`（"端口占用/服务判活"误归「网络坑」，正确为「DSH 自托管约束」）。
+  · **反直觉发现**：**类型化反而优于自由作答**（19 vs 17）—— 基线错在 T1-5/T1-8（标签混淆），强制枚举消除了这类错。
+  · **方法学关键（沿用本仓「假绿」纪律）**：① 答案**人工逐条给定**、不从模型回读（否则是自证）；② 基线用**同批样本 + 同一后端**，不引仓内历史数字；③ 后端不可达 ⇒ **exit 3 = skip，不算通过**（与 `inject-baseline-diff` 同口径）。
+  · **诚实标注**：**校准性未验** —— confidence 数值是否名副其实须 **A 档真概率**，本件不做（B 档无真概率，只验**排序性**）。
+  · **M0-1 撤回（自纠）**：会审曾判「模块数 96 vs 实测 97」为作废级 —— 补跑门本体 `check-arch-sync` 得 **PASS**（声称 96 · 实测 96 · **排除生成物 1 件**）⇒ 口径本就自洽，该条**不成立**。错因：**只数文件（代理指标）未跑门本体（权威判据）**，与本方案全篇批判的假绿同型。教训已落方案 §1 与 §2-M0-1′。
+  · **未动 src**：本轮工作树仅 `CHANGELOG.md` + `check-runner.mjs`（登记 1 行）+ 两个新文件；**零 src 改动、零跨会话共享面**（符合 R2）。
 - **方案档：承诺结算链（2026-09-19 · `docs/promise-settlement-plan.md` · 用户选「A 只出方案+验收成对」）**：
   治「承诺**只进不出**」——实测 `commitment.open` **75** / `commitment.settle` **1**（且那 1 条是 09-13
   回填补发的状态迁移，活路径**从未结算过一次**），75 条记录 `lifecycle` **全 active**（pending 74 · kept 1）。

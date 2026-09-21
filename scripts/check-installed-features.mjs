@@ -90,6 +90,34 @@ const HOST_FEATURES = [
   ['S-P2a 睡眠窗口归约（planSleepWindow）', 'lib/trigger-plan.js', 'planSleepWindow'],
   ['S-P2b 探测结论决策表（planProbeOutcome）', 'lib/probe-plan.js', 'planProbeOutcome'],
   ['S-P2b 冲突有界阈值（conflictRound）', 'lib/probe-plan.js', 'conflictRound: c'],
+  // 可配置评估通道 M1+M2+M4（2026-09-21 · ACT-283 / ADR-280/284/286/287）——同纪律：**出口符号级**标记。
+  //   立件理由同本件头注：「文件 sha 一致 ≠ 特性齐全」⇒ 装上去的那份必须带本轮的**判据与出口**。
+  ['评估通道 出网闸（egressAllowed）', 'lib/eval-config.js', 'egressAllowed'],
+  ['评估通道 出网判定走解析 hostname（isLoopbackUrl）', 'lib/eval-config.js', 'isLoopbackUrl'],
+  ['评估通道 七态归因（EvalOutcome）', 'lib/eval-channel.js', 'egress-denied'],
+  ['评估通道 node:http 直连（绕开被 patch 的 fetch）', 'lib/eval-channel.js', 'node:http'],
+  ['评估通道 默认关闭 fail-closed', 'lib/eval-config.js', "evalEnabled: z.boolean().default(false)"],
+  ['评估通道 阈值随档不共用（EVAL_THRESHOLDS）', 'lib/eval-ledger.js', 'EVAL_THRESHOLDS'],
+  ['评估通道 落账只落形态（stateSha8）', 'lib/eval-ledger.js', 'stateSha8'],
+  ['评估通道 落账并入统一台账（eval.decision）', 'lib/eval-ledger.js', 'eval.decision'],
+  ['评估通道 M4 明细（recent）', 'lib/eval-ledger.js', 'recent'],
+  ['评估通道 面板面三路由', 'lib/panel-eval.js', '/eval/stats'],
+  /* ACT-295（2026-09-21）：评估通道**面板化 + 模型选择器共用**——装上去的那份必须带这些出口，
+   *   否则"文件 sha 一致"会掩盖"UI 其实还是旧代"（本件头注的立件理由）。 */
+  ['模型选择器 共享三级实现入产物（modelPicker）', 'lib/client.js', 'modelPicker'],
+  ['模型选择器 endpoint 源可枚举（enumerateEndpoint）', 'lib/client.js', 'enumerateEndpoint'],
+  ['模型选择器 装载期不调 tr（R4 红线）', 'lib/client.js', 'setShown'],
+  ['评估通道面板卡 按需开（renderEvalCard）', 'lib/client.js', 'renderEvalCard'],
+  /* ⚠ 探针必须**纯 ASCII**：esbuild 把产物里的 CJK 转义成 `\uXXXX`，中文标记恒不命中
+   *   （本轮实测踩到一次：'允许出网 evalEgressAllow' 判缺失）。此处改用代码里的 ASCII 标识。 */
+  ['评估通道面板卡 出网许可控件（evalEgressAllow）', 'lib/client.js', 'evalEgressAllow'],
+  ['模型路由域 单一事实源（modelConfigSchema）', 'lib/model-config.js', 'modelConfigSchema'],
+  ['模型路由域 回落规则单一实现（resolveRoute）', 'lib/model-config.js', 'resolveRoute'],
+  ['子代理档位组装单一实现（withEffort）', 'lib/model-config.js', 'withEffort'],
+  ['子代理档位真进 spawn（withEffort 调用点）', 'lib/distill-agent.js', 'withEffort'],
+  ['深睡档位真进 spawn（withEffort 调用点）', 'lib/deepsleep-run.js', 'withEffort'],
+  ['宿主模型目录含档位富化（createLlmCatalog）', 'lib/llm-catalog.js', 'createLlmCatalog'],
+  ['任务归类纯函数（classifySegment）', 'lib/distill-agent.js', 'classifySegment'],
   ['S-P3 段级流程状态读口（readSegFlowState）', 'lib/distill-watermark.js', 'readSegFlowState'],
   ['S-P4 自检节拍持久判据（dueSelfCheck）', 'lib/trigger-plan.js', 'dueSelfCheck'],
   ['S-P2b 探测域配置单一事实源（probeConfigSchema）', 'lib/probe-config.js', 'probeConfigSchema'],

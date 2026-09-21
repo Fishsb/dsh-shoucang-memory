@@ -85,6 +85,9 @@ const table = new Map((mod.PANEL_ROUTES || []).map((r) => [r.path, r]))
 {
   const obs = readFileSync(join(SRC, 'panel-observe.ts'), 'utf8')
   const inj = readFileSync(join(SRC, 'panel-inject.ts'), 'utf8')
+  /* M1（ACT-283）：评估通道白名单随其面板面一并切到 `panel-eval.ts`（初版在 panel-inject 使其 624 行 ≥600）。
+   * 门禁按**源码文本**取白名单 ⇒ 源文件换了必须同步此处，否则会报「源码未找到白名单」（本轮实测踩过）。 */
+  const evl = readFileSync(join(SRC, 'panel-eval.ts'), 'utf8')
   const cmp = (label, exported, srcKey, srcText) => {
     const m = new RegExp('const ' + srcKey + "\\s*=\\s*\\[([^\\]]*)\\]").exec(srcText)
     if (!m) return bad('③ 源码未找到白名单 ' + srcKey)
@@ -105,6 +108,7 @@ const table = new Map((mod.PANEL_ROUTES || []).map((r) => [r.path, r]))
   }
   cmp('蒸馏配置', mod.DISTILL_CONFIG_KEYS || [], 'DISTILL_CONFIG_KEYS', obs)
   cmp('嵌入配置', mod.EMBED_CONFIG_KEYS || [], 'EMBED_CONFIG_KEYS', inj)
+  cmp('评估通道配置', mod.EVAL_CONFIG_KEYS || [], 'EVAL_CONFIG_KEYS', evl)
 }
 
 console.log('\n结果: ' + pass + ' PASS / ' + fail + ' FAIL')

@@ -75,6 +75,11 @@ export interface DistillConfig {
   distillModel: string
   sleepProvider: string
   sleepModel: string
+  // ACT-295（2026-09-21）：子代理**档位**（reasoning effort，adapter 自有词表；空=沿用模型默认）。
+  //   ⚠ 这是真字段的落点：宿主 `AgentOptions.reasoningEffort` 由 `ctx.subagents.start('spawn',{agentOptions})`
+  //     透传（见 `distill-agent.ts` 的 agentOptions 组装），**不是假旋钮**。
+  distillEffort?: string
+  sleepEffort?: string
   // S3-1（2026-09-14）：蒸馏触发开关。`false` ⇒ 只关蒸馏的**触发入口**（`armIdleTimer` 自动触发 +
   //   `runDistillNow` 手动触发），**保留 `distillAgent`** 供深睡作回调 ⇒ 维护链与生产链**独立启停**。
   //   缺省（undefined）视为开启，行为与改动前一致。
@@ -111,6 +116,15 @@ export interface DistillConfig {
   embedBaseUrl?: string // OpenAI 兼容 embeddings 基址
   embedModel?: string // embedding 模型名
   embedApiKeyEnv?: string // key 环境变量名（本地免 key）
+  // ── ACT-293：评估域 6 键（**运行时早已由 `distillOptionsOf` 的 `...evalOptionsOf(config)` 传入**，
+  //    但本接口此前**未声明** ⇒ 类型与运行态脱节：消费者在类型层就看不见它。
+  //    形态即本仓反复记的「schema 有 ≠ 运行时 config 有」的第三种表现：**映射有 ≠ 类型有**。 */
+  evalEnabled?: boolean
+  evalBaseUrl?: string
+  evalModel?: string
+  evalApiKeyEnv?: string
+  evalTier?: string
+  evalEgressAllow?: boolean
   // ═══ v2（ADR-122）检索/运维面 ═══
   recallFusion?: string // 融合策略：'rrf'（缺省，排名融合 k=60）| 'weighted'（旧 min-max 加权，回滚用）
   bankGit?: boolean // 记忆库本地 git 版本化（写后快照；缺省开，失败静默）
@@ -198,11 +212,13 @@ const loadEngineSignals = async (): Promise<void> => {
 import { runNode, textOf } from './distill-proc.js'
 import type { RunResult } from './distill-proc.js'
 import { createWriteApi } from './distill-write.js'
+import type { WriteDeps } from './distill-write.js'
 import { createActApi } from './distill-activation.js'
 import { createAgentApi } from './distill-agent.js'
 import { createHooksApi, mountDistillEvents } from './distill-hooks.js'
 import { createBankApi } from './distill-bank.js'
 import { createEmbedApi } from './distill-embed.js'
+import { ingestAuditOf } from './eval-ingest-audit.js'
 
 // ── 蒸馏器主体 ──
 /**
@@ -225,6 +241,27 @@ export function distillEntryOf(agent: ReturnType<typeof createAgentApi>, enableD
     ...agent,
     armIdleTimer: () => { /* 蒸馏已关闭：不武装（深睡不走此入口） */ },
     runDistillNow: async () => ({ ok: false, sessions: 0, note: 'enableDistill=false（蒸馏已关闭）' }),
+  }
+}
+
+/**
+ * `createWriteApi` 的依赖包（**模块级** · ACT-293 · 装配超限抽出的函数）。
+ *
+ * 判因：接线后 `registerDistill` 超出 `audit-wiring` 的 I1 上限（装配 ≤120 行）。
+ *   该棘轮**只许收紧**（抬基线属 R3）⇒ 走仓内既有出路「装配超限先抽模块函数」。
+ *
+ * ACT-293 接线：`auditIndexLine` = 评估通道的**真实消费者**（方案档 A4 要求"新件有消费者"）。
+ *   · 默认关闭 ⇒ `ingestAuditOf` 返回 `undefined` ⇒ 钩子不接 ⇒ 与改造前逐字节一致
+ *   · 接缝刻意**不动冻结件 `mcl.ts`**（方案 §4-M3 那步须先解 E-05 竞态）
+ *   · 能力依据 = 三模型真库对照（假阳性 15–50%），见 `_memory/audit/consumer-compare.mjs`
+ */
+function writeDepsOf(c: WriteDeps & { embedCfgOf: () => EmbedCfg }): WriteDeps {
+  return {
+    ...c,
+    auditIndexLine: ingestAuditOf(c.config, {
+      log: (m: string) => c.infra.log(m),
+      audit: (rec) => c.infra.ledger({ ...rec, type: 'eval.decision', domain: 'ingest' }),
+    }),
   }
 }
 
@@ -276,10 +313,10 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
   const llm = createLlmApi({ log: infra.log, llmState, config, ctx })
 
   // ── 领域模块装配（阶段 C-2）：依赖**按领域窄传**，实现在 distill-*.ts ──
-  const write = createWriteApi({
+  const write = createWriteApi(writeDepsOf({
     kRoot, pendDir, infra, cand, llm, st, config,
-    embedCfgOf: () => embed.embedCfgOf(), // 惰性：embedCfgOf 定义在本函数更下方（TDZ），箭头延迟求值
-  })
+    embedCfgOf: () => embed.embedCfgOf(), // 惰性：embedCfgOf 定义在本函数更下方（TDZ）
+  }))
   const bank = createBankApi({ kRoot, infra, config })
 
   // ── 领域模块装配（阶段 C-2b）：依赖**按领域窄传**，实现在 distill-*.ts ──
@@ -295,7 +332,7 @@ export function registerDistill(ctx: AppContext, config: DistillConfig): {
     env: { config, ctx, hasDistillSignals, DEFAULT_DISTILL_PROMPT },
   })
 
-  /** 返回 'done'=本轮窗口已消化（推进水位）；'failed'=瞬时故障（回滚水位，下轮可重试同一批痕迹） */
+/** 返回 'done'=本轮窗口已消化（推进水位）；'failed'=瞬时故障（回滚水位，下轮可重试同一批痕迹） */
 
   // ── 深睡状态机装配（2026-09-12 P1 二期：1499 行已迁至 ./deepsleep.ts）──────────
   // 依赖倒置：把蒸馏侧回调（distillAgent / writeDispatch）与共享设施**注入**，

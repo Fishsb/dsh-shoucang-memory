@@ -42,6 +42,9 @@ import { registerConfigRoutes } from './panel-config.js'
 import { registerMemoryRoutes } from './panel-memory.js'
 import { registerObserveRoutes } from './panel-observe.js'
 import { registerArchRoutes } from './panel-arch.js'
+// M1（ACT-283）评估通道面板面：按**领域接缝**抽出（门禁指路——初版加在 panel-inject 使其 624 行 ≥600，
+//   `check-module-growth` 原文「新功能应落新模块，而不是堆大旧模块」；抬基线属 R3，故走切分）。
+import { registerEvalRoutes } from './panel-eval.js'
 import type { CompositionHandles } from './composition.js'
 import { registerInject } from './panel-inject.js'
 
@@ -89,4 +92,6 @@ export function applyPanel(ctx: Context, config: Config, comp?: CompositionHandl
   })
   // inject 需挂 ctx.effect（systemPrompt 注入挂点的生命周期归宿主），故额外传 ctx
   registerInject(ctx, { route: bind.route, disposers: bind.disposers, root, hot, injectMeta, suite, logger })
+  // M1（ACT-283）评估通道：配置读写 + 连通性测试（**只读**；判定写账属 M2）
+  registerEvalRoutes({ route: bind.route, suite, logger })
 }

@@ -22,6 +22,8 @@ import { demoteVerdict, promoteVerdict } from './criteria.js'
 import { DEEP_SLEEP_PROMPT, deepSleepLanded, liveFailPolicy, planDeepSleepVerdict, DeepSleepOtherChannels, splitByCap, windowMaterialBytes } from './deepsleep-core.js'
 import { gatherDeepSleepTraces, countWindowTraces, type TraceDeps } from './deepsleep-traces.js'
 import { consolidateTree, type TreeDeps } from './deepsleep-tree.js'
+// ACT-295：档位并进 agentOptions 的**唯一实现**（与蒸馏侧共用）
+import { withEffort } from './model-config.js'
 import type { EmbedCfg } from './vec.js'
 import { applyPrinciples, applyPointerOps, applyNarratives, type ApplyDeps } from './deepsleep-apply.js'
 import { commitRingChannels } from './ring-commit.js'
@@ -635,7 +637,11 @@ export async function runDeepSleep(d: RunDeps, sinceArg?: number): Promise<'done
         const materialBytes = windowMaterialBytes({ pendDir: io.pendDir, candidateDir: io.candidateDir }, since)
         const resolvedLlm = resolveLlm(config.sleepProvider, config.sleepModel)
         const useProvider = !!resolvedLlm && llmState.providerFailCount < 2
-        const agentOptions = useProvider ? { provider: resolvedLlm.provider, model: resolvedLlm.model } : undefined
+        /* ACT-295（2026-09-21）：深睡档位同蒸馏——`withEffort` **唯一实现**（空串不带字段，
+         * 沿用模型默认；**不塞空串**免被 adapter 当非法档位拒call）。 */
+        const agentOptions = useProvider
+          ? withEffort({ provider: resolvedLlm.provider, model: resolvedLlm.model }, (config as { sleepEffort?: unknown }).sleepEffort)
+          : undefined
         const ac = new AbortController()
         const timeout = setTimeout(() => { try {
             ac.abort(new Error('deep sleep timeout 10min'))

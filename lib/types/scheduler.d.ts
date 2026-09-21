@@ -16,6 +16,8 @@
  */
 import type { Context } from 'cordis';
 import { type ProbeConfigFields } from './probe-config.js';
+import { type ModelConfigFields } from './model-config.js';
+import { type EvalConfigFields } from './eval-config.js';
 import type { CompositionHandles } from './composition.js';
 export declare const name = "@dsh-external/shoucang-scheduler";
 export declare const inject: string[];
@@ -25,7 +27,7 @@ export interface SuiteMember {
     repo: string;
     role: string;
 }
-export interface Config extends ProbeConfigFields {
+export interface Config extends ProbeConfigFields, EvalConfigFields, ModelConfigFields {
     members: SuiteMember[];
     verify_enabled: boolean;
     enableDistill: boolean;
@@ -36,10 +38,6 @@ export interface Config extends ProbeConfigFields {
     distillPrompt: string;
     llmProvider: string;
     llmModel: string;
-    distillProvider: string;
-    distillModel: string;
-    sleepProvider: string;
-    sleepModel: string;
     capAgent: number;
     capUser: number;
     capMemory: number;

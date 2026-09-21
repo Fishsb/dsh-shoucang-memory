@@ -61,8 +61,9 @@ const validateDeepSleepConfig = (c: Record<string, unknown>): string | null => {
   return null
 }
 
-/** 蒸馏节流组键（键名同 scheduler.Config；UI 通道写入 ~/.dsh/suite/scheduler.json，重载生效） */
-const DISTILL_CONFIG_KEYS = ['enableDistill', 'idleWakeMs', 'minTurnChars', 'distillPrescan', 'llmProvider', 'llmModel', 'distillProvider', 'distillModel', 'sleepProvider', 'sleepModel'] as const
+/** 蒸馏节流组键（键名同 scheduler.Config；UI 通道写入 ~/.dsh/suite/scheduler.json，重载生效）
+ *  ACT-295（2026-09-21）：新增 `distillEffort`/`sleepEffort`（子代理档位，宿主 `AgentOptions.reasoningEffort` 真字段）。 */
+const DISTILL_CONFIG_KEYS = ['enableDistill', 'idleWakeMs', 'minTurnChars', 'distillPrescan', 'llmProvider', 'llmModel', 'distillProvider', 'distillModel', 'distillEffort', 'sleepProvider', 'sleepModel', 'sleepEffort'] as const
 
 /** 蒸馏节流组配置键校验（与 scheduler.Config 同约束）；返回错误串或 null */
 const validateDistillConfig = (c: Record<string, unknown>): string | null => {
@@ -82,6 +83,9 @@ const validateDistillConfig = (c: Record<string, unknown>): string | null => {
   if ('distillModel' in c && typeof c.distillModel !== 'string') return 'distillModel 须为字符串'
   if ('sleepProvider' in c && typeof c.sleepProvider !== 'string') return 'sleepProvider 须为字符串'
   if ('sleepModel' in c && typeof c.sleepModel !== 'string') return 'sleepModel 须为字符串'
+  // ACT-295：子代理档位（adapter 自有词表 ⇒ 只校验类型，**不校验取值**：写死枚举即等于发明词表）
+  if ('distillEffort' in c && typeof c.distillEffort !== 'string') return 'distillEffort 须为字符串'
+  if ('sleepEffort' in c && typeof c.sleepEffort !== 'string') return 'sleepEffort 须为字符串'
   return null
 }
 

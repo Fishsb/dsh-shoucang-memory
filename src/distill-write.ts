@@ -36,6 +36,13 @@ export interface WriteDeps {
   llm: LlmApi
   st: DistillState
   config: any
+  /**
+   * ACT-293 · 评估通道消费面（**可选**）：
+   *   `undefined` ⇒ 不接（缺省；评估关闭时装配层不传）⇒ 行为与改造前逐字节一致。
+   *   接线点 = 索引行**落盘成功后**（只读复核，**不阻断写入**）。
+   *   能力依据见 `_memory/audit/consumer-compare.mjs`（三模型对照：假阳性 15–50%）。
+   */
+  auditIndexLine?(line: string, at: { sid: string; target: string }): Promise<void>
 }
 
 /** 去掉首个参数（依赖 d）后的参数元组 —— 用于生成**保类型**的绑定句柄。 */
@@ -467,7 +474,12 @@ const writeDispatch = async (dep: WriteDeps, sid: string, out: any, route: strin
       }
       const r = await memAppend(dep, t, 'new', nl, '-', resolved)
       bump(t, 'attempted')
-      if (r.status === 0) { added++; bump(t, 'written'); registerIndexMeta(dep, resolved.root, t, nl, sid) }
+      if (r.status === 0) {
+        added++; bump(t, 'written'); registerIndexMeta(dep, resolved.root, t, nl, sid)
+        // ACT-293：**评估通道的真实消费者**（默认关闭 ⇒ 钩子 undefined ⇒ 零行为变化）。
+        //   只读复核，不阻断写入（`memAppend` 已落盘）；异常在钩子内吞掉，不影响主线。
+        if (dep.auditIndexLine) { void dep.auditIndexLine(nl, { sid, target: t }) }
+      }
       else {
         bump(t, 'rejected')
         markByText('index', t, '', textOf(r), mNew ? mNew[1] : '')

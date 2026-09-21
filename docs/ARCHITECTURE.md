@@ -45,7 +45,16 @@ L4 交互（DSH Web GUI）
 | **M10 自省** | `assistant_capabilities` | 能力面查询 | 只读，无 token |
 
 > **载体归属口径（2026-09-12 根治 A–D 后；2026-09-14 P1 订正）**：
-> `src/` 共 **96 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> `src/` 共 **103 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> **2026-09-21 新增 `eval-config.ts` / `eval-channel.ts` / `eval-ledger.ts` / `panel-eval.ts`** ⇒ 96 → 100：**可配置评估通道 M1+M2**（ACT-283 / ADR-280/284/286）。
+> 定位 = 补 **Rasmussen SRK 的 rule-based 中层**（自动化层 = `planXxx` 纯函数 · 推理层 = LLM 子代理，两层本已齐）。
+> `eval-config.ts` = 评估域**配置单一事实源**（6 键 schema 与显式映射同文件；档位 const union 防死开关；
+> **出网判据 `isLoopbackUrl`/`egressAllowed`** —— 判因：仓内既有两份 `isLocal` 实现各有漏法，
+> 且 `panel-shared.ts:803` 的 `isLocalBase` 会把 `127.0.0.1.evil.com` 类伪造 URL 误判为 LOCAL，
+> 故出网判定**一律走解析后的 hostname**，并把「非 loopback 须显式许可」做成可执行合取）；
+> `eval-channel.ts` = 运行时（**七态归因** —— 治 `vec.ts:240-260` 把六类失败塌缩成 `null` 致
+> 真机 `embed-off`=0 的同形病；state 白名单；严格解析；**`node:http` 直连**因宿主全局 `fetch` 被 patch；
+> **默认关闭** fail-closed）。判据 `test-eval-channel`（43 条）+ `eval-gate`（G2 中文精度闸门：实测 19/20=95%）。
 > **2026-09-20 新增 `fact-supersede-apply.ts` / `due-window.ts`** ⇒ 94 → 96：门4**时态剔除接线** + 承诺结算链。
 > `fact-supersede-apply.ts` = 时态剔除的**落库唯一出口**（`fact-ring#supersede()` 此前**全仓零调用方**
 > ⇒ 真库 `validTo` 非空长期 0/6037 ⇒ 旧断言永不失效、与新断言并存；三重 fail-closed：默认关闭 +

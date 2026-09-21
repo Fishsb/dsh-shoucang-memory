@@ -32,6 +32,8 @@ export interface DistillConfig {
     distillModel: string;
     sleepProvider: string;
     sleepModel: string;
+    distillEffort?: string;
+    sleepEffort?: string;
     enableDistill?: boolean;
     enableDeepSleep: boolean;
     enableRemPass?: boolean;
@@ -57,6 +59,12 @@ export interface DistillConfig {
     embedBaseUrl?: string;
     embedModel?: string;
     embedApiKeyEnv?: string;
+    evalEnabled?: boolean;
+    evalBaseUrl?: string;
+    evalModel?: string;
+    evalApiKeyEnv?: string;
+    evalTier?: string;
+    evalEgressAllow?: boolean;
     recallFusion?: string;
     bankGit?: boolean;
     injectProfileRows?: number;

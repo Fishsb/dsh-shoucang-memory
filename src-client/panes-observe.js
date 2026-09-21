@@ -138,6 +138,57 @@ function renderViewObserve(view) {
     }, { async: true, busyText: tr("测试中…"), okText: tr("嵌入连通性测试完成") }), {}));
   ops.appendChild(embedRes);
 
+  /* M1（ACT-283）评估通道：配置读取 + 连通性测试 + **出网状态明示**。
+   * 为什么必须明示出网：`evalEgressAllow` 与 `evalEnabled` 是**两项独立授权**
+   *   （「允许装外部服务」≠「允许记忆内容出机」）——界面必须让人看得见当前是否允许出网。 */
+  var evalRes = el('div', 'sc-desc', tr("未测试"));
+  ops.appendChild(UI.item(tr("评估通道连通性"), tr("POST /eval/test —— 验证评估通道是否可用（默认关闭；本机端点免 key，远端端点须另开出网许可）。"),
+    UI.button(tr("测试连接"), function () {
+      evalRes.textContent = tr("读取配置…");
+      return appState.api('/eval/config').then(function (c) {
+        var e = (c && c.effective) || {};
+        var enabled = e.evalEnabled === true;
+        var allow = e.evalEgressAllow === true;
+        if (!enabled) { evalRes.textContent = tr("通道已关闭（缺省）。到「参数调节」开启 evalEnabled 后再测。"); return; }
+        evalRes.textContent = tr("测试中… ") + String(e.evalBaseUrl || '') + (allow ? tr("（已允许出网）") : '');
+        return appState.apiCtx('/eval/test', { method: 'POST', body: '{}' }, tr("评估通道")).then(function (r) {
+          // 分态回报（七态）——不把"失败"笼统写成"不可用"，否则与本仓既有的"归因塌缩"同病
+          var o = String((r && r.outcome) || '');
+          var why = String((r && r.why) || '');
+          evalRes.textContent = (r && r.ok)
+            ? (tr("✓ 可达 · ") + String(r.model || '') + ' · ' + String(r.latencyMs || 0) + 'ms · ' + o)
+            : ('✗ ' + o + (why ? (' · ' + why) : ''));
+          Log.info(tr('评估通道连通性测试') + ((r && r.ok) ? tr('通过') : (tr("失败：") + o + ' ' + why)));
+        });
+      }).catch(function (e) { evalRes.textContent = '✗ ' + e.message; });
+    }, { async: true, busyText: tr("测试中…"), okText: tr("评估通道连通性测试完成") }), {}));
+  ops.appendChild(evalRes);
+
+  /* M2（ACT-283）评估通道**判定统计**：把账折成分布——四问必须看得见（谁做的/有无回落/去向哪里/分态可辨）。 */
+  var evalStats = el('div', 'sc-desc', tr("未统计"));
+  ops.appendChild(UI.item(tr("评估通道统计"), tr("GET /eval/stats —— 折统一台账 type=eval.decision：分态分布 / 来源 / 真出机次数 / 回落次数。"),
+    UI.button(tr("刷新统计"), function () {
+      return appState.api('/eval/stats').then(function (s) {
+        var oc = (s && s.byOutcome) || {};
+        var keys = Object.keys(oc);
+        /* ⚠ 文案**不拼语序**（中文语序无法靠片段翻译；本件初版试过拼 `共/N 条/分态` 片段，
+         *   被 `check-i18n-keys` 的「词表内重复键」当场抓出）⇒ 改成**数字在前、标签自包含**。 */
+        evalStats.textContent = (s && s.total)
+          ? ('total ' + s.total + ' · outcomes ' + keys.length + ' (' + keys.map(function (k) { return k + ':' + oc[k]; }).join(' ') + ') · egress ' + (s.egressOk || 0) + ' · fallback ' + (s.fellBack || 0))
+          : tr("尚无判定记录（通道未开启或未跑过）");
+        /* M4：把**最近明细**也摊开（四问是单条属性 —— 聚合答不了"哪一条回落了、去了哪"）。
+         * 只显示形态字段；**不显示 state 内容**（账里本就没有）。 */
+        var rec = (s && s.recent) || [];
+        if (rec.length) {
+          evalStats.textContent += ' ｜ ' + rec.slice(-3).map(function (r) {
+            return r.outcome + '@' + (r.destLoopback ? 'local' : r.destHost) + (r.fellBack ? '↩' : '') + ' ' + r.latencyMs + 'ms';
+          }).join(' · ');
+        }
+        Log.info(tr('评估通道统计') + ' ' + evalStats.textContent);
+      }).catch(function (e) { evalStats.textContent = '✗ ' + e.message; });
+    }, { async: true, busyText: tr("统计中…"), okText: tr("统计完成") }), {}));
+  ops.appendChild(evalStats);
+
   var bootRes = el('div', 'sc-desc', tr("未执行"));
   ops.appendChild(UI.item(tr("根目录引导"), tr("POST /root/bootstrap —— 初始化/修复记忆根目录结构。"),
     UI.button(tr("执行引导"), function () {
