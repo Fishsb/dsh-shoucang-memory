@@ -191,15 +191,22 @@
 | **S4** | **清公开树真实记忆原文**（首轮 **21 处 / 6 件**，**只在 `scripts/` 面**）+ `eval-gate` 迁运行期取材 + 新门 `check-public-content` | 语义级扫描：`scripts/` 内与库文**逐字重合 0 处**；`check-public-tree` PASS；`eval-gate` 内嵌 `state` 样本 **20 → 0** | ✅ 门内**实跑**反例（塞真库整行 ⇒ 必命中） |
 | **S4′** | **续：全域清理 45 处 / 6 件** —— 上一步的门只扫 `scripts/`，而**重灾面是文档面**：`deliverables/inject-parity` **38** · `inject-recall-chain` 2 · `docs/sleep-granularity-plan` 2 · `CHANGELOG` 1 · `tessa-test-plan` 1 | 实跑 **45 → 0**；**保形脱敏**：`inject-parity` 两份 dump 的行数 **48/49** 与 `- ` 前缀 **41/12** ⇒ **与该档 §1 所载完全一致** ⇒ 其判断仍可逐条复核 | ✅ 自查抓到门自身**两个盲区**（① 只扫 `scripts/` ② 只扫 `git ls-files` ⇒ **门漏了自己**），均已修 |
 | **S5** | **修 `eval-gate` 的平凡通过**（本轮我自己引入并当场抓到的**新缺陷**）：G2-a 加 `MIN_JUDGE_N=8` 与"基线非零"双条件，未取证 ⇒ **exit 3 skip**（原 `null !== false` 会放行 ⇒ 报 PASS） | 实跑 `0/3 vs 0/3` ⇒ 旧码判 **✅ PASS**（`0≥0`）；新码判 **⏭ skip ⋯ 未取证** | ✅ 实证：同一输入下新旧行为对照（见 `CHANGELOG` 该条） |
+| **S6** | **槽位额度接面板（S3）**：新件 `budget-override.ts`（覆盖链唯一实现）+ 面板三键 | 真机端到端：`/set 1800` ⇒ `budgetTotal 4000→1800`、`overBudget true`、**注入头变「预算 1800 省略 96 行」**；回滚复原 | ✅ 门 ④ 行为断言 + `--selftest` 反例 |
+| **S7** | **D2：`coexist` 取得产生路径** | `conflict=coexist` ⇒ 出参 `coexist` + basis；旧调用方零迁移（实测 `supersedes` 布尔路径逐字不变） | ✅ 真机产量 0 ⇒ 记为「通路已建·样本未到」 |
+| **S8** | **pin 归位**（环境侧） | `check-version-pin` **PASS（三处一致 @ 3c9b8fb）** | 动前备份三件于 `%TEMP%\sc-bak3` |
+| **S9** | **🔴 源码真凭据串清理 + 历史重写**（自查发现） | **新史 0 命中 / 156 提交**（提交数守恒）· `fsck --full` 无错 · 树 928 件 · 远端拉回再核仍 0 | ✅ 干跑先用克隆验证（`refs/original` 会留着旧史 ⇒ 必须删+expire+gc）；详见 `PUBLISH-POLICY §6` |
 
 **五层验收终态（本轮）**：
-① 仓内绿：`typecheck` 0 错 · `build` OK · `check-runner` **201 pass / 0 xfail / 1 skip（exit 0）**；
-② 部署同步：副本 **314/314** sha1 一致（`--strict` PASS）；③ 热重载：fiber **active**（清 103 模块）；
-④ 功能探针：**118 项标记齐全**；⑤ 面板活体：`/mcl/status` 200 · `/inject/stats` 200。
-另：`check-arch-sync` PASS（CHECKS **202** / 标记 118）· `check-hardcode` PASS · `check-public-tree` PASS · **`check-public-content` PASS（全域 45 → 0 处）**。
+① 仓内绿：`typecheck` 0 错 · `build` OK · `check-runner` **203 pass / 0 xfail / 1 skip（exit 0）**；
+② 部署同步：副本 sha1 一致（`--strict` PASS）；③ 热重载：fiber **active**（清 104 模块）；
+④ 功能探针：**118 项标记齐全**；⑤ **云端+pin**：`local == remote == 3c9b8fb` · **pin 三处一致**。
+另：`check-arch-sync` PASS（CHECKS **204** / 标记 118 / 模块 **104**）· `check-hardcode` PASS ·
+`check-public-tree` PASS · `check-public-content` PASS（全域 45 → 0 处）· 面板 5 条路由全 200。
 
 **本轮新增/扩展的判据件（均已登记 `CHECKS`）**：`check-panel-fallback`（新，含 `--selftest`）·
-`check-public-content`（新，含 `--selftest`）· `check-attribution-samples`（**③/④ 扩展**，同一文件内加断言，**未另立件**）。
+`check-public-content`（新，含 `--selftest`）· `check-budget-override`（新，含 `--selftest`）·
+`check-attribution-samples`（**③/④ 扩展**，同一文件内加断言，**未另立件**）· `check-carriers`（**⑤b 扩为四类**，新增"对象"类）。
+
 
 **⚠ 本轮自己犯并已修的三个错（留档，防再犯）**：
 1. **`takeAttributionScan` 首版返回原始行**而非解析后对象 ⇒ 样本恒 0，**而当时四条结构断言全绿**
@@ -207,6 +214,13 @@
 2. **`eval-gate` 缺省收到 1/任务后出现"平凡通过"**（`0/3 ≥ 0/3×0.9` ⇒ `0≥0` ⇒ PASS）⇒ 加样本量下限 + 基线非零双条件。
 3. **把 `SURFACE.activity?.x` 写进回落**（一个**不存在**的字段）⇒ 自我否决并撤回，如实保留字面量 —— 那是"为统一而造的假引用"，比字面量更坏。
 4. 另：复算 E-05 时**切点未带时区**致**假红**（详见 §0 时间戳陷阱）。
+5. **把 `panel-shared` 顶到 868 行（> 冻结 846）**：先按门禁唯一出路抽模块，**抽完仍 858** —— 因为我把判因**大段写在调用点**（该判因本该只在 `budget-override.ts` 抬头一处）。压到 **837** 后才过。
+6. **`check-budget-override` ① 首版判据把"接线代码自身"判成残留**（宽正则跨到回落实参）⇒ 改判「赋值右值直接是注册表读数」；**同一门在抽模块后又成假红**（断言写死了旧函数名）⇒ 改为接受**聚合入口**。**两次都是"判据随实现演进必须同步"的证据，不是放宽**。
+7. **改 `criteria.json` 时把字符串插入了真实换行**（`\n` 写成字面换行）⇒ JSON 解析炸 + `gen:criteria` 拒跑；**同族于 `[原则] 文本改动先定编码`**：编辑 JSON 内长字符串须用工具而非 sed/手拼。修后 `check-criteria` 三处投影一致。
+8. **在错路径查 `yield-rounds.jsonl` 并据此下了"不存在"的错结论**（实际在 `<bank>/audit/` 而非 `knowledge/audit/`）⇒ 已在 D5 记录里订正。**这正是"未查到 ≠ 不存在"**。
+9. **历史重写首版 tree-filter 有破坏性缺陷**（`sed` 无入参 ⇒ 会把目标文件清空）——**开工前自查抓到并 kill**，改用「脚本内自带文件名、`sed -i` 就地改」并在**克隆上干跑验证**后才碰真仓。
+10. 另：验证 `sed` 时**用 PowerShell 重定向取历史文件** ⇒ 被写成 UTF-16/BOM ⇒ `sed` 匹配不到，**一度误判"脚本不工作"**（实为取证方法有错）⇒ 改 **node 直读**（`execFileSync('git',['show',…])`）。
+
 
 ---
 
