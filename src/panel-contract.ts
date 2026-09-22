@@ -40,6 +40,33 @@ export const MCL_CONFIG_KEYS = ['mclEnabled', 'mclFamiliarThreshold', 'mclMaxNud
 
 const zAny = z.any()
 
+/** `/set` 的**可写标量键白名单**（面板设置页经此通道落 `scheduler.json`）。
+ *  实现在 `panel-config.ts` 的 `allowed` 表；本常量是**契约侧投影**（逐键与源码一致）。
+ *
+ *  ⚠ **为什么必须登记**（2026-09-22 · ADR-328 ②）：槽位预算三键此前**只落在通用 `/set` 路由**
+ *  （`body: { key: z.string() }`）之下 ⇒ 契约表里**没有它们的条目** ⇒
+ *  `check-panel-contract` 的「三向一致」对它们是**空过**（不是"验过"）。
+ *  实测根因：三键服务面早已可用（`POST /set` 200 · 越界 400 · `/config` 可读），
+ *  但 `src-client/` **零引用** ⇒ **人调不到**。⇒ 补齐两侧：控件进 UI + 键进本白名单。
+ *  ⚠ 本表**由 `check-budget-override` ⑦ 与 `panel-config` 的 `allowed` 逐键比对**（机检）；
+ *    手抄必漂 —— 本件初版即漏抄 6 键（`injection.*` 容量门与 `embedding.dimension`），当场被比对纠出。 */
+export const SET_SCALAR_KEYS = [
+  // 板块容量门 + 注入取向
+  'injection.hot_memory', 'injection.level', 'injection.persona',
+  'injection.agent_max_chars', 'injection.user_max_chars', 'injection.memory_max_chars',
+  'injection.cap_agent', 'injection.cap_user', 'injection.cap_memory',
+  'embedding.dimension',
+  // 活性 / 遗忘 / 召回
+  'activityWarmDays', 'activityColdDays', 'activityArchiveDays', 'activityHotHits', 'recallColdFactorPercent',
+  'injectFreshSlots', 'recallFusion', 'injectProfileRows',
+  // 注入面槽位额度（ADR-328 ②·本轮补登记的三键）
+  'injectBudgetChars', 'injectSituationBudgetChars', 'injectLevelCaps',
+  // MCL / 打分
+  'mclFamiliarThreshold', 'mclMaxNudges', 'mclBudgetChars', 'mclTopK', 'scoreWeights',
+  // 自检 / 深睡失败策略
+  'selfCheckRepo', 'selfCheckIntervalHours', 'deepSleep.failPolicy', 'deepSleep.failPolicyMaxRounds',
+] as const
+
 export const PANEL_ROUTES: readonly RouteSpec[] = [
   /* ── 根目录与配置（panel-config） ── */
   { path: '/roots', summary: '已登记根目录列表' },
@@ -49,7 +76,7 @@ export const PANEL_ROUTES: readonly RouteSpec[] = [
   { path: '/config', summary: '读配置原文' },
   { path: '/save', summary: '写配置原文', contract: { body: z.object({ text: z.string() }), required: ['text'] } },
   { path: '/toggle', summary: '翻转布尔键', contract: { body: z.object({ key: z.string() }), required: ['key'] } },
-  { path: '/set', summary: '设置标量键', contract: { body: z.object({ key: z.string(), value: zAny }), required: ['key'] } },
+  { path: '/set', summary: '设置标量键（键集 = SET_SCALAR_KEYS，越界由服务端夹取或 400）', contract: { body: z.object({ key: z.string(), value: zAny }), required: ['key'] } },
 
   /* ── 记忆库只读（panel-memory） ── */
   { path: '/memory/overview', summary: '索引/容量/候选总览' },

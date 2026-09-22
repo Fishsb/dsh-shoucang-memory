@@ -20,7 +20,7 @@
 //
 // 用法: node scripts/check-budget-override.mjs [--selftest]
 // 退出码：0=PASS  1=FAIL  3=skip（lib 未构建）
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -147,6 +147,41 @@ ok(clamped.value === BUDGET_RANGES.injectBudgetChars[1] && clamped.clamped === t
   const missing = newStrs.filter((s) => !dictSrc.includes(`'${s}'`))
   ok(newStrs.length > 0 && missing.length === 0,
     `⑥ 额度夹取的 UI 文案已进 i18n 词表（${newStrs.length} 条，缺：${missing.join(' / ') || '无'}）`)
+
+  /* ⑦ **三键必须真的能被人调到**（2026-09-22 · ADR-328 ② · 治「半截落地」）──────────────
+   *  判因（真机实测）：册二的交付物写「接上 `/set` + `/config` + **契约表**」，实测**只通服务面** ——
+   *    `POST /set` 三键 200 · 越界 400 · `/config` 可读，但：
+   *      · `src-client/` 对三键 **零引用**（没有控件）⇒ **只有 curl 能拧**；
+   *      · 契约表里**没有三键条目**（落在通用 `/set` 之下）⇒ `check-panel-contract` 的
+   *        「三向一致」对它们是**空过**，不是"验过"。
+   *  ⇒ 三组断言，缺一即"面板调不到"重新成立：
+   *    ⑦a 每个键在 `src-client/` 有控件（`/set` 提交点）
+   *    ⑦b 契约白名单 `SET_SCALAR_KEYS` 含这三键
+   *    ⑦c `SET_SCALAR_KEYS` ⟷ `panel-config.ts#allowed` **逐键一致**（防手抄漂移 ——
+   *        本件初版手抄即漏 6 键，当场被纠出）。 */
+  const BUDGET_KEYS = ['injectBudgetChars', 'injectSituationBudgetChars', 'injectLevelCaps']
+  const clientSrc = readdirSync(join(root, 'src-client'))
+    .filter((f) => f.endsWith('.js') && !f.includes('generated'))
+    .map((f) => readFileSync(join(root, 'src-client', f), 'utf8')).join('\n')
+  const noUi = BUDGET_KEYS.filter((k) => !clientSrc.includes(k))
+  ok(noUi.length === 0, `⑦a 三键在面板**有控件**（而非只有 curl）：实测缺 ${noUi.length} 个${noUi.length ? ' → ' + noUi.join(', ') : ''}`)
+
+  const contractSrc = readFileSync(join(root, 'src', 'panel-contract.ts'), 'utf8')
+  const mKeys = /export const SET_SCALAR_KEYS = \[([\s\S]*?)\] as const/.exec(contractSrc)
+  const declared = mKeys ? [...mKeys[1].matchAll(/'([^']+)'/g)].map((m) => m[1]) : []
+  const noContract = BUDGET_KEYS.filter((k) => !declared.includes(k))
+  ok(declared.length > 0 && noContract.length === 0,
+    `⑦b 三键在契约白名单 \`SET_SCALAR_KEYS\` 内（否则门是空绿）：实测缺 ${noContract.length} 个${noContract.length ? ' → ' + noContract.join(', ') : ''}`)
+
+  const cfgSrc = readFileSync(join(root, 'src', 'panel-config.ts'), 'utf8')
+  const ai = cfgSrc.indexOf('const allowed')
+  const aj = cfgSrc.indexOf('// 数值范围校验')
+  const allowedKeys = ai >= 0 && aj > ai ? [...cfgSrc.slice(ai, aj).matchAll(/^\s*'([^']+)':/gm)].map((m) => m[1]) : []
+  const sd = new Set(declared), sa = new Set(allowedKeys)
+  const onlyDecl = declared.filter((k) => !sa.has(k))
+  const onlySrc = allowedKeys.filter((k) => !sd.has(k))
+  ok(allowedKeys.length > 0 && onlyDecl.length === 0 && onlySrc.length === 0,
+    `⑦c 契约白名单 ⟷ \`panel-config#allowed\` **逐键一致**（契约 ${declared.length} · 源码 ${allowedKeys.length}${onlyDecl.length ? ` · 契约多 ${onlyDecl.join(',')}` : ''}${onlySrc.length ? ` · 源码多 ${onlySrc.join(',')}` : ''}）`)
 }
 
 console.log('')

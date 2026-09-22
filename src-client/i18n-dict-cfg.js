@@ -187,6 +187,13 @@ export var EN = {
   '探测发起延迟 deepSleepProbeAfterMs': 'Probe launch delay deepSleepProbeAfterMs',
   '探测采样间隔 deepSleepProbeWindowMs': 'Probe sampling interval deepSleepProbeWindowMs',
   '新鲜度保底槽 injectFreshSlots': 'Freshness reserved slots injectFreshSlots',
+  /* ── 槽位预算三键（2026-09-22 · ADR-328 ②）—— 控件新入面板，文案须双语齐备 ── */
+  '注入总预算 injectBudgetChars': 'Injection total budget injectBudgetChars',
+  '注入文本的字符总预算（**参与限额的三层之和**：稳定面 + 动态面 + 一次性；范围 800–20000，缺省 4000）。越界由服务端夹回并在面板标「已夹取」': 'Character budget for the injected text (**sum of the three limited layers**: stable + dynamic + one-shot; range 800–20000, default 4000). Out-of-range values are clamped server-side and flagged as "clamped" in the panel',
+  '情境槽预算 injectSituationBudgetChars': 'Situation slot budget injectSituationBudgetChars',
+  '情境槽（环记录按情境键匹配）的字符预算（范围 0–4000，缺省 1200）。它**独立于**注入总预算，不吃三层额度': 'Character budget for the situation slot (ring records matched by situation key; range 0–4000, default 1200). It is **independent of** the total injection budget and does not consume the three layers',
+  '档位上限 injectLevelCaps': 'Level caps injectLevelCaps',
+  '四档（low/medium/high/smart）各自的选行上限（**对象键**，缺省 2/4/8/14）。改后整对象写回；单档越界由服务端拒并回报': 'Per-level row caps for the four levels (low/medium/high/smart; an **object key**, default 2/4/8/14). The whole object is written back; an out-of-range level is rejected server-side and reported',
   '方案 A · 本地 GPU 服务（推荐，零 token 成本）': 'Option A · Local GPU service (recommended, zero token cost)',
   '方案 B · 云端 API': 'Option B · Cloud API',
   '无响应': 'No response',

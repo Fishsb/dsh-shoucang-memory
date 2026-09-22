@@ -52,8 +52,18 @@
     },
     {
       "pane": "inject",
+      "name": "档位上限 injectLevelCaps",
+      "kind": "number"
+    },
+    {
+      "pane": "inject",
       "name": "画像 persona 注入档位 injection.persona",
       "kind": "slider"
+    },
+    {
+      "pane": "inject",
+      "name": "情境槽预算 injectSituationBudgetChars",
+      "kind": "number"
     },
     {
       "pane": "inject",
@@ -74,6 +84,11 @@
       "pane": "inject",
       "name": "注入相关性重排 injectRelevance",
       "kind": "checkbox"
+    },
+    {
+      "pane": "inject",
+      "name": "注入总预算 injectBudgetChars",
+      "kind": "number"
     },
     {
       "pane": "model",
@@ -254,5 +269,5 @@
     }
   ],
   "note": "面板视图契约基线（真机渲染快照）",
-  "at": "2026-09-21T13:10:30.324Z"
+  "at": "2026-09-22T11:48:01.265Z"
 }

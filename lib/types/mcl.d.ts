@@ -226,17 +226,18 @@ export interface DecideResult {
  *     · **轻判定**（折收益、判"线索是否变弱"）：**每步一次**，只吃**已有状态** ⇒ 频率提高**零新开销**
  *   ⇒ 高频的那一半被设计成廉价的，护栏项**从架构上消失**（不是被调小）。
  *
- * **判据复用**：`nextZeroGain` / `shouldSwitchSource` 一律取自 `recall-yield`（**不重造第二份**）。
+ * **判据复用**：`nextZeroGain` / `shouldSwitchSource` 一律取自 `recall-yield`（**不重造第二份**）；
+ *   2026-09-22（D5）起**折减本身**也归 `recall-yield#foldZeroGain`（三态信号），本件只做决策。
  * **边界**（照 `recall-yield:11-12`）：本件只出「是否离开**当前源**」的信号，**不决定换到哪**
  *   （选行归 `ring-supply` / `recallIndex`）。
  *
- * @param topicEcho 上一步回复是否回引了材料主题词（**词面代理**，非"材料被用上"；口径见 mcl 审计 `topicEcho`）
+ * @param zeroGain **已折减**的连续零增益计数（折减由 `foldZeroGain` 负责 —— 本件不再吃 `topicEcho`，
+ *   判因：折减要区分"真实动作 / 词面代理 / 无证据"三态，而那需要事件快照，属 `decideTurn` 的职责）
  * @param hasTopics 本轮是否**投过材料** —— 无材料（快通道/空主题）时不谈"离开该源"（否则会凭空产生换向）
  * @param switchEmitted 本轮是否已出过换向出口（**幂等**：同一轮只喊一次）
  */
 export declare function planStepJudgement(input: {
-    topicEcho: boolean;
-    zeroGain: number | undefined;
+    zeroGain: number;
     hasTopics: boolean;
     switchEmitted: boolean;
 }): {

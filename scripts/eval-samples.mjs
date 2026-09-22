@@ -28,6 +28,7 @@
  */
 import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { tagLabelZh } from '../src-client/tag-label.js'
 
 /** 解析索引行：`[tag] 主题 · 概况 → 指针` / `← 源: …` 尾注 */
 export function parseIndexRows(text) {
@@ -112,11 +113,41 @@ export function buildSamples(opts) {
    *   而 MEMORY.md 有 637 行、7 类、基线 48.0%，且是**真实使用面**（注入的就是它）。
    *   实测其分类按"带主题·概况 vs 短促断言"可分：类内相似 0.033 vs 类间 0.010（truth-audit）。
    * ⚠ 类不均（lesson 306 vs 经验 2）⇒ 每类**封顶** `lim.t1cap`，使多数类不碾压；
-   *   未用满的额度补给小类之外的最大类，并如实报基线。 */
+   *   未用满的额度补给小类之外的最大类，并如实报基线。
+   *
+   * 🔴 **2026-09-22 修（本册真缺陷 · 同族第 N 例「代理指标非判据」）─────────────────
+   * **判因（真机实测）**：库内**同一类被双写两个键** —— `MEMORY.md` 实测标签分布
+   *   `{lesson:361, 教训:102, 环境:93, tool:83, flow:41, env:34, 经验:3}` ⇒
+   *   `lesson`/`教训` 是**同一种「教训」**、`env`/`环境` 是**同一种「环境」**
+   *   （显示层映射早已记此事实：`tag-label.js:22` 原话「**1:N 撞名（实测）**：`env` 与 `环境`
+   *     同显 Environment/环境；`lesson` 与 `教训` 同显 Lesson/教训」）。
+   *   ⇒ 本件把这些键**原样当成了 7 个互斥类**，后果是**三重**的：
+   *     ① **假选项**：选项集里 `lesson` 与 `教训` 并列（同一个答案占两个位置）⇒ 随机基线被稀释；
+   *     ② **多数类被人为劈成两半**：`lesson 15 / 教训 5`（本件 20 条上），名义上"两类"实则一类；
+   *     ③ **最重要的**：`check-eval-samples ⑤` 的「多数类基线 <90%」判据**因此空过** ——
+   *        劈开后的 15/20 = **75.0%** 判过，而**归一后 20/20 = 100%**（单类退化）本该判红。
+   *        **读数被掩盖**：B1「TF-IDF+LR 75.0%」实测其预测分布 = `{lesson:20}`（**恒判一个类**）
+   *        ⇒ 那 75.0% **恰好等于多数类基线**，**零判别力**，却看起来像个像样的分数。
+   *        同族：`switchSource 95.7% 恒真` · `overBudget` 恒真 · `alphaVal` 恒 0。
+   * **修法**：取样**前置一步归一**（`canonOf`）—— 用**既有**显示层映射（`src-client/tag-label.js`
+   *   `tagLabelZh`，**不另造一份同义表**，遵「不从零造轮子」）把键折成**中文规范名**，
+   *   归并后再统计/封顶/出选项 ⇒ 双写键自动合并为一类，且选项里不再出现同义重复。
+   * ⚠ **归一后若某任务只剩 1 类 ⇒ 该任务样本无判别力**，须由 `check-eval-samples ⑤′` 判红
+   *   （不能靠"劈开两个键"把它变成 75% 混过去）。 */
   {
+    /** 规范名：**复用**显示层唯一映射（不新写同义词表）。未知键原样保留（不静默折叠）。 */
+    const canonOf = (tag) => { try { return tagLabelZh(tag) || tag } catch { return tag } }
     const byTag = new Map()
-    for (const r of rowsMemory) { if (!byTag.has(r.tag)) byTag.set(r.tag, []); byTag.get(r.tag).push(r) }
+    for (const r of rowsMemory) {
+      const c = canonOf(r.tag)
+      if (!byTag.has(c)) byTag.set(c, [])
+      byTag.get(c).push(r)
+    }
     const universe = [...byTag.keys()].sort((a, b) => byTag.get(b).length - byTag.get(a).length)
+    const rawKeyCount = new Set(rowsMemory.map(r => r.tag)).size
+    if (universe.length < rawKeyCount) {
+      warnings.push(`T1 标签**归一**后 ${universe.length} 类（原始键 ${rawKeyCount} 个 ⇒ 同义双写已合并；判因见上方 🔴 注）`)
+    }
     const picked = []
     const isPicked = (r) => picked.some(p => p.r === r)
     // 第一轮：每类至多 cap
@@ -142,7 +173,8 @@ export function buildSamples(opts) {
         id: `T1-${samples.length + 1}`, task: 'T1', kind: 'choice', label: '标签归类',
         state, options: universe.slice(),
         answer: tag,
-        provenance: { file: 'MEMORY.md', line: r.line, tag, method: 'strip-tag-prefix' },
+        // `rawTag` 留痕：归一前的原始键（可溯，不回流当键）
+        provenance: { file: 'MEMORY.md', line: r.line, tag, rawTag: r.tag, method: 'strip-tag-prefix+canon' },
       })
     }
     warnings.push(`T1 取 MEMORY.md 词表（${universe.length} 类，池 ${rowsMemory.length} 行，每类封顶 ${lim.t1cap}）`)

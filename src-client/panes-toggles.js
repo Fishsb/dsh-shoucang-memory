@@ -137,6 +137,53 @@ function renderTogglesInject(host, view, parsed, g) {
   }));
   host.appendChild(numSetting(tr("新鲜度保底槽 injectFreshSlots"), tr("注入时优先保留「最近新增条目」的槽位数（0–6，缺省 2）"), gVal('injectFreshSlots', 2), 'injectFreshSlots', tr("条"), 1));
 
+  /* ── 槽位预算三键接 UI（2026-09-22 · ADR-328 ②）────────────────────────────
+   * 判因（真机实测 · **半截落地**）：`closure-plan` 册二的交付物写「把三个槽位额度接上
+   *   `/set` + `/config` + 契约表」，实测**只通了服务面** ——
+   *     `POST /set` 三键各 200 · 越界 400 · `/config` 三个都在 global；
+   *   但 `src-client/` 对三键**零引用**（`git grep injectBudgetChars -- src-client` ⇒ 无命中），
+   *   而本页 13 个设置**全是硬编码键**、**没有通用/裸键编辑器** ⇒
+   *   **旋钮从"不存在"变成了"只有 curl 能拧"**，人依旧调不到。
+   * ⇒ 本处补三个控件，使「面板调不到」真正关闭。数值范围与写入侧同源
+   *   （`BUDGET_RANGES`，由 `check-budget-override` ② 守「范围单一事实源」），
+   *   此处只作**提示文案**，实际夹取仍在服务端（越界 ⇒ 400 / 夹取留痕）。 */
+  host.appendChild(numSetting(
+    tr("注入总预算 injectBudgetChars"),
+    tr("注入文本的字符总预算（**参与限额的三层之和**：稳定面 + 动态面 + 一次性；范围 800–20000，缺省 4000）。越界由服务端夹回并在面板标「已夹取」"),
+    gVal('injectBudgetChars', 4000), 'injectBudgetChars', tr("字符"), 100));
+  host.appendChild(numSetting(
+    tr("情境槽预算 injectSituationBudgetChars"),
+    tr("情境槽（环记录按情境键匹配）的字符预算（范围 0–4000，缺省 1200）。它**独立于**注入总预算，不吃三层额度"),
+    gVal('injectSituationBudgetChars', 1200), 'injectSituationBudgetChars', tr("字符"), 100));
+  host.appendChild(levelCapsSetting(gVal('injectLevelCaps', null)));
+}
+
+/** `injectLevelCaps` 是**对象**键（`{low,medium,high,smart}`）⇒ 不能走 `numSetting` 的
+ *  `parseInt`（会被吞成 0 而 API 仍回 200 —— `check-budget-override` ③ 专守此坑）。
+ *  这里用**逐档数字输入**并整体 JSON 提交，与 `panel-config.ts` 的 JSON 分支同形。 */
+function levelCapsSetting(cur) {
+  var DEF = { low: 2, medium: 4, high: 8, smart: 14 };
+  var caps = (cur && typeof cur === 'object' && !Array.isArray(cur)) ? cur : DEF;
+  var wrap = el('div', 'sc-num-wrap');
+  var inputs = {};
+  ['low', 'medium', 'high', 'smart'].forEach(function (k) {
+    var cell = el('span', 'sc-range-label', k + ' ');
+    var inp = el('input'); inp.type = 'number'; inp.className = 'sc-input'; inp.min = '0'; inp.step = '1';
+    inp.value = String(caps[k] !== undefined && caps[k] !== null ? caps[k] : DEF[k]);
+    inp.onchange = function () {
+      var next = {};
+      ['low', 'medium', 'high', 'smart'].forEach(function (kk) { next[kk] = Math.max(0, parseInt(inputs[kk].value, 10) || 0); });
+      appState.api('/set', { method: 'POST', body: JSON.stringify({ key: 'injectLevelCaps', value: JSON.stringify(next) }) })
+        .then(function () { appState.statusFn('✓ injectLevelCaps = ' + JSON.stringify(next)); })
+        .catch(appState.failFn);
+    };
+    inputs[k] = inp;
+    cell.appendChild(inp); wrap.appendChild(cell);
+  });
+  return UI.item(
+    tr("档位上限 injectLevelCaps"),
+    tr("四档（low/medium/high/smart）各自的选行上限（**对象键**，缺省 2/4/8/14）。改后整对象写回；单档越界由服务端拒并回报"),
+    null, { children: [appState.metaBadges('injectLevelCaps'), wrap] });
 }
 
 function renderTogglesCap(host, g) {

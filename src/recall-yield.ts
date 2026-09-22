@@ -24,9 +24,65 @@ export const SWITCH_THRESHOLD = 2
 
 /** 折一次收益：**回引**（`topicEcho`，旧称 compliant）⇒ 归零；未回引 ⇒ 递增（线索在变弱）。
  *  ⚠ 参数 2026-09-18 更名：该布尔测的是**上一步回复是否回引了材料主题词**（词面代理，实测 true=0/3119），
- *  不是"材料被用上了"。真实收益信号见 `audit/yield-rounds.jsonl`（J5/U3-修信号）。 */
+ *  不是"材料被用上了"。真实收益信号见 `audit/yield-rounds.jsonl`（J5/U3-修信号）。
+ *  ⚠ 2026-09-22（D5）：本函数**保留为兼容入口**（旧调用方零迁移）；新路径一律走 `foldZeroGain`
+ *   —— 它才带**三态**（action / echo / 无证据）。二者**同一实现**（本函数即其 echo 分支的薄封装）。 */
 export function nextZeroGain(prev: number | undefined, topicEcho: boolean): number {
   return topicEcho ? 0 : Math.max(0, Number(prev) || 0) + 1
+}
+
+/* ══ D5（2026-09-22）：收益信号**换源 + 三态化** ══════════════════════════════════════════
+ * 判因（用户拍板 D5 · 本轮实测两组分布，**两组都不是"材料被用上"**）：
+ *   · **词面代理** `topicEcho`（上一步回复是否出现材料主题词）：真机 `true = 0/3119`
+ *     ⇒ **恒 false** ⇒ 本链**只递增、永不归零** ⇒ 换向信号**恒真**（真机曾达 94.6%）。
+ *     它自述就**不是**"材料被用上"（见 `mcl.ts` 审计注释）⇒ 拿它判慢通道成败＝**代理指标当判据**。
+ *   · **真实动作** `nextTools`（注入后模型是否真的调了工具，`audit/yield-rounds.jsonl`）：
+ *     实测 **4985/5931 = 84.0% 非空**（长度分布 `{0:946, 1:17, 2:21, 3:4947}`）。
+ *     ⚠ **如实记**：它**同样不是"材料被用上"**，且 84% 近恒定 ⇒ 单用它会把换向出口**变哑**
+ *       （84% 归零 ⇒ 几乎不再出换向）。**所以本轮不做"朴素换源"** —— 那是用一种弱代理
+ *       换掉另一种（仓内反复剿的「假绿换假绿」）。
+ *   · **真正的收益判据**在 `deepsleep-run#judgeYieldRounds`（读 yield-rounds → **子代理语义判**
+ *     "材料对随后动作有没有实质帮助"...）—— 那是**离线、按轮**的，**不适合每步**。
+ *
+ * ⇒ 本轮落**三态 + 显式留痕**（判据诚实，而不是把弱信号包装成强判据）：
+ *   `acted=true`（有真实动作）⇒ 归零：**线索没变弱**（模型还在推进），不该换向；
+ *   `acted=false`（无动作）⇒ 递增：**进展停滞**，才是换向该看的形态；
+ *   证据缺失（两路都取不到）⇒ **保持不动**（既不归零也不递增）—— 宁可不动，也不据"无证据"换向
+ *     （与 J5/U3 既有保守口径同旨：「未判 ⇒ 不换向」；换向会丢当前来源上下文，代价高于多试一次）。
+ *
+ * ⚠ **信号优先级**：真实动作（可观测时）> 词面代理 > 无证据。选此序的判因：动作是**行为证据**，
+ *   回引是**词面巧合**；但当动作不可观测（快照不可达）时，回退到词面代理**好过装作无信号**。
+ * ⚠ 判据（机检）：`yieldSignal` / `acted` 必须落审计 ⇒ 「用了哪个信号」可事后分辨（`输入量须可见化`）。 */
+
+/** 一次收益折减的**信号来源**（三态）——落审计，供事后分辨"这条判定依据是什么"。 */
+export type YieldSignalKind = 'action' | 'echo' | 'none'
+
+export interface YieldFolding {
+  /** 折减后的连续零增益计数（`0` = 本轮有正向证据）。 */
+  zeroGain: number
+  /** **哪个信号**驱动了本次折减。 */
+  signal: YieldSignalKind
+  /** 真实动作（`true` 有动作 / `false` 无动作 / `null` 取不到）。 */
+  acted: boolean | null
+}
+
+/**
+ * **收益折减的单一实现**（纯函数 · 零 IO · 零抛出）。
+ * @param prev 上一步的连续零增益计数
+ * @param input `acted` = 真实动作（注入后是否调过工具；`null` = 不可观测）；
+ *              `echoed` = 词面代理（上一步是否回引主题词；`null` = 不可观测）
+ */
+export function foldZeroGain(
+  prev: number | undefined,
+  input: { acted?: boolean | null; echoed?: boolean | null },
+): YieldFolding {
+  const n = Math.max(0, Number(prev) || 0)
+  const acted = input.acted === true || input.acted === false ? input.acted : null
+  const echoed = input.echoed === true || input.echoed === false ? input.echoed : null
+  if (acted !== null) return { zeroGain: acted ? 0 : n + 1, signal: 'action', acted }
+  if (echoed !== null) return { zeroGain: nextZeroGain(prev, echoed), signal: 'echo', acted: null }
+  // 无证据 ⇒ **保持不动**（不归零也不递增）——见上方判因
+  return { zeroGain: n, signal: 'none', acted: null }
 }
 
 /** 是否已达换向阈值（`switchSource` 信号；调用方据此改变检索来源，而非继续灌同一批材料） */

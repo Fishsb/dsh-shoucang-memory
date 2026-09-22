@@ -807,6 +807,32 @@ const CHECKS = [
   //   ⚠ 结构断言（①–③）会漏"接线了但值变了"⇒ 故 ④ 是**真跑 `lib/`** 的行为断言。
   ['scripts/check-budget-override.mjs'],
   ['scripts/check-budget-override.mjs', '--selftest'],
+  // **消费方必须与产者同源**（2026-09-22 · ADR-328 · **本轮真机回归**）
+  //   判因：上一轮（`4fa315a`）把 `eval-gate.mjs` 的样本从**字面量**改成**运行期构建器**，
+  //     9 个兄弟消费者都改了 import，**漏了 2 个** —— 而它们住 `_memory/`（gitignore）
+  //     **且都不在 `CHECKS` 表内** ⇒「未登记 = 等于没写」⇒ **`npm test` 全绿而它们已经崩了**
+  //     （`baseline-lab.mjs` exit 2 · `baseline-lab-verify.mjs` exit 1，一天无人察觉）。
+  //     后果不止"工具坏了"：那两件正是「TF-IDF+LR vs laya」那笔账的工具 ⇒ 账从"没做"变"做不了"。
+  //   本件守两条：
+  //     ① **无安全网的源码文本取数**（`indexOf('const X = ')` / `.match(/const X = …/)` 抠别人声明，
+  //        且该文件**不在 CHECKS 表内** ⇒ 产者改写法时静默失配、无一层会响）。
+  //        ⚠ 判据**必须带「不在 CHECKS 表内」**：本仓 `check-*/audit-*/test-*` 本就以"读源码做断言"为业，
+  //          那是正当的（每次 `npm test` 都跑，产者一变当场红）—— 本件首版漏此条，实测 9 处里 7 处假红。
+  //          真病灶不是"读文本"，是「**读文本 + 没有安全网**」。
+  //     ② **import 面漂移**：具名导入必须在产者导出集里真实存在（仓规则 6 原话此前只有人肉纪律，无机检）。
+  //   扫描面含 `_memory/`（**三条真实回归里两条住那里** ⇒ 该面必须扫）；`--selftest` 12 例 / 6 反例。
+  //   先红实证：修前本件 **exit 1**（报出那两件 + 本件自身）；修后 exit 0。
+  //   ⚠ 本件自身「读 check-runner 取 CHECKS 表」符合判据 ① 的自洽性（它**在**表内）；抠不到即判红（不静默降级）。
+  ['scripts/check-script-consumers.mjs'],
+  ['scripts/check-script-consumers.mjs', '--selftest'],
+  // **两条真实回归的修复件的回归锁**（2026-09-22 · ADR-328）
+  //   判因：`baseline-lab` / `baseline-lab-verify` **此前从未登记** ⇒ 崩了也没人知道
+  //     （同族先例：`test-deepsleep-verdict` / `test-watermark-guard` / `test-atomic-write` 曾既不在
+  //      `CHECKS` 也不在 `npm test` 链上，写了从未运行）。
+  //   ⚠ 它们是**离线分析件**（依赖真库 + 可选 arbiter）⇒ 与 `eval-gate` 同口径：缺库/缺后端起时
+  //     **exit 3 = skip（不算通过）**，绝不静默放过。本件只保证「**取数这一环与产者同源**」不再回退。
+  ['_memory/audit/baseline-lab.mjs'],
+  ['_memory/audit/baseline-lab-verify.mjs'],
   // **索引行合法标签集：注册表 ⟷ 写门 ⟷ 孪生 ⟷ prompt 抵达**（2026-09-20 · 真机取证）
   //   判因（与 `formatConstraintLine()` / 门4「取值域未抵达 prompt」**同族**）：写门的标签白名单
   //     只在 `memory-append.mjs` 的 `--new` 正则里，**prompt 里一个都没有** ⇒ 模型自造

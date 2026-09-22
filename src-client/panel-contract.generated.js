@@ -93,7 +93,7 @@ export const PANEL_CONTRACT = {
     },
     {
       "path": "/set",
-      "summary": "设置标量键",
+      "summary": "设置标量键（键集 = SET_SCALAR_KEYS，越界由服务端夹取或 400）",
       "required": [
         "key"
       ],

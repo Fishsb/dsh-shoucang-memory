@@ -14,7 +14,7 @@
 | `/config` | 读配置原文 | — | — |
 | `/save` | 写配置原文 | text | `text`:string |
 | `/toggle` | 翻转布尔键 | key | `key`:string |
-| `/set` | 设置标量键 | key | `key`:string · `value`:any |
+| `/set` | 设置标量键（键集 = SET_SCALAR_KEYS，越界由服务端夹取或 400） | key | `key`:string · `value`:any |
 | `/memory/overview` | 索引/容量/候选总览 | — | — |
 | `/memory/sections` | 索引小节列表 | — | — |
 | `/suite` | suite 装配矩阵 | — | — |

@@ -2,8 +2,30 @@
 export declare const SWITCH_THRESHOLD = 2;
 /** 折一次收益：**回引**（`topicEcho`，旧称 compliant）⇒ 归零；未回引 ⇒ 递增（线索在变弱）。
  *  ⚠ 参数 2026-09-18 更名：该布尔测的是**上一步回复是否回引了材料主题词**（词面代理，实测 true=0/3119），
- *  不是"材料被用上了"。真实收益信号见 `audit/yield-rounds.jsonl`（J5/U3-修信号）。 */
+ *  不是"材料被用上了"。真实收益信号见 `audit/yield-rounds.jsonl`（J5/U3-修信号）。
+ *  ⚠ 2026-09-22（D5）：本函数**保留为兼容入口**（旧调用方零迁移）；新路径一律走 `foldZeroGain`
+ *   —— 它才带**三态**（action / echo / 无证据）。二者**同一实现**（本函数即其 echo 分支的薄封装）。 */
 export declare function nextZeroGain(prev: number | undefined, topicEcho: boolean): number;
+/** 一次收益折减的**信号来源**（三态）——落审计，供事后分辨"这条判定依据是什么"。 */
+export type YieldSignalKind = 'action' | 'echo' | 'none';
+export interface YieldFolding {
+    /** 折减后的连续零增益计数（`0` = 本轮有正向证据）。 */
+    zeroGain: number;
+    /** **哪个信号**驱动了本次折减。 */
+    signal: YieldSignalKind;
+    /** 真实动作（`true` 有动作 / `false` 无动作 / `null` 取不到）。 */
+    acted: boolean | null;
+}
+/**
+ * **收益折减的单一实现**（纯函数 · 零 IO · 零抛出）。
+ * @param prev 上一步的连续零增益计数
+ * @param input `acted` = 真实动作（注入后是否调过工具；`null` = 不可观测）；
+ *              `echoed` = 词面代理（上一步是否回引主题词；`null` = 不可观测）
+ */
+export declare function foldZeroGain(prev: number | undefined, input: {
+    acted?: boolean | null;
+    echoed?: boolean | null;
+}): YieldFolding;
 /** 是否已达换向阈值（`switchSource` 信号；调用方据此改变检索来源，而非继续灌同一批材料） */
 export declare function shouldSwitchSource(zeroGain: number | undefined, threshold?: number): boolean;
 /** 一轮待判的检索（**只带判定所需的最小事实**，不塞原文）。 */
