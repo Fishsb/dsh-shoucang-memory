@@ -36,7 +36,13 @@ ok('导出 hasSecret', typeof hasSecret === 'function')
 
 /* ── ① 真命中组：每类至少 1 例，必须全中 ── */
 const TRUE_POSITIVES = [
-  ['sk- 型（本库实盘形态）', 'sk-REDACTED-HISTORY-PLACEHOLDER'],
+  /* ⚠ **本条曾违反紧随其后的那条规定，已修（2026-09-21 · 自查）**：
+   *   它是本组里**唯一没拆**的一条 —— 直接把完整 `sk-…` 串写死在源码里，
+   *   而下一行注释正是「源码里不得出现完整凭据串」。后果不只是自己违规：
+   *   `git grep` 全历史可见该串（**公开树 + 已推送远端**）⇒ 与"这条纠正了 2026-09-17 的教训"
+   *   形成**同族反讽**：教训写下了，但**没回头检查写下它的那个文件本身**。
+   *   ⇒ 现按同款拆片拼接（**运行时仍是完整串**，规则照测；源码内不构成可扫描 token）。 */
+  ['sk- 型（本库实盘形态）', 'sk-' + 'REDACTED_HISTORY_PLACEHOLDER'],
   /* ⚠ **夹具须在运行时拼接，源码里不得出现完整凭据串**（2026-09-17 实测教训）：
    *   GitHub Push Protection 会把源码里的真格式假 token 判为**真密钥**并**拒绝推送**
    *   （实测被拦：Slack token 形态 ⇒ GH013 Push protection）。同理本仓 `check-public-tree`
@@ -119,8 +125,10 @@ for (const [name, text, shouldMatch] of KNOWN_GAPS) {
   ok(`漏网边界（如实断言）: ${name}`, got === shouldMatch, `期望=${shouldMatch} 实测=${got}`)
 }
 
-/* ── 辅助：告警文本不回显原值 ── */
-const warn = secretWarnings(findSecrets('sk-REDACTED-HISTORY-PLACEHOLDER'))
+/* ── 辅助：告警文本不回显原值 ──
+ * ⚠ 同款拆片（本行原为**第二处**完整凭据串 —— 与 TRUE_POSITIVES 那条一起，构成源码内
+ *   两处可扫描 token；**同批修**，只修一处等于没修）。 */
+const warn = secretWarnings(findSecrets('sk-' + 'REDACTED_HISTORY_PLACEHOLDER'))
 ok('告警文本不回显完整原值', warn.length === 1 && !warn[0].includes('REDACTED_TAIL_PLACEHOLDER'), warn[0])
 
 
