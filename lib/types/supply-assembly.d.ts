@@ -114,6 +114,31 @@ export interface SupplyResult {
     };
 }
 export declare function budgetTotalOf(b: SupplyBudget): number;
+/**
+ * **溢出判据（单一实现 · 2026-09-22 修正）** —— 逐槽比**该槽自己的**额度。
+ *
+ * ── 判因（真机实测 · **恒真旋钮**，同 `switchSource 95.7% 恒真` 家族）────────────────
+ * 原式两处（`supplyMetaOf` / `assembleSupply`）皆写：
+ *   `overBudget: chars > budgetTotal || stableChars > budget.stable`
+ * 而 `chars` 是**全部槽**字符之和 —— 其中 `situation`（独立预算）与 `process`（**不参与限额**，
+ * 注册表原文「不吃 dynamic 额度 · 零挤占」）**根本不在那三层预算里**。
+ * 真机读数（2026-09-22 · `/inject/preview`）：
+ *   `chars=4064 > budgetTotal=4000 ⇒ overBudget=true`，而**三层逐项都没超**
+ *   （stable 2799/3200 · dynamic 360/600 · oneshot 70/200）、
+ *   `situation` 也是 615/1200 ⇒ **真实结论应为 false**。
+ *   实测跨 6 个 query：**空 query 才 false，其余 5 个恒 true** —— 典型恒真。
+ * ⇒ 改为**逐槽比自身额度**：任何"参与限额的槽"超了才算溢出。
+ *   等价性：`chars > budgetTotal` 在全槽受限时**由逐槽条件蕴含**（各项 ≤ 各自额度 ⇒ 和 ≤ 总额度），
+ *   故删掉总量项**不放松**任何真实溢出，只消除"非受限槽撑大分子"的假阳性。
+ *   ⚠ `stable` 项含 `core`（核心必进、**超额度也进**）—— 这正是它必须逐槽判而非看总量的原因。
+ */
+export declare function isOverBudget(used: {
+    stable: number;
+    dynamic: number;
+    oneshot: number;
+    serendipity?: number;
+    situation?: number;
+}, budget: SupplyBudget): boolean;
 export type SupplySlot = 'core' | 'stable' | 'dynamic' | 'oneshot' | 'process' | 'serendipity' | 'situation';
 /** 主路径的真实裁切结果（每槽：**保留行** / 被丢行 / 该槽的丢弃原因） */
 export interface SlotOutcome {

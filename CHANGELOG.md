@@ -5,6 +5,40 @@
 ## [Unreleased]
 
 ### Changed
+- **🔴 三处「写了没人看 / 判据恒真」同族缺陷修复 + 我自己引入的缓存迟滞（2026-09-22 · ADR-327 · 用户授权「继续修」）**：
+  - **① `overBudget` 结构性恒真（预存缺陷，非本轮引入）**：判据原为 `chars > budgetTotal || stableChars > budget.stable`，
+    而 `chars` 是**全部槽**之和 —— 其中 `situation`（独立预算）与 `process`（注册表明写「**不参与限额**」，且调用点传的是**行数**）
+    **根本不在那三层预算里** ⇒ 只要这两槽有内容，`chars` 就被撑过 4000。
+    **真机实测**（`/inject/preview`）：`chars=4064 > budgetTotal=4000 ⇒ true`，而三层逐项**都没超**
+    （stable 2799/3200 · dynamic 360/600 · oneshot 70/200）；跨 6 个 query **空 query 才 false、其余 5 个恒 true**。
+    与仓内剿过的 `switchSource 95.7% 恒真` 同型。
+    · **修**：溢出判据收敛为**单一实现** `supply-assembly#isOverBudget`（**逐槽比该槽自身额度**），两处调用点共用；
+      同时修正 `budgetTotalOf` 的**量纲混用**（`process` 是行数，不得加进字符总额）。
+      等价性说明：全槽受限时 `chars > budgetTotal` **由逐槽条件蕴含**，故删掉总量项**不放松**任何真实溢出。
+    · **判据**：`test-supply-assembly` §H 双向断言 —— ① 非受限槽撑大总量 ⇒ **不得**判溢出（真机形态，且断言前置 `chars > budgetTotal` 成立以保证有区分力）；
+      ② 恒定面真超 ⇒ **仍须判 true**（防"恒真改成恒假"的假修）；③ 情境槽超自身额度 ⇒ 判 true；④ 量纲；⑤ 旧式已清除（**先剥注释再匹配**，否则把判因文本当残留）。
+  - **② `attributionScanned` 零消费面**（治「写入侧有、消费面零」）：该字段（**为收满样本扫了多少行**）是
+    「**扫描触顶**（须调上限）」与「**样本真不足**（须等时间）」的**唯一分辨依据** —— 两者在 `samples < 门槛` 上**读数同形**而处置相反 ——
+    却**全树零读取方** ⇒ 该分辨能力从未抵达任何人眼前。
+    **真机证据**：台账 66 条 `deep-sleep` 行中 `attributionScanned` 落库 **0 行**（52 条有 `attributionVerdict`）。
+    · **修**：`sleep-report` 增 `AttributionReading` 消费面 —— 汇报 §5 分**三态**措辞（触顶 / 已判 / 真不足），并同步进 `sleep-reports.jsonl` 机器面。
+    · **判据**：`test-sleep-report` §7 —— 触顶态人读可见 · 两态**措辞可分辨** · 机器面同源 · **反向：无该通道时不编造 0**。
+  - **③ `budgetClamped` 前端零渲染**（治「夹取不静默」只做了一半）：`panel-shared` 写入 `cache.usage.budgetClamped`，
+    而前端**无任何渲染** ⇒ 用户设了越界值仍会以为生效。
+    · **修**：总览「系统状态」卡增一行（**仅真有夹取时出**，无夹取不占屏 —— 常态零噪音）+ 三条 i18n 词条。
+    **真机端到端**：绕过 `/set` 的 400 直接注入历史坏值 `999999` ⇒ 账报 `injectBudgetChars→20000（原 999999）` 且 `/inject/stats` 同源携带，回滚后 `<absent>`。
+    · **判据**：`check-budget-override` ⑤ 逐字段断言**消费点存在**（本仓首次把"留痕必须有消费面"落成机检）+ ⑥ UI 文案进 i18n 词表。
+  - **④ 🔴 我自己在 S3 引入的缓存迟滞（本轮审查中真机抓到）**：`injectBudgetChars` 覆盖被删除后，
+    面板 `stable chars` 仍停在 **1433**（应 2812），直到 **120s TTL** 才恢复 ⇒ **"旋钮改了额度、注入文本纹丝不动"**。
+    根因 = **两层缓存键都不含额度**（外层 `cacheKey` 30s / 稳定面 `stableKey` 120s）。
+    ⚠ 尤须自省：`stableKey` **紧邻的注释**（IR1 册五 E5）写的正是「凡是改变输出的输入都必须进键」——
+    **同一条教训写在旁边，我这次仍漏了 `capStable`**。既有全部断言仍绿（它们只验"介质落盘即失效"，从未验过"额度变化即失效"）。
+    · **修**：两层键均纳入额度（`|budget:${resolved.totalBudget}` 与 `|cap:${capStable}`）。
+    · **判据**：`test-inject-cache` §S9，**先红自证已做**：变异移除两处额度键 ⇒ `1035 → 1035` 纹丝不动（正是真机症状），还原后 PASS。
+    · **真机复验**：`/set` 改额度后 **T+0.8s 即生效**（`4064 → 2319 → 3504`，`overBudget` 随真实超额 true/false 正确翻转），删除覆盖后**立即回落**（不再等 120s）。
+  - **验收**（五层）：`typecheck` 零错 · `build` 成功 · `check-runner` **203 pass / 0 xfail / 1 skip（exit 0）** ·
+    `check-installed-sync --strict` **317/317 逐件 sha1 一致**（483 件全一致）· 热重载后 fiber **active** ·
+    `check-installed-features` **118 项标记齐全** · `check-module-growth` PASS（三个冻结件均在容差内）· `check-arch-sync` PASS。
 - **🔴 公开树真实记忆库原文：全域清理（**45 处 / 6 件**）—— 上一条只清了 `scripts/`，而重灾面根本不在那儿（2026-09-21 续）**：
   - **为什么会漏**：上一条的 `check-public-content` 首版**只扫 `scripts/`**且**只扫已跟踪文件**。本轮自查抓到**两个盲区**：
     ① **只扫 scripts/ 等于守着一间空屋子** —— 实测全公开树 921 件里 **44 处**分布在

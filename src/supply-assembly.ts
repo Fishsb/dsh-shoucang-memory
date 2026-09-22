@@ -131,8 +131,43 @@ export interface SupplyResult {
   }
 }
 
+/* ⚠ **单位错误修正（2026-09-22）**：原式末尾有 `+ (b.process ?? 0)` —— 而 `process` 槽在调用点
+ *   （`panel-shared.ts#buildHotMemoryText`）传的是**行数**（`procPicked.length`），把它加进**字符**
+ *   总额属**量纲混用**；且注册表明写该槽「**不参与限额**」（零挤占，见 `surface.injection.process.note`）
+ *   ⇒ 它**不得**计入任何"预算总额"。移除后本函数语义收敛为「**参与限额的槽**的额度之和」。
+ *   影响面实测：主路径传 `opts.budgetTotal` 覆盖，故该处数值本未受影响；但本函数是**公开导出**，
+ *   `scripts/supply-preview.mjs`（离线预览）直接用 ⇒ 那里它是**真错**。 */
 export function budgetTotalOf(b: SupplyBudget): number {
-  return b.stable + b.dynamic + b.oneshot + b.serendipity + b.situation + (b.process ?? 0)
+  return b.stable + b.dynamic + b.oneshot + b.serendipity + b.situation
+}
+
+/**
+ * **溢出判据（单一实现 · 2026-09-22 修正）** —— 逐槽比**该槽自己的**额度。
+ *
+ * ── 判因（真机实测 · **恒真旋钮**，同 `switchSource 95.7% 恒真` 家族）────────────────
+ * 原式两处（`supplyMetaOf` / `assembleSupply`）皆写：
+ *   `overBudget: chars > budgetTotal || stableChars > budget.stable`
+ * 而 `chars` 是**全部槽**字符之和 —— 其中 `situation`（独立预算）与 `process`（**不参与限额**，
+ * 注册表原文「不吃 dynamic 额度 · 零挤占」）**根本不在那三层预算里**。
+ * 真机读数（2026-09-22 · `/inject/preview`）：
+ *   `chars=4064 > budgetTotal=4000 ⇒ overBudget=true`，而**三层逐项都没超**
+ *   （stable 2799/3200 · dynamic 360/600 · oneshot 70/200）、
+ *   `situation` 也是 615/1200 ⇒ **真实结论应为 false**。
+ *   实测跨 6 个 query：**空 query 才 false，其余 5 个恒 true** —— 典型恒真。
+ * ⇒ 改为**逐槽比自身额度**：任何"参与限额的槽"超了才算溢出。
+ *   等价性：`chars > budgetTotal` 在全槽受限时**由逐槽条件蕴含**（各项 ≤ 各自额度 ⇒ 和 ≤ 总额度），
+ *   故删掉总量项**不放松**任何真实溢出，只消除"非受限槽撑大分子"的假阳性。
+ *   ⚠ `stable` 项含 `core`（核心必进、**超额度也进**）—— 这正是它必须逐槽判而非看总量的原因。
+ */
+export function isOverBudget(
+  used: { stable: number; dynamic: number; oneshot: number; serendipity?: number; situation?: number },
+  budget: SupplyBudget,
+): boolean {
+  return used.stable > budget.stable
+    || used.dynamic > budget.dynamic
+    || used.oneshot > budget.oneshot
+    || (used.serendipity ?? 0) > (budget.serendipity ?? 0)
+    || (used.situation ?? 0) > (budget.situation ?? 0)
 }
 
 /* ══ IR1 册三（2026-09-18）**装配单出口 · 账由真实裁切直出** ══════════════════════════════
@@ -193,13 +228,17 @@ export function supplyMetaOf(
   const kept = {} as SupplySlotsMeta['kept']
   const dropped: DroppedRow[] = []
   let chars = 0
-  let stableChars = 0
+  /* 逐槽实耗字符（**只为溢出判定** —— 不参与任何切割；切割语义仍归各领域） */
+  const used = { stable: 0, dynamic: 0, oneshot: 0, serendipity: 0, situation: 0 }
   for (const slot of ['core', 'stable', 'dynamic', 'oneshot', 'process', 'serendipity', 'situation'] as SupplySlot[]) {
     const o = outcomes[slot]
     const kLines = (o?.kept ?? []).map(String)
     const kChars = kLines.reduce((n, s) => n + s.length + 1, 0)
     chars += kChars
-    if (slot === 'stable' || slot === 'core') stableChars += kChars
+    // `core` 与 `stable` **同属恒定面额度**（core 必进、超额度也进 ⇒ 逐槽判据据此才成立）；
+    // `process` 槽**不计入任何额度**（外接追加、零挤占）⇒ 此处刻意不累计。
+    if (slot === 'stable' || slot === 'core') used.stable += kChars
+    else if (slot in used) used[slot as keyof typeof used] += kChars
     const dRows = (o?.droppedRows ?? []).map(String)
     for (const line of dRows) dropped.push({ slot, line, why: `${slot}：${o?.why ?? SLOT_WHY[slot]}` })
     kept[slot] = kLines.length
@@ -209,8 +248,10 @@ export function supplyMetaOf(
   return {
     chars,
     budgetTotal,
-    // 溢出 = 超总预算，或恒定面自身超额度（与 `assembleSupply` 同式）
-    overBudget: chars > budgetTotal || stableChars > budget.stable,
+    /* 溢出判据走**单一实现**（逐槽比自身额度；判因见 `isOverBudget` 抬头）。
+     * ⚠ 旧式 `chars > budgetTotal || stableChars > budget.stable` 已删 —— 它被
+     *   `situation`/`process`（**不吃三层额度**）撑大分子 ⇒ 真机恒 true。 */
+    overBudget: isOverBudget(used, budget),
     serendipityEnabled: budget.serendipity > 0,
     situationEnabled: budget.situation > 0,
     kept,
@@ -378,8 +419,9 @@ export function assembleSupply(inputs: SupplyInputs, budget: SupplyBudget = DEFA
     meta: {
       chars,
       budgetTotal,
-      // 溢出 = 超了预算，或（恒定面自身超额度/存在被挡下的行）
-      overBudget: chars > budgetTotal || stableChars > budget.stable,
+      /* 溢出判据走**单一实现**（逐槽比自身额度 · 判因见 `isOverBudget` 抬头）。
+       * ⚠ 旧式 `chars > budgetTotal || stableChars > budget.stable` 已删 —— 同 `supplyMetaOf`。 */
+      overBudget: isOverBudget({ stable: stableChars, dynamic: dynamicTake.chars, oneshot: oneshotTake.chars, serendipity: serTake.chars, situation: sitTake.chars }, budget),
       serendipityEnabled,
       situationEnabled,
       kept: {

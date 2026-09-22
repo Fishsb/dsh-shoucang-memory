@@ -251,6 +251,60 @@ writeFileSync(join(bankRoot, 'audit', 'activity.jsonl'), [
   for (const d of [kRoot2, kRoot3, bankRoot2]) rmSync(d, { recursive: true, force: true })
 }
 
+// ── 7 · 归因取样读数**必须有消费面**（2026-09-22 · 补「写入侧有、消费面零」）──────────────
+//   判因（全树 grep 实测）：`deepsleep-run.ts:552` 落的 `attributionScanned`（为收满样本扫了多少行）
+//   是「**扫描触顶**（调上限）」与「**样本真不足**（等时间）的**唯一分辨依据** ——
+//   两者在 `samples < 门槛` 上读数同形而处置相反 —— 却**零读取方** ⇒ 该分辨能力从未抵达任何人眼前。
+//   **先红**：改造前 `SleepRoundInput` 无 `attribution` 字段 ⇒ 本组头一条即红。
+{
+  const mkAt = (at, attr) => ({
+    at, sinceMs: now - 3600 * 1000, untilMs: now,
+    produceOff: true, produced: { added: 0, replaced: 0, profiles: 0 },
+    maintenance: { tree: 0, pointers: 0, archived: 0, kept: 0 },
+    materials: { segments: 1, failures: 0 },
+    impact: [], ...(attr ? { attribution: attr } : {}),
+  })
+  const date2 = '2026-09-22'
+  /* ⚠ 汇报文件是**追加式**（同日多轮不覆盖，本册的核心口径）⇒ 判读**必须只看最后一段**：
+   *   首版直接 `includes` 整份文件 ⇒ 读到的是**上一轮**的内容（两处断言因此假红 —— 是测试的
+   *   读法错，不是实现错）。取 `lastIndexOf('\n## ')` 之后的切片即"最新一轮"。 */
+  const lastRoundOf = (file) => {
+    const t = readFileSync(file, 'utf8')
+    const i = t.lastIndexOf('\n## ')
+    return i < 0 ? t : t.slice(i + 1)
+  }
+  // ① 触顶态：必须能一眼看出「该调上限」而不是「该等时间」
+  const rCap = M.writeSleepRound({ kRoot, bankRoot, date: date2 }, mkAt('2026-09-22T01:00:00.000Z', {
+    verdict: 'insufficient', samples: 7, scanned: 4000, hitCap: true, note: '扫描触顶',
+  }))
+  const capText = lastRoundOf(rCap.reportFile)
+  capText.includes('扫描触顶') && /等时间不够|调 `ATTRIBUTION_MAX_SCAN`/.test(capText)
+    ? ok('触顶态**人读可见**：汇报明写「扫描触顶 ⇒ 调上限，等时间不够」（不再是只有一句"样本 < 30"）')
+    : bad('触顶态未抵达汇报正文（分辨能力仍不可见）')
+  // ② 真不足态：必须与触顶态**措辞可分辨**（同形是这条缺陷的本质）
+  const rLow = M.writeSleepRound({ kRoot, bankRoot, date: date2 }, mkAt('2026-09-22T02:00:00.000Z', {
+    verdict: 'insufficient', samples: 7, scanned: 120, hitCap: false, note: '',
+  }))
+  const lowText = lastRoundOf(rLow.reportFile)
+  lowText.includes('属样本真不足') && !lowText.includes('扫描触顶')
+    ? ok('真不足态**措辞可分辨**：明写「未触顶 ⇒ 属样本真不足，等时间」（与触顶态不再同形）')
+    : bad('两种不足态在汇报里仍同形 —— 正是本缺陷要消灭的形态')
+  // ③ 机器面：`sleep-reports.jsonl` 的轮行必须带 attribution（供面板/脚本消费，不只人读）
+  const stream2 = readFileSync(M.sleepReportsStreamOf(kRoot), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l))
+  const rounds2 = stream2.filter((r) => r.kind === 'sleep-round')
+  const withAttr = rounds2.filter((r) => r.attribution && typeof r.attribution.scanned === 'number')
+  withAttr.length === 2 && withAttr.some((r) => r.attribution.hitCap === true)
+    ? ok(`机器面同源：${withAttr.length} 条轮行带 \`attribution{scanned,hitCap}\`（面板/脚本可直接消费）`)
+    : bad(`机器面缺 attribution（实得 ${withAttr.length}/${rounds2.length}）`)
+  // ④ 反向：**无该通道时不得编造 0**（"没跑该通道"与"扫了 0 行"必须可分辨）
+  const rNone = M.writeSleepRound({ kRoot, bankRoot, date: date2 }, mkAt('2026-09-22T03:00:00.000Z', null))
+  const rounds3 = readFileSync(M.sleepReportsStreamOf(kRoot), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)).filter((r) => r.kind === 'sleep-round')
+  const lastR = rounds3[rounds3.length - 1]
+  lastR.attribution === undefined && !lastRoundOf(rNone.reportFile).includes('召回归因取样')
+    ? ok('反向：**无该通道时不编造**（轮行无 attribution 键 · 正文不出该行 —— 不把"没跑"渲染成"扫了 0 行"）')
+    : bad(`无通道时仍编造了读数：${JSON.stringify(lastR.attribution)}`)
+}
+
 rmSync(kRoot, { recursive: true, force: true }); rmSync(bankRoot, { recursive: true, force: true })
 console.log(`\n结果: ${pass} PASS / ${fail} FAIL`)
 process.exit(fail ? 1 : 0)

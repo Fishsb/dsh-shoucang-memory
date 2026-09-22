@@ -22,6 +22,26 @@ export interface IssueRow {
     /** 本轮是否仍然未被真读（本函数只产 `true`；字段存在的意义是让后续轮次可写 `false`）。 */
     stillUnused: boolean;
 }
+/** **归因取样读数**（`deepsleep-run#attributeRecallMisses` 的产出，经台账末条 `deep-sleep` 行回流）。
+ *
+ *  ⚠ **为什么要它进汇报**（2026-09-22 · 补「写入侧有、消费面零」）：
+ *    `deepsleep-run.ts:552` 落审计时写了 `attributionScanned`（= **为收满样本扫了多少行**），
+ *    它是「**扫描触顶**（须调 `ATTRIBUTION_MAX_SCAN`）」与「**样本真不足**（须等时间）」的**唯一分辨依据**
+ *    —— 两者在 `samples < 门槛` 上**读数同形**，而处置相反。
+ *    实测（全树 grep）：该字段**只有写入点、零读取方** ⇒ 这条分辨能力**从未抵达任何人眼前**，
+ *    汇报里也就只剩一句「未命中样本 N < 30」（正是那条把人引向"等样本"的旧读数）。
+ *    ⇒ 本字段是它的**第一个消费面**：随汇报落账并进人读正文。 */
+export interface AttributionReading {
+    /** 归因判定（`insufficient` = 未达门槛未判 · 其余为真判结果 · 空 = 本轮无该通道读数） */
+    verdict: string | null;
+    /** 实际未命中样本数 */
+    samples: number;
+    /** **为收集样本实际扫描的行数**（输入量可见化：扫了多远才收满/未收满） */
+    scanned: number | null;
+    /** 是否**扫描触顶**（`scanned >= ATTRIBUTION_MAX_SCAN`）—— true ⇒ 调上限，等多久都不够 */
+    hitCap: boolean;
+    note: string;
+}
 export interface SleepRoundInput {
     at: string;
     sinceMs: number;
@@ -43,6 +63,8 @@ export interface SleepRoundInput {
         failures: number;
     };
     impact: ImpactRow[];
+    /** 归因取样读数（可选：台账里无该通道的行 ⇒ 不打这段，**不编造 0**） */
+    attribution?: AttributionReading;
 }
 export declare const sleepReportDirOf: (bankRoot: string) => string;
 export declare const sleepReportPathOf: (bankRoot: string, date: string) => string;

@@ -201,6 +201,11 @@ export var EN = {
   '根目录引导完成': 'Root bootstrap complete',
   '注入统计': 'Injection stats',
   '恒定面通道': 'Stable-face channel',
+  /* S3 额度夹取可见化（2026-09-22）：`supplyUsage.budgetClamped` 的面板面。
+   * 判因：夹取此前只写进账、**无渲染** ⇒ 用户设了越界值仍以为生效（"不静默"只做了一半）。 */
+  '额度夹取': 'Budget clamped',
+  '（你设的值越界 ⇒ 已按范围夹回，未采原值）': '(your value was out of range ⇒ clamped back, the original was not used)',
+  '已夹取': 'Clamped',
   '已挂 section · 节点0豁免': 'section mounted · node 0 exempt',
   '未挂载 ⇒ 随 context 注入（可压区）': 'not mounted ⇒ injects via context (compressible)',
   ' · 原因：': ' · reason: ',

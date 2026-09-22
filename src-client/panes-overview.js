@@ -414,6 +414,16 @@ function renderViewOverview(view) {
         : tr("未挂载 ⇒ 随 context 注入（可压区）") + (scReason ? tr(" · 原因：") + scReason : '');
       sysBox.appendChild(ovCRow(tr("恒定面通道"), scDetail, [ovPill(okMounted ? tr("豁免") : tr("可压"), okMounted ? 'ok' : 'warn')]));
     }
+    /* S3（2026-09-21）**额度夹取必须可见**：`supplyUsage.budgetClamped` 由 `budget-override`
+     *   在"用户设的值越界、被夹回范围内"时写入 —— 若只在账里写、UI 不显示，
+     *   那"不静默"就只做了一半（用户仍会以为「我设的那个值生效了」）。
+     *   ⚠ 只在**真有夹取**时出这一行（无夹取不占屏 —— 常态零噪音）。 */
+    var bc = (s.supplyUsage && s.supplyUsage.budgetClamped) || null;
+    if (bc && bc.length) {
+      sysBox.appendChild(ovCRow(tr("额度夹取"),
+        bc.join(' · ') + ' ' + tr('（你设的值越界 ⇒ 已按范围夹回，未采原值）'),
+        [ovPill(tr("已夹取"), 'warn')]));
+    }
     sysBox.appendChild(ovCRow(tr("嵌入服务"),
       'provider=' + String(v.provider || 'off') + ' · ' + Derive.num(v.rows || 0) + tr(" 行"),
       [ovPill(v.present ? tr("可达") : tr("未启用"), v.present ? 'ok' : 'warn')]));

@@ -19,6 +19,9 @@ import { dirname, join } from 'node:path'
 import { readTailLines } from './file-stat-cache.js'
 import { readLedgerVolumes } from './ledger-compact.js'
 import { resolveSection } from './section-ref.js'
+/* 取样窗口的**扫描上限**（单一实现 · 不在此复写数字）：判据「扫描触顶 vs 样本真不足」
+ *   必须与写入侧（`deepsleep-run`）用**同一个**上限值，否则两侧会就"触没触顶"给出不同结论。 */
+import { ATTRIBUTION_MAX_SCAN } from './recall-diagnosis.js'
 
 export interface ImpactRow {
   file: string
@@ -44,6 +47,26 @@ export interface IssueRow {
   /** 本轮是否仍然未被真读（本函数只产 `true`；字段存在的意义是让后续轮次可写 `false`）。 */
   stillUnused: boolean
 }
+/** **归因取样读数**（`deepsleep-run#attributeRecallMisses` 的产出，经台账末条 `deep-sleep` 行回流）。
+ *
+ *  ⚠ **为什么要它进汇报**（2026-09-22 · 补「写入侧有、消费面零」）：
+ *    `deepsleep-run.ts:552` 落审计时写了 `attributionScanned`（= **为收满样本扫了多少行**），
+ *    它是「**扫描触顶**（须调 `ATTRIBUTION_MAX_SCAN`）」与「**样本真不足**（须等时间）」的**唯一分辨依据**
+ *    —— 两者在 `samples < 门槛` 上**读数同形**，而处置相反。
+ *    实测（全树 grep）：该字段**只有写入点、零读取方** ⇒ 这条分辨能力**从未抵达任何人眼前**，
+ *    汇报里也就只剩一句「未命中样本 N < 30」（正是那条把人引向"等样本"的旧读数）。
+ *    ⇒ 本字段是它的**第一个消费面**：随汇报落账并进人读正文。 */
+export interface AttributionReading {
+  /** 归因判定（`insufficient` = 未达门槛未判 · 其余为真判结果 · 空 = 本轮无该通道读数） */
+  verdict: string | null
+  /** 实际未命中样本数 */
+  samples: number
+  /** **为收集样本实际扫描的行数**（输入量可见化：扫了多远才收满/未收满） */
+  scanned: number | null
+  /** 是否**扫描触顶**（`scanned >= ATTRIBUTION_MAX_SCAN`）—— true ⇒ 调上限，等多久都不够 */
+  hitCap: boolean
+  note: string
+}
 export interface SleepRoundInput {
   at: string
   sinceMs: number
@@ -53,6 +76,8 @@ export interface SleepRoundInput {
   maintenance: { tree: number; pointers: number; archived: number; kept: number }
   materials: { segments: number; failures: number }
   impact: ImpactRow[]
+  /** 归因取样读数（可选：台账里无该通道的行 ⇒ 不打这段，**不编造 0**） */
+  attribution?: AttributionReading
 }
 
 export const sleepReportDirOf = (bankRoot: string): string => join(bankRoot, 'reports', 'sleep')
@@ -222,6 +247,19 @@ export function buildReportSection(i: SleepRoundInput, stats: Record<string, num
   if (!issues.length) lines.push('- 本轮无标记\n')
   for (const s of issues.slice(0, 20)) lines.push(`- \`${s.tag}\` ${s.file}${s.section ? ' §' + s.section : ''} · ${s.evidence} · **未处理**（${s.why}） · 首次标记 ${s.unusedAtFirstObservation} · ${s.stillUnused ? '**仍未真读**' : '已恢复真读'}\n`)
   lines.push(`\n### 5. 统计\n- 影响账 ${stats.rows} 条 · `+'`unused`'+` ${stats.unused}（率 ${stats.unusedRate}，**分母=本窗影响账 ${stats.rows} 条**）\n- \`suspect-recall\` ${stats.suspectRecall} / \`suspect-quality\` ${stats.suspectQuality}（**前者占比高 ⇒ 问题在召回面**）\n- 占**当日产出** ${stats.producedToday} 条的比例 ${stats.suspectPerProduced}（**第二个分母**：口径 = 分子本窗标记数 ÷ 分母当日 \`added\`+\`replaced\`；分母 0 ⇒ 记 0，不给"无意义的 0%"）\n- 注入口径不可判定 ${stats.injectedUnknown} 条（\`injected=unknown\`：步级遥测无法按条目归属，**不冒充判据**）\n`)
+  /* 归因取样通道（2026-09-22）：**消费面**（此前 `attributionScanned` 只写不读）。
+   *   三态**分列**，因为它们在 `samples` 上都表现为"不足"而处置相反 —— 这正是本仓
+   *   「把两种情形写成不同 note」纪律的落点（同 `deepsleep-run` 的 hitCap 分支）。 */
+  const at = i.attribution
+  if (at) {
+    const scanNote = at.scanned == null ? '（未记扫描行数）' : `扫 ${at.scanned} 行`
+    const verdictLine = at.hitCap
+      ? `**扫描触顶**（${scanNote} ≥ 上限 ${ATTRIBUTION_MAX_SCAN}）⇒ 调 \`ATTRIBUTION_MAX_SCAN\`，**等时间不够**`
+      : at.verdict && at.verdict !== 'insufficient'
+        ? `已判 \`${at.verdict}\`（${scanNote}）`
+        : `未达门槛（样本 ${at.samples} · ${scanNote} · 未触顶 ⇒ **属样本真不足，等时间**）`
+    lines.push(`- 召回归因取样：${verdictLine}${at.note ? ' · ' + at.note : ''}\n`)
+  }
   lines.push(`\n<!-- round ${ts} -->\n`)
   return lines.join('')
 }
@@ -294,6 +332,18 @@ export function roundInputFromLedger(d: { kRoot: string; untilMs?: number }, fal
       },
       materials: { segments: Number(r.attempted || 0), failures: Number(r.rejected || 0) },
       impact: [],
+      /* 归因取样读数（2026-09-22）：台账行**有该通道才带** —— 用 `in` 判键存在，
+       *   不用 `|| 0` 兜底（那会把"本轮没跑该通道"渲染成"扫了 0 行"，属本仓禁的
+       *   「把没设渲染成设成了默认」）。`hitCap` 只由写入侧给的 `scanned` 与上限比得出。 */
+      ...('attributionScanned' in r || 'attributionVerdict' in r ? {
+        attribution: {
+          verdict: r.attributionVerdict == null ? null : String(r.attributionVerdict),
+          samples: Number(r.attributionSamples || 0),
+          scanned: r.attributionScanned == null ? null : Number(r.attributionScanned),
+          hitCap: r.attributionScanned != null && Number(r.attributionScanned) >= ATTRIBUTION_MAX_SCAN,
+          note: String(r.attributionNote || ''),
+        },
+      } : {}),
     }
   }
   return null
@@ -321,7 +371,7 @@ export function writeSleepRound(
   mkdirSync(dirname(file), { recursive: true })
   appendFileSync(file, report, 'utf8') // 追加：**同日多轮不覆盖**（"永不删除"的落点）
   mkdirSync(join(d.kRoot, 'audit'), { recursive: true })
-  appendFileSync(sleepReportsStreamOf(d.kRoot), JSON.stringify({ kind: 'sleep-round', at: input.at, sinceMs: input.sinceMs, untilMs: input.untilMs, produceOff: input.produceOff, ...input.produced, ...input.maintenance, materials: input.materials, stats, firstOfDay: !existed }) + '\n', 'utf8')
+  appendFileSync(sleepReportsStreamOf(d.kRoot), JSON.stringify({ kind: 'sleep-round', at: input.at, sinceMs: input.sinceMs, untilMs: input.untilMs, produceOff: input.produceOff, ...input.produced, ...input.maintenance, materials: input.materials, stats, firstOfDay: !existed, ...(input.attribution ? { attribution: input.attribution } : {}) }) + '\n', 'utf8')
   for (const r of impact) appendFileSync(sleepReportsStreamOf(d.kRoot), JSON.stringify({ kind: 'impact', at: input.at, ...r }) + '\n', 'utf8')
   for (const s of issues) appendFileSync(sleepIssuesStreamOf(d.kRoot), JSON.stringify({ at: input.at, state: 'open', ...s }) + '\n', 'utf8')
   /* **指纹账**（G11 的"永不删除"判据载体 · 2026-09-19）：每轮对**整份报告文件**记一行

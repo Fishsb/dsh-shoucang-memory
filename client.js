@@ -7887,6 +7887,14 @@
         var scDetail = okMounted ? tr("\u5DF2\u6302 section \xB7 \u8282\u70B90\u8C41\u514D") + " \xB7 " + Derive.num(sc.calls || 0) + tr(" \u6B21") + (sc.lastLen > 0 ? " \xB7 " + Derive.num(sc.lastLen) + tr(" \u5B57\u7B26") : "") : tr("\u672A\u6302\u8F7D \u21D2 \u968F context \u6CE8\u5165\uFF08\u53EF\u538B\u533A\uFF09") + (scReason ? tr(" \xB7 \u539F\u56E0\uFF1A") + scReason : "");
         sysBox.appendChild(ovCRow(tr("\u6052\u5B9A\u9762\u901A\u9053"), scDetail, [ovPill(okMounted ? tr("\u8C41\u514D") : tr("\u53EF\u538B"), okMounted ? "ok" : "warn")]));
       }
+      var bc = s4.supplyUsage && s4.supplyUsage.budgetClamped || null;
+      if (bc && bc.length) {
+        sysBox.appendChild(ovCRow(
+          tr("\u989D\u5EA6\u5939\u53D6"),
+          bc.join(" \xB7 ") + " " + tr("\uFF08\u4F60\u8BBE\u7684\u503C\u8D8A\u754C \u21D2 \u5DF2\u6309\u8303\u56F4\u5939\u56DE\uFF0C\u672A\u91C7\u539F\u503C\uFF09"),
+          [ovPill(tr("\u5DF2\u5939\u53D6"), "warn")]
+        ));
+      }
       sysBox.appendChild(ovCRow(
         tr("\u5D4C\u5165\u670D\u52A1"),
         "provider=" + String(v2.provider || "off") + " \xB7 " + Derive.num(v2.rows || 0) + tr(" \u884C"),
@@ -13199,6 +13207,11 @@
     "\u6839\u76EE\u5F55\u5F15\u5BFC\u5B8C\u6210": "Root bootstrap complete",
     "\u6CE8\u5165\u7EDF\u8BA1": "Injection stats",
     "\u6052\u5B9A\u9762\u901A\u9053": "Stable-face channel",
+    /* S3 额度夹取可见化（2026-09-22）：`supplyUsage.budgetClamped` 的面板面。
+     * 判因：夹取此前只写进账、**无渲染** ⇒ 用户设了越界值仍以为生效（"不静默"只做了一半）。 */
+    "\u989D\u5EA6\u5939\u53D6": "Budget clamped",
+    "\uFF08\u4F60\u8BBE\u7684\u503C\u8D8A\u754C \u21D2 \u5DF2\u6309\u8303\u56F4\u5939\u56DE\uFF0C\u672A\u91C7\u539F\u503C\uFF09": "(your value was out of range \u21D2 clamped back, the original was not used)",
+    "\u5DF2\u5939\u53D6": "Clamped",
     "\u5DF2\u6302 section \xB7 \u8282\u70B90\u8C41\u514D": "section mounted \xB7 node 0 exempt",
     "\u672A\u6302\u8F7D \u21D2 \u968F context \u6CE8\u5165\uFF08\u53EF\u538B\u533A\uFF09": "not mounted \u21D2 injects via context (compressible)",
     " \xB7 \u539F\u56E0\uFF1A": " \xB7 reason: ",

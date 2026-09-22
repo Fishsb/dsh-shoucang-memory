@@ -239,6 +239,46 @@ const stableOf = (t) => { const i = t.indexOf('[守藏·热记忆]'); const j = 
   ok(!/缓存[^。\n]{0,12}省\s*token/.test(injSrc.replace(/不代表省 token|不等于省 token/g, '')), 'S8/D3 反例：不得出现"缓存省 token"的正面表述')
 }
 
+/* ── S9（2026-09-22）：**额度必须进缓存键** —— 否则"调了旋钮、文本不动" ──────────────
+ * 判因（真机实测 · 我自己引入的第二次发作）：S3 把 `injectBudgetChars` 做成真旋钮后，
+ *   删掉覆盖键 ⇒ 面板 `stable chars` 仍停在 **1433**（应 2812），直到 **120s TTL** 才恢复。
+ *   根因 = 两层缓存键都**不含额度**：外层 `cacheKey`（30s）与稳定面 `stableKey`（120s）。
+ *   ⇒ 症状是「**旋钮改了额度、注入文本纹丝不动**」，而**所有既有断言仍绿**
+ *     （它们只验"介质落盘即失效"，从没验过"额度变化即失效"）。
+ * ⚠ 本组落在**输出**上（纪律 §0.2 第 4 条）：不比键、只比**产出的字符数**。 */
+{
+  const f = fixture()
+  /* ⚠ **必须让输出真的随额度变**（首版踩到两次，两次都是**假红**，不是代码缺陷）：
+   *   ① 极简夹具（AGENT/USER 各 1 行）⇒ 额度 4000→1200 两边都裁不到 ⇒ 输出不变；
+   *   ② 改成 30 条 `[边界]` **同标签**画像行 ⇒ 仍不变：`readCarrier` 的 `byTag`
+   *      **同标签只留最近 1 条**（去重设计，非缺陷）⇒ 30 行只进 1 行。
+   *   ⇒ 正确做法是堆**变动面**候选（`MEMORY.md` 的 `[原则]` 索引行）——它们逐行进 dynamic 面
+   *     且受 `min(600, total×0.15)` 的**额度**约束 ⇒ 额度一收，裁切必然发生（与真机同形）。 */
+  const fat = Array.from({ length: 40 }, (_, i) => `[原则] 长行${i} ${'字'.repeat(150)} → notes/env.md §q${i}`)
+  appendFileSync(join(f.mem, 'MEMORY.md'), fat.join('\n') + '\n', 'utf8')
+  const hot = await hotIn(f.home)
+  const charsOf = (t) => t.length
+  // ① 覆盖额度 ⇒ **同一 query 紧接重调即变**（不得等 TTL）
+  const t1 = hot.build('')
+  const c1 = charsOf(t1)
+  // 用 `injectBudgetChars` 把总额压到下限（1200 ⇒ 三层随之收缩，变动面额度 600→180 ⇒ 行被裁）
+  const schedFile = join(f.home, 'suite', 'scheduler.json')
+  writeFileSync(schedFile, JSON.stringify({ injectBudgetChars: 1200 }), 'utf8')
+  const t2 = hot.build('')
+  ok(charsOf(t2) < c1,
+    `S9① 覆盖额度后**同 query 紧接重调即变**（${c1} → ${charsOf(t2)} 字符；修前会因键不含额度而纹丝不动）`)
+  // ② 删掉覆盖 ⇒ 立即回到原值（同一个迟滞缺陷的反向）
+  writeFileSync(schedFile, JSON.stringify({}), 'utf8')
+  const t3 = hot.build('')
+  ok(charsOf(t3) === c1,
+    `S9② 删除覆盖后**立即回到基线**（${charsOf(t3)} == ${c1}；修前需等 120s TTL）`)
+  // ③ 结构锁：两层键都**必须含额度**（防后来人只修一层）
+  const src9 = readFileSync(join(repoRoot, 'src', 'panel-shared.ts'), 'utf8')
+  ok(/const cacheKey = [^\n]*budget:/.test(src9) || /const cacheKey = [^\n]*resolved\.totalBudget/.test(src9),
+    'S9③ 外层 `cacheKey` 含额度（resolved.totalBudget）')
+  ok(/\|cap:\$\{capStable\}/.test(src9), 'S9③ 稳定面 `stableKey` 含 `capStable`（两处都要有：漏一处就迟滞一层）')
+}
+
 if (fails.length) {
   console.log(`❌ FAIL（${fails.length} 条）`)
   fails.forEach((x) => console.log('  ❌ ' + x))

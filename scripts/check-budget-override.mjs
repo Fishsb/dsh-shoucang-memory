@@ -118,6 +118,37 @@ const clamped = resolveBudgetNumber('injectBudgetChars', 999999, undefined)
 ok(clamped.value === BUDGET_RANGES.injectBudgetChars[1] && clamped.clamped === true,
   `④ **越界被夹取且留痕**：999999 ⇒ ${clamped.value} · clamped=${clamped.clamped}`)
 
+/* ⑤ **留痕字段必须有消费面**（2026-09-22 · 治「写入侧有、消费面零」）────────────────────────
+ *  判因（全树 grep 实测，两个字段同病）：
+ *    · `supplyUsage.budgetClamped`（越界夹取留痕）—— 只写进账，**前端零渲染**
+ *      ⇒ 用户设了越界值仍以为生效（"夹取不静默"只做了一半）；
+ *    · `attributionScanned`（归因取样扫了多少行）—— 只落审计行，**零读取方**
+ *      ⇒ 「扫描触顶（调上限）」与「样本真不足（等时间）」这对**唯一分辨依据**从未抵达任何人眼前。
+ *  ⇒ 本组要求：凡**为了让人看见**而写入的字段，必须有**消费点**；否则它就是"写了没人看"的
+ *    又一例（本仓已反复出现：`companion`/`switchSource` 恒真、`alphaVal` 恒 0、假旋钮分类）。
+ *  ⚠ 判据落在**消费点存在**上（能否被读到），不落在"文本里有这个词"上 ——
+ *    后者会把字段的**定义处/写入处**误判成消费。 */
+{
+  const CONSUMERS = [
+    ['budgetClamped', 'src-client/panes-overview.js', '额度夹取的面板渲染行'],
+    ['attributionScanned', 'src/sleep-report.ts', '== 消费面（sleep-report）'],
+  ]
+  for (const [field, file, why] of CONSUMERS) {
+    const p = join(root, file)
+    const has = existsSync(p) && readFileSync(p, 'utf8').includes(field)
+    ok(has, `⑤ 留痕字段 \`${field}\` **有消费面**（${file} —— ${why}）`)
+  }
+  /* ⑥ **UI 文案必须进 i18n 词表**（否则英文界面露中文裸串，`check-i18n-keys` 断言 A 会红）——
+   *   此处只做**同点自检**（提示先在 i18n-dict 补词条），完整键集守恒由 `check-i18n-keys` 守。 */
+  const ovSrc = readFileSync(join(root, 'src-client', 'panes-overview.js'), 'utf8')
+  const newStrs = [...ovSrc.matchAll(/tr\(['"]([^'"]{2,})['"]\)/g)].map((m) => m[1]).filter((s) => s.includes('夹取'))
+  const dictSrc = ['i18n-dict-pane-run.js', 'i18n-dict-cfg.js', 'i18n-dict-memory.js', 'i18n-dict-nav.js']
+    .map((f) => { const pp = join(root, 'src-client', f); return existsSync(pp) ? readFileSync(pp, 'utf8') : '' }).join('\n')
+  const missing = newStrs.filter((s) => !dictSrc.includes(`'${s}'`))
+  ok(newStrs.length > 0 && missing.length === 0,
+    `⑥ 额度夹取的 UI 文案已进 i18n 词表（${newStrs.length} 条，缺：${missing.join(' / ') || '无'}）`)
+}
+
 console.log('')
 if (fail) { console.log(`FAIL（${fail} 项）`); process.exit(1) }
-console.log('PASS（额度覆盖链：消费侧接线 · 范围同源 · 对象类型防线 · **无覆盖时行为等价** · 覆盖真生效）')
+console.log('PASS（额度覆盖链：消费侧接线 · 范围同源 · 对象类型防线 · **无覆盖时行为等价** · 覆盖真生效 · 留痕字段有消费面）')

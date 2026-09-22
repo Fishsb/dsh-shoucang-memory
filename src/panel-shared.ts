@@ -473,23 +473,28 @@ function buildHotMemoryText(d: HotMemoryDeps, cache: HotMemoryCache, query = '',
   const now = Date.now()
   const memRoot = memoryRootOf()
   const q = String(query || '').replace(/\s+/g, ' ').trim().slice(0, 200)
+  // P1-2（2026-09-10）：注入配置作用域迁全局——优先读 ~/.dsh/suite/scheduler.json 的 injection 键，
+  // 回落 root config YAML（旧配置兼容），都无 → 缺省。切 root 不再影响注入（与记忆/蒸馏同域）。
+  // 注：板块上限（caps）2026-09-10 起为「记忆库容量门」（写门用），不再裁注入——注入总看完整画像+记忆
+  // ⚠ S3 补（2026-09-22）：**读配置与解析额度必须提到缓存键之前** —— 否则额度改变不进键，
+  //   改额度后的 30s 内注入文本仍是旧代（真机实测的"旋钮迟滞"；判因详见下方 `cacheKey` 注）。
+  const sched = (() => { try { return d.suite.read() } catch { return {} } })()
+  /* S3：额度走覆盖链（`scheduler.json` → 注册表）；**判因与边界见 `budget-override.ts` 抬头**
+   * （此处只留调用点，不复述 —— 该件受 §冻结上限约束，且同一判因不该两处各写一份）。 */
+  const resolved = resolveSupplyBudget(sched, SURFACE.injection as unknown as Record<string, unknown>)
+  const budgetClamped: string[] = [...resolved.clamped]
   // 阶段 1 修复（2026-09-14）：键尾接上游介质签名 —— **这一层才是把关整段文本的缓存**
   //   （稳定面只装画像段；签在那里会"缓存失效了、输出没变"，证据见 `upstreamStampOf` 头注）。
-  const cacheKey = memRoot + '|' + q + '|' + stampKeyOf(libStampOf(memRoot)) + (omitStable ? '|nostable' : '')
+  // ⚠ S3 补（2026-09-22）：键还**必须含额度** —— 判因（真机实测）：删除 `injectBudgetChars` 覆盖后，
+  //   注入文本与账**在 TTL 内纹丝不动**（30s 本层 / 120s 稳定面层各自迟滞一次）⇒ 用户刚调完旋钮
+  //   却看到旧值，属「调了没用」的窗口。**凡是改变输出的输入都必须进键**（与 IR1 册五 E5 同一条纪律）。
+  const cacheKey = memRoot + '|' + q + '|' + stampKeyOf(libStampOf(memRoot)) + '|budget:' + resolved.totalBudget + (omitStable ? '|nostable' : '')
   if (cache.key === cacheKey && now - cache.at < 30000) return cache.text
   cache.key = cacheKey
   cache.at = now
   let level = 'smart'
   let hotMemoryOn = true
   let personaMode = 'both'
-  // P1-2（2026-09-10）：注入配置作用域迁全局——优先读 ~/.dsh/suite/scheduler.json 的 injection 键，
-  // 回落 root config YAML（旧配置兼容），都无 → 缺省。切 root 不再影响注入（与记忆/蒸馏同域）。
-  // 注：板块上限（caps）2026-09-10 起为「记忆库容量门」（写门用），不再裁注入——注入总看完整画像+记忆
-  const sched = (() => { try { return d.suite.read() } catch { return {} } })()
-  /* S3：额度走覆盖链（`scheduler.json` → 注册表）；**判因与边界见 `budget-override.ts` 抬头**
-   * （此处只留调用点，不复述 —— 该件受 §冻结上限约束，且同一判因不该两处各写一份）。 */
-  const resolved = resolveSupplyBudget(sched, SURFACE.injection as unknown as Record<string, unknown>)
-  const budgetClamped: string[] = [...resolved.clamped]
   const hasSchedInject = 'injectLevel' in sched || 'injectPersona' in sched || 'hotMemory' in sched
   if (hasSchedInject) {
     if (typeof sched.injectLevel === 'string') level = sched.injectLevel
@@ -620,7 +625,11 @@ function buildHotMemoryText(d: HotMemoryDeps, cache: HotMemoryCache, query = '',
   // ★IR1 册五 E5（2026-09-18）：稳定面键**必须含消重状态** —— 消重（`dedupState`）在装配内部生效，
   //   而它是**异步预热**出来的（mount 后几秒才就绪）⇒ 若键不含它，首次渲染（skip 还空）算出的稳定面
   //   会被缓存 120s，此后 skip 就绪也**不重建**（实测：行仍在文本里）。用 `warmedAt` 作指纹即可。
-  const stableKey = `${memRoot}|${personaMode}|${profileCap}|${playbookEnabled(d.suite)}|${sizeStampOf(memRoot, ['AGENT.md', 'USER.md'])}|dedup:${dedupState().warmedAt}`
+  // ⚠ S3 补（2026-09-22 · **同一缺陷的第二次发作，本次是我自己引入的**）：键还**必须含 `capStable`**。
+  //   判因（真机实测）：`injectBudgetChars` 覆盖被删除后，面板 `stable chars` 仍停在 **1433**（应为 2812），
+  //   直到 **120s TTL 过期**才恢复 —— 即：**旋钮改了额度、注入文本纹丝不动**（"调了没用"的 120 秒窗口）。
+  //   上一条 E5 的教训写在这里、本次却仍漏了 `capStable`：**凡是改变本函数输出的输入，都必须进键**。
+  const stableKey = `${memRoot}|${personaMode}|${profileCap}|${playbookEnabled(d.suite)}|${sizeStampOf(memRoot, ['AGENT.md', 'USER.md'])}|cap:${capStable}|dedup:${dedupState().warmedAt}`
   // stash 供 `buildStable()` 每步零副作用取用（**不得**在里面重跑本函数 —— 那会覆盖 cache.text 与影子账）
   cache.sd = stableStashOf(memRoot, capStable, playbookEnabled(d.suite), stableKey, agentLines, userLines)
   const stablePart = stableLinesOf(cache.sd, now, cache)

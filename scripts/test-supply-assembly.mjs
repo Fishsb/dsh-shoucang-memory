@@ -10,6 +10,7 @@
 //
 // 用法: node scripts/test-supply-assembly.mjs   （先 `npm run build:host`；npm test 已含 pretest）
 import { dirname, join } from 'node:path'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -132,6 +133,50 @@ console.log('== G. 候选集：时态失效者**不得入候选**（双时间戳
   ok(!SA.renderSupplyText(assembled).includes('死的'), '**端到端**：装配+渲染后失效行不出现')
   const c2 = SA.buildCandidates(recs, { at: '2026-08-01T00:00:00.000Z' })
   ok(!c2.expired.some((e) => e.id === 'dead1') && c2.expired.length === 1, '判定时刻早于 validTo ⇒ 该条**仍有效**（时态判定真按时刻走，不是一刀切）')
+}
+
+console.log('== H. 溢出判据：逐槽比自身额度（2026-09-22 修「恒真」）==')
+{
+  /* 判因（真机实测 · 修前恒真）：原式 `chars > budgetTotal || stableChars > budget.stable`
+   *   把**全部槽**的字符和（含 `situation` 独立预算、`process` **不参与限额**）去比**三层**总额
+   *   ⇒ 真机 `chars=4064 > 4000` 恒 true，而三层逐项都没超（stable 2799/3200 · dyn 360/600 · one 70/200）。
+   * 本组钉住「**非受限槽不得把 overBudget 顶成 true**」，且**真超时必须仍能 true**（防改成恒假）。 */
+  const big = L(500)
+  // ① 三层都在额度内，但 situation/process 很大 ⇒ **不得**判溢出（真机形态）
+  //   ⚠ 行数×长度必须让**总量真的越过 budgetTotal**（真机：4064 > 4000），否则本 case 无区分力
+  //     —— 首版只放 4 行 ⇒ 总量 2013 < 4000，等于没测到那个边界（自查抓到）。
+  const meta = SA.supplyMetaOf({
+    stable: { kept: ['s1'] },
+    dynamic: { kept: ['d1'] },
+    oneshot: { kept: ['o1'] },
+    situation: { kept: Array.from({ length: 7 }, () => big) },   // 3507
+    process: { kept: Array.from({ length: 3 }, () => big) },     // 1503（只补账、**不参与限额**）
+  }, { stable: 3200, dynamic: 600, oneshot: 200, serendipity: 0, situation: 4000 },
+    { budgetTotal: 4000 })
+  ok(meta.overBudget === false,
+    `① 三层未超而 situation/process 撑大总量 ⇒ **不判溢出**（实得 ${meta.overBudget}；这正是真机修前的恒真形态）`)
+  ok(meta.chars > meta.budgetTotal,
+    `① 前置成立：字符总量 ${meta.chars} 确实 > 总额 ${meta.budgetTotal}（否则本 case 无区分力）`)
+  // ② 真超恒定面额度 ⇒ **必须** true（防"恒真改成恒假"的假修）
+  const over = SA.supplyMetaOf({ stable: { kept: [big, big, big, big, big, big, big] } },
+    { stable: 100, dynamic: 600, oneshot: 200, serendipity: 0, situation: 0 }, { budgetTotal: 4000 })
+  ok(over.overBudget === true, `② 恒定面真超额度 ⇒ **仍判溢出**（实得 ${over.overBudget}）—— 判据具区分力，非恒假`)
+  // ③ 情境槽超**自己的**额度 ⇒ 判溢出（独立槽也要有闸）
+  const sitOver = SA.supplyMetaOf({ situation: { kept: [big, big, big] } },
+    { stable: 3200, dynamic: 600, oneshot: 200, serendipity: 0, situation: 100 }, { budgetTotal: 4000 })
+  ok(sitOver.overBudget === true, `③ 情境槽超自身额度 ⇒ 判溢出（实得 ${sitOver.overBudget}）`)
+  // ④ `budgetTotalOf` **不得**把 process（行数，非字符额度）计入字符总额（量纲混用）
+  ok(SA.budgetTotalOf({ stable: 100, dynamic: 50, oneshot: 20, serendipity: 0, situation: 0, process: 999 }) === 170,
+    `④ budgetTotalOf 只累加**参与限额**的槽（process 是行数 ⇒ 不计；实得 ${SA.budgetTotalOf({ stable: 100, dynamic: 50, oneshot: 20, serendipity: 0, situation: 0, process: 999 })}，期望 170）`)
+  // ⑤ 两处实现同源：`isOverBudget` 被两个出口共用（防"只修一处"）
+  /* ⚠ **必须剥注释再匹配**（首次实跑踩到）：判因注释里**引用了旧式原文**作说明
+   *   （`overBudget: chars > …`），不剥注释就会把**判因文本**当成**残留代码**判红。
+   *   本仓既有同款纪律：`check-carriers` / `check-injection-reach` 的「先剥注释再匹配」。 */
+  const stripC = (s) => s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1')
+  const src = stripC(readFileSync(join(repoRoot, 'src', 'supply-assembly.ts'), 'utf8'))
+  const calls = (src.match(/isOverBudget\(/g) || []).length
+  ok(calls >= 3, `⑤ 溢出判据**单一实现**：isOverBudget 定义 + 两处调用（实测出现 ${calls} 次）`)
+  ok(!/overBudget:\s*chars\s*>/.test(src), '⑤ **旧式已清除**：不再有 `overBudget: chars > …` 的旧写法（恒真的根因）')
 }
 
 console.log(`\n${fail ? 'FAIL' : 'PASS'}（${pass} pass · ${fail} fail）`)
