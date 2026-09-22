@@ -18,9 +18,13 @@ import { filterInjected, filterInjectedText, dedupState, crossFormCovered, CROSS
 let pass = 0, fail = 0
 const ok = (c, msg) => { if (c) { pass++; console.log(`  ✅ ${msg}`) } else { fail++; console.log(`  ❌ ${msg}`) } }
 
-const COARSE = '[原则] 批处理水位即真相 · 产物未校验可解析不得推进水位，失败须回滚重试 → notes/flows.md §深睡蒸馏'
-const FINE = '- 深睡产线曾先推水位致窗口恒零痕迹、产物不可解析仍推水位；done 前先校验产物可解析。 ← 源: distill e739b514'
-const OTHER = '- 另一条与任何粗行都无关的叙事行，应当保留不动。'
+/* ⚠ 夹具用语（2026-09-21 隐私红线整改）：原为**真实记忆库原文**，而 `scripts/` 是公开树
+ *   ⇒ 逐字与运行库画像文件重合 = 私人内容在公开面（`check-public-tree` 只按路径/模式扫）。
+ *   本件判据只关心**形状**（粗行=有标签有指针 / 细行=无标签 / 无关行），与语义无关
+ *   ⇒ 换**合成占位**，判据强度不变。 */
+const COARSE = '[原则] 合成粗行甲 · 占位概况说明 → notes/合成.md §合成小节甲'
+const FINE = '- 合成细行甲：占位替换文本。 ← 源: distill 0000000a'
+const OTHER = '- 合成无关行：与任何粗行都不配对，应当保留不动。'
 const TEXT = `## 画像\n${COARSE}\n${FINE}\n${OTHER}\n\n## 尾\n`
 
 console.log('── S-P4e 注入侧消重（行为级）──')

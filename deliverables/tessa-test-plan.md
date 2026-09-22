@@ -117,7 +117,7 @@ export const materialText = (rows: RecallRow[], budget: number, contract: string
 
 **通过标准**：词法通道（recallIndex）**≥95%**（实跑 97.9% ✅）；向量通道（recallRanked+embed）**≥95%**；union **≥98%**。
 
-**唯一未命中行的区分判据（团队要求）**：未命中行 = `[tool] MCP · bilibili/禁/hermes → notes/tools.md §MCP`，query 仅 `"MCP"`（单 token 缩写，top3 为空）。区分规则：
+**唯一未命中行的区分判据（团队要求）**：未命中行 = **一条 `[tool]` 索引行（正文已脱敏；其主题为纯缩写、`→ notes/tools.md §MCP`）**，query 仅 `"MCP"`（单 token 缩写，top3 为空）。区分规则：
 - **判为"query 构造问题"**（非丢失）：若该行可用**其完整主题短语或指向子串**捞回（如 `bilibili 工具`、`hermes`），则属探测词过短。
 - **判为"该行本就无检索价值"**（可接受丢失）：若该行**任何 ≥2 字 token 组合**都零命中，且其主题为纯缩写/生僻词（无自然语言线索）——此类行即使留在常驻面，agent 也难主动想起，转按需 recall 不构成损失。
 - **判为"真丢失"**（须修复）：若某行有自然语言主题却召回不到 → 说明 `recallIndex` 信号不足，**缺陷1 不可单独上线，须与召回质量修复捆绑**。

@@ -81,6 +81,8 @@ export interface SupplyUsage {
     cues: string[];
     /** P3：情境槽是否开启（注册表 `surface.injection.situation` 的解析后值） */
     situationEnabled: boolean;
+    /** S3：额度越界夹取的留痕（空 = 无夹取）—— **不静默**，用户设到范围外时必须看得出 */
+    budgetClamped?: string[];
     /** 阶段 3 取证（2026-09-14）：装配器口径（`renderSupplyText`）渲染的注入文本。**只读诊断字段**。
      *  S4R/R1 起主路径**已改调** `renderSupplyText`（渲染收敛）⇒ 本字段现为**同一实现的独立复算**，用于对拍。 */
     assemblerText?: string;

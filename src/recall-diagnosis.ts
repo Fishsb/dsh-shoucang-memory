@@ -213,6 +213,15 @@ export function calibrationVerdictOf(note: string): AttributionVerdict {
   return 'insufficient'
 }
 
+/** **归因样本的消费者谓词**（唯一判据）：只有"未命中"的行才支撑得起归因判断。
+ *  ⚠ 抽成**单一实现**的理由：此前这段判据在 `samplesFromMclRows` 里内联，而**取样窗口**
+ *    （`deepsleep-run` 的倒扫循环）用的是**另一个**判据（"是 mcl-step 就行"）——
+ *    两个判据不同源 ⇒ 窗口会被**不满足消费谓词**的行占满（见 `takeAttributionScan` 的判因）。
+ *  `missReason` 缺省按 `'ok'`（无该字段 = 那一行没做归因分流，不是"未命中"）。 */
+export function isAttributionRow(row: Record<string, unknown> | null | undefined): boolean {
+  return String(row?.missReason || 'ok') !== 'ok'
+}
+
 /** 从 mcl-step 审计行抽归因样本（**纯函数**：只做映射，不读文件）。
  *  ⚠ **实测限制（如实记）**：`mcl-step` 审计行**不记 query 原文**（只记 `hit`/`topics`/`sim`/`rowsN`）
  *    ⇒ 归因请求里的"查询"只能由 `topics` 近似，必要时为空。要真正带上 query，
@@ -220,11 +229,64 @@ export function calibrationVerdictOf(note: string): AttributionVerdict {
 export function samplesFromMclRows(rows: readonly Record<string, unknown>[], limit = 20): AttributionSample[] {
   const out: AttributionSample[] = []
   for (const r of rows) {
-    if (String(r?.missReason || 'ok') === 'ok') continue
+    if (!isAttributionRow(r)) continue
     const topics = Array.isArray(r?.topics) ? (r.topics as unknown[]).map(String) : []
     const hit = String(r?.hit || '')
     out.push({ q: topics.join(' / '), rows: hit ? [hit] : [], sim: Number(r?.sim) || 0 })
     if (out.length >= limit) break
   }
   return out
+}
+
+/* ══ 取样窗口的**关闭判据**（2026-09-21 · ADR-324）════════════════════════════════════════
+ * 判因（真机实测）：M3a（ADR-303）把判定频率提到**每步**，新增 `phase:'judge'` 行，
+ *   **而该行不带 `missReason`**。取样窗口原按「末 60 条 `mcl-step`」截断 ⇒
+ *   `judge` 行占切点后总量的 **77.7%** ⇒ 窗口内可用样本被挤到 **0**（门槛 30）
+ *   ⇒ 归因判定**再次结构性不可达**（与已修的「上限 20 < 门槛 30」同型，成因相反：
+ *     上次是常量打架，这次是**新产者挤占共用窗口**）。
+ * **判据不该建在"产者是谁"上，而该建在"消费者要什么"上** ——
+ *   任何"更近的行"都可能不满足消费谓词（`judge` 今日不满足，明日别的行也一样）。
+ *   ⇒ 窗口**按消费谓词收满即停**：收满 `limit` 条 `isAttributionRow` 的行就结束，
+ *     同时给一个**扫描上限**（`maxScan`）防台账坏档/长尾导致无界扫描。
+ * ⚠ 另记：ADR-324 我最初拟的写法是"按 `phase === 'inject'` 过滤后再截 60 条"——
+ *   **实测该写法只得到 27 条（< 门槛 30），仍不可达** ⇒ 已按消费谓词改写。
+ *   **教训：按产者名过滤是脆弱解，按消费谓词收满是收敛解。** */
+
+/** 取样窗口的**扫描上限**（行；防坏档/长尾无界扫描。实测收满 30 条只需扫 ≈503 行）。 */
+export const ATTRIBUTION_MAX_SCAN = 4000
+
+/**
+ * 取归因样本的**扫描窗口**：自 `rawsDescending`（**倒序**，最新在前）逐行**解析**，
+ * 收满 `limit` 条满足 `pred` 的行即停；最多扫描 `maxScan` 行。
+ *
+ * **纯函数**（不读文件、不自己解析 JSON —— 解析由调用方以 `parse` 注入）⇒ 可独立断言
+ * 「窗口按消费谓词关闭」，这正是本轮修复的机检落点（`check-attribution-samples` ③）。
+ *
+ * ⚠ **两个谓词必须分开**（本轮实测教训）：`parse` 只答"这行能不能解析、是什么"，
+ *   `pred` 才答"它是不是消费者要的"。首版把 parse 与 pred 合成一个（直接返回裸行），
+ *   **导致返回的是原始字符串而下游 `samplesFromMclRows` 要的是对象 ⇒ 样本恒为 0**
+ *   ——该缺陷由编译产物端到端跑真台账时当场暴露（不是靠读码发现）。
+ *   ⇒ **返回的 `rows` 必须是 `parse` 的产物（对象），不是原始行**。
+ *
+ * @returns `rows` 命中的**已解析行**（保持输入倒序）· `scanned` 实际扫描行数（**可见化**：扫了多远才收满）
+ */
+export function takeAttributionScan<R, T>(
+  rawsDescending: readonly R[],
+  parse: (raw: R) => T | null,
+  pred: (row: T) => boolean,
+  limit: number,
+  maxScan: number = ATTRIBUTION_MAX_SCAN,
+): { rows: T[]; scanned: number } {
+  const rows: T[] = []
+  let scanned = 0
+  for (const raw of rawsDescending) {
+    if (scanned >= maxScan) break
+    scanned++
+    const row = parse(raw)
+    if (row === null || row === undefined) continue
+    if (!pred(row)) continue
+    rows.push(row)
+    if (rows.length >= limit) break
+  }
+  return { rows, scanned }
 }

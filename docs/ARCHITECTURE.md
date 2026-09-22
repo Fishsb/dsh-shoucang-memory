@@ -45,7 +45,7 @@ L4 交互（DSH Web GUI）
 | **M10 自省** | `assistant_capabilities` | 能力面查询 | 只读，无 token |
 
 > **载体归属口径（2026-09-12 根治 A–D 后；2026-09-14 P1 订正）**：
-> `src/` 共 **103 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> `src/` 共 **104 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
 > **2026-09-21 新增 `eval-config.ts` / `eval-channel.ts` / `eval-ledger.ts` / `panel-eval.ts`** ⇒ 96 → 100：**可配置评估通道 M1+M2**（ACT-283 / ADR-280/284/286）。
 > 定位 = 补 **Rasmussen SRK 的 rule-based 中层**（自动化层 = `planXxx` 纯函数 · 推理层 = LLM 子代理，两层本已齐）。
 > `eval-config.ts` = 评估域**配置单一事实源**（6 键 schema 与显式映射同文件；档位 const union 防死开关；

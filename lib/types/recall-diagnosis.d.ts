@@ -107,8 +107,35 @@ export declare function agreementRate(items: readonly {
  *   猜错会让"一致率"虚高，正好掩盖本项要暴露的问题。
  */
 export declare function calibrationVerdictOf(note: string): AttributionVerdict;
+/** **归因样本的消费者谓词**（唯一判据）：只有"未命中"的行才支撑得起归因判断。
+ *  ⚠ 抽成**单一实现**的理由：此前这段判据在 `samplesFromMclRows` 里内联，而**取样窗口**
+ *    （`deepsleep-run` 的倒扫循环）用的是**另一个**判据（"是 mcl-step 就行"）——
+ *    两个判据不同源 ⇒ 窗口会被**不满足消费谓词**的行占满（见 `takeAttributionScan` 的判因）。
+ *  `missReason` 缺省按 `'ok'`（无该字段 = 那一行没做归因分流，不是"未命中"）。 */
+export declare function isAttributionRow(row: Record<string, unknown> | null | undefined): boolean;
 /** 从 mcl-step 审计行抽归因样本（**纯函数**：只做映射，不读文件）。
  *  ⚠ **实测限制（如实记）**：`mcl-step` 审计行**不记 query 原文**（只记 `hit`/`topics`/`sim`/`rowsN`）
  *    ⇒ 归因请求里的"查询"只能由 `topics` 近似，必要时为空。要真正带上 query，
  *      须在 `mcl.ts` 的审计行里加字段（与仓内「输入量须可见化」同族）—— 属后续项，**此处不假装有**。 */
 export declare function samplesFromMclRows(rows: readonly Record<string, unknown>[], limit?: number): AttributionSample[];
+/** 取样窗口的**扫描上限**（行；防坏档/长尾无界扫描。实测收满 30 条只需扫 ≈503 行）。 */
+export declare const ATTRIBUTION_MAX_SCAN = 4000;
+/**
+ * 取归因样本的**扫描窗口**：自 `rawsDescending`（**倒序**，最新在前）逐行**解析**，
+ * 收满 `limit` 条满足 `pred` 的行即停；最多扫描 `maxScan` 行。
+ *
+ * **纯函数**（不读文件、不自己解析 JSON —— 解析由调用方以 `parse` 注入）⇒ 可独立断言
+ * 「窗口按消费谓词关闭」，这正是本轮修复的机检落点（`check-attribution-samples` ③）。
+ *
+ * ⚠ **两个谓词必须分开**（本轮实测教训）：`parse` 只答"这行能不能解析、是什么"，
+ *   `pred` 才答"它是不是消费者要的"。首版把 parse 与 pred 合成一个（直接返回裸行），
+ *   **导致返回的是原始字符串而下游 `samplesFromMclRows` 要的是对象 ⇒ 样本恒为 0**
+ *   ——该缺陷由编译产物端到端跑真台账时当场暴露（不是靠读码发现）。
+ *   ⇒ **返回的 `rows` 必须是 `parse` 的产物（对象），不是原始行**。
+ *
+ * @returns `rows` 命中的**已解析行**（保持输入倒序）· `scanned` 实际扫描行数（**可见化**：扫了多远才收满）
+ */
+export declare function takeAttributionScan<R, T>(rawsDescending: readonly R[], parse: (raw: R) => T | null, pred: (row: T) => boolean, limit: number, maxScan?: number): {
+    rows: T[];
+    scanned: number;
+};

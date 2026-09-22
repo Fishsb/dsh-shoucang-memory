@@ -8,6 +8,9 @@ import { existsSync, readFileSync } from 'node:fs'
 import { isAbsolute, join, resolve } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { contractFor } from './panel-contract.js'
+import { SURFACE, SCORE } from './criteria.generated.js'
+/* S3（2026-09-21）：额度范围**单一事实源**（与运行时夹取同源，防两处各写一份数字）+ 读数解析同源 */
+import { BUDGET_RANGES, resolveBudgetNumber, resolveLevelCaps } from './budget-override.js'
 import { dshHome, memoryLibRoot } from './targets.js'
 import { CONFIG_FILE, backupThenWrite, bootstrapDefaults, flipBool, parseView, readBody, sendJson, statMtime } from './panel-shared.js'
 import type { HotMemory, PanelLogger, RootAccess, RouteFn, StateStore, SuiteConfigAccess } from './panel-shared.js'
@@ -88,28 +91,59 @@ function configRoute(d: ConfigDeps, _req: IncomingMessage, res: ServerResponse):
     cap_user: typeof sched.capUser === 'number' ? sched.capUser : (typeof sched.injectUserMaxChars === 'number' ? sched.injectUserMaxChars : CAP_GATES['USER.md']),
     cap_memory: typeof sched.capMemory === 'number' ? sched.capMemory : (typeof sched.injectMemoryMaxChars === 'number' ? sched.injectMemoryMaxChars : CAP_GATES['MEMORY.md']),
     actual: { agent: fileChars('AGENT.md'), user: fileChars('USER.md'), memory: fileChars('MEMORY.md') },
-    // v7 活性/遗忘/加深校准阈值（2026-09-10：/config 返回供 UI 渲染；缺省同 scheduler zod 默认 14/44/90/5/35）
+    /* ⚠ **2026-09-21 修（回落字面量落后于注册表 → 面板与运行态显示不一致）** ────────────────────
+     *  判因（真机实测）：本块原先用**硬编码字面量**回落（`:105` 的 `: 0.65`、`:111` 的 `: 3`、
+     *    `:92-96` 的 `14/44/90/23/35`），而**运行时的真实缺省来自注册表**（`criteria.json#surface.*`，
+     *    `scheduler.ts` 的 zod 就是 `default(SURFACE.…)`）⇒ 两套口径各自演化后**必然打架**：
+     *    实测 `mclFamiliarThreshold` 回落 **0.65** 而注册表 **0.58**；
+     *    `injectProfileRows` 回落 **3** 而注册表 `carriers.profile` = **6**。
+     *    后果：当 `scheduler.json` **无该键**时（`sched.x === undefined`），
+     *    **面板报 3 / 运行时用 6** —— 用户看到的值与真实行为不一致（本仓最忌的"假可控"）。
+     *  ⇒ 修法 = 回落**一律读 `SURFACE.*`**（与 `scheduler.ts` 同源），字面量只保留注册表未覆盖者。
+     *    **不新增机制、不改运行行为**（只改"无键时给 UI 显示什么"），可逐键比对机检。 */
+    /* v7 活性/遗忘/加深校准阈值：注册表 `surface` **未声明**这四个键 ⇒ **只能保留字面量**
+     *  （与 `scheduler.ts` 的 `.default(14)/(44)/(90)/(23)` 同值）。⚠ **如实标注**：这四项
+     *  属**已知的第二处口径**（两处都是字面量），待其进注册表后一并收敛为 `SURFACE.*`。
+     *  ⇒ 本轮**不**改成 `SURFACE.activity?.x` —— 那会引用一个**不存在的字段**，
+     *    是"为了让代码看起来统一"而制造的**假引用**（比留着字面量更坏）。 */
     activityWarmDays: typeof sched.activityWarmDays === 'number' ? sched.activityWarmDays : 14,
     activityColdDays: typeof sched.activityColdDays === 'number' ? sched.activityColdDays : 44,
     activityArchiveDays: typeof sched.activityArchiveDays === 'number' ? sched.activityArchiveDays : 90,
     activityHotHits: typeof sched.activityHotHits === 'number' ? sched.activityHotHits : 23,
-    recallColdFactorPercent: typeof sched.recallColdFactorPercent === 'number' ? sched.recallColdFactorPercent : 35,
+    recallColdFactorPercent: typeof sched.recallColdFactorPercent === 'number' ? sched.recallColdFactorPercent : SURFACE.recall.coldFactorPercent,
     // U3（ADR-122 UI · B5 能力对齐）：此前 panel 已读取但 scheduler 未声明的键 + v2 新增键 —— 现全部进 /config 供 UI 渲染
     injectRelevance: sched.injectRelevance !== false,
     // S4-2（2026-09-14）：三层判据常驻开关（缺省开；false ⇒ 注入文本逐字节回到改动前）
     injectPlaybook: sched.injectPlaybook !== false,
-    injectFreshSlots: typeof sched.injectFreshSlots === 'number' ? sched.injectFreshSlots : 2,
-    recallFusion: String(sched.recallFusion ?? 'rrf'),
+    injectFreshSlots: typeof sched.injectFreshSlots === 'number' ? sched.injectFreshSlots : SURFACE.injection.freshSlots,
+    recallFusion: String(sched.recallFusion ?? SURFACE.fusion.kind),
     bankGit: sched.bankGit !== false,
     mclEnabled: sched.mclEnabled !== false,
-    mclFamiliarThreshold: typeof sched.mclFamiliarThreshold === 'number' ? sched.mclFamiliarThreshold : 0.65,
-    mclMaxNudges: typeof sched.mclMaxNudges === 'number' ? sched.mclMaxNudges : 1,
-    mclBudgetChars: typeof sched.mclBudgetChars === 'number' ? sched.mclBudgetChars : 600,
-    mclTopK: typeof sched.mclTopK === 'number' ? sched.mclTopK : 3,
+    mclFamiliarThreshold: typeof sched.mclFamiliarThreshold === 'number' ? sched.mclFamiliarThreshold : SURFACE.mcl.familiarThreshold,
+    mclMaxNudges: typeof sched.mclMaxNudges === 'number' ? sched.mclMaxNudges : SURFACE.mcl.maxNudges,
+    mclBudgetChars: typeof sched.mclBudgetChars === 'number' ? sched.mclBudgetChars : SURFACE.mcl.budgetChars,
+    mclTopK: typeof sched.mclTopK === 'number' ? sched.mclTopK : SURFACE.mcl.topK,
     mclAudit: sched.mclAudit !== false,
     // v2.2（ADR-130）：层模型开关
-    injectProfileRows: typeof sched.injectProfileRows === 'number' ? sched.injectProfileRows : 3,
-    scoreWeights: String(sched.scoreWeights ?? 'legacy'),
+    injectProfileRows: typeof sched.injectProfileRows === 'number' ? sched.injectProfileRows : SURFACE.injection.carriers.profile,
+    /* S3（2026-09-21）：槽位额度**热覆盖三键**的读数 —— 三者都回**解析后的生效值** + **来源**，
+     *   使"未覆盖（走注册表）"与"已覆盖（走 scheduler.json）"在面板上**可分辨**
+     *   （同 `[原则] 输入量须可见化`：不得把"没设"渲染成"设成了默认"）。
+     *   ⚠ 回的是 `resolveBudgetNumber/resolveLevelCaps` 的产物（**与运行时同一个函数**），
+     *   而非 scheduler.json 的原始值 —— 否则面板会显示"用户写了什么"而运行态是"夹取后的值"（又一处假读数）。 */
+    injectBudgetChars: (() => {
+      const r = resolveBudgetNumber('injectBudgetChars', sched.injectBudgetChars, SURFACE.injection.budgetChars)
+      return { value: r.value, source: r.source, clamped: r.clamped }
+    })(),
+    injectSituationBudgetChars: (() => {
+      const r = resolveBudgetNumber('injectSituationBudgetChars', sched.injectSituationBudgetChars, SURFACE.injection.situation?.budgetChars)
+      return { value: r.value, source: r.source, clamped: r.clamped }
+    })(),
+    injectLevelCaps: (() => {
+      const r = resolveLevelCaps(sched.injectLevelCaps, SURFACE.injection.levelCaps as Record<string, unknown>)
+      return { value: r.caps, source: ('injectLevelCaps' in sched) ? 'override' : 'registry', clamped: r.clamped.length > 0, clampedKeys: r.clamped }
+    })(),
+    scoreWeights: String(sched.scoreWeights ?? SCORE.mode),
     shadowScore: sched.shadowScore !== false,
     maturationEnforce: sched.maturationEnforce === true,
     // v2.2：睡眠期自检
@@ -224,6 +258,12 @@ async function setRoute(d: ConfigDeps, req: IncomingMessage, res: ServerResponse
     'mclTopK': [],
     'recallFusion': ['rrf', 'weighted'],
     'injectProfileRows': [],
+    /* S3（2026-09-21）：注入槽位额度热覆盖（数值类走 /set）。
+     *  · `injectBudgetChars` / `injectSituationBudgetChars`：数值，范围与 `BUDGET_RANGES` **同源**（下方 RANGE）。
+     *  · `injectLevelCaps`：对象（`{low,medium,high,smart}`）⇒ 值解析走下面的 JSON 分支（**不做字符串枚举**）。 */
+    'injectBudgetChars': [],
+    'injectSituationBudgetChars': [],
+    'injectLevelCaps': [],
     'scoreWeights': ['legacy', 'v2'],
     'selfCheckRepo': [],       // 仓根路径（字符串）
     'selfCheckIntervalHours': [],
@@ -254,6 +294,11 @@ async function setRoute(d: ConfigDeps, req: IncomingMessage, res: ServerResponse
     'mclBudgetChars': [120, 4000],
     'mclTopK': [1, 5],
     'injectProfileRows': [0, 6],
+    /* S3（2026-09-21）：范围与 `budget-override#BUDGET_RANGES` **同源**（消费侧夹取用同一组数；
+     * 此处用于**写入侧即时 400**，夹取用于**运行侧防御** —— 两者都要有，缺一即单边防线）。
+     * 判据 `check-budget-override` 断言两处同值。 */
+    'injectBudgetChars': [BUDGET_RANGES.injectBudgetChars[0], BUDGET_RANGES.injectBudgetChars[1]],
+    'injectSituationBudgetChars': [BUDGET_RANGES.injectSituationBudgetChars[0], BUDGET_RANGES.injectSituationBudgetChars[1]],
     'selfCheckIntervalHours': [0, 168],
     'deepSleep.failPolicyMaxRounds': [1, 100], // G-19：连败放行阈值（轮）；0/负数会被 liveFailPolicy 忽略并回落默认值 3
   }
@@ -289,6 +334,12 @@ async function setRoute(d: ConfigDeps, req: IncomingMessage, res: ServerResponse
     'recallFusion': 'recallFusion',
     'scoreWeights': 'scoreWeights', // v2.2：打分公式开关（legacy|v2）
     'injectProfileRows': 'injectProfileRows', // v2.2：P 层画像行每档上限（0=回滚）
+    /* S3（2026-09-21）：注入槽位额度**热覆盖三键** → scheduler.json 顶层（键名与 zod 属性名一致）。
+     * ⚠ 加白名单**必须同时**有映射 —— 本仓已有先例判定过"只加白名单不加映射"是
+     *   **假可控的另一种形态**（能校验却写不进去，见本条上方 `storeMode` 的注解）。 */
+    'injectBudgetChars': 'injectBudgetChars',
+    'injectSituationBudgetChars': 'injectSituationBudgetChars',
+    'injectLevelCaps': 'injectLevelCaps',
     'embedding.dimension': 'embedDim', // 历史遗留键：此前只登记白名单却无映射（实测 400）→ 补映射
     'selfCheckRepo': 'selfCheckRepo',
     'selfCheckIntervalHours': 'selfCheckIntervalHours',
@@ -304,8 +355,30 @@ async function setRoute(d: ConfigDeps, req: IncomingMessage, res: ServerResponse
   // U3 修正（实测缺陷：recallFusion='rrf' 曾被 Number() 写成 0）：**枚举键原样写字符串**，仅数值键 Number 化。
   // U3/v2.2 修正（实测：字符串键 selfCheckRepo 被 Number() 吞成 0）：**枚举/字符串键原样写**，仅数值键 Number 化。
   const STRING_KEYS = new Set(['selfCheckRepo'])
-  const isEnum = allowed[key].length > 0
-  const merged = { ...d.suite.read(), [schedKey]: (isEnum || STRING_KEYS.has(key)) ? value : (Number(value) || 0) }
+  /* ⚠ S3（2026-09-21）：**对象键必须原样写，不能被 Number() 吞掉**。
+   *   本条 `injectLevelCaps` 的值是 `{low,medium,high,smart}` ⇒ 若落到下面的 `Number(value) || 0`
+   *   会变成 **0**（`Number('{"low":1}')` = NaN ⇒ `|| 0`）⇒ 写进去的是**垃圾**，
+   *   而 API 仍回 200 ⇒ **"看着成功、值却是坏的"**（与本条上方两行注解记载的 `recallFusion`/`selfCheckRepo`
+   *   是同一类，只是这次是对象）。⇒ 显式 JSON 解析 + 逐档数值校验，非法即 **400**。
+   *   ⚠ 这也是"三条防线缺一不可"的第三道：白名单（能调）/ 映射（写得进）/ 类型（写对）。 */
+  let writeValue: unknown
+  if (key === 'injectLevelCaps') {
+    let obj: unknown
+    try { obj = JSON.parse(value) } catch { return sendJson(res, 400, { error: `injectLevelCaps 须为 JSON 对象：{"low":2,...}` }) }
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return sendJson(res, 400, { error: 'injectLevelCaps 须为 JSON 对象（非数组/非标量）' })
+    const [lo, hi] = [BUDGET_RANGES.injectLevelCaps[0], BUDGET_RANGES.injectLevelCaps[1]]
+    const bad: string[] = []
+    for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+      const n = Number(v)
+      if (!Number.isFinite(n) || n < lo || n > hi) bad.push(`${k}=${String(v)}`)
+    }
+    if (bad.length) return sendJson(res, 400, { error: `injectLevelCaps 越界或非数值（单档须 ∈ [${lo}, ${hi}]）：${bad.join(', ')}` })
+    writeValue = obj
+  } else {
+    const isEnum = allowed[key].length > 0
+    writeValue = (isEnum || STRING_KEYS.has(key)) ? value : (Number(value) || 0)
+  }
+  const merged = { ...d.suite.read(), [schedKey]: writeValue }
   d.suite.write(merged)
   d.hot.invalidate() // 注入缓存作废：改动立即反映到下一轮注入
   d.logger.info?.(`[shoucang] panel set ${key}=${value}（全局 scheduler.json ${schedKey}）`)

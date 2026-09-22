@@ -25,12 +25,12 @@ if (typeof selectProcessLines !== 'function') {
 }
 
 const ROWS = [
-  '[路径] 本地插件注入闭环 · 六步 → notes/env.md §插件注入',
-  '[原则] 结果验证重实证 · 看审计态 → notes/lessons.md §假绿与实证',
-  '[路径] 检索通道多级回退 · 先探引擎 → notes/env.md §DSH 环境',
-  '[路径] 批处理水位即真相 · 产物未校验不推水位 → notes/flows.md §深睡蒸馏',
-  '[env] DSH 环境 · 数据目录 → notes/env.md §DSH 环境',
-  '[路径] 第四步 · 不该被 topN=3 取到 → notes/x.md §y',
+  '[路径] 合成路径甲 · 占位说明 → notes/合成.md §合成甲',
+  '[原则] 合成原则甲 · 占位说明 → notes/合成.md §合成乙',
+  '[路径] 合成路径乙 · 占位说明 → notes/合成.md §合成丙',
+  '[路径] 合成路径丙 · 占位说明 → notes/合成.md §合成丁',
+  '[env] 合成环境甲 · 占位说明 → notes/合成.md §合成戊',
+  '[路径] 合成路径丁 · 不该被 topN=3 取到 → notes/x.md §y',
 ]
 
 console.log('S4-3 中层 process 槽（按标签供给）')
@@ -45,21 +45,21 @@ ok(selectProcessLines(ROWS, { enabled: true }).length > 0, '① `enabled:true` �
   const out = selectProcessLines(ROWS, { enabled: true, topN: 10 })
   ok(out.length === 4, `② 只取 4 条 \`[路径]\`（实际 ${out.length}）—— \`[原则]\`/\`[env]\` 不得混入`)
   ok(out.every((l) => /^\[路径\]/.test(l)), '② 输出行全部以 `[路径]` 开头')
-  ok(!out.some((l) => l.includes('结果验证重实证')), '② 未混入 `[原则]` 行')
+  ok(!out.some((l) => l.includes('合成原则甲')), '② 未混入 `[原则]` 行')
 }
 
 // ── ③ topN 有界 + 顺序稳定（按输入序）──
 {
   const out3 = selectProcessLines(ROWS, { enabled: true, topN: 3 })
   ok(out3.length === 3, '③ `topN:3` ⇒ 恰 3 条')
-  ok(out3[0].includes('本地插件注入闭环') && out3[2].includes('批处理水位即真相'), '③ 顺序 = 输入序（稳定，不重排 —— 重排归调用方）')
+  ok(out3[0].includes('合成路径甲') && out3[2].includes('合成路径丙'), '③ 顺序 = 输入序（稳定，不重排 —— 重排归调用方）')
   ok(!out3.some((l) => l.includes('第四步')), '③ 第 4 条 `[路径]` 未越界取入')
 }
 
 // ── ④ 自定义标签 + 去重 ──
 {
   const out = selectProcessLines(ROWS, { enabled: true, carrierTag: ['原则'], topN: 5 })
-  ok(out.length === 1 && out[0].includes('结果验证重实证'), '④ `carrierTag` 可配（此处取 `[原则]`）')
+  ok(out.length === 1 && out[0].includes('合成原则甲'), '④ `carrierTag` 可配（此处取 `[原则]`）')
   const dup = ['[路径] A → notes/a.md §x', '[路径] A → notes/a.md §x', '[路径] B → notes/b.md §y']
   ok(selectProcessLines(dup, { enabled: true, topN: 5 }).length === 2, '④ **去重**：同文两次只留一条（不得重复塞入注入面）')
 }

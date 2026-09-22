@@ -84,13 +84,17 @@ const allowedKeys = [...allowedBlock.matchAll(/'([A-Za-z_.]+)':\s*\[/g)].map((m)
 const ROOT_ONLY = new Set() // 当前无 root-only 键（boards.* 已移除）；将来新增写 root YAML 的键在此登记
 const unmapped = allowedKeys.filter((k) => !new RegExp(`'${k}':`).test(schBlock) && !new RegExp(`${k}: '`).test(boolBlock) && !new RegExp(`'${k}':`).test(boolBlock) && !ROOT_ONLY.has(k))
 chk(allowedKeys.length >= 10 && unmapped.length === 0, `⑤/set 白名单 ${allowedKeys.length} 键全部有写通道映射（未映射 ${unmapped.length}${unmapped.length ? ' → ' + unmapped.join(',') : ''}）`)
-// ⑤b **键类型分类**：每个 /set 键必须能归类为「枚举 / 数值(有 RANGE) / 字符串(在 STRING_KEYS)」——
-//     否则会在 Number() 化时被吞（实测两次：recallFusion='rrf'→0、selfCheckRepo=<path>→0）
+// ⑤b **键类型分类**：每个 /set 键必须能归类为「枚举 / 数值(有 RANGE) / 字符串(在 STRING_KEYS) / **对象(显式 JSON 解析)**」——
+//     否则会在 Number() 化时被吞（实测三次：recallFusion='rrf'→0、selfCheckRepo=<path>→0、
+//     injectLevelCaps={...}→Number(对象)=NaN→`|| 0` ⇒ **写成 0 而 API 仍回 200**，即"看着成功、值却是坏的"）
 const enumKeys = new Set([...allowedBlock.matchAll(/'([A-Za-z_.]+)':\s*\[([^\]]*)\]/g)].filter((m) => m[2].trim().length > 0).map((m) => m[1]))
 const rangeKeys = new Set([...panel.slice(panel.indexOf('const RANGE'), panel.indexOf('if (!(key in allowed))')).matchAll(/'([A-Za-z_.]+)':\s*\[/g)].map((m) => m[1]))
 const stringKeys = new Set([...(panel.match(/const STRING_KEYS = new Set\(\[([^\]]*)\]\)/) || [])[1]?.matchAll(/'([A-Za-z_.]+)'/g) || []].map((m) => m[1]))
-const unclassified = allowedKeys.filter((k) => !enumKeys.has(k) && !rangeKeys.has(k) && !stringKeys.has(k))
-chk(unclassified.length === 0, `⑤b 每个 /set 键可归类为 枚举/数值/字符串（未归类 ${unclassified.length}${unclassified.length ? ' → ' + unclassified.join(',') : ''}；已归类 枚举 ${enumKeys.size} / 数值 ${rangeKeys.size} / 字符串 ${stringKeys.size}）`)
+/* ④ **对象类键**：判据是"写入前有**显式的 JSON.parse(value) 分支**"（不是看键名 —— 键名会骗人）。
+ *   为什么必须单列一类：对象落进 `Number(value) || 0` 会**静默变 0**，而这是本仓已记两次的坑的**第三种形态**。 */
+const objKeys = new Set([...panel.matchAll(/key === '([A-Za-z_.]+)'\s*\)\s*\{[\s\S]{0,400}?JSON\.parse\(value\)/g)].map((m) => m[1]))
+const unclassified = allowedKeys.filter((k) => !enumKeys.has(k) && !rangeKeys.has(k) && !stringKeys.has(k) && !objKeys.has(k))
+chk(unclassified.length === 0, `⑤b 每个 /set 键可归类为 枚举/数值/字符串/对象（未归类 ${unclassified.length}${unclassified.length ? ' → ' + unclassified.join(',') : ''}；已归类 枚举 ${enumKeys.size} / 数值 ${rangeKeys.size} / 字符串 ${stringKeys.size} / 对象 ${objKeys.size}）`)
 // ⑤/toggle 布尔键对账（覆盖边界说明）：下面是对**硬编码 6 键列表**做 SUITE_BOOL 映射核对——
 //    它只覆盖「这 6 个键是否已映射」，**不覆盖**「/toggle 白名单新增了键却漏配映射」这类新键缺口
 //    （既有弱点，非本次引入）。原此处另有 toggleBlock / toggleKeys 两变量，经 grep 全仓确认**零引用 = 死代码**

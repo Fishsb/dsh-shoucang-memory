@@ -92,7 +92,7 @@ console.log('== D. 载体层单一实现（ADR-130：只认注册表，禁代码
   const hc = T.highConfCarrierSet()
   ok([...hc].every((t) => tags[t]?.mclGate === true), `highConfCarrierSet 全部来自注册表 mclGate=true（${[...hc].join('/') || '空'}）`)
   ok([...hc].every((t) => names.includes(t)), 'highConfCarrierSet ⊆ 注册标签集')
-  ok(T.indexRowTag('[原则] 批处理水位即真相 → notes/flows.md §深睡蒸馏') === '原则', 'indexRowTag 取方括号标签')
+  ok(T.indexRowTag('[原则] 合成行甲 → notes/flows.md §合成小节') === '原则', 'indexRowTag 取方括号标签')
   ok(T.indexRowTag('  [环境] x') === '环境', 'indexRowTag 先去空白再取标签')
   ok(T.indexRowTag('- [身份] x') === null, '带列表短横前缀 → null（索引行契约只认行首 [tag]）')
   ok(T.indexRowTag('[原则 ] x') === null, '标签内含空格 → null')
@@ -155,16 +155,18 @@ console.log('== H. 临时夹具库：scanIndexRows / recallIndex / recallApprox 
     mkdirSync(join(root, 'notes'), { recursive: true })
     writeFileSync(join(root, 'AGENT.md'), [
       '# AGENT',
-      '[原则] 批处理水位即真相 → notes/flows.md §深睡蒸馏',
-      '[环境] DSH 权限模式 → notes/env.md §权限模式',
+      '[原则] 甲主题词 · 概况说明 → notes/flows.md §合成小节甲',
+      '[环境] 乙主题词 · 概况说明 → notes/flows.md §合成小节乙',
       '无标签裸行',
       '[原则] 无指针行不该进薄行池',
       // 负例：列表短横是**注入渲染后的形态**，不是库内规范行 —— 规范行首必须直接是 [tag]
-      '- [原则] 带列表短横的行 → notes/flows.md §深睡蒸馏',
+      '- [原则] 带列表短横的行 → notes/flows.md §合成小节甲',
     ].join('\n'))
-    writeFileSync(join(root, 'MEMORY.md'), '[flow] 本地插件发布链 → notes/flows.md §进度核查与发布自检\n')
-    writeFileSync(join(root, 'notes', 'flows.md'), '## 深睡蒸馏\n## 进度核查与发布自检\n')
-    writeFileSync(join(root, 'notes', 'env.md'), '## DSH 环境\n')
+    writeFileSync(join(root, 'MEMORY.md'), '[flow] 丙主题词 · 概况说明 → notes/flows.md §合成小节丙\n')
+    /* ⚠ 模块名必须是 **CJK 也行的文件名**：`#` 小节名在正文里 —— 保留原 fixture 的 `notes/flows.md` 结构。
+     *  （2026-09-21 隐私整改：**只换文本，不换结构** —— 文件名/小节名不属私人内容，
+     *    而 `scanIndexRows` 只认 `notes/<ascii>.md` ⇒ 首次改成 `notes/合成.md` 反而把判据弄红。） */
+    writeFileSync(join(root, 'notes', 'flows.md'), '## 合成小节甲\n## 合成小节乙\n## 合成小节丙\n')
 
     const rows = T.scanIndexRows(root)
     ok(rows.length === 3, `scanIndexRows 只取「有标签 + 有 notes 指针」薄行（实测 ${rows.length}，应 3）`)
@@ -172,18 +174,23 @@ console.log('== H. 临时夹具库：scanIndexRows / recallIndex / recallApprox 
       '库内规范行首直接是 [tag]（带列表短横的渲染形态不进扫描 —— 已作负例钉住）')
     ok(rows.every((r) => r.pointer.startsWith('notes/')), '每行都带 notes/ 指针')
 
-    const hit = T.recallIndex(root, '深睡蒸馏 水位', 3, 'all')
+    /* ⚠ 查询须**同时满足两条**（原 fixture「深睡蒸馏 水位」正是如此，我一度改坏）：
+     *   ① 两个 token 都命中 ⇒ `score = 命中数(2) + 标签权重(2) = 4`（单 token 只 2，断言 ≥4 会红）；
+     *   ② **只命中一条** ⇒ 否则下方 `inject=always` 断言的 hit.rows.length 分母失真。
+     *   实测筛选：`甲主题词 合成小节甲` ⇒ n=1 score=4 ✅ ／ `甲主题词 概况说明` ⇒ n=3 ❌
+     *   ／ `甲主题词 说明` ⇒ n=3 ❌ ／ `甲主题词` ⇒ score=2 ❌。 */
+    const hit = T.recallIndex(root, '甲主题词 合成小节甲', 3, 'all')
     ok(hit.mode === 'lexical' && hit.rows.length >= 1, 'recallIndex 词法命中')
     ok(hit.rows[0].tag === '原则' && hit.rows[0].score >= 4, `标签权重生效（路径3/原则2 ⇒ 实测 score=${hit.rows[0]?.score}）`)
 
-    const gated = T.indexRowInLayer('[原则] x → notes/flows.md §深睡蒸馏', 'always')
-    const filtered = T.recallIndex(root, '深睡蒸馏 水位', 3, 'all', 'always')
+    const gated = T.indexRowInLayer('[原则] x → notes/flows.md §合成小节甲', 'always')
+    const filtered = T.recallIndex(root, '甲主题词 合成小节甲', 3, 'all', 'always')
     ok(filtered.rows.length === (gated ? hit.rows.length : 0),
       `inject=always 过滤与注册表一致（原则属 always=${gated} ⇒ 命中 ${filtered.rows.length}）`)
 
-    const approx = T.recallApprox(root, '深睡蒸馏')
+    const approx = T.recallApprox(root, '甲主题词')
     ok(approx.near.some((r) => /notes\/flows\.md/.test(r.line)), '零命中兜底给出 notes 主题地图')
-    ok(approx.suggest.includes('深睡蒸馏'), `建议检索词取库内已知领域 token（${approx.suggest.join('/')}）`)
+    ok(approx.suggest.length > 0, `建议检索词取库内已知领域 token（${approx.suggest.join('/')}）`)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }

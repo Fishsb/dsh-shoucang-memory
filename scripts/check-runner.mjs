@@ -765,6 +765,48 @@ const CHECKS = [
   //   ⚠ 先红实证：变异 `LIMIT 30→20` ⇒ 本件 exit 1；还原 ⇒ exit 0 且**字节级还原**（`_tmp-mut-j3.mjs`，已删）。
   ['scripts/check-attribution-samples.mjs'],
   ['scripts/check-attribution-samples.mjs', '--selftest'],
+  // **归因取样窗口的关闭判据 + 行为级实证**（2026-09-21 · ADR-324 · 真机实测发现）
+  //   判因：M3a（ADR-303）把判定频率提到**每步**，新增的 `phase:'judge'` 行**不带 missReason**
+  //     且占切点后总量的 **77.7%**，而取样窗口原按「末 60 条 `mcl-step`」截断 ⇒
+  //     **窗口内可用样本被挤到 0**（门槛 30）⇒ 归因判定**再次结构性不可达**。
+  //     （与已修的「上限 20 < 门槛 30」同型，成因相反：上次常量打架，这次新产者挤占共用窗口。）
+  //   本件 **= `check-attribution-samples` ③/④ 的扩展**（未另立文件 —— 同一事实不写两份判据）：
+  //     ③ 结构：窗口走 `takeAttributionScan` + 谓词含 `isAttributionRow` + 无行数截断 + 谓词同源
+  //        + **返回已解析行**（首版裸行直传 ⇒ 样本恒 0，而当时结构断言**全绿** ⇒ 故补 ④）
+  //     ④ 行为：100 条噪音打头仍能收满**已解析**样本（真跑 `lib/`，非文本断言）
+  //   ⚠ 先红实证：两条变异各令本件 exit 1（① 退回行数截断 ② 谓词退化只判 kind），还原后字节级一致。
+  // **面板回落值必须与运行态同源**（2026-09-21 · S4 · 真机实测「同一开关两套口径」）
+  //   判因：`/config` 的 `global` 回落原为硬编码字面量，而运行时缺省来自注册表
+  //     ⇒ 实测 `mclFamiliarThreshold` 回落 0.65 vs 注册表 0.58、`injectProfileRows` 回落 3 vs 6、
+  //       `scoreWeights` 回落 'legacy' vs 运行态 'v2' ⇒ 无键时**面板显示 A、运行时按 B**（假可控）。
+  //   守三件：① 无陈旧字面量 ② 真引用 `SURFACE.*`/`SCORE.*` ③ **无假引用**
+  //     （注册表未声明的 `activity*` 四项**如实**保留字面量；不得写成 `SURFACE.不存在的字段`）。
+  //   反例自证 4 例含 2 反例。
+  ['scripts/check-panel-fallback.mjs'],
+  ['scripts/check-panel-fallback.mjs', '--selftest'],
+  // **公开树内不得含真实记忆库原文**（2026-09-21 · 隐私红线语义级补门）
+  //   判因（**既成事实，两批 21 处**）：`check-public-tree.mjs` 按**路径/模式**扫（邮箱/盘符/用户名…），
+  //     **不查正文语义** ⇒ 「把记忆库原文复制进 `scripts/`」它**结构性看不见**。实测：
+  //       ① `eval-gate.mjs` 内嵌 20 条样本，**16 条**与运行库画像文件逐字重合；
+  //       ② 另有 **5 件**测试/运维脚本把库内索引行原文当夹具
+  //          （test-granularity-converge / test-inject-drain / test-process-supply / test-targets / threshold-scan）。
+  //     成因**单一**：都是「**复制真库内容当夹具/样本**」—— 而夹具只需**形状**（有标签/有指针/两行不同），
+  //       不需要真文本 ⇒ 两批均已换**合成占位**，判据强度不变（相关测试仍全绿）。
+  //   本件守：① 逐字重合 = 0（判据是"在库文里真出现"，不是"长得像索引行" —— 后者全是合成夹具，会误报）
+  //          ② 反例自证（实跑：塞真库整行 ⇒ 必命中）③ 库不可达 ⇒ exit 3 skip（**不算通过**）。
+  ['scripts/check-public-content.mjs'],
+  ['scripts/check-public-content.mjs', '--selftest'],
+  // **注入槽位额度的覆盖链（`scheduler.json` → 注册表）**（2026-09-21 · S3）
+  //   判因（**差点造出第二个假旋钮**）：`/set` 白名单里原先**没有**这三个额度键（"面板调不到"）；
+  //     而运行时的总预算/档位上限/情境槽预算**只读 `SURFACE.*`**（`criteria.json` 的**构建期投影常量**）
+  //     ⇒ 若只加白名单，用户改的值写进 `scheduler.json` 而**运行时读不到** ⇒ "看起来能调、调了没用"。
+  //   ⇒ 同时补**消费链**（`budget-override#resolveSupplyBudget`）与面板三键（白名单 + 映射 + 类型）。
+  //   守四组：① 消费侧真接线（且无旧式直读残留）② 范围单一事实源（写入侧 400 与运行侧夹取同值）
+  //     ③ 对象键显式 JSON 解析（防落进 `Number()` 被吞成 0 而 API 仍回 200）④ **无覆盖时行为等价**
+  //     （原式逐值相等 ⇒ 注入文本不变，真机 `inject-baseline-diff` 逐字节对拍亦 PASS）+ 覆盖真生效/越界夹取。
+  //   ⚠ 结构断言（①–③）会漏"接线了但值变了"⇒ 故 ④ 是**真跑 `lib/`** 的行为断言。
+  ['scripts/check-budget-override.mjs'],
+  ['scripts/check-budget-override.mjs', '--selftest'],
   // **索引行合法标签集：注册表 ⟷ 写门 ⟷ 孪生 ⟷ prompt 抵达**（2026-09-20 · 真机取证）
   //   判因（与 `formatConstraintLine()` / 门4「取值域未抵达 prompt」**同族**）：写门的标签白名单
   //     只在 `memory-append.mjs` 的 `--new` 正则里，**prompt 里一个都没有** ⇒ 模型自造

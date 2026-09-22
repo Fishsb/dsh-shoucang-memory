@@ -30,6 +30,7 @@ import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
+import { buildSamples } from './eval-samples.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const argv = process.argv.slice(2)
@@ -41,83 +42,38 @@ const MODEL = argOf('--model', process.env.EVAL_MODEL || 'qwen3:8b')
 const ONLY = argOf('--only', '')
 const TIMEOUT = Number(argOf('--timeout', '120000'))
 const BANK = argOf('--bank', process.env.MEMORY_ROOT || join(homedir(), '.dsh', 'suite', 'memory'))
+/* 样本量：**缺省 1/任务**（= 3 条 × 2 模式 = 6 次模型调用）。
+ *  ⚠ **这个缺省只够"冒烟"（证明链路通），不足以出结论** —— 而**不够时本件判 `skip`、不判 PASS**
+ *    （见下方 `MIN_JUDGE_N` 与 G2-a 的三态判定）。要出有统计意义的读数须**显式** `--n ≥8`。
+ *  **实测耗时（本机 qwen3:8b @ Ollama）**：单次 ≈ **12.7s**，闸门内（长 prompt）≈ **21s/次**
+ *    ⇒ `--n 2`（12 次调用）实测 **249s**，而 `check-runner` 看门狗上限 **300s** ⇒ 缺省取 2 都可能被杀。
+ *  ⚠ **并发无效（实测）**：4 并发 50.4s vs 串行预估 50.8s ⇒ Ollama 侧本就串行
+ *    ⇒ 想跑满 `--n 8`（48 次 × ~21s ≈ **17 分钟**）只能接受墙钟，**不能靠并行压缩**
+ *    （故本件在 `CHECKS` 里登记为 `{ slow: true }`，`--fast` 时跳过）。
+ *  ⚠ **不与旧值比准确率**：迁前那 20 条内嵌样本实测三处结构性失效（字面泄漏 8/20 ·
+ *    镜像对 8/20 · 真独立样本仅 4）⇒ 其 95% **不可解读**，拿它当基线是拿污染值当锚。 */
+const N = Number(argOf('--n', '1')) || 1
+const LIMITS = N > 0 ? { t1: N, t2: N, t3: N } : undefined
 
-/* ══ 样本集：真材料 + 已知答案（人工给定，留档于此） ══════════════════════════
- * 取材：运行库索引行（`AGENT.md` / `MEMORY.md`）与 notes 小节标题。
- * 任务形态对齐方案 §3 册二的**三通道准入**：答案可枚举 ⇒ 才是评估通道该做的。
- * 三个子任务：
- *   T1 choice  —— 标签归类：给一行索引行，判它属哪个标签（enum）
- *   T2 boolean —— 断言核对：给一行索引行 + 一个断言，判该断言是否被此行支持（二分）
- *   T3 choice  —— 小节归属：给一个主题词 + 候选小节名，判它属哪个小节（enum）
- * ⚠ 答案由人工逐条给定（见 `answer` 字段），**不从模型回读**——否则是自证。
+/* ══ 样本集：**运行期从真库取材**（不再内嵌） ══════════════════════════════════
+ * ⚠ **2026-09-21 迁（隐私红线 · ACT-289 遗留风险清账）**：
+ *   本文件**原先内嵌 20 条真实记忆库原文**（`state:` 字面量），而 `scripts/` 是**公开树**（git 跟踪）
+ *   ⇒ 实测其中 **16/20 条与运行库画像文件逐字重合**，即**私人记忆内容已在公开面**
+ *   （`check-public-tree` 按路径/模式扫，**不查正文语义** ⇒ 漏过）。
+ *   ⚠ **本文档亦不复述那些原文**（引一句样本进注释 = 内容仍在公开树，等于没清）。
+ *   ADR-290 已建接收端 `scripts/eval-samples.mjs`（构建器内**零记忆内容**，样本运行期从 `<bank>` 读，
+ *   产物落 `_memory/audit/` 已 gitignore），**前代未迁** ⇒ 本轮补迁。
+ *   ⇒ 本文件从此**零记忆原文**；`check-eval-samples` ⑨ 的反例自证继续守构建器。
+ *
+ * 任务形态对齐方案 §3 册二三通道准入（答案可枚举）：T1 choice 标签归类 · T2 boolean 概况归属 · T3 choice 小节归属。
+ * ⚠ 答案由**构建器按 provenance 派生**（真行的真标签 / 真小节），**不从模型回读** —— 否则是自证。
  */
-const SAMPLES = [
-  /* ── T1 标签归类（真行原样取自 AGENT.md/MEMORY.md；答案=该行实际标签） ── */
-  { id: 'T1-1', task: 'T1', label: '标签归类',
-    state: '[原则] 代理指标非判据 · 心跳/端口/钉点/文件增长皆机制自证，不等运行态 → notes/agent.md §版本钉点三处一致',
-    options: ['原则', '经验', '路径', '边界', '认知'], answer: '原则' },
-  { id: 'T1-2', task: 'T1', label: '标签归类',
-    state: '[经验] 记忆脚本参数解析坑 · --out 误吞位置参 → notes/agent.md §学习史',
-    options: ['原则', '经验', '路径', '边界', '认知'], answer: '经验' },
-  { id: 'T1-3', task: 'T1', label: '标签归类',
-    state: '[路径] 深睡记忆蒸馏 · ①区间起点先取值显式传参 ②按判据三通道提炼 ③done 才推进水位 → notes/flows.md §深睡蒸馏',
-    options: ['原则', '经验', '路径', '边界', '认知'], answer: '路径' },
-  { id: 'T1-4', task: 'T1', label: '标签归类',
-    state: '[边界] 宿主服务免动 · 不自重启/不杀宿主端口，重启交用户，失败即停手转重建',
-    options: ['原则', '经验', '路径', '边界', '认知'], answer: '边界' },
-  { id: 'T1-5', task: 'T1', label: '标签归类',
-    state: '[认知] 架构优先 · 先定承载节点再动手，说不出落点即判局部补丁',
-    options: ['原则', '经验', '路径', '边界', '认知'], answer: '认知' },
-  { id: 'T1-6', task: 'T1', label: '标签归类',
-    state: '[原则] 结果验证重实证 · 接口成功非达成，须看审计态/字节比对等实质证据 → notes/lessons.md §假绿与实证',
-    options: ['原则', '经验', '路径', '边界', '认知'], answer: '原则' },
-  { id: 'T1-7', task: 'T1', label: '标签归类',
-    state: '[原则] 变更先判因备份 · 清理分级：在写与系统项勿动，共享配置增量改',
-    options: ['原则', '经验', '路径', '边界', '认知'], answer: '原则' },
-  { id: 'T1-8', task: 'T1', label: '标签归类',
-    state: '[原则] 静默失效查被吞异常 · 探针PASS≠生效，先查catch吞错与本地绑定',
-    options: ['原则', '经验', '路径', '边界', '认知'], answer: '原则' },
-
-  /* ── T2 断言核对（boolean：给定断言是否被该行支持） ── */
-  { id: 'T2-1', task: 'T2', label: '断言核对',
-    state: '[原则] 代理指标非判据 · 心跳/端口/钉点/文件增长皆机制自证，不等运行态',
-    claim: '该原则主张：心跳与端口等信号不能作为系统真的在运行的判据。', answer: true },
-  { id: 'T2-2', task: 'T2', label: '断言核对',
-    state: '[原则] 代理指标非判据 · 心跳/端口/钉点/文件增长皆机制自证，不等运行态',
-    claim: '该原则主张：心跳与端口可以证明系统已经在正常运行。', answer: false },
-  { id: 'T2-3', task: 'T2', label: '断言核对',
-    state: '[边界] 宿主服务免动 · 不自重启/不杀宿主端口，重启交用户，失败即停手转重建',
-    claim: '该条要求：agent 遇到问题时不要自行重启宿主服务。', answer: true },
-  { id: 'T2-4', task: 'T2', label: '断言核对',
-    state: '[边界] 宿主服务免动 · 不自重启/不杀宿主端口，重启交用户，失败即停手转重建',
-    claim: '该条鼓励：遇到失败时 agent 应反复重试直到成功。', answer: false },
-  { id: 'T2-5', task: 'T2', label: '断言核对',
-    state: '[原则] 文本改动先定编码 · 改文本用编辑工具，非ASCII .ps1带BOM余者免BOM',
-    claim: '该原则要求：修改非 ASCII 的 PowerShell 脚本时要带 BOM。', answer: true },
-  { id: 'T2-6', task: 'T2', label: '断言核对',
-    state: '[原则] 文本改动先定编码 · 改文本用编辑工具，非ASCII .ps1带BOM余者免BOM',
-    claim: '该原则要求：所有文件都必须带 BOM。', answer: false },
-  { id: 'T2-7', task: 'T2', label: '断言核对',
-    state: '[原则] 批处理水位即真相 · 产物未校验可解析不得推进水位，失败须回滚重试',
-    claim: '该原则主张：只要程序没有报错，就可以推进水位。', answer: false },
-  { id: 'T2-8', task: 'T2', label: '断言核对',
-    state: '[原则] 批处理水位即真相 · 产物未校验可解析不得推进水位，失败须回滚重试',
-    claim: '该原则主张：产物必须经过校验、确认可解析之后才能推进水位。', answer: true },
-
-  /* ── T3 小节归属（choice：主题词应归入哪个小节） ── */
-  { id: 'T3-1', task: 'T3', label: '小节归属',
-    state: '主题：插件注册后端口被占用、服务判活失败',
-    options: ['网络坑', 'DSH 自托管约束', 'Windows 系统运维与数据安全', '检索通道故障绕行'], answer: 'DSH 自托管约束' },
-  { id: 'T3-2', task: 'T3', label: '小节归属',
-    state: '主题：检索接口报错时的多级回退与换源',
-    options: ['网络坑', 'DSH 自托管约束', 'Windows 系统运维与数据安全', '检索通道故障绕行'], answer: '检索通道故障绕行' },
-  { id: 'T3-3', task: 'T3', label: '小节归属',
-    state: '主题：控制台读中文文件出现乱码、需注意输出编码',
-    options: ['网络坑', 'DSH 自托管约束', 'Windows 系统运维与数据安全', '检索通道故障绕行'], answer: 'Windows 系统运维与数据安全' },
-  { id: 'T3-4', task: 'T3', label: '小节归属',
-    state: '主题：下载大文件被截断、需要重钉与全量下载',
-    options: ['网络坑', 'DSH 自托管约束', 'Windows 系统运维与数据安全', '检索通道故障绕行'], answer: '网络坑' },
-]
+const SAMPLES = (() => {
+  if (!existsSync(BANK)) { console.error(`⏭ skip：记忆库不存在（${BANK}）`); process.exit(3) }
+  const built = buildSamples({ bank: BANK, limits: LIMITS })
+  for (const w of built.warnings) console.error(`  ⚠ 采样告警：${w}`)
+  return built.samples
+})()
 
 /* ══ 提问构造（**类型化问题**——即评估通道的形态：问题自包含 + 答案可枚举） ══ */
 function questionOf(s) {
@@ -249,6 +205,19 @@ const base = results.samples.filter((x) => x.mode === 'baseline')
 const rate = (arr) => (arr.length ? arr.filter((x) => x.ok).length / arr.length : null)
 const accT = rate(typed), accB = rate(base)
 
+/* ⚠⚠ **2026-09-21 修：G2-a 的"平凡通过"（本轮我自己引入并当场实测抓到）** ──────────────────
+ *   判因：缺省样本量收到 1/任务后实测输出 `类型化 0/3 = 0.0%` / `基线 0/3 = 0.0%`
+ *     而 G2-a 判据是 `accT >= accB * 0.9` ⇒ **`0 >= 0` 为真 ⇒ ✅ PASS**。
+ *     **零准确率、零证据，却报通过** —— 这正是本仓反复剿的形态
+ *     （同族：`inject-dedup-probe` 的"输入为空 ⇒ 跳过断言 ⇒ PASS"· §0o ④）。
+ *   ⇒ 修法（**两条，缺一不可**）：① 判据要求**基线非零**（`accB > 0`）—— 基线为 0 时
+ *      "相对基线的 90%" **无意义**（0 的 90% 还是 0，任何模型都能"达标"）；
+ *      ② **样本量下限**：`MIN_JUDGE_N` 条/任务以下 ⇒ 判 **skip（exit 3）**，**不判 PASS**。
+ *      依据（本仓 `[原则] 条件式验收` / `[原则] 输入量须可见化`）：N 太小或分母为 0，
+ *      只能"未取证"，**不得**因为不等式恰好在退化点成立而给绿。 */
+const MIN_JUDGE_N = 8
+const samplesEnough = typed.length >= MIN_JUDGE_N && base.length >= MIN_JUDGE_N
+const baseNonZero = accB !== null && accB > 0
 // G2-b 排序性：按 confidence 中位数切两半，比较高半是否更准
 let rankOk = null
 const withConf = typed.filter((x) => typeof x.conf === 'number')
@@ -260,12 +229,19 @@ if (withConf.length >= 4) {
   results.rankSplit = { low: low, high: high, n: withConf.length }
 }
 
-const gateAcc = (accT === null) ? null : (accB === null ? null : accT >= accB * 0.9)
+/* G2-a 三态：`true` 达标 / `false` 不达标 / `null` **未取证**（样本不足 或 基线为 0） */
+const gateAcc = (accT === null || accB === null) ? null
+  : (!samplesEnough || !baseNonZero) ? null
+  : (accT >= accB * 0.9)
 results.summary = {
   typed: { n: typed.length, acc: accT },
   baseline: { n: base.length, acc: accB },
   gateG2a: gateAcc,
   gateG2b: rankOk,
+  minJudgeN: MIN_JUDGE_N,
+  samplesEnough,
+  baseNonZero,
+  evidenceNote: gateAcc === null ? (!samplesEnough ? `样本不足（须 ≥${MIN_JUDGE_N}/模式；实测 typed=${typed.length} baseline=${base.length}）⇒ **未取证**` : '基线为 0 ⇒ “≥基线×90%”无意义 ⇒ **未取证**') : '',
   errors: results.errors.length,
 }
 
@@ -275,7 +251,7 @@ console.log(`模型 ${MODEL} @ ${BASE}`)
 console.log(`类型化（评估通道形态）：${typed.filter((x) => x.ok).length}/${typed.length} = ${accT === null ? '-' : (accT * 100).toFixed(1) + '%'}`)
 console.log(`基线（自由作答）      ：${base.filter((x) => x.ok).length}/${base.length} = ${accB === null ? '-' : (accB * 100).toFixed(1) + '%'}`)
 if (results.rankSplit) console.log(`G2-b 排序性：高置信 ${(results.rankSplit.high * 100).toFixed(1)}% vs 低置信 ${(results.rankSplit.low * 100).toFixed(1)}%（n=${results.rankSplit.n}）`)
-console.log(`G2-a 准确率 ≥ 基线×90%：${gateAcc === null ? '无法判定（缺基线）' : (gateAcc ? '✅ PASS' : '❌ FAIL')}`)
+console.log(`G2-a 准确率 ≥ 基线×90%：${gateAcc === null ? `⏭ **未取证**（${results.summary.evidenceNote}）` : (gateAcc ? '✅ PASS' : '❌ FAIL')}`)
 console.log(`G2-b 置信度排序性    ：${rankOk === null ? '样本不足，未判' : (rankOk ? '✅ PASS' : '❌ FAIL')}`)
 console.log('⚠ 校准性（confidence 数值是否名副其实）**未验**——须 A 档真概率，本件不做（如实标注）')
 console.log(`错误 ${results.errors.length} 条`)
@@ -290,5 +266,12 @@ try {
 } catch (e) { console.log(`（落盘失败：${String(e?.message || e)}）`) }
 
 if (accT === null) process.exit(3)
+/* ⚠ **未取证 ⇒ exit 3（skip），不得 exit 0** —— 这是本次修的要点：/
+ *   旧实现 `pass = (gateAcc !== false) && (rankOk !== false)` 在 `gateAcc === null` 时
+ *   因 `null !== false` 为真而**放行** ⇒ 样本不足/基线为 0 时**报通过**。 */
+if (gateAcc === null) {
+  console.log(`\n⏭ skip：G2-a **未取证**（${results.summary.evidenceNote}）—— 按本仓契约 exit 3 = skip，**不算通过**`)
+  process.exit(3)
+}
 const pass = (gateAcc !== false) && (rankOk !== false)
 process.exit(pass ? 0 : 1)

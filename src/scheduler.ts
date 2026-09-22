@@ -24,6 +24,8 @@ import { recallRanked } from './vec.js'
 import { renderAssocBlock, supplyAssociations } from './association-supply.js'
 // B 档（审查 F1-A）：深睡触发 / 召回融合 / MCL / 画像行上限的**缺省值直接读判据注册表**（单一真源）
 import { TRIGGER, SURFACE, SCORE, MATURATION } from './criteria.generated.js'
+/* S3（2026-09-21）：额度热覆盖三键的**范围单一事实源**（与运行时消费侧同源，防两处各写一份） */
+import { BUDGET_RANGES } from './budget-override.js'
 // S-P2b（2026-09-20）：探测域（8 键）按**领域接缝**抽出 —— schema 与显式映射同处一文件，单一事实源。
 import { probeConfigSchema, probeOptionsOf, type ProbeConfigFields } from './probe-config.js'
 // ACT-295（2026-09-21）：子代理路由域（8 键，含**档位**）按同一接缝抽出 —— 解本件冻结棘轮。
@@ -232,6 +234,20 @@ export const Config: any = z.object({
   injectFreshSlots: z.number().min(0).max(6).default(2).description('新鲜度保底槽位数（注入时优先保留最近新增条目）'),
   // v2.2（ADR-130）三层生效模型开关
   injectProfileRows: z.number().min(0).max(6).default(SURFACE.injection.carriers.profile).description('P 层画像行（`- … ← 源:`）每档注入上限（缺省 3；0=关闭 → 回滚到画像行不注入的旧行为）'),
+  /* ── S3（2026-09-21）：注入槽位额度的**热覆盖三键** ──────────────────────────────────────
+   *   判因（**差点造出第二个假旋钮**）：这三个额度在运行时原先**只读 `SURFACE.*`**（构建期投影常量），
+   *   面板 `/set` 白名单里**零命中** ⇒ "面板调不到"。而若只把它们加进白名单，值会写进
+   *   `scheduler.json` 而**运行时读不到** ⇒ "看起来能调、调了没用"（本仓最忌）。
+   *   ⇒ 故**同时**补上消费侧（`budget-override.ts` 的覆盖链）与这三条 schema 声明。
+   *   ⚠ **声明但**不设 `default`**：`schemastery` 无 `.optional()`，而本仓配置读侧
+   *     （`suite.read()`）走**原始 JSON**，不依赖 schema 产出 ⇒ 用 `z.any().description(...)` 声明
+   *     **类型与范围由 `BUDGET_RANGES` 在消费侧夹取**（判据 `check-budget-override` 守两处同源）。
+   *     ⚠ 这**不是**"写个不生效的键"——它与既有 `recallColdFactorPercent`（`.default(SURFACE…)`）
+   *     的差别只在**缺省属于注册表**；未设置时 `scheduler.json` 里不出现该键 ⇒ `budgetOverrideOf`
+   *     判为"未覆盖" ⇒ 取值 = 注册表 ⇒ **行为逐字不变**。 */
+  injectBudgetChars: z.any().description(`注入总预算（字符）热覆盖；缺省读注册表 surface.injection.budgetChars；范围 ${BUDGET_RANGES.injectBudgetChars[0]}–${BUDGET_RANGES.injectBudgetChars[1]}（越界由消费侧夹取并留痕）`),
+  injectSituationBudgetChars: z.any().description(`情境槽预算（字符）热覆盖；缺省读注册表 surface.injection.situation.budgetChars（0=关该槽）；范围 ${BUDGET_RANGES.injectSituationBudgetChars[0]}–${BUDGET_RANGES.injectSituationBudgetChars[1]}`),
+  injectLevelCaps: z.any().description(`档位行数上限热覆盖（{low,medium,high,smart}）；缺省读注册表 surface.injection.levelCaps；单档范围 ${BUDGET_RANGES.injectLevelCaps[0]}–${BUDGET_RANGES.injectLevelCaps[1]}`),
   scoreWeights: z.string().default(SCORE.mode).description("召回打分公式：'legacy'=现行 relevance+activity | 'v2'=α_rel·relevance+α_imp·importance+α_rec·recency（**缺省读注册表 surface.score.mode** · 单一真源）"),
   shadowScore: z.boolean().default(true).description('影子打分：并行计算 v2 公式并写**统一台账** audit/ledger.jsonl（	ype=score.shadow，不改变排序，用于 M4 影子期）'),
   maturationEnforce: z.boolean().default(MATURATION.enforce).description('成熟度强制：true 时 [原则]/[路径] 升格须满足 A≥maturation.gate（**缺省读注册表 maturation.enforce** · 单一真源）'),

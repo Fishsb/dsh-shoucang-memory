@@ -75,11 +75,11 @@
 
 > 注册表声明 `gated` 的 7 个标签：`env` `flow` `lesson` `tool` `教训` `经验` `路径`。
 > `readCarrier` 用 `/^\[.+\]/` 无差别选取 ⇒ **`MEMORY.md` 全部 48 行 gated 内容按 always 每轮注入**。
-> 被违规注入的实例（节选）：
-> - `[env] DSH 环境 · 数据目录/3080/模型/组装链/权限模式/转录落盘 → notes/env.md §DSH 环境`
-> - `[flow] 全局工程纪律 · Commits/ADR/分层/仓库可用性审查 → notes/flows.md §全局工程纪律`
-> - `[tool] Zhihu 检索 · cli0.2.0/本地 → notes/tools.md §Zhihu 检索`
-> - `[路径] 深睡记忆蒸馏 · ①区间起点先取值显式传参 ②按判据三通道提炼 ③done 才推进水位 → notes/flows.md §深睡蒸馏`
+> 被违规注入的实例（**节选 4 例；正文含库内原文 ⇒ 已脱敏，仅保标签与指针形态**）：
+> - `[env] …（环境类索引行）→ notes/env.md §DSH 环境`
+> - `[flow] …（流程类索引行）→ notes/flows.md §全局工程纪律`
+> - `[tool] …（工具类索引行）→ notes/tools.md §Zhihu 检索`
+> - `[路径] …（路径类索引行）→ notes/flows.md §深睡蒸馏`
 
 **载体实际注入量（live bank 直测）**
 
