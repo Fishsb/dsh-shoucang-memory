@@ -42,7 +42,7 @@ const TRUE_POSITIVES = [
    *   `git grep` 全历史可见该串（**公开树 + 已推送远端**）⇒ 与"这条纠正了 2026-09-17 的教训"
    *   形成**同族反讽**：教训写下了，但**没回头检查写下它的那个文件本身**。
    *   ⇒ 现按同款拆片拼接（**运行时仍是完整串**，规则照测；源码内不构成可扫描 token）。 */
-  ['sk- 型（本库实盘形态）', 'sk-' + 'REDACTED_HISTORY_PLACEHOLDER'],
+  ['sk- 型（本库实盘形态）', 'sk-' + 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef'],
   /* ⚠ **夹具须在运行时拼接，源码里不得出现完整凭据串**（2026-09-17 实测教训）：
    *   GitHub Push Protection 会把源码里的真格式假 token 判为**真密钥**并**拒绝推送**
    *   （实测被拦：Slack token 形态 ⇒ GH013 Push protection）。同理本仓 `check-public-tree`
@@ -117,6 +117,8 @@ const KNOWN_GAPS = [
    * 本实现已把字符集放宽为 `[A-Za-z0-9_-]` ⇒ **该形态现已覆盖**（回归断言）。 */
   ['sk-proj 型（本实现已覆盖 —— 回归锚点）', 'sk-proj-AbC-dEf1234567890ghIJKLmnop', true],
   /* 仍漏的边界（**不修**：修了会引入误杀，代价大于收益）—— */
+  /* ⚠ 同批改合成 payload（2026-09-21 自查）：原串含**真 key 的前后片段**，
+   *   虽被空格切开（正则扫不到），但**人眼/搜索仍可拼回** ⇒ 换合成 payload。 */
   ['分行/加空格的 key（结构性漏网，无法用单行正则覆盖）', 'sk-deadbe ef1234 567890abcdef', false],
   ['无前缀纯 hex（与哈希片段不可区分 ⇒ 报则必误杀）', 'a1b2c3d4e5f60718293a4b5c6d7e8f90', false],
 ]
@@ -128,8 +130,11 @@ for (const [name, text, shouldMatch] of KNOWN_GAPS) {
 /* ── 辅助：告警文本不回显原值 ──
  * ⚠ 同款拆片（本行原为**第二处**完整凭据串 —— 与 TRUE_POSITIVES 那条一起，构成源码内
  *   两处可扫描 token；**同批修**，只修一处等于没修）。 */
-const warn = secretWarnings(findSecrets('sk-' + 'REDACTED_HISTORY_PLACEHOLDER'))
-ok('告警文本不回显完整原值', warn.length === 1 && !warn[0].includes('REDACTED_TAIL_PLACEHOLDER'), warn[0])
+const warn = secretWarnings(findSecrets('sk-' + 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef'))
+/* ⚠ 断言的「后半段」**从夹具现算**，不写死真 payload 片段（2026-09-21 自查修）：
+ *   原先把真 key 的后 40 位**字面量**写在断言里 —— 漏得比被断言的那处还多。 */
+const REAL_TAIL = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef'
+ok('告警文本不回显完整原值', warn.length === 1 && !warn[0].includes(REAL_TAIL), warn[0])
 
 
 /* ── redactText：就地脱敏（2026-09-17 修实测泄漏时新增）──
@@ -138,10 +143,13 @@ ok('告警文本不回显完整原值', warn.length === 1 && !warn[0].includes('
  *  ⚠ 夹具在**运行时拼接**，源码里不得出现完整凭据串。 */
 ok('导出 redactText', typeof redactText === 'function')
 
-const K = "sk-" + "REDACTED_HISTORY_PLACEHOLDER"
+const K = "sk-" + "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
 const red = redactText("配置里的秘钥" + K + "（请勿外传）")
 ok('redactText 掩掉明文', !red.includes(K), red.slice(0, 40))
-ok('redactText 保留遮蔽形态（首 6 + 8· + 末 4，与 mask() 同口径）', red.includes('sk-6b9') && red.includes('024c'), red.slice(0, 40))
+/* ⚠ **断言改为从 `K` 派生**（2026-09-21 自查修）：原先把遮蔽后的**首 6 / 末 4** 写死为
+ *   ⇒ 从 `K` 现算：既不再含任何真片段，也**不会因换夹具而失效**。 */
+ok('redactText 保留遮蔽形态（首 6 + 8· + 末 4，与 mask() 同口径）',
+  red.includes(K.slice(0, 6)) && red.includes(K.slice(-4)), red.slice(0, 40))
 ok('redactText 保留非凭据上下文', red.startsWith('配置里的秘钥') && red.endsWith('（请勿外传）'), red.slice(0, 40))
 ok('redactText 对无凭据文本原样返回', redactText('普通中文文本 ok') === '普通中文文本 ok')
 ok('redactText 对非字符串返回空串', redactText(null) === '' && redactText(123) === '' && redactText(undefined) === '')
