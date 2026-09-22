@@ -76,6 +76,7 @@ export interface L0Input {
     sessions?: number;
     /** 与既有条目冲突（将被取代） */
     supersedes?: boolean;
+    conflict?: L0Conflict;
 }
 /** L0 共用内核：四维枚举（两域同口径；**不打分**，避免魔法数） */
 export declare function evaluateL0(input: L0Input): L0Verdict;

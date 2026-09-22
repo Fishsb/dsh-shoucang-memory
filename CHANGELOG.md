@@ -3260,6 +3260,12 @@
     ⇒ 与本次改动**构造无关**（真库 `lessons.md` 的 mtime 落在本次会话期间）。**留待单独归因，未在此处顺手改。**
 
 ### Added
+- **`coexist` 取得产生路径（D2 收口 · 2026-09-21）**：`conflict` 维声明三义 `none | coexist | supersede`，而 `evaluateL0` **只由 `supersedes: boolean` 决定** ⇒ `coexist` **无产生路径**。
+  · **更坏的是模型判了也会被抹掉**：调用点（`distill-agent.ts`）已把模型输出**按三义校验**（`CONFLICT_VALUES` 含 `coexist`、越界另有 `judgement-invalid` 留证），随后**只**传 `supersedes: conflictNorm === 'supersede'` ⇒ **`coexist` 被静默压成 `none`**。形态 = **声明三义、实现两义、第三义静默降级**（与 `§0p` 同族，但这条是"判了也不落"的**运行时**版）。
+  · **修**：`L0Input` 增可选 `conflict`（**原始三义**），`evaluateL0` 按「**显式优先、布尔兜底**」取值；调用点把已校验的 `conflictNorm` 原样传下。
+  · **零迁移已实测**：`supersedes=true/false` ⇒ `supersede/none`（与改前逐字相同）；`conflict=coexist` ⇒ `coexist` + basis `l0.conflict.coexist`（`coexist` **不进**取代的 basis —— 它是"并存"不是"取代"）。
+  · **注册表同步**：`coexist` 已从 `wiring.unreachableValues` **删除**（棘轮只许收紧；留痕于 `unreachableValuesNote`）。⚠ 真机 `coexist` 产量现为 **0**（历史从未产生）⇒ 属「**通路已建、样本未到**」，与「断链」从此**可分辨**（前者 basis 会出现 `l0.conflict.coexist`）。
+
 - **注入槽位额度的**面板可调 + 覆盖链**（2026-09-21 · S3 · 用户授权「全部处理」）**：三册（`memClass`/`gate`/`budgetChars`）的**代码面**其实早已落地，真缺口是**面板调不到** —— `/set` 白名单 27 键里 `injection.budgetChars` / `injection.levelCaps` / `injection.situation.*` **零命中**。
   · **⚠ 差点造出第二个假旋钮（本次最重的自查）**：运行时的总预算/档位上限/情境槽预算**只读 `SURFACE.injection.*`** —— 那是 `criteria.json` 的**构建期投影常量**。若**只**把三个键加进 `/set`，用户改的值会写进 `scheduler.json` 而**运行时永远读不到** ⇒ "看起来能调、调了没用"。**先取证再动手**（读到 `panel-shared.ts` 只 `SURFACE`、`scheduler.ts` 无 `injection.*` 覆盖映射）⇒ 判定"只加白名单"是**不可接受**的。
   · **正解 = 补覆盖链**：新件 `src/budget-override.ts`（**唯一实现**）——`scheduler.json`（热覆盖）→ 注册表（缺省·单一真源），越界**夹取并留痕**（记入 `supplyUsage.budgetClamped`，`/inject/stats` 只读出去，**不静默**）。三处消费点共用：`panel-shared`（运行时真裁切依据）· `scheduler`（schema 声明）· `panel-config`（面板读数）。

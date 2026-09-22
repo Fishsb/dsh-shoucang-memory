@@ -102,6 +102,17 @@ export interface L0Input {
   sessions?: number
   /** 与既有条目冲突（将被取代） */
   supersedes?: boolean
+  /* ⚠ **2026-09-21（D2 收口）：`coexist` 的产生路径**。
+   *   判因（真机 + 读码双证）：`conflict` 维声明了三义 `none | coexist | supersede`，
+   *     而本函数原先**只由 `supersedes: boolean` 决定** ⇒ `coexist`（与既有并存·**不取代**）
+   *     **无任何产生路径**。更坏的是**模型判了也会被抹掉**：调用点
+   *     （`distill-agent.ts`）已把模型输出**按三义校验**（`CONFLICT_VALUES` 含 `coexist`），
+   *     随后却只传 `supersedes: conflictNorm === 'supersede'` ⇒ **`coexist` 被静默压成 `none`**。
+   *     ⇒ 与仓内已登记形态同族：**声明了三义、实现了两义、第三义静默降级**。
+   *   ⇒ 修法：**并列传入原始三义**（`conflict`），由本函数按"显式优先、布尔兜底"取值 ——
+   *     `conflict` 给定时以它为准（三义全可达）；未给定时退回 `supersedes` 布尔（**旧调用方零迁移**，
+   *     行为逐字不变）。`coexist` **不参与** `supersedes` 的 basis 标注（它不是取代）。 */
+  conflict?: L0Conflict
 }
 
 /** L0 取值域（B 档 · 审查 F1-A）：**枚举字面量取自注册表** `criteria.l0.*.values`，并在此做一致性校验——
@@ -139,8 +150,17 @@ export function evaluateL0(input: L0Input): L0Verdict {
   if (days30 >= 2) { stability = STAB.crossDay as L0Stability; basis.push('l0.stability.cross-day') }
   else if (traces >= 2) { stability = STAB.sameDay as L0Stability; basis.push('l0.stability.same-day') }
 
-  const conflict: L0Conflict = input.supersedes ? (CONF.supersede as L0Conflict) : (CONF.none as L0Conflict)
-  if (input.supersedes) basis.push('l0.conflict.supersede')
+  /* conflict：**显式三义优先，布尔兜底**（D2 收口 · 见 `L0Input.conflict` 判因）。
+   *   · `input.conflict` 已给 ⇒ 用它（`coexist` 从此**有产生路径**）；
+   *   · 未给 ⇒ 退回 `supersedes` 布尔（**旧调用方零迁移**，取值与改前逐字相同）；
+   *   · basis 只在**取代**时标注（`coexist` 是"并存"，不是取代 ⇒ 不该进取代的因）。 */
+  const conflict: L0Conflict = (() => {
+    const explicit = input.conflict
+    if (explicit === CONF.coexist || explicit === CONF.supersede || explicit === CONF.none) return explicit as L0Conflict
+    return input.supersedes ? (CONF.supersede as L0Conflict) : (CONF.none as L0Conflict)
+  })()
+  if (conflict === CONF.supersede) basis.push('l0.conflict.supersede')
+  else if (conflict === CONF.coexist) basis.push('l0.conflict.coexist')
 
   return { reuse, generality, stability, conflict, basis }
 }

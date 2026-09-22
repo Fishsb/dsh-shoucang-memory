@@ -455,7 +455,10 @@ const distillAgent = async (dep: AgentDeps, agent: any): Promise<void> => {
           domain: 'ingest', sid: sid.slice(0, 8), chunk: k + 1,
           judgement: jd,
           ...(jd ? { judgementChecked: { conflict: conflictOk } } : {}),
-          l0After: evaluateL0({ text: String(chunk.text || '').slice(0, 400), traces: 1, supersedes: conflictNorm === 'supersede' }),
+          /* D2（2026-09-21）：把**已校验的三义**原样传下去 —— 原先只传 `supersedes` 布尔
+           *   ⇒ 模型判出的 `coexist` 被**静默压成 `none`**（声明三义、实现两义）。
+           *   `conflictNorm` 已保证 ∈ {none, coexist, supersede}（越界另有 `judgement-invalid` 留证）。 */
+          l0After: evaluateL0({ text: String(chunk.text || '').slice(0, 400), traces: 1, supersedes: conflictNorm === 'supersede', conflict: conflictNorm as 'none' | 'coexist' | 'supersede' }),
           decision: { route, fclass, handledByHost: true },
           result: { added: disp.added, rejected: disp.rejected, failed: disp.failed, targetLib: disp.targetLib },
           // P4（2026-09-14）：enqueued 一并报**经历四通道**计数——否则「环记录落库了没」无据可查
