@@ -35,14 +35,17 @@
 // 运行行为：· 逐件运行并按其退出码归类；· 打印统一摘要（xfail 单独成段）；
 //   · 任一 fail ⇒ 自身 exit 1；全 pass/skip/**xfail** ⇒ exit 0（xfail 不判失败）。
 // 用法: node scripts/check-runner.mjs [--json] [--list] [--only <子串>[,<子串>...]] [--fast]
-import { writeFileSync, readdirSync } from 'node:fs'
+import { writeFileSync, readdirSync, appendFileSync, mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { tmpdir } from 'node:os'
+import { tmpdir, homedir } from 'node:os'
 import { basename } from 'node:path'
 import { execFileSync } from 'node:child_process'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+/** DSH 家目录（与 `src/targets.ts#dshHome` 同口径：env 优先，其次 `~/.dsh`）。
+ *  ⚠ 本件是 `scripts/` 侧独立运行器，**不 import `lib/`**（避免与宿主产物耦合）⇒ 就地按同口径解析。 */
+const dshHome = process.env.DSH_HOME || join(homedir(), '.dsh')
 const AS_JSON = process.argv.includes('--json')
 /* 选择性运行（2026-09-18）：**只做显式点名**（`--only <子串>`，可重复、可逗号分隔）。
  *   判因（实测）：全量 141 件串行 ~105s，而其中位数仅 0.13s —— 前 5 件占 63%。
@@ -257,6 +260,20 @@ const CHECKS = [
   ['scripts/test-save-roundtrip.mjs'],
   ['scripts/check-carriers.mjs'],
   ['scripts/check-field-usage.mjs'],
+  // ACT-349（2026-09-23）：`essence-review-stability` 此前**未登记**（属 obs 席报的「有判据无消费者」族），
+  //   而它是 **S-P5c 释放接线的前置门**（判"语义判定是否收敛到足以接线自动执行"）。
+  //   ⚠ **只登记只读路径** `--from-ledger`：该件**不带开关时会触发 8 个并发子代理跑真深睡**
+  //     （实测单跑 >300s），违反本仓「**检查件不得写真库**」纪律 ⇒ 只用只读档。
+  //   ⚠ 该件在本轮的**真缺陷修复**：异常纪元（`note` 含 `stop=error` / `approved+rejected==0` 而候选>0）
+  //     原被直接算 `approved/candidates` ⇒ **把"12 批全失败"计成"通过率 0%"**，把极差从 **16.3pp 虚增到 37.2pp**。
+  //     修后异常**单独列出并排除出通过率序列**（不静默丢弃）。
+  ['scripts/essence-review-stability.mjs', '--from-ledger'],
+  // B 方向（2026-09-23 · ACT-344）：**空扫判据下沉到件内自证**。
+  //   判因：曾建外围元门禁想机检"谁真读 src/"，**五版判据全被证伪**——该事实从进程外部不可判定；
+  //     该报告态件已删（价值被件内自证取代）。正解是**件自己**给判据（它清楚自己的扫描面）。
+  //   范式：`lib-scan-scope.mjs#selftestScanGuard` —— 件只声明 `probe(dir)`（自己的扫描函数），
+  //     helper 在隔离夹具上验三态（有内容/空/缺席）并**反证 probe 非恒真**。
+  ['scripts/check-field-usage.mjs', '--selftest'],
   ['scripts/test-layering.mjs'],
   ['scripts/test-carrier-layers.mjs'],
   ['scripts/test-forgetops.mjs'],
@@ -554,9 +571,58 @@ const CHECKS = [
   //   配套 --selftest 反向证伪（证明改坏了会翻红，不是一个永远绿的门禁）。
   ['scripts/check-layout-px.mjs'],
   ['scripts/check-layout-px.mjs', '--selftest'],
+  // ── W1：激活「写了却从不运行」的 `--selftest`（2026-09-23 · 圆桌会审 · ACT-338）─────────────
+  //   判因（obs 席实测，主持人逐件复核）：全仓 **38 件实现了 `--selftest`**，而 CHECKS 只登记 **25 件**
+  //     ⇒ **13 件的自证能力「写了但从不运行」**。依仓规规则 6「未登记 = 等于没写」，这 13 件等于没写。
+  //   ⚠ 不是全部登记 —— 先按**副作用与确定性**筛（本仓已被"非确定性门"坑过两次）：
+  //     · `check-runner.mjs` **剔除**：它的 `--selftest` 会**递归跑全量门禁**（实测 >120s 被杀、退出码 null）
+  //       —— 登记即自引用递归，且会让每次门禁再翻一倍耗时。
+  //     · `migrate-cue-keys.mjs` **剔除**：它是**一次性迁移器**（写盘 + 真库），非判据件；登记它等于把"迁移动作"纳入常驻门禁。
+  //     · `inject-baseline-diff.mjs` 保留但**注意**：本件经实测量到**非确定性**（全量跑红 / 单跑 3 次全 ✅，
+  //       原因=首差未被 normalize 覆盖的**活数据行**，见 obs 席 E3）——它的自证分支是**合成样本**、确定性通过。
+  //       本行登记的是**它的自证**，不是它本体（本体在下方另有登记行）。
+  //   以下 11 件均为**确定性通过**（逐件实跑 2 次同码）+ selftest 分支零副作用（写盘全走 `mkdtemp`/`tmpdir`）。
+  ['scripts/check-claim-alignment.mjs', '--selftest'],
+  ['scripts/check-cue-space.mjs', '--selftest'],
+  ['scripts/check-i18n-keys.mjs', '--selftest'],
+  ['scripts/check-i18n-scan.mjs', '--selftest'],
+  ['scripts/check-journal-privacy.mjs', '--selftest'],
+  ['scripts/check-judge-kind.mjs', '--selftest'],
+  ['scripts/check-relevance-live.mjs', '--selftest'],
+  ['scripts/check-section-refs.mjs', '--selftest'],
+  ['scripts/effective-directions.mjs', '--selftest'],
+  ['scripts/inject-baseline-diff.mjs', '--selftest'],
+  ['scripts/test-i18n-render.mjs', '--selftest'],
+  // W1 新增工具（2026-09-23 · ACT-340）：**记录库时点快照**——W2（动真源）的硬前置。
+  //   判因：data 席实测 `.records/` **无可用回滚点**（库内唯一备份是 9 天前且**不含 `records.jsonl` 副本**）。
+  //   本自证 9 条，全在 `mkdtemp` 合成库上（**绝不碰真库**），含**反例**：
+  //     ⑦ 库前进后 `--verify` 仍须 exit 0 且注明"与当前库不同"（防把"库前进"误判为"快照损坏"）；
+  //     ⑤ 目录名必须恰为 14 位纯数字 —— **防尾点**（实测踩过：`slice(0,15)` 切进毫秒前的点，
+  //        而 PowerShell `-Filter "…*."` 因尾点被规范化而**匹配全部** ⇒ 曾误删全部快照）；
+  //     ⑨ 库不存在 ⇒ exit 3（**不凭空造快照**，与本仓"库未建拒写"同族）。
+  ['scripts/record-snapshot.mjs', '--selftest'],
+  // 空扫扫描轮（2026-09-23 · ACT-341）：**系统性**核查全部做目录扫描的件，而非抽样。
+  //   做法：在 tmp 假根（src/ 与 src-client/ 置空）里逐一实跑 ⇒ 分类"假绿 / 诚实判红 / 崩溃"。
+  //   结论：**`check-bridges` 是唯一真假绿**（已修 · 见上方其 `--selftest` 9 例）；
+  //     其余 24 件空扫时非 0（判红或崩溃），另有 4 件经精核实为**误报**（扫描面非 src/、或属报告态、或已有 exit 3 守卫）。
+  //   ⇒ 本行登记 `check-i18n-attr-literal --selftest`：该件本轮**加固了扫描面守卫**
+  //     （修前 `catch` 吞一切错误并一律报"无 src-client" ⇒「读不出来」与「目录不存在」不可分辨）。
+  ['scripts/check-i18n-attr-literal.mjs', '--selftest'],
+  // 扫描面收口（2026-09-23 · ACT-343 · 用户当轮明令「**注意要避免打补丁问题**」）：
+  //   背景：同一道「空扫不得判绿」守卫我**逐件打了四遍补丁**（audit-architecture / check-bridges /
+  //     check-field-usage / check-i18n-attr-literal），措辞各异 —— 那正是「打补丁」本身。
+  //   收口：语义收敛到 `scripts/lib-scan-scope.mjs`（**单一实现**，同 lib-client-src.mjs 先例）
+  //     + 本件登记其自证（三态判定 ok/empty/skip/error 与"读不出≠不存在"的分离）。
+  ['scripts/lib-scan-scope.mjs', '--selftest'],
   // 架构门禁（棘轮：只许收紧不许放松）——守「零循环依赖 / 模块规模 / 接口宽度 / 扇入上限」。
   // 与 check-srcmap 分工：srcmap 管 src↔lib 产物漂移，本件管模块依赖图的**结构性质**。
   ['scripts/audit-architecture.mjs', '--gate'],
+  // D-A 反向证伪（2026-09-23 · 圆桌会审 W0）：**空扫不得判绿**。
+  //   判因（受控证伪，修前）：`--gate --dir <空目录>` 报 `0 模块`却打「✅ 全部在阈值内」且 exit 0
+  //   —— 空集上「无违规」是**恒真命题**，即"判据不可证伪"。这不是远景假设：它同时是本件 `--dir`
+  //   **变异副本反向证伪手法自身的守卫**（路径写错 ⇒ 扫不到文件 ⇒ 修前会静默判绿）。
+  //   本自证用 mkdtemp 造真空目录与"有文件但 0 模块"两态，并断言真 src 不回归（防过修）。
+  ['scripts/audit-architecture.mjs', '--selftest'],
   // 前端分层门（接缝④ · 2026-09-17 阶段 5）：`audit-architecture` 默认 `REL='src'` ⇒ **前端从未被扫**，
   //   全模块被打 `??`（无层级）、且已有 1 处双向环 `panes-memory ↔ panes-memory-detail` 无人看见。
   //   ⚠ **顺序不可颠倒**：加本行前必须先破环（否则立刻红）—— 实测破环前 exit 1 / 破环后 exit 0。
@@ -606,6 +672,11 @@ const CHECKS = [
   //   ① 往返闸恒跑（md → Record → md 逐字节重现，切源前置条件）；② 影子库存在时对账；
   //   ③ storeMode=dual 而影子库缺席 ⇒ FAIL（不是跳过）——防"开关已启用却无影子库"的死开关。
   ['scripts/check-record-parity.mjs'],
+  // D-C 反向证伪（2026-09-23 · 圆桌会审 W0）：**口径不得再被误标为字节**。
+  //   判因：本件曾把 `String.length`（UTF-16 码元数）打成 `B`，真库差 **2.36×**
+  //   （`notes/lessons.md` 313,849 字节 vs 132,922 字符）⇒ 读数会让人误判"文件被截断"。
+  //   自证含**反例**（注入裸 `${….length}B` 必须判红 ⇒ 防恒真）与**边界**（正确双口径写法不得判红 ⇒ 防过严）。
+  ['scripts/check-record-parity.mjs', '--selftest'],
   // S1R（2026-09-19）小节寻址跨面**差分锁**：宿主侧 `src/section-ref.ts`（`lib/section-ref.js`）
   //   与库工具链 `skill/scripts/section-ref.mjs` 必须**逐例同结论**（state/exact/fileExists/候选集）。
   //   判因：该语义曾有**四份实现**（读侧取首个 / 写门集合去重 / matchSection 多命中⇒null / append 逐级取首个）
@@ -688,6 +759,40 @@ const CHECKS = [
   //   ③ 每条回执带 `attempted` + `written`（缺则无法闭合）。
   ['scripts/check-write-receipts.mjs'],
   ['scripts/check-write-receipts.mjs', '--selftest'],
+  // 「容量门开关 · 真机行为」（ADR-333 · 2026-09-22）：**用户拍板「容量门不是硬拒绝门槛，
+  //   做成开关功能」**的落地判据。判因（真机实测）：设置里三个容量框的文案都写「超限被拒」，
+  //   而四条写入路径里**三条本就不阻断**（cap_memory 913.9% 照写 / principles 已写 112 行），
+  //   只有画像 profiles 通道是真硬拒（167 次全拒 / 0 成功）⇒ 用户设一个值得到**两种结果**；
+  //   且面板走去空白口径（USER.md 87.3%）而写门走含空白口径（98.9%，Δ348）
+  //   ⇒ **面板那根进度条在结构上不可能显示该故障**。
+  //   本判据守六条：① 口径单一实现（capacityCharsOf）② 真关闭（非"超大 cap"假关闭）
+  //   ③ 超限仍留痕（`capacity-over`，不得删掉唯一失败信号）④ 原式已不存在（等价替换）
+  //   ⑤ 判据输入与面板同源 ⑥ **真库零改动**（写入探针只落副本，真库前后 sha 相同）。
+  ['scripts/probe-capacity-gate.mjs'],
+  // 「容量门开关 · **真机生效性**」（ADR-333 · 2026-09-22）：与上一条的分工是**代理指标 vs 行为**——
+  //   `probe-capacity-gate` 查静态形态（源码里有该分支），本条走**安装副本的真实代码**实测判决差异。
+  //   判因（**实战价值已被证明**）：开关语义首版把方向写反（`=== false ? false : true` ⇒ 缺键时判"阻断"），
+  //   而 `typecheck` / `build` / 全部 208 项门禁**全绿** —— 只有本条 V1 用例（缺省态应放行却 rejected）
+  //   抓到了它；V3 又抓到 fail-safe 方向（坏值应保守阻断）。⇒ 正是「代理指标非判据」的实例。
+  //   四态判据：缺省不阻断 / 显式 false 不阻断 / 显式 true 阻断 / 坏值保守阻断。
+  //   ⚠ 只写副本（`DSH_HOME` 指向临时目录），真库前后 sha256 必须不变（R3）。
+  ['scripts/verify-capacity-live.mjs'],
+  // 「容量门**接线与可观测**」（ADR-333 · 2026-09-22）：前两条判据守"开关本身对不对"，
+  //   本条守"**开关有没有真的贯通到该贯通的地方、留痕有没有人读**"——治三类实战缺陷：
+  //   ① **关了一半的门**：`SHOUCANG_CAP_STRICT` 在子进程调用点语义分叉（两个自动路径从不注入、
+  //      面板路径用 `...process.env` 继承）⇒ 部署侧一旦设 =1，"人手工改文件"会被自动容量闸拒且无信号；
+  //   ② **采了不显示**：`gateRejects` 前端零命中、`rejectRate` 分母用全体 ⇒ 画像 167 次真拒被摊薄成 7.4%；
+  //   ③ **跨通道聚合掩盖**：`other:{tried,done}` 答不了"**哪个**通道零落地"（实测画像通道被遮 29 轮）。
+  //   判据含 `--selftest` 六例三反例（继承 env / 只比字节 / 无 CAS 均须判违规）。
+  ['scripts/check-capacity-wiring.mjs'],
+  ['scripts/check-capacity-wiring.mjs', '--selftest'],
+  // 「CAS 与内容回读 · **真机行为**」（ADR-333 册三）：与上一条的分工同「代理指标 vs 行为」——
+  //   `check-capacity-wiring` 是**静态**断言（源码里有 `commitWithCas` / 有逐字回读），
+  //   本条走安装副本真实模块，实测三类**该被拦住/该放行**的情形：
+  //   C1 丢失更新被拦（他人先写 ⇒ 我方拒写、其内容仍在、我方未落盘）
+  //   C2 正常写放行（不误伤）· C3 等长篡改可被逐字比对识别（原实现只比字节数 ⇒ 抓不到）。
+  //   ⚠ 真库零改动：全部在临时 DSH_HOME 的副本上做，并断言真库 sha256 前后一致（R3）。
+  ['scripts/verify-cas-live.mjs'],
   // R2‴「自改源码型测试件必须能自愈」（2026-09-20 · **事故驱动**）：一次污染拖红 4 道门。
   //   判因：`test-split-equivalence` 是**先红自证**型测试（临时改 `src-client/` 做反例注入），
   //   事故形态 = **反例留在工作树** ⇒ `test-split-equivalence` / `test-panel-view-contract` /
@@ -1179,6 +1284,7 @@ if (FAST) {
   console.log('   发版/合入前必须跑不带 --fast 的全量：node scripts/check-runner.mjs')
 }
 const rows = []
+const runStartedAt = Date.now()
 for (const entry of selected) {
   const [file, ...rest] = entry
   // 末位若是**普通对象**即为选项（{ xfail: true }），不参与 argv——否则会被当成参数喂给检测件
@@ -1186,6 +1292,7 @@ for (const entry of selected) {
   const opts = (last && typeof last === 'object' && !Array.isArray(last)) ? rest.pop() : {}
   const argv = rest.map((a) => (a === '__ROOT__' ? root : a))
   let code = 0
+  const itemStart = Date.now()   // ACT-346：逐件耗时（运行历史用）
   /* 捕获输出（2026-09-13 立）：原先 stdio:'ignore' 把失败件的输出**吞掉**，
    *   导致两次 test-forgetops 抖动无从定位（只知文件名、不知断言）。绿色运行仍不打印，保持无噪音。 */
   let childOut = ''
@@ -1198,15 +1305,93 @@ for (const entry of selected) {
     childOut = String(e.stdout || '') + String(e.stderr || '')
   }
   // 4 **且**已声明 xfail ⇒ xfail；未声明件退 4 ⇒ **fail**（见件头：4 是被运行时脚本占用的码位）
-  rows.push({ file, code, out: childOut, verdict: code === 0 ? 'pass' : code === 3 ? 'skip' : (code === 4 && opts.xfail) ? 'xfail' : 'fail' })
+  rows.push({ file, code, out: childOut, durationMs: Date.now() - itemStart, verdict: code === 0 ? 'pass' : code === 3 ? 'skip' : (code === 4 && opts.xfail) ? 'xfail' : 'fail' })
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// **门禁运行历史落盘**（2026-09-23 · ACT-346 · 收口 Q3）
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// ── 判因（obs 席实测，本件治的是「唯一现在完全做不成」的判据）──────────────────
+// 恒真门禁筛查有一条判据是「**该件历史上是否从未红过**」——而它**当时完全做不成**：
+//   `check-runner` 只 console 输出，**不留历史**（失败件输出落 `tmpdir()/shoucang-runner-<name>.log`，
+//   固定名、**下一次运行即覆盖**）⇒ 实测**已真实丢失一次 `eval-gate` 的退出码证据**。
+// ⇒ 后果有二：① 「从未红过」查不出（无法机检恒真门禁）；② **低频抖动查不动**（证据被覆盖）。
+//   一份落盘**同时治两个缺口**。
+//
+// ── 设计纪律（逐条对应本仓既有教训）──────────────────────────────────────────
+//   · **append-only**：只追加，绝不改写历史行（同 `ledger.jsonl` 族）。
+//   · **落仓外**：`~/.dsh/suite/…` 不属本仓隐私面；且**绝不进公开树**
+//     （记忆库根下的观测面，与 `ledger.jsonl` 同级，由 `check-observability` 的流注册表统管）。
+//   · **失败才写全文**：绿行只记一行 JSON（`{at,file,code,verdict,durationMs}`）；
+//     失败件**另存带时间戳的输出全文** ⇒ 治「证据被覆盖」而**不**让绿跑产生大量文件。
+//   · **写入失败不得影响主流程**（try/catch 吞掉并**显式打印一句**——本仓纪律：吞错必须有痕）。
+//   · **只记形态不记内容**：绿行不含子进程输出（内容可能含真库原文，隐私面）。
+//
+// ⚠ **不并入 `ledger.jsonl`**：那条台账是**业务/蒸馏**审计流（`type=audit.*` / `decision.*`），
+//   而本流是**门禁自省**元层，消费方不同（恒真筛查/抖动定位 vs 蒸馏对账）。⇒ 须单独成流。
+//
+// ⚠⚠ **默认关闭（fail-closed）—— 据实留档：这一步卡在棘轮上，不能由 agent 自行放开** ──────────
+//   `check-observability` 是**棘轮**（`BASELINE = 1`，DS4「单一事件源」，**只许收紧**）。新增一条
+//   suite 域事件流使其变 **2 > 1** ⇒ 实测**当场红**（门禁正确抓到我）。
+//   而两种"绕过"都不可接受：
+//     · **抬基线** ⇒ 越过冻结棘轮（**R3**，须用户拍板）；
+//     · **改归 `state` 族** ⇒ **标签说谎**（本流是 append-only 追加，不是"整体重写/key upsert"）。
+//   ⇒ 故本轮**默认不落盘**（不产生未登记流、不动棘轮），能力以**显式开关**保留：
+//     用户拍板「新增此流并抬基线」后，设 `SHOUCANG_GATE_RUNS=1`（或改缺省）即生效，**代码已就绪**。
+//   ⇒ 这是本仓既有的 **fail-closed 开关**范式（同 `evalEnabled` / `proposalApply`）。
+const GATE_RUNS_ENABLED = process.env.SHOUCANG_GATE_RUNS === '1'
+const RUN_HISTORY = join(dshHome, 'suite', 'audit', 'gate-runs.jsonl')
+const RUN_LOGS_DIR = join(dshHome, 'suite', 'audit', 'gate-logs')
+if (GATE_RUNS_ENABLED) {
+  try {
+    mkdirSync(dirname(RUN_HISTORY), { recursive: true })
+    const at = new Date().toISOString()
+    // 逐件一行（**件级**，使"某件历史"可查）；另加一行**整轮汇总**
+    const lines = rows.map((r) => JSON.stringify({
+      at, file: r.file, code: r.code, verdict: r.verdict, durationMs: r.durationMs,
+    }))
+    lines.push(JSON.stringify({
+      at, round: true, total: rows.length,
+      pass: rows.filter((r) => r.verdict === 'pass').length,
+      xfail: rows.filter((r) => r.verdict === 'xfail').length,
+      skip: rows.filter((r) => r.verdict === 'skip').length,
+      fail: rows.filter((r) => r.verdict === 'fail').length,
+      durationMs: Date.now() - runStartedAt,
+      scope: ONLY.length ? 'subset' : FAST ? 'fast' : 'full',
+    }))
+    appendFileSync(RUN_HISTORY, lines.join('\n') + '\n', 'utf8')
+
+    // 失败件：**带时间戳**另存全文（治「证据被下次覆盖」）
+    const failedForLog = rows.filter((r) => r.verdict === 'fail')
+    if (failedForLog.length) {
+      mkdirSync(RUN_LOGS_DIR, { recursive: true })
+      const stamp = at.replace(/[-:]/g, '').replace(/\..*$/, '')
+      for (const r of failedForLog) {
+        const p = join(RUN_LOGS_DIR, `${stamp}__${basename(r.file)}.log`)
+        writeFileSync(p, r.out || '(无输出)', 'utf8')
+      }
+      console.log(`· 运行历史已落盘：${RUN_HISTORY}（失败件全文 ${failedForLog.length} 份 → ${RUN_LOGS_DIR}，**带时间戳不再覆盖**）`)
+    }
+  } catch (e) {
+    // ⚠ 吞错必须有痕（本仓纪律）：观测面写不进去不影响判读，但**必须说出来**
+    console.error(`⚠ 运行历史落盘失败（不影响本次判读）：${String(e && e.message).slice(0, 120)}`)
+    console.error(`   · 目标：${RUN_HISTORY}`)
+  }
 }
 const failed = rows.filter((r) => r.verdict === 'fail')
 const xfailed = rows.filter((r) => r.verdict === 'xfail')
+const skippedRows = rows.filter((r) => r.verdict === 'skip')
 const out = {
   checks: rows,
   fail: failed.map((r) => r.file),
   xfail: xfailed.map((r) => r.file),
-  note: '契约（ADR-132）：0=pass · 3=skip(依赖缺失) · 4=xfail(已知未修，不判失败但必须可见) · 其他=fail',
+  // D-B（2026-09-23）：skip 件名进 JSON 面 —— 机读消费方同样须能分辨"未验面"（此前只有计数）。
+  skip: skippedRows.map((r) => r.file),
+  // D-B：显式标记"本次是否有未验面"，使 `exit 0` 不被读成"全部已验证"。
+  verified: skippedRows.length === 0 && failed.length === 0,
+  note: '契约（ADR-132）：0=pass · 3=skip(依赖缺失) · 4=xfail(已知未修，不判失败但必须可见) · 其他=fail。'
+    + '⚠ `pass` 与 `skip` **不可同等记账**：skip = 该面未验，不得计入通过（见 skip[] 与 verified）。',
 }
 if (AS_JSON) console.log(JSON.stringify(out, null, 2))
 else {
@@ -1222,6 +1407,16 @@ else {
       : ''
   console.log(`\n${failed.length ? 'FAIL' : 'PASS'}${scope}（${nPass} pass · ${xfailed.length} xfail · ${nSkip} skip${failed.length ? ` · ${failed.length} fail` : ''}）`)
   if (xfailed.length) console.log(`⚠ XFAIL 项（已知未修，不判失败但必须可见）：${xfailed.map((r) => r.file).join(', ')}`)
+  /* D-B（2026-09-23 · 圆桌会审）：**SKIP 项必须列名**。
+   *   判因（实测）：摘要形态 `PASS（… · 1 skip）` 会被人读成"全绿"，而本轮那 1 件 skip 恰是
+   *   **G2 中文精度闸** `eval-gate`（`exit=3`）——该面**从未被验过**却混在同一句 PASS 里。
+   *   `check-runner.mjs:36` 的契约原文是「全 pass/skip/xfail ⇒ exit 0」，但**退出码为 0 ≠ 该面已验证**。
+   *   ⇒ 与 XFAIL 同一待遇：件名恒列（含件数），使"未验面"在终端里**无法被误读为通过**。
+   *   ⚠ 本行**不改变退出码语义**（skip 仍不判失败）——只修"读的人会怎么理解"。 */
+  if (nSkip) {
+    const skipped = rows.filter((r) => r.verdict === 'skip')
+    console.log(`⏭ SKIP 项（**依赖缺失 ⇒ 该面未验，不得计入通过**）：${skipped.map((r) => r.file).join(', ')}`)
+  }
   if (failed.length) {
     console.log(`FAIL 项：${failed.map((r) => r.file).join(', ')}`)
     /* 诊断输出：失败件的子进程输出必须**可见**，否则"抖动一次就查不动"（本轮实测教训）。
@@ -1271,4 +1466,14 @@ else {
 //        静默降级成 xfail ⇒ **把「坏了」显示成「没那么坏」**。只验 ③ 不验 ⑥，这个洞就是敞开的。
 //        （实测：声明件退 4 ⇒ ⚠/不计 failed/exit 0；**未声明件退 4 ⇒ ❌/计入 failed/exit 1**；
 //          未声明件退 5 ⇒ ❌/计入 failed/exit 1；还原 ⇒ `PASS（19 pass · 1 xfail · 0 skip）` exit 0。）
+//
+//   ⑦ **skip 必须列名**（D-B · 2026-09-23 圆桌会审新增 · 与上同族：也是"渲染分支真的接上了"）
+//       做法（同样跑完还原）：建临时件 `scripts/__skip-probe.mjs` 内容 `process.exit(3)`，
+//         在 CHECKS 首行插入 `['scripts/__skip-probe.mjs'],` ⇒ 跑 `node scripts/check-runner.mjs`，必须同时满足：
+//           渲染 `  ⏭ scripts/__skip-probe.mjs  exit=3 skip`
+//           摘要出现 `1 skip`
+//           **且出现「⏭ SKIP 项（…该面未验，不得计入通过）：scripts/__skip-probe.mjs」段** ← 本步新增的判据
+//           runner 自身 exit 仍为 0（skip 不判失败 —— 退出码语义**未被本改动触碰**）
+//       反向的另一半（不可省）：若把 `if (nSkip)` 那段删掉，第三条必须落空 ⇒ 证明该断言**真的在守**，
+//         而不是"加了一行看着像在守"（与本件 ⑤/⑥ 同一纪律）。
 process.exit(failed.length ? 1 : 0)

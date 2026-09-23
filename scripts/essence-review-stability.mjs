@@ -35,6 +35,31 @@ const deepSleepRows = () => {
   return rows
 }
 
+/**
+ * 该纪元是否**判定未完成**（异常态），而非"判了全否"。
+ *
+ * ⚠ **唯一实现**（2026-09-23 · ACT-352 收敛）：此前 `--decompose` 与 `--from-ledger` **各写一份**
+ *   （同语义两处重实现，本仓反复记账的漂移源）⇒ 现只此一份，两分支共用。
+ *
+ * **必要性（真缺陷实测）**：真机某纪元 `候选 113 · 通过 0 · 否 0`，而 note 明写
+ *   「全部批次无法解析（`stop=error`×12）」⇒ 旧实现算 `approved/candidates` **把"12 批全失败"
+ *   计成"通过率 0%"**，使极差从真值 **16.3pp 虚增到 37.2pp**（判读被污染一倍）。
+ *
+ * **三级判据（强 → 弱）**：
+ *   ① **显式字段** `releaseSemanticError`（`unparsable`|`threw`）—— ACT-352 起由产出侧写出，
+ *      **这是判据**（结构化事实）；新行一律走此路。
+ *   ② `releaseSemanticNote` 文本匹配（`全部批次无法解析|stop=error`）——
+ *      **仅回退给历史行**（写字段之前产出的），**代理指标**，不作为长期依赖。
+ *   ③ 末位兜底：候选 > 0 而 通过+否 = 0 ⇒ 判定面未产出（**最弱**，仅救既无字段又无特征文案的历史行）。
+ */
+const isEpochError = (r) => {
+  if (r && r.releaseSemanticError) return true
+  const note = String((r && r.releaseSemanticNote) || '')
+  if (/全部批次无法解析|stop=error/.test(note)) return true
+  const sum = Number((r && r.releaseSemanticApproved) || 0) + Number((r && r.releaseSemanticRejected) || 0)
+  return Number((r && r.releaseSemanticCandidates) || 0) > 0 && sum === 0
+}
+
 const lastDeepSleep = () => {
   const rows = deepSleepRows()
   return rows[rows.length - 1] || null
@@ -55,8 +80,30 @@ console.log('')
  *   · 实测相邻轮变化若**远大于**该上界 ⇒ 差额只能归因于**模型判定波动**。 */
 if (argv.includes('--decompose')) {
   const rowsAll = deepSleepRows().filter((o) => typeof o.releaseSemanticCandidates === 'number' && o.releaseSemanticCandidates > 0)
-  const last = rowsAll.slice(-6)
-  if (last.length < 2) { console.log(`⚠ 可分解样本 ${last.length} < 2 ⇒ 不足以分解`); process.exit(0) }
+  /**
+   * ⚠ **异常纪元必须识别并排除**（2026-09-23 修 · 真缺陷，非补丁）。
+   *
+   * **判因（实测到行号与原文）**：末 6 轮读数里第 6 轮是 `候选 113 · 通过 0 · 否 0 · 未判 0 ⇒ 0%`，
+   *   而它把整段**极差拉到 37.2pp**，据此判"未收敛"。但该行的 `releaseSemanticNote` 明写：
+   *     `全部批次无法解析（stop=error,error,…×12 · 输出 0/0/0/…×12 字符）`
+   *   ⇒ **`approved=0` 不是"模型判了全否"，而是"12 批全失败"**。
+   *   旧实现直接算 `approved/candidates` ⇒ **把异常退化成 0%**，
+   *   与"真的 0 通过"**不可分辨** —— 本仓「失败不可观测」族的标准形态
+   *   （同族先例：`vec.ts` 把六类失败塌缩成 `null`；`sleep-selfcheck` 把"未跑"记成 ok）。
+   * **修法**：`stop=error` / 输出全 0 字符 / `approved+rejected == 0` 而 `candidates > 0` 者
+   *   ⇒ 归 **`error` 档**，**不进通过率序列**（否则极差与判读都被污染）。
+   * ⚠ **未致漏报**：异常行**单独计数并打印**（不静默丢弃）——读者仍能看到"本轮 12 批全失败"。
+   * ⚠ `isEpochError` 现为**模块级唯一实现**（见其定义处长注）——此处不再内联。
+   */
+  const all = rowsAll.slice(-6)
+  const errored = all.filter(isEpochError)
+  const last = all.filter((r) => !isEpochError(r))
+  if (errored.length) {
+    console.log(`⚠ **排除 ${errored.length} 个异常纪元**（判定面未产出，非"0 通过"）：`)
+    for (const r of errored) console.log(`   · ${r.at} 候选 ${r.releaseSemanticCandidates} —— ${String(r.releaseSemanticNote || '').slice(0, 110)}`)
+    console.log('   （异常计入极差会污染判读 ⇒ 已排除；但它**单独列出**，不静默丢弃）\n')
+  }
+  if (last.length < 2) { console.log(`⚠ 可分解样本 ${last.length} < 2 ⇒ 不足以分解（异常 ${errored.length} 个已排除）`); process.exit(0) }
   console.log('P5c 波动分解（只读台账 · 不触发）')
   console.log('')
   console.log('轮  纪元                      候选  通过  否   未判  通过率')
@@ -129,8 +176,21 @@ if (argv.includes('--from-ledger')) {
     pool = idx >= 0 ? rowsAll.slice(idx) : byTime
     if (!pool.length) { console.log(`⚠ --since ${since} 未命中任何纪元（台账共 ${rowsAll.length} 行）⇒ **不判**（别据此说"收敛"）`); process.exit(0) }
   }
-  const last = pool.slice(-n)
-  if (last.length < 2) { console.log(`⚠ 可用真纪元 ${last.length} < 2 ⇒ 不足以判波动`); process.exit(0) }
+  // ⚠ **异常纪元必须排除**（2026-09-23 修 · 与 `--decompose` 分支同因，见该处长注）：
+  //   实测末轮 `候选 113 · 通过 0 · 否 0` 而 note 明写「全部批次无法解析（stop=error×12 · 输出 0 字符）」
+  //   ⇒ 直接算 `approved/candidates` 会**把"12 批全失败"计成"通过率 0%"**，
+  //     进而把极差从 **16.3pp 虚增到 37.2pp**（判读被污染），与"真 0 通过"不可分辨。
+  //   ⇒ 归 `error` 档、**不进通过率序列**；但**单独列出**（不静默丢弃）。
+  //   ⚠ `isEpochError` 现为**模块级唯一实现**——此前两分支各写一份（同语义重实现），已收敛。
+  const tailRaw = pool.slice(-n)
+  const erroredLedger = tailRaw.filter(isEpochError)
+  const last = tailRaw.filter((r) => !isEpochError(r))
+  if (erroredLedger.length) {
+    console.log(`⚠ **排除 ${erroredLedger.length} 个异常纪元**（判定面未产出，非"0 通过"）：`)
+    for (const r of erroredLedger) console.log(`   · ${r.at} 候选 ${r.releaseSemanticCandidates} —— ${String(r.releaseSemanticNote || '').slice(0, 110)}`)
+    console.log('')
+  }
+  if (last.length < 2) { console.log(`⚠ 可用真纪元 ${last.length} < 2 ⇒ 不足以判波动（异常 ${erroredLedger.length} 个已排除）`); process.exit(0) }
   console.log(`P5c 判定波动（**只读模式**：${since ? `世代 --since ${since} · 命中 ${pool.length} 个 · ` : ''}取最近 ${last.length} 个真纪元 · 不发触发）`)
   console.log('')
   const rates = [], unjs = []

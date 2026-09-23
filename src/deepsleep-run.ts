@@ -19,7 +19,7 @@ import { applyForgetOps } from './forgetops.js'
 import { activityAggregate } from './activity.js'
 import { TRIGGER, SURFACE } from './criteria.generated.js'
 import { demoteVerdict, promoteVerdict } from './criteria.js'
-import { DEEP_SLEEP_PROMPT, deepSleepLanded, liveFailPolicy, planDeepSleepVerdict, DeepSleepOtherChannels, splitByCap, windowMaterialBytes } from './deepsleep-core.js'
+import { DEEP_SLEEP_PROMPT, deepSleepLanded, liveFailPolicy, planDeepSleepVerdict, DeepSleepOtherChannels, splitByCap, windowMaterialBytes, zeroLandedChannels } from './deepsleep-core.js'
 import { gatherDeepSleepTraces, countWindowTraces, type TraceDeps } from './deepsleep-traces.js'
 import { consolidateTree, type TreeDeps } from './deepsleep-tree.js'
 // ACT-295：档位并进 agentOptions 的**唯一实现**（与蒸馏侧共用）
@@ -245,12 +245,12 @@ async function reviewReleaseSemantics(ctx: any, parent: any, agentOptions: any, 
         const raw5 = agentTextOf(res5)
         const parsed = parseSemanticReview(raw5)
         if (!parsed)
-            return { candidates: plan.candidates.length, approved: 0, rejected: 0, unjudged: 0, note: `无法解析（stop=${String(res5?.stopReason || '?')} · 输出 ${raw5.length} 字符）` }
+            return { candidates: plan.candidates.length, approved: 0, rejected: 0, unjudged: 0, error: 'unparsable', note: `无法解析（stop=${String(res5?.stopReason || '?')} · 输出 ${raw5.length} 字符）` }
         const m = semanticApprovedRows(plan, parsed)
-        return { candidates: plan.candidates.length, approved: m.approved.length, rejected: m.rejected, unjudged: m.unjudged, note: `候选 ${plan.candidates.length} ⇒ 语义通过 ${m.approved.length} · 否 ${m.rejected} · 未判 ${m.unjudged}（**未判按不通过**）` }
+        return { candidates: plan.candidates.length, approved: m.approved.length, rejected: m.rejected, unjudged: m.unjudged, error: undefined, note: `候选 ${plan.candidates.length} ⇒ 语义通过 ${m.approved.length} · 否 ${m.rejected} · 未判 ${m.unjudged}（**未判按不通过**）` }
     }
     catch (e) {
-        return { candidates: plan.candidates.length, approved: 0, rejected: 0, unjudged: 0, note: '调用异常：' + String((e as Error)?.message || e).slice(0, 60) }
+        return { candidates: plan.candidates.length, approved: 0, rejected: 0, unjudged: 0, error: 'threw', note: '调用异常：' + String((e as Error)?.message || e).slice(0, 60) }
     }
 }
 
@@ -265,7 +265,25 @@ async function reviewReleaseSemanticsBatched(ctx: any, parent: any, agentOptions
      *  ⚠ **不重跑 `planRelease`**：ops 与语义门必须来自**同一次快照**，否则"批准的行"与"要释放的 op"
      *     可能指向不同的库状态（`applyRelease` 内部仍会**再复核一次当下状态**，那是第二道门，不冲突）。 */
     const opsPack = releaseOpsFromPlan(plan)
-    const base = { candidates: plan.candidates.length, approved: 0, rejected: 0, unjudged: 0, batches: 0, sample: [], approvedRows: [], ops: [], opsSkipped: opsPack.skipped, executable: false }
+    /* ⚠ **异常态必须与"判了全否"可分**（2026-09-23 · ACT-352 · 真缺陷，治因非补丁）。
+     *
+     * **判因（实测到台账原文）**：真机某纪元写出 `候选 113 · 通过 0 · 否 0 · 未判 0`，而它的
+     *   `releaseSemanticNote` 明写「**全部批次无法解析（stop=error×12 · 输出 0 字符）**」。
+     *   消费侧（`essence-review-stability`）据此算 `approved/candidates` ⇒ **把"12 批全失败"
+     *   计成"通过率 0%"**，使极差从真值 **16.3pp 虚增到 37.2pp**（**判读被污染一倍**）。
+     *
+     * **根因（本处）**：`base` 以 `approved: 0, rejected: 0` 为初值，而**两条异常分支**
+     *   （`全部批次无法解析` / `调用异常`）**直接返回 `base`** ⇒ 三种语义塌缩成同一个数：
+     *     ① 「判了全否」（**真值** 0）② 「全部批次无法解析」（**异常**）③ 「调用异常」（**异常**）。
+     *   本仓「失败不可观测」族的标准形态（同族先例：`vec.ts` 把六类失败塌缩成 `null`、
+     *   `sleep-selfcheck` 把"未跑"记成 ok）。
+     *
+     * **修法（治因）**：新增**显式 `error` 字段**（`undefined` = 正常判定完成；有值 = 判定未完成及其原因）。
+     *   · **不动既有数值字段**（`approved` 仍是 0，向后兼容既有消费方）；
+     *   · 消费侧**读 `error` 即可分辨**，无需再靠 `note` 文本匹配（文本匹配是**代理指标**，本仓明令慎用）；
+     *   · 落审计时一并写出（见下方 audit 行），使**历史行可回溯**。
+     */
+    const base = { candidates: plan.candidates.length, approved: 0, rejected: 0, unjudged: 0, batches: 0, sample: [], approvedRows: [], ops: [], opsSkipped: opsPack.skipped, executable: false, error: undefined }
     if (!plan.candidates.length)
         return { ...base, note: '无候选 ⇒ 不调用（释放默认关闭）' }
     const reqs = buildSemanticReviewBatches(plan, 10)
@@ -289,7 +307,7 @@ async function reviewReleaseSemanticsBatched(ctx: any, parent: any, agentOptions
         const [results, results2] = await Promise.all([runBatches(reqs, 'a'), runBatches(reqs, 'b')])
         const all = results.flatMap((r) => r.parsed || [])
         if (!all.length)
-            return { ...base, batches: reqs.length, note: `全部批次无法解析（stop=${results.map((r) => r.stop).join(',')} · 输出 ${results.map((r) => r.len).join('/')} 字符）` }
+            return { ...base, batches: reqs.length, error: 'unparsable', note: `全部批次无法解析（stop=${results.map((r) => r.stop).join(',')} · 输出 ${results.map((r) => r.len).join('/')} 字符）` }
         const m = semanticApprovedRows(plan, all)
         const all2 = results2.flatMap((r) => r.parsed || [])
         const m2 = all2.length ? semanticApprovedRows(plan, all2) : null
@@ -312,7 +330,8 @@ async function reviewReleaseSemanticsBatched(ctx: any, parent: any, agentOptions
         return { candidates: plan.candidates.length, approved: stable.length, rejected: m.rejected, unjudged: m.unjudged, ungrounded: m.ungrounded, batches: reqs.length * 2, sample, hashes, approvedRows: stable, ops: opsPack.ops, opsSkipped: opsPack.skipped, executable, note: `${reqs.length}×2 批（并发）⇒ 候选 ${plan.candidates.length} · 单组通过 ${m.approved.length}${m2 ? ` / ${m2.approved.length}` : '（第二组缺席）'} · **交集通过 ${stable.length}** · 否 ${m.rejected} · 未判 ${m.unjudged}（引文接地失败 ${m.ungrounded}）${alarm}` }
     }
     catch (e) {
-        return { ...base, batches: reqs.length, note: '调用异常：' + String((e as Error)?.message || e).slice(0, 60) }
+        // ⚠ 同 `unparsable`：**异常态须可与"判了全否"分辨**（见 `base` 处长注 · ACT-352）
+        return { ...base, batches: reqs.length, error: 'threw', note: '调用异常：' + String((e as Error)?.message || e).slice(0, 60) }
     }
 }
 
@@ -553,7 +572,11 @@ function emitDeepSleepAudit(audit: any, x: any): any {
                 // J5/U3：收益判定与**计数法对账**（`yieldHelpedTrue` > 0 ⇒ 计数法把"其实帮上了"的轮次误当零增益）
                 yieldJudged: yieldRes.judged, yieldHelpedTrue: yieldRes.helpedTrue, yieldSwitchSemantic: yieldRes.switchSemantic, yieldSwitchCounter: yieldRes.switchCounter, yieldNote: yieldRes.note,
                 // P5c 语义门：**通过数**（= 可释放面）与未判数；⚠ **仍未执行任何释放**（applyRelease 默认关闭）
-                releaseSemanticCandidates: relReview.candidates, releaseSemanticApproved: relReview.approved, releaseSemanticRejected: relReview.rejected, releaseSemanticUnjudged: relReview.unjudged, releaseSemanticUngrounded: relReview.ungrounded, releaseSemanticNote: relReview.note, releaseApprovedSample: relReview.sample, releaseApprovedHashes: relReview.hashes,
+                // ⚠ **`releaseSemanticError`**（2026-09-23 · ACT-352）：`undefined` = 判定完成；
+                //   有值（`unparsable` | `threw`）= **判定未完成** ⇒ 此行的 `approved:0` **不是"判了全否"**。
+                //   消费侧（如 `essence-review-stability`）**必须读此字段**，不得再据 `approved===0` 推断
+                //   （那是**代理指标**；此前正因此把"12 批全失败"计成"通过率 0%"，使极差虚增一倍）。
+                releaseSemanticCandidates: relReview.candidates, releaseSemanticApproved: relReview.approved, releaseSemanticRejected: relReview.rejected, releaseSemanticUnjudged: relReview.unjudged, releaseSemanticUngrounded: relReview.ungrounded, releaseSemanticError: relReview.error, releaseSemanticNote: relReview.note, releaseApprovedSample: relReview.sample, releaseApprovedHashes: relReview.hashes,
                 // S-P4c″（2026-09-16）**输出形状可见化**：`otherTried:0` **无法区分**「模型没提」与
                 //   「提了但字段名/位置不符（解析没取到）」—— 两者后果完全不同（后者是**接线缺陷**）。
                 //   ⇒ 只记 `out` 的**顶层键名**（**不含任何值/内容**，避免把模型原文写进审计），
@@ -561,7 +584,11 @@ function emitDeepSleepAudit(audit: any, x: any): any {
                 outKeys: out && typeof out === 'object' ? Object.keys(out).slice(0, 24) : [],
                 // S3-5（2026-09-14）**REM 相状态显式记录**：验收 D3 要求"未开启也必须记录**缺省关**状态"，
                 //   否则「没开 REM」与「开了但没产出」在审计上不可分辨（同 S3-3/S3-4 的"输入量"问题）。
-                remPass: remOn, rejected: (app.rejectedLines || []).length, rejectedLines: (app.rejectedLines || []).slice(0, 5), profiles: profileAdded, pointers: ptrRes.updated, ptrSkipped: ptrRes.skipped, tree: treeRes.applied, treeSkipped: treeRes.skipped, forgetArchived: forgetRes.archived, forgetKept: forgetRes.kept, forgetSkipped: forgetRes.skipped, gate: app.gate, gateExit: app.gateExit, otherTried: otherChannels.tried, otherDone: otherChannels.done, landed: landedNow, failPolicy: fp.policy, failStreak: streak.v, released: pv.release }
+                remPass: remOn, rejected: (app.rejectedLines || []).length, rejectedLines: (app.rejectedLines || []).slice(0, 5), profiles: profileAdded, pointers: ptrRes.updated, ptrSkipped: ptrRes.skipped, tree: treeRes.applied, treeSkipped: treeRes.skipped, forgetArchived: forgetRes.archived, forgetKept: forgetRes.kept, forgetSkipped: forgetRes.skipped, gate: app.gate, gateExit: app.gateExit, otherTried: otherChannels.tried, otherDone: otherChannels.done,
+                /* ADR-333 册三：**指名**有提案但零落地的通道（原只有两个汇总数字 ⇒ 回答不了"哪里堵了"）。
+                 * 留痕字段必须有消费面：本字段由 `scripts/check-channel-observability.mjs` 断言存在。 */
+                zeroLanded: zeroLandedChannels(otherChannels),
+                landed: landedNow, failPolicy: fp.policy, failStreak: streak.v, released: pv.release }
 }
 
 export async function runDeepSleep(d: RunDeps, sinceArg?: number): Promise<'done' | 'failed' | 'no-traces'> {
@@ -833,9 +860,21 @@ export async function runDeepSleep(d: RunDeps, sinceArg?: number): Promise<'done
              *  判因与三重 fail-closed 见该函数抬头）。 */
             const supRes = runSupersedeChannelSleep({ root: resolved.root, out, stop, profiles: M.currentProfiles, treeSections: M.currentTreeSections, log, audit })
 
+            /* ADR-333 册三（2026-09-22）：除汇总外**填 `byChannel` 明细**——原形状只有两个数字，
+             *   判据回答不了"**哪个**通道零落地"，实测导致画像通道有提案零落地的轮次被遮（obs 席实证 29 轮）。
+             *   ⚠ 汇总两字段**逐字保留**（既有断言与审计消费方零迁移），明细是**增**不是改。 */
             const otherChannels = {
                 tried: profileTried + ptrRes.skipped + treeRes.skipped + forgetRes.skipped + outcTried + epiTried + conv.skipped + conv.applied,
                 done: profileAdded + ptrRes.updated + treeRes.applied + forgetRes.archived + ringRes.outcomes + ringRes.episodes + conv.applied,
+                byChannel: [
+                    { name: 'profiles' as const, tried: profileTried, done: profileAdded },
+                    { name: 'pointers' as const, tried: ptrRes.skipped, done: ptrRes.updated },
+                    { name: 'tree' as const, tried: treeRes.skipped, done: treeRes.applied },
+                    { name: 'forget' as const, tried: forgetRes.skipped, done: forgetRes.archived },
+                    { name: 'outcomes' as const, tried: outcTried, done: ringRes.outcomes },
+                    { name: 'episodes' as const, tried: epiTried, done: ringRes.episodes },
+                    { name: 'converge' as const, tried: conv.skipped + conv.applied, done: conv.applied },
+                ],
             }
             log(`deep sleep: stop=${stop} 原则 +${app.added}/替换 ${app.replaced}/跳过 ${app.skipped}（${app.gate}）画像 +${profileAdded} 指针更新 ${ptrRes.updated}/跳过 ${ptrRes.skipped}（${ptrRes.gate}）树 ops ${treeRes.applied}/跳过 ${treeRes.skipped}/归档 ${treeRes.archived} forget 归档 ${forgetRes.archived}/保留 ${forgetRes.kept}/跳过 ${forgetRes.skipped} 释放 ${relRes.released}（${relRes.ran ? '已执行' : relRes.reasons[0]}）L2 提案 ${propRes.applied}/${propRes.applied + propRes.skipped}（${propRes.ran ? (propRes.reasons[0] || '已执行') : propRes.reasons[0]}）后果回收 ${ringRes.outcomes}/${(out?.outcomes || []).length} 叙事 ${narRes.written} 正文/${ringRes.episodes} 记录（ring ${ringRes.ok ? 'ok' : (ringRes.reason || 'fail')}）`)
             // G-19 失败策略：本轮裁定**只算一次**，审计与下方返回值共用同一结果（防两处口径漂移——
