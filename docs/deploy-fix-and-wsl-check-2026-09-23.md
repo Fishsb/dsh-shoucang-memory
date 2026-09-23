@@ -112,14 +112,64 @@ git status:  M client.js /  M lib/client.js          （未提交在途改动）
 
 - 未在 WSL 跑**全量** `check-runner`（该环境 pin 停在 `a5c9b40`，副本 scripts 面为旧代；
   据旧代跑出的"全绿"没有意义）。
-- **运行态未验证**：`package.json` 的读取结果被宿主缓存在 `pkgMeta`（per-process Map，
-  键 = `${baseUrl}\0${loaderName}`，**无任何 mtime 失效路径**——`statSync` 仅用于 client bundle）
-  ⇒ **磁盘部署不保证运行中进程感知**，需宿主重启/热重载才会重读。检查时刻 dsh 进程未运行。
-- 本轮的「部署」是**磁盘面**归位；**「部署 ≠ 生效」这一层未闭合**。
+- 本轮的「部署」是**磁盘面**归位；**「部署 ≠ 生效」这一层见 §8**（已实测到具体机制）。
 
 ## 7. 建议
 
-1. **提交**本轮改动（`deploy-installed.mjs` / `check-installed-sync.mjs` / `AGENTS.md` / `CHANGELOG.md`）。
-   未提交时宿主重新物化会把装上去的那份退回已提交版本（本仓有实测先例）。
-2. 推进 WSL pin → 重新物化 ⇒ 修复后的 `deploy-installed` 才会随包抵达该环境。
-3. 需要时**重启/热重载** dsh 让 `pkgMeta` 重读（否则运行中的宿主仍用旧声明）。
+1. ~~提交~~ ✅ **已完成**（`8770591`，已推 origin，远端 HEAD 一致）。
+2. ✅ **两侧 pin 已归位**至 `8770591`（字节级替换，仅 1 行差异，无 BOM 引入）。
+3. ⚠ **重新物化**与**宿主重启**仍待办——见 §8。
+
+---
+
+## 8. 部署链路收尾（2026-09-23 · 第二轮后续）
+
+### 8.1 五层清单逐层状态
+
+| 层 | 判据 | 状态 |
+|---|---|---|
+| ① 仓内绿 | 我改动面 6 门全绿 | ✅ |
+| ② 部署同步 | 安装副本 `package.json` 已带本轮修复（inject=renderer / engines 已补） | ✅ |
+| ③ 运行态生效 | 热重载已执行（fiber active，105 模块清缓存，client ✓） | ⚠ **仅对 lib 有效**，见 8.3 |
+| ④ 功能探针 | `check-installed-features` exit 0 | ✅ |
+| ⑤ 云端 + pin | 本地 HEAD = 远端 HEAD = `8770591`；两侧 pin 同值 | ✅ |
+
+### 8.2 pin 归位（纯文本，已做）
+
+两侧均用**字节级精确替换**（`a5c9b40…` → `8770591…`，替换前先断言旧串**出现次数 == 1**，
+备份留 `.bak-pin-8770591`）。校验：仅 **1 行**差异、前 3 字节 `7b 0a 20`（**无 BOM**）、bundles 仍 16 项。
+
+> ⚠ 中间踩过一次坑并已回退：`ConvertTo-Json | Set-Content` **重排了整个文件**（缩进 2→4 空格、
+> 值前多空格）**且引入 BOM**。改用字节级替换后差异收敛为 1 行。**改 JSON 配置勿用序列化器往返。**
+> 这正是记忆里 `[原则] 文本改动先定编码` 的实例。
+
+### 8.3 ⚠ 关键边界：「热重载」**不足以**让 `package.json` 声明生效
+
+实测证据（非推断）：
+
+```
+dsh-client-modules/lib/index.js
+  resolveMeta:  const cached = this.pkgMeta.get(sourceKey);
+                if (cached !== void 0) return cached;   ← 命中即直接返回，不再读盘
+  pkgMeta 的失效路径（delete/clear）命中数 = 0        ← 无任何文件失效机制
+  statSync 唯一用处 = client bundle 的陈旧基线（与 package.json 无关）
+```
+
+且 `super-injector` 的 `client-meta-healed` 只清**它自己**的键：
+```js
+cmSvc.pkgMeta.delete("@dsh-external/dsh-super-injector");
+```
+
+⇒ **热重载重建 fiber（作用于 `lib/`），但 `package.json` 的解析结果仍留在 `pkgMeta` 里。**
+**要让 `dsh.client.inject` 的新声明真正生效，必须重启 DSH 进程。**
+
+判别方法（无需读源码，可复现）：比较**宿主进程启动时刻**与**安装副本 `package.json` 的 mtime**——
+前者晚于后者 ⇒ 该进程用的是旧解析。本轮实测：宿主启动 `09-23 18:42`，部署 `09-24 05:08` ⇒ **仍是旧值**。
+
+### 8.4 仍待用户决定的两步（不擅自执行）
+
+1. **重新物化**（`pnpm install`）——把 pin 落到 lock；本仓记载该动作会触发宿主**批量删除保护**，宜择时手动。
+2. **重启 DSH 进程**——让 `pkgMeta` 重读（否则 `inject` 声明仍是 `dsh-client-runtime`）。
+   ⚠ 重启会**中断本会话所在的 GUI**，故不擅自执行。
+
+> 注：这两步都**不影响**已完成的代码面/声明面修复——它们只决定「运行中的宿主何时看到新声明」。
