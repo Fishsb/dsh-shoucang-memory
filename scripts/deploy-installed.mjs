@@ -93,7 +93,19 @@ if (!targets.length) { console.log(`⏭ 跳过：未探测到已安装副本（~
 //   `bundledSkillDir` 指向的正是**安装副本内**的 `skill/`，不同步 ⇒ 注册到的是旧规则档。
 //   ⚠ 与本面上方的「勿纳入仓根 client.js」**不冲突**：那件是**构建中间产物**（`lib/client.js` 才是加载面）；
 //     本处两者皆为**随包发布件**（`package.json#files` 含 `"skill"` 与 `cordis.patch.yml`），非冗余副本。
-const FACE1_EXTRA = ['cordis.patch.yml']
+//   ⚠ **`package.json` 必须纳入安装面**（2026-09-23 WSL 部署检查实测缺陷）：原先 `FACE1_EXTRA` 只有
+//   `cordis.patch.yml` ⇒ 仓内改了 `dsh.client.inject` / 补了 `dsh.engines`，**装上去的那份 package.json
+//   永远不变**。而宿主**运行期真读它**：`dsh-client-modules/lib/index.js` 的
+//   `locatePkgJson()` → `readFileSync(pkgPath)` → `parseDshClient(packageName, dsh.client)`，
+//   即客户端半区的 `inject` 声明与 `platform` 由**安装副本的 package.json** 决定，
+//   不是由 Cordis patch 或 lib 决定 ⇒ 不同步 = 声明面静默停在旧代（本仓「仓内绿 ≠ 运行态绿」的又一实例）。
+//   实证（WSL，0.1.7-rc.1）：仓内 `inject=[dsh-client-ui-renderer]` + `engines={dsh:>=0.1.5-rc.1}`，
+//   而已部署副本仍为 `inject=[dsh-client-runtime]`、无 `engines` —— 差额 100% 集中在这一个文件。
+//   ⚠ **覆盖安全性（实测前提，勿想当然）**：两侧键集合**完全相同**（各 19 键）、**唯一差异就是 `dsh` 键**、
+//   且安装副本**无任何 pnpm 注入字段**（`_id`/`_resolved`/`_integrity`/`_from` 全无）、非 symlink。
+//   ⇒ 整件覆盖**不动依赖解析**（仓内 `dependencies` 为空、依赖全在 `peerDependencies`）。
+//   将来若本包出现真实 `dependencies`，须先复验该前提再保留此项。
+const FACE1_EXTRA = ['cordis.patch.yml', 'package.json']
 for (const extra of FACE1_EXTRA) {
   const src = join(root, extra)
   if (existsSync(src)) for (const tgt of targets) planCopy(src, join(tgt, extra), extra, true)

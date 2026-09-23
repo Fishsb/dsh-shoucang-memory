@@ -5,6 +5,36 @@
 ## [Unreleased]
 
 ### Changed
+- **部署面补 `package.json`：修「契约面改动静默不抵达安装副本」（2026-09-23 · WSL 部署检查查出）**：
+  `scripts/deploy-installed.mjs` 的面 1（安装副本面）原先 `FACE1_EXTRA` **只有 `cordis.patch.yml`**
+  ⇒ 仓内改了 `dsh.client.inject` / 补了 `dsh.engines`，**装上去的那份 package.json 永远不变**。
+  而宿主**运行期真读它**：`dsh-client-modules/lib/index.js` 的 `locatePkgJson()` → `readFileSync(pkgPath)`
+  → `parseDshClient(packageName, dsh.client)` —— 客户端半区的 `inject`/`platform` 由**安装副本的
+  package.json** 决定，不由 lib 或 Cordis patch 决定。
+  实证（WSL · 0.1.7-rc.1）：仓内 `inject=[dsh-client-ui-renderer]`+`engines={dsh:>=0.1.5-rc.1}`，
+  已部署副本却仍是 `inject=[dsh-client-runtime]`、无 `engines`——差额 **100% 集中在这一个文件**，
+  而三道门（srcmap / deploy-sync / installed-sync）当时**全绿**。
+  · **覆盖安全性已实测前置**：两侧键集合**完全相同**（各 19 键）、**唯一差异仅 `dsh` 键**、
+  安装副本**无任何 pnpm 注入字段**（`_id`/`_resolved`/`_integrity`/`_from` 全无）、非 symlink
+  ⇒ 整件覆盖**不动依赖解析**（本包 `dependencies` 为空，依赖全在 `peerDependencies`）。
+  · **同步扩 `check-installed-sync` 的比对面**：原先只比 `lib/` ⇒ 上述漂移**完全不可见**。
+  现并入 `META_FILES = ['package.json','cordis.patch.yml']`，与 lib 同判据（sha1·换行归一）、
+  同报告面。实现上**逐目标重建合成表**（模板绝不就地改，否则多 profile 会串味）。
+  · **反向验证**：未部署时该门**精确报出 `../package.json` 内容不同**（此前 0 条），`--strict` 转红；
+  部署后回归 **322/322 一致**、`--strict` 绿；`--installed /nonexistent` 仍 **exit 3** 诚实跳过（CI 语义零回归）。
+  · ⚠ **范围克制**：WSL 侧 dry-run 同时列出 `skill/engine/criteria-{gate.json,md}` 两件投影，
+  其源 `criteria.json` 是**他人未提交在途改动** ⇒ 按 R3「跨会话共享件须拍板」**未代为推进**，
+  本次只部署与修复直接相关的 `package.json`（与 Windows 侧同范围）。
+- **`package.json` 两处契约订正（2026-09-23 · 修 shoucang × 0.1.7-rc.1 兼容检查查出的缺陷）**：
+  - `dsh.client.inject`：`@deepseek-ai/dsh-client-runtime`（**已除名**，0.1.7 全盘零命中）
+    → **`@deepseek-ai/dsh-client-ui-renderer`**。判据是**实证**而非命名相似：我方 `lib/client.js`
+    实际依赖的是 `ctx.slots`（`ctx.inject(["locale"])` + `var inject = ["slots"]`），
+    而 `slots` 服务由 renderer 提供（`lib/client.js` `super(ctx, "slots")`），且 renderer 才是真 client module
+    （`dsh.client` + `exports["./client"]` 齐备；`dsh-client-ui-slots` 两者皆无，不可能是 inject 目标）。
+    已实测该目标在 **0.1.5-rc.2 与 0.1.7-rc.1 两代**上均为 client-module ⇒ **不制造新悬空**。
+  - 补 **`dsh.engines.dsh = ">=0.1.5-rc.1"`**（此前缺失 ⇒ 插件对宿主版本**无任何声明面**）。
+    下界有事实锚点：`dsh-client-ui-renderer@0.1.5-rc.1` 实测已是 client-module。
+  - 两处均为纯文本改动；`check-hardcode` / `check-content-types` / `check-client-syntax` 相邻门禁复跑全绿。
 - **🔴 授权推进轮（N-1/N-2/N-3）：嵌入通道恢复 + 投影归位 + 深睡闭环复验 —— 揭出「通道修好 ≠ 判定可用」的第三层（2026-09-23 · ACT-367 / ADR-368 / ADR-369）**：
   - **N-1 嵌入通道恢复（环境面，实证）**：判因发现 `Ollama` 主进程不在、**11434 未监听**，但留着一个**孤儿 `llama-server`（PID 14068，09-22 起，父进程已死）** —— 它占着模型却**不服务 11434**。
     处置：以**与用户开机同一路径**（启动夹 `Ollama.lnk` → `ollama app.exe`）启动；实测**新 PID 35664 听 11434**、`/api/tags` 列 17 模型含 `bge-m3:latest`、**`/v1/embeddings` 真返回 1024 维**。
@@ -3881,6 +3911,29 @@
     `lib-scan-scope` 同型 `IS_MAIN` 缺陷 · 四份文档仍按数字形态引用 FREEZE。**均须另行授权。**
 
 ### Added
+- **宿主契约兼容闸门 `check-host-compat`（2026-09-23 · 由一次性人工报告升级为常驻机检）**：
+  0.1.7-rc.1 兼容性检查原先只是 `docs/compat-0.1.7-rc.1.md` 一份**一次性报告**——结论对，但**没人会重跑**，
+  而宿主每出一个 rc 结论就旧一分，且**没有任何机制会告诉人它旧了**（与 `check-installed-sync` 之前的病灶同型）。
+  本件把其中**可机检的三条**变成每次 `npm test` 都跑的门（已登记 CHECKS，`233 → 234` 件）：
+  · **A1** `dsh.client.inject` 每项必须在当前宿主**真实存在**。判因：实测 `@deepseek-ai/dsh-client-runtime`
+  在 0.1.7 安装里**全盘零命中**（npm 停在 0.1.1-rc.2，roundtable 发布说明明写"不再发布"），
+  而宿主 `dsh-client-modules` 解析该字段时 `graphRows.get(pkg)` **找不到即静默跳过**
+  ⇒ 悬空声明**永远不报错**，只能靠机检抓（本仓最忌的「失败不可观测」）。
+  · **A2** `dsh.engines.dsh` 形态 + 与已装宿主比对。判因：该字段有**真实消费者**
+  （dshmarket `discovery-compatibility.js` 读 `manifest.dsh.engines`），非死字段。
+  · **A3** `@deepseek-ai/dsh*` peer range 必须容纳已装宿主 —— 0.1.7 新增兼容闸门
+  `evaluatePluginCompatibility` 的**同口径前置自检**（升级前就看见，而非等宿主拒装）。
+  · ⚠ **A4 反例自证不可删**：本件**被它抓出过两个真 bug**（宿主包实际嵌套在 `dsh/node_modules/` 下；
+  scope 路径被拼成双前缀 `@deepseek-ai/@deepseek-ai/…`）⇒ 若无 A4，A1 会在**全悬空时仍报绿**。
+  · 不做联网查 npm（网络不可用时门变噪声源）；宿主不可达 ⇒ 诚实 skip(3)。BOM 容忍已实测（否则 Windows 上
+  `Set-Content -Encoding UTF8` 写的 manifest 会让门**以崩溃代替判定**）。
+  · **WSL 实测又修出三处**（2026-09-23 部署检查轮，详见 `docs/wsl-deploy-check-2026-09-23.md` §4）：
+  ① 探测面缺 Linux 全局安装（`/usr/local/lib/node_modules`）⇒ WSL 上判 renderer **假红**；
+  ② `DSH_HOST_SCOPE` 走裸 push 漏嵌套面；③ **混用宿主**（`scopesFromPath` 首个命中即 break ⇒
+  WSL 上 A1 用 Linux 侧 0.1.7 的 renderer、A2/A3 却用 Windows 侧 0.1.5 的 dsh，**同一门内两个宿主**）。
+  修法：**沿 PATH 解析 `dsh` 真实包根**（零硬编码，覆盖任意安装布局）并按层收全。
+  WSL 复验：仓内 manifest **PASS**、已部署旧 manifest **FAIL**（A1 抓到 `dsh-client-runtime` 悬空）；
+  Windows 侧无回归。
 - **`coexist` 取得产生路径（D2 收口 · 2026-09-21）**：`conflict` 维声明三义 `none | coexist | supersede`，而 `evaluateL0` **只由 `supersedes: boolean` 决定** ⇒ `coexist` **无产生路径**。
   · **更坏的是模型判了也会被抹掉**：调用点（`distill-agent.ts`）已把模型输出**按三义校验**（`CONFLICT_VALUES` 含 `coexist`、越界另有 `judgement-invalid` 留证），随后**只**传 `supersedes: conflictNorm === 'supersede'` ⇒ **`coexist` 被静默压成 `none`**。形态 = **声明三义、实现两义、第三义静默降级**（与 `§0p` 同族，但这条是"判了也不落"的**运行时**版）。
   · **修**：`L0Input` 增可选 `conflict`（**原始三义**），`evaluateL0` 按「**显式优先、布尔兜底**」取值；调用点把已校验的 `conflictNorm` 原样传下。

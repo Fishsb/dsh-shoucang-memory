@@ -34,6 +34,21 @@ const STRICT = argv.includes('--strict')
 
 const REPO_LIB = join(root, 'lib')
 
+/**
+ * 安装面**元文件**（与 `lib/` 同属「宿主实际加载/读取的那份」，但不在 lib/ 下）。
+ *
+ * 判因（2026-09-23 WSL 部署检查实测）：本件原先**只比 `lib/`** ⇒ `package.json` 的
+ *   `dsh.client.inject` / `dsh.engines` 停在旧代**完全不可见**。
+ *   而宿主**运行期真读它**：`dsh-client-modules/lib/index.js` 的
+ *   `locatePkgJson()` → `readFileSync(pkgPath)` → `parseDshClient(packageName, dsh.client)`
+ *   ⇒ 客户端半区的 `inject`/`platform` 由安装副本的 package.json 决定，不由 lib 决定。
+ *   实证：仓内 `inject=[dsh-client-ui-renderer]` 而已部署仍 `[dsh-client-runtime]`，而本门报"全一致"。
+ *   `cordis.patch.yml` 同理（`deploy-installed` 2026-09-21 才纳入面1，本门当时也未跟上）。
+ * ⚠ 与 `lib/` 同一判据（sha1 逐字节，换行归一）：这些件在 `deploy-installed` 的面1 内，
+ *   漂移即"部署未跟上"，属本门职责；缺件不判失败（只是未部署）。
+ */
+const META_FILES = ['package.json', 'cordis.patch.yml']
+
 // 默认探测：~/.dsh/profiles/<profile>/node_modules/<包名>。路径一律由 homedir() 推导（零硬编码红线）
 // 注：注释里写「profiles/ 通配」会形成注释闭合符，故此处用占位名描述
 const PKG_NAME = 'dsh-shoucang-memory'
@@ -81,23 +96,37 @@ if (targets.length === 0) {
   process.exit(3)
 }
 
-const repo = walkFiles(REPO_LIB)
+/** 安装面元文件（package.json / cordis.patch.yml）：与 lib/ 合并进**同一张表**同判据比对。
+ *  实现要点：**逐目标重建合成表**（`repoAll` 是模板，绝不就地改），否则上一个目标的元文件
+ *  会污染下一个目标的比对（同一进程多 profile 时会串味）。 */
+const sha1Of = (p) => createHash('sha1').update(readFileSync(p, 'utf8').replace(/\r/g, '')).digest('hex')
+const entryOf = (p) => ({ size: statSync(p).size, sha1: sha1Of(p) })
+const metaEntries = new Map()
+for (const rel of META_FILES) {
+  const a = join(root, rel)
+  if (existsSync(a)) metaEntries.set(`../${rel}`, entryOf(a))
+}
+const repoAll = new Map([...walkFiles(REPO_LIB), ...metaEntries])
 const reports = []
 for (const tgt of targets) {
   const instLib = join(tgt, 'lib')
   if (!existsSync(instLib)) { reports.push({ target: tgt, error: '已安装副本无 lib/，无法比对' }); continue }
   const inst = walkFiles(instLib)
+  for (const rel of META_FILES) {
+    const dst = join(tgt, rel)
+    if (existsSync(dst)) inst.set(`../${rel}`, entryOf(dst))
+  }
   const differ = [], onlyRepo = [], onlyInst = []
-  for (const [k, v] of inst) if (!repo.has(k)) onlyInst.push(k)
-  for (const [k, v] of repo) {
+  for (const [k] of inst) if (!repoAll.has(k)) onlyInst.push(k)
+  for (const [k, v] of repoAll) {
     const b = inst.get(k)
     if (!b) onlyRepo.push(k)
     else if (b.sha1 !== v.sha1) differ.push({ file: k, repoBytes: v.size, instBytes: b.size })
   }
   reports.push({
     target: tgt,
-    repoFiles: repo.size, instFiles: inst.size,
-    same: repo.size - differ.length - onlyRepo.length,
+    repoFiles: repoAll.size, instFiles: inst.size,
+    same: [...repoAll.keys()].filter((k) => inst.has(k) && inst.get(k).sha1 === repoAll.get(k).sha1).length,
     differ: differ.sort((a, b) => a.file.localeCompare(b.file)),
     onlyRepo: onlyRepo.sort(), onlyInst: onlyInst.sort(),
   })
@@ -106,7 +135,7 @@ for (const tgt of targets) {
 const drift = reports.filter((r) => !r.error && (r.differ.length || r.onlyRepo.length || r.onlyInst.length))
 if (AS_JSON) { console.log(JSON.stringify({ root, reports }, null, 2)) }
 else {
-  console.log(`已安装副本漂移报告（仓 lib/ ↔ 已安装 lib/ · 报告态，漂移不判失败）`)
+  console.log(`已安装副本漂移报告（仓 lib/ + 安装面元文件 ↔ 已安装副本 · 报告态，漂移不判失败）`)
   for (const r of reports) {
     console.log(`\n  📦 ${r.target}`)
     if (r.error) { console.log(`     ⚠ ${r.error}`); continue }

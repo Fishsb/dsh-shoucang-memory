@@ -52,9 +52,12 @@
     },
     "client": {
       "inject": [
-        "@deepseek-ai/dsh-client-runtime"
+        "@deepseek-ai/dsh-client-ui-renderer"
       ],
       "platform": "web"
+    },
+    "engines": {
+      "dsh": ">=0.1.5-rc.1"
     }
   },
   "license": "Apache-2.0",

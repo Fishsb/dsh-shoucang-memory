@@ -1198,6 +1198,21 @@ const CHECKS = [
   //     （默认关闭零写入 / 命中⇒改写+留档+应用账 / 逐条裁决可见（越界与未实现 op 各自留理由）/
   //     复跑幂等 no-op / 陈旧提案不做模糊匹配 / 歧义命中拒改）。**先红**：未接线时 A1–A3 三条红。
   ['scripts/test-proposal-apply.mjs'],
+  // 宿主契约兼容闸门（2026-09-23）：把一次性人工报告 `docs/compat-0.1.7-rc.1.md` 里
+  //   **可机检的三条**变成每次 `npm test` 都跑的门——一次性报告的结论对，但**没人会重跑**，
+  //   而宿主每出一个 rc 结论就旧一分，且**没有任何机制会告诉人它旧了**（同 `check-installed-sync` 前病灶）。
+  //   ① A1 `dsh.client.inject` 每项必须在当前宿主真实存在 —— 实测 `@deepseek-ai/dsh-client-runtime`
+  //      在 0.1.7 安装里**全盘零命中**（npm 停在 0.1.1-rc.2，roundtable 发布说明明写"不再发布"），
+  //      而宿主 `dsh-client-modules` 解析时 `graphRows.get(pkg)` **找不到即静默跳过** ⇒ 悬空声明
+  //      **永远不报错**，只能靠机检抓（本仓最忌的「失败不可观测」）。
+  //   ② A2 `dsh.engines.dsh` 形态 + 与已装宿主比对 —— 它有**真实消费者**（dshmarket
+  //      `discovery-compatibility.js` 读 `manifest.dsh.engines`），非死字段。
+  //   ③ A3 `@deepseek-ai/dsh*` peer range 必须容纳已装宿主 —— 0.1.7 新增兼容闸门
+  //      `evaluatePluginCompatibility` 的**同口径前置自检**（升级前就看见，而非等宿主拒装）。
+  //   ⚠ 本件**被自己的 A4 反例自证抓出过两个真 bug**（宿主包嵌套在 `dsh/node_modules/` 下；
+  //     scope 路径双前缀）⇒ 若无 A4，A1 会在**全悬空时仍报绿**。故 A4 不可删。
+  //   ⚠ 不做联网查 npm：网络不可用时门变噪声源。宿主不可达 ⇒ 诚实 skip(3)。
+  ['scripts/check-host-compat.mjs'],
 ]
 /* ── 已登记在册的自证（i18n · 2026-09-17 · v2.1 验收③）─────────────────────────
  * 判因：验收口径里写「须看到两个新件在册」，若靠**人眼确认**即为文本纪律
