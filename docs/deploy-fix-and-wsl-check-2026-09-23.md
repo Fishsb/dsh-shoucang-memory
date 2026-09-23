@@ -168,8 +168,74 @@ cmSvc.pkgMeta.delete("@dsh-external/dsh-super-injector");
 
 ### 8.4 仍待用户决定的两步（不擅自执行）
 
-1. **重新物化**（`pnpm install`）——把 pin 落到 lock；本仓记载该动作会触发宿主**批量删除保护**，宜择时手动。
+1. ~~**重新物化**（`pnpm install`）~~ ✅ **已完成（WSL 侧，见 §9）**。
 2. **重启 DSH 进程**——让 `pkgMeta` 重读（否则 `inject` 声明仍是 `dsh-client-runtime`）。
    ⚠ 重启会**中断本会话所在的 GUI**，故不擅自执行。
 
-> 注：这两步都**不影响**已完成的代码面/声明面修复——它们只决定「运行中的宿主何时看到新声明」。
+> 注：重启**不影响**已完成的代码面/声明面修复——它只决定「运行中的宿主何时看到新声明」。
+
+---
+
+## 9. WSL 部署执行（2026-09-23 · 用户指令「只用部署WSL」）
+
+### 9.1 执行（严格按记忆 L470「profile pin 归位四步」）
+
+| 步 | 内容 | 实测 |
+|---|---|---|
+| ① | 备份三件 | `package.json` / `pnpm-lock.yaml` / `node_modules/.modules.yaml` → `.bak-pindeploy-20260924-060012/` |
+| ② | pin 全 sha | 已为 `8427f43473595a2cdca9b9d7655ec1c40fb25522`（40 位） |
+| ③ | profile 内 `pnpm install` | `--config.confirmModulesPurge=false`；**3.5s / +2 包 / 未见批量删除拦截** |
+| ④ | 复验三处一致 | ✅ 见 9.2 |
+
+### 9.2 三处一致性（归位前是「声明领先、锁定落后」）
+
+| | 归位前 | 归位后 |
+|---|---|---|
+| `package.json` pin | `8427f43…` | `8427f43…` |
+| `pnpm-lock.yaml` | `a5c9b40…`（落后） | **`8427f43…`** |
+| `.modules.yaml` | `a5c9b40…`（落后） | **`8427f43…`** |
+
+前置检查：`pnpm -v = 12.4.2`（记忆 L455 要求 ≥12）；`git ls-remote` 通（远端 HEAD = `8427f43`）。
+
+### 9.3 本轮修复是否抵达（逐件核）
+
+| 目标 | 已安装副本实况 |
+|---|---|
+| `dsh.client.inject` | `["@deepseek-ai/dsh-client-ui-renderer"]` ✅ |
+| `dsh.engines` | `{"dsh":">=0.1.5-rc.1"}` ✅ |
+| `scripts/check-host-compat.mjs` | 存在 ✅ |
+| `check-runner` 登记 | 含该件、1507 行 ✅ |
+| `deploy-installed` 面 1 | `['cordis.patch.yml','package.json']` ✅ |
+
+四件与仓内在**换行归一化口径**下全部一致（仓内 CRLF / tarball LF——这正是
+`check-installed-sync` 归一化判等的原因，**非内容漂移**）。
+
+### 9.4 ⚠ 两处须记录的发现
+
+**① 一次「假绿」我自己的验证方法造成的**：初版我在**安装副本目录内**跑
+`check-installed-sync`，该脚本 `root = dirname(script)/..` ⇒ root 解析成**安装副本自身**
+⇒ 报「319/319 全一致」= **自己跟自己比**。在**仓根**重跑才是真判定。
+> 教训：验证工具的 **root 归属**必须先确认，否则「跑绿了」可能只是自比。
+
+**② `import` 失败属既有的未提交半截态，非本轮引入**（已逐一归因排除）：
+
+```
+已安装 deepsleep-run.js 引用 zeroLandedChannels
+        deepsleep-core.js 不导出该符号（计数 0）
+        channel-plan.js 在 tarball 中不存在
+```
+
+**归因**：该半截状态在 `a5c9b40`（我介入**之前**的提交）就已存在，
+`a5c9b40` / `8770591` / `8427f43` **三个提交全部相同** ⇒ **不是 pin 推进引入的**。
+`channel-plan.js` / `deepsleep-core.js` 等在工作树是**未提交在途改动**（属其他会话），
+tarball 由 **committed 状态**打包，故不含它们。
+
+⇒ 本轮部署**未造成**该状态，也**未尝试修复**它（属跨会话在途施工，按 R3 不越界）。
+
+### 9.5 边界
+
+- 部署的是**磁盘面**；`pkgMeta` 缓存那条边界（§8.3）在 WSL 侧同样适用——
+  需**重启该环境的 dsh** 才会重读新声明。本次**未重启**（未获指令，且会中断服务）。
+- `check-installed-sync` 在 WSL 仓根跑报「289 一致 / 30 内容不同 / 3 仅仓内」，
+  经核**全部指向未提交在途件**（`channel-plan.*`、`budget-override.*`、`client.js` 等），
+  与本轮修复无关。
