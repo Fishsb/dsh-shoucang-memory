@@ -17,7 +17,10 @@
  *   缓解：只在超阈值时触发（低频）· 台账本就是 best-effort 审计（各写入点都 catch 静默）。
  *   这与被替换掉的旧 `episodes` 裁剪**同一量级**的风险，不构成回归。
  */
-import { copyFileSync, existsSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { appendFileSync, copyFileSync, existsSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+// 有界尾读（2026-09-23）：热路径不得全量读台账（实测 48k 行 / 18MB）——
+//   复用既有真字节级尾读 + `(mtimeMs,size)` 缓存（单一实现，不重造）。
+import { readTailLines } from './file-stat-cache.js'
 
 /** 取一行的 `type`（解析失败或非 JSON ⇒ 空串：**坏行视为不可裁剪**，绝不因裁剪丢坏行证据）。 */
 function typeOfLine(line: string): string {
@@ -65,6 +68,21 @@ export function compactFile(file: string, type: string, keepLast: number, slack:
 export const LEDGER_VOLUMES = 3
 
 /**
+ * **台账追加一行**（fail-safe · 2026-09-23）—— 台账**写侧**的单一出口。
+ *
+ * 为什么要有它：写入点此前各自内联 `appendFileSync(join(knowledgeRoot(),'audit','ledger.jsonl'), …)`，
+ *   而**读者**要同时满足「跨档」（`readLatestLedgerRow` / `readLedgerVolumes`）与「有界」。
+ *   把写口也归到本域 ⇒ 台账的**读写两侧同处一模块**，"路径 + 编码 + 失败姿态"只有一份口径。
+ *
+ * 语义：**绝不抛**（审计是 best-effort —— 各既有写入点无一例外都包了 `try/catch` 并静默；
+ *   把该姿态收进本件，调用方就不必各自重复 try/catch）。
+ * @returns 写入的行数（`1` = 已写；`0` = 失败被吞，调用方按"未落账"处理）
+ */
+export function appendLedgerLine(file: string, line: string): number {
+  try { appendFileSync(file, line, 'utf8'); return 1 } catch { return 0 }
+}
+
+/**
  * 按**体积**轮转（2026-09-17 · 圆桌会审 D-M5）。与同文件 `compactFile` 的分工：
  *   · `compactFile` 按 **type** 裁 —— 保住共享台账里**其他 type** 的行（这是它存在的全部理由）；
  *   · 本件按**整体体积**轮转 —— 保住**时间窗口**（旧档整份留存、可回读）。
@@ -96,6 +114,62 @@ export function rotateBySize(file: string, capBytes: number, keep = LEDGER_VOLUM
     writeFileSync(file, '', 'utf8')
     return 'rotated'
   } catch { return 'noop' }
+}
+
+/**
+ * **跨档有界取"最后一条匹配行"**（2026-09-23 · 消费链拟态落地方案 §3.1）。
+ *
+ * 为什么需要它（两条硬约束同时成立，别的写法都满足不了其一）：
+ *   ① **必须跨档**：台账按体积轮转（`.1`/`.2`）⇒ 只读主档会**静默丢历史且不报错**。
+ *      本仓有专门门禁 `check-ledger-read.mjs`（G13「轮转失明」防第 N 次漏网），其 v6 判据为
+ *      「含 `ledger.jsonl` 字面量 ∧ 含按行读取器 ∧ **不含 `readLedgerVolumes`** ⇒ 红」。
+ *      本函数**在本件内**经 `LEDGER_VOLUMES` 枚举全部卷位 ⇒ 满足该判据的**本意**（真跨档）；
+ *      而调用方（如 `mcl.ts`）只需调本函数、**不自持台账路径与读取器** ⇒ 也不再撞该判据的字面。
+ *   ② **必须有界**：调用点在**每轮热路径**（`decideTurn` 每轮一次），而全量跨档读实测
+ *      **48k 行 / 18MB** ⇒ 每轮全读会占满唯一事件循环。故走 `file-stat-cache#readTailLines`
+ *      （**真字节级尾读** + `(mtimeMs,size)` 缓存 ⇒ 文件没变则一次 `statSync` 即返回）。
+ *
+ * 顺序语义：**新 → 旧**逐卷找，**命中即返回**（首条匹配就是全局最新的一条，无需读完所有卷）。
+ *
+ * @param file      主档路径（`.1`/`.2` 由本函数派生）
+ * @param match     行判定（**收已 parse 的对象**；抛异常的行视为不匹配）
+ * @param perVolume 每卷尾读窗口行数（缺省 1000；`readTailLines` 的字节窗 256KB ≈ 700–1300 行，
+ *                  取 1000 与之匹配 —— **不留"读了却丢弃"的空转**。见下方 ACT-363 判因）
+ * @returns 解析后的对象；无匹配/不可读 ⇒ `undefined`（**零抛出**，调用方按"没有"处理）
+ *
+ * ⚠ **缺省值判因（2026-09-23 · ACT-363 · 复验抓出的第三处缺陷）**：原缺省 `200`。
+ *   `readTailLines` 的字节窗是 `maxBytes = 256KB`（≈ 750 行）⇒ 读进来后 `slice(-200)`
+ *   **丢掉已读的 ~73%**（实测：末 730 行 = 260KB 已进内存，只保留末 200 行 = 76KB）。
+ *   而这不只是浪费 —— 它**直接导致读不到**：回流行 `yield.verdict` 写在**深睡那一刻**，
+ *   之后每步都在追加 `mcl-step`（实测 4.8 行/分）⇒ 距末尾 271 行时，
+ *   `perVolume=200` **MISS**、`300` **HIT**（同一行、同一函数，实测对照）。
+ *   ⇒ 一个**每分钟都在发生的**时间差就能让回流静默失效（约 42 分钟后必然读不到）。
+ *   取 1000 行：与字节窗同量级 ⇒ **零新增读盘**，只把已经读到的东西真正用起来。
+ */
+export function readLatestLedgerRow<T = Record<string, unknown>>(
+  file: string,
+  match: (o: Record<string, unknown>) => boolean,
+  perVolume = 1000,
+): T | undefined {
+  const scan = (p: string): T | undefined => {
+    let lines: string[] = []
+    try { lines = readTailLines(p, Math.max(1, perVolume)) } catch { return undefined }
+    for (let i = lines.length - 1; i >= 0; i--) {
+      try {
+        const o = JSON.parse(lines[i]) as Record<string, unknown>
+        if (match(o)) return o as T
+      } catch { /* 坏行跳过（与各读侧同纪律） */ }
+    }
+    return undefined
+  }
+  // 新 → 旧：主档优先，其次 .1 … .{LEDGER_VOLUMES}
+  const main = scan(file)
+  if (main !== undefined) return main
+  for (let i = 1; i <= LEDGER_VOLUMES; i++) {
+    const hit = scan(`${file}.${i}`)
+    if (hit !== undefined) return hit
+  }
+  return undefined
 }
 
 /**

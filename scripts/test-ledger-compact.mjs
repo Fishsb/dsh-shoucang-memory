@@ -17,7 +17,7 @@ let pass = 0, fail = 0
 const ok = (c, m) => { if (c) { pass++; console.log(`✅ ${m}`) } else { fail++; console.log(`❌ ${m}`) } }
 const load = (rel) => pathToFileURL(join(repoRoot, rel)).href
 
-const { planCompaction, compactFile } = await import(load('lib/ledger-compact.js'))
+const { planCompaction, compactFile, readLatestLedgerRow } = await import(load('lib/ledger-compact.js'))
 const tmp = mkdtempSync(join(tmpdir(), 'sc-compact-'))
 process.on('exit', () => { try { rmSync(tmp, { recursive: true, force: true }) } catch { /* 清理失败无害 */ } })
 
@@ -71,6 +71,35 @@ console.log('== D. compactFile：真文件 + 原子替换 + 备份 ==')
   ok(!readdirSync(tmp).some((n) => n.includes('.tmp-')), 'D6 无 tmp 残留（rename 成功）')
   ok(compactFile(f, 'a', 1, 8) === 'noop', 'D7 余量内再裁 ⇒ noop（不重复重写）')
   ok(compactFile(join(tmp, 'nope.jsonl'), 'a', 1, 0) === 'missing', 'D8 文件不存在 ⇒ missing')
+}
+
+// ── E. readLatestLedgerRow：**跨档有界取最后一条**（2026-09-23 · ACT-363）──
+//   判因：回流读侧 `mcl#readLatestVerdict` 走本函数。它有两处**静默**失效面，各钉一条：
+//     ① 只在**主档**找而不跨 `.1`/`.2` ⇒ 轮转后静默丢失（本仓 G13 已漏网 6 处）；
+//     ② 尾读窗口**小于**目标行离末尾的距离 ⇒ 读不到（实测：距末尾 271 行时旧缺省 200 必 MISS）。
+{
+  const dir = mkdtempSync(join(tmpdir(), 'sc-llr-'))
+  const f = join(dir, 'ledger.jsonl')
+  // 主档：目标行在**距末尾 500 行**处（远大于旧缺省 200）
+  const lines = []
+  lines.push(JSON.stringify({ at: '2026-09-23T00:00:00.000Z', type: 'yield.verdict', sid: 'abc12345', verdict: 'helped' }))
+  for (let i = 0; i < 500; i++) lines.push(JSON.stringify({ at: `2026-09-23T00:${String(i % 60).padStart(2, '0')}:00.000Z`, type: 'mcl-step', n: i }))
+  writeFileSync(f, lines.join('\n') + '\n', 'utf8')
+  const hit = readLatestLedgerRow(f, (o) => o.type === 'yield.verdict' && o.sid === 'abc12345')
+  ok(hit && hit.verdict === 'helped', 'E1 **距末尾 500 行仍能取到**（旧缺省窗口 200 会 MISS ⇒ 回流静默失效）')
+  ok(readLatestLedgerRow(f, (o) => o.type === 'nope') === undefined, 'E2 无匹配 ⇒ undefined（零抛出）')
+  ok(readLatestLedgerRow(join(dir, 'missing.jsonl'), () => true) === undefined, 'E3 文件不存在 ⇒ undefined')
+  // 跨档：目标行**已在 .1 卷**（主档全不匹配）⇒ 必须仍取到
+  writeFileSync(`${f}.1`, JSON.stringify({ at: '2026-09-22T00:00:00.000Z', type: 'yield.verdict', sid: 'old12345', verdict: 'not-helped' }) + '\n', 'utf8')
+  const cross = readLatestLedgerRow(f, (o) => o.type === 'yield.verdict' && o.sid === 'old12345')
+  ok(cross && cross.verdict === 'not-helped', 'E4 **跨档**取到 `.1` 卷里的行（只读主档会静默丢历史）')
+  // 新→旧：主档与 .1 都有 ⇒ 取主档（更新）
+  writeFileSync(`${f}.1`, JSON.stringify({ at: '2026-09-22T00:00:00.000Z', type: 'yield.verdict', sid: 'z9', verdict: 'not-helped' }) + '\n' + JSON.stringify({ at: '2026-09-23T00:00:00.000Z', type: 'yield.verdict', sid: 'z9', verdict: 'helped' }) + '\n', 'utf8')
+  // 主档也放一条同 sid 的更新行 —— 必须取主档那条
+  writeFileSync(f, JSON.stringify({ at: '2026-09-23T09:00:00.000Z', type: 'yield.verdict', sid: 'z9', verdict: 'helped' }) + '\n' + lines.join('\n') + '\n', 'utf8')
+  const newest = readLatestLedgerRow(f, (o) => o.type === 'yield.verdict' && o.sid === 'z9')
+  ok(newest && newest.verdict === 'helped' && newest.at === '2026-09-23T09:00:00.000Z', 'E5 新→旧：主档优先（取到更新的那条）')
+  rmSync(dir, { recursive: true, force: true })
 }
 
 console.log(`\n${fail ? 'FAIL' : 'PASS'}（${pass} pass · ${fail} fail）`)

@@ -1,6 +1,7 @@
 import { type RecallRow } from './targets.js';
 import { type EmbedCfg } from './vec.js';
 import { type SupplyLedger } from './supply-ledger.js';
+import { type YieldVerdict } from './recall-yield.js';
 export interface MclConfig {
     enabled: boolean;
     /** 熟悉度阈值（绝对余弦；缺省 0.58 = 2026-09-11 按 193 条实测样本重校准，见 criteria.json#surface.mcl） */
@@ -83,6 +84,12 @@ interface SessMcl {
     /** **E-05（2026-09-21）判定在飞标志** —— 与 `channel` 合成**原子幂等闸**（`decideTurn` 头，
      *  检查与置位之间无 await）。缺了它，两条入口会在两个 await 之间同时越过闸门 ⇒ 同一轮判两次。 */
     deciding?: boolean;
+    /** **本会话最近一次轮级模型判定**（由 `decideTurn` 每轮读一次台账得到；缺席 = 未判 = 不驱动） */
+    verdict?: YieldVerdict;
+    /** **该 verdict 所属轮次**（`sid` 去重键的一部分：同会话内按"最后一条"取值，故只需记时刻） */
+    verdictAt?: string;
+    /** **verdict 已被折减过的标记** —— 保证「**同一轮只 +1**」（幂等；否则每步都折一次 ⇒ 计数虚高） */
+    verdictFolded?: string;
     /** **M3a（2026-09-21 · 频率分离）每步轻判定结果** —— 完整判定（定通道，含嵌入）每轮一次；
      *  轻判定（折收益/判"线索是否变弱"，**零嵌入零召回**）每步一次。本字段存后者，供观测与出口用。 */
     lastJudge?: {
@@ -240,12 +247,34 @@ export declare function planStepJudgement(input: {
     zeroGain: number;
     hasTopics: boolean;
     switchEmitted: boolean;
+    judged?: boolean;
 }): {
     zeroGain: number;
     switchSource: boolean;
     emitSwitch: boolean;
     stopSource: boolean;
 };
+/**
+ * **回流读侧**（2026-09-23 · 消费链拟态落地方案 §3.1）—— 从台账取本会话**最后一条**轮级判定。
+ *
+ * 为什么需要它（实测判因）：步内出口（`mcl-switch` 10 行）与离线模型判定（`yieldSwitchSemantic=true` 14 次）
+ *   **跨日错开**，配对 60s/3600s 均 **0/10**；本文件此前**全文零 `readFileSync`**
+ *   ⇒ 离线已判出的「该换向」对步内行为**零影响**。本函数即补上那条缺失的回流边。
+ *
+ * 实现纪律（**台账 IO 全部委托 ledger 域模块**，本件不自持路径与读取器）：
+ *   · 走 `readLatestLedgerRow` —— 它同时满足两条硬约束：**跨档**（防 G13 轮转失明）
+ *     与**有界**（尾读 + mtime/size 缓存，热路径不全量读 48k 行）；
+ *   · **只认 `type === YIELD_VERDICT_TYPE`**（唯一拼写处取自 `recall-yield`，防两处漂移）；
+ *   · **只按 sid 取最后一条**（newest wins；跨会话不继承——"别的任务里没用"不构成本任务的证据）；
+ *   · 任何异常/无匹配 ⇒ `undefined` ⇒ 上层按**未判**处理（fail-closed，**不据"没有证据"换向**）。
+ *
+ * @param ledgerFile 台账主档路径（跨档枚举由 `readLatestLedgerRow` 内部完成）
+ * @param sid        会话 id（**长形/短形皆可** —— 归一走 `recall-yield#shortSidOf`，与写侧**同一实现**）
+ */
+export declare function readLatestVerdict(ledgerFile: string, sid: string): {
+    verdict: YieldVerdict;
+    at: string;
+} | undefined;
 export declare function decideTurn(d: DecideDeps, sid: string, step: number): Promise<DecideResult>;
 export declare function handlePreStep(payload: any, next: () => Promise<any>, dep: PreStepDeps): Promise<any>;
 export {};

@@ -5,9 +5,40 @@
 //        ⑤ 中途步不插材料（late-step skip）⑥ 子代理会话不引导 ⑦ 审计行形状 ⑧ 零抛出（异常不打断）
 // 用法: node scripts/test-mcl.mjs
 import { registerMcl } from '../lib/mcl.js'
+import { shortSidOf } from '../lib/recall-yield.js'
+import { mkdirSync, appendFileSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir, homedir } from 'node:os'
 
 let pass = 0, fail = 0
 const ok = (c, msg) => { if (c) { pass++; console.log(`✅ ${msg}`) } else { fail++; console.log(`❌ ${msg}`) } }
+
+/* ══ 隔离的「守藏**状态区**」（2026-09-23 新增）═══════════════════════════════════════════
+ * 判因：本场景（M3）需**真写一条回流 `verdict` 行**来驱动新语义（唯一驱动者 = 轮级模型判），
+ *   而回流行落在 `knowledgeRoot()/audit/ledger.jsonl`（由 `DSH_HOME` 派生）。
+ * ⇒ 把 `DSH_HOME` 重定向到临时目录 ⇒ 回流行写进临时区，**绝不污染真台账**。
+ *
+ * ⚠ **同时必须钉住 `MEMORY_ROOT`**（实测踩到，如实记）：`knowledgeRoot()` 与 `memoryLibRoot()`
+ *   **同由 `DSH_HOME` 派生** ⇒ 只改 `DSH_HOME` 会把**记忆库**也指到空目录 ⇒ 索引行取不到
+ *   ⇒ `freshRows` 为空 ⇒ 走"全量去重"分支（`injected=0` / `topics=undefined`）⇒ `st.topics` 永不赋值
+ *   ⇒ `hasTopics=false` ⇒ **出口永不出**（M3-4 当场红，而根因在夹具不在判据）。
+ *   ⇒ 故**显式把 `MEMORY_ROOT` 钉到真库**（与改造前同一取材），只隔离状态区。
+ * ⚠ 必须在 `registerMcl` **之前**设好（两处 `*Root()` 都是每次调用现算）。
+ * ⚠ 退出前清理（失败也不留垃圾）。 */
+const TEST_DSH = join(tmpdir(), `shoucang-test-mcl-${process.pid}-${Date.now()}`)
+const REAL_MEM = process.env.MEMORY_ROOT || join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'suite', 'memory')
+process.env.DSH_HOME = TEST_DSH
+process.env.MEMORY_ROOT = REAL_MEM
+const TEST_LEDGER = join(TEST_DSH, 'suite', 'knowledge', 'audit', 'ledger.jsonl')
+try { mkdirSync(join(TEST_DSH, 'suite', 'knowledge', 'audit'), { recursive: true }) } catch { /* 已存在 */ }
+process.on('exit', () => { try { rmSync(TEST_DSH, { recursive: true, force: true }) } catch { /* 清理失败无害 */ } })
+
+/** 往**隔离台账**写一条回流 verdict 行（新语义的唯一驱动源；与 `deepsleep-run` 写侧同形状） */
+const writeVerdictRow = (sid, verdict) => {
+  // ⚠ 归一化走**单一实现** `shortSidOf`（ACT-363）：此前两侧各写一份且口径相反，测不出来。
+  const ev = { type: 'yield.verdict', kind: 'yield-verdict', sid: shortSidOf(sid), verdict, roundIndex: 0, injectedChars: 100, nextToolsN: 1, at: new Date().toISOString() }
+  try { appendFileSync(TEST_LEDGER, JSON.stringify(ev) + '\n', 'utf8') } catch { /* 写失败 ⇒ 回流不通 ⇒ 断言会红，如实暴露 */ }
+}
 
 const mkCtx = () => {
   const handlers = new Map()
@@ -328,17 +359,26 @@ const baseCfg = { enabled: true, familiarThreshold: 0.65, maxNudges: 1, budgetCh
 // ── 场景 M3（2026-09-21 · 频率分离）：**每步判定 / 注入仅首步 / 环内换向出口幂等** ──
 //   架构：完整判定（带嵌入、定通道）每轮一次 ⟷ 轻判定（零嵌入、折收益/换向）每步一次。
 //   判据对应方案档 §12-A-M3-2（判定每步 · 注入仅首步）与 A-M3-3（换向出口端到端 · 同轮不重复）。
+//
+//   ⚠ **2026-09-23 同步（消费链拟态落地方案 §3）**：驱动源**已换** —— 旧夹具靠 `noEcho`
+//     （词面不回引）让 `zeroGain` 递增，而新语义下**词面代理不驱动计数**（实测恒 false 且是词面巧合）。
+//     新语义的**唯一驱动者 = 轮级模型判**，它经**回流行**（`ledger.jsonl` 里 `type:'yield.verdict'`）到达步内。
+//     ⇒ 本场景改为**真写一条 verdict 行**再跑步 —— 这同时是对**回流读侧**的端到端验证
+//       （若回流读不通，M3-4 必红：`mcl-switch` 0 行）。
 {
   const audit = []
   const { ctx, emit, fire } = mkCtx()
   const mcl = registerMcl(ctx, { ...baseCfg, maxNudges: 3 }, { audit: (o) => audit.push(o), log: () => { /* */ } })
-  const sid = 'sess-m3-1'
+  // ⚠ 生产形状的会话 id（`session-<8hex>-uuid`）—— 归一化取**前 8 位**，夹具必须让该段**互不相同**，
+  //   否则跨场景会撞同一个键（实测踩到：`sess-m3-1` 与 `sess-m3-neg-…` 前 8 位同为 `sess-m3-`）。
+  const sid = 'session-m3a10001-1729-4b28-8f24-41ce9fbca42b'
   const txt = '指针 分裂 结构 怎么搭树'
-  const noEcho = '好的，我先看看代码。' // 不回引主题词 ⇒ topicEcho=false ⇒ zeroGain 递增
+  const noEcho = '好的，我先看看代码。' // 不回引主题词（新语义下**不再驱动计数**，仅落观测）
   emit('session/event', { id: sid }, { type: 'user/message', data: { source: { kind: 'user' }, content: [{ type: 'text', text: txt }] } })
-  // step1 注入；step2/3/4 每步都判（assistant 均不回引）
+  // step1 注入；随后写入**两条** `not-helped` 回流（新语义的唯一驱动源）⇒ 第 2 次折减即达阈值
   for (const step of [1, 2, 3, 4]) {
     const msgs = step === 1 ? [userMsg(txt)] : [userMsg(txt), asstMsg(noEcho)]
+    if (step >= 2) writeVerdictRow(sid, 'not-helped')
     await fire('agent/pre-step', { agent: { id: sid, session: { header: {} } }, messages: msgs, step }, async () => ({ kind: 'allow', messages: msgs }))
   }
   const judgeRows = audit.filter((r) => r.kind === 'mcl-step' && r.phase === 'judge')
@@ -348,10 +388,75 @@ const baseCfg = { enabled: true, familiarThreshold: 0.65, maxNudges: 1, budgetCh
   ok(judgeRows.length >= 4, `M3-1 **每步都有判定行**（judge 行 ${judgeRows.length} ≥ 4 步）`)
   ok(injectRows.length === 1, `M3-2 **注入频率不动**（inject 行 ${injectRows.length} = 1，仅首步）`)
   ok(judgeRows.every((r) => typeof r.note === 'string' && r.note.length > 0), 'M3-3 每条判定行都带原因（不得只报数不报因）')
-  ok(switchRows.length === 1, `M3-4 **环内换向出口有且仅一行**（mcl-switch ${switchRows.length}，期望 1）`)
+  ok(switchRows.length === 1, `M3-4 **环内换向出口有且仅一行**（mcl-switch ${switchRows.length}，期望 1；**回流读侧端到端**）`)
   if (switchRows.length) ok(Number(switchRows[0].zeroGain) >= 2, `M3-5 出口触发于 zeroGain 达阈（实测 ${switchRows[0].zeroGain} ≥ 2）`)
   ok(nudgeRows.length <= 2, `M3-6 出过换向 ⇒ **不再对同源材料再引导**（nudge 行 ${nudgeRows.length} ≤ 2；原上限 3）`)
   ok(mcl.status().steps === 4, `M3-7 主链未被打断（steps=${mcl.status().steps}）`)
+  // M3-8（2026-09-23 新增）：**换向行必须带 `judged`/`verdict`** —— 防"回流没通、计数自己动了"这类假绿
+  if (switchRows.length) ok(switchRows[0].judged === true && !!switchRows[0].verdict,
+    `M3-8 出口行带 judged/verdict（judged=${switchRows[0].judged} · verdict=${switchRows[0].verdict}）—— 回流来源可核`)
+}
+
+// ── 场景 M3-NEG（2026-09-23 新增）：**回流不通 ⇒ 不得出换向**（新语义的反向自证）──
+//   判因：旧语义下 `echoed` 恒 false 会**只增不归零** ⇒ 换向恒真（曾 94.6%）；新语义必须**未判不动**。
+//   ⇒ 本场景刻意**不写 verdict 行**，只给"不回引"的 assistant 文本 —— 出口必须**一行都不出**。
+{
+  const audit = []
+  const { ctx, emit, fire } = mkCtx()
+  registerMcl(ctx, { ...baseCfg, maxNudges: 3 }, { audit: (o) => audit.push(o), log: () => { /* */ } })
+  // ⚠ 与 M3 的键**必须不同**（前 8 位为区分段）—— 本场景靠"查不到回流"成立。
+  const sid = 'session-m3neg001-1729-4b28-8f24-41ce9fbca42b'
+  const txt = '指针 分裂 结构 怎么搭树'
+  emit('session/event', { id: sid }, { type: 'user/message', data: { source: { kind: 'user' }, content: [{ type: 'text', text: txt }] } })
+  for (const step of [1, 2, 3, 4, 5]) {
+    const msgs = step === 1 ? [userMsg(txt)] : [userMsg(txt), asstMsg('好的，我先看看代码。')]
+    await fire('agent/pre-step', { agent: { id: sid, session: { header: {} } }, messages: msgs, step }, async () => ({ kind: 'allow', messages: msgs }))
+  }
+  const switchRows = audit.filter((r) => r.kind === 'mcl-switch')
+  const judgeRows = audit.filter((r) => r.kind === 'mcl-step' && r.phase === 'judge')
+  ok(switchRows.length === 0, `M3N-1 **无回流 ⇒ 零换向**（mcl-switch ${switchRows.length} = 0）—— 未判不得出信号（旧语义此处会恒真）`)
+  ok(judgeRows.length >= 5, `M3N-2 判定行仍每步落（${judgeRows.length} ≥ 5）—— "没判"与"没触发"在读数上可分辨`)
+  ok(judgeRows.every((r) => r.judged === false), 'M3N-3 每步 `judged=false`（**如实标"未判"**，不冒充"没进展"）')
+}
+
+// ── 场景 M3-LONG（2026-09-23 新增 · ACT-363）：**回流在"真机长形 sid"下也必须命中** ──
+//   判因（真缺陷，复验抓出）：既有 M3 夹具用 `sess-m3-1`（**短形**），而真机 `agent.id` 是
+//   **长形** `session-<uuid>`（活体面板实测 `sysBlockLastSid="session-7de99a"` + `renSame`）。
+//   旧实现读写两侧归一化**口径相反**（写 `.slice(0,8)` / 读 `.slice(-8)`）⇒ 长形下算出**两个键**
+//   ⇒ 回流永不命中。而它 fail-closed（未判 ⇒ 计数不动）⇒ **不报警、只静默失效**。
+//   ⚠ **本场景就是那个盲区**：夹具必须用**生产形状**的 id，否则测的只是"短形自洽"。
+//   ⇒ 反向自证：若把读侧改回 `.slice(-8)`，本场景 M3L-1 必红（mcl-switch 0 行）。
+{
+  const audit = []
+  const { ctx, emit, fire } = mkCtx()
+  registerMcl(ctx, { ...baseCfg, maxNudges: 3 }, { audit: (o) => audit.push(o), log: () => { /* */ } })
+  const LONG_SID = `session-${Math.random().toString(16).slice(2, 10)}-1729-4b28-8f24-41ce9fbca42b`
+  const txt = '指针 分裂 结构 怎么搭树'
+  const noEcho = '好的，我先看看代码。'
+  emit('session/event', { id: LONG_SID }, { type: 'user/message', data: { source: { kind: 'user' }, content: [{ type: 'text', text: txt }] } })
+  for (const step of [1, 2, 3, 4]) {
+    const msgs = step === 1 ? [userMsg(txt)] : [userMsg(txt), asstMsg(noEcho)]
+    if (step >= 2) writeVerdictRow(LONG_SID, 'not-helped')
+    await fire('agent/pre-step', { agent: { id: LONG_SID, session: { header: {} } }, messages: msgs, step }, async () => ({ kind: 'allow', messages: msgs }))
+  }
+  const switchRows = audit.filter((r) => r.kind === 'mcl-switch')
+  const judgeRows = audit.filter((r) => r.kind === 'mcl-step' && r.phase === 'judge')
+  ok(shortSidOf(LONG_SID).length === 8 && !shortSidOf(LONG_SID).includes('-'),
+    `M3L-0 单一归一化实现可用（长形 ⇒ ${shortSidOf(LONG_SID)}）`)
+  ok(switchRows.length === 1, `M3L-1 **长形 sid 下回流仍命中**（mcl-switch ${switchRows.length}，期望 1）—— 旧读写口径相反 ⇒ 此处恒 0`)
+  ok(judgeRows.some((r) => r.judged === true && r.verdict === 'not-helped'),
+    'M3L-2 读过回流后 judged=true 且 verdict 可见（旧实现在长形下恒 judged=false）')
+  // 写侧跨形幂等：长形与短形归一后必须**同键**（否则写读仍会错配）
+  ok(shortSidOf(LONG_SID) === shortSidOf(shortSidOf(LONG_SID)),
+    'M3L-3 归一化幂等（重复 sids 归一不改变结果 —— 写侧重复归一安全）')
+  /* ⚠ **M3L-4 是把"约定"钉成字面量，而不是靠两侧自洽**（2026-09-23 · 变异自证抓出的测试盲区）：
+   *   上面 M3L-1/2 用**同一个** `shortSidOf` 写又读 ⇒ 即使把口径整体改成 `slice(-8)` 也照样绿
+   *   （已实测：变异后 M3L-1/2 仍 PASS）。**两侧共用一份实现能消除错配，但不足以证明口径正确**。
+   *   ⇒ 唯一能防复发的写法：把**约定的取值**写成断言 —— 即「短码 = 剥 `session-` 前缀后的**前 8 位**」。
+   *     依据不是"我觉得"，而是**既有全量审计行的事实口径**（`mcl.ts` 各处 `sid.slice(0, 8)`；
+   *     真机 2049 个 sid 全为 8 字符前段）。改口径 ⇒ 本行必红。 */
+  ok(shortSidOf('session-abcdef12-9999-8888-7777-666655554444') === 'abcdef12',
+    'M3L-4 **口径钉死为「剥前缀后前 8 位」**（与既有全量审计行同源；改口径本行必红）')
 }
 
 // ── 场景 M3-EMBED（2026-09-21）：**轻判定零嵌入的机检实证**（方案档 §12-B1 的可核验形式）──
