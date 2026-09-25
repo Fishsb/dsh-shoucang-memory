@@ -479,4 +479,57 @@ var UI = {
 /** 渲染层每轮调用：允许本轮写入一次页头（原 `headEpoch++` 的等价物）
  *  ⚠ 已**移入 `UI` 对象字面量**（见文件上部）—— 赋值式添加会让 `check-ui-contract` ②b 扫不到成员。 */
 
-export { UI };
+/* ══ 数值/枚举设置控件（2026-09-22 · ADR-333 归位）══════════════════════════════════════
+ * 为什么从 `panes-toggles.js` 迁到本件：② 记忆与容量 pane 抽出为 `panes-capacity.js` 后，
+ *   两个 pane 都要用 `numSetting` ⇒ 若由 `panes-toggles.js` 导出并被 capacity import，
+ *   就形成 **`panes-toggles → panes-capacity → panes-toggles` 静态循环**，
+ *   被 `audit-architecture --dir src-client --gate` 当场判红（实测）。
+ * 正解不是"允许那对互相 import"，而是**把共用控件下沉到中立层** —— 本件本就是控件工厂域
+ *   （`UI.item` / `UI.select` / `UI.input` 都在此处），两个控件与它们同域且依赖齐备
+ *   （`el` / `appState` / `tr` 本件都已 import）⇒ 归位后**环消失**，且"同一控件只有一份实现"。
+ * ⚠ 不得再在 pane 内复制这两份实现（复制会产生"同一控件两种行为"）。
+ */
+
+/** 数值设置行（走 `/set`；整数或小数由 `step < 1` 判）。 */
+function numSetting(name, desc, val, key, unit, step) {
+  var isFloat = typeof step === 'number' && step < 1; // U3：小数键（如 MCL 熟悉度阈值）支持
+  var wrap = el('div', 'sc-num-wrap'); // U2.5：内联样式 → 类（令牌化，可统一/可回滚）
+  var inp = el('input'); inp.type = 'number'; inp.className = 'sc-input'; inp.min = '0'; inp.step = String(step || 100); inp.value = String(val);
+  var unitEl = el('span', 'sc-range-label', unit || '');
+  inp.onchange = function () {
+    var v = String(isFloat ? (Math.max(0, parseFloat(inp.value) || 0)) : Math.max(0, parseInt(inp.value, 10) || 0));
+    appState.api('/set', { method: 'POST', body: JSON.stringify({ key: key, value: v }) })
+      .then(function () { appState.statusFn('✓ ' + key + ' = ' + v); })
+      .catch(appState.failFn);
+  };
+  wrap.appendChild(inp); wrap.appendChild(unitEl);
+  // A2：改用 UI.item（DOM 等价）——children 保持「info + 作用域徽标 + 控件」的原有顺序与结构
+  return UI.item(name, desc, null, { children: [appState.metaBadges(key), wrap] });
+}
+
+/**
+ * 枚举设置行（ADR-333 新增；走 `/set` 的**字符串枚举**键）。
+ * 为什么需要它（不复用 `numSetting`）：枚举值域如 `on|off`，走 numSetting 的 `parseInt` 通道
+ *   会写出 `NaN→0` —— 正是写入侧明确防的「枚举键落进 Number 分支 ⇒ 看着成功、值是坏的」。
+ * 为什么不用 `/toggle` 通道：其 `SUITE_BOOL` 分支语义是 **「缺省 true，翻转」**，
+ *   而本控件服务的键**缺省 false** ⇒ 复用会把"未设置"读成 true，首次点击方向相反。
+ */
+function enumSetting(name, desc, val, key, options) {
+  var wrap = el('div', 'sc-num-wrap');
+  var sel = el('select', 'sc-input');
+  (options || []).forEach(function (o) {
+    var opt = el('option'); opt.value = o.v; opt.textContent = o.label;
+    if (String(o.v) === String(val)) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  sel.onchange = function () {
+    var v = String(sel.value);
+    appState.api('/set', { method: 'POST', body: JSON.stringify({ key: key, value: v }) })
+      .then(function () { appState.statusFn('✓ ' + key + ' = ' + v); })
+      .catch(appState.failFn);
+  };
+  wrap.appendChild(sel);
+  return UI.item(name, desc, null, { children: [appState.metaBadges(key), wrap] });
+}
+
+export { UI, numSetting, enumSetting };

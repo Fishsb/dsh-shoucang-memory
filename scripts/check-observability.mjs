@@ -85,6 +85,15 @@ const STREAMS = [
    *  ② 读侧语义是"取该 dateFile 的最早/最新一行"（键控），与事件族不同。 */
   ['sleep-report-ledger.jsonl', 'keyed', '睡眠报告指纹账（整文件 sha256 + 字节/行/段数；"永不删除"= 行数单调 + 全覆盖 + 逐值相等）', 'suite'],
   ['ledger.jsonl', 'event', '统一台账（judgement + write 回执 + 各域并入流；**DS4 主干**）', 'suite'],
+  /* ⚠ ACT-346（2026-09-23）**登记的可是真问题，但我不能自行登记** —— 据实留档：
+   *   `check-runner` 新增的门禁运行历史 `gate-runs.jsonl` 是**运行时写出的 append-only 观测流**，
+   *   按本表口径应登记；但它的族归属**卡在棘轮上**：
+   *     · 归 `event` ⇒ 使 suite 域事件流 **1 → 2**，**越过基线 1**（本件是棘轮，**只许收紧**）
+   *       ⇒ 实测当场红：`❌ 事件流 2 > 基线 1`（**门禁正确抓到我**）。
+   *     · 归 `state` ⇒ **标签说谎**（本流是 append-only 追加，非"整体重写/key upsert"）。
+   *   ⇒ 抬基线/放宽族定义**都属 R3**（越过冻结棘轮须用户拍板）⇒ 本轮**不擅自处置**，
+   *     列为待拍板项，并把新流的落盘行为**默认保持**（它是独立新流，不影响既有判据）。
+   *   ⇒ 已同步撤回本条上方的登记尝试（保留此注释作为可审计留痕）。 */
   // ── 事件流 · **bank 域**（数据属库）—— 与 suite 台账分域，**不并入**
   ['access-real.jsonl', 'event', '真实访问流水（由**库内脚本** harvest-access 增采；活性/遗忘/回想强度的真实信号源）', 'bank'],
   /* S-P2a（2026-09-16）**为何不能并入单一事件源**（登记要求的理由）：
@@ -331,6 +340,44 @@ if (process.argv.includes('--parsability')) {
     }
   }
   console.log(`\n汇总：文件 ${files} · 解析失败件数 ${unusable} · 失败行合计 ${totalBad} · **带 BOM 件数 ${bomFiles}**`)
+  /* ⚠ 2026-09-25 修复（**空集判绿** · 两轮独立审计 L1-01 同时点名）：
+   *   本段下方两条 PASS 出口都建立在「扫到的文件全部可解析」之上，而 `files === 0` 时
+   *   「全部可解析」**在空集上恒真** ⇒ 两库根都没扫到时照样打 ✅ 且 exit 0。
+   *   危害与本件 :358-372 已修的扫描面守卫**同型**（那段是 src/ 缺席，这段是**两库根整体空**）：
+   *   「没有坏文件」与「没扫到文件」不可分辨 ⇒ 一个指向空目录的 MEMORY_ROOT / DSH_HOME
+   *   会得到一份**全绿**报告（隔离环境跑门禁时最易踩）。
+   *   修法照抄本件既有先例：走 `guardScanScope`（四态 ok/empty/skip/error 的单一实现），
+   *   不再内联判断；`required: true` ⇒ 空扫当场以 exit 1 收口，而不是继续往下打 ✅。 */
+  {
+    /* ⚠ 2026-09-25 二次修（**独立复核席推翻了我的第一版**，记此以防复长）：
+     *   第一版写成 `dir: roots[0].root`（把"两库根"当成**单一**目录）+ 判据用 `files === 0 ||`（把两个
+     *   互不相干的量用 `||` 合并），⇒ 实测新引入一条假绿：`DSH_HOME=<空> + MEMORY_ROOT=<真库>` 时
+     *   suite 根**不存在**，却因 bank 有 104 件而打印「✅ PASS：**两库根** jsonl 全部可解析」exit 0
+     *   —— 门在**声称**它验了两个根，实际只验了一个。（复核席原话：「指错字段 + 合并判据」。）
+     *   现改为**逐根独立判**：每个根走一次 guardScanScope，**任一非 ok 即早退**（ok 才继续）。
+     *   这样「两个根都验过了」是可证的，而不是靠 `||` 短路后的剩余直觉。 */
+    /* ⚠ 二次修（复核席推翻第一版，且**第二次也错**，两次都记下）：
+     *   错·第一版：`dir: roots[0].root` 把"两库根"当单一目录 + `||` 合并两个量
+     *     ⇒ `DSH_HOME=<空> + MEMORY_ROOT=<真库>` 时 suite 根不存在却打「两库根全部可解析」PASS。
+     *   错·第二版：逐根调 `guardScanScope({dir})` —— 但该 helper 的目录形态只 `readdirSync` **顶层**，
+     *     而本段的 jsonl 由 `walk()` **递归**收集（bank 根的 104 件全在 `audit/`、`.records/` 子目录里）
+     *     ⇒ 真库被误判 empty、**正对照翻红**（假红）。helper 语义与递归扫描面不匹配，不能硬套。
+     *   正解：判据落在**本段真正用的那个量**上 —— 逐根**存在性**（缺席即根不可用，闸门会声称扫了它）+ 
+     *     全量非空（`files > 0`）。并**逐根打印件数**，让"哪个根贡献了几件"可见（不再靠合并量猜）。 */
+    const perRoot = roots.map(({ name, root }) => ({ name, root, exists: existsSync(root), n: walk(root).length }))
+    for (const r of perRoot) console.log(`  · 根 [${r.name}] ${r.root} —— 存在=${r.exists} · jsonl 件数=${r.n}`)
+    const absent = perRoot.filter((r) => !r.exists)
+    if (absent.length) {
+      console.log(`\n❌ 扫描面不可用：${absent.map((r) => `[${r.name}] ${r.root}`).join(' · ')} 不存在`)
+      console.log('   ⇒ 本段**声称**扫描两库根；根缺席时「没有坏文件」与「没扫到」不可分辨，不得判绿。')
+      process.exit(1)
+    }
+    if (files === 0) {
+      console.log(`\n❌ FAIL：两库根存在但**一件 jsonl 都没扫到**（${perRoot.map((r) => `[${r.name}]=${r.n}`).join(' · ')}）`)
+      console.log('   ⇒ 空集上「全部可解析」恒真，本段无法给出结论。')
+      process.exit(1)
+    }
+  }
   for (const e of exemplars) console.log(`  · 失败样本（${e.p}）：${String(e.l).slice(0, 120)}`)
   for (const b of bomList) console.log(`  · ⚠ 带 UTF-8 BOM（首行剥 BOM 后可解析；**任何直读 JSON.parse(行) 的消费方会丢首行**）：${b}`)
   if (unusable > 0) {
@@ -345,6 +392,22 @@ if (process.argv.includes('--parsability')) {
   console.log('✅ PASS：两库根 jsonl 全部可解析且失败行 = 0、无 BOM（读数口径四件套的「解析失败行数」项成立）')
   process.exit(0)
 }
+
+// ── 扫描面守卫（2026-09-23 · ACT-344 · 消费单一实现 `lib-scan-scope.mjs`）────────────
+//   判因（实测）：本行原为 `existsSync(SRC) ? readdirSync(SRC)… : []` —— `src/` 缺席时**静默给空集**
+//     ⇒ 下方「未登记 .jsonl 字面量」的检查在**空扫描面**上恒真 ⇒ 打 PASS。
+//     危害：本件守的是「观测流必须显式登记」，空扫时**"没有未登记流"与"没扫到"不可分辨**。
+//   修法：**消费单一实现**（原语给出 ok/empty/skip/error 四态与统一判因/退回动作），不再内联。
+//   ⚠ **位置**：置于一切读取之前（本段之前只有参数解析与 --repair 的独立早退分支，不涉本扫描面）。
+const { guardScanScope } = await import('./lib-scan-scope.mjs')
+const srcScope = guardScanScope({
+  dir: SRC,
+  label: '`src/`',
+  required: true,
+  why: '本件判据建立在「src/** 与 scripts/** 中引用了哪些 .jsonl 流」之上；src/ 缺席时空集会让"无未登记流"恒真。',
+  accept: (n) => n.endsWith('.ts'),
+})
+if (srcScope.exitCode !== null) process.exit(srcScope.exitCode)
 
 const files = [
   ...(existsSync(SRC) ? readdirSync(SRC).filter((f) => f.endsWith('.ts')).map((f) => join(SRC, f)) : []),

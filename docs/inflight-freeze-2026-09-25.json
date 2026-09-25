@@ -1,0 +1,886 @@
+{
+  "at": "2026-09-25T07:21:14.692Z",
+  "head": "4761b8edd769346c524aceb12da15d763bb633b9",
+  "branch": "master",
+  "revision": 2,
+  "previousAt": "2026-09-25T06:23:41.657Z",
+  "rule": "【冻结面】下列文件为跨会话在途改动（非本会话产生）。冻结期间：任何人不得修改、不得提交、不得回退。解冻须用户具名裁定。",
+  "why": "提交会把未完整评审的改动固化进公开仓库；回退不可逆且会毁掉他人工作。冻结是唯一既安全又不改变现状的选项。",
+  "note": "v2（2026-09-25 15:2x 刷新）：跨会话面**仍在推进**——上一版冻结后实测有 1 件被改（见 changedSinceV1）。冻结不是「不许任何人动」，而是「**本会话**不越界改动他人在途文件」。",
+  "changedSinceV1": [
+    "scripts/check-runner.mjs"
+  ],
+  "disappearedSinceV1": [],
+  "verify_cmd": "node -e \"const fs=require('fs'),c=require('crypto'),j=JSON.parse(fs.readFileSync('docs/inflight-freeze-2026-09-25.json','utf8'));let bad=0;for(const g of Object.values(j.byDir))for(const f of g){if(!f.sha256)continue;try{const h=c.createHash('sha256').update(fs.readFileSync(f.path)).digest('hex');if(h!==f.sha256){console.log('CHANGED '+f.path);bad++}}catch(e){console.log('MISSING '+f.path);bad++}}console.log(bad?'冻结面漂移 '+bad+' 件':'冻结面完好：0 件漂移')\"",
+  "counts": {
+    "frozen": 92,
+    "agentThisSession": 13,
+    "frozenBuildArtifacts": 36,
+    "frozenSources": 55
+  },
+  "agentThisSession": [
+    "CHANGELOG.md",
+    "scripts/check-carriers.mjs",
+    "scripts/check-criteria.mjs",
+    "scripts/check-installed-sync.mjs",
+    "scripts/check-journal-privacy.mjs",
+    "scripts/check-placement-convergence.mjs",
+    "scripts/check-yield-reflow.mjs",
+    "scripts/essence-review-stability.mjs",
+    "scripts/test-eval-channel.mjs",
+    "scripts/test-i18n-taglabel.mjs",
+    "scripts/test-idxrow-pills.mjs",
+    "docs/high-concurrency-audit-2026-09-25.md",
+    "docs/inflight-freeze-2026-09-25.json"
+  ],
+  "byDir": {
+    "(repo-root)": [
+      {
+        "path": "client.js",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 830181,
+        "sha256": "01d750c6f8706265bf62765287b7fb56627cc7bee475d7dd234ad0a231dcc516",
+        "mtime": "2026-09-25T06:37:56.142Z",
+        "owner": "cross-session-inflight"
+      }
+    ],
+    "docs": [
+      {
+        "path": "docs/ARCHITECTURE.md",
+        "state": "M",
+        "kind": "source",
+        "bytes": 29808,
+        "sha256": "4fd6a8af19f29660a14c3587f9c0cd959e068f63952b6f286420818e4ea327c7",
+        "mtime": "2026-09-22T19:08:03.498Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "docs/OPEN-ITEMS.md",
+        "state": "M",
+        "kind": "source",
+        "bytes": 221362,
+        "sha256": "2cb7de5c4529ad56d94f171b1e25d030f7234fdd49d7e4f1ed7df2cdc718b167",
+        "mtime": "2026-09-23T11:37:04.872Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "docs/evaluation-channel-plan.md",
+        "state": "M",
+        "kind": "source",
+        "bytes": 52059,
+        "sha256": "0fa9b625ba805b0825966aba9b46e90a2af3f33b3f5435db20348859cabe2b36",
+        "mtime": "2026-09-23T11:37:04.873Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "docs/capacity-gate-acceptance-plan.md",
+        "state": "??",
+        "kind": "source",
+        "bytes": 17297,
+        "sha256": "9780ba416bef025a0063058216196235e32265d0708eb831f8acd271ef58db8f",
+        "mtime": "2026-09-22T14:44:55.259Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "docs/capacity-gate-adjustment-plan.md",
+        "state": "??",
+        "kind": "source",
+        "bytes": 22110,
+        "sha256": "179149ae3b13ceef5cf36ef42ac29fe093537cc250859a69c8d7fcc630a80a09",
+        "mtime": "2026-09-23T11:05:05.090Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "docs/capacity-gate-switch-plan.md",
+        "state": "??",
+        "kind": "source",
+        "bytes": 16479,
+        "sha256": "6f12222b510e8921a686c1cbb5bc7f4091980e0f45d43728eade219674598133",
+        "mtime": "2026-09-23T11:05:32.292Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "docs/full-audit-charter-2026-09-23.md",
+        "state": "??",
+        "kind": "source",
+        "bytes": 25910,
+        "sha256": "fbe9782f92c69ccbe829d404d1a946af1d1e702dd226b8214d995bccf5f90380",
+        "mtime": "2026-09-22T22:18:37.102Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "docs/full-audit-plan-2026-09-23.md",
+        "state": "??",
+        "kind": "source",
+        "bytes": 23342,
+        "sha256": "3333e8959bbf1a6d33074791671f556f828c708c188184f0cea0a57fbc6ae2dc",
+        "mtime": "2026-09-23T04:43:55.394Z",
+        "owner": "cross-session-inflight"
+      }
+    ],
+    "lib": [
+      {
+        "path": "lib/budget-override.js",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 9935,
+        "sha256": "c83f340da888834c6b1f660cd396ab2eb427adf666e693483845349d51de70ff",
+        "mtime": "2026-09-24T09:58:47.692Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/budget-override.js.map",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 3914,
+        "sha256": "5d871132363e9dd0e9b326b46eb31f233ed16a16fc141d70ac6f46855b4786e0",
+        "mtime": "2026-09-24T09:58:47.692Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/client.js",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 830181,
+        "sha256": "01d750c6f8706265bf62765287b7fb56627cc7bee475d7dd234ad0a231dcc516",
+        "mtime": "2026-09-25T06:37:56.145Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/deepsleep-apply.js",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 23483,
+        "sha256": "1ba3e311ae0821307fed5b6b12cc287971180451065eab28240a93d1fdd946d1",
+        "mtime": "2026-09-24T09:58:47.886Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/deepsleep-apply.js.map",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 16769,
+        "sha256": "713b799461328b4fa002fddb60f677ded314cf589f7b5bf3fea1c0c420fd24b8",
+        "mtime": "2026-09-24T09:58:47.883Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/deepsleep-core.js",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 40568,
+        "sha256": "6aa85397dc685d126690d1fb7beeffcfebe8b93cf0014bcf1cc8d0e1aa21b728",
+        "mtime": "2026-09-24T09:58:47.786Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/deepsleep-core.js.map",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 13152,
+        "sha256": "d42e135b04148c8048c9be9e577ec2068376afffddb493958074a9155e80f2fd",
+        "mtime": "2026-09-24T09:58:47.786Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/distill-write.js",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 66645,
+        "sha256": "72c190dea66b6bdbd7f35529237a2ca123a09e1951458086e71ed32740f7559e",
+        "mtime": "2026-09-24T09:58:48.422Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/distill-write.js.map",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 43959,
+        "sha256": "db45476a5e8bbe817619d399c0a72828a228130dd60a8d01d8e3f7cab10cbaa7",
+        "mtime": "2026-09-24T09:58:48.419Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/distill.js.map",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 7790,
+        "sha256": "f9f3e11790f87cd777148adfe3815aac13ff9dbe7113ed302800bd6dd6e5701a",
+        "mtime": "2026-09-24T09:58:48.594Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/mcl.js",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 56505,
+        "sha256": "5bbc8c352f89b84d012415239a72a18e48d8e403f90763cb77add088c28a3a2d",
+        "mtime": "2026-09-25T00:00:52.611Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/panel-config.js",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 28902,
+        "sha256": "176f7716830dad164a9ad19e26f97df5434255b76a3eee6602e47d17e39aed08",
+        "mtime": "2026-09-24T09:58:48.751Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/panel-config.js.map",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 19448,
+        "sha256": "85c34ab5abec71960a6d48a9ebe91583133960c98432f3e86f9099646678174f",
+        "mtime": "2026-09-24T09:58:48.751Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/panel-contract.js",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 12733,
+        "sha256": "654f4d0275590a1a8a29a28cded5a8df8a6c211baa6b47831b6fb64cdab9e2ab",
+        "mtime": "2026-09-24T09:58:48.737Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/panel-contract.js.map",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 7505,
+        "sha256": "9c23998f50b946863aa0641148c9b09ef9d073b2c0f2354716431959cfe47e59",
+        "mtime": "2026-09-24T09:58:48.737Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/panel-inject.js",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 50781,
+        "sha256": "5df9f524c6c7c5210ad6d3b86c51c30c019e5d876ea00c49d73c630e655b10e8",
+        "mtime": "2026-09-24T09:58:48.849Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/panel-inject.js.map",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 38096,
+        "sha256": "ea6d689ba01e0e50d5665c8eb89048b2c9edf64749134525bbc712184b09df0f",
+        "mtime": "2026-09-24T09:58:48.845Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/panel-memory.js",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 38082,
+        "sha256": "a3260c9d398388c887fbb2128969bf5341193f8c859dc7fe7c8f17c89c0991e7",
+        "mtime": "2026-09-25T06:58:31.408Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/panel-memory.js.map",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 30415,
+        "sha256": "bc49b78a90bae74d93ce4b92ff00b9f049ecd08e745bc0249d20ab9150711673",
+        "mtime": "2026-09-24T09:58:48.777Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/scheduler.js",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 56577,
+        "sha256": "98e66a5976b79a97f3eb0ad6c414e3228aa59de94431b1fe9fdb1dc7f843e3fe",
+        "mtime": "2026-09-24T09:58:48.898Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/scheduler.js.map",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 29464,
+        "sha256": "11fc949883ee8f5c456454b3f69afc05d4519d14172c4b1acd280b6015d24d78",
+        "mtime": "2026-09-24T09:58:48.896Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/section-rewrite.js",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 10408,
+        "sha256": "f1b76e01762996bc7ae68d4fef6155b6b93c99ed299f0e294efd614fc59cfe6e",
+        "mtime": "2026-09-24T09:58:47.450Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/section-rewrite.js.map",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 6714,
+        "sha256": "abf6ba3e8446ca2caae8341ea8ff3101bf09414d92b755aafda28c880ce5eb9c",
+        "mtime": "2026-09-24T09:58:47.445Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/treeops.js",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 39414,
+        "sha256": "786c8242d802bb9e66c4f968c11773b8b3ea08d84d044c67ffe95357f82a33f8",
+        "mtime": "2026-09-24T09:58:47.949Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/treeops.js.map",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 36250,
+        "sha256": "858876788651908770228fe77025f8b57f732f371dbfc64f3307c2d9c4a3e5fb",
+        "mtime": "2026-09-24T09:58:47.939Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/channel-plan.js",
+        "state": "??",
+        "kind": "build-artifact",
+        "bytes": 2431,
+        "sha256": "73ab0c885663f48271f208224e505f15097c25b1948a0e3c72f2e3716fb9990f",
+        "mtime": "2026-09-24T09:58:47.709Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/channel-plan.js.map",
+        "state": "??",
+        "kind": "build-artifact",
+        "bytes": 724,
+        "sha256": "0a5ab8425aac454774664ff8de944387a86808e87593219ddaf2861930d0f58d",
+        "mtime": "2026-09-24T09:58:47.706Z",
+        "owner": "cross-session-inflight"
+      }
+    ],
+    "lib/types": [
+      {
+        "path": "lib/types/budget-override.d.ts",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 8250,
+        "sha256": "7488c06ffccec06a23f829505cfc750f69a23c5cdf74a6d0ee4826725b9dd3c5",
+        "mtime": "2026-09-24T09:58:47.703Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/types/deepsleep-core.d.ts",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 23707,
+        "sha256": "da832616f5ef44b5aa399eb8ec06078474589e2e6f084dd7a8c8ec4e5c45622a",
+        "mtime": "2026-09-24T09:58:47.807Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/types/distill.d.ts",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 4652,
+        "sha256": "f772fda2661c724e78dab4ea8378c9f77ed48c12b76c32a310d383bd81622b19",
+        "mtime": "2026-09-24T09:58:48.594Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/types/panel-contract.d.ts",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 3886,
+        "sha256": "d559ab046b95aeccdc45aaf9f7629171d0e9f56151e604ddf6f05fd7a4d5b0b1",
+        "mtime": "2026-09-24T09:58:48.742Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/types/panel-memory.d.ts",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 1695,
+        "sha256": "3fb5cb4afbaaa90949aa5505fba98088c3e951818c5fe6579fca2d24745b3e19",
+        "mtime": "2026-09-24T09:58:48.781Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/types/scheduler.d.ts",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 3700,
+        "sha256": "8951c04d549284f3b395595ddbc5ba60fd73d16cdc5011f996f0f0b6060742aa",
+        "mtime": "2026-09-24T09:58:48.898Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/types/section-rewrite.d.ts",
+        "state": "M",
+        "kind": "build-artifact",
+        "bytes": 4119,
+        "sha256": "d88d3a27553f569de8b39334b11ca92d4bf368ff2152a33b4ebfd8e5b11861c7",
+        "mtime": "2026-09-24T09:58:47.455Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "lib/types/channel-plan.d.ts",
+        "state": "??",
+        "kind": "build-artifact",
+        "bytes": 1878,
+        "sha256": "3a60e047e38b9cd7e971e1244129907eb5943b7519e5d90b4766b94b15f1d855",
+        "mtime": "2026-09-24T09:58:47.713Z",
+        "owner": "cross-session-inflight"
+      }
+    ],
+    "scripts": [
+      {
+        "path": "scripts/audit-architecture.mjs",
+        "state": "M",
+        "kind": "source",
+        "bytes": 27574,
+        "sha256": "aca2477b3a5acd71d994c8cdbf72747d18c2def64ed15e10d33dd48313c2d16e",
+        "mtime": "2026-09-23T11:37:04.873Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "scripts/check-bridges.mjs",
+        "state": "M",
+        "kind": "source",
+        "bytes": 9517,
+        "sha256": "4b0957d97854c22ebe7f35ace1da783db0edf9a1bcd9621d7863c1b1d2ac0d5f",
+        "mtime": "2026-09-23T07:49:02.637Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "scripts/check-client-syntax.mjs",
+        "state": "M",
+        "kind": "source",
+        "bytes": 8674,
+        "sha256": "5337307c6df96cbcddcecb91b3d1b0a65afd8059ffb820e6554e59e3ceb464f9",
+        "mtime": "2026-09-22T16:10:58.494Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "scripts/check-field-usage.mjs",
+        "state": "M",
+        "kind": "source",
+        "bytes": 10220,
+        "sha256": "08e7123bcf0d7416f4a283e5dcdc376d9d03879baad4af6a9fd3c4a5fbfdc809",
+        "mtime": "2026-09-23T06:23:16.826Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "scripts/check-i18n-attr-literal.mjs",
+        "state": "M",
+        "kind": "source",
+        "bytes": 8043,
+        "sha256": "49ce8de5b2c7d65670b2e6214c24ef4c305af3f79e5a4efda4359d87f73e3368",
+        "mtime": "2026-09-23T06:24:54.066Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "scripts/check-i18n-registered.mjs",
+        "state": "M",
+        "kind": "source",
+        "bytes": 7467,
+        "sha256": "c8e8fc3a957fde8c62beb33a1ba1ab7530575e5a9c223c69cde5264e21cd4631",
+        "mtime": "2026-09-23T11:37:04.874Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "scripts/check-l0-conflict-wiring.mjs",
+        "state": "M",
+        "kind": "source",
+        "bytes": 21792,
+        "sha256": "182711d564160dce0c5484257053db242699097b0c7908bbe5f3972e8b8c60f6",
+        "mtime": "2026-09-23T08:20:20.820Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "scripts/check-ledger-read.mjs",
+        "state": "M",
+        "kind": "source",
+        "bytes": 18037,
+        "sha256": "bb3cebddde04e5122575861372496012d1e1062874201be41b73f2a8cd3684fc",
+        "mtime": "2026-09-23T05:46:30.172Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "scripts/check-module-growth.mjs",
+        "state": "M",
+        "kind": "source",
+        "bytes": 50241,
+        "sha256": "73be0be6196a1d41a98169b88c5b794eed01b3a2813ea67c39e560f719872415",
+        "mtime": "2026-09-23T11:37:04.875Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "scripts/check-observability.mjs",
+        "state": "M",
+        "kind": "source",
+        "bytes": 45031,
+        "sha256": "f8bab7f7cdab046cae4ed02fc6eb9ad5f57fe4180761774f29fa61278896c1a0",
+        "mtime": "2026-09-23T07:46:18.540Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "scripts/check-record-parity.mjs",
+        "state": "M",
+        "kind": "source",
+        "bytes": 12278,
+        "sha256": "145824315e2de748b2ac0d47f1d12f7aaa6f2635f31fba7dc9a97eeca976109c",
+        "mtime": "2026-09-23T00:37:04.397Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "scripts/check-runner.mjs",
+        "state": "M",
+        "kind": "source",
+        "bytes": 148921,
+        "sha256": "7241b6ec6c5928f77f2d16b5ad97998579959ef76a86d1c1310b262a44464c6b",
+        "mtime": "2026-09-25T06:56:48.427Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "scripts/check-suite-config-read.mjs",
+        "state": "M",
+        "kind": "source",
+        "bytes": 11821,
+        "sha256": "dc7c4922b814e760a9639972836af1050129a3c540bcfd5aafd644c33324533c",
+        "mtime": "2026-09-23T00:37:23.240Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "scripts/inject-baseline-diff.mjs",
+        "state": "M",
+        "kind": "source",
+        "bytes": 16701,
+        "sha256": "393e963a9d85a6584501a90ed0cbf1820e93649659b8c4bc3c2ddeb4733ba604",
+        "mtime": "2026-09-23T09:26:16.849Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "scripts/lib-scan-scope.mjs",
+        "state": "M",
+        "kind": "source",
+        "bytes": 20645,
+        "sha256": "1494d932cd63bd406d57ece65ac0db39bcafc63ff3b0772f32bb8e20e85599a7",
+        "mtime": "2026-09-23T11:37:04.876Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "scripts/memory-reconcile.mjs",
+        "state": "M",
+        "kind": "source",
+        "bytes": 28981,
+        "sha256": "fc1947bfc16d4e3b21211d65b15b2e2b6ee615c9656f595623acd128e765f8a3",
+        "mtime": "2026-09-22T17:56:52.058Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "scripts/test-wiring-gate.mjs",
+        "state": "M",
+        "kind": "source",
+        "bytes": 21271,
+        "sha256": "c0a63eb39c233e90ae3ef00e46002568b0418bc901af32def2eed53d43701444",
+        "mtime": "2026-09-22T19:35:47.572Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "scripts/check-capacity-wiring.mjs",
+        "state": "??",
+        "kind": "source",
+        "bytes": 8837,
+        "sha256": "325ad54714bc3f93cefcd9c0f3ff0d2f58d4cf6d130b25d2c4dfaec8a72ca7f0",
+        "mtime": "2026-09-22T19:25:17.399Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "scripts/check-index-parse-cr.mjs",
+        "state": "??",
+        "kind": "source",
+        "bytes": 8606,
+        "sha256": "7fbda40d3db35713c84b275c5881f007ace3237d9fb28b7d3830ba0d1a7cb9c1",
+        "mtime": "2026-09-24T09:58:08.000Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "scripts/probe-capacity-gate.mjs",
+        "state": "??",
+        "kind": "source",
+        "bytes": 7629,
+        "sha256": "77bbb3ab28f66456491da1317ef9c2b5ac4617fd64468826259b38aca8f17c91",
+        "mtime": "2026-09-22T17:03:48.470Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "scripts/record-snapshot.mjs",
+        "state": "??",
+        "kind": "source",
+        "bytes": 11110,
+        "sha256": "6a807240fd6c3ed90910438dca72fbf7603544435236f769d10595d7cc9997b7",
+        "mtime": "2026-09-23T02:14:45.656Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "scripts/verify-capacity-live.mjs",
+        "state": "??",
+        "kind": "source",
+        "bytes": 6656,
+        "sha256": "199913d8c0df432885314ef169726d803ed14b51ac5808815e431196816d0484",
+        "mtime": "2026-09-22T16:44:02.506Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "scripts/verify-cas-live.mjs",
+        "state": "??",
+        "kind": "source",
+        "bytes": 6768,
+        "sha256": "e39772fb6e870545fd46326f95fdb963f010abb9f81fe91e3ed6c64c3d2a0fbc",
+        "mtime": "2026-09-22T19:46:45.251Z",
+        "owner": "cross-session-inflight"
+      }
+    ],
+    "scripts/fixtures": [
+      {
+        "path": "scripts/fixtures/i18n-zh-baseline.json",
+        "state": "M",
+        "kind": "source",
+        "bytes": 20899,
+        "sha256": "a50cab289e30590ea322e7274c99a42eaa98dd5cc8fd9e3ea9e1fc0f19d305f0",
+        "mtime": "2026-09-22T18:40:31.282Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "scripts/fixtures/panel-view-baseline.json",
+        "state": "M",
+        "kind": "source",
+        "bytes": 6045,
+        "sha256": "bbddb5856ce6bfcadcdfc9646a525201e7b608aed3e652390b6f67bb5bc56a6d",
+        "mtime": "2026-09-22T15:23:47.109Z",
+        "owner": "cross-session-inflight"
+      }
+    ],
+    "skill/engine": [
+      {
+        "path": "skill/engine/criteria.json",
+        "state": "M",
+        "kind": "source",
+        "bytes": 91797,
+        "sha256": "192f65c103e1d44a31ce66864c8329ecbe85aaca08290553a0142f007780df8e",
+        "mtime": "2026-09-23T11:37:04.878Z",
+        "owner": "cross-session-inflight"
+      }
+    ],
+    "src-client": [
+      {
+        "path": "src-client/i18n-dict-cfg.js",
+        "state": "M",
+        "kind": "source",
+        "bytes": 43025,
+        "sha256": "0caa3fa2c5d3962a2472b3f0235ae1c56a952d7ad488038d81fa69e91bbd8f54",
+        "mtime": "2026-09-22T15:19:08.489Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "src-client/i18n-dict-memory.js",
+        "state": "M",
+        "kind": "source",
+        "bytes": 14642,
+        "sha256": "334c25c5cf30ec826a5ae962c60b123cfb797220c86dc63704e9894357799b2b",
+        "mtime": "2026-09-22T18:01:12.185Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "src-client/i18n-dict-pane-run.js",
+        "state": "M",
+        "kind": "source",
+        "bytes": 17489,
+        "sha256": "2e7c182f4b8bc97e861fd2da321f39c75f99fd52e0f808c41e5eb7ecd851b2f4",
+        "mtime": "2026-09-22T18:14:21.886Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "src-client/panes-memory-detail.js",
+        "state": "M",
+        "kind": "source",
+        "bytes": 39244,
+        "sha256": "02d94d7c27c2f281aafe2c9398ee7ddef449b0fe09c88084b7beeff8f9955d94",
+        "mtime": "2026-09-22T17:59:53.247Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "src-client/panes-observe.js",
+        "state": "M",
+        "kind": "source",
+        "bytes": 25106,
+        "sha256": "02874c192b77c8734e39ff1592e9994f19da1f31293f170e1b5c075c09d428ce",
+        "mtime": "2026-09-22T17:59:01.318Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "src-client/ui-kit.js",
+        "state": "M",
+        "kind": "source",
+        "bytes": 28734,
+        "sha256": "8988607f7af426f197d7ec750c05360ea85076a0cb8241f612b8a4d2f9f8d852",
+        "mtime": "2026-09-22T16:26:04.397Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "src-client/panes-capacity.js",
+        "state": "??",
+        "kind": "source",
+        "bytes": 13344,
+        "sha256": "48334254d257d2a8591b8af8483c5f18b12ba4110079158bb7f587189cba578f",
+        "mtime": "2026-09-22T16:32:07.720Z",
+        "owner": "cross-session-inflight"
+      }
+    ],
+    "src": [
+      {
+        "path": "src/budget-override.ts",
+        "state": "M",
+        "kind": "source",
+        "bytes": 11153,
+        "sha256": "4bb05eb5faa3077b8f0a7be1ddc6bbfd29c631a510e04ab5becf4f7c25d24ed2",
+        "mtime": "2026-09-22T15:21:48.431Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "src/deepsleep-apply.ts",
+        "state": "M",
+        "kind": "source",
+        "bytes": 23013,
+        "sha256": "7c2016fcee93a61f6a0bd81f6d8936587dafbe99fbd7f948edfd2434de924021",
+        "mtime": "2026-09-22T19:34:37.633Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "src/deepsleep-core.ts",
+        "state": "M",
+        "kind": "source",
+        "bytes": 51811,
+        "sha256": "828e644ea04bb00c9c3536814e7694cac668abd85bbeeaeaf7ea7833d00467fb",
+        "mtime": "2026-09-22T19:05:08.511Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "src/distill-write.ts",
+        "state": "M",
+        "kind": "source",
+        "bytes": 65035,
+        "sha256": "8912ba6f07081a4b715d060ab7d7812be1d605f0449a9c68f77fc8a85c19eda4",
+        "mtime": "2026-09-22T17:50:24.786Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "src/distill.ts",
+        "state": "M",
+        "kind": "source",
+        "bytes": 30288,
+        "sha256": "a906272203273d3203c636227d0b43af882fbc6f22b09a8bd33765882b3bf3b4",
+        "mtime": "2026-09-22T14:52:38.879Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "src/mcl.ts",
+        "state": "M",
+        "kind": "source",
+        "bytes": 65039,
+        "sha256": "f7b31ddc38b12f9665be866aae85fefce1cdbf41adbc73e9d0e6a9a75e3be807",
+        "mtime": "2026-09-25T00:00:52.608Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "src/panel-config.ts",
+        "state": "M",
+        "kind": "source",
+        "bytes": 28267,
+        "sha256": "f40ba38701b4560049e39de95fb17cbc8fd0023793c1b3699f0ff136aebfdf1c",
+        "mtime": "2026-09-22T16:46:24.600Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "src/panel-contract.ts",
+        "state": "M",
+        "kind": "source",
+        "bytes": 12865,
+        "sha256": "4ef23458c48b098d4312d393970190d75566a5c543546a5843611f6e67085c79",
+        "mtime": "2026-09-22T14:55:37.482Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "src/panel-inject.ts",
+        "state": "M",
+        "kind": "source",
+        "bytes": 51804,
+        "sha256": "686a24d7d8e99df28ea85aee07418bcff8ac1e48e2ea31341fc1ef096df78dbc",
+        "mtime": "2026-09-22T17:51:39.358Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "src/panel-memory.ts",
+        "state": "M",
+        "kind": "source",
+        "bytes": 38449,
+        "sha256": "a4ffc83887f766a1df690acc7505458398df84e502d74f64c8ead5ca3a221354",
+        "mtime": "2026-09-24T10:07:41.249Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "src/scheduler.ts",
+        "state": "M",
+        "kind": "source",
+        "bytes": 62990,
+        "sha256": "748db7aed36b1af86a6161b8efe3e4883daa0b26012aa7380e3da423ebe04968",
+        "mtime": "2026-09-22T14:53:24.211Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "src/section-rewrite.ts",
+        "state": "M",
+        "kind": "source",
+        "bytes": 10692,
+        "sha256": "dbed379c77592045cec1ab469b81fbfe270cac837f36df493062363bf980b371",
+        "mtime": "2026-09-22T17:44:33.852Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "src/treeops.ts",
+        "state": "M",
+        "kind": "source",
+        "bytes": 41674,
+        "sha256": "b5d054dc61bee1affda6fded04fc4de191a07e90ea75195a15000020aa6d1411",
+        "mtime": "2026-09-22T17:51:59.255Z",
+        "owner": "cross-session-inflight"
+      },
+      {
+        "path": "src/channel-plan.ts",
+        "state": "??",
+        "kind": "source",
+        "bytes": 3409,
+        "sha256": "ab86a16a358f3687054e533b0874544681ac2cb68515200895ea5946009e36cc",
+        "mtime": "2026-09-22T19:04:44.318Z",
+        "owner": "cross-session-inflight"
+      }
+    ],
+    "docs/roundtable-kb": [
+      {
+        "path": "docs/roundtable-kb/",
+        "state": "??",
+        "kind": "dir",
+        "bytes": null,
+        "sha256": null,
+        "mtime": null,
+        "owner": "cross-session-inflight"
+      }
+    ]
+  }
+}

@@ -34,7 +34,12 @@ if (!existsSync(join(bank, 'scripts'))) {
 const FACES = [
   { src: join(root, 'scripts'), bank: 'scripts', exts: ['.mjs'], label: 'scripts/' },
   { src: join(root, 'skill', 'scripts'), bank: 'scripts', exts: ['.mjs'], label: 'skill/scripts/' },
-  { src: join(root, 'skill', 'engine'), bank: 'engine', exts: ['.json', '.md'], label: 'skill/engine/' },
+  // 2026-09-25（高难度遍历审计 B-02 · 独立复验 confirmed）：**补 `.mjs`**——原 exts 只有 ['.json','.md']，
+  //   而 `skill/engine/signals.mjs` 是**运行期被 import 的活件**（`src/distill.ts:207` 动态 import），
+  //   且它决定「增量要不要唤醒蒸馏 LLM」。它不在任何面内 ⇒ 该件漂移**结构性不可见**
+  //   （同族：`scripts/candidate_grep.mjs` 自述与它同源却各自维护词表，已实测 9 条 vs 5 条）。
+  //   实测两侧 sha1 当前相同（667CC14C…）⇒ 本次纳入**不造红**，纯堵漏。
+  { src: join(root, 'skill', 'engine'), bank: 'engine', exts: ['.json', '.md', '.mjs'], label: 'skill/engine/' },
   { src: join(root, 'skill', 'docs'), bank: 'docs', exts: ['.md', '.json'], label: 'skill/docs/' },
 ]
 /** 递归列出 face 下符合扩展名的相对路径（跳过 .bak-* 备份件，dir 缺失⇒空）。 */

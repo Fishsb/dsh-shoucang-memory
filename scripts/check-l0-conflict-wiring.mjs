@@ -163,8 +163,20 @@ for (const p of ['supersedes', 'days30', 'sessions', 'text', 'traces']) {
   const passed = callSites.some((c) => new RegExp(`\\b${p}\\s*:`).test(c.args))
   if (!passed) neverPassed.push(p)
 }
-ok(neverPassed.length === 0 || neverPassed.every((p) => unreachableReg.has(p) || p === 'text' && false),
-  `② \`evaluateL0\` 可选入参在调用点是否真的被传 ${callSites.length ? `（调用点 ${callSites.length} 处：${callSites.map((c) => c.f).join(', ')}）` : ''}${neverPassed.length ? ` —— 从不传：${neverPassed.join(', ')}（须登记 \`wiring.unreachableValues\` 或删除该入参）` : ''}`)
+// ⚠ **文案缺陷修复**（2026-09-23 · 收尾轮实测）：原提示把「**已登记为不可达**」与「**未登记**」
+//   混在同一句话里（`—— 从不传：X, Y（须登记 … 或删除该入参）`）⇒ 本机实测 `days30, sessions`
+//   **已在 `wiring.unreachableValues` 登记**，却仍提示"须登记"，**读者会以为有未办事项**。
+//   ⇒ 判据本身没错（下行合取是 `已登记 || …`），错的是**文案没有区分两态**。
+//   修法：按实际状态**分开措辞**——已登记 ⇒ 陈述事实；未登记 ⇒ 才是待办（且只有它判红）。
+{
+  const registered = neverPassed.filter((p) => unreachableReg.has(p))
+  const unregistered = neverPassed.filter((p) => !unreachableReg.has(p))
+  const parts = []
+  if (registered.length) parts.push(`未传但**已登记为不可达**：${registered.join(', ')}（wiring.unreachableValues，属既定事实）`)
+  if (unregistered.length) parts.push(`⚠ **未传且未登记**：${unregistered.join(', ')}（须登记 wiring.unreachableValues 或删除该入参）`)
+  ok(unregistered.length === 0,
+    `② \`evaluateL0\` 可选入参在调用点是否真的被传 ${callSites.length ? `（调用点 ${callSites.length} 处：${callSites.map((c) => c.f).join(', ')}）` : ''}${parts.length ? ` —— ${parts.join(' · ')}` : ' —— 全部已传'}`)
+}
 
 /* ③ **模型输出的 `judgement` 取值校验**（2026-09-20 新增 · 真机实测暴露的更上游缺陷）
  *   真机实测（跨档台账 437 条带 judgement 的行）：`judgement.conflict` 取值**五花八门** ——

@@ -184,6 +184,12 @@ ok(srcBad.length === 0,
 for (const p of srcExemptHit) console.log(`   · 已核例外（**人眼确认不读台账**，非豁免）：${p} —— ${SRC_EXEMPT.get(p)}`)
 
 /* ── ② 脚本面（**报告态**）──────────────────────────────────────────────── */
+// ⚠ **本段不需要空扫守卫**（2026-09-23 · ACT-344 收口轮**逐件实证后**的判定，非遗漏）：
+//   本行形态为 `existsSync(SCRIPTS) ? readdirSync(SCRIPTS)… : []`，看着像"静默空集"，
+//   但**本段的产出是"未登记候选列表"且明确标注为报告态**（见下方 `unlisted` 只打印、不 `process.exit(1)`）。
+//   ⇒ 空集时它报"无候选"，而该段的**语义本就是提示性**的，不构成"判据在空集上恒真"。
+//   ⇒ 故**不接 `lib-scan-scope`**：接上去会把一件**报告态**变成**判红**，那是**扩大**语义而非收口。
+//   （判据：只有"扫描面为空 ⇒ 结论恒真 ⇒ 误判通过"的段才需要守卫；报告态段不需要。）
 const SCRIPTS = join(root, 'scripts')
 const scriptFiles = existsSync(SCRIPTS) ? readdirSync(SCRIPTS).filter((f) => f.endsWith('.mjs')) : []
 const scriptSingle = []

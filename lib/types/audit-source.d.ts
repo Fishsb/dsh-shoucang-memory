@@ -6,3 +6,9 @@ export declare function readDistillAudit(legacyFile: string): Array<Record<strin
  * 不存在的历史文件 ⇒ 贡献空串（调用方原有的 `existsSync` 守卫可保留，也可直接删）。
  */
 export declare function readDistillAuditText(legacyFile: string): string;
+/** 缓存命中/未命中计数（**只读**；供机检断言缓存真生效，勿用于业务逻辑）。 */
+export declare function readDistillAuditCacheStats(): {
+    hits: number;
+    misses: number;
+    keys: string[];
+};

@@ -39,7 +39,10 @@ const run = (scriptDir, script, args) => {
      *   ⇒ 外层会先杀、关系式不成立。**实测**（真机 `POST /selfcheck/run`）：全 6 项串行 **1125 ms**、6/6 pass。
      *   按关系式落值 `6×25000 + 30000 = 180000` ⇒ t_inner = **25000**（对实测值 22× 余量），外层保持 180000
      *   ⇒ 前端文案（`panes-overview`「超时上限 180s」）**无需改**。 */
-    execFileSync('node', [p, ...args], { cwd, timeout: 25000, windowsHide: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+    /* ⚠ 2026-09-25 修复：原写裸 `node` ⇒ 命令名不在 PATH 时抛 `spawnSync node ENOENT`，
+     *   而下方 catch 把 `e.status ?? -1` 报成「exit≠0（-1）」—— **归因错**（看着像子检查失败，
+     *   真因是环境里没有 node）。改用 `process.execPath`（本件自己就是 node 进程）⇒ 判因回到子检查本身。 */
+    execFileSync(process.execPath, [p, ...args], { cwd, timeout: 25000, windowsHide: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
     return { ok: true }
   } catch (e) {
     const code = Number(e.status ?? -1)

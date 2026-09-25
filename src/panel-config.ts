@@ -12,6 +12,8 @@ import { SURFACE, SCORE } from './criteria.generated.js'
 /* S3（2026-09-21）：额度范围**单一事实源**（与运行时夹取同源，防两处各写一份数字）+ 读数解析同源 */
 import { BUDGET_RANGES, resolveBudgetNumber, resolveLevelCaps } from './budget-override.js'
 import { dshHome, memoryLibRoot } from './targets.js'
+// ADR-333 册零：容量计数**单一实现**（去空白口径；与写门/门脚本同源）。
+import { capacityCharsOf } from './budget-override.js'
 import { CONFIG_FILE, backupThenWrite, bootstrapDefaults, flipBool, parseView, readBody, sendJson, statMtime } from './panel-shared.js'
 import type { HotMemory, PanelLogger, RootAccess, RouteFn, StateStore, SuiteConfigAccess } from './panel-shared.js'
 
@@ -80,7 +82,10 @@ function configRoute(d: ConfigDeps, _req: IncomingMessage, res: ServerResponse):
   // actual = 当前实际量（动态参考，随内容成长变化，仅展示不参与配置）
   const CAP_GATES: Record<string, number> = { 'AGENT.md': 3000, 'USER.md': 3000, 'MEMORY.md': 5000 }
   const fileChars = (name: string): number => {
-    try { const base = memoryLibRoot(); const t = readFileSync(join(base, name), 'utf8'); return t.replace(/\s+/g, '').length } catch { return 0 }
+    // ADR-333 册零：改走**容量计数单一实现**（`targets.capacityCharsOf`，去空白）。
+    //   本处原为内联 `replace(/\s+/g,'').length`（口径**恰好相同**，故行为不变）——
+    //   收口只为消除"第二份实现"，使"面板读数 == 写门判据"由**同源**而非**巧合**保证。
+    try { const base = memoryLibRoot(); return capacityCharsOf(readFileSync(join(base, name), 'utf8')) } catch { return 0 }
   }
   const globalCfg = {
     persona: String(sched.injectPersona ?? 'both'),
@@ -90,6 +95,10 @@ function configRoute(d: ConfigDeps, _req: IncomingMessage, res: ServerResponse):
     cap_agent: typeof sched.capAgent === 'number' ? sched.capAgent : (typeof sched.injectAgentMaxChars === 'number' ? sched.injectAgentMaxChars : CAP_GATES['AGENT.md']),
     cap_user: typeof sched.capUser === 'number' ? sched.capUser : (typeof sched.injectUserMaxChars === 'number' ? sched.injectUserMaxChars : CAP_GATES['USER.md']),
     cap_memory: typeof sched.capMemory === 'number' ? sched.capMemory : (typeof sched.injectMemoryMaxChars === 'number' ? sched.injectMemoryMaxChars : CAP_GATES['MEMORY.md']),
+    /* ADR-333 容量门开关读数：与 `distill-write#liveCapacityEnforce` **同口径**（先判 undefined，
+     *   再 `!== false`）—— 两处若各写一套，会在"坏值"上分叉：面板显示"未开启"而运行态在阻断
+     *   （本仓两次记录过同类漂移）。⚠ 不得回落 `true`（那会让"未设置"与"已启用阻断"不可分辨）。 */
+    capacityEnforce: (() => { const raw = sched.capacityEnforce; return raw === undefined ? false : raw !== false })(),
     actual: { agent: fileChars('AGENT.md'), user: fileChars('USER.md'), memory: fileChars('MEMORY.md') },
     /* ⚠ **2026-09-21 修（回落字面量落后于注册表 → 面板与运行态显示不一致）** ────────────────────
      *  判因（真机实测）：本块原先用**硬编码字面量**回落（`:105` 的 `: 0.65`、`:111` 的 `: 3`、
@@ -240,6 +249,11 @@ async function setRoute(d: ConfigDeps, req: IncomingMessage, res: ServerResponse
     'injection.cap_agent': [],
     'injection.cap_user': [],
     'injection.cap_memory': [],
+    /* ADR-333（2026-09-22）：容量门**是否阻断**写入。**枚举而非数值**——见下方 SCHED_KEY 与
+     *   `:378` 的类型分支：若登记成 `[]`（数值键）会落进 `Number(value)||0`，'on' 被吞成 0，
+     *   而接口仍回 200 ⇒ "看着成功、值是坏的"（仓内 storeMode / embedding.dimension 两次先例）。
+     *   ⚠ 本键与 SET_SCALAR_KEYS 两处由 `check-budget-override` ⑦c 逐键断言锁死，必须同批改。 */
+    'injection.capacity_enforce': ['on', 'off'],
     // 2026-09-10 收敛：archive/lifecycle/merge 组键消费端为旧 Python 链路（_meta/*.py 已不随包分发），
     // 无真消费——保留只会误导用户。已从白名单移除（真蒸馏/归档走 scheduler.json 通道）。
     'embedding.dimension': [],
@@ -319,6 +333,9 @@ async function setRoute(d: ConfigDeps, req: IncomingMessage, res: ServerResponse
     'injection.cap_agent': 'capAgent',
     'injection.cap_user': 'capUser',
     'injection.cap_memory': 'capMemory',
+    // ADR-333：容量门开关 → scheduler.json 的 `capacityEnforce`（布尔）。
+    //   ⚠ 值转换在下方 `BOOL_ON_KEYS` 处理（'on'→true / 'off'→false）——**不得**走 Number 分支。
+    'injection.capacity_enforce': 'capacityEnforce',
     // v7 活性/遗忘/加深校准阈值：键名与 scheduler zod 属性名一致（数值 Number 化写入 scheduler.json 顶层）
     'activityWarmDays': 'activityWarmDays',
     'activityColdDays': 'activityColdDays',
@@ -374,6 +391,11 @@ async function setRoute(d: ConfigDeps, req: IncomingMessage, res: ServerResponse
     }
     if (bad.length) return sendJson(res, 400, { error: `injectLevelCaps 越界或非数值（单档须 ∈ [${lo}, ${hi}]）：${bad.join(', ')}` })
     writeValue = obj
+  } else if (key === 'injection.capacity_enforce') {
+    /* ADR-333：`on`/`off` → **布尔**落盘（scheduler.json 的 `capacityEnforce` 是 `z.boolean()`）。
+     *   若不转换，`'off'` 会被写成字符串 —— schema 层抛错 ⇒ 该键被忽略 ⇒ **运行态静默回到缺省**，
+     *   而接口仍回 200（正是 `:355-363` 记载的"看着成功、值是坏的"第三形态：**类型对不上**）。 */
+    writeValue = value === 'on'
   } else {
     const isEnum = allowed[key].length > 0
     writeValue = (isEnum || STRING_KEYS.has(key)) ? value : (Number(value) || 0)

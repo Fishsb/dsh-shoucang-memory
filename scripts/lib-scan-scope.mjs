@@ -200,8 +200,24 @@ export function selftestScanGuard (o = {}) {
     // ② 空目录**必须**与"有内容"可分（防"空也当正常"）
     ok(!eq(vEmpty, vFull), '② 空目录的读数**不等于**正常读数（空集不得被当作正常）')
     // ③ 件应能表达"目录缺失"这一态（`required` 时更须与"空"区分；尽力而为，不强判恒等）
+    /* ⚠ 2026-09-25 修复（恒真断言）：原写 `ok(true, …)` —— 该断言**永远为真**，
+     *   它出现在「反空扫 helper」的**自证**里尤其自相矛盾：本 helper 的全部存在理由就是
+     *   「不许用代理指标替代不可观测事实」，而它自己用了一条不可证伪的断言充当证据。
+     *   （这条被 2026-09-25 两轮独立审计同时点名，L1-05。）
+     *   可证伪的替代判据：**三态（有内容 / 空 / 缺席）必须至少两两可分** ——
+     *   若三态读数全相等，说明本件区分不出任何状态，③ 才真正失败。
+     *   刻意**不**断言 `vMissing` 与另两态的具体关系：`probe` 在缺目录时**允许返回 error 态**
+     *   而不 throw（`required` 只影响主路径是否判红），故具体形态由调用方决定，
+     *   这里只锁「可分」这一必要条件。 */
     if (required) {
-      ok(true, `③ 「缺席」态已取值：${JSON.stringify(vMissing)}（件应以 ${label} 缺失时判红/跳过，见其主路径守卫）`)
+      /* ⚠ 2026-09-25 二次修（独立复核席指出**判别力弱**，已实测）：
+       *   初版写 `distinct >= 2`（三态里至少两两可分）。复核席构造反例：探针
+       *   `(d) => existsSync(d) ? readdirSync(d).length : 0` —— 空目录与**缺席**取同一值(0)，
+       *   distinct = 2 ⇒ ③ 判 ✅。但本件要问的恰恰是「**缺席**能不能与'空'分开」。
+       *   而 ①（有内容 ≠ 空）早已拦住"全相等"⇒ `distinct >= 2` 相对 ① 几乎零增量。
+       *   改为**针对性判据**：缺席读数必须**不等于**空读数（真正想要的区分）。 */
+      ok(!eq(vMissing, vEmpty),
+        `③ 「缺席」态与「空」态可分：缺席取值 ${JSON.stringify(vMissing)} ≠ 空取值 ${JSON.stringify(vEmpty)}`)
     }
     // ④ 反例自证：把 probe 换成恒真函数时，① 必须失败（证明 ① 有判别力）
     const alwaysSame = () => 42
@@ -230,7 +246,7 @@ export function selftestScanGuard (o = {}) {
 //
 //   ⚠⚠ **判据必须用 `realpath` 归一，不能比字符串（2026-09-23 · ACT-355 · 独立复核实测抓出）**：
 //     上式（字符串比较）在**别名路径**下判 **false** ⇒ 整段副作用**一行不执行** ⇒ 静默 `exit 0`。
-//     实测（junction `D:\FF\sc-jt → D:\FF\shoucang`）：`node <junction>/lib-scan-scope.mjs --selftest`
+//     实测（junction `<仓根上级>/sc-jt → <仓根>`）：`node <junction>/lib-scan-scope.mjs --selftest`
 //     ⇒ **输出 0 行 · exit 0**（真实路径同命令输出 21 行）⇒ **判红能力在别名路径下整体消失**，
 //     且比「假绿」更隐蔽（旧至少打印内容）。
 //     该模式此前被 `check-module-growth.mjs` 抄去、造成了同样后果（那里已由 ACT-351 修掉）。

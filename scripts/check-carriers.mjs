@@ -71,9 +71,15 @@ const gateJson = (() => { try { return JSON.parse(read('skill/engine/criteria-ga
 chk(!!gateJson?.carriers && !!gateJson?.maturation, '④脚本面参数含 carriers / maturation 投影')
 
 try {
-  execFileSync('node', [join(root, 'scripts', 'gen-criteria.mjs'), '--check'], { stdio: 'inherit', cwd: root })
+  // 2026-09-25（L6-06 同族修复）：裸 `node` ⇒ ENOENT 被报成「投影过期」，真因在 PATH。
+  execFileSync(process.execPath, [join(root, 'scripts', 'gen-criteria.mjs'), '--check'], { stdio: 'inherit', cwd: root })
   chk(true, '④生成投影与注册表一致')
-} catch { chk(false, '④投影过期（重跑 npm run gen:criteria）') }
+} catch (e) {
+  const spawnFail = !e || e.status === null || e.status === undefined
+  chk(false, spawnFail
+    ? `④**未能运行生成器**（${e?.code || 'spawn failed'}）⇒ 投影一致性未验（不是「过期」）`
+    : '④投影过期（重跑 npm run gen:criteria）')
+}
 
 // ⑤ 写通道三方对齐（U3 教训机制化）：**每个 /set 白名单键都必须有映射**（SCHED_KEY 或 SUITE_BOOL 或 root-only）
 //    否则会出现「白名单放了但写入 400」这类实测缺陷（scoreWeights 就踩过）

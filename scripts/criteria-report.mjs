@@ -29,9 +29,21 @@ for (const p of gatePaths) { try { gate = JSON.parse(readFileSync(p, 'utf8')); g
 const tmp = join(bank, 'audit', `.criteria-audit-tmp-${Date.now()}.json`)
 let audit = null
 try {
-  execFileSync('node', [join(repo, 'scripts', 'criteria-audit.mjs'), '--bank', bank, '--days', String(days), '--json', '--out', tmp], { stdio: 'ignore', windowsHide: true })
+  /* ⚠ 2026-09-25 修复（裸 `node` ⇒ 静默降级）—— 原写 `execFileSync('node', …)`（裸命令名），
+   *   而 `catch { audit = null }` **吞掉一切**。实测本机：系统 node 安装损坏且不在 PATH
+   *   ⇒ 裸 `node` 抛 `spawnSync node ENOENT`（已实证）⇒ 本器**静默**产出「无对账数据」的报告，
+   *   读报告的人分不清「真没数据」与「子进程根本没起来」。
+   *   两处修：① 用 `process.execPath`（同 check-carriers / test-split-equivalence 先例，不依赖 PATH）；
+   *   ② 失败**如实记因**，不再降级成空数据。 */
+  execFileSync(process.execPath, [join(repo, 'scripts', 'criteria-audit.mjs'), '--bank', bank, '--days', String(days), '--json', '--out', tmp], { stdio: 'ignore', windowsHide: true })
   audit = JSON.parse(readFileSync(tmp, 'utf8'))
-} catch { audit = null }
+} catch (e) {
+  audit = null
+  /* 「子进程根本没起来」（status 为 null/undefined）与「跑起来但退非 0」是两回事：
+   *   前者是环境问题（PATH / 安装），后者是数据或脚本问题 —— 报告里必须可分辨。 */
+  const spawnFail = !e || e.status === null || e.status === undefined
+  console.log(`⚠ 判据对账数据缺失：${spawnFail ? `未能运行对账器（${e?.code || 'spawn failed'}）` : `对账器退非 0（${e.status}）`} —— 本报告不含对账段`)
+}
 
 // 注入预算（与体检同口径：画像行全量 + 索引行按档位 cap）
 const capRows = Number(gate?.surface?.injection?.levelCaps?.smart || 10)

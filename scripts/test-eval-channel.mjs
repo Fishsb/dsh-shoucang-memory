@@ -148,7 +148,12 @@ console.log('\nF. M2 落账（只落形态不落内容 —— 沿 yield-rounds �
     fellBack: false, latencyMs: 123, sid: 'abcdef12', point: 'probe',
   })
   eq(ev.type, 'eval.decision', 'F18 落账 type = eval.decision（并入统一台账，不新开流）')
-  ok('F19 **不含内容字段**：' + (('text' in ev) || ('state' in ev) || ('q' in ev) ? '❌ 出现了内容字段' : '无 text/state/q')) 
+  // 2026-09-25（高并发遍历审计 L6-01）：原实现是 `ok('F19 …' + (cond ? '❌ …' : '无 …'))`——
+  //   **条件被塞进消息串**，而本件的 `ok`（:24）只收 1 个参数 ⇒ 无论 cond 真假都 `pass++`。
+  //   即：判据本体退化成「消息里有没有 ❌ 字样」，落台账若真带上内容字段也照样 ✅。
+  //   现改为 `eq(...)` 真断言（与同件 F18/F20 同规格），并保留可读的实测明细。
+  const contentKeys = ['text', 'state', 'q'].filter((k) => k in ev)
+  eq(contentKeys.length, 0, `F19 **不含内容字段**（实测越界键：${contentKeys.join(',') || '无'}）`) 
   eq(Object.keys(ev).includes('stateSha8'), true, 'F20 含形态字段 stateSha8')
 }
 

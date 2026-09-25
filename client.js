@@ -7010,6 +7010,45 @@
       return w2;
     }
   };
+  function numSetting(name, desc, val, key, unit, step) {
+    var isFloat = typeof step === "number" && step < 1;
+    var wrap = el("div", "sc-num-wrap");
+    var inp = el("input");
+    inp.type = "number";
+    inp.className = "sc-input";
+    inp.min = "0";
+    inp.step = String(step || 100);
+    inp.value = String(val);
+    var unitEl = el("span", "sc-range-label", unit || "");
+    inp.onchange = function() {
+      var v2 = String(isFloat ? Math.max(0, parseFloat(inp.value) || 0) : Math.max(0, parseInt(inp.value, 10) || 0));
+      appState.api("/set", { method: "POST", body: JSON.stringify({ key, value: v2 }) }).then(function() {
+        appState.statusFn("\u2713 " + key + " = " + v2);
+      }).catch(appState.failFn);
+    };
+    wrap.appendChild(inp);
+    wrap.appendChild(unitEl);
+    return UI.item(name, desc, null, { children: [appState.metaBadges(key), wrap] });
+  }
+  function enumSetting(name, desc, val, key, options) {
+    var wrap = el("div", "sc-num-wrap");
+    var sel = el("select", "sc-input");
+    (options || []).forEach(function(o9) {
+      var opt = el("option");
+      opt.value = o9.v;
+      opt.textContent = o9.label;
+      if (String(o9.v) === String(val)) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    sel.onchange = function() {
+      var v2 = String(sel.value);
+      appState.api("/set", { method: "POST", body: JSON.stringify({ key, value: v2 }) }).then(function() {
+        appState.statusFn("\u2713 " + key + " = " + v2);
+      }).catch(appState.failFn);
+    };
+    wrap.appendChild(sel);
+    return UI.item(name, desc, null, { children: [appState.metaBadges(key), wrap] });
+  }
 
   // src-client/derive.js
   var Derive = /* @__PURE__ */ (function() {
@@ -7970,7 +8009,7 @@
     view.appendChild(cap.box);
     var capGrid = el("div", "sc-cap3");
     cap.body.appendChild(capGrid);
-    cap.body.appendChild(el("div", "sc-cap-note", tr("\u53EA\u6709\u5B58\u5728\u771F\u5B9E\u5BB9\u91CF\u95E8\u7684\u8F7D\u4F53\u624D\u7ED9\u767E\u5206\u6BD4\u4E0E\u8FDB\u5EA6\u6761\uFF1AMEMORY.md\uFF08cap_memory\uFF09\u4E0E\u753B\u50CF\uFF08cap_user / cap_agent\uFF09\uFF1Bnotes / pending \u65E0\u5BB9\u91CF\u95E8 \u21D2 \u53EA\u62A5\u7EDD\u5BF9\u91CF\u3002\u8D85\u9650\u7531 write_gate \u62D2\u5199\u3002")));
+    cap.body.appendChild(el("div", "sc-cap-note", tr("\u53EA\u6709\u5B58\u5728\u771F\u5B9E\u5BB9\u91CF\u95E8\u7684\u8F7D\u4F53\u624D\u7ED9\u767E\u5206\u6BD4\u4E0E\u8FDB\u5EA6\u6761\uFF1AMEMORY.md\uFF08cap_memory\uFF09\u4E0E\u753B\u50CF\uFF08cap_user / cap_agent\uFF09\uFF1Bnotes / pending \u65E0\u5BB9\u91CF\u95E8 \u21D2 \u53EA\u62A5\u7EDD\u5BF9\u91CF\u3002\u662F\u5426\u56E0\u8D85\u9650**\u963B\u65AD**\u5199\u5165\u7531\u300C\u53C2\u6570\u8C03\u8282 \u2192 \u8BB0\u5FC6\u4E0E\u5BB9\u91CF\u300D\u7684\u5BB9\u91CF\u95E8\u5F00\u5173\u51B3\u5B9A\uFF08\u7F3A\u7701\u5173\u95ED = \u7167\u5199\u5E76\u7559\u4E00\u6761 capacity-over \u7559\u75D5\uFF09\u3002")));
     if (!data || !data.present) {
       appState.statusFn(data && data.error || tr("\u8BB0\u5FC6\u5E93\u4E0D\u53EF\u7528"));
       return;
@@ -9314,7 +9353,20 @@
       var P2 = ly.P || { index: 0, profile: 0 }, R2 = ly.R || { index: 0, profile: 0 }, E2 = ly.E || { index: 0, profile: 0 };
       rw.appendChild(mk(tr("\u8D26\u672C\u95ED\u5408"), cl.ok === null ? tr("\u6837\u672C\u4E0D\u8DB3") : cl.ok ? tr("\u2705 \u5DEE\u5F02 0") : tr("\u26A0 \u6709\u5DEE\u5F02"), tr("\u53F0\u8D26 ") + ((r7.window || {}).ledgerRows || 0) + tr(" \u884C \xB7 \u5199\u4E8B\u4EF6 ") + (h3.writeEvents || 0) + tr(" \u6B21")));
       rw.appendChild(mk(tr("\u4E0A\u6B21\u6709\u6548\u6DF1\u7761"), h3.lastSuccessfulWrite ? fmtTime(h3.lastSuccessfulWrite) : tr("\uFF08\u65E0\uFF09"), tr("\u8FDE\u7EED\u7A7A\u8F6C ") + (h3.idleStreak || 0) + tr(" \u8F6E \xB7 \u6DF1\u7761\u8F6E\u6B21 ") + (h3.deepSleepRounds || 0)));
-      rw.appendChild(mk(tr("\u5199\u5165\u88AB\u62D2\u7387"), h3.rejectRate === null || h3.rejectRate === void 0 ? "n/a" : (h3.rejectRate * 100).toFixed(0) + "%", tr("\u62D2 ") + (h3.rejectedWrites || 0) + tr(" / \u5199\u4E8B\u4EF6 ") + (h3.writeEvents || 0) + tr(" \xB7 \u5C1D\u8BD5 ") + (h3.attemptedTotal || 0) + tr(" \u6761")));
+      var byCh = h3.byChannel || {};
+      var chRows = Object.keys(byCh).map(function(k2) {
+        var v2 = byCh[k2] || {};
+        var pct = v2.rejectRate === null || v2.rejectRate === void 0 ? "\u2014" : (v2.rejectRate * 100).toFixed(0) + "%";
+        return k2 + " " + pct;
+      }).sort();
+      rw.appendChild(mk(tr("\u5199\u5165\u88AB\u62D2\u7387"), h3.rejectRate === null || h3.rejectRate === void 0 ? "n/a" : (h3.rejectRate * 100).toFixed(0) + "%", tr("\u62D2 ") + (h3.rejectedWrites || 0) + tr(" / \u5199\u4E8B\u4EF6 ") + (h3.writeEvents || 0) + tr(" \xB7 \u5C1D\u8BD5 ") + (h3.attemptedTotal || 0) + tr(" \u6761") + (chRows.length ? tr(" \xB7 \u6309\u901A\u9053\uFF1A") + chRows.join(" / ") : "")));
+      var gd = h3.gateRejectsDetail;
+      if (gd && gd.total) {
+        var gRows = Object.keys(gd.byTarget || {}).map(function(k2) {
+          return k2 + "\xD7" + gd.byTarget[k2];
+        }).sort();
+        rw.appendChild(mk(tr("\u95E8\u7981\u62D2\u6536\uFF08\u6309\u76EE\u6807\uFF09"), String(gd.total) + tr(" \u6B21"), gRows.join(" / ") + (gd.lastAt ? tr(" \xB7 \u6700\u8FD1 ") + fmtTime(gd.lastAt) + " " + (gd.lastTarget || "") + (gd.lastReason ? "\uFF1A" + gd.lastReason : "") : "")));
+      }
       rw.appendChild(mk(tr("\u4E09\u5C42\u5360\u6BD4"), "P " + (P2.index + P2.profile) + " \xB7 R " + R2.index + " \xB7 E " + (E2.index + E2.profile), tr("P=\u6052\u5E38\uFF08\u7D22\u5F15+P \u5C42\u753B\u50CF\u884C \u2264") + ((r7.layers || {}).profileCap || 3) + tr("/\u6863\uFF09\xB7 R=\u4EFB\u52A1\u95E8\u63A7 \xB7 E=\u76F8\u5173\u6027\u95E8\u63A7")));
     }).catch(function() {
       rw.textContent = "";
@@ -10573,6 +10625,109 @@
     });
   }
 
+  // src-client/panes-capacity.js
+  function renderTogglesCap(host, g2, deps) {
+    function gVal(key, fallback2) {
+      return g2[key] !== void 0 && g2[key] !== null ? g2[key] : fallback2;
+    }
+    var enforce = gVal("capacityEnforce", false) === true;
+    var overDesc = enforce ? tr("\u5199\u5165\u8D85\u9650\u4F1A\u88AB\u62D2\uFF08\u5F53\u524D\uFF1A\u963B\u65AD\u5DF2\u5F00\u542F\uFF09") : tr("\u5199\u5165\u8D85\u9650\u4E0D\u518D\u963B\u65AD\uFF08\u5F53\u524D\uFF1A\u963B\u65AD\u5DF2\u5173\u95ED\uFF0C\u8D85\u9650\u7167\u5199\u5E76\u7559\u4E00\u6761 capacity-over \u5BA1\u8BA1\u75D5\uFF09");
+    host.appendChild(el("div", "sc-desc", tr("\u5BB9\u91CF\u95E8 = \u8BB0\u5FC6\u5E93\u80FD\u957F\u591A\u5927\uFF08\u8D85\u9650\u662F\u5426\u963B\u65AD\u7531\u4E0B\u65B9\u5F00\u5173\u51B3\u5B9A\uFF09\uFF1B\u6D3B\u6027/\u9057\u5FD8\u4E3A\u5929\u7EA7\u9608\u503C\u3002")));
+    host.appendChild(enumSetting(
+      tr("\u5BB9\u91CF\u95E8\u662F\u5426\u963B\u65AD\u5199\u5165 capacityEnforce"),
+      tr("\u7F3A\u7701\u300C\u5173\u95ED\u300D= \u8D85\u9650\u7167\u5199\uFF08\u5E76\u843D\u4E00\u6761 capacity-over \u7559\u75D5\uFF09\u3002\u5F00=\u8D85\u9650\u62D2\u5199\uFF08\u6539\u9020\u524D\u753B\u50CF\u884C\u4E3A\uFF09\u3002\u53EA\u5F71\u54CD\u5BB9\u91CF\u8FD9\u4E00\u652F\uFF1A\u6E90\u6307\u9488\u60AC\u7A7A / \u884C\u683C\u5F0F / \u7591\u4F3C\u51ED\u636E\u4E09\u9053\u95E8\u59CB\u7EC8\u786C\u62D2\uFF0C\u4E0D\u53D7\u6B64\u5F00\u5173\u5F71\u54CD\u3002\u6539\u540E\u5373\u65F6\u751F\u6548\uFF08\u5199\u95E8\u6BCF\u8F6E\u91CD\u8BFB\uFF09\u3002"),
+      enforce ? "on" : "off",
+      "injection.capacity_enforce",
+      [{ v: "off", label: tr("\u5173\u95ED\uFF08\u7F3A\u7701\xB7\u8D85\u9650\u7167\u5199\u5E76\u7559\u75D5\uFF09") }, { v: "on", label: tr("\u5F00\u542F\uFF08\u8D85\u9650\u62D2\u5199\uFF09") }]
+    ));
+    var actualChars = g2 && g2.actual || { agent: 0, user: 0, memory: 0 };
+    host.appendChild(numSetting(tr("AGENT.md \u5BB9\u91CF\u95E8 cap_agent"), tr("agent \u753B\u50CF\u8BB0\u5FC6\u5E93\u5BB9\u91CF\uFF08\u5B57\u7B26\uFF09\uFF1A") + overDesc + tr("\uFF08AGENT.md \u5F53\u524D\u5B9E\u9645 ") + (actualChars.agent || 0) + tr(" \u5B57\u7B26\uFF09\u3002\u4E0D\u5F71\u54CD\u4EFB\u52A1\u6267\u884C\u6CE8\u5165\u2014\u2014\u6CE8\u5165\u603B\u770B\u5B8C\u6574\u753B\u50CF"), gVal("cap_agent", 3e3), "injection.cap_agent", tr("\u5B57\u7B26")));
+    host.appendChild(numSetting(tr("USER.md \u5BB9\u91CF\u95E8 cap_user"), tr("\u7528\u6237\u753B\u50CF\u8BB0\u5FC6\u5E93\u5BB9\u91CF\uFF08\u5B57\u7B26\uFF09\uFF1A") + overDesc + tr("\uFF08\u5F53\u524D\u5B9E\u9645 ") + (actualChars.user || 0) + tr(" \u5B57\u7B26\uFF09\u3002\u4E0D\u5F71\u54CD\u4EFB\u52A1\u6267\u884C\u6CE8\u5165"), gVal("cap_user", 3e3), "injection.cap_user", tr("\u5B57\u7B26")));
+    host.appendChild(numSetting(tr("MEMORY.md \u5BB9\u91CF\u95E8 cap_memory"), tr("\u77E5\u8BC6\u7D22\u5F15\u8BB0\u5FC6\u5E93\u5BB9\u91CF\uFF08\u5B57\u7B26\uFF09\uFF1A") + overDesc + tr("\uFF08\u5F53\u524D\u5B9E\u9645 ") + (actualChars.memory || 0) + tr(" \u5B57\u7B26\uFF09\u3002\u6CE8\u5165\u6309\u6863\u4F4D\u884C\u6570\u4E0D\u53D7\u6B64\u9650"), gVal("cap_memory", 5e3), "injection.cap_memory", tr("\u5B57\u7B26")));
+    host.appendChild(el("div", "sc-h3", tr("\u6D3B\u6027 / \u9057\u5FD8\u9608\u503C\uFF08v7\uFF09")));
+    host.appendChild(el("div", "sc-desc", tr("\u8BB0\u5FC6\u6761\u76EE\u6D3B\u6027\u72B6\u6001\u673A\uFF08active\u2192warm\u2192cold\uFF09\u4E0E\u9057\u5FD8/\u52A0\u6DF1\u5019\u9009\u7684\u5224\u5B9A\u9608\u503C\uFF0C\u4EE5\u53CA\u878D\u5408\u53EC\u56DE\u5BF9 cold/retired \u6761\u76EE\u7684\u964D\u6743\u7CFB\u6570\u3002\u6539\u52A8\u7ECF /set \u5373\u65F6\u5199\u56DE scheduler.json\uFF08\u4E0E\u6CE8\u5165/\u84B8\u998F\u914D\u7F6E\u540C\u901A\u9053\uFF0C\u91CD\u8F7D\u540E\u6309\u65B0\u9608\u503C\u8FD0\u884C\uFF09\u3002")));
+    host.appendChild(numSetting(tr("\u6D3B\u6027\u964D\u7EA7 warm \u9608\u503C activityWarmDays"), tr("active\u2192warm \u65E0\u547D\u4E2D\u5929\u6570\uFF08\u7F3A\u7701 14\uFF09"), gVal("activityWarmDays", 14), "activityWarmDays", tr("\u5929")));
+    host.appendChild(numSetting(tr("\u9057\u5FD8\u51B7\u964D cold \u9608\u503C activityColdDays"), tr("warm\u2192cold \u65E0\u547D\u4E2D\u5929\u6570\uFF08\u7F3A\u7701 44 = warm+30\uFF09"), gVal("activityColdDays", 44), "activityColdDays", tr("\u5929")));
+    host.appendChild(numSetting(tr("\u9057\u5FD8\u5019\u9009 archive \u9608\u503C activityArchiveDays"), tr("cold \u540E\u8D85\u6B64\u5929\u6570\u672A\u547D\u4E2D \u2192 \u9057\u5FD8\u5019\u9009\u6E05\u5355\uFF08\u7F3A\u7701 90\uFF0C\u53EA\u5EFA\u8BAE\u4E0D\u5220\u9664\uFF09"), gVal("activityArchiveDays", 90), "activityArchiveDays", tr("\u5929")));
+    host.appendChild(numSetting(tr("\u52A0\u6DF1\u5019\u9009\u547D\u4E2D\u6570 activityHotHits"), tr("\u8FD1 30 \u5929\u547D\u4E2D \u2265 \u6B64\u503C \u2192 \u52A0\u6DF1\u5019\u9009 B\uFF08\u7F3A\u7701 5\uFF0C\u5582\u6DF1\u7761\u5F52\u7EB3\uFF09"), gVal("activityHotHits", 5), "activityHotHits", tr("\u6B21")));
+    var pctItem = el("div", "setting-item");
+    var pctInfo = el("div", "setting-item-info");
+    pctInfo.appendChild(el("div", "setting-item-name", tr("\u53EC\u56DE\u51B7\u6761\u76EE\u964D\u6743 recallColdFactorPercent")));
+    pctInfo.appendChild(el("div", "setting-item-desc", tr("cold/retired \u5C0F\u8282\u5728\u878D\u5408\u53EC\u56DE\u4E2D\u7684\u964D\u6743\u7CFB\u6570\uFF08\u767E\u5206\u6BD4 \u2192 /100\uFF1B\u7F3A\u7701 35%\uFF0C\u540E\u7AEF\u8303\u56F4\u6821\u9A8C [5,95] \u515C\u5E95\uFF09")));
+    var pctWrap = el("div", "sc-num-wrap");
+    var pctInp = el("input");
+    pctInp.type = "number";
+    pctInp.className = "sc-input";
+    pctInp.min = "5";
+    pctInp.max = "95";
+    pctInp.step = "5";
+    pctInp.value = String(gVal("recallColdFactorPercent", 35));
+    var pctUnit = el("span", "sc-range-label", "%");
+    pctInp.onchange = function() {
+      var raw = parseInt(pctInp.value, 10);
+      if (isNaN(raw)) raw = 35;
+      var v2 = Math.max(5, Math.min(95, raw));
+      pctInp.value = String(v2);
+      appState.api("/set", { method: "POST", body: JSON.stringify({ key: "recallColdFactorPercent", value: String(v2) }) }).then(function() {
+        appState.statusFn("\u2713 recallColdFactorPercent = " + v2 + "%");
+      }).catch(appState.failFn);
+    };
+    pctWrap.appendChild(pctInp);
+    pctWrap.appendChild(pctUnit);
+    pctItem.appendChild(pctInfo);
+    pctItem.appendChild(pctWrap);
+    host.appendChild(pctItem);
+    var injectInfo = el("div", "sc-desc");
+    injectInfo.classList.add("sc-inline-note");
+    host.appendChild(injectInfo);
+    appState.api("/inject/preview").then(function(r7) {
+      var txt = r7 && r7.text || "";
+      if (!txt) {
+        injectInfo.textContent = tr("\u5F53\u524D\u6CE8\u5165\uFF1A\u7A7A\uFF08hot_memory \u5173\u6216\u753B\u50CF/\u8BB0\u5FC6\u4E3A\u7A7A\uFF09");
+        return;
+      }
+      var chars = txt.replace(/\s+/g, "").length;
+      var tokens = Math.ceil(chars / 2);
+      var lineCount = txt.split("\n").filter(function(l6) {
+        return l6.trim().indexOf("- [") === 0;
+      }).length;
+      injectInfo.textContent = tr("\u5F53\u524D\u76F4\u63A5\u6CE8\u5165 \u2248 ") + tokens + " token\uFF08" + chars + tr(" \u5B57\u7B26 \xB7 \u53CC\u753B\u50CF+\u8BB0\u5FC6\u6307\u9488 ") + lineCount + tr(" \u6761\uFF09\u2014\u2014\u6BCF\u8F6E\u968F\u63D0\u793A\u8BCD\u6CE8\u5165");
+    }).catch(function() {
+      injectInfo.textContent = "";
+    });
+    host.appendChild(el("div", "sc-h3", tr("\u6DF1\u7761\u672A\u6D88\u5316\u7B56\u7565")));
+    host.appendChild(el("div", "sc-desc", tr("\u6DF1\u7761\u6BCF\u8F6E\u7528 deepSleepLanded \u5224\u5B9A\u672C\u8F6E\u662F\u5426\u300C\u5DF2\u6D88\u5316\u300D\u3002\u672A\u6D88\u5316\u65F6\u7684\u4E24\u79CD\u53D6\u5411\u5728\u6B64\u5207\u6362\u2014\u2014\u5168\u91CD\u635E\u4FDD\u8BC1\u4E0D\u4E22\u6599\u4F46\u53EF\u80FD\u65E0\u9650\u91CD\u8BD5\uFF1B\u5206\u7EA7\u5728\u8FDE\u8D25\u8FBE\u4E0A\u9650\u540E\u653E\u884C\u5E76\u544A\u8B66\uFF0C\u907F\u514D\u65E0\u9650\u91CD\u8BD5\u70E7 LLM\u3002")));
+    host.appendChild(UI.item(
+      tr("\u6DF1\u7761\u672A\u6D88\u5316\u7B56\u7565 deepSleep.failPolicy"),
+      tr("\u5168\u91CD\u635E\uFF08retry\uFF09= \u6C38\u4E0D\u653E\u5F03\uFF0C\u672A\u6D88\u5316\u5C31\u4E00\u76F4\u91CD\u635E\u672C\u6279\uFF08\u4FDD\u8BC1\u4E0D\u4E22\u6599\uFF1B\u6750\u6599\u6C38\u4E45\u5931\u8D25\u65F6\u6BCF\u8F6E\u90FD\u4F1A\u91CD\u8BD5\uFF09\uFF1B\u5206\u7EA7\uFF08graded\uFF09= \u8FDE\u7EED\u5931\u8D25\u8FBE N \u8F6E\u540E\u653E\u884C\u6C34\u4F4D\u5E76\u8BB0\u5BA1\u8BA1\u544A\u8B66\uFF08\u907F\u514D\u65E0\u9650\u91CD\u8BD5\u70E7 LLM\uFF09\u3002\u7F3A\u7701 graded\u3002"),
+      UI.select([
+        { value: "retry", label: tr("\u5168\u91CD\u635E\uFF08\u4E0D\u4E22\u6599\uFF0C\u6C38\u4E0D\u653E\u5F03\uFF09") },
+        { value: "graded", label: tr("\u5206\u7EA7\uFF08\u8FDE\u8D25 N \u8F6E\u540E\u653E\u884C\u5E76\u544A\u8B66\uFF09") }
+      ], String(gVal("deepSleepFailPolicy", "graded")), function(v2) {
+        appState.api("/set", { method: "POST", body: JSON.stringify({ key: "deepSleep.failPolicy", value: v2 }) }).then(function() {
+          appState.statusFn(tr("\u2713 \u6DF1\u7761\u672A\u6D88\u5316\u7B56\u7565 = ") + v2);
+        }).catch(appState.failFn);
+      }, "deepSleep.failPolicy")
+    ));
+    var roundsInput = UI.input(String(gVal("deepSleepFailMaxRounds", 3)), function(raw) {
+      var n6 = parseInt(raw, 10);
+      if (isNaN(n6)) n6 = 3;
+      n6 = Math.max(1, Math.min(100, n6));
+      roundsInput.value = String(n6);
+      appState.api("/set", { method: "POST", body: JSON.stringify({ key: "deepSleep.failPolicyMaxRounds", value: String(n6) }) }).then(function() {
+        appState.statusFn(tr("\u2713 \u5206\u7EA7\u7B56\u7565\u8FDE\u8D25\u4E0A\u9650 = ") + n6 + tr(" \u8F6E"));
+      }).catch(appState.failFn);
+    }, { type: "number", width: "120px", ariaLabel: "deepSleep.failPolicyMaxRounds" });
+    roundsInput.min = "1";
+    roundsInput.max = "100";
+    roundsInput.step = "1";
+    host.appendChild(UI.item(
+      tr("\u5206\u7EA7\u7B56\u7565\u8FDE\u8D25\u4E0A\u9650 deepSleep.failPolicyMaxRounds"),
+      tr("\u4EC5\u5728\u300C\u5206\u7EA7\u300D\u7B56\u7565\u4E0B\u751F\u6548\uFF081\u2013100\uFF0C\u7F3A\u7701 3\uFF09\uFF1A\u8FDE\u7EED\u5931\u8D25\u8FBE\u6B64\u8F6E\u6570\u540E\u653E\u884C\u6DF1\u7761\u6C34\u4F4D\u5E76\u8BB0\u4E00\u6761\u5BA1\u8BA1\u544A\u8B66\uFF1B\u5168\u91CD\u635E\u7B56\u7565\u4E0B\u6B64\u9879\u4E0D\u53C2\u4E0E\u5224\u5B9A\u3002"),
+      roundsInput
+    ));
+  }
+
   // src-client/panes-toggles.js
   function renderViewToggles(view, parsed, global) {
     view.textContent = "";
@@ -10585,12 +10740,12 @@
     view.appendChild(_tb.box);
     var g2 = global || {};
     renderTogglesInject(UI.cardIn(_tb.pane("inject")), view, parsed, g2);
-    renderTogglesCap(UI.cardIn(_tb.pane("cap")), g2);
+    renderTogglesCap(UI.cardIn(_tb.pane("cap")), g2, { numSetting: numSetting2 });
     renderTogglesModel(UI.cardIn(_tb.pane("model")));
     renderTogglesSched(UI.cardIn(_tb.pane("sched")), g2);
     appState.flushFolds();
   }
-  function numSetting(name, desc, val, key, unit, step) {
+  function numSetting2(name, desc, val, key, unit, step) {
     var isFloat = typeof step === "number" && step < 1;
     var wrap = el("div", "sc-num-wrap");
     var inp = el("input");
@@ -10704,8 +10859,8 @@
         sw.checked = !sw.checked;
       });
     }));
-    host.appendChild(numSetting(tr("\u65B0\u9C9C\u5EA6\u4FDD\u5E95\u69FD injectFreshSlots"), tr("\u6CE8\u5165\u65F6\u4F18\u5148\u4FDD\u7559\u300C\u6700\u8FD1\u65B0\u589E\u6761\u76EE\u300D\u7684\u69FD\u4F4D\u6570\uFF080\u20136\uFF0C\u7F3A\u7701 2\uFF09"), gVal("injectFreshSlots", 2), "injectFreshSlots", tr("\u6761"), 1));
-    host.appendChild(numSetting(
+    host.appendChild(numSetting2(tr("\u65B0\u9C9C\u5EA6\u4FDD\u5E95\u69FD injectFreshSlots"), tr("\u6CE8\u5165\u65F6\u4F18\u5148\u4FDD\u7559\u300C\u6700\u8FD1\u65B0\u589E\u6761\u76EE\u300D\u7684\u69FD\u4F4D\u6570\uFF080\u20136\uFF0C\u7F3A\u7701 2\uFF09"), gVal("injectFreshSlots", 2), "injectFreshSlots", tr("\u6761"), 1));
+    host.appendChild(numSetting2(
       tr("\u6CE8\u5165\u603B\u9884\u7B97 injectBudgetChars"),
       tr("\u6CE8\u5165\u6587\u672C\u7684\u5B57\u7B26\u603B\u9884\u7B97\uFF08**\u53C2\u4E0E\u9650\u989D\u7684\u4E09\u5C42\u4E4B\u548C**\uFF1A\u7A33\u5B9A\u9762 + \u52A8\u6001\u9762 + \u4E00\u6B21\u6027\uFF1B\u8303\u56F4 800\u201320000\uFF0C\u7F3A\u7701 4000\uFF09\u3002\u8D8A\u754C\u7531\u670D\u52A1\u7AEF\u5939\u56DE\u5E76\u5728\u9762\u677F\u6807\u300C\u5DF2\u5939\u53D6\u300D"),
       gVal("injectBudgetChars", 4e3),
@@ -10713,7 +10868,7 @@
       tr("\u5B57\u7B26"),
       100
     ));
-    host.appendChild(numSetting(
+    host.appendChild(numSetting2(
       tr("\u60C5\u5883\u69FD\u9884\u7B97 injectSituationBudgetChars"),
       tr("\u60C5\u5883\u69FD\uFF08\u73AF\u8BB0\u5F55\u6309\u60C5\u5883\u952E\u5339\u914D\uFF09\u7684\u5B57\u7B26\u9884\u7B97\uFF08\u8303\u56F4 0\u20134000\uFF0C\u7F3A\u7701 1200\uFF09\u3002\u5B83**\u72EC\u7ACB\u4E8E**\u6CE8\u5165\u603B\u9884\u7B97\uFF0C\u4E0D\u5403\u4E09\u5C42\u989D\u5EA6"),
       gVal("injectSituationBudgetChars", 1200),
@@ -10755,98 +10910,6 @@
       null,
       { children: [appState.metaBadges("injectLevelCaps"), wrap] }
     );
-  }
-  function renderTogglesCap(host, g2) {
-    function gVal(key, fallback2) {
-      return g2[key] !== void 0 && g2[key] !== null ? g2[key] : fallback2;
-    }
-    host.appendChild(el("div", "sc-desc", tr("\u5BB9\u91CF\u95E8 = \u8BB0\u5FC6\u5E93\u80FD\u957F\u591A\u5927\uFF08\u5199\u5165\u8D85\u9650\u88AB write_gate \u62D2\u5199\uFF09\uFF1B\u6D3B\u6027/\u9057\u5FD8\u4E3A\u5929\u7EA7\u9608\u503C\u3002")));
-    var actualChars = g2 && g2.actual || { agent: 0, user: 0, memory: 0 };
-    host.appendChild(numSetting(tr("AGENT.md \u5BB9\u91CF\u95E8 cap_agent"), tr("agent \u753B\u50CF\u8BB0\u5FC6\u5E93\u5BB9\u91CF\uFF08\u5B57\u7B26\uFF09\uFF1A\u84B8\u998F/\u6DF1\u7761\u5199\u5165\u8D85\u9650\u4F1A\u88AB write_gate \u62D2\uFF08AGENT.md \u5F53\u524D\u5B9E\u9645 ") + (actualChars.agent || 0) + tr(" \u5B57\u7B26\uFF09\u3002**\u4E0D\u5F71\u54CD\u4EFB\u52A1\u6267\u884C\u6CE8\u5165**\u2014\u2014\u6CE8\u5165\u603B\u770B\u5B8C\u6574\u753B\u50CF"), gVal("cap_agent", 3e3), "injection.cap_agent", tr("\u5B57\u7B26")));
-    host.appendChild(numSetting(tr("USER.md \u5BB9\u91CF\u95E8 cap_user"), tr("\u7528\u6237\u753B\u50CF\u8BB0\u5FC6\u5E93\u5BB9\u91CF\uFF08\u5B57\u7B26\uFF09\uFF1A\u5199\u5165\u8D85\u9650\u88AB\u62D2\uFF08\u5F53\u524D\u5B9E\u9645 ") + (actualChars.user || 0) + tr(" \u5B57\u7B26\uFF09\u3002\u4E0D\u5F71\u54CD\u4EFB\u52A1\u6267\u884C\u6CE8\u5165"), gVal("cap_user", 3e3), "injection.cap_user", tr("\u5B57\u7B26")));
-    host.appendChild(numSetting(tr("MEMORY.md \u5BB9\u91CF\u95E8 cap_memory"), tr("\u77E5\u8BC6\u7D22\u5F15\u8BB0\u5FC6\u5E93\u5BB9\u91CF\uFF08\u5B57\u7B26\uFF09\uFF1A\u5199\u5165\u8D85\u9650\u88AB\u62D2\uFF08\u5F53\u524D\u5B9E\u9645 ") + (actualChars.memory || 0) + tr(" \u5B57\u7B26\uFF09\u3002\u6CE8\u5165\u6309\u6863\u4F4D\u884C\u6570\u4E0D\u53D7\u6B64\u9650"), gVal("cap_memory", 5e3), "injection.cap_memory", tr("\u5B57\u7B26")));
-    host.appendChild(el("div", "sc-h3", tr("\u6D3B\u6027 / \u9057\u5FD8\u9608\u503C\uFF08v7\uFF09")));
-    host.appendChild(el("div", "sc-desc", tr("\u8BB0\u5FC6\u6761\u76EE\u6D3B\u6027\u72B6\u6001\u673A\uFF08active\u2192warm\u2192cold\uFF09\u4E0E\u9057\u5FD8/\u52A0\u6DF1\u5019\u9009\u7684\u5224\u5B9A\u9608\u503C\uFF0C\u4EE5\u53CA\u878D\u5408\u53EC\u56DE\u5BF9 cold/retired \u6761\u76EE\u7684\u964D\u6743\u7CFB\u6570\u3002\u6539\u52A8\u7ECF /set \u5373\u65F6\u5199\u56DE scheduler.json\uFF08\u4E0E\u6CE8\u5165/\u84B8\u998F\u914D\u7F6E\u540C\u901A\u9053\uFF0C\u91CD\u8F7D\u540E\u6309\u65B0\u9608\u503C\u8FD0\u884C\uFF09\u3002")));
-    host.appendChild(numSetting(tr("\u6D3B\u6027\u964D\u7EA7 warm \u9608\u503C activityWarmDays"), tr("active\u2192warm \u65E0\u547D\u4E2D\u5929\u6570\uFF08\u7F3A\u7701 14\uFF09"), gVal("activityWarmDays", 14), "activityWarmDays", tr("\u5929")));
-    host.appendChild(numSetting(tr("\u9057\u5FD8\u51B7\u964D cold \u9608\u503C activityColdDays"), tr("warm\u2192cold \u65E0\u547D\u4E2D\u5929\u6570\uFF08\u7F3A\u7701 44 = warm+30\uFF09"), gVal("activityColdDays", 44), "activityColdDays", tr("\u5929")));
-    host.appendChild(numSetting(tr("\u9057\u5FD8\u5019\u9009 archive \u9608\u503C activityArchiveDays"), tr("cold \u540E\u8D85\u6B64\u5929\u6570\u672A\u547D\u4E2D \u2192 \u9057\u5FD8\u5019\u9009\u6E05\u5355\uFF08\u7F3A\u7701 90\uFF0C\u53EA\u5EFA\u8BAE\u4E0D\u5220\u9664\uFF09"), gVal("activityArchiveDays", 90), "activityArchiveDays", tr("\u5929")));
-    host.appendChild(numSetting(tr("\u52A0\u6DF1\u5019\u9009\u547D\u4E2D\u6570 activityHotHits"), tr("\u8FD1 30 \u5929\u547D\u4E2D \u2265 \u6B64\u503C \u2192 \u52A0\u6DF1\u5019\u9009 B\uFF08\u7F3A\u7701 5\uFF0C\u5582\u6DF1\u7761\u5F52\u7EB3\uFF09"), gVal("activityHotHits", 5), "activityHotHits", tr("\u6B21")));
-    var pctItem = el("div", "setting-item");
-    var pctInfo = el("div", "setting-item-info");
-    pctInfo.appendChild(el("div", "setting-item-name", tr("\u53EC\u56DE\u51B7\u6761\u76EE\u964D\u6743 recallColdFactorPercent")));
-    pctInfo.appendChild(el("div", "setting-item-desc", tr("cold/retired \u5C0F\u8282\u5728\u878D\u5408\u53EC\u56DE\u4E2D\u7684\u964D\u6743\u7CFB\u6570\uFF08\u767E\u5206\u6BD4 \u2192 /100\uFF1B\u7F3A\u7701 35%\uFF0C\u540E\u7AEF\u8303\u56F4\u6821\u9A8C [5,95] \u515C\u5E95\uFF09")));
-    var pctWrap = el("div", "sc-num-wrap");
-    var pctInp = el("input");
-    pctInp.type = "number";
-    pctInp.className = "sc-input";
-    pctInp.min = "5";
-    pctInp.max = "95";
-    pctInp.step = "5";
-    pctInp.value = String(gVal("recallColdFactorPercent", 35));
-    var pctUnit = el("span", "sc-range-label", "%");
-    pctInp.onchange = function() {
-      var raw = parseInt(pctInp.value, 10);
-      if (isNaN(raw)) raw = 35;
-      var v2 = Math.max(5, Math.min(95, raw));
-      pctInp.value = String(v2);
-      appState.api("/set", { method: "POST", body: JSON.stringify({ key: "recallColdFactorPercent", value: String(v2) }) }).then(function() {
-        appState.statusFn("\u2713 recallColdFactorPercent = " + v2 + "%");
-      }).catch(appState.failFn);
-    };
-    pctWrap.appendChild(pctInp);
-    pctWrap.appendChild(pctUnit);
-    pctItem.appendChild(pctInfo);
-    pctItem.appendChild(pctWrap);
-    host.appendChild(pctItem);
-    var injectInfo = el("div", "sc-desc");
-    injectInfo.classList.add("sc-inline-note");
-    host.appendChild(injectInfo);
-    appState.api("/inject/preview").then(function(r7) {
-      var txt = r7 && r7.text || "";
-      if (!txt) {
-        injectInfo.textContent = tr("\u5F53\u524D\u6CE8\u5165\uFF1A\u7A7A\uFF08hot_memory \u5173\u6216\u753B\u50CF/\u8BB0\u5FC6\u4E3A\u7A7A\uFF09");
-        return;
-      }
-      var chars = txt.replace(/\s+/g, "").length;
-      var tokens = Math.ceil(chars / 2);
-      var lineCount = txt.split("\n").filter(function(l6) {
-        return l6.trim().indexOf("- [") === 0;
-      }).length;
-      injectInfo.textContent = tr("\u5F53\u524D\u76F4\u63A5\u6CE8\u5165 \u2248 ") + tokens + " token\uFF08" + chars + tr(" \u5B57\u7B26 \xB7 \u53CC\u753B\u50CF+\u8BB0\u5FC6\u6307\u9488 ") + lineCount + tr(" \u6761\uFF09\u2014\u2014\u6BCF\u8F6E\u968F\u63D0\u793A\u8BCD\u6CE8\u5165");
-    }).catch(function() {
-      injectInfo.textContent = "";
-    });
-    host.appendChild(el("div", "sc-h3", tr("\u6DF1\u7761\u672A\u6D88\u5316\u7B56\u7565")));
-    host.appendChild(el("div", "sc-desc", tr("\u6DF1\u7761\u6BCF\u8F6E\u7528 deepSleepLanded \u5224\u5B9A\u672C\u8F6E\u662F\u5426\u300C\u5DF2\u6D88\u5316\u300D\u3002\u672A\u6D88\u5316\u65F6\u7684\u4E24\u79CD\u53D6\u5411\u5728\u6B64\u5207\u6362\u2014\u2014\u5168\u91CD\u635E\u4FDD\u8BC1\u4E0D\u4E22\u6599\u4F46\u53EF\u80FD\u65E0\u9650\u91CD\u8BD5\uFF1B\u5206\u7EA7\u5728\u8FDE\u8D25\u8FBE\u4E0A\u9650\u540E\u653E\u884C\u5E76\u544A\u8B66\uFF0C\u907F\u514D\u65E0\u9650\u91CD\u8BD5\u70E7 LLM\u3002")));
-    host.appendChild(UI.item(
-      tr("\u6DF1\u7761\u672A\u6D88\u5316\u7B56\u7565 deepSleep.failPolicy"),
-      tr("\u5168\u91CD\u635E\uFF08retry\uFF09= \u6C38\u4E0D\u653E\u5F03\uFF0C\u672A\u6D88\u5316\u5C31\u4E00\u76F4\u91CD\u635E\u672C\u6279\uFF08\u4FDD\u8BC1\u4E0D\u4E22\u6599\uFF1B\u6750\u6599\u6C38\u4E45\u5931\u8D25\u65F6\u6BCF\u8F6E\u90FD\u4F1A\u91CD\u8BD5\uFF09\uFF1B\u5206\u7EA7\uFF08graded\uFF09= \u8FDE\u7EED\u5931\u8D25\u8FBE N \u8F6E\u540E\u653E\u884C\u6C34\u4F4D\u5E76\u8BB0\u5BA1\u8BA1\u544A\u8B66\uFF08\u907F\u514D\u65E0\u9650\u91CD\u8BD5\u70E7 LLM\uFF09\u3002\u7F3A\u7701 graded\u3002"),
-      UI.select([
-        { value: "retry", label: tr("\u5168\u91CD\u635E\uFF08\u4E0D\u4E22\u6599\uFF0C\u6C38\u4E0D\u653E\u5F03\uFF09") },
-        { value: "graded", label: tr("\u5206\u7EA7\uFF08\u8FDE\u8D25 N \u8F6E\u540E\u653E\u884C\u5E76\u544A\u8B66\uFF09") }
-      ], String(gVal("deepSleepFailPolicy", "graded")), function(v2) {
-        appState.api("/set", { method: "POST", body: JSON.stringify({ key: "deepSleep.failPolicy", value: v2 }) }).then(function() {
-          appState.statusFn(tr("\u2713 \u6DF1\u7761\u672A\u6D88\u5316\u7B56\u7565 = ") + v2);
-        }).catch(appState.failFn);
-      }, "deepSleep.failPolicy")
-    ));
-    var roundsInput = UI.input(String(gVal("deepSleepFailMaxRounds", 3)), function(raw) {
-      var n6 = parseInt(raw, 10);
-      if (isNaN(n6)) n6 = 3;
-      n6 = Math.max(1, Math.min(100, n6));
-      roundsInput.value = String(n6);
-      appState.api("/set", { method: "POST", body: JSON.stringify({ key: "deepSleep.failPolicyMaxRounds", value: String(n6) }) }).then(function() {
-        appState.statusFn(tr("\u2713 \u5206\u7EA7\u7B56\u7565\u8FDE\u8D25\u4E0A\u9650 = ") + n6 + tr(" \u8F6E"));
-      }).catch(appState.failFn);
-    }, { type: "number", width: "120px", ariaLabel: "deepSleep.failPolicyMaxRounds" });
-    roundsInput.min = "1";
-    roundsInput.max = "100";
-    roundsInput.step = "1";
-    host.appendChild(UI.item(
-      tr("\u5206\u7EA7\u7B56\u7565\u8FDE\u8D25\u4E0A\u9650 deepSleep.failPolicyMaxRounds"),
-      tr("\u4EC5\u5728\u300C\u5206\u7EA7\u300D\u7B56\u7565\u4E0B\u751F\u6548\uFF081\u2013100\uFF0C\u7F3A\u7701 3\uFF09\uFF1A\u8FDE\u7EED\u5931\u8D25\u8FBE\u6B64\u8F6E\u6570\u540E\u653E\u884C\u6DF1\u7761\u6C34\u4F4D\u5E76\u8BB0\u4E00\u6761\u5BA1\u8BA1\u544A\u8B66\uFF1B\u5168\u91CD\u635E\u7B56\u7565\u4E0B\u6B64\u9879\u4E0D\u53C2\u4E0E\u5224\u5B9A\u3002"),
-      roundsInput
-    ));
   }
   function renderTogglesModel(host) {
     renderTogglesModelVec(host);
@@ -11223,10 +11286,10 @@
         sw.checked = !sw.checked;
       });
     }));
-    host.appendChild(numSetting(tr("\u719F\u6089\u5EA6\u9608\u503C mclFamiliarThreshold"), tr("\u300C\u7528\u6237\u6587\u672C \u2194 \u547D\u4E2D\u7D22\u5F15\u884C\u300D\u7684\u7EDD\u5BF9\u4F59\u5F26\u9608\u503C\uFF080\u20131\uFF0C\u7F3A\u7701 0.65\uFF1BACT-024 \u6821\u51C6\uFF1A0.65 \u2192 \u89E6\u53D1\u7387 ~2% \u4E14\u9608\u4E0A\u5168\u4E3A\u771F\u547D\u4E2D\uFF09"), gVal("mclFamiliarThreshold", 0.65), "mclFamiliarThreshold", "", 0.01));
-    host.appendChild(numSetting(tr("\u518D\u5F15\u5BFC\u4E0A\u9650 mclMaxNudges"), tr("\u6162\u901A\u9053\u6700\u591A\u518D\u5F15\u5BFC\u6B21\u6570\uFF080\u20133\uFF0C\u7F3A\u7701 1\uFF1B\u7EDD\u4E0D\u6B7B\u9501\uFF09"), gVal("mclMaxNudges", 1), "mclMaxNudges", tr("\u6B21"), 1));
-    host.appendChild(numSetting(tr("\u6750\u6599\u9884\u7B97 mclBudgetChars"), tr("\u6162\u901A\u9053\u6750\u6599\u786C\u9884\u7B97\uFF08120\u20134000 \u5B57\u7B26\uFF0C\u7F3A\u7701 600\uFF1B\u53EA\u4F5C\u7528\u4E8E\u6162\u901A\u9053\u9996\u6B65\uFF09"), gVal("mclBudgetChars", 600), "mclBudgetChars", tr("\u5B57\u7B26"), 50));
-    host.appendChild(numSetting(tr("\u6307\u9488\u6761\u6570 mclTopK"), tr("\u6162\u901A\u9053\u6CE8\u5165\u7684\u6307\u9488\u6761\u6570\uFF081\u20135\uFF0C\u7F3A\u7701 3\uFF09"), gVal("mclTopK", 3), "mclTopK", tr("\u6761"), 1));
+    host.appendChild(numSetting2(tr("\u719F\u6089\u5EA6\u9608\u503C mclFamiliarThreshold"), tr("\u300C\u7528\u6237\u6587\u672C \u2194 \u547D\u4E2D\u7D22\u5F15\u884C\u300D\u7684\u7EDD\u5BF9\u4F59\u5F26\u9608\u503C\uFF080\u20131\uFF0C\u7F3A\u7701 0.65\uFF1BACT-024 \u6821\u51C6\uFF1A0.65 \u2192 \u89E6\u53D1\u7387 ~2% \u4E14\u9608\u4E0A\u5168\u4E3A\u771F\u547D\u4E2D\uFF09"), gVal("mclFamiliarThreshold", 0.65), "mclFamiliarThreshold", "", 0.01));
+    host.appendChild(numSetting2(tr("\u518D\u5F15\u5BFC\u4E0A\u9650 mclMaxNudges"), tr("\u6162\u901A\u9053\u6700\u591A\u518D\u5F15\u5BFC\u6B21\u6570\uFF080\u20133\uFF0C\u7F3A\u7701 1\uFF1B\u7EDD\u4E0D\u6B7B\u9501\uFF09"), gVal("mclMaxNudges", 1), "mclMaxNudges", tr("\u6B21"), 1));
+    host.appendChild(numSetting2(tr("\u6750\u6599\u9884\u7B97 mclBudgetChars"), tr("\u6162\u901A\u9053\u6750\u6599\u786C\u9884\u7B97\uFF08120\u20134000 \u5B57\u7B26\uFF0C\u7F3A\u7701 600\uFF1B\u53EA\u4F5C\u7528\u4E8E\u6162\u901A\u9053\u9996\u6B65\uFF09"), gVal("mclBudgetChars", 600), "mclBudgetChars", tr("\u5B57\u7B26"), 50));
+    host.appendChild(numSetting2(tr("\u6307\u9488\u6761\u6570 mclTopK"), tr("\u6162\u901A\u9053\u6CE8\u5165\u7684\u6307\u9488\u6761\u6570\uFF081\u20135\uFF0C\u7F3A\u7701 3\uFF09"), gVal("mclTopK", 3), "mclTopK", tr("\u6761"), 1));
     host.appendChild(appState.makeToggle("mclAudit", tr("\u8BA4\u77E5\u73AF\u5BA1\u8BA1\u6D41 mclAudit"), tr("\u6BCF\u6B65\u4E00\u884C\u5199 suite/knowledge/audit/mcl-audit.jsonl\uFF08\u901A\u9053/\u719F\u6089\u5EA6/\u6CE8\u5165/\u518D\u5F15\u5BFC/\u5408\u89C4\uFF09"), gVal("mclAudit", true) !== false, function(key, sw) {
       appState.api("/toggle", { method: "POST", body: JSON.stringify({ key }) }).then(function() {
         appState.statusFn(tr("\u2713 \u5DF2\u5207\u6362 ") + key + tr("\uFF08\u9700\u91CD\u8F7D\u751F\u6548\uFF09"));
@@ -12282,7 +12345,7 @@
     " \u5206\u949F / \u672C\u8F6E\u6700\u5C11 ": " min / this turn minimum ",
     " \u5B57\u7B26 / \u9884\u7B5B ": " chars / prescan ",
     " \u5B57\u7B26 \xB7 \u53CC\u753B\u50CF+\u8BB0\u5FC6\u6307\u9488 ": " chars \xB7 dual profile + memory pointers ",
-    " \u5B57\u7B26\uFF09\u3002**\u4E0D\u5F71\u54CD\u4EFB\u52A1\u6267\u884C\u6CE8\u5165**\u2014\u2014\u6CE8\u5165\u603B\u770B\u5B8C\u6574\u753B\u50CF": " chars). **Does not affect task-execution injection** \u2014 injection always reads the full profile",
+    " \u5B57\u7B26\uFF09\u3002\u4E0D\u5F71\u54CD\u4EFB\u52A1\u6267\u884C\u6CE8\u5165\u2014\u2014\u6CE8\u5165\u603B\u770B\u5B8C\u6574\u753B\u50CF": " chars). Does not affect task-execution injection \u2014 injection always sees the full profile",
     " \u5B57\u7B26\uFF09\u3002\u4E0D\u5F71\u54CD\u4EFB\u52A1\u6267\u884C\u6CE8\u5165": " chars). Does not affect task-execution injection",
     " \u5B57\u7B26\uFF09\u3002\u6CE8\u5165\u6309\u6863\u4F4D\u884C\u6570\u4E0D\u53D7\u6B64\u9650": " chars). Injection follows tier line counts and is not bound by this limit",
     " \u5B8C\u6210": " done",
@@ -12303,7 +12366,22 @@
     "URL \u65E0\u6548\uFF08\u9700 http(s):// \u5F00\u5934\uFF09": "Invalid URL (must start with http(s)://)",
     "USER.md \u5BB9\u91CF\u95E8 cap_user": "USER.md capacity gate cap_user",
     "active\u2192warm \u65E0\u547D\u4E2D\u5929\u6570\uFF08\u7F3A\u7701 14\uFF09": "Days with no hit before active\u2192warm (default 14)",
-    "agent \u753B\u50CF\u8BB0\u5FC6\u5E93\u5BB9\u91CF\uFF08\u5B57\u7B26\uFF09\uFF1A\u84B8\u998F/\u6DF1\u7761\u5199\u5165\u8D85\u9650\u4F1A\u88AB write_gate \u62D2\uFF08AGENT.md \u5F53\u524D\u5B9E\u9645 ": "Agent profile memory bank capacity (chars): distillation/deep sleep writes over the limit are rejected by write_gate (AGENT.md currently ",
+    // ADR-333（2026-09-22）：容量门文案改为**随开关态**如实描述（原文案无条件称"被拒"，
+    //   而实测四条路径里三条本就不阻断 ⇒ 开关关闭后那三句全是假话）。
+    //   ⚠ 键必须与 `panes-capacity.js` 的 tr() 串**逐字一致**（`check-i18n-keys` 守）。
+    "\u5199\u5165\u8D85\u9650\u4F1A\u88AB\u62D2\uFF08\u5F53\u524D\uFF1A\u963B\u65AD\u5DF2\u5F00\u542F\uFF09": "writes over the limit are rejected (currently: blocking is ON)",
+    "\u5199\u5165\u8D85\u9650\u4E0D\u518D\u963B\u65AD\uFF08\u5F53\u524D\uFF1A\u963B\u65AD\u5DF2\u5173\u95ED\uFF0C\u8D85\u9650\u7167\u5199\u5E76\u7559\u4E00\u6761 capacity-over \u5BA1\u8BA1\u75D5\uFF09": "writes over the limit are no longer blocked (currently: blocking is OFF \u2014 over-limit writes pass and leave a capacity-over audit trace)",
+    "\u5BB9\u91CF\u95E8 = \u8BB0\u5FC6\u5E93\u80FD\u957F\u591A\u5927\uFF08\u8D85\u9650\u662F\u5426\u963B\u65AD\u7531\u4E0B\u65B9\u5F00\u5173\u51B3\u5B9A\uFF09\uFF1B\u6D3B\u6027/\u9057\u5FD8\u4E3A\u5929\u7EA7\u9608\u503C\u3002": "Capacity gate = how large the memory bank may grow (whether over-limit blocks is decided by the switch below); activity/forgetting are day-level thresholds.",
+    "\u5BB9\u91CF\u95E8\u662F\u5426\u963B\u65AD\u5199\u5165 capacityEnforce": "Does the capacity gate block writes? (capacityEnforce)",
+    "\u7F3A\u7701\u300C\u5173\u95ED\u300D= \u8D85\u9650\u7167\u5199\uFF08\u5E76\u843D\u4E00\u6761 capacity-over \u7559\u75D5\uFF09\u3002\u5F00=\u8D85\u9650\u62D2\u5199\uFF08\u6539\u9020\u524D\u753B\u50CF\u884C\u4E3A\uFF09\u3002\u53EA\u5F71\u54CD\u5BB9\u91CF\u8FD9\u4E00\u652F\uFF1A\u6E90\u6307\u9488\u60AC\u7A7A / \u884C\u683C\u5F0F / \u7591\u4F3C\u51ED\u636E\u4E09\u9053\u95E8\u59CB\u7EC8\u786C\u62D2\uFF0C\u4E0D\u53D7\u6B64\u5F00\u5173\u5F71\u54CD\u3002\u6539\u540E\u5373\u65F6\u751F\u6548\uFF08\u5199\u95E8\u6BCF\u8F6E\u91CD\u8BFB\uFF09\u3002": 'Default "OFF" = over-limit writes pass (and leave a capacity-over trace). ON = reject over-limit writes (the pre-change profile behaviour). Affects only the capacity branch: dangling source pointers / line format / suspected credentials always stay hard-rejected regardless of this switch. Takes effect immediately (the write gate re-reads it every round).',
+    "\u5173\u95ED\uFF08\u7F3A\u7701\xB7\u8D85\u9650\u7167\u5199\u5E76\u7559\u75D5\uFF09": "OFF (default \xB7 pass over-limit and leave a trace)",
+    "\u5F00\u542F\uFF08\u8D85\u9650\u62D2\u5199\uFF09": "ON (reject over-limit writes)",
+    "agent \u753B\u50CF\u8BB0\u5FC6\u5E93\u5BB9\u91CF\uFF08\u5B57\u7B26\uFF09\uFF1A": "Agent profile memory bank capacity (chars): ",
+    "\uFF08AGENT.md \u5F53\u524D\u5B9E\u9645 ": "(AGENT.md currently ",
+    "\uFF08\u5F53\u524D\u5B9E\u9645 ": "(currently ",
+    " \u5B57\u7B26\uFF09\u3002\u4E0D\u5F71\u54CD\u4EFB\u52A1\u6267\u884C\u6CE8\u5165\u2014\u2014\u6CE8\u5165\u603B\u770B\u5B8C\u6574\u753B\u50CF": " chars). Does not affect task-execution injection \u2014 injection always sees the full profile",
+    " \u5B57\u7B26\uFF09\u3002\u4E0D\u5F71\u54CD\u4EFB\u52A1\u6267\u884C\u6CE8\u5165": " chars). Does not affect task-execution injection",
+    " \u5B57\u7B26\uFF09\u3002\u6CE8\u5165\u6309\u6863\u4F4D\u884C\u6570\u4E0D\u53D7\u6B64\u9650": " chars). Injection is limited by per-level row count, not by this",
     "cold \u540E\u8D85\u6B64\u5929\u6570\u672A\u547D\u4E2D \u2192 \u9057\u5FD8\u5019\u9009\u6E05\u5355\uFF08\u7F3A\u7701 90\uFF0C\u53EA\u5EFA\u8BAE\u4E0D\u5220\u9664\uFF09": "No hit for more than this many days after cold \u2192 forgetting candidate list (default 90; suggestion only, never deletes)",
     "cold/retired \u5C0F\u8282\u5728\u878D\u5408\u53EC\u56DE\u4E2D\u7684\u964D\u6743\u7CFB\u6570\uFF08\u767E\u5206\u6BD4 \u2192 /100\uFF1B\u7F3A\u7701 35%\uFF0C\u540E\u7AEF\u8303\u56F4\u6821\u9A8C [5,95] \u515C\u5E95\uFF09": "Downweight factor for cold/retired sections in fusion recall (percentage \u2192 /100; default 35%, backend range validation [5,95] as a fallback)",
     "key \u73AF\u5883\u53D8\u91CF\u540D\uFF08\u672C\u5730\u514D\u586B\uFF09": "Key environment variable name (not needed locally)",
@@ -12402,7 +12480,6 @@
     "\u5B57\u7B26": "chars",
     "\u5B88\u85CF\u6839\u76EE\u5F55": "Shoucang root directories",
     "\u5B88\u85CF\u84B8\u998F\u5668 enableDistill": "Shoucang distiller enableDistill",
-    "\u5BB9\u91CF\u95E8 = \u8BB0\u5FC6\u5E93\u80FD\u957F\u591A\u5927\uFF08\u5199\u5165\u8D85\u9650\u88AB write_gate \u62D2\u5199\uFF09\uFF1B\u6D3B\u6027/\u9057\u5FD8\u4E3A\u5929\u7EA7\u9608\u503C\u3002": "Capacity gate = how large the memory bank may grow (writes beyond the limit are rejected by write_gate); activity/forgetting are day-level thresholds.",
     "\u5BBF\u4E3B\u539F\u751F\u76AE\u80A4": "Host native skin",
     "\u5BBF\u4E3B\u53EF\u7528 ": "Host available ",
     "\u5BBF\u4E3B\u6A21\u578B\u76EE\u5F55\u4E3A\u7A7A \u2014\u2014 \u53EF\u5728\u300C\u81EA\u5B9A\u4E49\u300D\u91CC\u624B\u586B\u6A21\u578B\u540D\uFF0C\u6216\u5148\u5728 Harness \u91CC\u914D\u597D\u6A21\u578B": 'The host model catalog is empty \u2014 type a model id under "Custom", or configure a model in Harness first',
@@ -12521,7 +12598,7 @@
     "\u70ED\u8BB0\u5FC6\u6CE8\u5165\u5F3A\u5EA6 injection.level": "Hot-memory injection strength injection.level",
     "\u719F\u6089\u5EA6": "Familiarity",
     "\u73B0\u6709\u5927\u6A21\u578B": "Existing large model",
-    "\u7528\u6237\u753B\u50CF\u8BB0\u5FC6\u5E93\u5BB9\u91CF\uFF08\u5B57\u7B26\uFF09\uFF1A\u5199\u5165\u8D85\u9650\u88AB\u62D2\uFF08\u5F53\u524D\u5B9E\u9645 ": "User profile memory bank capacity (chars): writes over the limit are rejected (currently ",
+    "\u7528\u6237\u753B\u50CF\u8BB0\u5FC6\u5E93\u5BB9\u91CF\uFF08\u5B57\u7B26\uFF09\uFF1A": "User profile memory bank capacity (chars): ",
     "\u753B\u50CF persona \u6CE8\u5165\u6863\u4F4D injection.persona": "Profile persona injection level injection.persona",
     "\u754C\u9762\u504F\u597D": "Interface preferences",
     "\u754C\u9762\u504F\u597D\u4E0E\u9AD8\u7EA7\u64CD\u4F5C\u3002\u914D\u7F6E\u539F\u6587\uFF08YAML\uFF09\u4E0E\u884C\u7EA7\u7F16\u8F91\u6536\u5728\u6B64\u5904\uFF0C\u914D\u98CE\u9669\u63D0\u793A\u3002": "Interface preferences and advanced operations. The raw configuration (YAML) and line-level editing live here, with risk warnings.",
@@ -12529,7 +12606,7 @@
     "\u754C\u9762\u8BBE\u7F6E\u5DF2\u6062\u590D\u9ED8\u8BA4": "UI settings restored to defaults",
     "\u7559\u7A7A=\u7EE7\u627F\u4E3B\u4F1A\u8BDD\u6A21\u578B": "Leave blank = inherit the main session model",
     "\u76F4\u63A5\u7F16\u8F91 shoucang.config.yaml \u5168\u6587\u3002\u4FDD\u5B58\u65F6\u539F\u6587\u4EF6\u81EA\u52A8\u5907\u4EFD\u4E3A .bak-\u65F6\u95F4\u6233\u3002": "Edit shoucang.config.yaml in full directly. On save the original file is automatically backed up as .bak-timestamp.",
-    "\u77E5\u8BC6\u7D22\u5F15\u8BB0\u5FC6\u5E93\u5BB9\u91CF\uFF08\u5B57\u7B26\uFF09\uFF1A\u5199\u5165\u8D85\u9650\u88AB\u62D2\uFF08\u5F53\u524D\u5B9E\u9645 ": "Knowledge index memory bank capacity (chars): writes over the limit are rejected (currently ",
+    "\u77E5\u8BC6\u7D22\u5F15\u8BB0\u5FC6\u5E93\u5BB9\u91CF\uFF08\u5B57\u7B26\uFF09\uFF1A": "Knowledge index memory bank capacity (chars): ",
     "\u786E\u8BA4\u6062\u590D\u5168\u90E8\u754C\u9762\u8BBE\u7F6E\u4E3A\u9ED8\u8BA4\u503C\uFF1F": "Restore all UI settings to their default values?",
     "\u79D2": "sec",
     "\u7A7A\u95F2\u5524\u9192 idleWakeMs": "Idle wake-up idleWakeMs",
@@ -12735,7 +12812,7 @@
     "\u5347\u683C / \u964D\u683C\u8D70 /memory/approve\uFF0C\u7531 L0 \u5224\u636E\u88C1\u51B3\u3002\u7D22\u5F15\u884C\u53EA\u8BFB\uFF0C\u6B63\u6587\u7F16\u8F91\u8D70 /memory/section-edit\u3002": "Promotion / demotion goes through /memory/approve and is decided by the L0 criterion. Index rows are read-only; body edits go through /memory/section-edit.",
     "\u539F\u5219 ": "Principles ",
     "\u53D6\u6D88": "Cancel",
-    "\u53EA\u6709\u5B58\u5728\u771F\u5B9E\u5BB9\u91CF\u95E8\u7684\u8F7D\u4F53\u624D\u7ED9\u767E\u5206\u6BD4\u4E0E\u8FDB\u5EA6\u6761\uFF1AMEMORY.md\uFF08cap_memory\uFF09\u4E0E\u753B\u50CF\uFF08cap_user / cap_agent\uFF09\uFF1Bnotes / pending \u65E0\u5BB9\u91CF\u95E8 \u21D2 \u53EA\u62A5\u7EDD\u5BF9\u91CF\u3002\u8D85\u9650\u7531 write_gate \u62D2\u5199\u3002": "Only carriers with a real capacity gate get a percentage and progress bar: MEMORY.md (cap_memory) and profiles (cap_user / cap_agent); notes / pending have no capacity gate \u21D2 absolute counts only. Over-limit writes are rejected by write_gate.",
+    "\u53EA\u6709\u5B58\u5728\u771F\u5B9E\u5BB9\u91CF\u95E8\u7684\u8F7D\u4F53\u624D\u7ED9\u767E\u5206\u6BD4\u4E0E\u8FDB\u5EA6\u6761\uFF1AMEMORY.md\uFF08cap_memory\uFF09\u4E0E\u753B\u50CF\uFF08cap_user / cap_agent\uFF09\uFF1Bnotes / pending \u65E0\u5BB9\u91CF\u95E8 \u21D2 \u53EA\u62A5\u7EDD\u5BF9\u91CF\u3002\u662F\u5426\u56E0\u8D85\u9650**\u963B\u65AD**\u5199\u5165\u7531\u300C\u53C2\u6570\u8C03\u8282 \u2192 \u8BB0\u5FC6\u4E0E\u5BB9\u91CF\u300D\u7684\u5BB9\u91CF\u95E8\u5F00\u5173\u51B3\u5B9A\uFF08\u7F3A\u7701\u5173\u95ED = \u7167\u5199\u5E76\u7559\u4E00\u6761 capacity-over \u7559\u75D5\uFF09\u3002": "Only carriers with a real capacity gate get a percentage and progress bar: MEMORY.md (cap_memory) and profiles (cap_user / cap_agent); notes / pending have no capacity gate \u21D2 absolute counts only. Whether over-limit writes are blocked is decided by the capacity-gate switch under Settings \u2192 Memory & Capacity (default OFF = write through and leave a capacity-over trace).",
     "\u5982\u9700\u6062\u590D\uFF0C\u628A notes/archive/ \u4E0B\u7684\u6587\u4EF6\u79FB\u56DE notes/ \u5373\u53EF\uFF08\u9762\u677F\u4E0D\u63D0\u4F9B\u5199\u5165\u53E3\uFF09\u3002": "To restore, simply move the files under notes/archive/ back into notes/ (the panel provides no write entry point).",
     "\u5B88\u85CF\u672C\u5730\u77E5\u8BC6\u533A \xB7 suite/knowledge": "Shoucang local knowledge area \xB7 suite/knowledge",
     "\u5B88\u85CF\u672C\u5730\u77E5\u8BC6\u533A\u672A\u542F\u7528\uFF08suite/knowledge \u4E0D\u5B58\u5728\uFF09": "Shoucang local knowledge area is not enabled (suite/knowledge does not exist)",
@@ -13344,7 +13421,12 @@
     "\u9AD8\u7EA7\uFF1A\u884C\u7EA7\u7F16\u8F91 / \u5220\u9664\uFF08\u8C28\u614E\uFF09": "Advanced: line-level edit / delete (use with care)",
     "\uFF08\u5DF2\u843D\u76D8\uFF09": " (saved to disk)",
     "\uFF08\u65E0\uFF09": "(none)",
-    "\uFF08\u7F3A\u7701\u5728\u7528\uFF09": " (default in use)"
+    "\uFF08\u7F3A\u7701\u5728\u7528\uFF09": " (default in use)",
+    // ADR-333 册三（2026-09-22）：写入被拒率**按通道**明细 + 门禁拒收**按目标**明细。
+    //   判因：原面板只有总量 ⇒ 画像通道 167 次真拒被摊薄成 7.4%，**通道级冻死在 UI 上不可见**。
+    " \xB7 \u6309\u901A\u9053\uFF1A": " \xB7 by channel: ",
+    "\u95E8\u7981\u62D2\u6536\uFF08\u6309\u76EE\u6807\uFF09": "Gate rejections (by target)",
+    " \xB7 \u6700\u8FD1 ": " \xB7 latest "
   };
 
   // src-client/i18n-dict-index.generated.js

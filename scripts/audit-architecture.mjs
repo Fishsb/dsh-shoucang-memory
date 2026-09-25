@@ -16,9 +16,10 @@
 //
 // 用法: node scripts/audit-architecture.mjs [--json] [--gate] [--dir <相对仓根目录，默认 src>]
 //   --gate 退出码：0 = 未超阈值；1 = 超阈值（CI 用）。默认（无 --gate）= 报告态，恒 exit 0。
-import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { join, dirname, extname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { spawnSync } from 'node:child_process'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const AS_JSON = process.argv.includes('--json')
@@ -38,8 +39,40 @@ function listFiles(dir) {
   return out
 }
 
+/** ⚠ **扫描面守卫（2026-09-23 · ACT-355 · 消费单一实现 `lib-scan-scope.mjs`）** ——
+ *  判因（会审独立复核实测）：`--gate --dir <不存在的目录>` 原先**未处理崩溃** ——
+ *    `listFiles()` 的 `readdirSync` 直接抛 `ENOENT` 带栈退出（`at listFiles (…:34)`），
+ *    走不到下面 `EMPTY_SCAN` 与报告段的「扫描面不可用」判因 ⇒ **第三态缺失**。
+ *  正撞 `lib-scan-scope.mjs:20-23` 明文要求分开的「**读不出 ≠ 不存在**」，而本件此前是
+ *    **唯一未消费该库的扫描面守卫**（另 4 件：check-bridges / check-field-usage /
+ *    check-i18n-attr-literal / check-observability 均已消费）。
+ *  ⚠ 递归 `listFiles` **保留**（递归是它的语义，非待清除的重复）：本件判「**递归解析产物**为 0」，
+ *    与库的「**目录条目**为 0」是不同量 ⇒ 只借库的**三态判因与退出码**，不搬判定。
+ *    据实留档：`accept` 只收条目名、无法表达「递归后 0 模块」（实测 `skill/` 顶层只有子目录时
+ *    库判 empty 而本件 20 模块）⇒ 不把判据搬进库，避免制造新假绿（会审 steelman 席结论）。
+ */
+{
+  const { guardScanScope } = await import(new URL('./lib-scan-scope.mjs', import.meta.url).href)
+  const scoped = guardScanScope({
+    dir: DIR,
+    label: `\`${REL}/\``,
+    required: true,
+    why: '本件判据建立在「递归解析该目录下的 .ts/.mjs/.js 模块为 0」之上；扫描面不可用时「全部在阈值内」是恒真命题。',
+    // ⚠ 只判「目录能否列举」，不在此处过滤扩展名（递归与后缀过滤仍是本件自己的语义）
+    accept: () => true,
+  })
+  if (scoped.exitCode !== null) process.exit(scoped.exitCode)
+}
+
 const files = listFiles(DIR)
 const mods = new Map() // name -> { file, src, lines, bytes }
+
+/** ⚠ D-A（2026-09-23 · 圆桌会审受控证明并修复）：**空扫不得判绿**。
+ *  判因：凡以「集合内无违规项」为结论的门禁，**必须先断言集合非空**——空集上「全部在阈值内」是恒真命题。
+ *  实测（修前）：`--gate --dir <空目录>` ⇒ 报 `0 模块` 却打「✅ 全部在阈值内」且 **exit 0**。
+ *  这一步只能由**扫描面大小**判定，不能由 `breaches.length` 判定（空集必然无 breach）。
+ *  ⚠ 同时是本件 `--dir` 反向证伪手法的守卫：tmp 变异副本若因路径写错而扫不到文件，修前会**静默判绿**。 */
+const EMPTY_SCAN = files.length === 0
 
 // ⚠ 解析前**必须先剥注释**（本仓第三次踩到「注释被正则护栏当成代码」：
 //   check-ui-contract 递归防护、AST 闸骨架化都栽过）。
@@ -249,6 +282,30 @@ for (const r of rows) {
     breaches.push(`${r.name} 扇入 ${r.fanIn} > ${T.fanIn} 且不稳定度 ${instability.toFixed(2)} > ${T.instability}（高扇入 + 自身不稳定 = 耦合风险）`)
   }
 }
+
+// ── **棘轮收紧提示**（2026-09-23 · ACT-355 · 会审 minimal 席指出的**唯一真缺口**）──
+//   判因：`T` 是棘轮（只许收紧），但本件此前**只判「超阈值」**——若某次重构把某个量压下来，
+//     门**不会提醒**，于是它可以悄悄涨回去，而**没人知道中间发生过「先降后升」**。
+//     先例：`audit-fnspan.mjs:144` 与 `check-bridges.mjs:141` 都有同型提示（本仓既有范式）。
+//   ⚠ 这是**提示而非判红**（与 `--gate` 的退出码无关）：阈值不在本件里自动改写，
+//     因为「收紧到多少」是**重构决策**，须由人显式改 `T` 并进 git diff（同 `--rebase` 的显式性纪律）。
+const tightenHints = []
+{
+  const maxLines = Math.max(0, ...rows.map((r) => r.lines))
+  const maxExports = Math.max(0, ...rows.map((r) => r.exports))
+  const maxFanIn = Math.max(0, ...rows.map((r) => r.fanIn))
+  const maxReexports = Math.max(0, ...rows.map((r) => r.reexports))
+  if (maxLines < T.lines - 100) tightenHints.push(`行数上限：实测最大 ${maxLines} < 阈值 ${T.lines}（余量 ${T.lines - maxLines}）⇒ 考虑收紧 \`T.lines\``)
+  if (maxExports < T.exports) tightenHints.push(`导出上限：实测最大 ${maxExports} < 阈值 ${T.exports} ⇒ 考虑收紧 \`T.exports\``)
+  if (maxFanIn <= T.fanIn) tightenHints.push(`扇入上限：实测最大 ${maxFanIn} ≤ 阈值 ${T.fanIn} ⇒ 若无「高扇入 + 不稳定」实例，考虑收紧 \`T.fanIn\``)
+  if (maxReexports < T.reexports) tightenHints.push(`转发上限：实测最大 ${maxReexports} < 阈值 ${T.reexports} ⇒ 考虑收紧 \`T.reexports\``)
+}
+if (tightenHints.length && AS_GATE) {
+  console.log('')
+  console.log('· 棘轮收紧提示（**不判红** · 只提醒「阈值已有余量、可考虑收紧」）：')
+  for (const h of tightenHints) console.log('    ' + h)
+  console.log('    ⇒ 「先降后升」若无人提醒就无人知晓；改阈值请**显式改 `T`** 并进 git diff。')
+}
 // ── 接线门（2026-09-14 · P0a）──
 // 为什么需要它：本仓 7 件架构机检**全是负面约束**（无环 / 无桥 / 行数 / 依赖宽度 / 符号漂移），
 //   没有一道问「这个模块有没有人在用」。实测后果：supply-assembly 与 record-address 功能完整、
@@ -309,12 +366,69 @@ else {
   console.log(`扇入最高: ${rows.slice().sort((a, b) => b.fanIn - a.fanIn).slice(0, 3).map(r => `${r.name}(${r.fanIn})`).join(', ')}`)
   console.log(`规模最大: ${rows.slice().sort((a, b) => b.lines - a.lines).slice(0, 3).map(r => `${r.name}(${r.lines})`).join(', ')}`)
   if (AS_GATE) {
-    if (breaches.length) { console.log(`\n❌ 超阈值 ${breaches.length} 项：`); for (const b of breaches) console.log('   · ' + b) }
+    if (EMPTY_SCAN) {
+      console.log(`\n❌ 扫描面为空：\`${REL}/\` 下解析出 **0 个模块** —— **不得判绿**（空集上「无违规」是恒真命题）`)
+      console.log('   · 判因（D-A · 2026-09-23 圆桌会审受控证明）：`--gate --dir <空目录>` 曾报 0 模块却打「✅ 全部在阈值内」并 exit 0。')
+      console.log('   · 退回动作：确认 `--dir` 指向真实目录、且该目录下有 .ts/.mjs/.js 源文件。')
+    } else if (breaches.length) { console.log(`\n❌ 超阈值 ${breaches.length} 项：`); for (const b of breaches) console.log('   · ' + b) }
     else console.log('\n✅ 全部在阈值内')
+  } else if (EMPTY_SCAN) {
+    console.log(`\n⚠ 扫描面为空：\`${REL}/\` 下 0 个模块 —— 本次读数**不携带信息**（gate 模式下会判红）`)
   } else if (breaches.length) {
     console.log(`\n⚠ gate 模式下会报 ${breaches.length} 项：`); for (const b of breaches) console.log('   · ' + b)
   }
 }
 
-if (AS_GATE) process.exit(breaches.length ? 1 : 0)
+// ── --selftest（D-A 反向证伪 · 2026-09-23）─────────────────────────────
+//   判因：本件曾对**空目录**报「✅ 全部在阈值内」并 exit 0 —— 空集上「无违规」是恒真命题。
+//   本自证用 `mkdtemp` 造真空目录，**不碰 src**、不依赖真仓状态；判据 = gate 下必须非 0 退出。
+{
+  const stIdx = process.argv.indexOf('--selftest')
+  if (stIdx >= 0) {
+    const { mkdtempSync, rmSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const self = fileURLToPath(import.meta.url)
+    // ⚠ **两路都要收**（2026-09-23 ACT-355 实测）：`lib-scan-scope.mjs:113` 的契约是
+    //   「输出走 **stderr**（红）或 stdout（skip）」⇒ 只收 stdout 会**收不到判因**，
+    //   使 ② 变成假红（实测：exit 码对、文案在对侧流）。这是「断言读错流」而非守卫失效。
+    const run = (dir) => {
+      const r = spawnSync(process.execPath, [self, '--gate', '--dir', dir], { encoding: 'utf8' })
+      return { status: r.status, stdout: `${r.stdout || ''}${r.stderr || ''}` }
+    }
+    let pass = 0, fail = 0
+    const ok = (cond, name) => { if (cond) { pass++; console.log(`  ✅ ${name}`) } else { fail++; console.log(`  ❌ ${name}`) } }
+
+    const empty = mkdtempSync(join(tmpdir(), 'sc-empty-'))
+    const rEmpty = run(empty)
+    ok(rEmpty.status !== 0, `① 空目录 + --gate **必须**非 0 退出（实测 ${rEmpty.status}）`)
+    ok(/扫描面为空|不得判绿/.test(rEmpty.stdout || ''), '② 空扫时必须打印「不得判绿」判因（否则红得不可解释）')
+
+    // ③ 正向不回归：真 src 必须仍全绿（防"一律判红"的过修）
+    const rSrc = run('src')
+    ok(rSrc.status === 0, `③ 真 src + --gate 仍须 exit 0（不回归；实测 ${rSrc.status}）`)
+    ok(/全部在阈值内|超阈值/.test(rSrc.stdout || ''), '④ 真 src 仍给出实质结论（非空扫分支）')
+
+    // ⑤ 有文件但无源文件（非空目录却 0 模块）也必须判红
+    const noSrc = mkdtempSync(join(tmpdir(), 'sc-nosrc-'))
+    writeFileSync(join(noSrc, 'readme.txt'), 'x')
+    const rNo = run(noSrc)
+    ok(rNo.status !== 0, `⑤ 「有文件但 0 模块」也须判红（实测 ${rNo.status}）—— 防「目录非空即判绿」`)
+
+    // ⑥ **目录不存在**（2026-09-23 ACT-355 新增 · 本条即该修复的回归守卫）：
+    //   修前 `listFiles` 的 `readdirSync` 直接抛 `ENOENT` 带栈退出 ⇒ 判因不可解释/第三态缺失。
+    const missing = join(tmpdir(), `sc-missing-${Date.now()}-xyz`)
+    const rMissing = run(missing)
+    ok(rMissing.status !== 0, `⑥ 目录**不存在** ⇒ 判红（实测 ${rMissing.status}）`)
+    ok(/扫描面不可用/.test(rMissing.stdout || ''), '⑥′ 且给**可解释判因**「扫描面不可用」（修前是 ENOENT 抛栈）')
+    ok(!/ENOENT/.test(rMissing.stdout || ''), '⑥″ **不得**以 `ENOENT` 抛栈收场（「读不出 ≠ 不存在」契约）')
+
+    rmSync(empty, { recursive: true, force: true })
+    rmSync(noSrc, { recursive: true, force: true })
+    console.log(`\n${fail ? 'FAIL' : 'PASS'}（${pass} pass / ${fail} fail）`)
+    process.exit(fail ? 1 : 0)
+  }
+}
+
+// D-A（2026-09-23）：空扫必须报红 —— 与上方 gate/报告两条路径的「不得判绿」是同一判据的退出码半边。
+if (AS_GATE) process.exit(EMPTY_SCAN || breaches.length ? 1 : 0)
 process.exit(0)

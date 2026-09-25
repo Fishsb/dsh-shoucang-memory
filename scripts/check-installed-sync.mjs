@@ -132,7 +132,50 @@ for (const tgt of targets) {
   })
 }
 
+  /* -- 已声明保留件（DECLARED KEEP · 2026-09-25 立）--------------------------------
+   * 判因（实测）：安装副本里出现**仓内从未存在**的 *.bak-* —— 它们是**别的会话**直接写进
+   *   node_modules 的回滚点（实测两件：client.js.bak-navfix-20260925-080326 /
+   *   mcl.js.bak-win-20260925-080016；git status -uall 全仓 0 命中，故**不是**部署链产物）。
+   *   它们被 --strict 计入漂移 ⇒ **运行态实际已 100% 一致**（内容不同 0）时仍报红，
+   *   把「他人留下的、不许删的回滚点」与「我没部署」混为一谈 —— 读者无法据此决策。
+   * 为什么不删：它们是**别人的回滚点**（删了不可逆，且本仓有「不删文件」的硬墙）。
+   * 为什么是白名单而不是收紧匹配：*.bak-* 形态本身合法（本仓大量使用），
+   *   收紧会把「真该部署的 .bak」一并放过 —— 那是**放宽**不是修准。
+   * 纪律（照抄同仓 EXEMPT 表）：**逐条写明理由**，不许默默略过；且只豁免
+   *   onlyInst（仅安装面有）里的 .bak- 件，**differ / onlyRepo 一律照常判红**。 */
+  const DECLARED_KEEP = new Map([
+    ['client.js.bak-navfix-20260925-080326', '别的会话直写进 node_modules 的回滚点（仓内无同源件）；删它不可逆，属他人资产'],
+    ['mcl.js.bak-win-20260925-080016', '同上（同批直写，时间戳 09-25 08:00 前后）'],
+  ])
+  /** 只剥离 **onlyInst 里的已声明 .bak**；返回 { kept, dropped } 供报告照实打印。 */
+  const stripDeclared = (list) => {
+    const kept = [], dropped = []
+    for (const f of list) {
+      const base = String(f).split('/').pop()
+      if (String(f).includes('.bak-') && DECLARED_KEEP.has(base)) { dropped.push({ f, why: DECLARED_KEEP.get(base) }); continue }
+      kept.push(f)
+    }
+    return { kept, dropped }
+  }
+  const declaredKept = []
+  for (const r of reports) {
+    if (r.error) continue
+    const { kept, dropped } = stripDeclared(r.onlyInst)
+    if (dropped.length) { r.onlyInst = kept; declaredKept.push(...dropped.map((d) => ({ ...d, target: r.target }))) }
+  }
+  for (const d of declaredKept) {
+    console.log("     ⏭ 已声明保留（**不计漂移**）：" + d.f + " —— " + d.why)
+  }
+
 const drift = reports.filter((r) => !r.error && (r.differ.length || r.onlyRepo.length || r.onlyInst.length))
+// 2026-09-25（高并发遍历审计 L1-02 · 独立复验 confirmed）：**「未能比对」≠「一致」**。
+//   上面 :113 在副本无 lib/ 时只 push 一条 error 就 continue ⇒ error 行被 `!r.error` 排除出 drift 表
+//   ⇒ 一个从未被比对过的目标（lib/ 缺失 / 路径指错 / 半截安装）会一路走到末尾的 else，打印
+//   「✅ 全部已安装副本与仓内 lib/ 逐文件 sha1 一致」，且 --strict 这道硬门不复位。
+//   那与本件 :7-8 的立项判因（「仓内绿」≠「运行态绿」）正好反向：把「没比对」显示成「一致」。
+//   实测（复验席）：`--installed <存在但无 lib/ 的目录> --strict` ⇒ 同屏先 ⚠ 后 ✅、EXIT=0。
+//   故 error 行单列，与真漂移**走同一 --strict 硬门**（:160 的同一规格）。
+const unverifiable = reports.filter((r) => r.error)
 if (AS_JSON) { console.log(JSON.stringify({ root, reports }, null, 2)) }
 else {
   console.log(`已安装副本漂移报告（仓 lib/ + 安装面元文件 ↔ 已安装副本 · 报告态，漂移不判失败）`)
@@ -161,8 +204,15 @@ else {
       console.error(`\n❌ --strict：已安装副本漂移 ${drift.length} 个（合计 ${n} 件）——先重跑「只覆盖差异文件」部署，再复验}`)
       process.exit(1)
     }
+  } else if (!unverifiable.length) {
+    console.log(`\n✅ 全部 ${reports.length} 个已安装副本与仓内 lib/ 逐文件 sha1 一致（0 件未比对）`)
   } else {
-    console.log(`\n✅ 全部已安装副本与仓内 lib/ 逐文件 sha1 一致`)
+    console.warn(`\n⚠️⚠️  ${unverifiable.length} 个目标**未能比对**（副本无 lib/ / 路径不对 / 半截安装）⇒ **不得据此报「全部一致」**。`)
+    console.warn(`    ⇒ 未比对的目标：${unverifiable.map((r) => r.target).join(' · ')}`)
+    if (STRICT) {
+      console.error(`\n❌ --strict：${unverifiable.length} 个已安装副本无法比对——「没比对」不能当「一致」}`)
+      process.exit(1)
+    }
   }
 }
 process.exit(0)

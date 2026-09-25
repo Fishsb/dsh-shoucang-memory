@@ -332,7 +332,23 @@ function renderRunExtras(view) {
     var P = ly.P || { index: 0, profile: 0 }, R = ly.R || { index: 0, profile: 0 }, E = ly.E || { index: 0, profile: 0 };
     rw.appendChild(mk(tr("账本闭合"), cl.ok === null ? tr("样本不足") : cl.ok ? tr("✅ 差异 0") : tr("⚠ 有差异"), tr("台账 ") + ((r.window || {}).ledgerRows || 0) + tr(" 行 · 写事件 ") + (h.writeEvents || 0) + tr(" 次")));
     rw.appendChild(mk(tr("上次有效深睡"), h.lastSuccessfulWrite ? fmtTime(h.lastSuccessfulWrite) : tr("（无）"), tr("连续空转 ") + (h.idleStreak || 0) + tr(" 轮 · 深睡轮次 ") + (h.deepSleepRounds || 0)));
-    rw.appendChild(mk(tr("写入被拒率"), h.rejectRate === null || h.rejectRate === undefined ? 'n/a' : (h.rejectRate * 100).toFixed(0) + '%', tr("拒 ") + (h.rejectedWrites || 0) + tr(" / 写事件 ") + (h.writeEvents || 0) + tr(" · 尝试 ") + (h.attemptedTotal || 0) + tr(" 条")));
+    /* ADR-333 册三（2026-09-22）：**按通道**显示拒写 —— 顶层 `rejectRate` 是全体口径，
+     * 实测会被摊薄（画像 167 次真拒 ⇒ 面板仅显示 7.4%），通道级冻死在 UI 上**看不见**。
+     * 判据：`scripts/check-channel-observability.mjs` 断言本渲染存在（留痕字段必须有消费面）。 */
+    var byCh = h.byChannel || {};
+    var chRows = Object.keys(byCh).map(function (k) {
+      var v = byCh[k] || {};
+      var pct = (v.rejectRate === null || v.rejectRate === undefined) ? '—' : (v.rejectRate * 100).toFixed(0) + '%';
+      return k + ' ' + pct;
+    }).sort();
+    rw.appendChild(mk(tr("写入被拒率"), h.rejectRate === null || h.rejectRate === undefined ? 'n/a' : (h.rejectRate * 100).toFixed(0) + '%', tr("拒 ") + (h.rejectedWrites || 0) + tr(" / 写事件 ") + (h.writeEvents || 0) + tr(" · 尝试 ") + (h.attemptedTotal || 0) + tr(" 条") + (chRows.length ? tr(" · 按通道：") + chRows.join(' / ') : '')));
+    /* 门拒明细（原 `gateRejects` 只采不显示）：**按 target 分组** + 最近一次的时间与原因 ——
+     * 这是"画像被拒 167 次"在 UI 上唯一能被看见的地方。 */
+    var gd = h.gateRejectsDetail;
+    if (gd && gd.total) {
+      var gRows = Object.keys(gd.byTarget || {}).map(function (k) { return k + '×' + gd.byTarget[k]; }).sort();
+      rw.appendChild(mk(tr("门禁拒收（按目标）"), String(gd.total) + tr(" 次"), gRows.join(' / ') + (gd.lastAt ? tr(" · 最近 ") + fmtTime(gd.lastAt) + ' ' + (gd.lastTarget || '') + (gd.lastReason ? '：' + gd.lastReason : '') : '')));
+    }
     rw.appendChild(mk(tr("三层占比"), 'P ' + (P.index + P.profile) + ' · R ' + R.index + ' · E ' + (E.index + E.profile), tr("P=恒常（索引+P 层画像行 ≤") + ((r.layers || {}).profileCap || 3) + tr("/档）· R=任务门控 · E=相关性门控")));
   }).catch(function () { rw.textContent = ''; rw.appendChild(mk(tr("对账"), tr("读取失败"), '/reconcile')); });
 }

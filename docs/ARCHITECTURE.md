@@ -45,7 +45,13 @@ L4 交互（DSH Web GUI）
 | **M10 自省** | `assistant_capabilities` | 能力面查询 | 只读，无 token |
 
 > **载体归属口径（2026-09-12 根治 A–D 后；2026-09-14 P1 订正）**：
-> `src/` 共 **104 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> `src/` 共 **105 模块**（**排除生成物 `criteria.generated.ts`**，与 `audit-fnspan` 同口径；
+> **2026-09-22 新增 `channel-plan.ts`** ⇒ 104 → 105：深睡**通道观测纯函数区**（ADR-333 册三）。
+> 抽出的**硬理由**：`deepsleep-core.ts` 导出数受 `audit-architecture` 棘轮约束（阈 35），
+> 就地新增明细类型与归约函数使其达 **37** 当场红，放松棘轮属 R3（须用户拍板）⇒ 走既有出路
+> 「按领域接缝单独成件」（同 `probe-plan.ts` / `trigger-plan.ts` 先例）；`deepsleep-core` **再导出**保零迁移。
+> 治理症状 = **跨通道聚合掩盖**：原 `other:{tried,done}` 只能答"有没有落地"，答不了"**哪个**通道零落地」
+> ⇒ 实测画像通道有提案零落地的轮次被判 `landed=true`（**29 轮**）而告警台账 **0 行从未响过**。
 > **2026-09-21 新增 `eval-config.ts` / `eval-channel.ts` / `eval-ledger.ts` / `panel-eval.ts`** ⇒ 96 → 100：**可配置评估通道 M1+M2**（ACT-283 / ADR-280/284/286）。
 > 定位 = 补 **Rasmussen SRK 的 rule-based 中层**（自动化层 = `planXxx` 纯函数 · 推理层 = LLM 子代理，两层本已齐）。
 > `eval-config.ts` = 评估域**配置单一事实源**（6 键 schema 与显式映射同文件；档位 const union 防死开关；

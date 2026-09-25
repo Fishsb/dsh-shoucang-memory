@@ -80,11 +80,20 @@ const pillText = (tag, loc) => t.tagLabel(tag, loc)
 {
   if (typeof t.ambiguousTags === 'function') bad('④ ambiguousTags 仍存在（可见文本既已不附后缀，该机制应已移除）')
   else ok('④ ambiguousTags 已移除（消歧不再靠可见文本）')
+  // 2026-09-25（高并发遍历审计 L6-02）：原判据两处失效——
+  //   ① 窗口 `match(/idxPill[\s\S]{0,400}/)` 从文件里**第一次出现 `idxPill` 的地方**起算，
+  //      而实测那是**文件头注释**（字符偏移 650），真函数在偏移 6030 ⇒ 真函数从未进窗；
+  //   ② 兜底分支 `else ok(...)` **无条件判绿** ⇒ 窗口取不到 / 文件读失败都算通过。
+  //   现改为：按**函数体边界**取片（`function idxPill` 到其后首个 `\n}`），取不到即判红（bad）。
   const mem = existsSync(join(ROOT, 'src-client', 'panes-memory.js'))
     ? (await import('node:fs')).readFileSync(join(ROOT, 'src-client', 'panes-memory.js'), 'utf8') : ''
-  if (mem && !/' · '\.?/.test(mem.match(/idxPill[\s\S]{0,400}/)?.[0] || '')) ok('④ idxPill 内无「 · 」拼接')
-  else if (mem.includes("name + ' · '")) bad('④ idxPill 内又出现「 · 原始键」拼接')
-  else ok('④ idxPill 内无「 · 」拼接')
+  if (!mem) bad('④ 读不到 src-client/panes-memory.js ⇒ 该判据**未验**（不得当通过）')
+  else {
+    const body = mem.match(/function\s+idxPill\s*\([^)]*\)\s*\{[\s\S]*?\n\}/)?.[0] || ''
+    if (!body) bad('④ 取不到 `function idxPill` 函数体（结构变了？）⇒ 该判据未验')
+    else if (/' · '/.test(body)) bad(`④ idxPill 内又出现「 · 」拼接（函数体 ${body.length} 字符内命中）`)
+    else ok(`④ idxPill 函数体（${body.length} 字符）内无「 · 」拼接`)
+  }
 }
 
 console.log('')

@@ -199,5 +199,21 @@ if (fail) {
   console.log('   一旦判定转绿，本件应退 **1**（XPASS = 施工完成信号，**不是**回归失败）。')
   process.exit(4)
 }
-console.log('\nPASS（收益回流可触发性：信号有判别力）')
+// 2026-09-25（高并发遍历审计 L1-04 · 独立复验 confirmed）：**XPASS 必须退 1**。
+//   本件件头 :23-28 与 check-runner.mjs:23 的契约都写着「xfail 一旦意外转绿 ⇒ emitter 退 1」，
+//   但实现只做了一半（fail ⇒ 4）：三条判据全绿时 fail=0 ⇒ 一路走到末尾退 0 ⇒ 运行器渲染 ✅ pass，
+//   于是「缺陷已修好、须重新裁定 xfail 声明」这个信号被**静默吞掉**——施工完成无人知。
+//   同仓对照组已实现完整双向锁：test-treeops-rm.mjs:318/325。
+//   `r3.ok === null` 是「数据不足」，不算转绿（与 :187「未取得数据，不假装通过」同口径）。
+const allGreen = r1.ok && r2.ok && r3.ok === true
+if (allGreen) {
+  console.log('\n❌ XPASS（exit 1）：R1/R2/R3 已**全部可触** ⇒ 已知未修的形态已被修复。')
+  console.log('   须重审本件在 check-runner 的 `{ xfail: true }` 声明（:758）——这不是回归失败，是**施工完成信号**。')
+  process.exit(1)
+}
+if (r3.ok === null) {
+  console.log('\nPASS（R1/R2 可触；**R3 数据不足 ⇒ 未验**，不假装通过）')
+} else {
+  console.log('\nPASS（收益回流可触发性：信号有判别力）')
+}
 process.exit(0)

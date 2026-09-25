@@ -119,7 +119,17 @@ if (existsSync(schedJs) && existsSync(panelJs)) {
 {
   const { readdirSync, statSync } = await import('node:fs')
   const exts = ['.md', '.mjs', '.ts', '.json', '.js']
-  const skipDirs = new Set(['node_modules', 'lib', '.git', '_memory', 'client.js'])
+  // D-D 修复（2026-09-23 · 圆桌会审受控证明）：补 `.roundtable` —— 它与 `_memory` 同类，
+  //   是 **gitignore 的运行时数据区**（`.gitignore:92`），不是仓内内容。
+  // 判因（实测，非推断）：门禁扫描面曾遗漏它 ⇒ 外部进程写一个 **14B 带 BOM 的临时 json**
+  //   就能让**仓级门禁**翻红（受控复现：注前 exit 0 → 注后 exit 1「命中 1 件 → .roundtable/…」→ 删除后 exit 0）。
+  //   即**入库面与扫描面不一致**：不入库的东西却在扫。
+  // ⚠ 同胞三件**本就含它**（`check-hardcode.mjs:58` EXCLUDE_DIRS · `check-public-content.mjs:118` SKIP 正则 ·
+  //   `check-script-consumers.mjs:70` SKIP_DIR）⇒ 本次是**对齐**，不是新增豁免。
+  // ⚠ 治因未做（留待拍板）：同一「运行时/私密目录」概念在仓内仍有 **4 份实现**（本行 + 上述三件），
+  //   且四者扫描面**按设计各不相同**（如 `check-hardcode` 有意扫 `lib/` 因本仓 lib 随仓提交）⇒
+  //   不能简单合并成一份全集，只能收口「**禁扫的运行时目录**」这个**交集**。
+  const skipDirs = new Set(['node_modules', 'lib', '.git', '_memory', 'client.js', '.roundtable'])
   const offenders = []
   const walk = (dir, rel = '') => {
     let ents = []
@@ -144,6 +154,20 @@ if (existsSync(schedJs) && existsSync(panelJs)) {
   const probe = Buffer.concat([Buffer.from([0xEF, 0xBB, 0xBF]), Buffer.from('{}')])
   ok(probe[0] === 0xEF && probe[1] === 0xBB && probe[2] === 0xBF,
     '⑤ 检测器自证 · 字节级判定能识别带 BOM 的输入（不用会被自动剥 BOM 的字符串 API）')
+  // ⑤b 扫描面自证（D-D · 2026-09-23）：**运行时/私密目录不得进扫描面**。
+  //   判因：实测外部进程在 `.roundtable/` 放一个 14B 带 BOM 的 json 就使**仓级门禁**翻红
+  //     （受控复现 0→1→0），而该目录 `git check-ignore` 命中 ⇒ **不入库的东西却在扫**。
+  //   本断言防回退：这四类是**隔离区**，任一被扫都会让"仓内内容"与"运行时数据"混流。
+  //   ⚠ 本清单与 `check-hardcode.mjs:58` / `check-public-content.mjs:118` / `check-script-consumers.mjs:70`
+  //     是**同族但按设计不同的扫描面**（如 hardcode 有意扫 `lib/`，因本仓 lib 随仓提交），
+  //     故只锁「必须排除的隔离区」这个**交集**，不强行合并为一份全集（合并属跨件契约变更，须单独拍板）。
+  const MUST_SKIP = ['.roundtable', '_memory', '.git', 'node_modules']
+  const missing = MUST_SKIP.filter((d) => !skipDirs.has(d))
+  ok(missing.length === 0,
+    `⑤b 扫描面排除集含全部隔离区（缺 ${missing.join(', ') || '无'}）—— 防 "不入库的东西却在扫"`)
+  // ⑤c 反例自证：注入一个"不含 .roundtable"的集合**必须**被判缺失（否则 ⑤b 恒真）
+  const fakeSkip = new Set(['node_modules', 'lib', '.git', '_memory', 'client.js'])
+  ok(MUST_SKIP.some((d) => !fakeSkip.has(d)), '⑤c 反例自证：缺 `.roundtable` 的集合**必须**被判缺失（否则 ⑤b 恒真）')
 }
 
 if (AS_JSON) console.log(JSON.stringify({ pass, fail, cfgPath, cfgState, rows }, null, 1))

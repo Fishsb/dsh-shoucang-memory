@@ -208,11 +208,10 @@ export declare const DEEP_SLEEP_PROMPT: string;
  *   取向：宁可重试（failed，幂等、可观测），不可静默丢料（landed，无声无息）。
  */
 export declare const COMMIT_FAILED_GATE = "\u843D\u76D8\u5F02\u5E38";
-/** 除 principles 外四通道的轮次汇总（G-19）：`tried`=该通道有提案且未落地数，`done`=成功落地数。 */
-export type DeepSleepOtherChannels = {
-    tried: number;
-    done: number;
-};
+import { zeroLandedChannels, anyZeroLanded } from './channel-plan.js';
+import type { DeepSleepChannelName, DeepSleepChannelStat, DeepSleepOtherChannels } from './channel-plan.js';
+export { zeroLandedChannels, anyZeroLanded };
+export type { DeepSleepChannelName, DeepSleepChannelStat, DeepSleepOtherChannels };
 export declare const deepSleepLanded: (stop: unknown, out: unknown, app: {
     attempted: number;
     added: number;

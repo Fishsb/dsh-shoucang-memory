@@ -1,0 +1,3 @@
+2026-09-25T10:58:31.558Z ev=refused by=29016-mugul2ot-7uo4qi holder=10084-mugul1lt-nbxoor holderPid=10084 ageMs=2212 waitedMs=808 note=waiter-B
+2026-09-25T11:02:01.578Z ev=refused by=26620-mugupkxz-23ddm6 holder=15592-mugunpap-mdatfl holderPid=15592 ageMs=88216 waitedMs=546 note=external-holder
+2026-09-25T11:02:04.831Z ev=refused by=29448-mugupmoj-1fzco1 holder=15592-mugunpap-mdatfl holderPid=15592 ageMs=91468 waitedMs=1546 note=test-split-equivalence

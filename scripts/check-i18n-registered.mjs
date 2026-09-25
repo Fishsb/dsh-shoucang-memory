@@ -35,7 +35,36 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const SRC = join(ROOT, 'src-client')
 const BUNDLE = join(ROOT, 'lib', 'client.js')
 
-if (!existsSync(SRC)) { console.log('check-i18n-registered：无 src-client —— 跳过'); process.exit(3) }
+/* ⚠⚠ **扫描面三态收口（2026-09-23 · ACT-355 · 用户「从根源解决」）** ──────────────
+ *  判因（会审独立复核席指出）：本件原把**三种不同性质**的缺席一律 `exit 3` 跳过
+ *  （`:38` 无 src-client · `:39` 无 lib/client.js · `:52` **目录读成功但一份词表都没有**）。
+ *  前两者是**部署形态**（未构建/未展开，按设计可缺）；第三者却是**断链**——
+ *  目录刚被成功 `readdirSync`，里面却 0 份词表 ⇒ 「词表是否进了产物」这条断言**空过**，
+ *  属本仓反复记账的「**输入链断掉 ⇒ 跳过断言**」静默保护伞族（§0o ⑥ 同族）。
+ *  ⇒ 现按 `lib-scan-scope.mjs` 的**三态语义**分开表达（该库 20-23 行即为此立）：
+ *     · `src-client` 缺席    ⇒ `required:false` ⇒ **skip（exit 3）**，诚实跳过、不算通过；
+ *     · 目录**读不出**        ⇒ `error` ⇒ **判红**（读不出 ≠ 不存在，二者必须可分）；
+ *     · 目录在但 **0 份词表** ⇒ `empty` ⇒ **判红**（空集上「全部已注册」是恒真命题）。
+ */
+const { resolveScanScope, reportScanScope, scanScopeExitCode } = await import(new URL('./lib-scan-scope.mjs', import.meta.url).href)
+{
+  const scope = resolveScanScope({
+    dir: SRC,
+    label: '`src-client/`',
+    required: false, // 部署形态可缺 ⇒ 缺席时 skip，不冒充通过
+    why: '本件判据建立在「src-client 里的 i18n-dict-*.js 是否都进了 lib/client.js 产物」之上。',
+    accept: (n) => /^i18n-dict-.*\.js$/.test(n) && !/\.generated\./.test(n),
+  })
+  if (scope.state === 'empty') {
+    // ⚠ 目录读成功却 0 份词表 = **断链**，不是"没东西可查" ⇒ 必须判红（修前静默 exit 3）
+    console.error('❌ check-i18n-registered：`src-client/` 存在但**一份 `i18n-dict-*.js` 都没有** ⇒ 词表链断裂')
+    console.error('   · 判因：目录可读却 0 命中 ⇒ 「词表已进产物」这条断言会**空过**（空集恒真）')
+    console.error('   · 退回动作：确认 `src-client/i18n-dict-*.js` 是否存在（本仓应有 5 份，见 `check-i18n-keys`）')
+    process.exit(1)
+  }
+  const stopped = reportScanScope(scope)
+  if (stopped !== null) process.exit(scanScopeExitCode(scope))
+}
 if (!existsSync(BUNDLE)) { console.log('check-i18n-registered：无 lib/client.js（未构建）—— 跳过'); process.exit(3) }
 
 /* 接缝③（阶段 4）：先判**生成物是否新鲜** —— 词表索引按目录生成，过期即红 */
@@ -47,9 +76,9 @@ try {
   process.exit(1)
 }
 const bundle = readFileSync(BUNDLE, 'utf8')
-/* ⚠ 排除生成物自身（文件名同样匹配 `i18n-dict-*`）—— 否则会被当成第 6 份词表 */
+/* ⚠ 排除生成物自身（文件名同样匹配 `i18n-dict-*`）—— 否则会被当成第 6 份词表
+ *   ⚠ 空的检查已上移到三态守卫（`empty ⇒ 判红`）⇒ 此处只需列举。 */
 const files = readdirSync(SRC).filter((f) => /^i18n-dict-.*\.js$/.test(f) && !/\.generated\./.test(f)).sort()
-if (!files.length) { console.log('check-i18n-registered：未找到 i18n-dict-*.js —— 跳过'); process.exit(3) }
 
 /** 解析词表的 `'key': 'en',` 行 */
 function parseEn (f) {

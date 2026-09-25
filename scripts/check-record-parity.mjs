@@ -60,7 +60,13 @@ for (const f of files) {
   const back = S.renderFile(records, f)
   const rt = back === raw
   if (!rt) bad++
-  console.log(`${rt ? '✅' : '❌'} ${f.padEnd(10)} 往返 ${String(records.length).padStart(3)} 记录 / ${String(raw.length).padStart(5)}B ${rt ? '逐字节一致' : '**不一致**'}`)
+  // ⚠ 口径修正（D-C · 2026-09-23）：此处原打 `${raw.length}B` —— `String.length` 是 **UTF-16 码元数（字符数）**，
+  //   **不是字节**。真库实测差异极大：`notes/lessons.md` 磁盘 **305,314 字节** vs 字符数 **129,407**（中文 3 字节/字符）。
+  //   同时「逐字节一致」实为**字符串相等**（`back === raw`，非 Buffer 比较）——结论不错，**标签说谎**。
+  //   本行同时给两个口径：字符数（判据实际用的量）+ 真字节数（`statSync().size`），消除歧义。
+  const cs = raw.length
+  const bs = statSync(join(ROOT, f)).size
+  console.log(`${rt ? '✅' : '❌'} ${f.padEnd(10)} 往返 ${String(records.length).padStart(3)} 记录 / ${String(cs).padStart(5)} 字符（${bs} 字节） ${rt ? '字符串相等（往返可还原）' : '**不一致**'}`)
 }
 
 // ② 对账闸（影子库存在时）
@@ -72,7 +78,11 @@ if (hasStore) {
   //   纪律：**未证实的容错等于掩盖真漂移**——留在这里会把首次不一致静默抹掉。
   for (const r of H.parityOf(ROOT, files)) {
     if (!r.ok) bad++
-    console.log(`${r.ok ? '✅' : '❌'} ${r.file.padEnd(10)} 对账 md ${r.mdBytes}B / store ${r.storeBytes}B${r.reason ? ` · ${r.reason}` : ''}`)
+    // ⚠ 口径修正（D-C · 2026-09-23）：`parityOf` 的 `mdBytes`/`storeBytes` 实为 `raw.length`/`rendered.length`
+    //   ⇒ **字符数**，不是字节（见 `src/record-shadow.ts:232-233`）。字段名是**跨件契约**
+    //   （另被 `record-sync.mjs` · `panel-arch.ts` · `ui-geo-regress.mjs` 消费）⇒ **本件不擅自改名**，
+    //   改为在显示层标注真实口径。改名属跨件契约变更，须连带改三件 + 面板 UI + 几何夹具，应单独拍板。
+    console.log(`${r.ok ? '✅' : '❌'} ${r.file.padEnd(10)} 对账 md ${r.mdBytes} 字符 / store ${r.storeBytes} 字符${r.reason ? ` · ${r.reason}` : ''}`)
   }
   const inv = H.shadowInventory(ROOT)
   console.log(`· 影子库 ${inv.records} 记录 · kind ${Object.entries(inv.byKind).map(([k, v]) => `${k}:${v}`).join(' ')} · 无标签待归类 ${inv.untagged}`)
@@ -129,4 +139,53 @@ if (argv.includes('--coverage')) {
 }
 
 if (bad) { console.log(`\nFAIL（${bad} 项）`); process.exit(1) }
+
+// ── --selftest（D-C 反向证伪 · 2026-09-23）────────────────────────────
+//   判因：本件曾把 `String.length`（UTF-16 码元数）打成 `B`（字节），真库差 **2.36×**
+//   （`notes/lessons.md` 313,849 字节 vs 132,922 字符）⇒ 读数会让人误判"文件被截断"。
+//   本自证**只读临时样本**，不碰真库；且不依赖真库是否可读（无库环境亦须可判）。
+if (argv.includes('--selftest')) {
+  let pass = 0, fail = 0
+  const ok = (cond, name) => { if (cond) { pass++; console.log(`  ✅ ${name}`) } else { fail++; console.log(`  ❌ ${name}`) } }
+
+  // ① 口径差异可复现：同一段中文，字符数 ≠ 字节数（且比值 > 1）
+  const cn = '中文字符口径测试'
+  const cs = cn.length, bs = Buffer.byteLength(cn)
+  ok(cs !== bs && bs > cs, `① 中文串上字符数 ≠ 字节数（${cs} 字符 vs ${bs} 字节）—— 证明口径必须区分`)
+
+  // ② 反向：若把字节数当字符数，则相等 ⇒ 说明本判据能抓到"用错口径"的形态
+  const wrong = Buffer.byteLength(cn) === cn.length
+  ok(wrong === false, '② 反例：字节数 === 字符数 在中文上**必须为假**（修前标签就是这样错的）')
+
+  // ③ 本件输出契约：**console.log 的模板实参**里不得再出现裸 `B` 后缀直接接 `.length`
+  //   ⚠ 判据设计教训（本轮实测两次假红，据实留档）：
+  //     ① 首版扫全文 ⇒ 命中**自己的订正注释**（本仓第三次踩「注释被正则当代码」）；
+  //     ② 改剥注释后仍红 ⇒ 因为**断言名与反例样本本身就是那种文本**（自指）。
+  //   ⇒ 结论：这类"禁止某文本形态"的自证**不能扫全文件**（判据与判据的证伪材料同处一文件时必然自指）。
+  //     改为**只扫 console.log(...) 的实参**（真正的输出面），并剥掉断言工具行。
+  const srcSelf = readFileSync(fileURLToPath(import.meta.url), 'utf8')
+  const strip = (s) => s
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+    .replace(/^[ \t]*\/\/[^\n]*/gm, (m) => m.replace(/[^\n]/g, ' '))
+  const code = strip(srcSelf)
+  // 取所有 console.log 的实参（单行模板串形态），排除 selftest 段（自证段含反例样本，属自指）
+  const selftestAt = code.indexOf('--selftest')
+  const prodCode = selftestAt > 0 ? code.slice(0, selftestAt) : code
+  const logArgs = [...prodCode.matchAll(/console\.log\((`[^`]*`|'[^']*'|"[^"]*")/g)].map((m) => m[1])
+  const badPat = /\$\{[^}]*\.length[^}]*\}B/
+  const offenders = logArgs.filter((a) => badPat.test(a))
+  ok(offenders.length === 0, `③ 输出面（console.log 实参）中**无** \`\${….length}B\` 形态（实检 ${logArgs.length} 条实参，命中 ${offenders.length}）`)
+
+  // ③b 反向自证：该判据**必须能**在注入下报红（否则 ③ 恒真）
+  ok(badPat.test('${raw.length}B'), '③b 反例自证：注入裸 `${….length}B` **必须**被判红（否则 ③ 恒真）')
+  // ③c 边界自证：正确的双口径写法**不得**被判红（防过严）
+  ok(!badPat.test('${cs} 字符（${bs} 字节）'), '③c 边界自证：`${cs} 字符（${bs} 字节）` **不得**被判红（防过严）')
+
+  // ④ 真字节数走的是 fs.statSync（而非 length 近似）
+  ok(/statSync\([^)]*\)\.size/.test(srcSelf), '④ 真字节数取自 `statSync().size`（非 length 近似）')
+
+  console.log(`\n${fail ? 'FAIL' : 'PASS'}（${pass} pass / ${fail} fail）`)
+  process.exit(fail ? 1 : 0)
+}
+
 console.log('\nPASS（事实源切换前置条件成立）')

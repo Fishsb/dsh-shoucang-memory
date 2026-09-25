@@ -119,7 +119,7 @@ export var EN = {
   '升格 / 降格走 /memory/approve，由 L0 判据裁决。索引行只读，正文编辑走 /memory/section-edit。': 'Promotion / demotion goes through /memory/approve and is decided by the L0 criterion. Index rows are read-only; body edits go through /memory/section-edit.',
   '原则 ': 'Principles ',
   '取消': 'Cancel',
-  '只有存在真实容量门的载体才给百分比与进度条：MEMORY.md（cap_memory）与画像（cap_user / cap_agent）；notes / pending 无容量门 ⇒ 只报绝对量。超限由 write_gate 拒写。': 'Only carriers with a real capacity gate get a percentage and progress bar: MEMORY.md (cap_memory) and profiles (cap_user / cap_agent); notes / pending have no capacity gate ⇒ absolute counts only. Over-limit writes are rejected by write_gate.',
+  '只有存在真实容量门的载体才给百分比与进度条：MEMORY.md（cap_memory）与画像（cap_user / cap_agent）；notes / pending 无容量门 ⇒ 只报绝对量。是否因超限**阻断**写入由「参数调节 → 记忆与容量」的容量门开关决定（缺省关闭 = 照写并留一条 capacity-over 留痕）。': 'Only carriers with a real capacity gate get a percentage and progress bar: MEMORY.md (cap_memory) and profiles (cap_user / cap_agent); notes / pending have no capacity gate ⇒ absolute counts only. Whether over-limit writes are blocked is decided by the capacity-gate switch under Settings → Memory & Capacity (default OFF = write through and leave a capacity-over trace).',
   '如需恢复，把 notes/archive/ 下的文件移回 notes/ 即可（面板不提供写入口）。': 'To restore, simply move the files under notes/archive/ back into notes/ (the panel provides no write entry point).',
   '守藏本地知识区 · suite/knowledge': 'Shoucang local knowledge area · suite/knowledge',
   '守藏本地知识区未启用（suite/knowledge 不存在）': 'Shoucang local knowledge area is not enabled (suite/knowledge does not exist)',

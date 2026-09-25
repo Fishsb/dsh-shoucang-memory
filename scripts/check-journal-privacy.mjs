@@ -22,7 +22,11 @@ import { fileURLToPath } from 'node:url'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const argv = process.argv.slice(2)
 const argOf = (k, d) => { const i = argv.indexOf(k); return i > -1 && argv[i + 1] ? argv[i + 1] : d }
-const bank = argOf('--bank', process.env.MEMORY_ROOT || join(homedir(), '.dsh', 'suite', 'memory'))
+// 2026-09-25（高并发遍历审计 L1-08 · 独立复验 confirmed）：补 **DSH_HOME** 分支——与同族件同口径
+//   （check-public-content.mjs:29 / check-observability.mjs:303 / check-yield-reflow.mjs:157）。
+//   原写法不认 DSH_HOME ⇒ 任何以 DSH_HOME 做隔离的验证会话都会**穿透到生产库**并据其下结论：
+//   PASS 会被读成「隔离环境的日志干净」，实际测的是真库（拿错事实源却显示正常）。
+const bank = argOf('--bank', process.env.MEMORY_ROOT || join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'suite', 'memory'))
 const file = join(bank, 'audit', 'tool-usage.jsonl')
 
 const ALLOWED_KEYS = new Set(['t', 'sid', 'tool', 'n'])

@@ -13,6 +13,7 @@ import { appState } from './app-state.js'
 import { lang, tr } from './i18n.js'
 import { modelPicker } from './model-picker.js'
 import { renderEvalCard } from './panes-eval.js'
+import { renderTogglesCap } from './panes-capacity.js'
 
 function renderViewToggles(view, parsed, global) {
   view.textContent = '';
@@ -25,7 +26,7 @@ function renderViewToggles(view, parsed, global) {
   /* v9 结构（DOM 实测 §7）：**每个 pane 的内容包一张卡**（原型 div.card.plain：卡体直接含 setrow）。
    * 面板此前是裸行平铺（18 个按钮散落）⇒ 整页少一层容器，多板块读起来是散块而非分组。 */
   renderTogglesInject(UI.cardIn(_tb.pane('inject')), view, parsed, g);
-  renderTogglesCap(UI.cardIn(_tb.pane('cap')), g);
+  renderTogglesCap(UI.cardIn(_tb.pane('cap')), g, { numSetting });
   renderTogglesModel(UI.cardIn(_tb.pane('model')));
   renderTogglesSched(UI.cardIn(_tb.pane('sched')), g);
   appState.flushFolds();
@@ -184,97 +185,6 @@ function levelCapsSetting(cur) {
     tr("档位上限 injectLevelCaps"),
     tr("四档（low/medium/high/smart）各自的选行上限（**对象键**，缺省 2/4/8/14）。改后整对象写回；单档越界由服务端拒并回报"),
     null, { children: [appState.metaBadges('injectLevelCaps'), wrap] });
-}
-
-function renderTogglesCap(host, g) {
-  function gVal(key, fallback) { return (g[key] !== undefined && g[key] !== null) ? g[key] : fallback; }
-
-  host.appendChild(el('div', 'sc-desc', tr("容量门 = 记忆库能长多大（写入超限被 write_gate 拒写）；活性/遗忘为天级阈值。")));
-  // 2026-09-10 用户拍板：三上限=记忆库「容量门」（蒸馏/扩增超限拒写），不裁注入——
-  // 任务执行时 agent 总看到完整双画像+记忆指针（裁切会漏记忆影响执行）；容量门控制记忆库能长多大
-  var actualChars = (g && g.actual) || { agent: 0, user: 0, memory: 0 };
-  host.appendChild(numSetting(tr("AGENT.md 容量门 cap_agent"), tr("agent 画像记忆库容量（字符）：蒸馏/深睡写入超限会被 write_gate 拒（AGENT.md 当前实际 ") + (actualChars.agent || 0) + tr(" 字符）。**不影响任务执行注入**——注入总看完整画像"), gVal('cap_agent', 3000), 'injection.cap_agent', tr("字符")));
-  host.appendChild(numSetting(tr("USER.md 容量门 cap_user"), tr("用户画像记忆库容量（字符）：写入超限被拒（当前实际 ") + (actualChars.user || 0) + tr(" 字符）。不影响任务执行注入"), gVal('cap_user', 3000), 'injection.cap_user', tr("字符")));
-  host.appendChild(numSetting(tr("MEMORY.md 容量门 cap_memory"), tr("知识索引记忆库容量（字符）：写入超限被拒（当前实际 ") + (actualChars.memory || 0) + tr(" 字符）。注入按档位行数不受此限"), gVal('cap_memory', 5000), 'injection.cap_memory', tr("字符")));
-  // ── v7 活性/遗忘 · 校准阈值（2026-09-10）：条目活性状态机判定天数 + 融合召回降权系数；
-  //    经 /set 写入 scheduler.json，深睡巡检/召回运行时生效（缺省 14/44/90/5/35 与 scheduler zod 默认一致）
-  host.appendChild(el('div', 'sc-h3', tr("活性 / 遗忘阈值（v7）")));
-  host.appendChild(el('div', 'sc-desc', tr("记忆条目活性状态机（active→warm→cold）与遗忘/加深候选的判定阈值，以及融合召回对 cold/retired 条目的降权系数。改动经 /set 即时写回 scheduler.json（与注入/蒸馏配置同通道，重载后按新阈值运行）。")));
-  host.appendChild(numSetting(tr("活性降级 warm 阈值 activityWarmDays"), tr("active→warm 无命中天数（缺省 14）"), gVal('activityWarmDays', 14), 'activityWarmDays', tr("天"))); // 与 scheduler zod 默认一致
-  host.appendChild(numSetting(tr("遗忘冷降 cold 阈值 activityColdDays"), tr("warm→cold 无命中天数（缺省 44 = warm+30）"), gVal('activityColdDays', 44), 'activityColdDays', tr("天"))); // 与 scheduler zod 默认一致
-  host.appendChild(numSetting(tr("遗忘候选 archive 阈值 activityArchiveDays"), tr("cold 后超此天数未命中 → 遗忘候选清单（缺省 90，只建议不删除）"), gVal('activityArchiveDays', 90), 'activityArchiveDays', tr("天"))); // 与 scheduler zod 默认一致
-  host.appendChild(numSetting(tr("加深候选命中数 activityHotHits"), tr("近 30 天命中 ≥ 此值 → 加深候选 B（缺省 5，喂深睡归纳）"), gVal('activityHotHits', 5), 'activityHotHits', tr("次"))); // 与 scheduler zod 默认一致
-  // 百分比项：numSetting 的 step=100 不适用百分比（会出问题），自建输入块（step=5, min=5, max=95，parseInt 后 clamp [5,95]）
-  var pctItem = el('div', 'setting-item');
-  var pctInfo = el('div', 'setting-item-info');
-  pctInfo.appendChild(el('div', 'setting-item-name', tr("召回冷条目降权 recallColdFactorPercent")));
-  pctInfo.appendChild(el('div', 'setting-item-desc', tr("cold/retired 小节在融合召回中的降权系数（百分比 → /100；缺省 35%，后端范围校验 [5,95] 兜底）")));
-  var pctWrap = el('div', 'sc-num-wrap'); // U2.5：内联 → 类
-  var pctInp = el('input'); pctInp.type = 'number'; pctInp.className = 'sc-input'; pctInp.min = '5'; pctInp.max = '95'; pctInp.step = '5'; pctInp.value = String(gVal('recallColdFactorPercent', 35)); // 与 scheduler zod 默认一致
-  var pctUnit = el('span', 'sc-range-label', '%');
-  pctInp.onchange = function () {
-    var raw = parseInt(pctInp.value, 10);
-    if (isNaN(raw)) raw = 35;
-    var v = Math.max(5, Math.min(95, raw));
-    pctInp.value = String(v);
-    appState.api('/set', { method: 'POST', body: JSON.stringify({ key: 'recallColdFactorPercent', value: String(v) }) })
-      .then(function () { appState.statusFn('✓ recallColdFactorPercent = ' + v + '%'); })
-      .catch(appState.failFn);
-  };
-  pctWrap.appendChild(pctInp); pctWrap.appendChild(pctUnit);
-  pctItem.appendChild(pctInfo); pctItem.appendChild(pctWrap);
-  host.appendChild(pctItem);
-  // 当前实际注入统计（调用 /inject/preview 算 token：中文 ~2 字符/token）
-  var injectInfo = el('div', 'sc-desc');
-  injectInfo.classList.add('sc-inline-note');
-  host.appendChild(injectInfo);
-  appState.api('/inject/preview').then(function (r) {
-    var txt = (r && r.text) || '';
-    if (!txt) { injectInfo.textContent = tr("当前注入：空（hot_memory 关或画像/记忆为空）"); return; }
-    var chars = txt.replace(/\s+/g, '').length;
-    var tokens = Math.ceil(chars / 2); // 中文粗估 ~2 字符/token
-    var lineCount = txt.split('\n').filter(function (l) { return l.trim().indexOf('- [') === 0; }).length;
-    injectInfo.textContent = tr("当前直接注入 ≈ ") + tokens + ' token（' + chars + tr(" 字符 · 双画像+记忆指针 ") + lineCount + tr(" 条）——每轮随提示词注入");
-  }).catch(function () { injectInfo.textContent = ''; });
-
-  // ── G-19（2026-09-12）：深睡未消化策略（B 全重捞 / C 分级）──
-  //    此前两种取向写死在代码里，用户无法选；现经 /set 写 scheduler.json
-  //    （distill.ts 的 liveFailPolicy 实时读这两个键），改动即时生效，无需重载。
-  host.appendChild(el('div', 'sc-h3', tr("深睡未消化策略")));
-  host.appendChild(el('div', 'sc-desc', tr("深睡每轮用 deepSleepLanded 判定本轮是否「已消化」。未消化时的两种取向在此切换——全重捞保证不丢料但可能无限重试；分级在连败达上限后放行并告警，避免无限重试烧 LLM。")));
-  host.appendChild(UI.item(
-    tr("深睡未消化策略 deepSleep.failPolicy"),
-    tr("全重捞（retry）= 永不放弃，未消化就一直重捞本批（保证不丢料；材料永久失败时每轮都会重试）；分级（graded）= 连续失败达 N 轮后放行水位并记审计告警（避免无限重试烧 LLM）。缺省 graded。"),
-    UI.select([
-      { value: 'retry', label: tr("全重捞（不丢料，永不放弃）") },
-      { value: 'graded', label: tr("分级（连败 N 轮后放行并告警）") }
-    ], String(gVal('deepSleepFailPolicy', 'graded')), function (v) {
-      appState.api('/set', { method: 'POST', body: JSON.stringify({ key: 'deepSleep.failPolicy', value: v }) })
-        .then(function () { appState.statusFn(tr("✓ 深睡未消化策略 = ") + v); })
-        .catch(appState.failFn);
-    }, 'deepSleep.failPolicy')
-  ));
-  // 连败上限：仅在 graded 下生效（retry 永不放弃，此项不参与判定）
-  var roundsInput = UI.input(String(gVal('deepSleepFailMaxRounds', 3)), function (raw) {
-    var n = parseInt(raw, 10);
-    if (isNaN(n)) n = 3;
-    n = Math.max(1, Math.min(100, n));
-    roundsInput.value = String(n); // 非法/越界就地回落，显示值=实际写入值
-    appState.api('/set', { method: 'POST', body: JSON.stringify({ key: 'deepSleep.failPolicyMaxRounds', value: String(n) }) })
-      .then(function () { appState.statusFn(tr("✓ 分级策略连败上限 = ") + n + tr(" 轮")); })
-      .catch(appState.failFn);
-  }, { type: 'number', width: '120px', ariaLabel: 'deepSleep.failPolicyMaxRounds' });
-  roundsInput.min = '1'; roundsInput.max = '100'; roundsInput.step = '1';
-  host.appendChild(UI.item(
-    tr("分级策略连败上限 deepSleep.failPolicyMaxRounds"),
-    tr("仅在「分级」策略下生效（1–100，缺省 3）：连续失败达此轮数后放行深睡水位并记一条审计告警；全重捞策略下此项不参与判定。"),
-    roundsInput
-  ));
-
-  // 2026-09-10 审查收敛：以下旧控件已移除——
-  //  archive/lifecycle/merge 组（蒸馏空闲 idle_review_ms/归档模式/成熟时长/指纹阈值等）消费端为 v15 单库化前
-  //  旧 Python 链路（_meta/*.py 已不随包分发），改了无效。真蒸馏节流/深睡阈值在下方「蒸馏节流」与
-  //  「深度睡眠」页（scheduler.json 通道）。
 }
 
 function renderTogglesModel(host) {
@@ -712,4 +622,4 @@ function renderTogglesSched(host, g) {
   }).catch(function (e) { dZone.textContent = ''; dZone.appendChild(el('div', 'sc-desc', tr("⚠ 读取失败：") + e.message)); });
 }
 
-export { renderViewToggles, numSetting, renderTogglesInject, renderTogglesCap, renderTogglesModel, renderTogglesModelVec, renderTogglesModelLlm, renderTogglesSched };
+export { renderViewToggles, numSetting, renderTogglesInject, renderTogglesModel, renderTogglesModelVec, renderTogglesModelLlm, renderTogglesSched };

@@ -1,5 +1,11 @@
 #!/usr/bin/env node
-// essence-review-stability.mjs — **P5c 语义判定稳定性校准器**（2026-09-16 · 报告态，不入 CHECKS）
+// essence-review-stability.mjs — **P5c 语义判定稳定性校准器**（2026-09-16）
+// ⚠ 2026-09-25 订正：此行原写「报告态，不入 CHECKS」——**与事实不符**。ACT-349（2026-09-23）已把它
+//   登记为 **S-P5c 释放接线的前置门**（`scripts/check-runner.mjs:270`，只登记只读档 `--from-ledger`）。
+//   本器既在前置门位上，就**不得**「红在终端、绿在退出码」：三条判据路径现均以 **exit 4**
+//   （已知未修 · 声明制）表达「不收敛 ⇒ 不得接线自动执行」，与同族的 `check-yield-reflow` 同规格。
+//   ⚠ 残余一步（未做，因 `check-runner.mjs` 当前属**跨会话冻结面**）：`check-runner.mjs:270` 须补
+//   `{ xfail: true }`，否则按运行器 `:1348` 的规则——**未声明却退 4 ⇒ 判 fail**。解冻后补一行即可。
 //
 // 判因（实测）：同一判据、同一候选，**轮间结果差很大** ——
 //   轮 A `通过 19 · 否 28 · 未判 4`（37.3% / 8%）· 轮 B `通过 14 · 否 17 · 未判 20`（**27.5% / 39%**）。
@@ -210,6 +216,13 @@ if (argv.includes('--from-ledger')) {
   console.log(span <= 10 && unjSpan <= 10
     ? '✅ **收敛** ⇒ 满足接线自动执行的"波动"条件（仍须抽样干净）'
     : '❌ **未收敛** ⇒ 不得接线自动执行（每轮释放集合不同）')
+  // 2026-09-25（L6-04 · 独立复验 confirmed）：**本行才是 check-runner 登记的那条**
+  //   （`['scripts/essence-review-stability.mjs','--from-ledger']`），原实现 `process.exit(0)` 恒绿
+  //   ⇒ 终端打 ❌、runner 摘要却是 ✅，禁令无执行力。补真退出码与 `:282` 同规格。
+  if (!(span <= 10 && unjSpan <= 10)) {
+    console.error(`\n❌ exit 4（已知未修 · 声明制）：未收敛（极差 ${Math.round(span * 10) / 10}pp / ${Math.round(unjSpan * 10) / 10}pp ＞ 10pp）⇒ 不得接线自动执行`)
+    process.exit(4)
+  }
   process.exit(0)
 }
 
@@ -272,6 +285,16 @@ if (argv.includes('--jaccard')) {
   console.log(min >= 0.8
     ? '✅ **释放集合稳定** ⇒ 满足接线的"集合稳定"条件（仍须抽样干净）'
     : '❌ **释放集合不稳定** ⇒ 不得接线自动执行（每轮释放的条目在换）')
+  // 2026-09-25（高并发遍历审计 L6-04 · 独立复验 confirmed）：本件 `:270` 在 check-runner 里
+  //   登记为「S-P5c 释放接线前置门」，却**全文无 exit 1** ⇒ 判据红了（❌）而退出码恒 0
+  //   ⇒ `npm test` 摘要与 CI 都读不到，禁令无执行力（仓规 6「未登记=没写」的镜像：
+  //   登记了但判不出红）。此处**就地改真门禁**，不再靠 runner 注记降级——
+  //   理由：该门拦的是「自动执行放量」，读数不收敛正是它该拦的状态；真收敛时自然转绿。
+  const unstable = min < 0.8
+  if (unstable) {
+    console.error('\n❌ exit 4（已知未修 · 声明制）：释放集合不稳定 ⇒ 不得接线自动执行（见上：最小 Jaccard ' + min.toFixed(3) + ' < 0.8）')
+    process.exit(4)
+  }
   process.exit(0)
 }
 
@@ -341,3 +364,9 @@ console.log(converged
   ? '✅ **收敛**（通过率极差 ≤10pp 且 未判率极差 ≤10pp）⇒ 满足接线自动执行的"波动"条件（仍须抽样干净）'
   : `❌ **未收敛**（极差 ${Math.round(span * 10) / 10}pp / ${Math.round(unjSpan * 10) / 10}pp ＞ 10pp）⇒ **不得接线自动执行**（每轮释放集合会不同）`)
 console.log('⚠ 提醒：本器只量"轮间一致性"；判据**正确性**另由抽样核对背书（`releaseApprovedSample` 人眼核）。')
+// 2026-09-25（L6-04 同族第三处）：默认（触发式）路径同样补退出码，使「不得接线自动执行」
+//   在三条路径上都有执行力——否则同一条禁令的强度随参数而异，读者无法据退出码判断。
+if (!converged) {
+  console.error('\n❌ exit 4（已知未修 · 声明制）：未收敛 ⇒ 不得接线自动执行（见上极差）')
+  process.exit(4)
+}

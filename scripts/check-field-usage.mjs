@@ -12,19 +12,48 @@
 // 声明机制：`criteria.json#fieldRoles`，键 = 导出常量.字段（如 `SCORE.alphaImp`），值 = `runtime` | `doc`。
 //   门禁同时反向校验：声明 `doc` 的字段**不得**被判为已消费（否则标记说谎）；声明 `runtime` 的必须已消费。
 // 用法: node scripts/check-field-usage.mjs [--json]
-import { readFileSync, readdirSync } from 'node:fs'
+import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const reg = JSON.parse(readFileSync(join(root, 'skill', 'engine', 'criteria.json'), 'utf8'))
-const roles = reg.fieldRoles || {}
 const AS_JSON = process.argv.includes('--json')
 const SUGGEST = process.argv.includes('--suggest')
-
-// 采集：每个 src 文件（排除生成物）import 了哪些导出常量 + 全文
 const srcDir = join(root, 'src')
+const regPath = join(root, 'skill', 'engine', 'criteria.json')
+
+// ⚠ **扫描面/判据源守卫**（2026-09-23 · ACT-344 收口：**改为消费单一实现** `lib-scan-scope.mjs`）。
+//   ⚠ **必须放在一切 IO 之前**：本件首版加固只护了 `readdirSync(srcDir)`，而**上一行**
+//     `readFileSync(criteria.json)` 早已先崩 —— 实测从空目录跑仍是 ENOENT 堆栈。
+//     教训：**守卫的位置比守卫本身更重要**（"加了守卫"≠"守卫生效"，本仓同型反复吃过）。
+//   ⚠ **改为消费库的理由**（用户当轮「避免打补丁」）：本段原为**手写三态**
+//     （不存在 / 读不出 / 空集），而 `lib-scan-scope.mjs` 已有同一语义的**单一实现**——
+//     留两份就是"同一语义多处重实现"（本仓反复记账的漂移源）。
+//   ⚠ **位置**：在 `--selftest` 分支**之前**是对的——自证用的是隔离夹具（不读这两个路径），
+//     而主路径必须先确认判据源可用（否则后续 `readFileSync` 会以 ENOENT 崩，语义不可分辨）。
+const { guardScanScope } = await import('./lib-scan-scope.mjs')
+{
+  // ① 判据源（单文件形态）
+  const regSrc = guardScanScope({
+    file: regPath,
+    label: '判据注册表 `skill/engine/criteria.json`',
+    why: '字段角色表（fieldRoles）是本件的判据来源，不可缺。',
+  })
+  if (regSrc.exitCode !== null) process.exit(regSrc.exitCode)
+  // ② 扫描面（目录形态；`accept` 与主路径同式：只收 .ts 且排除生成物）
+  const sc = guardScanScope({
+    dir: srcDir,
+    label: '`src/`',
+    required: true,
+    why: '本件判据建立在「src/ 下每个 .ts 的字段使用」之上；空集上"无未使用字段"是恒真命题。',
+    accept: (n) => n.endsWith('.ts') && n !== 'criteria.generated.ts',
+  })
+  if (sc.exitCode !== null) process.exit(sc.exitCode)
+}
 const files = readdirSync(srcDir).filter((f) => f.endsWith('.ts') && f !== 'criteria.generated.ts')
+
+const reg = JSON.parse(readFileSync(join(root, 'skill', 'engine', 'criteria.json'), 'utf8'))
+const roles = reg.fieldRoles || {}
 const info = files.map((f) => {
   const text = readFileSync(join(srcDir, f), 'utf8')
   const consts = new Set([...text.matchAll(/import\s*\{([^}]*)\}\s*from\s*'\.\/criteria\.generated\.js'/g)].flatMap((m) => m[1].split(',').map((s) => s.trim().split(/\s+as\s+/)[0].trim())).filter(Boolean))
@@ -87,6 +116,32 @@ if (SUGGEST) {
   console.log(JSON.stringify(out, null, 2))
   process.exit(0)
 }
+// ── --selftest（2026-09-23 · ACT-344 · B 方向：判据下沉到件内）────────────────────
+//   判因：本件扫描面是 `src/`，**空扫即结论恒真**（"无未使用字段"在空集上必真）⇒ 必须有守卫。
+//   主路径已有守卫（见上方 `existsSync`/`files.length` 两段），但**守卫本身也要被证伪** ——
+//   否则"加了守卫"只是声明，无法分辨它是否真的会红（本仓反复吃过的形态）。
+//   本段用 `lib-scan-scope` 的 `selftestScanGuard` 在**隔离夹具**上验三态，
+//   并反证"扫描函数非恒真"（防守卫与判据一起恒真）。
+{
+  const stIdx = process.argv.indexOf('--selftest')
+  if (stIdx >= 0) {
+    const { selftestScanGuard } = await import('./lib-scan-scope.mjs')
+    console.log('check-field-usage · 扫描面守卫自证（消费 lib-scan-scope）')
+    const rc = selftestScanGuard({
+      label: '`src/`',
+      // 件自己的扫描函数：与主路径**同式**（列 .ts 并排除生成物）
+      probe: (dir) => {
+        if (!existsSync(dir)) return 'ABSENT'
+        let names = []
+        try { names = readdirSync(dir) } catch (e) { return 'UNREADABLE' }
+        return names.filter((f) => f.endsWith('.ts') && f !== 'criteria.generated.ts').length
+      },
+      required: true,
+    })
+    process.exit(rc)
+  }
+}
+
 if (AS_JSON) console.log(JSON.stringify(report, null, 2))
 else {
   console.log('注册表字段消费机检（filed-level: import ∧ 字段名）')

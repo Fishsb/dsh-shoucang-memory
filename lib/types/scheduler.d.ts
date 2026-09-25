@@ -41,6 +41,8 @@ export interface Config extends ProbeConfigFields, EvalConfigFields, ModelConfig
     capAgent: number;
     capUser: number;
     capMemory: number;
+    /** ADR-333 容量门开关（缺省 false=不阻断）。三处同批：本类型 + 下方 zod schema + `distillOptionsOf` 映射。 */
+    capacityEnforce: boolean;
     storeMode: string;
     enableDeepSleep: boolean;
     enableRemPass?: boolean;

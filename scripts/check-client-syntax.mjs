@@ -100,6 +100,16 @@ for (const f of files) {
     const src = readFileSync(join(DIR, f), 'utf8')
     const m = /export \{ ([^}]+) \}/.exec(src)
     if (m) m[1].split(',').map((x) => x.trim()).filter(Boolean).forEach((n) => paneExports.add(n))
+    /* ⚠ 2026-09-22（ADR-333 实测补）：**就地 `export function/const/class` 也要收**。
+     *   判因：新增 pane `panes-capacity.js` 用 `export function renderTogglesCap(...)` 就地导出
+     *     （新件的自然写法），而本段原先**只认尾部 `export { … }` 表** ⇒ 该符号**不进监视集**
+     *     ⇒ 同一件里"定义并使用自己导出的符号"被 A5 判成「用了但未 import」（**假红**）。
+     *   实测两形态并存于本仓：`panes-toggles.js` 用尾表，本件用就地导出——
+     *     判据必须**同时认两形态**，否则会逼着新件去写尾表（形态之争不该由门禁决定）。
+     *   ⚠ 与下方"`own`"的配合：认了就地导出后，`own` 侧也必须认（见 `:111` 附近），否则仍判红。 */
+    const reInline = /^export\s+(?:async\s+)?(?:function|const|let|var|class)\s+([A-Za-z0-9_$]+)/gm
+    let im
+    while ((im = reInline.exec(src)) !== null) paneExports.add(im[1])
   }
   const WATCH = { ...SERVICES }
   for (const n of paneExports) WATCH[n] = '(pane 导出)'
@@ -109,6 +119,13 @@ for (const f of files) {
     const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
     const imported = new Set((src.match(/import \{ ([^}]+) \}/g) || []).flatMap((s) => s.replace(/import \{|\}/g, '').split(',').map((x) => x.trim())))
     const own = new Set(((/export \{ ([^}]+) \}/.exec(src) || [, ''])[1]).split(',').map((x) => x.trim()))
+    /* ⚠ 与上方 `paneExports` 同一补丁的另一半（缺此则仍假红）：把**就地导出**也算进 `own`，
+     *   否则"本件定义并使用了 renderTogglesCap"仍被当成"未 import 别人的同名符号"。 */
+    {
+      const re = /^export\s+(?:async\s+)?(?:function|const|let|var|class)\s+([A-Za-z0-9_$]+)/gm
+      let im
+      while ((im = re.exec(src)) !== null) own.add(im[1])
+    }
     const bad = Object.keys(WATCH).filter((s) => !imported.has(s) && !own.has(s) && new RegExp('(?:^|[^.\\w$])' + s + '\\b').test(code))
     if (bad.length) {
       miss++

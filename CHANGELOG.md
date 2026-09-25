@@ -5,6 +5,23 @@
 ## [Unreleased]
 
 ### Changed
+- **面板打开提速 −72%：台账读取两层缓存（2026-09-26 · 圆桌会议 shoucang-ui-perf 落地）**：
+  `/memory/overview` 实测 **789.7ms → 219.4ms**（min 跨批 · 同命令同层号同守门）。
+  根因（多方独立取证）：该端点每请求经 `panel-memory.ts:73/297/438` 对 `audit-source#readDistillAuditRows`
+  调 **3 遍**，而后者对台账 **4 卷 25.3 MiB / 约 7 万行做全量 `JSON.parse`**，只为筛出其中 **6.6%** 的
+  `audit.*` 行（93.4% 的解析白做）；且**同步执行占满唯一事件循环**（实测连 1.5ms 的零成本端点都被
+  拖到 1.5s，N 并发严格线性放大）。
+  修法（**零冻结面**，只动两件非冻结模块）：`ledger-compact#readLedgerVolumes` 加**第 1 层**缓存
+  （键 = 各卷 `(mtimeMs,size)` 元组，**不按主档单文件**——轮转 5 步里 3 步不碰主档且存在主档缺失瞬态）；
+  `audit-source#ledgerAuditRowsOf` 加**第 2 层**缓存（缓存已 parse 的 `audit.*` 行）+ **廉价子串预筛**
+  （`includes('"audit.')`，等价性实测命中集合 4,554/4,554 逐项相同）。
+  等价判据：缓存输出与原实现**逐字节一致**（1,587,913 B）、**保序**（最旧档→主档单调）未变、
+  `readLedgerVolumes` 8 个消费方 + audit 4 个消费方**零迁移**。
+  ⚠ 独立审查抓出并已修的真缺陷：原实现**无条件写缓存**，导致「存在但读失败」（独占锁/EACCES/EISDIR）
+  被当成有效结果**永久粘住、不再重试**（改前逐调用自愈）⇒ 改为「本轮出现读失败即不入缓存」，
+  实测：锁期间 1 行 → 释放后 2 行（自愈），且解锁后 50 次连读 0.065ms/次（缓存仍生效）。
+  ⚠ 已知未决（已记入会议导出物的未决项）：条件二「刷新墙钟 ≤800ms」未稳定达成（最好 387ms / 另次 977ms），
+  逐请求溯源主导项是 **`/vector/status2`**（709–1903ms，每轮最大），属**另一条独立路径**、须另立项。
 - **部署面补 `package.json`：修「契约面改动静默不抵达安装副本」（2026-09-23 · WSL 部署检查查出）**：
   `scripts/deploy-installed.mjs` 的面 1（安装副本面）原先 `FACE1_EXTRA` **只有 `cordis.patch.yml`**
   ⇒ 仓内改了 `dsh.client.inject` / 补了 `dsh.engines`，**装上去的那份 package.json 永远不变**。
@@ -2712,6 +2729,83 @@
 - **panel client 迁移到 slot 契约（2026-09-05，解冻前置）**：client.js 注入声明加 `'slots'`，入口从直插侧栏 footArea DOM 改为注册 `sidebar.footer.action` 插槽按钮（无 slots 环境保留直插兜底）；host+client 已注入运行（ef85e372），构建产物 lib/ 重建
 
 ### Fixed
+- **发布面/文档真值/部署面四处（2026-09-25 · 二次遍历 E/D/B 席，全部独立复验 confirmed）**：
+  · **npm 发布面漏闸（E1，隐私面）**：`package.json#files` 收整目录 `scripts`/`skill`，而 `.gitignore`
+    对 **npm pack 零效力** ⇒ 实测 **24 件本应忽略的私件随包外发**：`skill/docs/devref/` **20 件**
+    （其 `INDEX.md` 首行自述「本机，不入库，gitignore 排除」，且被 `check-i18n-keys:172` /
+    `check-public-content:118` / `check-public-tree:124` 三件门禁列为禁区）+ `*.bak-*` 2 件 +
+    `skill/docs/.internal/` 备份 1 件。现加四条排除模式：实测 **663 → 639 件、泄漏 24 → 0**；
+    负对照：`lib/index.js`·`lib/client.js`·`client.js`·`cordis.patch.yml`·`skill/engine/criteria.json`·
+    `skill/engine/signals.mjs`·`skill/scripts/memory_write_gate.mjs`·`skill/SKILL.md`·`scripts/check-runner.mjs`
+    等运行期必需件**全部仍在包内**（未误伤）。
+  · **README 把用户带向不存在的路径（D-03，用户数据面）**：`README.md:121` 与 `README.en.md:121`
+    称默认库根 `~/.dsh/skills/managing-memory`——实测该目录**不存在**，真根为 `~/.dsh/suite/memory`
+    （存在·328 文件，权威口径 `src/targets.ts:41`）。而紧邻下一行正教用户「想保留记忆，直接备份库目录即可」
+    ⇒ 照做者备份到空目录且不报错。现两份 README 均改为真根并注明 `MEMORY_ROOT` 可覆盖。
+  · **README 隐私门自述与事实相反（D-01）**：原文「每次提交扫描个人信息」——实测 `.git/hooks` 仅
+    `*.sample`、`core.hooksPath` 未设、无 `.husky/.githooks/.github`、`package.json` 无 `prepare`
+    ⇒ **提交/推送期无任何入口**（该件只在 `check-runner.mjs:221` 作手工件登记）。现两份 README 改为
+    「**推送前须手动执行且必须 PASS**（无 hook、无 CI，别当成已自动化）」。
+  · **README 门禁规模两处失真（D-04）**：`143 件` → 实测 `--list` 报 **236 件**；`--fast 跳过 4 件` → 在册
+    `{slow:true}` 实为 **5 处**（`L130/232/248/345/1045`）。均已按实测订正。
+  · **`skill/engine` 部署面缺扩展名（B-02）**：`check-deploy-sync.mjs:37` 的 `exts` 只有 `['.json','.md']`，
+    而 `skill/engine/signals.mjs` 是**运行期被 import 的活件**（`src/distill.ts:207`）⇒ 该件对库侧漂移
+    **结构性不可见**。现补 `.mjs`：实测「一致 86 → 87」，**单字节反例 ⇒ 报 `skill/engine/signals.mjs` 不一致
+    并 exit 1**，还原后回 PASS（两侧 sha1 改前同为 `667CC14C…`，纳入不造红）。
+  · ⚠ **本轮我自己造成并已修复的一处违规**：给 `check-placement-convergence.mjs` 加注释时写入了本机路径
+    （违反仓规规则 1 零硬编码红线），被本轮 E 席的 `check-public-tree` 实测抓出（FAIL 1 件）——已改为
+    不含本机路径的表述，复跑该门回 **PASS**。
+
+  · `test-eval-channel.mjs:151` F19 **隐私判据是恒真**：原写 `ok('F19 …' + (cond ? '❌ …' : '无 …'))`——
+  条件被塞进**消息串**，而本件 `ok`（`:24`）只收 1 参 ⇒ 无论 `cond` 真假都 `pass++`
+  （判据本体退化成「消息里有没有 ❌ 字样」）。落台账若真带上 `text/state/q` 也照样 ✅。
+  现改 `eq(contentKeys.length, 0, …)` 真断言：正向 98 PASS/0 FAIL；**反例自证**——含 `text` 或 `q` ⇒ 计 1 ⇒ 判红。
+  · `test-i18n-taglabel.mjs` ④：两处失效——① 定长窗口 `match(/idxPill[\s\S]{0,400}/)` 从**文件头注释里的
+  `idxPill`**（字符偏移 650）起算，真函数在偏移 6030 ⇒ **从未进窗**；② 兜底 `else ok(…)` **无条件判绿**。
+  现按**函数体边界**取片（实测 699 字符）：**反例注入「 · 」⇒ FAIL exit 1**，按字节还原 ⇒ PASS exit 0。
+  · `test-idxrow-pills.mjs`：端点不可达时跳过 3 项真机断言，末行却仍打印**硬编码**「PASS（6 项 + 响应字段 3 项）」
+  并 exit 0 ⇒ 读者读成「3 项已过」。现改退 **3**（skip 且诚实留痕，写「**0/3 未验**」）；
+  端点正常时逐字不变（实测 exit 0）。
+- ⚠ **订正上一轮报告我自己的一个错误读数**：上轮 §3.6 写「同型恒真 `ok()` **40 处 / 16 件**」——**该数不实**。
+  本节实修时按「先判每件的 `ok` 约定、再判调用点」重做（本仓实测存在 **三套并存约定**：`ok/1` 49 件 ·
+  `ok/2` 98 件 · `ok/3` 23 件），并做了 ok/bad 平衡交叉验证：**真值 = 1 处 / 1 件**（即 `test-eval-channel:151`）。
+  我自己的前两次扫描也分别给过 298 处/28 件与 116 处/58 件，**同样是错口径**（把 `bad()` 分支、多行三元、
+  三参形态误判为恒真）。⇒ 教训：**跨件形态审计必须先按件判定约定**，否则「发现」的本身也是假的——
+  这比漏检更贵（会诱导别人去改 15 个本来没问题的件）。
+
+- **同批续修（L6-04 / L6-06 · 目标文件均 git clean，未碰冻结面）**：
+  · `check-criteria.mjs:33` 与 `check-carriers.mjs:74`：子进程用**裸 `node`** ⇒ PATH 内无 node 时
+  ENOENT 被无参 `catch` 吞掉，真因被报成**另一类缺陷**「②投影过期 / ④投影过期」（把人引向
+  `gen-criteria` 而非 PATH）。现改 `process.execPath`（全仓已有 23 处此写法），并把 catch 分成
+  「**未能运行生成器**（ENOENT/EPERM）⇒ 该项未验」与「生成器判红 ⇒ 投影过期」两条不同结论。
+  `check-placement-convergence.mjs:34` 同族加固（该处原本已正确取 `e.status`）。
+  · `essence-review-stability.mjs`：**三处**同族判据（`:213` `--from-ledger` 登记形态 / `:274` `--jaccard` /
+  `:352` 默认触发式）原先一律 `process.exit(0)` ⇒ 终端打「❌ **未收敛** ⇒ 不得接线自动执行」而退出码恒 0，
+  `npm test` 与 CI 都读不到，**禁令无执行力**。现三条路径统一以 **exit 4**（已知未修·声明制，与同族
+  `check-yield-reflow` 同规格）表达。实测改后：`--from-ledger` 极差 18.5pp/25pp ⇒ exit 4；
+  `--jaccard` 最小 **0.056** < 0.8 ⇒ exit 4；`--live` 逐字不变（exit 0）。
+  · 同时订正该件件头 `:2` 的自述——原写「报告态，**不入 CHECKS**」，而 ACT-349 已登记为
+  「S-P5c 释放接线前置门」（`check-runner.mjs:270`）：**文件自述与登记事实矛盾**，现已照实改正。
+  · ⚠ **残余一步（未做，因 `check-runner.mjs` 属跨会话冻结面）**：`:270` 须补 `{ xfail: true }`——
+  按运行器 `:1348` 规则，**未声明却退 4 判 `fail`**；解冻后补一行即可，件头已留指引。
+- **门禁自身的三处「假绿/半锁」修复（2026-09-25 · 高并发遍历审计，6 席取证 + 6 席独立复验全 confirmed）**：
+  · `check-installed-sync`：副本**无 `lib/`** 时只 push 一条 `error` 就 `continue`，而 `error` 行被
+  `!r.error` 排除出 drift 表 ⇒ 一个**从未被比对过**的目标会一路走到末尾 else，打印
+  「✅ 全部已安装副本与仓内 lib/ 逐文件 sha1 一致」且 `--strict` 不复位（实测 `--installed <无 lib 目录> --strict`
+  同屏先 ⚠ 后 ✅、**EXIT=0**）——与件头立项判因「仓内绿 ≠ 运行态绿」正好反向。现 `unverifiable` 单列，
+  `--strict` 下与真漂移**同规格退 1**；真实副本路径逐字不变（仍报漂移 1 个 · exit 1）。
+  · `check-yield-reflow`：件头 `:23-28` 与 `check-runner.mjs:23` 的契约均为「xfail 意外转绿 ⇒ emitter 退 1」，
+  实现只做了 `fail ⇒ 4` 一半 ⇒ 三判据全绿时退 0、运行器渲染 ✅，**施工完成信号被静默吞掉**。
+  现补 XPASS 出口（`r1.ok && r2.ok && r3.ok === true` 才触发；`r3.ok === null` 为数据不足、不算转绿，
+  与 `:187`「未取得数据，不假装通过」同口径）；同仓对照组 `test-treeops-rm.mjs:318/325` 早已实现双向锁。
+  · `check-journal-privacy`：库根解析**不认 `DSH_HOME`**（同族 `check-public-content:29` / `check-observability:303` /
+  `check-yield-reflow:157` 都认）⇒ 以 `DSH_HOME` 做隔离的验证会话**穿透到生产库**：实测隔离态仍读真库
+  6956 条并报 PASS（**拿错事实源却显示正常**）。现补同口径分支：隔离态改判 `skip（exit 3）`，未设时逐字不变。
+  · 范围克制：本次只动 `scripts/` 下三件**未在途**（git clean）的机检件；另 5 条高价值结论
+  （`check-observability` 空扫判绿 · `check-runner:594` 虚假自证登记 · `lib-scan-scope` 恒真断言 ·
+  `check-field-usage` 注释与实现相反 · `check-pointer-content` 硬判据休眠）**其文件正被别的会话占用**
+  ⇒ 按 R3 未代为推进，仅在审计清单里留全。
+
 - **🔴 ACT-355 · ADR-358：棘轮「可再生额度」**从根因消灭** + 扫描面守卫单一实现收口完成（2026-09-23 · 用户「全部做，从根源解决问题」授权）**：
   承接 ACT-351（独立复核席裁定其为「**半补丁**」：只把劣化说出来，没治「吃掉不还」）。本轮**改机制，非再加一层账**：
   - **① 根因＝`--rebase` 无条件抬 `base`，与件头注释「棘轮只许降」自相矛盾** ⇒ **`--rebase` 缺省只许收紧**

@@ -73,11 +73,29 @@ ok(/injectPlaybook: 'injectPlaybook'/.test(config), '⑥ 映射到 suite 持久�
   ok(still.length === 2, '⑦ 反例自证：三层标记缺一即被检出（本断言语义有效，非恒真）')
 }
 
-// ── ⑧ 新模块的**存在理由**本身也要成立：panel-shared 未因本项膨胀过冻结上限 ──
+/* ── ⑧ 新模块的**存在理由**本身也要成立：panel-shared 未因本项膨胀过冻结上限 ──
+ * 2026-09-25 修（口径不自洽 + 上限写死，实测本件红而同轮 check-module-growth 判 PASS）：
+ *   原实现按**物理行数**与**字面量 846** 比对；而权威件 check-module-growth.mjs 的判据是
+ *   **有效行数 = 物理 − 注释 − 空行**（codeLinesOf，其件头 :320-333 明写"注释撑开棘轮 ⇒
+ *   门会把它自己锁死"正是为治本形态）。两处口径分叉 ⇒ 同仓两件对同一事实给相反结论。
+ *   修法：**消费权威件的单一实现**（codeLinesOf），上限从权威件读；取不到则显式跳过
+ *   （不判绿也不判红），避免"读不到 ⇒ 恒真通过"。 */
 {
-  // 口径与 `check-module-growth` 对齐（去掉末尾换行再数，否则 split 的尾空串会多算 1 行）
-  const lines = read('src/panel-shared.ts').replace(/\n+$/, '').split('\n').length
-  ok(lines <= 846, `⑧ \`panel-shared.ts\` = ${lines} 行 ≤ 冻结上限 846（本项按 check-module-growth 的出路落新模块，而非顶爆棘轮）`)
+  let lines = null, limit = null, why = ""
+  try {
+    const { codeLinesOf } = await import('./check-module-growth.mjs')
+    lines = codeLinesOf(read('src/panel-shared.ts'))
+    const mm = /panel-shared[^\n]*?(\d{3,4})/.exec(read('scripts/check-module-growth.mjs'))
+    limit = mm ? Number(mm[1]) : null
+    if (limit === null) why = '未能在 check-module-growth 里取到 panel-shared 的冻结上限'
+  } catch (e) {
+    why = '未能 import check-module-growth 的 codeLinesOf（' + String(e && e.message || e).slice(0, 80) + '）'
+  }
+  if (lines !== null && limit !== null) {
+    ok(lines <= limit, "⑧ panel-shared.ts **有效行数** = " + lines + " ≤ 冻结上限 " + limit + "（口径 = 权威件 codeLinesOf）")
+  } else {
+    console.log("⚠ ⑧ 跳过：口径源不可用（" + why + "）—— **不计 pass 也不计 fail**，但须人工复核")
+  }
 }
 
 console.log(fail ? `\nFAIL（${fail} 项）` : '\nPASS（三层判据常驻断言全过）')

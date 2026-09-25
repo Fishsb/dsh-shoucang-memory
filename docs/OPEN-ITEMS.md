@@ -17,6 +17,59 @@
 
 ---
 
+## 0v. 🔴 **棘轮劣化面会审遗留（2026-09-23 · 5 席圆桌会审 · 档一已修，其余只登记）**
+
+> **授权范围（用户原话：「档一（推荐）：只做① —— 修 :235 正则（保住注释）+ FREEZE 改 {base,hwm} 双水位。单文件、未碰墙、git revert 即净，其余 6 条只登记」）**
+> ⇒ 本节即「其余」的登记面；**改任何一条都须重新具名授权**（下表末列已标是否碰 R3）。
+> **会审同时推翻主持人三处主张**（23→实为 21 条 · 三个文件并非全在途 · ③ 成因「库不递归」不可复现），
+> 并实证两条独立真缺陷（`--dir` 缺席崩溃 · `--rebase` 吞注释）——**后者已由档一修复**。
+> 排序口径（用户原话）：**先给「会掩盖其他问题 / 让失败不可观测」的缺陷**，不按显眼度排。
+
+**✅ 已修（档一 · ACT-351）**
+
+| # | 项 | 证据 | 复验 |
+|---|---|---|---|
+| V0-a | `--rebase` **整段替换吞掉 FREEZE 表历史注释**（原 `:235` 正则 `/(const FREEZE = \{)[\s\S]*?(\n\})/` ⇒ 实测 **28 行 → 4 行**，`IR1 册五 E2` / `UI1/U2` 棘轮轨迹全灭——而那正是「基线为何是这个数」的唯一依据） | 副本实测 + 隔离 CRLF 副本复跑 | `node scripts/check-module-growth.mjs --selftest`（含 4 条 rebase 正例 + 2 条 CRLF 用例 + 1 条「旧实现必吞注释」反例） |
+| V0-b | **容差被静默吃掉、永不归还**（`base + SLACK` 是「每次 rebase 重置回满」的可再生额度）。真形：`851215f` 把 styles 730→726，`467206f` 又长到 729 而**只改 body.js 一行基线** ⇒ +3 自 2026-09-17 **永久固化**；scheduler 同形状**第二次**（`9b8bdb2`/`17db03b`/`41fd7f8` 跨 3 天均 617/611） | `check-module-growth.mjs` 现输出「已吃额度」逐行 | 门禁本体：`· 已吃额度（hwm − base）：合计 12 行`（3+2+7） |
+| V0-c | **既有假绿（顺带收口，非本轮引入）**：本件被 `check-pane-sections.mjs:29` **直接 import**，而顶层含 `process.exit` ⇒ 被 import 时**抢先执行并退出** ⇒ `node scripts/check-pane-sections.mjs --selftest` 输出 36 行**全是本件的断言**，pane 自己的 6 条断言**一条没跑** | 修前/修后实测对照（修后 pane 输出自己的 6 条 `okc`） | `node scripts/check-pane-sections.mjs --selftest`；范式照 `lib-scan-scope.mjs:222-231` 的 `IS_MAIN` 守卫 |
+| V0-d | **`IS_MAIN` 别名路径静默 exit 0（本轮引入 → 本轮修复）**：首版照抄 `lib-scan-scope.mjs:229-231` 的**字符串**比较 `import.meta.url === new URL('file://'+argv[1])`。独立复核席用 **junction**（`<仓根上级>/sc-jt → <仓根>`）实测：该式**判 false** ⇒ 文件体（含 `process.exit` 与 PASS/FAIL）**一行不执行** ⇒ 输出 **0 行 · exit 0** ⇒ **判红能力整体消失，比旧假绿更隐蔽** | 修前：junction 0 行/exit 0；真实路径 17 行。修后：junction **17 行**（= 真实路径）· `--selftest` **36 行** | `realpathSync()` 归一后比较（实测可穿透 junction） |
+| V0-e | **自证驱动副本而非真实现（本轮引入 → 本轮修复）**：首版把 rebase 逻辑**复制**一份进 `--selftest`（`REBASE_SIM`）。独立复核席对**真** `--rebase` 注入三种缺陷（丢行尾注释 / 吞全部注释 / 幽灵检查短路），自证**全部 exit=0 PASS 逃逸**（验的是副本，副本没坏） | 修后：抽 `rewriteFreezeBlock` 为**导出单一实现**，`--rebase` 与自证**共用**；变异真实现 ⇒ 三处**语义有效**变异全部 `exit=1` 抓到（M-G/M-H2/M-I2/M-J） | `--selftest`（含 CRLF 用例）；变异测试脚本见本行判据 |
+
+**✅ 本次已全部处置（ACT-355 · ADR-358 · 用户「全部做，从根源解决问题」授权）**
+
+| 原序 | 项 | 本次处置（含实测证据） |
+|---|---|---|
+| 1 | `audit-architecture` 目录缺席裸崩 | ✅ **已修**：成为 `lib-scan-scope` **第 5 个消费者**（`guardScanScope`，`required:true`）⇒ 目录缺席改判**可解释判因**「扫描面不可用」+ exit 1，不再 ENOENT 抛栈。**补回归守卫** `--selftest` **⑥⑥′⑥″**（含「不得以 ENOENT 收场」）⇒ **8/8**。⚠ 顺带修真缺陷：`run()` 原只收 stdout，而库判因走 **stderr** ⇒ 断言会假红（实测踩到，已两路都收） |
+| 2 | 棘轮基线零登记（**制度那一半**） | ⛔ **明确不做**（见下方 V0-f）：会审三席一致否。**真缺口那一半已做**：`audit-architecture` 的 `T` 补**收紧提示**（不判红，`--gate` 时打印「阈值已有余量、可考虑收紧」）——实测打印 `T.lines` / `T.reexports` 两条余量 |
+| 3 | `check-i18n-registered` `exit 3` 混同 | ✅ **已修**：按库的**三态语义**分开 ⇐ `src-client` 缺席 = **部署形态** ⇒ `required:false` + skip(3)；目录**可读但 0 份词表** = **断链** ⇒ **判红(1)** + 判因/退回动作。实测三态分流：A(有词表) 继续 / **B(0 词表) exit 1** / **C(目录缺席) exit 3** |
+| 4 | `lib-scan-scope.mjs` 未跟踪 | ✅ **已入库**：`git add scripts/lib-scan-scope.mjs` ⇒ 状态 `A`（已暂存）⇒ 「部分提交致新克隆崩」的风险**消除**。⚠ **未暂存任何他人文件**（已核：暂存区仅此一件） |
+| 5 | `thresholds.note` 数字陈旧 + 指向已删件 | ✅ **已修**：note 改为**不写死条数**（`⇒ 权威读数一律以 check-threshold-registry.mjs 输出为准`），并订正读口为 `check-threshold-control.mjs`、注明 `check-threshold-consumed.mjs` **已删及其死因**。`gen-criteria` 重生成投影 + `check-criteria` **PASS** + `check-threshold-registry` **PASS** |
+| 6 | 散文账陈旧 | ✅ **已修**：`evaluation-channel-plan.md` 的三处（`:36`/`:109`/`:115`）由 `610/606（+4）` 订正为 **585/578（+7）** 并标注「引用前现跑」 |
+| 7 | `--rebase` 幽灵条目报错退出 | ✅ 已在档一落地（**知情登记**，非缺陷）：保留「不静默」语义 |
+| 8 | `CHANGELOG` 缺记账 | ✅ **已补**（ACT-351 那轮已落；本轮 ACT-355 同批） |
+| 9 | **欠账不产生红 ⇒「可再生额度」仍未治** | ✅ **已从根因解决**（这是本轮核心）：`--rebase` **缺省只许收紧**（`base := min(旧, 实测)`），**抬 base 须显式 `--raise`** ⇒ 上限恒为 `base+15`，**rebase 再也不能换取新空间**。实测：`base=578, hwm=578` + 实测 590 ⇒ 缺省 rebase 后 `{base:578, hwm:590}`（**base 不动**）；`--raise` 才 `{590,590}` 并打印「抬高了 1 条基线 578→900」。**自证含成对反例**（缺省与 `--raise` 结果必不同） |
+| 10 | `--print`/`--rebase` 仍在 import 期执行 | ✅ **已修**：扫描/`--print`/`--rebase`/自证**全部纳入 `IS_MAIN` 两段守卫**（只读扫描提模块作用域以避免跨块作用域断裂——实测踩到 `ReferenceError: rows is not defined`） |
+| 11 | `lib-scan-scope` 同型 `IS_MAIN` 缺陷 | ✅ **已修**：同一 `realpathSync` 归一。实测 junction 下 **23 行**（= 真实路径；修前 **0 行 / exit 0**） |
+| 12 | 四份文档按数字形态引用 FREEZE | ✅ **已订正**：`capacity-gate-switch-plan` / `capacity-gate-adjustment-plan` 加**形态与读数均已变**声明（**不重写历史**，只标注 + 指向现跑）；`evaluation-channel-plan` 数字订正 |
+
+**⛔ 明确不做（并登记否决理由，供后续不重开）**
+
+<a id="v0-f"></a>
+**V0-f · 「把棘轮基线登记进 `criteria.json#thresholds.entries`」—— ⛔ 不做（会审三席独立一致否）**
+- **理由 1（明文排除）**：`thresholds.note` 的范围界定写「不含…**工程常量（超时/重试/熔断）**」，行数/边数上限属工程常量。
+- **理由 2（登记即红或造假读口）**：`check-threshold-control.mjs:170-180` 对凡 `file+contains` 型强制要求 `e.read` 且读口须在 **`src/` 内**真实存在（扫描面 `:175-177`）；棘轮基线消费方在 `scripts/` ⇒ 直接登记**当场红**；编一个假读口 = **假绿**。
+- **理由 3（方向相反）**：`check-threshold-registry.mjs:83` 的 `deepEq` 要求与 `value` **深相等**（语义是"恒定"），而棘轮要的是「**只许收紧**」，且每次 `--rebase` 必漂移。
+- **理由 4（零消费点）**：21 条 entry 的探针**指向 `scripts/` 者 0 条**；登记后**没有任何消费者**会读它。
+- **替代（已采纳）**：维持散写 + **逐件自证** + `audit-architecture` 的 `T` 补收紧提示（见上表原序 2）。
+- **残留口径缺口（须人定，非机检缺陷）**：`note` 首句「任何影响『接受/拒绝/归类/取舍』判断的数值阈值都必须登记」按字面**覆盖** `FREEZE` 的 726，与该段范围界定**存在字面张力**。⇒ 属**制度措辞**问题，**须用户定夺**，本轮**不擅自改口径**（改口径 = 动制度，非本节授权面）。
+
+
+**未验证项（明确标出，勿当已证）**
+- 序 2 的「工程常量该不该进 `thresholds.entries`」**无既有裁决文本可援引** ⇒ 标**未验证**，须人定。
+- 序 4 的「部分提交」是**推演的风险，非已发生的事故**（实测只证明「当前未跟踪 + HEAD 无引用」）。
+
+---
+
 ## 0o. 🔴 **一个 BOM 掀出三层假绿：运行态配置整体失效 · 门自己静默降级 · 探针"平凡通过"**（2026-09-20 round 10 · 已修 + 带门）
 
 > **起点是一次操作失误，收获是一条链**：本轮改 profile pin 时用 `Set-Content -Encoding UTF8`

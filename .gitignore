@@ -102,3 +102,6 @@ deliverables/ui1-shots/
 #   译文已固化为 src-client/i18n-dict-*.js ⇒ 中间产物可安全丢弃。
 /.i18n-*.json
 /.i18n-backup-*/
+
+# 性能改造（2026-09-26）一次性回滚点——临时物，不入库
+.perf-backup-*/

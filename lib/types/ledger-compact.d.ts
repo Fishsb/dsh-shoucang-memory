@@ -70,10 +70,28 @@ export declare function rotateBySize(file: string, capBytes: number, keep?: numb
  */
 export declare function readLatestLedgerRow<T = Record<string, unknown>>(file: string, match: (o: Record<string, unknown>) => boolean, perVolume?: number): T | undefined;
 /**
+ * **台账整组卷位的「内容版本」键**（单一实现，供下游按同一判据做**自持缓存**）。
+ *
+ * 为什么必须由本件导出，而不是让下游各自算（**这是本仓反复栽过的坑**）：
+ *   `audit-source` 的第 2 层缓存（缓存"已 parse 的 `audit.*` 行"）需要一个"底层数据变没变"的判据。
+ *   若它自己写一份 `statSync(主档)` 就算数 —— 正是**只按主档做键**那个已证伪的错法
+ *   （轮转 5 步里 3 步不碰主档、且存在主档缺失瞬态，见上方整段判因）。
+ *   ⇒ 键的**判据只有一处实现**：与本函数读侧用的 `volumePathsOf` + `volStatKeysOf` **同源**，
+ *     下游拿到的就是"我读的到底是哪一组、各自什么状态"的**忠实指纹**。
+ *
+ * 形态：`<path>\0<mtimeMs>\0<size>` 逐卷用 `\u0001` 连接；该卷不存在/不可读 ⇒ `null` 段。
+ *   ⚠ 用 `\0`/`\u0001` 作分隔符（而非 `:`/`|`）—— 路径本身可能含 `:`（Windows 盘符）与 `|`。
+ * 代价：4×`statSync` ≈ **0.033 ms**（实测），相对其保护的一遍全量 parse（**327 ms**）可忽略。
+ */
+export declare function ledgerVolumeKey(file: string, keep?: number): string;
+/**
  * **跨档按时间序**读出台账全部非空行（最旧档 → … → 主档）。
  *
  * 顺序是判据的一部分：`audit-source` 的**水位回放**依赖"历史在前"，
  * `deepsleep-machine` 取"最后一条"= 最新 —— 顺序错了这两处都会静默取错值。
  * 不可读的档位跳过（零抛出）；调用方负责坏行处理（与既有读侧同纪律）。
+ *
+ * 2026-09-26：加「各卷 (mtimeMs,size) 元组」缓存（见上方整段判因）——**返回语义零变化**
+ *   （同序、同类型 `string[]`、同"不可读档跳过"姿态、零新导出）。
  */
 export declare function readLedgerVolumes(file: string, keep?: number): string[];

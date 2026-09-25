@@ -112,6 +112,10 @@ export interface DistillConfig {
   capAgent?: number
   capUser?: number
   capMemory?: number
+  /** ADR-333 容量门开关（false=不阻断，缺省；true=超限拒写）。⚠ 必须与 `scheduler.ts` 的
+   *  schema 及 `distillOptionsOf` 的显式映射**三处同批** —— 本接口此前就因漏声明 eval 域
+   *  6 键而出现「映射有 ≠ 类型有」（见下方 :119-121 注解）。 */
+  capacityEnforce?: boolean
   embedEnabled?: boolean // 嵌入开关（scheduler embedEnabled；本地 bge-m3 零 token）
   embedBaseUrl?: string // OpenAI 兼容 embeddings 基址
   embedModel?: string // embedding 模型名

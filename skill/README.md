@@ -32,7 +32,12 @@ DSH（DeepSeek Harness）文件式长期记忆技能的开发仓库：**规则�
 
 ## 使用
 
-技能本体部署于 DSH 技能目录（`~/.dsh/skills/managing-memory/`，含私人数据区与规则副本）；本仓库为规则/引擎的公开开发源。
+技能本体部署于 DSH 技能目录（`~/.dsh/skills/managing-memory/`，含规则副本）；本仓库为规则/引擎的公开开发源。
+
+> ⚠ **2026-09-25 订正（数据根 ≠ 技能装载面）**：上面说的 `~/.dsh/skills/managing-memory/` 是**技能副本的装载面**；
+> **记忆数据根**自 2026-09-21 起已迁至 **`~/.dsh/suite/memory`**（权威口径 = `src/targets.ts:41`
+> `env.MEMORY_ROOT || join(dshHome(),'suite','memory')`，实测该目录存在）。二者**不再同根**，勿把装载面当数据根引用——
+> 旧文档里「兜底 = 技能根下」的写法只适用于**更早的布局**。
 
 ## 许可与致谢
 

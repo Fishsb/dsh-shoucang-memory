@@ -20,7 +20,11 @@
     "client.js",
     "scripts",
     "skill",
-    "cordis.patch.yml"
+    "cordis.patch.yml",
+    "!**/*.bak-*",
+    "!skill/docs/devref",
+    "!skill/docs/.internal",
+    "!**/_memory"
   ],
   "sideEffects": [
     "./lib/client.js"

@@ -318,8 +318,14 @@ ${JUDGEMENT_VALUES}`
 //   （判据还在、门禁已失效，且不报错不测试红——Arch 2026-09-12 指出的漂移隐患）。
 export const COMMIT_FAILED_GATE = '落盘异常'
 
-/** 除 principles 外四通道的轮次汇总（G-19）：`tried`=该通道有提案且未落地数，`done`=成功落地数。 */
-export type DeepSleepOtherChannels = { tried: number; done: number }
+/* ⚠ ADR-333 册三（2026-09-22）：通道明细的**类型与纯函数已按领域接缝抽到 `channel-plan.ts`**
+ *   ——本件导出数受 `audit-architecture` 棘轮约束（阈 35），就地新增使其达 37 当场红；
+ *   放松棘轮属 R3（须用户拍板），故走本仓既有出路（同 `probe-plan.ts` / `trigger-plan.ts` 先例）。
+ *   **再导出**保既有消费方零迁移（与 `ring-supply` 再导出 `due-window` 同一手法）。 */
+import { zeroLandedChannels, anyZeroLanded } from './channel-plan.js'
+import type { DeepSleepChannelName, DeepSleepChannelStat, DeepSleepOtherChannels } from './channel-plan.js'
+export { zeroLandedChannels, anyZeroLanded }
+export type { DeepSleepChannelName, DeepSleepChannelStat, DeepSleepOtherChannels }
 
 export const deepSleepLanded = (
   stop: unknown,

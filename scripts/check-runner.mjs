@@ -267,13 +267,27 @@ const CHECKS = [
   //   ⚠ 该件在本轮的**真缺陷修复**：异常纪元（`note` 含 `stop=error` / `approved+rejected==0` 而候选>0）
   //     原被直接算 `approved/candidates` ⇒ **把"12 批全失败"计成"通过率 0%"**，把极差从 **16.3pp 虚增到 37.2pp**。
   //     修后异常**单独列出并排除出通过率序列**（不静默丢弃）。
-  ['scripts/essence-review-stability.mjs', '--from-ledger'],
+  /* ⚠ 2026-09-25 补 `{ xfail: true }`（仓内契约 :22-24：**exit 4 是声明制** ——
+   *   "有 xfail 且无真实断言失败"才记 xfail；未声明却退 4 ⇒ 判 **fail**）。
+   *   本件 `--from-ledger` 的退 4 含义是「**已收敛性未达成，不得接线自动执行**」= 已知未修，
+   *   属声明制语义；原先未声明 ⇒ 全量跑里被计成 fail（实测 236 件总账 3 red 之一），
+   *   把"已知且可见的未修项"与"真实回归"混为一谈。
+   *   ⚠ **双向锁**（同 :1348 的 `(code === 4 && opts.xfail) ? 'xfail' : 'fail'` 与 check-yield-reflow 的同款纪律）：
+   *     一旦本件**收敛**（改判 exit 0），XPASS 必须被看见 —— 见 `check-runner` 件头对 xfail 的
+   *     "意外转绿 ⇒ emitter 必须退 1"契约（那是件内纪律，运行时由 `check-yield-reflow` 实例化）。 */
+  ['scripts/essence-review-stability.mjs', '--from-ledger', { xfail: true }],
   // B 方向（2026-09-23 · ACT-344）：**空扫判据下沉到件内自证**。
   //   判因：曾建外围元门禁想机检"谁真读 src/"，**五版判据全被证伪**——该事实从进程外部不可判定；
   //     该报告态件已删（价值被件内自证取代）。正解是**件自己**给判据（它清楚自己的扫描面）。
   //   范式：`lib-scan-scope.mjs#selftestScanGuard` —— 件只声明 `probe(dir)`（自己的扫描函数），
   //     helper 在隔离夹具上验三态（有内容/空/缺席）并**反证 probe 非恒真**。
   ['scripts/check-field-usage.mjs', '--selftest'],
+  /* 2026-09-25：仓级单写者锁（`scripts/repo-lock.mjs`）—— 事故驱动（并发跑门禁导致
+   *   `test-split-equivalence` 的反例注入未被还原、`client.js` 成反例态产物）。
+   *   本件 14 条含**反例自证**（④ owner 不匹配须拒删 / ⑤ fail-closed 须等满才放弃 /
+   *   ⑥ 拒锁时 fn 不得被调用 / ⑧ 陈旧锁须**留证接管**而非直删）——
+   *   **它已实测抓到 repo-lock 自身的两层重入语义缺陷**（初版只查 HELD 表 ⇒ fail-closed 不可达）。 */
+  ['scripts/test-repo-lock.mjs'],
   ['scripts/test-layering.mjs'],
   ['scripts/test-carrier-layers.mjs'],
   ['scripts/test-forgetops.mjs'],
@@ -578,9 +592,16 @@ const CHECKS = [
   //     · `check-runner.mjs` **剔除**：它的 `--selftest` 会**递归跑全量门禁**（实测 >120s 被杀、退出码 null）
   //       —— 登记即自引用递归，且会让每次门禁再翻一倍耗时。
   //     · `migrate-cue-keys.mjs` **剔除**：它是**一次性迁移器**（写盘 + 真库），非判据件；登记它等于把"迁移动作"纳入常驻门禁。
-  //     · `inject-baseline-diff.mjs` 保留但**注意**：本件经实测量到**非确定性**（全量跑红 / 单跑 3 次全 ✅，
-  //       原因=首差未被 normalize 覆盖的**活数据行**，见 obs 席 E3）——它的自证分支是**合成样本**、确定性通过。
-  //       本行登记的是**它的自证**，不是它本体（本体在下方另有登记行）。
+  //     · `inject-baseline-diff.mjs` 经实测量到**非确定性**（全量跑红 / 单跑 3 次全 ✅，
+  //       原因=首差未被 normalize 覆盖的**活数据行**，见 obs 席 E3）。
+  //       2026-09-25 订正（原注记「本行登记的是它的自证」**与代码事实相反**，已删）：
+  //       该件 `:47-51` 只消费 `--write` / `--baseline`，**根本没有 `--selftest` 分支**；
+  //       且件内 `:140` **明文禁止**再加自证（原文「属**重复实现**…勿在本脚本内再加 `--selftest`」）。
+  //       ⇒ 原先那行 `['scripts/inject-baseline-diff.mjs', '--selftest']` 是**纯空操作**：
+  //         flag 被静默忽略、跑的是**本体**（与下方本体登记行重复，白烧一次真机请求）。已删。
+  //       真自证由 `scripts/test-inject-baseline-normalize.mjs`（下方 `:225` 已登记）承担。
+  //       ⚠ 该形态的教训是通用的：**登记行写的参数必须在件内真有那个分支** ——
+  //         否则门禁以为自己在验 A，实际在跑 B（本仓「假绿」族的最新一例）。
   //   以下 11 件均为**确定性通过**（逐件实跑 2 次同码）+ selftest 分支零副作用（写盘全走 `mkdtemp`/`tmpdir`）。
   ['scripts/check-claim-alignment.mjs', '--selftest'],
   ['scripts/check-cue-space.mjs', '--selftest'],
@@ -591,7 +612,6 @@ const CHECKS = [
   ['scripts/check-relevance-live.mjs', '--selftest'],
   ['scripts/check-section-refs.mjs', '--selftest'],
   ['scripts/effective-directions.mjs', '--selftest'],
-  ['scripts/inject-baseline-diff.mjs', '--selftest'],
   ['scripts/test-i18n-render.mjs', '--selftest'],
   // W1 新增工具（2026-09-23 · ACT-340）：**记录库时点快照**——W2（动真源）的硬前置。
   //   判因：data 席实测 `.records/` **无可用回滚点**（库内唯一备份是 9 天前且**不含 `records.jsonl` 副本**）。
@@ -964,6 +984,18 @@ const CHECKS = [
   //   反例自证 6 例 / 5 条反例（含"声明了却没落地""改一处忘另一处""孪生漂移""prompt 零标签"）。
   ['scripts/check-index-tag-reach.mjs'],
   ['scripts/check-index-tag-reach.mjs', '--selftest'],
+  // **索引行解析必须容忍行尾空白**（2026-09-24 · 真机缺陷驱动）。
+  //   判因：真库 MEMORY.md 曾 865/886 行带多枚行尾 CR（597 行 4×CR / 268 行 3×CR），
+  //     而 `panel-memory#parseIndexLines` 的正则不匹配 `\r` ⇒ **整行失配 ⇒ 静默吞行**：
+  //     面板 `/memory/overview` 由 **890 → 21** 条（吞吐 2.4%）且无异常提示。
+  //     同份数据另有 `targets#scanIndexRows` 与 `count-memory-lines.mjs` 两处口径（均先 trim，故容忍）
+  //     ⇒ 三处对同一文件给出 `21 / 884 / 890` 三种数 = 「同一事实多份实现」。
+  //   本件守：① 行为面（合成夹具：干净/1×CR/3×CR/4×CR/CR+空格 ⇒ 与干净行**逐字段相等**；
+  //     行首缩进/无标签/无指针 ⇒ 仍**不得**命中，防"宽容行尾"被实现成"宽容行首"）；
+  //   ② 真库对照（解析条数 == 规范计数口径，两独立实现须同数；库不可达则 skip）；③ 变异自证。
+  //   先红实证：把编译产物退回不容忍正则 ⇒ **exit 1**；还原 ⇒ exit 0（字节级还原，sha 相同）。
+  ['scripts/check-index-parse-cr.mjs'],
+  ['scripts/check-index-parse-cr.mjs', '--selftest'],
   // **统一事件信封**单测（2026-09-13）：`{ at, ...o }` 的展开顺序允许调用方用 `at: undefined` 覆盖注入值，
   //   而 `JSON.stringify` 静默丢弃 undefined ⇒ 行里没有 `at`（实测 distill-audit 930 行里 1 行如此）。
   //   本件把「任何一行都必须有非空 `at` + `type`」钉死，覆盖 audit/episode/stub/ledger 四条写出路径。
@@ -1325,7 +1357,7 @@ for (const entry of selected) {
    *   导致两次 test-forgetops 抖动无从定位（只知文件名、不知断言）。绿色运行仍不打印，保持无噪音。 */
   let childOut = ''
   try {
-    childOut = execFileSync('node', [join(root, file), ...argv], {
+    childOut = execFileSync(process.execPath, [join(root, file), ...argv], {
       encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 300000, windowsHide: true, maxBuffer: 64 * 1024 * 1024
     })
   } catch (e) {

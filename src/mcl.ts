@@ -441,7 +441,7 @@ export function registerMcl(
   //   round 8 接线后本函数体变长，装配函数 `registerMcl` 撞 I1 棘轮（≤120 行），按既有出路提出来。
   const judge = (text: string, topics: string[], signals: string[][] = []): boolean => judgeTopicEcho(text, topics, signals)
 
-  const mkMsg = (text: string): AnyMsg => msgFactory!({ content: [{ type: 'text', text }], source: { kind: 'plugin', plugin: 'shoucang-mcl', form: 'recall' } })
+  const mkMsg = (text: string): AnyMsg => msgFactory!({ content: [{ type: 'text', text }], source: { kind: 'plugin:shoucang-mcl', form: 'recall' } })
 
   // 任务文本捕获（主通道）：实现已提到**模块级** `captureTaskText`（仓内约定：实现函数在模块级，依赖显式窄传）
   //   —— 提出来同时把装配函数行数压回 I1 棘轮（≤120 行）以内。

@@ -31,7 +31,9 @@ const mkLib = (bodies) => {
 /** 跑一次 CLI，返回 { code, out } */
 const runCli = (root, file, section, text, env = {}) => {
   try {
-    const out = execFileSync('node', [CLI, `notes/${file}`, section, text], {
+    // 2026-09-25（L6-06 同族加固）：改 `process.execPath`——裸 `node` 依赖 PATH，
+    //   而本机实测 PATH 内无 node（node 装在 DSH 家目录下的独立 node/ 目录），全仓已有 23 处用 execPath。
+    const out = execFileSync(process.execPath, [CLI, `notes/${file}`, section, text], {
       encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, MEMORY_ROOT: root, ...env }, windowsHide: true,
     })
     return { code: 0, out: String(out) }

@@ -172,22 +172,144 @@ export function readLatestLedgerRow<T = Record<string, unknown>>(
   return undefined
 }
 
+/* ── 跨档读的「各卷 (mtimeMs,size) 元组」缓存（2026-09-26 · 性能改造第 1 层）─────────────
+ * 判因（实测，非推演）：`/memory/overview` 一次请求经 `audit-source` 调本函数 **3 遍**
+ *   （`panel-memory.ts:73 / 297 / 438`），真库 4 卷 **26.7 MB / 68,523 行**，实测：
+ *     · 单遍读+split = **62–109 ms**；`readDistillAuditRows` 整遍（读+parse+过滤）= **191–225 ms**
+ *     · 同进程连续 3 遍 = **642 ms**（请求内小计 804 ms）—— 纯同步，占满唯一事件循环
+ *   ⇒ 文件没变时结果**逐字相同**，第 2/3 遍是纯白读。
+ *
+ * **为什么不复用 `file-stat-cache#cached`**（那件看似现成）：
+ *   它的键是**单路径**（`keyOf = kind + '\0' + path`，file-stat-cache.ts:36），失效判据是
+ *   **该路径**的 (mtimeMs,size)。而本函数读的是**一组**文件（`<file>.{keep}..<file>`）⇒
+ *   单路径键在 `rotateBySize`（本件 :100-117）下**会静默漏**：
+ *     · 那次轮转 5 步里，`unlink(.keep)` / `rename(.{i}→.{i+1})` 共 **3 步完全不碰主档**；
+ *     · 且 `rename(主档→.1)` 与 `writeFileSync(主档,'')` 之间有**主档不存在**的瞬态
+ *       （:111-114 已自行记载该瞬态会造成"数据看起来消失"）。
+ *   ⇒ 只按主档 stat 做键，会把「少读一卷」的结果当**有效条目**缓存下来，**且不报错**。
+ *   故本缓存自持，键自足到**这一组文件各自的 (mtimeMs,size)**。
+ *
+ * **为什么不依赖调用方失效**：`file-stat-cache#invalidate` 是**死代码**
+ *   （实测：全仓 `src/` 无任何文件 import 它；`clearFileStatCache` 同样零调用），
+ *   而 `ledger.jsonl` 有 **6 处同进程写者**（`distill-infra` 的 `ledger()`+`rotateBySize` /
+ *   `deepsleep-run` 的 `appendLedgerLine` / `mcl` / `vec` / `panel-eval` / `pointer-deficits`）
+ *   ⇒ 任何"写完记得作废"的约定都会重蹈「声明了却从没实现」的覆辙。
+ *   本缓存**只靠元组自然失效**，不需要任何调用方配合。
+ *
+ * **语义等价（三条，缺一即错）**：
+ *   ① **保序**：返回顺序仍是「最旧档 → … → 主档」（本函数原有循环语义，见下方 :176-181 头注）。
+ *      命中路径直接复用缓存数组，**不做任何重排** ⇒ 顺序与未缓存时逐字节相同。
+ *   ② **补读「缓存时不存在、现存在」的卷位**（SYNC-MISS）：命中后**逐卷复读 stat** 并与缓存时的
+ *      元组逐个比对（`null` = 当时不存在）。这条**必需**：台账是「高频 append、每 ~17h 才轮转一次」，
+ *      若只比较"已缓存卷的 stat 是否变化"，则在主档缺失瞬态里缓存过**一整轮空数组**之后，
+ *      空主档重建**不会被察觉** ⇒ 面板在该窗口内恒显示"无台账"。代价 4×statSync = **0.033 ms**。
+ *   ③ **返回副本**：命中时 `slice()`（实测 **0.171 ms**，相对单遍读 62–109 ms 占 **0.16–0.28%**）。
+ *      刻意为之：调用方若就地 `sort/reverse/push`，会把**缓存本身**写坏，而这是**跨请求粘滞**的
+ *      静默错误 —— 本仓有同形前例：`file-stat-cache` 首版只用路径作键，导致 `statSize()` 存的
+ *      字节数被 `nonEmptyLineCount()` 当行数返回（该件 :33-35 自记）。实测当下 8 个调用点
+ *      **均未变异**返回数组，但"今天没人变异"不是"明天不会"。
+ *      ⚠ **能力边界（独立审查 verify 席 2026-09-26 指出，据实修正）**：本件元素类型是
+ *      `string`（**不可变原始值**）⇒ `slice()` 已**足够**，不存在"嵌套字段被改写"的面。
+ *      先前此处写的「整类消除该失效模式」是**过度声明**，已改为：本件消除的是**数组本身**被
+ *      就地改动这一种；对**元素为对象**的缓存（如 `audit-source` 的 `{line,o}`）**不适用** ——
+ *      那里必须另做对象级拷贝，见 `audit-source.ts` 的对应判因。
+ *
+ * **容量与上界**：`MAX_ENTRIES = 4`（生产真路径只有 1 个，其余留给脚本/自测的临时目录）。
+ *   ⚠ **上界论证的对象（独立审查 verify 席 2026-09-26 纠正，据实修正）**：
+ *     先前注释以「台账磁盘硬上限 32 MB（`LEDGER_CAP_BYTES` 8 MB/卷 × 4 卷，见 `distill-infra.ts:83`）」
+ *     论证"缓存有界"—— **界错了对象**：那是**磁盘**上界，而缓存放的是**堆**里的 JS 字符串。
+ *     verify 席实测：**单条目 ≈ 52.0 MiB**（UTF-16 双字节 + 对象/数组开销），
+ *     `cap=4` 满载 ⇒ **堆上界 ≈ 208 MiB**（相对磁盘界的放大 ≈ **6.5×**）。
+ *     修正后的**正确表述**：缓存**有界**（由 `MAX_ENTRIES` 与磁盘上界**共同**约束），
+ *     但**堆占用须按 ~6.5× 放大估算**；生产真路径只有 1 个键 ⇒ 现网实际 ≈ **52 MiB**。
+ *     若未来出现多根多键场景，须以 208 MiB 为估算上界，不得再引用 32 MB。
+ */
+type VolStatKey = { path: string; mtimeMs: number; size: number }
+interface VolCacheEntry { keep: number; keys: Array<VolStatKey | null>; value: string[] }
+const VOL_CACHE = new Map<string, VolCacheEntry>()
+const VOL_CACHE_MAX = 4
+/** 卷位路径，**与读侧循环同序**（最旧档 → … → 主档）。读侧与轮转侧共用同一顺序语义。 */
+const volumePathsOf = (file: string, keep: number): string[] => {
+  const out: string[] = []
+  for (let i = keep; i >= 1; i--) out.push(`${file}.${i}`)
+  out.push(file)
+  return out
+}
+/** 一组路径的 (mtimeMs,size)；该档不存在/不可读 ⇒ `null`（与"该档贡献空"同义）。 */
+const volStatKeysOf = (paths: string[]): Array<VolStatKey | null> => paths.map((p) => {
+  try { const st = statSync(p); return { path: p, mtimeMs: st.mtimeMs, size: st.size } } catch { return null }
+})
+/** 元组等价（`null` 表示"当时不存在"；`null` vs 对象 恒不等 ⇒ 触发重读 = SYNC-MISS）。 */
+const sameVolStat = (a: VolStatKey | null, b: VolStatKey | null): boolean =>
+  a === null || b === null ? a === b : a.mtimeMs === b.mtimeMs && a.size === b.size
+
+/**
+ * **台账整组卷位的「内容版本」键**（单一实现，供下游按同一判据做**自持缓存**）。
+ *
+ * 为什么必须由本件导出，而不是让下游各自算（**这是本仓反复栽过的坑**）：
+ *   `audit-source` 的第 2 层缓存（缓存"已 parse 的 `audit.*` 行"）需要一个"底层数据变没变"的判据。
+ *   若它自己写一份 `statSync(主档)` 就算数 —— 正是**只按主档做键**那个已证伪的错法
+ *   （轮转 5 步里 3 步不碰主档、且存在主档缺失瞬态，见上方整段判因）。
+ *   ⇒ 键的**判据只有一处实现**：与本函数读侧用的 `volumePathsOf` + `volStatKeysOf` **同源**，
+ *     下游拿到的就是"我读的到底是哪一组、各自什么状态"的**忠实指纹**。
+ *
+ * 形态：`<path>\0<mtimeMs>\0<size>` 逐卷用 `\u0001` 连接；该卷不存在/不可读 ⇒ `null` 段。
+ *   ⚠ 用 `\0`/`\u0001` 作分隔符（而非 `:`/`|`）—— 路径本身可能含 `:`（Windows 盘符）与 `|`。
+ * 代价：4×`statSync` ≈ **0.033 ms**（实测），相对其保护的一遍全量 parse（**327 ms**）可忽略。
+ */
+export function ledgerVolumeKey(file: string, keep = LEDGER_VOLUMES): string {
+  const paths = volumePathsOf(file, keep)
+  const keys = volStatKeysOf(paths)
+  return paths
+    .map((p, i) => {
+      const k = keys[i]
+      return k === null ? `${p}\u0000absent` : `${k.path}\u0000${k.mtimeMs}\u0000${k.size}`
+    })
+    .join('\u0001')
+}
+
 /**
  * **跨档按时间序**读出台账全部非空行（最旧档 → … → 主档）。
  *
  * 顺序是判据的一部分：`audit-source` 的**水位回放**依赖"历史在前"，
  * `deepsleep-machine` 取"最后一条"= 最新 —— 顺序错了这两处都会静默取错值。
  * 不可读的档位跳过（零抛出）；调用方负责坏行处理（与既有读侧同纪律）。
+ *
+ * 2026-09-26：加「各卷 (mtimeMs,size) 元组」缓存（见上方整段判因）——**返回语义零变化**
+ *   （同序、同类型 `string[]`、同"不可读档跳过"姿态、零新导出）。
  */
 export function readLedgerVolumes(file: string, keep = LEDGER_VOLUMES): string[] {
-  const out: string[] = []
-  const pushFile = (p: string): void => {
-    try {
-      if (!existsSync(p)) return
-      for (const l of readFileSync(p, 'utf8').split(/\r?\n/)) if (l.trim()) out.push(l)
-    } catch { /* 不可读=贡献空 */ }
+  const paths = volumePathsOf(file, keep)
+  const now = volStatKeysOf(paths)
+  const hit = VOL_CACHE.get(file)
+  if (hit && hit.keep === keep && hit.keys.length === now.length && hit.keys.every((k, i) => sameVolStat(k, now[i]))) {
+    VOL_CACHE.delete(file); VOL_CACHE.set(file, hit) // LRU 提升（Map 保序）
+    return hit.value.slice()
   }
-  for (let i = keep; i >= 1; i--) pushFile(`${file}.${i}`)
-  pushFile(file)
-  return out
+  const out: string[] = []
+  /* ⚠ 「读失败」不得被缓存（2026-09-26 · 独立审查 verify 席 find A，先红后修）：
+   *   判因（实测）：原实现无条件 `VOL_CACHE.set(...)` —— 若某卷**存在但读失败**
+   *   （被独占锁 / EACCES / EISDIR / 瞬态 IO 错），`catch` 静默吞成"该档贡献空"，
+   *   而元组 `now` 是**读之前**取的 ⇒ 该卷的 `(mtimeMs,size)` **没有任何变化** ⇒
+   *   下一次调用**元组全等 ⇒ 直接命中缓存**，把"读失败"当成有效结果**永久**返回。
+   *   实测（严格复现，PowerShell `FileShare.None` 独占锁 .1 档）：
+   *     改前：锁期间读 1 行 → **释放锁后再读仍 1 行**（残缺结果被粘住，不再重试）
+   *   危害：水位回放/深睡统计会**静默少算**，且**无任何痕迹**（本仓最忌的失败形态）。
+   *   修法（一行级、零返回语义变化）：只要本轮出现**「存在但读失败」**，就**不写缓存**
+   *   ⇒ 下一次调用退回"重新读盘"路径 ⇒ 与该缓存引入前的**逐调用自愈**姿态完全一致。
+   *   注：`existsSync` 为假（档位本就不存在）**不算**读失败 —— 那是正常形态，可缓存。 */
+  let unreadable = false
+  for (const p of paths) {
+    try {
+      if (!existsSync(p)) continue
+      for (const l of readFileSync(p, 'utf8').split(/\r?\n/)) if (l.trim()) out.push(l)
+    } catch { unreadable = true /* 存在但读失败：本轮结果不得入缓存 */ }
+  }
+  if (!unreadable) VOL_CACHE.set(file, { keep, keys: now, value: out })
+  while (VOL_CACHE.size > VOL_CACHE_MAX) {
+    const k = VOL_CACHE.keys().next().value as string | undefined
+    if (k === undefined) break
+    VOL_CACHE.delete(k)
+  }
+  return out.slice() // 与命中路径同姿态：**绝不把缓存数组本体交出去**
 }

@@ -34,6 +34,13 @@ const AS_JSON = argv.includes('--json');
 // 采样窗口固定（2026-09-11 审查修复）：--since 下界（绝对日期或 12h/3d/2w）+ --sids 样本白名单。
 const SINCE = argOf('--since', '').trim();
 const SIDS = new Set(argOf('--sids', '').split(',').map((s) => s.trim()).filter(Boolean));
+/* ⚠ 2026-09-25 修复（静默降级 + 报告误导）：
+ *   原实现末行 \`return Number.isFinite(t) ? t : 0\` —— **无法解析的 --since 被静默降级为"不设窗"**，
+ *   而下方"采样窗口"行仍照原样打印 \`since=<你的输入>\` ⇒ 读数者以为固定了基线，实为全量采样。
+ *   改前实证：\`--since 不是日期\` 与 \`--since 3d\` 采到同一批会话（同口径），却各自显示自己的值。
+ *   本件的全部用途（A/B 对比、P3 验收）都建立在"窗口真的被固定"之上 ⇒
+ *   静默降级会让**结论反向**，属"让失败不可观测"类，故按最高优先修。
+ *   口径：与同件"探针为空必须报错而非返回 0"一致 —— **输入无效即拒跑，不降级**。 */
 const sinceMs = (() => {
   if (!SINCE) return 0;
   const rel = /^(\d+)([hdw])$/.exec(SINCE);
@@ -43,7 +50,14 @@ const sinceMs = (() => {
     return Date.now() - n * unit;
   }
   const t = Date.parse(SINCE);
-  return Number.isFinite(t) ? t : 0;
+  if (!Number.isFinite(t)) {
+    console.error(`--since 无法解析: ${JSON.stringify(SINCE)}`);
+    console.error('  接受格式：绝对日期（2026-09-01 / 2026-09-01T00:00:00Z）或相对量 12h / 3d / 2w。');
+    console.error('  ⇒ 拒绝降级为"不设窗"：那会让本次读数看似固定了基线，实为全量采样（A/B 对比结论会反向）。');
+    console.error('  若确要跑全量：**不要传 --since**（那时报告会显式告警"未固定窗口"）。');
+    process.exit(2);
+  }
+  return t;
 })();
 
 const sessionsRoot = argOf('--sessions', lib.pathConfig().sessionsRoot);
@@ -177,7 +191,7 @@ if (AS_JSON) { console.log(JSON.stringify(payload, null, 2)); process.exit(0) }
 if (!rows.length) { console.error(`未发现会话（sessionsRoot=${sessionsRoot}）；可用 --sessions 指定。`); process.exit(1); }
 
 const per100 = (v) => totals.turns ? (100 * v / totals.turns).toFixed(1) : '0.0';
-console.log(`记忆库根: ${bank}\n会话根: ${sessionsRoot}\n采样窗口: 最新 ${N} 个${SINCE ? ` · since=${SINCE}` : ''}${SIDS.size ? ` · sids=${[...SIDS].join(',')}` : ''}${!SINCE && !SIDS.size ? '（⚠ 未固定窗口：跨次对比不可复现，请加 --since/--sids）' : ''}\n探针: 画像行 ${PROFILE.length} 词 / 知识索引行 ${KNOWLEDGE.length} 词\n`);
+console.log(`记忆库根: ${bank}\n会话根: ${sessionsRoot}\n采样窗口: 最新 ${N} 个${SINCE ? ` · since=${SINCE}${sinceMs ? ` (解析=${new Date(sinceMs).toISOString().slice(0, 10)})` : ''}` : ''}${SIDS.size ? ` · sids=${[...SIDS].join(',')}` : ''}${!SINCE && !SIDS.size ? '（⚠ 未固定窗口：跨次对比不可复现，请加 --since/--sids）' : ''}\n探针: 画像行 ${PROFILE.length} 词 / 知识索引行 ${KNOWLEDGE.length} 词\n`);
 console.log('会话      时间(UTC)   轮数  画像取用  知识取用  召回工具  零命中  跟读  主档读');
 for (const r of rows) console.log(`${r.sid.padEnd(10)}${r.when.padEnd(12)}${String(r.turns).padStart(5)}${String(r.profileHit).padStart(10)}${String(r.knowledgeHit).padStart(10)}${String(r.recallTool).padStart(10)}${String(r.recallZero).padStart(8)}${String(r.follow).padStart(6)}${String(r.mainRead).padStart(8)}`);
 console.log(`\n=== 合计（${totals.sessions} 会话 / ${totals.turns} 轮${totals.excluded ? `；已排除 ${totals.excluded} 个` : ''}）===`);

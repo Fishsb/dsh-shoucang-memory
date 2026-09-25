@@ -833,7 +833,18 @@ export const probeLocalEmbed = async (baseUrl: string): Promise<{ ok: boolean; p
   const probe = `(async()=>{for(const x of ${JSON.stringify(urls)}){try{const r=await fetch(x,{signal:AbortSignal.timeout(2500)});if(r.ok){console.log(JSON.stringify({ok:true,url:x,body:(await r.text()).slice(0,200)}));return}}catch(e){}}console.log(JSON.stringify({ok:false}))})()`
   try {
     const env2: Record<string, string | undefined> = { ...process.env, NODE_OPTIONS: '' }
-    const r = await runProcAsync('node', ['-e', probe], { timeoutMs: 12000, env: env2 as NodeJS.ProcessEnv })
+    /* ⚠ 2026-09-25 修复（**裸 `node` ⇒ 探针自失败被误读成「向量不可用」**）：
+     *   原写 `runProcAsync('node', …)`。实测（本机系统 node 安装损坏且不在 PATH）时该 spawn 抛
+     *   `spawnSync node ENOENT` ⇒ 被下方 catch 折成 `provider:'unreachable'` ⇒ **宿主与面板都以为
+     *   向量不可用**，而同一时刻向量桥其实**真的取回了 12 条**（`supplyUsage.relevance =
+     *   {source:'bridge', hits:{bridge:12}}`，实测）。
+     *   危害等级：这是「**代理指标失败被当成被检对象失败**」的标准形态 —— 本仓最忌的假红/假绿同族，
+     *   且它会**误导整条相关性通道的判据**（`check-relevance-live` 的 A4 正是据此分支判绿/判红，
+     *   实测因此同命令给出 3:3 两种判决）。
+     *   修法：用 `process.execPath`（宿主自己就是 node 进程 ⇒ 该路径必然可用且版本一致）。
+     *   同族先例与判因见 `scripts/check-carriers.mjs:74`、`scripts/test-split-equivalence.mjs`。
+     *   ⚠ **另行区分两件事**：spawn 失败（环境）与 probe 跑通但端点不通（真不可用）—— 后者才是 unreachable。 */
+    const r = await runProcAsync(process.execPath, ['-e', probe], { timeoutMs: 12000, env: env2 as NodeJS.ProcessEnv })
     const j = JSON.parse(String(r.out).trim()) as { ok?: boolean; url?: string; body?: string }
     if (!j.ok) return { ok: false, provider: 'unreachable' }
     const hit = String(j.url || '')

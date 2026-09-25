@@ -110,7 +110,9 @@ const runSelfCheckNow = async (d: ObserveDeps, lock: SelfcheckLock): Promise<Rec
     /* D-I4：原为 `execFileSync`（**同步阻塞宿主唯一事件循环，上限 180s**）且 `stdio:'ignore'`（丢光子进程 stderr）。
      *   改异步后不阻塞、且不丢 stderr。**超时值沿用 180s 不动**：新值须先测内层 6 项串行真实耗时，
      *   按 `6×t_inner + 启动 + 余量 ≤ t_outer` 落值，并与 `src-client` 的文案**同批**改（未测前不拍数字）。 */
-    const r = await runProcAsync('node', [script, ...args], { timeoutMs: 180000 })
+    const r = await runProcAsync(process.execPath, [script, ...args], { timeoutMs: 180000 })
+    /* ⚠ 2026-09-25：`'node'` → `process.execPath`（裸命令名在系统 node 缺失时抛 ENOENT，
+     *   会被下方折成「自检失败」——归因错。宿主自己即 node 进程，该路径必然可用）。 */
     if (!r.ok) return { active: false, error: (r.timedOut ? '自检超时（180s）' : '自检失败') + (r.err ? '：' + r.err.trim().slice(0, 200) : '') }
     return { active: true, ...(JSON.parse(readFileSync(out, 'utf8')) as Record<string, unknown>) }
   } catch (e) { return { active: false, error: String(e).slice(0, 200) } } finally { lock.running = false }
@@ -208,7 +210,7 @@ async function reconcileRoute(d: ObserveDeps, _req: IncomingMessage, res: Server
     const script = join(memoryLibRoot(), 'scripts', 'memory-reconcile.mjs')
     if (!existsSync(script)) return sendJson(res, 200, { active: false, error: 'memory-reconcile.mjs 未部署（跑 npm run build 后同步 skill/scripts）' })
     const tmp = join(knowledgeRoot(), 'audit', '.reconcile-tmp.json')
-    const r = await runProcAsync('node', [script, '--json', '--out', tmp], { timeoutMs: 30000 }) // D-I4：原 execFileSync 同步阻塞宿主 30s
+    const r = await runProcAsync(process.execPath, [script, '--json', '--out', tmp], { timeoutMs: 30000 }) // D-I4：原 execFileSync 同步阻塞宿主 30s；2026-09-25 'node'→execPath
     if (!r.ok) return sendJson(res, 200, { active: false, error: (r.timedOut ? 'reconcile 超时（30s）' : 'reconcile 失败') + (r.err ? '：' + r.err.trim().slice(0, 200) : '') })
     const out = JSON.parse(readFileSync(tmp, 'utf8'))
     sendJson(res, 200, { active: true, ...out })
@@ -224,7 +226,7 @@ async function maturationScanRoute(d: ObserveDeps, _req: IncomingMessage, res: S
     const script = join(memoryLibRoot(), 'scripts', 'maturation-scan.mjs')
     if (!existsSync(script)) return sendJson(res, 200, { active: false, error: 'maturation-scan.mjs 未部署（库内 scripts/ 缺失）' })
     const tmp = join(knowledgeRoot(), 'audit', '.maturation-tmp.json')
-    const r = await runProcAsync('node', [script, '--json', '--out', tmp], { timeoutMs: 30000 }) // D-I4：原 execFileSync 同步阻塞宿主 30s
+    const r = await runProcAsync(process.execPath, [script, '--json', '--out', tmp], { timeoutMs: 30000 }) // D-I4：原 execFileSync 同步阻塞宿主 30s；2026-09-25 'node'→execPath
     if (!r.ok) return sendJson(res, 200, { active: false, error: (r.timedOut ? 'maturation 超时（30s）' : 'maturation 失败') + (r.err ? '：' + r.err.trim().slice(0, 200) : '') })
     const out = JSON.parse(readFileSync(tmp, 'utf8')) as Record<string, unknown>
     sendJson(res, 200, { active: true, ...out })

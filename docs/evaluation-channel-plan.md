@@ -33,7 +33,7 @@
 | ⚠ **方法教训** | 上表该项曾被我列为"作废级"——错因：**只数文件（代理指标）未跑门本体（权威判据）** | 与本方案全篇批判的"假绿"同型 ⇒ 已改为"凡断言以门禁实跑为准" |
 | 🔴 **作废级 2** | **A1**：册三验收依赖 `inject-baseline-diff`，其宿主不可达时 `exit 3` 被判 **skip**（`check-runner.mjs:1083/1085/1105`）| **可在从未比对过的情况下报 PASS** |
 | 🔴 **作废级 3** | **E-01**：方案全文**无出网条款**；`state` 是把记忆库内容发给第三方 | 其余验收 = **给一个不该开的东西做质检** |
-| 🟠 门禁级 | B2 棘轮贴顶（深度 11/11 · `panel-shared` 导出 35/35 · `registerDistill` 120/120 · `scheduler.ts` 610/606）· B6 新开 `.jsonl` 流会被 `check-observability` 判 FAIL | 施工面受限，须按领域接缝抽新件 |
+| 🟠 门禁级 | B2 棘轮贴顶（深度 11/11 · `panel-shared` 导出 35/35 · `registerDistill` 120/120 · `scheduler.ts` 585/578，**2026-09-23 ACT-355 订正**原记 610/606）· B6 新开 `.jsonl` 流会被 `check-observability` 判 FAIL | 施工面受限，须按领域接缝抽新件 |
 | 🟡 挂账级 | D3 档位键须 const union · D4 白名单将成第 3 份副本 · D5/D6/D7/D8（见 §8） | 带期限挂账 |
 
 **总判定**：**原 v1 不能在当前册序下过闸**——册零测的是中文精度，而上述三条**都先于中文精度生效**。
@@ -106,13 +106,14 @@
 | 门 | 命令 | 本次实测 |
 |---|---|---|
 | 架构文档同步 | `node scripts/check-arch-sync.mjs` | **PASS**（①声称 96 = 实测 96，**排除生成物 1 件**；⑦CHECKS 192/192；⑧特性标记 92/92） |
-| 模块增长 | `node scripts/check-module-growth.mjs` | **PASS**；容差内三件：`src-client/styles.js` 729/726 · `src-client/body.js` 615/613 · **`src/scheduler.ts` 610/606（+4/容差 15）** |
+| 模块增长 | `node scripts/check-module-growth.mjs` | **PASS**；容差内三件：`src-client/styles.js` 729/726 · `src-client/body.js` 615/613 · **`src/scheduler.ts` 585/578（+7/容差 15）** ⚠ **读数已订正（2026-09-23 ACT-355）**：原记 `610/606（+4）`，实测已变 ⇒ 数字读数**一律现跑** |
 | 装配宽度 | `node scripts/audit-wiring.mjs` | **违规 0 个**（装配 0 / 作用域 0） |
 | 架构棘轮 | `node scripts/audit-architecture.mjs --gate` | **全部在阈值内**；静态环 0 · 动态隐藏环 0 · 规模最大 `criteria.generated(1366)`/`deepsleep-run(913)`/`panel-shared(823)` |
 | 函数跨度 | `node scripts/audit-fnspan.mjs` | **>400 行函数：0** |
 
 ⚠ **两条施工约束由基线直接导出**：
-1. **`scheduler.ts` 已在容差内（+4/15）** ⇒ 新增 5 个 eval schema 键会继续推高，**逼近容差**。这是"必须按领域接缝抽新件、不要把配置全塞 scheduler"的实证依据。
+1. **`scheduler.ts` 已在容差内（实测 **+7/15**，2026-09-23 ACT-355 订正；原记 +4）** ⇒ 新增 5 个 eval schema 键会继续推高，**逼近容差**。这是"必须按领域接缝抽新件、不要把配置全塞 scheduler"的实证依据。
+   ⚠ **同上订正（ACT-355）**：本件读数会随每次重构变化，**引用前现跑** `node scripts/check-module-growth.mjs`。
 2. **容差不是额度**（门禁原文）⇒ 不得把"还在容差内"当作可用的成长空间。
 
 ---

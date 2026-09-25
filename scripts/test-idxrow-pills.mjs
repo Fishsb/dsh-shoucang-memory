@@ -187,6 +187,13 @@ try {
   /* 端点不可达/超时 ⇒ skip（宿主未运行是常见态，不该让本件假红） */
   if (/fetch failed|ECONNREFUSED|timeout|aborted|HTTP 4|HTTP 5/i.test(msg)) {
     console.log('\ntest-idxrow-pills · 响应字段真机断言：端点不可达（' + msg.slice(0, 60) + '）—— 跳过该段')
+    // 2026-09-25（高并发遍历审计 L6-03 · 独立复验 confirmed）：
+    //   原实现跳过该段后，末尾仍打印**硬编码**的「PASS（6 项 + 响应字段 3 项）」并 exit 0 ——
+    //   读者从末行读到的是「3 项已过」，实际一项没跑（本仓反复记账的「把未验面读成通过」）。
+    //   现按 runner 契约退 **3**（skip 且诚实留痕），并显式写出「0/3 未验」。
+    //   宿主在跑时该 catch 不进入，日常仍走下面的 PASS 分支。
+    console.error('test-idxrow-pills: SKIP（响应字段 **0/3 未验** —— 端点不可达，不按通过计）')
+    process.exit(3)
   } else { console.error('  ❌ 响应字段断言异常：' + msg); process.exit(1) }
 }
 

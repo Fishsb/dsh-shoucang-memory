@@ -26,6 +26,31 @@
 /** 注入槽位额度的三个可覆盖键（**唯一声明处**；面板白名单 / zod schema / 读数三处均引用此处，不各写一份）。 */
 export declare const BUDGET_OVERRIDE_KEYS: readonly ["injectBudgetChars", "injectLevelCaps", "injectSituationBudgetChars"];
 export type BudgetOverrideKey = (typeof BUDGET_OVERRIDE_KEYS)[number];
+/**
+ * **容量计数口径「单一实现」**（ADR-333 册零 · 2026-09-22 圆桌会议 8 席确认）。
+ *
+ * ── 判因（真机实测 · 两套口径互相矛盾）──────────────────────────────────────────
+ * 可计数口径曾有**两套**：
+ *   · `distill-write.ts:172`（画像硬拒判定）用 `body.length` = **含空白**（USER.md 算 2967）；
+ *   · `panel-memory.ts` / `panel-config.ts` / `memory_write_gate.mjs` / `memory-append.mjs`
+ *     四处用 `replace(/\s+/g,'').length` = **去空白**（同一文件算 2619）。
+ * ⇒ 用户看面板 **87.3%**、写门按 **98.9%** 判（Δ348）——**两个数互相矛盾**：
+ *   面板那根进度条**在结构上不可能显示该故障**（用户以为还剩 13%≈390 字符，实际只剩 33）。
+ *
+ * ── 裁定（ADR-333 §7-O6）：**统一取去空白** ──────────────────────────────────
+ * 理由不是"哪个更对"，而是**改动面**：写门脚本与面板**都已是**去空白
+ * ⇒ 只改 `distill-write.ts` 一处即得**五者同源**；反向要改四处（含两个子进程活件）。
+ *
+ * ── 为什么落本件（而非 `targets.ts`）─────────────────────────────────────────
+ * 首版落在 `targets.ts`，被 `audit-architecture` 的**导出棘轮**挡下（实测 36 > 35）。
+ *   抬棘轮属 R3（须用户拍板）⇒ 本仓既有出路面是把判据放到**领域内聚且有余量**的模块。
+ *   本件是「额度/容量」域的纯函数区（零 IO、零依赖、零扇出）⇒ 任何层都可安全引用，语义亦贴切。
+ *
+ * ⚠ **这是容量计数器（宿主侧）的唯一实现**。子进程脚本 `memory_write_gate.mjs` /
+ *   `memory-append.mjs` 是**零依赖活件**（明令不得 import `src/`），各自内联同一公式
+ *   ⇒ 由 `scripts/check-capacity-chars.mjs` 做**跨面同源差分锁**（同 `section-ref` 的孪生形态）。
+ */
+export declare const capacityCharsOf: (text: string) => number;
 /** 各键的**合法范围**（与 `scheduler.ts` 的 zod `min/max` 同值 —— 改一处必须同改，由 `check-budget-override` 机检）。 */
 export declare const BUDGET_RANGES: Record<BudgetOverrideKey, readonly [number, number]>;
 /** 夹取结果：`value` 为采用值 · `clamped` 为是否发生夹取（**留痕用**，不静默）。 */

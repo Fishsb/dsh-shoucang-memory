@@ -118,9 +118,9 @@ See the panel's *Raw config* view for the full list.
 
 ## 🔒 Privacy
 
-- Memory data lives only on your machine (default root: `~/.dsh/skills/managing-memory`) — never committed, published or uploaded
+- Memory data lives only on your machine (default root: `~/.dsh/suite/memory`; override with `MEMORY_ROOT`) — never committed, published or uploaded
 - No telemetry; no outbound requests besides the LLM / embedding endpoints *you* configure
-- This repo runs a public-tree privacy gate on every commit (personal-info scan, zero hard-coded local paths)
+- This repo ships a public-tree privacy gate `scripts/check-public-tree.mjs` — **run it manually before pushing; it must PASS** (**no** git hook, no CI automation — do not assume it runs itself)
 - Uninstall = remove the plugin; keep your memories by simply backing up the library folder
 
 ## 🛠️ For developers

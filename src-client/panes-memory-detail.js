@@ -93,7 +93,7 @@ function renderMemoryExpanded(view, data) {
   var capGrid = el('div', 'sc-cap3');
   cap.body.appendChild(capGrid);
   /* v9 的容量口径说明段（卡内、灰字）：解释"哪些载体给百分比、哪些只报绝对量" */
-  cap.body.appendChild(el('div', 'sc-cap-note', tr("只有存在真实容量门的载体才给百分比与进度条：MEMORY.md（cap_memory）与画像（cap_user / cap_agent）；notes / pending 无容量门 ⇒ 只报绝对量。超限由 write_gate 拒写。")));
+  cap.body.appendChild(el('div', 'sc-cap-note', tr("只有存在真实容量门的载体才给百分比与进度条：MEMORY.md（cap_memory）与画像（cap_user / cap_agent）；notes / pending 无容量门 ⇒ 只报绝对量。是否因超限**阻断**写入由「参数调节 → 记忆与容量」的容量门开关决定（缺省关闭 = 照写并留一条 capacity-over 留痕）。")));
   if (!data || !data.present) {
     appState.statusFn((data && data.error) || tr("记忆库不可用"));
     return;

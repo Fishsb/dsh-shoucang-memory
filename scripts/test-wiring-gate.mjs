@@ -82,10 +82,18 @@ const RULES = [
     title: '原则落盘失败 ⇒ 本轮必须判失败（added=0 + 共享常量 gate），不得谎报已消化',
     why: 'G-16：rename 失败后若仍按 added>0 返回 ⇒ landed:true ⇒ 水位推进 ⇒ 本批痕迹静默永久丢失（崩溃型）。',
     asserts: [
-      [/const cm = commitPrinciples\(/g, 1, '提交点 commitPrinciples 调用存在且唯一'],
+      [/const cm = commitWithCas\(principlesTmp, principlesPath, baseline\)/g, 1, '提交点：**带 CAS 的提交**且唯一'],
       [/if \(!cm\.ok\) \{/g, 1, '提交失败分支存在且唯一'],
+      /* ⚠ ADR-333 册三（2026-09-22）结构定稿：CAS 预检与 rename **收敛为单一失败出口**
+       *   （`commitWithCas`）——两者是同一件事的两步，任一步不成立都等于"本轮没落盘"。
+       *   ⇒ 失败返回仍**恰好 1 处**（首版曾并列写两处，被本件与 AST 版同时判红；
+       *     修法是把结构收敛回去，**不是把期望值从 1 放宽到 2**——放宽会让"多出第三处"失去拦截）。 */
       [/return \{ attempted, added: 0, replaced: 0, skipped: attempted, gate: COMMIT_FAILED_GATE, gateExit: -1, rejectedLines \}/g,
-        1, '失败返回形状：added 归 0 + gate 用共享常量（只改 gate 无效，added 才是判据输入）'],
+        1, '失败返回形状：added 归 0 + gate 用共享常量（只改 gate 无效，added 才是判据输入）—— 恰 1 处（单一失败出口）'],
+      [/const commitWithCas = \(tmpPath: string, targetPath: string, baseline: string \| undefined\)/g,
+        1, 'CAS 预检与 rename 收敛为单一实现（不并列写两处 return）'],
+      [/const \{ content, disk: originOnDisk \} = readPrincipleOrigin\(principlesPath, PROFILE_HEADER\)/g,
+        1, 'CAS 基线**随读-改-写链传递**（落盘点重读 = 假保护 ⇒ 恒不冲突）'],
       [/export const COMMIT_FAILED_GATE = /g, 1, 'gate 字面量单一定义（producer 与 consumer 共享同一常量）'],
       [/COMMIT_FAILED_GATE\]\.includes\(app\.gate\)/g, 1, '判据侧 deepSleepLanded 消费同一常量（不得写死字面量）'],
     ],

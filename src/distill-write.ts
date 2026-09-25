@@ -7,6 +7,8 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSyn
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 import { memoryLibRoot, dshHome, resolveTarget, loadWhitelist, gateMemoryAppend } from './targets.js'
+// ADR-333 册零：容量计数**单一实现**（落在额度域纯函数件；落 targets 会被导出棘轮挡下 36>35）。
+import { capacityCharsOf } from './budget-override.js'
 import type { RouteTarget } from './targets.js'
 import { runNode, textOf } from './distill-proc.js'
 import type { RunResult } from './distill-proc.js'
@@ -16,7 +18,7 @@ import { admitIndexRow, pointersOfRow, sectionCore } from './section-ref.js'
 import { thresholdValue } from './criteria.js'
 // 待认领队列（单一实现）：卡命名与「未落地知识回退」共用同一函数（本件只转发导出，勿再写第二份）
 import { knowledgeDeferFileOf } from './pointer-deficits.js'
-import { atomicWriteFile } from './section-rewrite.js'
+import { atomicWriteFile, atomicWriteFileCas } from './section-rewrite.js'
 import { carrierFiles, mirrorAll, mirrorFailuresOf, mirrorFile } from './record-shadow.js'
 import { commitRingChannels } from './ring-commit.js'
 // B（2026-09-17 圆桌会议册一）：内容级凭据准入**单一实现**（与 gate 内联表同源，改一处须同步）。
@@ -85,10 +87,73 @@ const liveCaps = (dep: WriteDeps, ): { agent: number; user: number; memory: numb
   return d
 }
 
+/**
+ * 子进程容量 env（**开关必须贯通到这里** —— ADR-333 册三 · B3）。
+ *
+ * ── 判因（会议 impl 席 B3 实证）────────────────────────────────────────────────
+ * 两份门脚本（`memory_write_gate.mjs:248/275` · `memory-append.mjs:250`）各有一支
+ * `SHOUCANG_CAP_STRICT==='1'` ⇒ `exit 1` **不写**，而宿主此前**从不注入该变量**。
+ * ⇒ 若部署侧（或某次手改的环境）设了 strict，**宿主开关"关闭"在子链上仍是硬的，
+ *    且没有任何信号告诉你它硬着** —— 即"关了一半的门"，比不开更坏（因为它看起来是开的）。
+ *
+ * ── 为什么**不是**再加一个 env，而是**复用既有 `SHOUCANG_CAP_STRICT`**────────────
+ * 该变量在两份门脚本里**已实现并已测试**（默认关、显式开），语义与 `capacityEnforce`
+ * 完全同构（"超限是否阻断写入"）。新增第二个 env 会立刻造出**两套并存语义**——
+ * 正是本轮 ADR-333 要消灭的形态（同一件事四处实现）。⇒ 宿主开关**直接映射**到它：
+ * · `capacityEnforce === true`  ⇒ `SHOUCANG_CAP_STRICT=1`（子链也阻断）
+ * · `capacityEnforce === false` ⇒ 显式 `'0'`（**显式**置 0，而非"不设"——"不设"会让
+ *   部署侧残留的 `=1` 继续生效，那正是本 B3 要堵的口子）
+ * ⚠ 副作用须知情：本变量同时决定 `memory-append` 的行为（`MEMORY.md` 追加），
+ *   即**一个开关统一三条路径**（画像 / principles / 索引行追加）——这正是本方案的取向
+ *   （ADR-333 §2：让设置里三个框行为一致），不是副作用，是目的。
+ */
+/**
+ * 容量门**开关**读取（ADR-333 册二 · 2026-09-22 用户拍板「容量门不是硬拒绝门槛，做成开关功能」）。
+ *
+ * 语义：`false`（缺省）= 超限**不阻断**（留痕一行）· `true` = 超限拒写（= 改造前行为）。
+ * 缺省取 `false` 的三条理由（ADR-333 §7-O1）：
+ *   ① 四条写入路径里**三条现状已是不阻断**（`cap_memory` / principles / 索引行）⇒ 与多数现状一致；
+ *   ② 用户 2026-09-16 已就索引行判定「直接拒绝不符合意图，提醒就可以」⇒ 本条是**推广**该判定；
+ *   ③ 取 `true` 等于"修完默认仍坏"（USER.md 照旧停在 9/16）。
+ *
+ * ⚠ **回落 fail-safe**：非法值/缺键/坏文件 ⇒ `true`（保守：不知情时按原行为，不擅自放宽）。
+ * ⚠ **实时读**（与 `liveCaps` 同法）：面板改后即时生效，不必重载插件。
+ */
+const liveCapacityEnforce = (dep: WriteDeps): boolean => {
+  /* 四种输入的语义**逐一手算**（首版两处写错，均由真机探针 V1/V3 抓出，而门禁全绿）：
+   *   ┌──────────────┬──────────┬─────────────────────────────────────────┐
+   *   │ 输入          │ 期望      │ 理由                                     │
+   *   ├──────────────┼──────────┼─────────────────────────────────────────┤
+   *   │ 键未设        │ 不阻断    │ schema 缺省 = false（ADR-333 §7-O1）      │
+   *   │ `false`      │ 不阻断    │ 显式关闭                                 │
+   *   │ `true`       │ 阻断      │ 显式开启                                 │
+   *   │ `'typo'` 等坏值│ 阻断     │ fail-safe：不知情时**保守**（按原行为）     │
+   *   └──────────────┴──────────┴─────────────────────────────────────────┘
+   * ⇒ 判据 = **先判 undefined**（缺键 ⇒ 缺省不阻断），再 `!== false`（显式 false ⇒ 不阻断，
+   *   其余含坏值 ⇒ 保守阻断）。⚠ 写成 `=== false ? false : true` 会在"未设"时得 true（方向反了）；
+   *   写成 `=== true` 会把坏值静默变成"不阻断"（**放宽**，不是保守）。两种都错。
+   * ⚠ 本函数与 `panel-config.ts` 的面板读数**必须同口径**（那处按 `sched.capacityEnforce === true`
+   *   显示——读数是"是否已开启"，与本函数"是否阻断"同义，两处已对齐）。 */
+  const of = (raw: unknown): boolean => (raw === undefined ? false : raw !== false)
+  try {
+    const s = JSON.parse(readFileSync(join(dshHome(), 'suite', 'scheduler.json'), 'utf8')) as Record<string, unknown>
+    return of(s.capacityEnforce)
+  } catch {
+    return of(dep.config.capacityEnforce)
+  }
+}
+
 const capEnv = (dep: WriteDeps, ): Record<string, string> => {
   const c2 = liveCaps(dep, )
-  return { SHOUCANG_CAP_MEMORY: String(c2.memory), SHOUCANG_CAP_USER: String(c2.user), SHOUCANG_CAP_AGENT: String(c2.agent) }
+  return {
+    SHOUCANG_CAP_MEMORY: String(c2.memory),
+    SHOUCANG_CAP_USER: String(c2.user),
+    SHOUCANG_CAP_AGENT: String(c2.agent),
+    // ADR-333：把宿主开关**贯通到子进程链**（照 `liveCapacityEnforce` 同一真源，防两处判定分叉）。
+    SHOUCANG_CAP_STRICT: liveCapacityEnforce(dep) ? '1' : '0',
+  }
 }
+
 
 // ── 写入分发（ADR-0002 核心：动态路由 + 白名单门禁 + 零拷贝写入 + 审计）──
 const memAppend = async (dep: WriteDeps, target: string, kind: 'append' | 'new', payload: string, section: string, t: RouteTarget): Promise<RunResult> => {
@@ -166,10 +231,36 @@ const writeProfileLine = (dep: WriteDeps, root: string, target: string, section:
     }
     const file = join(root, canon)
     let body = ''
-    try { body = readFileSync(file, 'utf8') } catch { body = (PROFILE_HEADER[canon] || `# ${canon}\n`) + '\n' }
+    /* `disk` = **盘上真实内容**（文件不存在时为 `undefined`）—— 与 `body` 的差别：
+     *   `body` 在缺文件时是**内存造出的 header**（供后续拼装用），而 CAS 的期望值必须是
+     *   **真实的盘上状态**（`undefined` = 期望"此刻仍不存在"），否则会把"首次创建"误判成冲突。 */
+    let disk: string | undefined
+    try { body = readFileSync(file, 'utf8'); disk = body } catch { body = (PROFILE_HEADER[canon] || `# ${canon}\n`) + '\n'; disk = undefined }
     if (body.split('\n').some((l) => l.trim() === ln)) return { st: 'dedup' }
     const cap = profileCapOf(dep, canon)
-    if (body.length + ln.length + sec.length + 8 > cap) return { st: 'rejected', why: `容量超限（${body.length}+${ln.length}+${sec.length}+8 > ${canon} 容量 ${cap}）` } // 容量门：超限拒绝，待画像间合并
+    /* ══ ADR-333（2026-09-22）· 口径统一 + 容量门开关 ══════════════════════════════════════
+     * ① **口径**：原用 `body.length`（含空白），与面板/两个门脚本的**去空白**口径矛盾
+     *    ⇒ 真机实测 USER.md 面板 87.3% vs 写门 98.9%（Δ348），**面板结构上显示不出该故障**。
+     *    现统一走 `capacityCharsOf`（`targets.ts` 单一实现，四者同源）。
+     * ② **开关**：`capacityEnforce=false`（缺省）⇒ 超限**不再拒写**，但**必须留一行痕**
+     *    （`capacity-over` 审计）—— 否则会**亲手删掉当前唯一的失败信号**
+     *    （真机 167 条 `gate-reject` 是画像通道唯一的可观测面，缺失即"让失败不可观测"）。
+     * ③ **只关容量支路**：本函数上游的格式/凭据/§准入三道判据**不受开关影响**，照旧硬拒
+     *    （写门退出码 0/1/2/4/5 中只有 `1` 属容量）。
+     * ④ **不新增返回值状态**：超限放行仍返回 `{st:'added'}`（+ 可选 `warn`），
+     *    两个消费方（本文件 `:525-527` / `deepsleep-run.ts:755-758`）的 if 链**零改动**——
+     *    新增第四态会被它们各错一个方向（记成 `skipped` / 判 `landed:false` 回滚重蒸）。
+     * ⚠ 判定位**严格保持在去重（上一行）之后**：若提到函数头，超限文件上的重复行会由
+     *    `dedup`（静默）变 `rejected`（发审计）⇒ 等价断言不成立。 */
+    const bodyChars = capacityCharsOf(body)
+    const lnChars = capacityCharsOf(ln)
+    const secChars = capacityCharsOf(sec)
+    if (bodyChars + lnChars + secChars + 8 > cap) {
+      const over = `容量超限（${bodyChars}+${lnChars}+${secChars}+8 > ${canon} 容量 ${cap}）`
+      if (liveCapacityEnforce(dep)) return { st: 'rejected', why: over }
+      // 不阻断态：**照写 + 留痕**（换名 `capacity-over`，使"关掉的门"与"拒写"在审计上可分辨）
+      try { dep.infra.audit({ kind: 'capacity-over', target: canon, reason: over, enforced: false }) } catch { /* 留痕失败不阻断写入 */ }
+    }
     const lines = body.split('\n')
     const secIdx = lines.findIndex((l) => l.trim() === `## ${sec}`)
     if (secIdx < 0) lines.push('', `## ${sec}`, ln)
@@ -182,8 +273,16 @@ const writeProfileLine = (dep: WriteDeps, root: string, target: string, section:
       while (end < lines.length && !lines[end].startsWith('## ')) end++
       lines.splice(end, 0, ln)
     }
-    // S2S3 册零：改走**唯一写入原语**（唯一 tmp 名 + 回读校验）；原固定名 `file + '.tmp'` 并发互踩。
-    const w = atomicWriteFile(file, lines.join('\n'))
+    /* ADR-333 册三（2026-09-22）：改走 **CAS 原语**（乐观并发写）。
+     * 判因（会议 impl 席实证 · 本仓 §4.4）：本函数**不取库锁**（本件也不便改走锁——
+     *   它由蒸馏/深睡两条产线调用，取锁会引入嵌套与拒写面），而 `AGENT.md` 上
+     *   **另有一个不取锁的写者**（`deepsleep-apply` 的原则通道，走 `commitPrinciples`）。
+     *   两者此前**没有任何协议**：`readFileSync` → 整文件重写 → `rename`，**末写者胜**；
+     *   而原语只比字节数 ⇒ 内容被并发覆盖且长度相同时**检测不出**，双方各报 `added`。
+     * ⇒ 现以 `body`（本函数**读到的基线**）为期望值提交：盘上若已被他人改动 ⇒ **拒写退让**
+     *   （返回 `failed`，由调用方 `markUndigested` 记账并下轮重试，**不静默覆盖**）。
+     * ⚠ 这是"**宁可退让重试，不可静默覆盖**"的取向，与水位/重试链既有取向一致。 */
+    const w = atomicWriteFileCas(file, lines.join('\n'), disk)
     if (!w.ok) return { st: 'failed' }
     mirrorShadow(dep, root, canon) // P4 双写期：镜像进 Record 影子库（缺省 md 档=不动作）
     return { st: 'added' }

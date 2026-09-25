@@ -29,10 +29,19 @@ ok(Object.values(reg.l0 || {}).every((d) => Array.isArray(d.values) && d.values.
 ok(Array.isArray(reg.antiScope) && reg.antiScope.length > 0, `①anti-scope 已定义（${reg.antiScope?.length || 0} 条）`)
 
 // ② 投影最新（生成器自检）
+// 2026-09-25（高并发遍历审计 L6-06 · 独立复验 confirmed）：裸 `node` ⇒ 子进程 ENOENT 被吞，
+//   真因（PATH 里没有 node）被报成另一类缺陷「②投影过期」，把人带向 `gen-criteria` 而非 PATH。
+//   全仓已有 23 处用 `process.execPath`（都是当前解释器，语义等价且不依赖 PATH）。
 try {
-  execFileSync('node', [join(root, 'scripts', 'gen-criteria.mjs'), '--check'], { stdio: 'inherit', cwd: root })
+  execFileSync(process.execPath, [join(root, 'scripts', 'gen-criteria.mjs'), '--check'], { stdio: 'inherit', cwd: root })
   ok(true, '②三处生成投影与注册表一致（src/criteria.generated.ts · skill/engine/criteria.md · criteria-gate.json）')
-} catch { ok(false, '②投影过期（重跑 node scripts/gen-criteria.mjs）') }
+} catch (e) {
+  // 分流：子进程起不来（ENOENT/EPERM） ≠ 生成器判红（投影过期）——两者修复方向完全不同
+  const spawnFail = !e || e.status === null || e.status === undefined
+  ok(false, spawnFail
+    ? `②**未能运行生成器**（${e?.code || 'spawn failed'}）⇒ 投影新鲜度未验（不是「过期」）`
+    : '②投影过期（重跑 node scripts/gen-criteria.mjs）')
+}
 
 // ③ 投影接线（消费面确实引用生成物）
 const read = (p) => { try { return readFileSync(join(root, p), 'utf8') } catch { return '' } }

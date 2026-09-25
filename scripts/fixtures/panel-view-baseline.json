@@ -17,6 +17,11 @@
     },
     {
       "pane": "cap",
+      "name": "容量门是否阻断写入 capacityEnforce",
+      "kind": "select"
+    },
+    {
+      "pane": "cap",
       "name": "深睡未消化策略 deepSleep.failPolicy",
       "kind": "select"
     },
@@ -269,5 +274,5 @@
     }
   ],
   "note": "面板视图契约基线（真机渲染快照）",
-  "at": "2026-09-22T11:48:01.265Z"
+  "at": "2026-09-22T15:23:47.106Z"
 }

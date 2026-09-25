@@ -182,6 +182,29 @@ for (let i = dsRows.length - 1; i >= 0; i--) {
 const rejected = writeEvents.filter((r) => r.verdict === 'rejected').length
 const attemptedTotal = writeEvents.reduce((n, r) => n + Number(r.attempted || 0), 0)
 const writtenTotal = writeEvents.reduce((n, r) => n + Number(r.written || 0), 0)
+/* ══ ADR-333 册三（2026-09-22）：拒绝率**按通道**给出 ══════════════════════════════════
+ * 判因（会议 user 席实证 · 「拒绝率把画像冻死稀释成 7.4%」）：
+ *   原式 `rejected / writeEvents.length` 有**两处**不对：
+ *     ① **量纲不同** —— 分子是"verdict=rejected 的**行**数"，分母是"**事件**数"，两者不是同一总体；
+ *     ② **分母错层** —— 用**全体** writeEvents(982) 做分母 ⇒ 某一通道 100% 拒写
+ *        被摊薄成 7.4%（实测：画像真拒 167 次，面板显示 7.4%）⇒ **通道级冻死在面板上不可见**。
+ *   ⇒ 正解：按 `channel`（画像 = `profiles`）分组，各给 `attempted/written/rejected`，
+ *     拒绝率 = `rejected / attempted`（**同通道、同量纲**，可解释为"该通道被拒比例"）。
+ *   ⚠ 顶层 `rejectRate` **保留**（既有面板消费它；改形状会造出两套口径），但在其旁给出
+ *     `byChannel`，使"哪个通道在堵"可读。 */
+const byChannelAgg = {}
+for (const r of writeEvents) {
+  const k = String(r.channel || '(未标)')
+  const a = byChannelAgg[k] || (byChannelAgg[k] = { attempted: 0, written: 0, rejected: 0, rows: 0 })
+  a.attempted += Number(r.attempted || 0)
+  a.written += Number(r.written || 0)
+  a.rejected += Number(r.rejected || 0)
+  a.rows += 1
+}
+for (const a of Object.values(byChannelAgg)) {
+  // 同通道同量纲：拒写数 / 尝试数（attempted 为 0 时给 null，**不造假 0** —— 仓规「N=0 显式记 0」）
+  a.rejectRate = a.attempted > 0 ? a.rejected / a.attempted : null
+}
 const rejectRate = attemptedTotal ? rejected / Math.max(1, writeEvents.length) : null
 const materialChars = dsRows.slice(-10).map((r) => Number(r.chars || 0)).filter((n) => n > 0)
 
@@ -296,6 +319,9 @@ const out = {
     writeEvents: writeEvents.length,
     rejectedWrites: rejected,
     rejectRate,
+    /* ADR-333 册三：**按通道**明细 —— 顶层 `rejectRate` 是全体口径（会被摊薄），
+     * 本字段才能回答"哪个通道在堵"。消费面 = 面板「运行观测」与 `check-channel-observability`。 */
+    byChannel: byChannelAgg,
     attemptedTotal,
     writtenTotal,
     materialCharsRecent: materialChars,
