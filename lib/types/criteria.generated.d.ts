@@ -436,8 +436,8 @@ export declare const CRITERIA_ROWS: readonly [{
     readonly text: "索引行四要素格式（spec §8）";
     readonly params: {
         readonly topicMax: 12;
-        readonly summaryMax: 30;
-        readonly pathSummaryMax: 40;
+        readonly summaryMax: 50;
+        readonly pathSummaryMax: 60;
         readonly banDate: true;
         readonly requirePointer: true;
         readonly requireMiddleDot: true;

@@ -531,15 +531,19 @@ try {
   fs.writeFileSync(a2, '[路径] 升级 · ①备份 → ②覆盖 → ③重启 → notes/lessons.md §网络坑\n');
   run('路径门-步内箭头', 'node', [gate, 'AGENT.md', a2], [4]);
   const a3 = path.join(tj, 'a3.txt');
-  fs.writeFileSync(a3, '[路径] 升级 · ' + '①②'.repeat(30) + ' → notes/lessons.md §网络坑\n');
-  run('路径门-概要超40字', 'node', [gate, 'AGENT.md', a3], [4]);
+  /* 2026-09-27 随阈值同步：[路径] 概要上限 40 → **60**（用户拍板「索引长度放宽一些」）。
+   *   ⚠ 夹具必须**跟着放宽**，否则 '①②'.repeat(30)=60 字正好卡在新阈值上不被拒
+   *     ⇒ 本用例从「验证拦截有效」退化成「验证不再拦截」，**判据失效而不报警**（真实测撞到）。
+   *   现取 repeat(40)=80 字，明确越过 60 上限。 */
+  fs.writeFileSync(a3, '[路径] 升级 · ' + '①②'.repeat(40) + ' → notes/lessons.md §网络坑\n');
+  run('路径门-概要超60字', 'node', [gate, 'AGENT.md', a3], [4]);
   fs.appendFileSync(path.join(tj, 'AGENT.md'), '\n[路径] DSH 插件升级 · ①构建 ②覆盖 lib ③重启 ④验证 → notes/lessons.md §网络坑\n');
   const hp2 = execOut('node', [path.join(tj, 'scripts', 'memory_health_check.mjs')], { cwd: tj, env: { ...process.env, MEMORY_ROOT: tj } }).out;
   const agentSeg = (hp2.split('=== AGENT.md')[1] || '').split('===')[0]; // AGENT 段
   // tags 含 '路径' → 追加的 [路径] 行不得被判无标签：无标签为 0，或夹具自身有不合规行时该行不得出现在样例里
   const okPath = /无标签: 0/.test(agentSeg) || !/DSH 插件升级/.test(agentSeg);
   if (okPath) pass++; else fail++;
-  console.log(`${okPath ? '✅' : '❌'} v17-[路径] 行门禁（正常0/步内箭头4/超40字4/体检 tag 含路径）`);
+  console.log(`${okPath ? '✅' : '❌'} v17-[路径] 行门禁（正常0/步内箭头4/超60字4/体检 tag 含路径）`);
   fs.rmSync(tj, { recursive: true, force: true });
 } catch (e) { fail++; console.log('❌ v17-[路径] 行门禁（异常: ' + failMsg(e) + '）'); }
 

@@ -28,8 +28,8 @@
   },
   "format": {
     "topicMax": 12,
-    "summaryMax": 30,
-    "pathSummaryMax": 40,
+    "summaryMax": 50,
+    "pathSummaryMax": 60,
     "banDate": true,
     "requirePointer": true,
     "requireMiddleDot": true,
