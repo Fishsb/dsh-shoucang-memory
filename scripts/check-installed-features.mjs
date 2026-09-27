@@ -46,11 +46,20 @@ const FEATURES = [
   ['S2 侧栏入口走宿主插槽', 'lib/client.js', 'sidebar.footer.action'],
   ['S2 设置进宿主设置中心', 'lib/client.js', 'settings.section'],
   ['S2 入口互斥（插槽可用不挂 DOM 兜底）', 'lib/client.js', 'SLOT_OK'],
-  ['S3 组件库（Web Awesome）已随产物送达', 'lib/client.js', 'customElements'],
-  ['S3 组件库主题令牌层注入', 'lib/client.js', '__SC_VENDOR_CSS__'],
-  ['S3 Tab 组件化', 'lib/client.js', 'wa-tab-group'],
-  ['S3 按钮组件化', 'lib/client.js', 'wa-button'],
-  ['S3 尺寸层接管（scale 令牌）', 'lib/client.js', '--wa-font-size-scale'],
+  /* ── U2（2026-09-26）标记面更新：**去组件库**后的现状契约 ──
+   * 判因：原 5 条标记断言「产物自带 Web Awesome」（customElements / __SC_VENDOR_CSS__ /
+   *   wa-tab-group / wa-button / --wa-font-size-scale）。U2 把 7 个组件改为
+   *   「宿主 primitives 优先 + 自绘降级」后，产物**不再带组件库**（省 574KB）⇒
+   *   前两条**必然缺失**（不是部署落后，是能力已被刻意移除）。
+   * ⚠ 契约须描述现状：改为断言**新架构**的三个可机检事实 ——
+   *   ① 宿主接入层在位（setRequire 接缝）；② 宿主 primitives 模块名真被请求；
+   *   ③ 自绘降级基座在位（无宿主时不白屏）。
+   *   三条**同时**在才算完整（只有宿主接入无降级 ⇒ 无宿主环境白屏）。 */
+  ['U2 宿主 UI 接入层（setRequire 接缝）', 'lib/client.js', 'setRequire'],
+  ['U2 宿主 primitives 模块名（真实请求）', 'lib/client.js', 'dsh-client-ui-primitives'],
+  ['U2 自绘降级基座（无宿主时的实现）', 'lib/client.js', 'sc-prog-track'],
+  ['U2 自绘分段基座（Tab 降级路径）', 'lib/client.js', 'sc-tabnav'],
+  ['U2 宿主组件包裹容器', 'lib/client.js', 'sc-host-btn'],
   ['S1 皮肤机制（v9 / 宿主）', 'lib/client.js', 'sc-skin-host'],
   ['S1 CSS 稳定锚点（门禁抽取）', 'lib/client.js', '__SC_CSS__'],
   ['S4 共享契约注入客户端', 'lib/client.js', '__SC_CONTRACT__'],
@@ -241,7 +250,9 @@ console.log('\n重启 DSH 后的真机核对清单（人工）：')
 console.log('  1) 侧栏底部只有一个守藏入口（不再是两个）；点开面板正常')
 console.log('  2) 宿主设置中心出现「守藏」分区（含显示密度/导航宽度/皮肤/启动视图）')
 console.log('  3) 面板设置页可切「v9 方案皮肤 / 宿主原生皮肤」，切换即时生效')
-console.log('  4) 分段 Tab、操作卡按钮为组件库实现且观感与方案一致（按钮 30px 紫胶囊）')
+/* U2（2026-09-26）：本条原写「为**组件库**实现」—— 去组件库后已不成立。
+ *   契约须描述现状：改为「宿主 primitives 实现，无宿主时自绘降级」。 */
+console.log('  4) 分段 Tab、操作卡按钮走宿主 primitives（无宿主时自绘降级）；观感与方案一致（按钮 30px）')
 console.log('  5) 日志面板默认折叠成一行')
 console.log('  6) 宿主设置中心切「语言」为 English ⇒ 面板导航/标题即时变英文，切回中文即时复原')
 // `--require-i18n`：把 i18n 能力缺失变成**红灯**（发布前置第⑥条用）
