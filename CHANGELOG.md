@@ -5,6 +5,27 @@
 ## [Unreleased]
 
 ### Changed
+- **记忆库三处索引行指针订正 + 版本钉点三处归位（2026-09-26）**：
+  **① 指针订正**（承接上一轮解析缺陷修正后显形的 3 处真实错误，逐条取证后改指）：
+    · `USER.md`「命令行优先」原指 `notes/flows.md §插件注入` —— 该小节实在 **env.md**
+      ⇒ 改为 `notes/env.md §插件注入/§DSH 环境`
+    · `AGENT.md`「派生库只许回源重述」原把**跨文件**引用压成一条
+      （`lessons.md §契约内容准入/§记忆体系分工`，后者实在 flows.md）
+      ⇒ 拆为 `notes/lessons.md §契约内容准入 · notes/flows.md §记忆体系分工`
+    · `AGENT.md`「方案取最短可逆」原指 `§排障先看根因` —— **该小节全库不存在（生造名）**
+      ⇒ 改为语义最近的真实小节 `notes/lessons.md §诊断方法论（信息源与面板）`
+    验收：`check-section-refs` ✅ **exists 1754 · partial 0 · missing 0**（棘轮全绿，此前常红）。
+    ⚠ 改前已备份三档（/tmp/mem-bak），并在**记忆库自己的仓库**单独提交（`c0c8650`），
+      与自动生成的 `.records/` 改动**分开**（不混提交）。
+
+  **② 版本钉点三处归位**：此前 `声明 ed878c40 / 锁定 c089c0b4` 不一致（第⑤层缺口）。
+    归位过程中发现**真正的阻塞点**：`pnpm install` 因**无关依赖** `@dsh-external/project-nav`
+    的声明用了 **WSL UNC 形式**（`file://wsl.localhost/Ubuntu-26.04/...`，Linux 侧解析不到）而整体失败。
+    该 tarball 在 Linux 路径下**确实存在**，仅**路径形式**不可解析 ⇒ 改为 `file:///home/lk/FF/...`。
+    ⚠ 只改**路径形式**、不动版本内容；改前完整备份三件（package.json / pnpm-lock.yaml / .modules.yaml）。
+    `pnpm install` 实测 **57s · +2 包 · 未见批量删除拦截** ⇒ 复验 **PASS（三处一致 @ ed878c40）**。
+    （副产物：`project-nav` 顺带由 0.13.1 → 0.13.2，与声明一致。）
+
 - **修掉一处被掩盖的解析缺陷：指针 `§A/§B` 被误读成父子（2026-09-26）**：
   **契约与实现不符**（实测确凿）：`src/section-ref.ts` 与 `skill/scripts/section-ref.mjs` 的函数注释
   **自己写着**「一行可含多个文件指针与 **§A/§B 并列**」，而实现却按 `/` 天真切分，
