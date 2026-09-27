@@ -13,7 +13,7 @@ import { SURFACE, SCORE } from './criteria.generated.js'
 import { BUDGET_RANGES, resolveBudgetNumber, resolveLevelCaps } from './budget-override.js'
 import { dshHome, memoryLibRoot } from './targets.js'
 // ADR-333 册零：容量计数**单一实现**（去空白口径；与写门/门脚本同源）。
-import { capacityCharsOf } from './budget-override.js'
+import { indexCharsOf } from './budget-override.js'
 import { CONFIG_FILE, backupThenWrite, bootstrapDefaults, flipBool, parseView, readBody, sendJson, statMtime } from './panel-shared.js'
 import type { HotMemory, PanelLogger, RootAccess, RouteFn, StateStore, SuiteConfigAccess } from './panel-shared.js'
 
@@ -82,10 +82,13 @@ function configRoute(d: ConfigDeps, _req: IncomingMessage, res: ServerResponse):
   // actual = 当前实际量（动态参考，随内容成长变化，仅展示不参与配置）
   const CAP_GATES: Record<string, number> = { 'AGENT.md': 3000, 'USER.md': 3000, 'MEMORY.md': 5000 }
   const fileChars = (name: string): number => {
-    // ADR-333 册零：改走**容量计数单一实现**（`targets.capacityCharsOf`，去空白）。
-    //   本处原为内联 `replace(/\s+/g,'').length`（口径**恰好相同**，故行为不变）——
-    //   收口只为消除"第二份实现"，使"面板读数 == 写门判据"由**同源**而非**巧合**保证。
-    try { const base = memoryLibRoot(); return capacityCharsOf(readFileSync(join(base, name), 'utf8')) } catch { return 0 }
+    /* ADR-333 册零 → 2026-09-27 **口径根治**（用户拍板「容量门只管索引」）。
+     *   本处原走 `capacityCharsOf`（**全文件**去空白），而 `panel-memory.ts` 走**索引面**
+     *   ⇒ 同一件事**两个读数**（实测 AGENT.md 全文件 14k+ vs 索引面数字完全不同）。
+     *   现统一走 `indexCharsOf`（= `indexSurfaceOf` + `capacityCharsOf`，按权威判据
+     *   `targets#indexRowTag` 逐行取，与注入器 `readCarrier` **同源**）。
+     *   ⇒ 「面板读数 == 写门判据」由**同源**保证，不是巧合。 */
+    try { const base = memoryLibRoot(); return indexCharsOf(readFileSync(join(base, name), 'utf8')) } catch { return 0 }
   }
   const globalCfg = {
     persona: String(sched.injectPersona ?? 'both'),

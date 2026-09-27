@@ -48,13 +48,16 @@ const { indexSurfaceOf, indexCharsOf, totalCharsOf } = await import(HOST)
 /* ── 从两个子进程活件里抽出它们的**内联**切分+计数实现（黑盒：跑它们的等价逻辑）──
  * ⚠ 不 import 活件本身（它们有 top-level 副作用会读 argv/环境）。
  *   改为**文本提取**：确认活件里确实出现了同一规则的两个关键要素：
- *     ① `search(/^## /m)` 切分  ② `replace(/\s+/g, '').length` 计数
+ *     ① 按行取 `^[tag]` 形态（与注入器 indexRowTag 同判据）  ② `replace(/\s+/g, '').length` 计数
  *   这是"结构同源"的机检面；行为同源由下方逐例比对守。 */
 const GATE = join(ROOT, 'skill', 'scripts', 'memory_write_gate.mjs')
 const APPEND = join(ROOT, 'skill', 'scripts', 'memory-append.mjs')
-const SPLIT_RE = String.raw`search(/^## /m)`
+const SPLIT_RE = String.raw`[^\] ]+\]`
 const COUNT_RE = String.raw`replace(/\s+/g, '').length`
 
+/* ⚠ 2026-09-27 **口径根治**后改判据：旧版守的是 `search(/^## /m)`（首个 ## 之前），
+ *   而那是**未核对注入器行为**的假设——注入器 readCarrier 实测**全文扫描、只按标签筛**
+ *   ==> 旧口径在 AGENT.md 上低估 26 倍（面板 421 vs 真实 11,082）。本锁同步改守新判据。 */
 const problems = []
 const ok = (cond, msg) => { if (cond) console.log('  ✅ ' + msg); else { console.log('  ❌ ' + msg); problems.push(msg) } }
 

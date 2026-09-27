@@ -353,10 +353,13 @@ const CAP_ENV = {
 }
 const LIMITS = { 'MEMORY.md': 5000, 'USER.md': 3000, 'AGENT.md': 3000, ...CAP_ENV }
 if (isMain) {
-  /* 取**索引注入面**：首个行首 `## ` 之前的全部内容；无 `##` ⇒ 全文（MEMORY.md 即此形态）。
-   * ⚠ 只认**行首** `## `，避免正文里提到的 `##` 被误切。 */
-  const idxEnd = content.search(/^## /m);
-  const idxText = idxEnd >= 0 ? content.slice(0, idxEnd) : content;
+  /* 2026-09-27 **口径根治**：索引面 = **按行取 `^[tag]` 形态**，与注入器同判据。
+   *   判因见 `memory_write_gate.mjs` 同处注释：「取首个行首 ## 之前」是**未核对注入器行为**
+   *   的假设——注入器实测（`panel-shared#readCarrier`）**全文扫描、只按标签筛**，
+   *   旧口径在 AGENT.md 上低估 26 倍（面板 421 vs 真实 11,082）。
+   *   ⚠ 画像行（`- … ← 源:`）走 `always:profile` 独立配额，不计入索引容量门。 */
+  const idxText = content.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+    .filter((l) => /^\[[^\] ]+\]/.test(l)).join('\n');
   const chars = idxText.replace(/\s+/g, '').length;
   const limit = LIMITS[norm] ?? LIMITS['MEMORY.md'];
   /* 2026-09-16 **用户判定：容量不是硬限** —— 「直接全部失败或者拒绝」不符合意图，**提醒就可以了**。

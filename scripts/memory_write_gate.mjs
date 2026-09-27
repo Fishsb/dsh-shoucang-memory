@@ -118,9 +118,20 @@ const tmpText = fs.readFileSync(tmp, 'utf8');
  *     用户于是看到「体积一直涨、而注入的索引一直没变」的矛盾。
  *   本件是**零依赖活件**（不得 import src/）⇒ 内联同一规则；
  *   与 src/budget-override.ts#indexSurfaceOf 的同源由 check-capacity-chars.mjs 差分锁守。
- * ⚠ 只认**行首** `## `，避免正文里提到的 `##` 被误切。 */
-const idxEnd = tmpText.search(/^## /m);
-const idxText = idxEnd >= 0 ? tmpText.slice(0, idxEnd) : tmpText;
+ *
+ * ── 2026-09-27 **口径根治**（用户拍板「容量门只管索引，从架构考量根本解决」）──────────
+ * 【上一版是错的】首版按「取首个行首 ## 之前」切分 —— 那是**未核对注入器行为**的假设。
+ *   注入器实测（`panel-shared.ts#readCarrier`）：
+ *     const all = readFileSync(...).split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+ *     const idx = all.filter((l) => indexRowInLayer(l, 'always'))
+ *   ⇒ **全文扫描、只按标签筛，根本没有"首个 ## 之前"这回事**。
+ *   后果：AGENT.md 面板显示 421，真实 always 索引面 **11,082**（173 条）—— **差 26 倍**。
+ * 【根治】索引面 = **按行取 `^[tag]` 形态的行**，与注入器**同一判据**
+ *   （宿主侧 `targets.ts#indexRowTag`；本件为语义等价内联——零依赖活件不得 import src/）。
+ *   两处同源由 `scripts/check-capacity-chars.mjs` 差分锁守。
+ * ⚠ 画像行（`- … ← 源:`）走 `always:profile` 独立配额，不计入索引容量门。 */
+const idxText = tmpText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+  .filter((l) => /^\[[^\] ]+\]/.test(l)).join('\n');
 const chars = idxText.replace(/\s+/g, '').length;
 
 const issues = [];
