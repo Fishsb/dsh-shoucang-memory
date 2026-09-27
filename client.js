@@ -2867,7 +2867,7 @@
   }
   function renderMemoryExpanded(view, data) {
     view.textContent = "";
-    UI.pageHead(tr("记忆库"), tr("MEMORY.md 索引、候选、笔记与归档区，按「库 → 待消化 → 详情 → 已归档」的生命周期排序。"), { routes: ["/memory/overview", "/memory/sections", "/memory/approve"], search: { placeholder: tr("过滤索引 / 候选 / 笔记…"), onInput: appState.filterViewRows }, refresh: true });
+    UI.pageHead(tr("记忆库"), tr("MEMORY.md 索引、候选、笔记与归档区，按「库 → 待消化 → 详情 → 已归档」的生命周期排序。**点任意索引行即可展开该条的 notes 小节正文**。"), { routes: ["/memory/overview", "/memory/sections", "/memory/approve"], search: { placeholder: tr("过滤索引 / 候选 / 笔记…"), onInput: appState.filterViewRows }, refresh: true });
     var cap = UI.card(tr("容量占用"), { sub: tr("写入由 write_gate 强制红线") });
     view.appendChild(cap.box);
     var capGrid = el("div", "sc-cap3");
@@ -7684,7 +7684,7 @@
     " 顶层小节（树状，点击逐层展开；编辑在节点细节）": " top-level sections (tree view, click to expand level by level; edit in the node details)",
     "/替换 ": "/replaced ",
     "AGENT 画像": "AGENT profile",
-    "MEMORY.md 索引、候选、笔记与归档区，按「库 → 待消化 → 详情 → 已归档」的生命周期排序。": "MEMORY.md index, candidates, notes and archive, ordered by the life cycle “bank → pending digestion → details → archived”.",
+    "MEMORY.md 索引、候选、笔记与归档区，按「库 → 待消化 → 详情 → 已归档」的生命周期排序。**点任意索引行即可展开该条的 notes 小节正文**。": "MEMORY.md index, candidates, notes and archive, ordered by the life cycle “bank → pending digestion → details → archived”. Click any index row to expand the notes section body for that entry.",
     "cold 且 ≥90 天零命中": "cold and zero hits for ≥90 days",
     "h 有效": "h left",
     "notes 详情小节": "notes detail section",

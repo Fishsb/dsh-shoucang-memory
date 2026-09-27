@@ -87,7 +87,11 @@ function renderMemoryExpanded(view, data) {
   /* v9 布局对齐（第三轮·块级）：v9 的记忆库页 `.view` **只有一张卡「容量占用」**，
    * 三列容量 + 说明段 + **tabs 都在卡体里**；面板此前是**页级 `.sc-tabbox`** ⇒ 层级反了。
    * 现按原型重排：页头 → 卡「容量占用」{ 三列容量 · 说明 · tabs · 卡内小节 }。 */
-  UI.pageHead(tr("记忆库"), tr("MEMORY.md 索引、候选、笔记与归档区，按「库 → 待消化 → 详情 → 已归档」的生命周期排序。"), { routes: ['/memory/overview', '/memory/sections', '/memory/approve'], search: { placeholder: tr("过滤索引 / 候选 / 笔记…"), onInput: appState.filterViewRows }, refresh: true });
+  /* 2026-09-26（用户实测反馈「只有索引看不到小节内容」）：
+   *   小节内容**本就能看**（点索引行 → /memory/sections → 定位到具体小节），
+   *   但**页头与行上都没有说明**，用户不知道可以点 ⇒ 观感等于"功能不存在"。
+   *   此处补一句明确指引（不改任何逻辑，只补文案）。 */
+  UI.pageHead(tr("记忆库"), tr("MEMORY.md 索引、候选、笔记与归档区，按「库 → 待消化 → 详情 → 已归档」的生命周期排序。**点任意索引行即可展开该条的 notes 小节正文**。"), { routes: ['/memory/overview', '/memory/sections', '/memory/approve'], search: { placeholder: tr("过滤索引 / 候选 / 笔记…"), onInput: appState.filterViewRows }, refresh: true });
   var cap = UI.card(tr("容量占用"), { sub: tr("写入由 write_gate 强制红线") });
   view.appendChild(cap.box);
   var capGrid = el('div', 'sc-cap3');

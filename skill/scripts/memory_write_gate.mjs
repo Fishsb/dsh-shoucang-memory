@@ -104,7 +104,17 @@ try {
 } catch { /* 投影未部署 = 用内建缺省（不报错） */ }
 
 const tmpText = fs.readFileSync(tmp, 'utf8');
-const chars = tmpText.replace(/\s+/g, '').length;
+/* ⚠ 2026-09-26 **口径澄清（用户拍板）**：容量门统计的是「**索引注入面**」——
+ *   即会话开头真正注入的那部分，**不含** `## 正文本节`（那些供按需检索，只进总量统计）。
+ *   判因（实测）：USER.md 总 11888 字符中顶部索引仅 **370**，其余 **97%** 是 54 个正文本节
+ *   ⇒ 旧实现按**全文件**计，把不注入的内容也算进容量门，
+ *     用户于是看到「体积一直涨、而注入的索引一直没变」的矛盾。
+ *   本件是**零依赖活件**（不得 import src/）⇒ 内联同一规则；
+ *   与 src/budget-override.ts#indexSurfaceOf 的同源由 check-capacity-chars.mjs 差分锁守。
+ * ⚠ 只认**行首** `## `，避免正文里提到的 `##` 被误切。 */
+const idxEnd = tmpText.search(/^## /m);
+const idxText = idxEnd >= 0 ? tmpText.slice(0, idxEnd) : tmpText;
+const chars = idxText.replace(/\s+/g, '').length;
 
 const issues = [];
 // S1R（2026-09-19）：§ 小节存在性判据**收敛到单一语义件** `section-ref.mjs`（三态：exists/ambiguous/missing）。

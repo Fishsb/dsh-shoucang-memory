@@ -51,6 +51,33 @@ export type BudgetOverrideKey = (typeof BUDGET_OVERRIDE_KEYS)[number];
  *   ⇒ 由 `scripts/check-capacity-chars.mjs` 做**跨面同源差分锁**（同 `section-ref` 的孪生形态）。
  */
 export declare const capacityCharsOf: (text: string) => number;
+/**
+ * **索引面切分「单一实现」**（2026-09-26 · 用户口径澄清 + 真机实测）。
+ *
+ * ── 判因：容量一直按**全文件**计，而用户口径是**只计索引注入面** ──────────────
+ * 用户观察（实证）：USER.md 体积持续增长，但注入的索引**一直是 7 行没变**。
+ * 实测该文件：**总 11888 字符，其中顶部索引仅 370 字符，其余 ≈11500 字符（97%）
+ * 是 54 个 `## 正文本节`** —— 那些小节供**按需检索**（`shoucang_recall` / 指针寻址），
+ * **不进会话注入**。
+ * ⇒ 容量门的语义是「**热注入面**是否超限」，故**只应统计索引部分**；
+ *   小节属「总量统计」（看趋势用），两者**不是同一个数**。
+ *
+ * ── 切分规则（三档同构，实测确认）────────────────────────────────
+ *   · `USER.md`  : 首个 `## ` 之前 = 索引（实测 10 行）· 之后 = 54 个正文本节
+ *   · `AGENT.md` : 首个 `## ` 之前 = 索引（实测  8 行）· 之后 = 正文本节
+ *   · `MEMORY.md`: **无 `## `**（纯索引，实测 0 个二级标题）⇒ 取全文
+ * ⇒ 规则：**取首个行首 `## ` 之前的全部内容**；无则全文。
+ *   ⚠ 只认**行首** `## `（`/^## /m`）—— 行内的 `##` 不算（避免正文里提到 `##` 被误切）。
+ *
+ * ⚠ **这是「切哪一段」的唯一实现**；`capacityCharsOf` 是「怎么数」的唯一实现，两者配对使用。
+ *   子进程脚本（`memory_write_gate.mjs` / `memory-append.mjs`）是零依赖活件，
+ *   各自内联同一规则，由 `scripts/check-capacity-chars.mjs` 做跨面同源差分锁。
+ */
+export declare const indexSurfaceOf: (text: string) => string;
+/** **索引注入面**的容量计数（= 容量门应当统计的数）。 */
+export declare const indexCharsOf: (text: string) => number;
+/** 全文件容量（**总量统计**用，不用于容量门判定）。 */
+export declare const totalCharsOf: (text: string) => number;
 /** 各键的**合法范围**（与 `scheduler.ts` 的 zod `min/max` 同值 —— 改一处必须同改，由 `check-budget-override` 机检）。 */
 export declare const BUDGET_RANGES: Record<BudgetOverrideKey, readonly [number, number]>;
 /** 夹取结果：`value` 为采用值 · `clamped` 为是否发生夹取（**留痕用**，不静默）。 */

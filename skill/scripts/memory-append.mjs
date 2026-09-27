@@ -231,7 +231,14 @@ if (isNewIndexLine) {
   content = lines.join('\n');
 }
 
-// 容量门禁（主文档硬限；notes 不拦——全文件口径，同 write_gate）
+// 容量门禁（主文档硬限；notes 不拦）
+// ⚠ **2026-09-26 口径澄清（用户拍板）**：容量门统计的是「**索引注入面**」——
+//   即会话开头真正注入的那部分，**不含** `## 正文本节`（那些供按需检索，只进总量统计）。
+//   判因（实测）：USER.md 总 11888 字符中，顶部索引仅 **370**，其余 **97%** 是 54 个正文本节
+//   ⇒ 旧实现按**全文件**计（"全文件口径"），把不注入的内容也算进容量门，
+//     用户于是看到「体积一直涨、而注入的索引一直没变」的矛盾。
+//   本件是**零依赖活件**（不得 import src/）⇒ 内联同一规则；
+//   与 src/budget-override.ts#indexSurfaceOf 的同源由 check-capacity-chars.mjs 差分锁守。
 // 2026-09-11：默认值与容量门同源（画像 AGENT/USER 3,000 · 记忆 MEMORY 5,000）；env SHOUCANG_CAP_* 可覆盖
 //（蒸馏/深睡调用 memory-append 时由宿主注入 = scheduler.json 实时容量门，见 src/distill.ts capEnv()）
 const CAP_ENV = {
@@ -241,7 +248,11 @@ const CAP_ENV = {
 }
 const LIMITS = { 'MEMORY.md': 5000, 'USER.md': 3000, 'AGENT.md': 3000, ...CAP_ENV }
 if (isMain) {
-  const chars = content.replace(/\s+/g, '').length;
+  /* 取**索引注入面**：首个行首 `## ` 之前的全部内容；无 `##` ⇒ 全文（MEMORY.md 即此形态）。
+   * ⚠ 只认**行首** `## `，避免正文里提到的 `##` 被误切。 */
+  const idxEnd = content.search(/^## /m);
+  const idxText = idxEnd >= 0 ? content.slice(0, idxEnd) : content;
+  const chars = idxText.replace(/\s+/g, '').length;
   const limit = LIMITS[norm] ?? LIMITS['MEMORY.md'];
   /* 2026-09-16 **用户判定：容量不是硬限** —— 「直接全部失败或者拒绝」不符合意图，**提醒就可以了**。
    * 旧行为：超限即 `exit 1` **不写**。新默认：**提醒后照写**（写入不因容量被阻断）。

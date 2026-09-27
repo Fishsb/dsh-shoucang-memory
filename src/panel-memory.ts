@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { dshHome, knowledgeRoot, memoryLibRoot } from './targets.js'
 // ADR-333 册零：容量计数**单一实现**（去空白口径；与写门/门脚本同源）。
-import { capacityCharsOf } from './budget-override.js'
+import { indexCharsOf, totalCharsOf } from './budget-override.js'
 /* 册二（决议 D1）：归一核心名与小节解析**均取库内唯一实现**（与 `section-ref` 同源），
  * 不在本文件另写一份——「同一语义多份实现」正是根因 C1 本身。
  * ⚠ `resolveSectionSpec` 是**权威四态解析**（exists|ambiguous|missing|partial）：自写匹配必然与它分叉
@@ -45,7 +45,16 @@ export interface MemoryDeps {
  *   少一个会让 `panes-memory-detail.js:219` 静默显示「知识索引 0 条」（该处无空态守卫）。 */
 export interface MemIndexEntry { tag: string; subject: string; pointer: string }
 
-interface MemIndexFile { name: string; label: string; chars: number; cap: number; lines: MemIndexEntry[] }
+interface MemIndexFile {
+  name: string
+  label: string
+  /** **容量门口径** = 索引注入面字符数（不含 `##` 正文本节）。 */
+  chars: number
+  /** **全文件总量**（含正文本节）—— 仅供统计，**不参与容量判定**。 */
+  total: number
+  cap: number
+  lines: MemIndexEntry[]
+}
 
 const memoryHomeOf = (): string | null => {
   // 收口到单一事实源（2026-09-21）：旧址写死 `skills/managing-memory`，与 targets 的
@@ -252,13 +261,23 @@ export const parseIndexLines = (text: string): MemIndexEntry[] => {
   return out
 }
 
-// ADR-333 册零：容量计数**单一实现**（原为内联同式；口径相同、行为不变，收口为消"第二份实现"）。
-const charsOf = (text: string): number => capacityCharsOf(text)
+/* 容量计数**单一实现**（ADR-333 册零）。⚠ 2026-09-26 口径澄清（用户拍板）：
+ *   容量门统计的是**索引注入面**（= 会话开头真正注入的那部分），
+ *   **不含** 供按需检索的 `## 正文本节`；正文本节只进**总量**统计。
+ *   判因见 `budget-override.ts#indexSurfaceOf`（实测 USER.md 总 11888 字符中索引仅 370）。 */
+const charsOf = (text: string): number => indexCharsOf(text)
+/** 全文件总量（统计用；**不参与容量判定**）。 */
+const totalOf = (text: string): number => totalCharsOf(text)
 
 const readIndexFile = (base: string, f: { file: string; label: string }, caps: Record<string, number>): MemIndexFile | null => {
   try {
     const text = readFileSync(join(base, f.file), 'utf8')
-    return { name: f.file, label: f.label, chars: charsOf(text), cap: caps[f.file] ?? 3000, lines: parseIndexLines(text) }
+    return {
+      name: f.file, label: f.label,
+      chars: charsOf(text),                       /* 容量门口径 = 索引注入面 */
+      total: totalOf(text),                       /* 总量（含正文本节）· 仅供统计展示 */
+      cap: caps[f.file] ?? 3000, lines: parseIndexLines(text)
+    }
   } catch { return null }
 }
 
