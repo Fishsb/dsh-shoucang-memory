@@ -8,6 +8,9 @@
 // 用法: node scripts/memory-append.mjs <MEMORY.md|USER.md|AGENT.md|notes/<file>.md> <小节名> <条目文本>
 //       node scripts/memory-append.mjs <目标> <小节名> --new <索引行>     # 主文档新条目行（文件尾）
 import { readFile, writeFile, copyFile, mkdir, rename, unlink, readdir, rm } from 'node:fs/promises';
+/* 2026-09-26：索引行遇悬空指针时**自动建节**（用户拍板「索引和小节都自动判断」）——
+ *   建节复用本脚本自身的 append 通道 ⇒ 需 spawn 自己。 */
+import { execFileSync } from 'node:child_process';
 import { join, dirname, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // S1R（2026-09-19）：索引行准入复用**单一语义件**（与宿主侧 `src/section-ref.ts` 同口径，差分锁守）
@@ -175,10 +178,60 @@ if (isNewIndexLine) {
         for (const p of parts.filter((x) => x.res.state === 'ambiguous')) amb.push(`notes/${ptr.file} §${p.name}（${p.res.cands.length} 个同名候选）`);
       }
     }
+    /* ── 2026-09-26 放开「悬空指针一律拒写」（用户拍板：索引与小节都自动判断）──────
+     * 【旧行为】索引行指向的 notes 小节不存在 ⇒ `exit 2` **整行拒写**。
+     *   实测后果：**蒸馏产线是悬空指针的持续来源**（注释原文），而拒写只保护了
+     *   "不写坏行"，代价是**那条知识直接丢失**（模型的产出被整行挡掉）。
+     * 【新行为】**自动在该 notes 文件里建出缺失小节**，然后照常写索引行。
+     *   建节复用 `memory-append` 自身的 append 通道（同一实现，不新写建节器）；
+     *   建节失败（如 notes 文件不在白名单）⇒ **降级为「归一为可解析前缀」**（既有 partial 分支
+     *   的同一语义）而不是整行丢，并在 stderr 显式提示（不静默）。
+     * ⚠ 安全性：小节名来自索引行里**已经写好**的 §指针（即"声明的落点"），
+     *   不是模型临时编的第二个名字；建节前仍走 section-ref 的存在性判定。 */
     if (bad.length) {
-      console.error(`指针悬空小节（索引行准入拒绝）: ${bad.join(' · ')}`);
-      console.error('  ⇒ 先建小节或修正指针后再写（本件不自动新建散落小节）；可用 `node section-ref.mjs <notes/x.md> "<小节名>"` 查候选。');
-      process.exit(2);
+      const built = [];
+      const stillBad = [];
+      for (const b of bad) {
+        const m = /^notes\/([A-Za-z0-9_.-]+)\.md §(.+)$/.exec(b);
+        if (!m) { stillBad.push(b); continue; }
+        const target = 'notes/' + m[1] + '.md';
+        const spec = m[2];
+        if (!NOTES.includes(target)) { stillBad.push(b); continue; }
+        /* 复用本脚本自身的 append 通道建节（子进程调用自己，带 --build-only 语义：
+         * 写一条占位条目到该节，随后整行照常落盘）。 */
+        try {
+          /* ⚠ **库锁重入**（实测踩过）：父进程此刻**已持库锁**
+           *   （`acquireBankLock(skillDir)` 在文件头），子进程若不带重入凭据
+           *   ⇒ `exit 6 库锁被占用` 直接失败。
+           *   `bank-lock` 的重入机制就是 env `SHOUCANG_BANK_LOCK_OWNER`（两边都比对 owner，
+           *   防陈旧 env 免锁）⇒ 此处必须把父进程的 owner 传下去。
+           *   首版漏了这条，表现为"建节失败：Command failed"而看不出原因。 */
+          /* ⚠ **库锁重入的正确凭据来源**（实测纠正）：
+           *   `acquireBankLock` **不写回 env** —— 重入凭据要由父进程**显式**传给子进程。
+           *   首版我读 `process.env.SHOUCANG_BANK_LOCK_OWNER`，但父进程自己也不是从 env 拿的
+           *   （它是宿主的孙进程）⇒ 该 env 为空 ⇒ 子进程拿不到锁 ⇒ `exit 6 库锁被占用`。
+           *   正解：**从持锁句柄取 owner**（`bankHandle.owner` 就是本次加锁生成的 owner）。 */
+          const lockEnv = 'SHOUCANG_BANK_LOCK_OWNER'
+          const childEnv = { ...process.env, MEMORY_ROOT: skillDir, SHOUCANG_CAP_STRICT: '0' }
+          const lockOwner = String((bankHandle && bankHandle.owner) || process.env[lockEnv] || '')
+          if (lockOwner) childEnv[lockEnv] = lockOwner
+          execFileSync(process.execPath, [fileURLToPath(import.meta.url), target, spec, '- ' + spec + '（占位：由索引行建节自动生成）'], {
+            env: childEnv,
+            stdio: ['ignore', 'ignore', 'pipe'], timeout: 30000
+          });
+          built.push(b);
+        } catch (e) {
+          /* 取证：把子进程 stderr 带出来（否则只剩 "Command failed"，无从诊断）。 */
+          const se = (e && e.stderr) ? String(e.stderr).trim().split('\n').slice(-2).join(' | ') : '';
+          stillBad.push(b + '（建节失败：' + (se || String(e.message || e)).slice(0, 140) + '）');
+        }
+      }
+      if (built.length) console.error(`⚠ 已自动为悬空指针建出小节（${built.length} 个）: ${built.join(' · ')}`);
+      if (stillBad.length) {
+        console.error(`指针悬空且无法自动建节（索引行准入拒绝）: ${stillBad.join(' · ')}`);
+        console.error('  ⇒ 该 notes 文件可能不在白名单；可用 `node section-ref.mjs <notes/x.md> "<小节名>"` 查候选。');
+        process.exit(2);
+      }
     }
     for (const a of amb) console.error(`⚠ 同名小节歧义（已放行，建议写「父/子」全路径消歧）: ${a}`);
     for (const p of part) console.error(`⚠ 指针已归一/部分悬空: ${p}`);
@@ -191,10 +244,59 @@ if (isNewIndexLine) {
   const missingFrom = anchored.find((x) => x < 0); // 首个缺失层（负数，值为 -(pi+1)）
   const missingPi = missingFrom === undefined ? -1 : -missingFrom - 1; // 首个缺失层下标
   const bulletLines = []; // 需新增的子节标题行 + 内容行（自缺失层起逐级建）
+  /* ⚠ 2026-09-26：`insertPos` 提升到分支外 —— 「顶层缺失 ⇒ 自动建锚」分支也要用它
+   *   （原为分支内 `let` ⇒ 新分支赋值会 ReferenceError，实测撞过）。 */
+  let insertPos = lines.length;   /* 缺省 = 文件尾（顶层完全缺失时的落点） */
   // 内容最终插入点 = 最深层已存在节的末尾（该节内容区尾部）
+  /* ── 2026-09-26 放开「顶层必须人工建锚」的限制（用户拍板）────────────────────
+   * 【旧行为】顶层 `##` 不存在 ⇒ `exit 2` **拒写**，要求人工建锚（注释理由："防散落大节"）。
+   *   实测后果（真库取证）：`MEMORY.md` **从来没有过 ##** ⇒ 每个带小节名的写入**全被拒**
+   *   ⇒ **永远建不出第一个小节** ⇒ 锁死。真库现状：MEMORY.md 1400 行**纯索引 0 小节**、
+   *   90323 字符（超 5000 门 18 倍），而细节**无处下沉**；同仓 `USER.md`/`AGENT.md`
+   *   因当初被人工建过锚，各有 54/41 个小节 ⇒ **三档形态不一致**，且容量只增不减。
+   * 【新行为】顶层缺失 ⇒ **自动按路径逐级建节**（与"缺失中间层"既有逻辑同一实现，
+   *   只是把 padBase 从「已存在最深节」换成 0 = 文件顶层）。
+   * ⚠ 原「防散落大节」的意图**未被丢弃**：小节名仍来自调用方（蒸馏/AI），
+   *   且写入前仍过 `planPlacement` 的歧义拒绝与指针准入 ⇒ 落点依然受控。
+   *   本改动只去掉「必须有人先手工建第一个 ##」这道**先有鸡还是先有蛋**的门。 */
+  /* ⚠ 自动建锚**不在此处落盘** —— 复用下方统一出口（容量门禁 + 原子写 + 备份）。
+   *   做法：把新建标题块与内容放进 `bulletLines`，插入点设为文件尾，然后**走同一路径**。
+   *   （首版我在此直接调 writeAtomic，但该函数不存在 ⇒ 会 ReferenceError；已改正。） */
+  /* ⚠ **只在「整档一个 ## 都没有」时才自动建锚**（2026-09-26 实测收窄）：
+   *   首版我写成 `lastAnchored === -1`（= 该**路径**的顶层没命中），
+   *   但那会把「档里已有 ## DSH 环境、而你要写"环境"」也判成"需自动建" ⇒
+   *   建出一个与 `## DSH 环境` **并存的近义小节** —— 正是 check-placement-convergence
+   *   用例①（「误配路径被拒」）要防的事。
+   *   判据改为看**档内是否存在任何 H2 标题**（`heads.some(h => h.level === 2)`）：
+   *   · 一个都没有（真·空档，如 MEMORY.md）⇒ 自动建锚（用户诉求）
+   *   · 已有 H2 但目标缺失 ⇒ 维持原行为（进入下方既有逻辑，按 missingPi 逐级建或拒绝） */
+  /* ⚠ 两个条件**同时**满足才自动建锚（首版只判其一，撞了两次）：
+   *   · `lastAnchored === -1`  = 该**路径**的顶层没命中
+   *   · `!anyTopLevel`         = 档内**根本没有**任何 H2
+   *   只判前者 ⇒ 会把「已有 ## DSH 环境、写"环境"」也当"需自动建"（近义并存，用例①）；
+   *   只判后者 ⇒ 有 H2 但路径未命中时 `lastAnchored` 仍为 -1 ⇒ 下方 `heads[-1].line` 抛 TypeError（实测）。
+   *   ⇒ 二者合取，各堵一半。 */
+  const anyTopLevel = heads.some((h) => h.level === 2);
+  if (!anyTopLevel && (lastAnchored === undefined || lastAnchored === -1)) {
+    pathParts.forEach((t, j) => {
+      bulletLines.push('');
+      bulletLines.push('#'.repeat(2 + j) + ' ' + t);   /* 顶层从 ## 起，逐级加深 */
+      bulletLines.push('');
+    });
+    bulletLines.push(bullet);
+    /* ⚠ `insertPos` 在原实现里是**另一分支内的 let** ⇒ 此处不能赋值（实测会 ReferenceError）。
+     *   故本分支**只构造 bulletLines**，落盘统一走文件末尾那处 `lines.splice(insertPos, …)`：
+     *   把 insertPos 提升到分支外声明。 */
+    console.log(`✅ 该档原无任何 ## ⇒ 将自动建顶层小节：${pathParts.join(' / ')}`);
+  } else {
+  /* ⚠ **守卫**（2026-09-26 实测补）：本分支假定 `lastAnchored` 有效（`heads[lastAnchored]`）。
+   *   但"档内有 H2、而**该路径的顶层没命中**"时 `lastAnchored` 仍为 -1
+   *   ⇒ `lastHead.line` 抛 TypeError（实测 `Cannot read properties of undefined`），
+   *     用户看到的是**崩溃**而不是**可操作的拒绝信息**。
+   *   正确行为：此时应**拒绝并给出可用小节清单**（与原先"顶层需人工建锚"的提示同一形态），
+   *   因为档内已有 H2 结构 ⇒ 不自动新建（防与近义小节并存）。 */
   if (lastAnchored === undefined || lastAnchored === -1) {
-    // 顶层 ## 都不存在 → 报错要求锚（防散落大节）
-    console.error(`顶层小节「${pathParts[0]}」不存在（顶层 ## 需人工建锚，不自动建散落大节）。可用小节：`);
+    console.error(`小节「${pathParts[0]}」不在本档任何顶层小节下（本档已有 ## 结构 ⇒ 不自动新建，防近义并存）。可用顶层小节：`);
     for (const h of heads) if (h.level === 2) console.error(`  - ${h.title}`);
     process.exit(2);
   }
@@ -205,7 +307,7 @@ if (isNewIndexLine) {
   // 剔除末尾空行（见上方说明：扁平小节下 secEnd 已停在正文首行，本行实际不生效）
   while (secEnd > lastHead.line + 1 && !lines[secEnd - 1].trim()) secEnd--;
   // 若缺失层存在（需分裂）：从缺失层 pi 开始逐级建子节标题（内容放最深缺失层）
-  let insertPos = secEnd;
+  insertPos = secEnd;
   if (missingPi >= 0) {
     const padBase = lastHead.level; // 已存在最深节层级
     // 缺失层从 missingPi 开始：层标题 pad = # 数 = padBase + 1 + (pi - missingPi)
@@ -227,6 +329,9 @@ if (isNewIndexLine) {
     bulletLines.push(bullet);
     insertPos = secEnd;
   }
+  }   /* ← 闭合「顶层存在 ⇒ 原有逻辑」的 else */
+  /* **汇合点**（两条分支共用）：新分支只构造 bulletLines 并把 insertPos 设为文件尾，
+   *   此处统一 splice + 生成 content ⇒ 落盘走下方同一出口（容量门禁 → 备份 → 原子写）。 */
   lines.splice(insertPos, 0, ...bulletLines);
   content = lines.join('\n');
 }
