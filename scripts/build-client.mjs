@@ -29,44 +29,15 @@ execFileSync(process.execPath, [join(root, 'scripts', 'gen-panel-contract.mjs')]
 /* 接缝③：词表索引**由目录生成**（新增词表文件无须改手写清单）——见 gen-i18n-dict-index.mjs 头注 */
 execFileSync(process.execPath, [join(root, 'scripts', 'gen-i18n-dict-index.mjs')], { stdio: 'inherit' })
 
-/* ── 阶段 0b：展平第三方组件库的主题令牌层（S3） ──
- * 判因（真机取证）：只 import 组件、不引入其**主题令牌层**时，`--wa-color-*` 全部未定义 ⇒
- *   组件算出透明底 / 0 边框 / 0 内距（实测按钮 84×30 紫胶囊退化成 29×14 裸文字）。
- * 做法：跟随 `@import` 递归展平 themes/default.css（含调色板），生成一个 ESM 文本模块；
- *   运行时由面板用**独立 <style>** 注入 —— 与我们的 CSS 数组分离，不污染各门禁的抽取锚点。 */
-function flattenCss (file, seen) {
-  const abs = resolve(file)
-  if (seen.has(abs)) return ''
-  seen.add(abs)
-  if (!existsSync(abs)) return ''
-  return readFileSync(abs, 'utf8').replace(/@import\s+url\(\s*(['"]?)([^'")]+)\1\s*\)\s*;/g, (m, q, rel) => {
-    if (/^https?:/i.test(rel)) return ''
-    return flattenCss(join(dirname(abs), rel), seen)
-  })
-}
-{
-  const themeRoot = join(root, 'node_modules', '@awesome.me', 'webawesome', 'dist', 'styles')
-  const entry = join(themeRoot, 'themes', 'default.css')
-  if (existsSync(entry)) {
-    let css = flattenCss(entry, new Set())
-    /* 作用域收口（必须）：展平后的主题含 `:root`/`html`/`body` 全局选择器，
-     *   直接注入会**重绘宿主 DSH 页面**——插件绝不该改宿主。这里把它们改写为 `#scpanl-root`：
-     *   令牌在该元素上定义，再由面板内组件继承，宿主页一像素不动。 */
-    css = css
-      .replace(/(^|[\s,{(])(:root|html|body)\b/g, '$1#scpanl-root')
-      .replace(/\bwa-page\b/g, 'wa-page' /* 组件选择器保持原样 */)
-    if (/(^|[},])\s*(:root|html|body)\s*[,{]/.test(css)) {
-      console.error('build:client ✗ 主题 CSS 仍含未限定的全局选择器（会污染宿主页）')
-      process.exit(1)
-    }
-    const gen = join(root, 'src-client', '.vendor-css.generated.js')
-    writeFileSync(gen, '/* 生成物（build:client 产出）—— 第三方组件库主题令牌层，勿手改 */\n' +
-      'export const VENDOR_CSS = ' + JSON.stringify(css) + '\n', 'utf8')
-    console.log('  · 展平组件库主题令牌层 ' + Math.round(css.length / 1024) + 'KB → src-client/.vendor-css.generated.js')
-  } else {
-    console.warn('  ! 未找到组件库主题令牌层，跳过（组件将无配色）')
-  }
-}
+/* U2（2026-09-26）：**阶段 0b 已移除** —— 原本在此展平 Web Awesome 的主题令牌层
+ *   （生成 65KB 的 .vendor-css.generated.js，运行时注入为独立 <style>）。
+ *   U2 把 7 个 WA 组件全部改为「宿主 primitives 优先 + 自绘降级」后，产物已不带该库
+ *   ⇒ 展平失去唯一消费者。宿主 primitives 自带样式（各组件有独立 *.module.css），
+ *     面板自身样式仍走 window.__SC_CSS__ —— 单一来源，未变。
+ *   ⚠ 若将来重新引入第三方组件库，**必须一并恢复本段**：历史判因（2026-09-13 真机取证）
+ *     是「只 import 组件、不给令牌层 ⇒ 组件算出透明底/0 边框/0 内距，84×30 紫胶囊退化成
+ *     29×14 裸文字」。 */
+/* ── （原阶段 0b 代码已删除，保留本注释作为恢复指引） ──
 
 /* 打包到临时文件 → 校验锚点 → 原子替换（校验失败则保持旧产物，不破坏仓内门禁） */
 const tmp = artifact + '.build.tmp'
@@ -78,6 +49,15 @@ try {
     platform: 'browser',
     target: ['es2019'],
     minify: false,
+    /* U3（2026-09-26）：`charset: 'utf8'` —— 中文**按原文存**，不再逐字转成 \uXXXX。
+     *   判因（实测）：默认 ascii 下中文被转义成 \uXXXX（**6 字节/字**），而 UTF-8 原文只需
+     *     **3 字节/字**。产物实测转义总数 22,018（其中 CJK 18,863）≈ **111KB 纯转义开销**。
+     *   实测对照（同入口同选项）：charset=ascii **545KB** → charset=utf8 **479KB（省 66KB）**。
+     *   ⚠ 为什么安全：产物本就是 UTF-8 文本，宿主按 UTF-8 加载；本仓从产物里抽文本的门禁
+     *     （check-layout-px / audit-css-usage / gen-ui-preview / check-ui-contract）**都不依赖
+     *     转义形态**（实测零命中），且它们抽的是 CSS 数组与符号名，与中文转义无关。
+     *     语法由 `check-ui-contract` 的 `node --check` 独立守。 */
+    charset: 'utf8',
     /* 关键：本仓 package.json 的 sideEffects 只声明 ./lib/client.js（面向宿主加载器的发布提示），
      * esbuild 若尊重它会把 src-client/body.js 与 vendor.js 整体 tree-shake 掉 ⇒ 产物变空。
      * 构建期忽略该类注解（本包的源码入口全部靠副作用自注册）。 */
@@ -101,7 +81,16 @@ const REQUIRED = [
   ['CSS 数组稳定锚点（门禁按 window.__SC_CSS__ 抽取）', 'window.__SC_CSS__'],
   ['CSS 数组起点', 'window.__SC_CSS__ = ['],
   ['CSS 数组终点（引号由门禁正则容错）', '].join('],
-  ['web components（S3 组件库已随产物送达）', 'customElements']
+  /* U2（2026-09-26）锚点更新：原断言 'customElements'（S3 组件库随产物送达）**已不成立** ——
+   *   U2 把 7 个 WA 组件全部改为「宿主 primitives 优先 + 自绘降级」，产物**不再自带组件库**
+   *   （实测省下 574KB：WA 代码 272KB + 主题 CSS 302KB）。
+   *   契约改为描述现状：① 宿主接入层在位（host-ui 的 require 接缝）；
+   *   ② 自绘降级基座在位；③ 真实请求的宿主模块名在产物里。
+   *   ⚠ 三条**同时**存在才算完整：只有宿主接入而无降级 ⇒ 无宿主环境白屏；
+   *     只有降级而无宿主接入 ⇒ 等于没接宿主、白白多背一份自绘。 */
+  ['宿主 UI 接入层（U2：require 宿主 primitives 的接缝）', 'setRequire'],
+  ['自绘降级基座（U2：无宿主时的组件实现）', 'checkbox-container'],
+  ['宿主 primitives 模块名（U2：真实请求的模块）', 'dsh-client-ui-primitives']
 ]
 const missing = REQUIRED.filter(([, needle]) => !text.includes(needle))
 if (missing.length) {

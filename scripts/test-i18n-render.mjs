@@ -21,6 +21,8 @@ import { tmpdir } from 'node:os'
 import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
+/* R7（2026-09-26）：浏览器探测收敛到唯一实现 chrome-find。 */
+import { findChrome } from './chrome-find.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const CLIENT = join(ROOT, 'client.js')
@@ -28,30 +30,9 @@ const SELFTEST = process.argv.includes('--selftest')
 const shotsArg = process.argv.indexOf('--shots')
 const SHOTS = shotsArg >= 0 ? resolve(process.argv[shotsArg + 1] || tmpdir()) : null
 
-/* ── Chrome 探测（与姊妹件同口径：不写死本机路径） ── */
-const PF = process.env.PROGRAMFILES || ''
-const PF86 = process.env['PROGRAMFILES(X86)'] || ''
-const LOCAL = process.env.LOCALAPPDATA || ''
-const j = (b, r) => (b ? b.replace(/\\/g, '/') + '/' + r : '')
-const CAND = [
-  process.env.CHROME_PATH,
-  j(PF, 'Google/Chrome/Application/chrome.exe'),
-  j(PF86, 'Google/Chrome/Application/chrome.exe'),
-  j(PF86, 'Microsoft/Edge/Application/msedge.exe'),
-  j(PF, 'Microsoft/Edge/Application/msedge.exe'),
-  j(LOCAL, 'Google/Chrome/Application/chrome.exe'),
-  '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser',
-].filter(Boolean)
-let CHROME = CAND.find((p) => existsSync(p))
-if (!CHROME) {
-  for (const n of ['chrome', 'google-chrome', 'chromium', 'msedge']) {
-    try {
-      const o = execFileSync(process.platform === 'win32' ? 'where' : 'which', [n],
-        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).split(/\r?\n/)[0].trim()
-      if (o && existsSync(o)) { CHROME = o; break }
-    } catch (e) { /* 未安装 */ }
-  }
-}
+/* R7（2026-09-26）：Chrome 探测收敛到唯一实现（chrome-find）——原候选表 + which 兜底
+ *   都不查 puppeteer 缓存 ⇒ 主力环境（WSL）恒跳过。 */
+const CHROME = findChrome()
 if (!CHROME) { console.log('i18n 两态渲染：未找到 Chrome/Edge —— 环境缺件，跳过（exit 3）'); process.exit(3) }
 if (!existsSync(CLIENT)) { console.error('缺 client.js（先 npm run build:client）'); process.exit(1) }
 const client = readFileSync(CLIENT, 'utf8')

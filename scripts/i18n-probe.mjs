@@ -12,6 +12,9 @@ import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
+/* R7（2026-09-26）：浏览器探测收敛到唯一实现 chrome-find —— 原本地候选表不查 puppeteer 缓存，
+ *   主力环境（WSL）恒跳过，判据从未真正执行。 */
+import { findChrome } from './chrome-find.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const LOCALE = (process.argv[2] || 'en').trim()
@@ -28,14 +31,8 @@ function loadEnDict () {
   return out
 }
 
-const PF = process.env.PROGRAMFILES || ''
-const LOCAL = process.env.LOCALAPPDATA || ''
-const chrome = [
-  process.env.CHROME_PATH,
-  PF ? PF.replace(/\\/g, '/') + '/Google/Chrome/Application/chrome.exe' : '',
-  PF ? PF.replace(/\\/g, '/') + '/Microsoft/Edge/Application/msedge.exe' : '',
-  LOCAL ? LOCAL.replace(/\\/g, '/') + '/Google/Chrome/Application/chrome.exe' : '',
-].filter(Boolean).find((p) => existsSync(p))
+/* R7（2026-09-26）：改走共享探测；**退出码语义保持不变**。 */
+const chrome = findChrome()
 if (!chrome) { console.log('未找到 Chrome —— 跳过'); process.exit(3) }
 
 const dir = mkdtempSync(join(tmpdir(), 'i18n-probe-'))

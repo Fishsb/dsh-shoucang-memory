@@ -14,6 +14,9 @@ import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
+/* R7（2026-09-26）：浏览器探测收敛到唯一实现 chrome-find —— 原本地候选表不查 puppeteer 缓存，
+ *   主力环境（WSL）恒跳过，判据从未真正执行。 */
+import { findChrome, runChrome } from './chrome-find.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const OUT = process.argv[2] || join(tmpdir(), 'shot-real.png')
@@ -59,12 +62,8 @@ console.log('真数据：路由 ' + Object.keys(DATA).length + '/' + ROUTES.leng
   ' · root=' + ((DATA['/memory/overview'] || {}).root || '?') + ' · MEMORY.md lines=' + ((mem.lines || []).length))
 if (!Object.keys(DATA).length) { console.error('一条真数据都没取到 —— 宿主未运行？'); process.exit(1) }
 
-const PF = process.env.PROGRAMFILES || '', LOCAL = process.env.LOCALAPPDATA || ''
-const CHROME = [process.env.CHROME_PATH,
-  PF ? PF.replace(/\\/g, '/') + '/Google/Chrome/Application/chrome.exe' : '',
-  PF ? PF.replace(/\\/g, '/') + '/Microsoft/Edge/Application/msedge.exe' : '',
-  LOCAL ? LOCAL.replace(/\\/g, '/') + '/Google/Chrome/Application/chrome.exe' : '',
-].filter(Boolean).find((p) => existsSync(p))
+/* R7（2026-09-26）：改走共享探测；**退出码语义保持不变**。 */
+const CHROME = findChrome()
 if (!CHROME) { console.error('未找到 Chrome/Edge'); process.exit(1) }
 
 const dir = mkdtempSync(join(tmpdir(), 'panel-shot-'))
@@ -114,8 +113,11 @@ writeFileSync(page, P.join('\n'), 'utf8')
 /** 出图一次（scrollTop 经 hash 传入；0 表示不传） */
 function shot (h, out, scrollTop) {
   const url = 'file:///' + page.replace(/\\/g, '/') + (scrollTop ? ('#scroll=' + scrollTop) : '')
-  return execFileSync(CHROME, ['--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars',
-    '--window-size=1400,' + h, '--screenshot=' + out, '--virtual-time-budget=20000', url],
+  /* R7（2026-09-26）：改走共享 runChrome —— 原本处自拼参数、**缺 --disable-dev-shm-usage
+   *   与 --disable-background-networking**（前者在容器/WSL 下 /dev/shm 偏小会随机崩，
+   *   后者免后台握手拖启动），且不隔离 HOME。抽到共享实现后与其他件同源。 */
+  return runChrome(CHROME, ['--hide-scrollbars', '--window-size=1400,' + h,
+    '--screenshot=' + out, '--virtual-time-budget=20000', url],
   { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 180000, windowsHide: true })
 }
 
@@ -123,8 +125,8 @@ if (FULL) {
   /* 量 .sc-view 的 scrollHeight / clientHeight，按段出图 */
   let sh = 0, ch = 0
   try {
-    const dom = execFileSync(CHROME, ['--headless=new', '--disable-gpu', '--no-sandbox',
-      '--window-size=1400,1000', '--virtual-time-budget=20000', '--dump-dom', 'file:///' + page.replace(/\\/g, '/')],
+    const dom = runChrome(CHROME, ['--window-size=1400,1000', '--virtual-time-budget=20000',
+      '--dump-dom', 'file:///' + page.replace(/\\/g, '/')],
     { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 180000, maxBuffer: 64 * 1024 * 1024, windowsHide: true })
     const m = dom.match(/<title>SCROLLH(\{[^<]*\})</)
     if (m) { const o = JSON.parse(m[1].replace(/&quot;/g, '"')); sh = o.sh; ch = o.ch }

@@ -1061,8 +1061,20 @@ const CHECKS = [
   ['scripts/test-ui-derive.mjs'],
   // UI 几何回归（S1）：真机渲染下量「弹窗是否自适应 / 卡片是否换行 / KPI 是否被挤出首屏 / 日志是否折叠」。
   //   背景：CSS 门禁与结构断言都抓不到「写死尺寸把内容挤出可见区」——只有真渲染量几何才看得见（2026-09-13 实测）。
-  //   无 Chrome/Edge 的机器退 4 ⇒ 由本件的 xfail 声明承接（不判失败）。
-  ['scripts/ui-geo-regress.mjs', { xfail: true, slow: true }],
+  //   ⚠ **2026-09-26 摘除 xfail（U0 根因实修，判因见下）**：
+  //     本件此前长期 `exit 4` ⇒ 被 xfail 承接 ⇒ **AGENTS 规则 7 第④条「渲染级证据」从未真正执行**。
+  //     真因不在断言，而在 **Chrome 调用参数**：Linux/无 X/无 DBus 环境下，Chrome 154
+  //     **只要显式给 `--user-data-dir` 就卡死 ~45s 后被杀、输出为空**，门禁把它读成
+  //     「取不到几何数据（渲染失败）」，而 `catch` 又吞掉非零退出 ⇒ 看起来像渲染缺陷。
+  //     对照实测（同 chrome 同页面）：`--user-data-dir=/tmp/x` 45,132ms/0B ·
+  //     `$HOME/...` 45,113ms/0B · **不给该参数 1,118ms/60B ✓** · 不给 + 临时 HOME 911ms/60B ✓。
+  //     修法：6 处调用收敛为单一出口 `runChrome()`（不传 `--user-data-dir`，改用临时 HOME 隔离）。
+  //     ⇒ 修后实测 **121 PASS / 0 FAIL**（见 `scripts/ui-geo-regress.mjs` 头注）。
+  //     ⚠ 仓内契约（本文件 :22-24）：XPASS 必须可见 ⇒ **收敛即摘 xfail**，不得把一个能跑的
+  //       门禁长期正当化成豁免（那正是"把失败不可观测亲手做出来"）。
+  //     ⚠ 无浏览器的机器仍退 4；但本件**不再声明 xfail** ⇒ 那种环境会判 **fail**（显式可见），
+  //       这是有意的：环境缺件应当被修，而不是被静默承接。CI 若需豁免请显式加 `{ xfail: true }`。
+  ['scripts/ui-geo-regress.mjs', { slow: true }],
   // 面板视图契约（P1-1 / P1-2 前置安全网 · 2026-09-13）：守 `body.js` 里两个渲染巨石
   //   `renderViewToggles`（原 615 行）与 `renderMemoryExpanded`（321 行）——两个页面都零单测，
   //   拆分前必须先固化结构清单、拆分后逐项比对：**清单不变 = 行为等价**。

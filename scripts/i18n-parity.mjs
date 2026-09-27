@@ -22,17 +22,16 @@ import { tmpdir } from 'node:os'
 import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
+/* R7（2026-09-26）：浏览器探测收敛到唯一实现 chrome-find —— 原本地候选表不查 puppeteer 缓存，
+ *   主力环境（WSL）恒跳过，判据从未真正执行。 */
+import { findChrome } from './chrome-find.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const shotsArg = process.argv.indexOf('--shots')
 const SHOTS = shotsArg >= 0 ? resolve(process.argv[shotsArg + 1] || tmpdir()) : null
 
-const PF = process.env.PROGRAMFILES || '', LOCAL = process.env.LOCALAPPDATA || ''
-const CHROME = [process.env.CHROME_PATH,
-  PF ? PF.replace(/\\/g, '/') + '/Google/Chrome/Application/chrome.exe' : '',
-  PF ? PF.replace(/\\/g, '/') + '/Microsoft/Edge/Application/msedge.exe' : '',
-  LOCAL ? LOCAL.replace(/\\/g, '/') + '/Google/Chrome/Application/chrome.exe' : '',
-].filter(Boolean).find((p) => existsSync(p))
+/* R7（2026-09-26）：改走共享探测；**退出码语义保持不变**。 */
+const CHROME = findChrome()
 if (!CHROME) { console.log('i18n-parity：未找到 Chrome/Edge —— 跳过（exit 3）'); process.exit(3) }
 
 const NEW = readFileSync(join(ROOT, 'client.js'), 'utf8')
@@ -168,7 +167,24 @@ if (UPDATE) {
     const newR = render(NEW, null, 'new-zh')
     if (!newR) bad('A 未能取到 zh 渲染结果')
     else {
-      const norm = (s) => String(s == null ? '' : s).replace(/\d{2}:\d{2}:\d{2}/g, 'TT:TT:TT').replace(/·\d+ms·200/g, '·Xms·200')
+      /* R7（2026-09-26）**跨 locale 归一**。
+       *   判因（实测取证）：本件原只归一 `\d{2}:\d{2}:\d{2}`（24 小时制），
+       *   而 `toLocaleTimeString()` 的输出**随环境 locale 变**：
+       *     本机 `Intl.DateTimeFormat().resolvedOptions().locale = 'en-US'` ⇒ 输出 `8:35:48 AM`（12 小时制），
+       *     基线（2026-09-22 于另一环境生成）是 `08:35:48` ⇒ **9 个视图全判不一致**。
+       *   ⚠ 这是**环境面差异**，不是内容差异（本仓既有教训：「跨环境只判不变面」）。
+       *   修法：把 24h 与 12h **两种形态都归一**成同一占位符 —— 判据强度**不降**
+       *     （时间部分本来就不该参与「zh 文案是否保真」的判定；文案仍逐字符严比）。 */
+      const norm = (s) => String(s == null ? '' : s)
+        /* 真实格式实测（基线原文摘录）：/vector/status **20ms 200 02:40:32** · GET/...
+         *   ⇒ 「耗时 + 状态码 + 时间」三段**无分隔符**直接相连。
+         *   ⚠ 原实现写的是 `·\d+ms·200`（假定有 `·` 分隔）—— 与真实格式不符，
+         *     该替换**从未生效过**（死的归一规则）。此处按实测格式改写。 */
+        .replace(/(\d+)ms\s*200\s*\d{1,2}:\d{2}:\d{2}\s*[AP]M/gi, '$1ms200TT:TT:TT')  /* 12h */
+        .replace(/(\d+)ms\s*200\s*\d{1,2}:\d{2}:\d{2}/g, '$1ms200TT:TT:TT')            /* 24h */
+        /* 兜底：任何残留的孤立刻时间 */
+        .replace(/\b\d{1,2}:\d{2}:\d{2}\s*[AP]M\b/gi, 'TT:TT:TT')
+        .replace(/\b\d{1,2}:\d{2}:\d{2}\b/g, 'TT:TT:TT')
       const n = Math.min(base.n || 0, newR.n || 0)
       const diffs = []
       for (let k = 0; k < n; k++) {

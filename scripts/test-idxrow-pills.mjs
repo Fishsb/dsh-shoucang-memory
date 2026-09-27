@@ -31,6 +31,10 @@ import { tmpdir, homedir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
+/* R7（2026-09-26）：浏览器探测收敛到**唯一实现**（chrome-find）——
+ *   本件原有一份本地候选表，只查系统路径与 PATH、**不查 puppeteer 缓存**
+ *   ⇒ 主力环境（WSL，Ubuntu 无 chromium 包）恒退 exit 3「跳过」，判据从未真正执行。 */
+import { findChrome } from './chrome-find.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 /* 夹具源优先级：① $MEMORY_ROOT/MEMORY.md（显式覆盖）② 活库（真数据）③ 仓根 _memory/（旧副本兜底） */
@@ -43,12 +47,9 @@ const picked = CANDIDATES.find((c) => existsSync(c.path))
 if (!picked) { console.log('test-idxrow-pills：未找到 MEMORY.md（活库与 _memory 皆无）—— 跳过（exit 3）'); process.exit(3) }
 const MEM = picked.path
 
-const PF = process.env.PROGRAMFILES || '', LOCAL = process.env.LOCALAPPDATA || ''
-const CHROME = [process.env.CHROME_PATH,
-  PF ? PF.replace(/\\/g, '/') + '/Google/Chrome/Application/chrome.exe' : '',
-  PF ? PF.replace(/\\/g, '/') + '/Microsoft/Edge/Application/msedge.exe' : '',
-  LOCAL ? LOCAL.replace(/\\/g, '/') + '/Google/Chrome/Application/chrome.exe' : '',
-].filter(Boolean).find((p) => existsSync(p))
+/* R7（2026-09-26）：改走共享探测（chrome-find）——判因见上方 import 处注释。
+ *   ⚠ 退出码语义**保持不变**：找不到仍退 3（skip，诚实跳过），不改成 fail。 */
+const CHROME = findChrome()
 if (!CHROME) { console.log('test-idxrow-pills：未找到 Chrome/Edge —— 跳过（exit 3）'); process.exit(3) }
 
 /* ── 用真实索引行造夹具 ──

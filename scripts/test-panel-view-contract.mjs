@@ -34,6 +34,8 @@ import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
+/* 浏览器探测唯一实现（2026-09-26 U1）：同族各件原本各写一份候选表 ⇒ 探测面不一致、盲区各异。 */
+import { findChrome, runChrome } from './chrome-find.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CLIENT = join(ROOT, 'client.js');
@@ -41,31 +43,15 @@ const BASELINE = join(ROOT, 'scripts', 'fixtures', 'panel-view-baseline.json');
 const UPDATE = process.argv.includes('--update');
 const ONLY = process.argv.includes('--view') ? process.argv[process.argv.indexOf('--view') + 1] : null;
 
-/* ── Chrome 探测（缺失 ⇒ exit 4，由 CHECKS 的 xfail 声明承接） ──
- * 仓规红线：**不写死本机路径** —— 候选一律由环境变量派生，找不到再退回 PATH 探测。 */
-const PF = process.env.PROGRAMFILES || '';
-const PF86 = process.env['PROGRAMFILES(X86)'] || '';
-const LOCAL = process.env.LOCALAPPDATA || '';
-const j = (base, rest) => (base ? base.replace(/\\/g, '/') + '/' + rest : '');
-const CANDIDATES = [
-  process.env.CHROME_PATH,
-  j(PF, 'Google/Chrome/Application/chrome.exe'),
-  j(PF86, 'Google/Chrome/Application/chrome.exe'),
-  j(PF86, 'Microsoft/Edge/Application/msedge.exe'),
-  j(PF, 'Microsoft/Edge/Application/msedge.exe'),
-  j(LOCAL, 'Google/Chrome/Application/chrome.exe'),
-  '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'
-].filter(Boolean);
-let CHROME = CANDIDATES.find((p) => existsSync(p));
-if (!CHROME) {
-  for (const name of ['chrome', 'google-chrome', 'chromium', 'msedge']) {
-    try {
-      const out = execFileSync(process.platform === 'win32' ? 'where' : 'which', [name],
-        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).split(/\r?\n/)[0].trim();
-      if (out && existsSync(out)) { CHROME = out; break; }
-    } catch (e) { /* 未安装 */ }
-  }
-}
+/* ── Chrome 探测（2026-09-26 U1：收敛到共享模块） ──
+ * **判因（实测）**：本件原有一份**本地**候选表，只查固定系统路径与 PATH、**不查 puppeteer 缓存**
+ *   ⇒ 主力环境（WSL）里 Ubuntu 26.04 的 `chromium` 包无候选 ⇒ 恒退 exit 4。
+ *   后果是**连环**的：它退 4 ⇒ `test-split-equivalence` 的 A1/A3c 断言（要求本件能报 PASS）
+ *   **恒失败**。实测 A/B（把我的改动 stash 掉）：HEAD 基线 4 项未过，其中 A1/A3c 即由此而来。
+ *   故本件改为复用 `chrome-find.mjs`（**唯一实现**）——同族 7 件仍各有本地副本，
+ *   属**已登记的待办**（见方案档 §8），不在本轮扩大。
+ * 红线不变：仍不写死本机路径（候选由共享模块从环境变量与 homedir 派生）。 */
+const CHROME = findChrome();
 if (!CHROME) {
   console.log('面板视图契约：未找到 Chrome/Edge —— 环境缺件，跳过（exit 4）');
   process.exit(4);
@@ -189,8 +175,11 @@ ${probe(view, by, sel)}
   writeFileSync(f, html, 'utf8');
   let dom = '';
   try {
-    dom = execFileSync(CHROME, ['--headless=new', '--disable-gpu', '--user-data-dir=' + join(tmp, 'cp'),
-      '--virtual-time-budget=6000', '--window-size=1280,860', '--dump-dom', 'file:///' + f],
+    /* 2026-09-26 U1：改用共享 \`runChrome\`。判因同 \`ui-geo-regress\`——
+     * Linux/无 X 环境下显式传 \`--user-data-dir\` 会让 Chrome 卡死 ~45s、输出为空，
+     * 而本处 \`catch\` 把它读成「渲染失败」⇒ 看起来像页面缺陷。共享出口同时补齐
+     * \`--no-sandbox\` / \`--disable-dev-shm-usage\` / \`--disable-background-networking\`。 */
+    dom = runChrome(['--virtual-time-budget=6000', '--window-size=1280,860', '--dump-dom', 'file:///' + f],
     { encoding: 'utf8', timeout: 120000, maxBuffer: 64 * 1024 * 1024 });
   } catch (e) { dom = e.stdout || ''; }
   rmSync(tmp, { recursive: true, force: true });

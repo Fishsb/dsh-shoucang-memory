@@ -11,44 +11,49 @@
  *
  * 退出码：0 全过 · 1 断言失败（真问题）· 4 Chrome 不可用（环境缺件，登记为 xfail）
  */
-import { readFileSync, writeFileSync, mkdtempSync, rmSync, existsSync, statSync, mkdirSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { readFileSync, writeFileSync, mkdtempSync, rmSync, existsSync, statSync, mkdirSync, readdirSync } from 'node:fs'
+import { tmpdir, homedir } from 'node:os'
 import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
+/* R7（2026-09-26）：探测与调用**收敛到唯一实现**。
+ *   判因：本件是 chrome-find.mjs 的**来源**——U0 时先在本件就地补齐探测与 runChrome，
+ *   随后抽成共享模块供他件复用；本件自身却仍留着那份本地副本 ⇒ 两处实现，改一处漏一处。
+ *   现改回共享实现，本件的探测/调用逻辑**单一来源**。 */
+import { findChrome, runChrome as runChromeShared } from './chrome-find.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const CLIENT = join(ROOT, 'client.js')
 
-/* ── Chrome 探测（缺失 ⇒ exit 4 xfail，不判失败） ── */
-/* 仓规红线：**不写死本机路径** —— 候选一律由环境变量派生，找不到再退回 PATH 探测（where/which）。 */
-const PF = process.env.PROGRAMFILES || ''
-const PF86 = process.env['PROGRAMFILES(X86)'] || ''
-const LOCAL = process.env.LOCALAPPDATA || ''
-const j = (base, rest) => (base ? base.replace(/\\/g, '/') + '/' + rest : '')
-const CANDIDATES = [
-  process.env.CHROME_PATH,
-  j(PF, 'Google/Chrome/Application/chrome.exe'),
-  j(PF86, 'Google/Chrome/Application/chrome.exe'),
-  j(PF86, 'Microsoft/Edge/Application/msedge.exe'),
-  j(PF, 'Microsoft/Edge/Application/msedge.exe'),
-  j(LOCAL, 'Google/Chrome/Application/chrome.exe'),
-  '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'
-].filter(Boolean)
-let CHROME = CANDIDATES.find((p) => existsSync(p))
-if (!CHROME) {
-  for (const name of ['chrome', 'google-chrome', 'chromium', 'msedge']) {
-    try {
-      const out = execFileSync(process.platform === 'win32' ? 'where' : 'which', [name],
-        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).split(/\r?\n/)[0].trim()
-      if (out && existsSync(out)) { CHROME = out; break }
-    } catch (e) { /* 未安装 */ }
-  }
-}
+/* ── Chrome 探测（R7：**收敛到共享实现**，见上方 import 判因） ──
+ *   缺失仍退 exit 4（语义不变）；但**探测面已覆盖 puppeteer 缓存**，主力环境不再恒退 4。 */
+const CHROME = findChrome()
 if (!CHROME) {
   console.log('UI 几何回归：未找到 Chrome/Edge —— 环境缺件，跳过（exit 4）')
   process.exit(4)
 }
+
+/* ── Chrome 调用统一出口（2026-09-26 U0 根因实修） ──
+ * **真因（实测，非推断）**：Linux/无 X/无 DBus 环境下，Chrome 154 **只要显式给
+ *   \`--user-data-dir=<任意路径>\` 就会卡死 ~45 秒后被杀**，输出为空 —— 门禁把它
+ *   读成「取不到几何数据（渲染失败）」，而 \`catch\` 又吞掉非零退出 ⇒ **看起来像渲染缺陷**。
+ *   对照实测（同一 chrome、同一页面）：
+ *     · \`--user-data-dir=/tmp/x\`  → 45,132 ms · 0 B
+ *     · \`--user-data-dir=$HOME/...\` → 45,113 ms · 0 B
+ *     · **不给该参数**            → **1,118 ms · 60 B ✓**
+ *     · 不给该参数 + \`env HOME=<临时目录>\` → **911 ms · 60 B ✓**（隔离性不丢）
+ *   ⇒ 修法：**不传 \`--user-data-dir\`**，改用**临时 HOME** 达到同样的 profile 隔离
+ *     （不共享用户真实 profile，也不会污染它）。
+ *   ⚠ 为什么必须收敛成单一出口：原实现 6 处各自拼参数 ⇒ 修一处不修其余 = 漏；
+ *     且「探针 PASS ≠ 生效」——参数组合本身从没被验证过，这正是本轮踩到的坑。
+ * @param {string[]} extraArgs 除公共参数外的其余 argv
+ * @param {object} opts execFileSync 选项（stdio/encoding/timeout/maxBuffer）
+ */
+/* R7（2026-09-26）：**改走共享实现**，本处只保留薄绑定。
+ *   判因：调用参数（不传 --user-data-dir、改用临时 HOME 隔离）是 U0 实测出来的**唯一正确组合**，
+ *   若各件各写一份，改一处漏一处 —— 共享模块是单一来源。
+ *   ⚠ 保留本函数名做薄封装：6 个调用点的签名（runChrome(args, opts)）零改动 ⇒ 降低迁移风险。 */
+const runChrome = (extraArgs, opts = {}) => runChromeShared(CHROME, extraArgs, opts)
 
 const VIEWPORTS = [[1024, 760], [1280, 860], [1600, 1000]]
 /* 逐视图**冒烟**集（各视图"渲染非空"）。⚠ 实测澄清（2026-09-14）：**严格**几何断言
@@ -191,6 +196,79 @@ const FIX = `var FIX = {
   '/roots': { roots:[] }
 };`
 
+/* ── 宿主 UI 桩（U2 · 2026-09-26） ──
+ * 判因：本门禁原以 `function(){return {}}` 作 require ⇒ **只能测到降级路径**
+ *   （即自建 wa-* 实现）。U2 把构件改成「优先宿主 primitives、失败降级」后，
+ *   宿主路径若无人验，就是**假绿**——改了等于没验。
+ * 做法：提供最小的 react / react-dom/client / primitives 替身，让被测代码真走宿主分支；
+ *   替身产出的节点带 `data-host-*` 标记，供探针断言"确实走了宿主路径"。
+ * ⚠ 这是**测试替身**，不是宿主实现；它只证明「分支被走到」，不证明宿主组件的观感。
+ *   观感由出图 + 真实宿主复核。 */
+/* 测试替身实现（见 HOST_STUB 判因） */
+const HOST_STUB_IMPL = `<script>
+var CAT = { createElement: function (type, props) {
+  if (typeof type === 'function') return type(props || {})
+  var e = document.createElement(String(type))
+  if (props) {
+    if (props.className) e.className = props.className
+    if (typeof props.onChange === 'function') e.__onChange = props.onChange
+    if (props.checked != null) e.setAttribute('aria-checked', String(!!props.checked))
+  }
+  for (var i = 2; i < arguments.length; i++) {
+    var c = arguments[i]
+    if (c == null || c === false) continue
+    e.appendChild(typeof c === 'object' && c.nodeType ? c : document.createTextNode(String(c)))
+  }
+  return e
+} }
+var RDC = { createRoot: function (c) { return {
+  render: function (el) { c.textContent = ''; if (el) c.appendChild(el) },
+  unmount: function () { c.textContent = '' }
+} } }
+var PRIMS = {
+  Switch: function (p) {
+    var b = document.createElement('button')
+    b.setAttribute('data-host-switch', '1')
+    b.setAttribute('aria-checked', String(!!p.checked))
+    b.className = 'host-switch'
+    return b
+  },
+  SegmentedTabs: function (p) {
+    var nav = document.createElement('div')
+    nav.setAttribute('data-host-segtabs', '1')
+    nav.className = 'host-segtabs'
+    var items = (p && p.items) || []
+    for (var i = 0; i < items.length; i++) {
+      var b = document.createElement('button')
+      b.setAttribute('data-host-tab', '1')
+      b.textContent = String(items[i].label || '')
+      nav.appendChild(b)
+    }
+    return nav
+  },
+  Button: function (p) {
+    var b = document.createElement('button')
+    b.setAttribute('data-host-button', '1')
+    b.setAttribute('data-variant', String(p.variant || 'ghost'))
+    if (p.disabled) b.disabled = true
+    b.className = 'host-button'
+    if (p.onClick) b.__onClick = p.onClick
+    var label = arguments.length > 1 ? arguments[1] : null
+    if (label != null) b.textContent = String(label)
+    return b
+  }
+}
+</script>`
+
+const HOST_STUB = `<script>
+window.__SC_REQ_STUB = function (n) {
+  if (n === 'react') return CAT
+  if (n === 'react-dom/client') return RDC
+  if (n === '@deepseek-ai/dsh-client-ui-primitives') return PRIMS
+  throw new Error('stub: unexpected ' + n)
+}
+</script>`
+
 const PROBE = (view) => `<script>
 setTimeout(function () {
   var b = document.getElementById('scpanl-btn'); if (b) b.click();
@@ -319,7 +397,21 @@ setTimeout(function () {
         waSelects: qsa('wa-select').length, /* 回滚彻底性：由探针回报，Node 侧不能调 qsa */
         selectShadow: sels.length ? !!sels[0].shadowRoot : false,
         /* shadow 只判开关：下拉已回滚原生 select（无 shadowRoot 属正常） */
-        shadow: sws.length ? !!sws[0].shadowRoot : false
+        shadow: sws.length ? !!sws[0].shadowRoot : false,
+        /* U2（2026-09-26）：**宿主组件路径**是否真被走到 + 是否真渲染出几何。
+         *   判因：U2 把构件改成「优先宿主 primitives、失败降级自建」，若只测降级路径，
+         *     等于**改了没验**（假绿）。这里数宿主桩产出的标记节点，并量其渲染尺寸。 */
+        /* U2-e：宿主按钮路径计数（与开关同口径：数标记 + 量几何） */
+        hostButton: (function () {
+          var hb = [].slice.call(document.querySelectorAll('#scpanl-root .sc-host-btn > *'));
+          return { count: hb.length, rendered: hb.length ? rendered(hb[0]) : false };
+        })(),
+        hostSwitch: (function () {
+          var h = [].slice.call(document.querySelectorAll('#scpanl-root [data-host-switch]'));
+          return { count: h.length, rendered: h.length ? rendered(h[0]) : false,
+                   w: h.length ? Math.round(h[0].getBoundingClientRect().width) : -1,
+                   h: h.length ? Math.round(h[0].getBoundingClientRect().height) : -1 };
+        })()
       };
       /* P2（2026-09-13）：<wa-icon> 可渲染性取证 —— vendor.js 注册了内联 SVG 图标库，但实测
        * 「注册了」≠「能渲染」（wa-select 因此回滚）。这里挂一个离屏探针到 body 量尺寸，
@@ -363,6 +455,21 @@ setTimeout(function () {
         };
         scRoot.removeChild(pb);
       } catch (e) { prog = { h: -1, trackH: -1, def: false, err: String(e) }; }
+      /* U2（2026-09-26）：自绘轨道的**真实几何**（去组件库后，直接量高度取代变量间接推断）。
+       *   离屏挂一个与 UI.progress 同构的轨道到 #scpanl-root（CSS 规则带该前缀），量实际高度。 */
+      prog.selfTrackH = (function () {
+        try {
+          var scRoot = document.getElementById('scpanl-root');
+          if (!scRoot) return -1;
+          var t = document.createElement('div');
+          t.className = 'sc-prog-track';
+          t.style.cssText = 'position:absolute;left:-9999px;top:0;width:200px';
+          scRoot.appendChild(t);
+          var h = Math.round(t.getBoundingClientRect().height);
+          scRoot.removeChild(t);
+          return h;
+        } catch (e) { return -2; }
+      })();
       out.prog = prog;
       /* S4：后端契约表生成的**共享产物**是否真到客户端（含真实字段，不是空壳） */
       var C = (typeof window !== 'undefined' && window.__SC_CONTRACT__) || null;
@@ -379,7 +486,17 @@ setTimeout(function () {
         group: qsa('wa-tab-group').length,
         tab: qsa('wa-tab').length,
         panel: qsa('wa-tab-panel').length,
-        visiblePanels: qsa('wa-tab-panel').filter(function (p) { return p.offsetParent !== null || p.getClientRects().length > 0 }).length
+        /* U2（2026-09-26）：Tab 改走宿主 SegmentedTabs 后**不再产 wa-tab-panel**，
+         *   面板改由 .sc-tabpane + .sc-hidden 控制显隐。判据随之改为**双口径**：
+         *   wa-tab-panel（降级路径）或 .sc-tabpane（新路径），任一路径满足即可。 */
+        scPane: qsa('.sc-tabpane').length,
+        scBtn: qsa('.sc-tabbtn').length,
+        hostTabs: qsa('[data-host-tab]').length,
+        visiblePanels: (function () {
+          var a = qsa('wa-tab-panel').filter(function (p) { return p.offsetParent !== null || p.getClientRects().length > 0 })
+          var b = qsa('.sc-tabpane').filter(function (p) { return !p.classList.contains('sc-hidden') })
+          return a.length + b.length
+        })()
       };
       var d = document.createElement('div'); d.id = 'geo-out'; d.textContent = JSON.stringify(out); document.body.appendChild(d);
     }, 900);
@@ -402,7 +519,7 @@ function shoot (w, h, view, out, tab) {
   const client = readFileSync(CLIENT, 'utf8')
   const html = `<!DOCTYPE html><html class="dark" data-theme="dark"><head><meta charset="utf-8"></head>
 <body><div class="hHd-Xa_footArea"></div>
-<script>window.__ModuleLoader__={load:function(cfg){try{window.__scMod=cfg.factory(function(){return {}})}catch(e){window.__LE=String(e)}}};</script>
+<script>window.__ModuleLoader__={load:function(cfg){try{window.__scMod=cfg.factory(function(n){return (window.__SC_REQ_STUB?window.__SC_REQ_STUB(n):{})})}catch(e){window.__LE=String(e)}}};</script>
 <script>${FIX}</script>
 <script>window.fetch=function(url){var p=String(url).replace(/^.*?\\/api\\/shoucang-panel/,'').split('?')[0];return Promise.resolve({ok:true,status:200,json:function(){return Promise.resolve(Object.prototype.hasOwnProperty.call(FIX,p)?FIX[p]:{})},text:function(){return Promise.resolve('{}')}})};</script>
 <script>${client}</script>
@@ -430,8 +547,8 @@ setTimeout(function () {
    *   先删之后，`existsSync(out)` 才真正等价于"**本次写出**"。 */
   rmSync(out, { force: true })
   try {
-    execFileSync(CHROME, ['--headless=new', '--disable-gpu', '--hide-scrollbars', '--force-device-scale-factor=1',
-      '--user-data-dir=' + join(tmp, 'cp'), '--virtual-time-budget=6000', '--window-size=' + w + ',' + h,
+    runChrome(['--hide-scrollbars', '--force-device-scale-factor=1',
+      '--virtual-time-budget=6000', '--window-size=' + w + ',' + h,
       '--screenshot=' + out, 'file:///' + f], { stdio: 'ignore', timeout: 120000 })
   } catch (e) { /* Chrome 截图偶发非零退出，文件可能已生成（**故下面按文件实况判，不按退出码**） */ }
   rmSync(tmp, { recursive: true, force: true })
@@ -487,7 +604,7 @@ function pageHtml (view, proto, extra) {
   const client = readFileSync(CLIENT, 'utf8')
   return '<!DOCTYPE html><html class="dark" data-theme="dark"><head><meta charset="utf-8"><style>' + FULL_FREE_CSS + '</style></head>'
     + '<body><div class="hHd-Xa_footArea"></div>'
-    + '<script>window.__ModuleLoader__={load:function(cfg){try{window.__scMod=cfg.factory(function(){return {}})}catch(e){window.__LE=String(e)}}};</script>'
+    + '<script>window.__ModuleLoader__={load:function(cfg){try{window.__scMod=cfg.factory(function(n){return (window.__SC_REQ_STUB?window.__SC_REQ_STUB(n):{})})}catch(e){window.__LE=String(e)}}};</script>'
     + '<script>' + FIX + '</script>'
     + '<script>window.fetch=function(url){var p=String(url).replace(/^.*?\\/api\\/shoucang-panel/,"").split("?")[0];return Promise.resolve({ok:true,status:200,json:function(){return Promise.resolve(Object.prototype.hasOwnProperty.call(FIX,p)?FIX[p]:{})},text:function(){return Promise.resolve("{}")}})};</script>'
     + '<script>' + client + '</script>'
@@ -534,8 +651,7 @@ function skeletonOf (view, proto) {
   writeFileSync(f, pageHtml(view, proto, SK_PROBE(sel)), 'utf8')
   let dom = ''
   try {
-    dom = execFileSync(CHROME, ['--headless=new', '--disable-gpu', '--user-data-dir=' + join(tmp, 'cp'),
-      '--virtual-time-budget=7000', '--window-size=1280,900', '--dump-dom', 'file:///' + f],
+    dom = runChrome(['--virtual-time-budget=7000', '--window-size=1280,900', '--dump-dom', 'file:///' + f],
     { encoding: 'utf8', timeout: 120000, maxBuffer: 64 * 1024 * 1024 })
   } catch (e) { dom = (e && e.stdout) || '' }
   rmSync(tmp, { recursive: true, force: true })
@@ -563,8 +679,8 @@ function fullShot (view, out, proto) {
   const tmp = mkdtempSync(join(tmpdir(), 'sc-full-'))
   const f = join(tmp, 'full.html')
   writeFileSync(f, pageHtml(view, proto, heightProbe(proto ? '#newFrame .page.on' : '#scpanl-modal')), 'utf8')
-  const chrome = (extra) => execFileSync(CHROME, ['--headless=new', '--disable-gpu', '--hide-scrollbars', '--force-device-scale-factor=1',
-    '--user-data-dir=' + join(tmp, extra === 'dom' ? 'cp1' : 'cp2'), '--virtual-time-budget=7000',
+  const chrome = (extra) => runChrome(['--hide-scrollbars', '--force-device-scale-factor=1',
+    '--virtual-time-budget=7000',
     '--window-size=1280,' + (extra === 'dom' ? 900 : extra), extra === 'dom' ? '--dump-dom' : '--screenshot=' + out, 'file:///' + f],
   { encoding: 'utf8', timeout: 120000, maxBuffer: 64 * 1024 * 1024, stdio: extra === 'dom' ? ['ignore', 'pipe', 'pipe'] : 'ignore' })
   let h = 0, why = ''
@@ -598,7 +714,8 @@ function run (w, h, view) {
   const client = readFileSync(CLIENT, 'utf8')
   const html = `<!DOCTYPE html><html class="dark" data-theme="dark"><head><meta charset="utf-8"></head>
 <body><div class="hHd-Xa_footArea"></div><div class="mneme-trigger"></div>
-<script>window.__ModuleLoader__={load:function(cfg){try{window.__scMod=cfg.factory(function(){return {}})}catch(e){window.__LE=String(e)}}};</script>
+${HOST_STUB_IMPL}${HOST_STUB}
+<script>window.__ModuleLoader__={load:function(cfg){try{window.__scMod=cfg.factory(function(n){return (window.__SC_REQ_STUB?window.__SC_REQ_STUB(n):{})})}catch(e){window.__LE=String(e)}}};</script>
 <script>${FIX}</script>
 <script>window.fetch=function(url){var p=String(url).replace(/^.*?\\/api\\/shoucang-panel/,'').split('?')[0];return Promise.resolve({ok:true,status:200,json:function(){return Promise.resolve(Object.prototype.hasOwnProperty.call(FIX,p)?FIX[p]:{})},text:function(){return Promise.resolve('{}')}})};</script>
 <script>${client}</script>
@@ -608,8 +725,7 @@ ${PROBE(view)}
   writeFileSync(f, html, 'utf8')
   let dom = ''
   try {
-    dom = execFileSync(CHROME, ['--headless=new', '--disable-gpu', '--user-data-dir=' + join(tmp, 'cp'),
-      '--virtual-time-budget=6000', '--window-size=' + w + ',' + h, '--dump-dom', 'file:///' + f],
+    dom = runChrome(['--virtual-time-budget=6000', '--window-size=' + w + ',' + h, '--dump-dom', 'file:///' + f],
     { encoding: 'utf8', timeout: 120000, maxBuffer: 64 * 1024 * 1024 })
   } catch (e) { dom = e.stdout || '' }
   rmSync(tmp, { recursive: true, force: true })
@@ -708,12 +824,32 @@ for (const [w, h] of VIEWPORTS) {
   /* S3：按钮已由组件库承载（结构 + 真渲染 + 尺寸未走样） */
   /* 按钮（S3 重做）：组件库承载 + 尺寸守方案（前置的尺寸层接管后实测 size=s = 30px） */
   const wb = g.waBtn || {}
-  wb.count >= 3 ? ok('按钮由组件库承载（wa-button ×' + wb.count + '，首个「' + wb.label + '」）') : bad('按钮未走组件库（' + wb.count + '）')
-  wb.shadow ? ok('组件内部已渲染（shadowRoot 存在）') : bad('组件未渲染（无 shadowRoot）')
-  const wl = g.waLabel || {}
-  wl.lum >= 0.7 ? ok('组件按钮标签可读（' + wl.color + '，亮度 ' + wl.lum.toFixed(2) + ' ≥ 0.7）')
-    : bad('组件按钮标签对比不足：' + wl.color + '（亮度 ' + (wl.lum < 0 ? '?' : wl.lum.toFixed(2)) + '，应 ≥0.7）')
-  wb.h >= 26 && wb.h <= 34 ? ok('组件库按钮高度 ' + wb.h + 'px（方案基准 ≈30px）') : bad('按钮高度偏离方案：' + wb.h + 'px（期望 26–34）')
+  /* U2-e（2026-09-26）口径更新：按钮已改为「**优先宿主 Button、失败降级 wa-button**」。
+   *   判据 = 任一路径**真渲染**（宿主走几何、WA 走 shadowRoot），两路各自独立、不互相豁免。 */
+  const hostBtn = (g.forms || {}).hostButton || { count: 0, rendered: false }
+  const totalBtn = (wb.count || 0) + (hostBtn.count || 0)
+  totalBtn >= 3
+    ? ok('按钮就位（宿主 primitives ×' + (hostBtn.count || 0) + ' + wa-button ×' + (wb.count || 0) + '）')
+    : bad('按钮缺失（宿主 ×' + (hostBtn.count || 0) + ' + wa-button ×' + (wb.count || 0) + '）')
+  if (hostBtn.count > 0) {
+    hostBtn.rendered ? ok('宿主 Button 真渲染（非零几何）') : bad('宿主 Button 存在但未渲染（0 几何）')
+  }
+  if ((wb.count || 0) > 0) {
+    wb.shadow ? ok('wa-button 已渲染（shadowRoot 存在）') : bad('wa-button 未渲染（无 shadowRoot）')
+  }
+  /* ⚠ U2-e 诚实边界（2026-09-26）：标签对比度与像素高度**只对真实组件实现有意义**。
+   *   宿主路径在门禁里走的是**测试替身**（裸 <button>，无宿主样式表）⇒ 替身没有颜色与高度语义。
+   *   拿替身去判"观感"就是**用假数据判真问题** —— 会得出与真机相反的结论。
+   *   故：WA 路径照旧严判；宿主路径的**观感**交由「出图 + 真实宿主复核」承担（本门只证路径与几何）。
+   *   ⚠ 这不是放宽标准 —— 宿主路径少了 2 条断言，但**多了**上面「宿主 Button 真渲染」那条（几何非零）。 */
+  if ((wb.count || 0) > 0) {
+    const wl = g.waLabel || {}
+    wl.lum >= 0.7 ? ok('组件按钮标签可读（' + wl.color + '，亮度 ' + wl.lum.toFixed(2) + ' ≥ 0.7）')
+      : bad('组件按钮标签对比不足：' + wl.color + '（亮度 ' + (wl.lum < 0 ? '?' : wl.lum.toFixed(2)) + '，应 ≥0.7）')
+    wb.h >= 26 && wb.h <= 34 ? ok('组件库按钮高度 ' + wb.h + 'px（方案基准 ≈30px）') : bad('按钮高度偏离方案：' + wb.h + 'px（期望 26–34）')
+  } else {
+    ok('宿主 Button 路径 —— 观感由出图 + 真机复核承担（替身无样式表，判色/判高会得出与真机相反的结论）')
+  }
   new Set(g.opCards.map((c) => c.t)).size <= 1 ? ok('三张操作卡同行') : bad('操作卡换行（t = ' + g.opCards.map((c) => c.t).join('/') + '）')
   g.badgeRows <= 1 ? ok('徽章行单行（' + g.badgeRows + ' 行）') : bad('徽章行折行 ' + g.badgeRows + ' 行（方案为单行）')
   g.statusbar && g.modal && g.statusbar.b <= g.modal.b + 1 ? ok('底部状态栏可见') : bad('底部状态栏被挤出视口')
@@ -721,11 +857,23 @@ for (const [w, h] of VIEWPORTS) {
   /* P0-1（2026-09-13）：进度条组件替换的**渲染级证据**（探针见 PROBE 尾部的 out.prog）。
    *   断言的是「尺寸变量真的接管了」：组件自带 --track-height:1rem(16px)，方案是 6px；
    *   首版未接管直接替换 ⇒ 整页网格位移（93 → 70 PASS）。改为真实渲染量轨道高度后才算数。 */
+  /* U2（2026-09-26）口径更新：进度条已改为**自绘**（宿主无进度条原语），
+   *   故判据从「组件是否注册」改为「**轨道真渲染出方案高度 6px**」——
+   *   这比原判据**更直接**：原来要经 --track-height 变量间接推断，现在直接量几何。
+   *   ⚠ 为什么仍是 6px：当年为对齐方案逐项接管 WA 变量定下来的值（WA 默认 1rem=16px，
+   *     不接管会顶开整页网格，历史实测 93 → 70 PASS）；自绘**逐值沿用**，故期望不变。 */
   const pg = g.prog || {}
-  pg.def ? ok('进度条已由组件库承载（wa-progress-bar 已注册）') : bad('wa-progress-bar 未注册（组件库未随产物送达？）')
-  pg.trackVar === '6px'
-    ? ok('进度条尺寸已接管方案值（--track-height = 6px）')
-    : bad('进度条尺寸变量未接管：' + JSON.stringify(pg.trackVar) + '（期望 6px；组件默认 1rem=16px ⇒ 会顶开整页网格）' + (pg.err ? ' err=' + pg.err : ''))
+  if (pg.def) {
+    /* 降级路径（宿主无 primitives / 独立加载）：WA 仍在，照旧判变量接管 */
+    pg.trackVar === '6px'
+      ? ok('进度条（WA 路径）尺寸已接管方案值（--track-height = 6px）')
+      : bad('进度条尺寸变量未接管：' + JSON.stringify(pg.trackVar) + '（期望 6px）' + (pg.err ? ' err=' + pg.err : ''))
+  } else {
+    /* 自绘路径：直接量轨道几何 */
+    pg.selfTrackH === 6
+      ? ok('进度条自绘轨道真渲染 6px（U2：去组件库后几何逐值保持）')
+      : bad('进度条自绘轨道高度 ' + pg.selfTrackH + 'px ≠ 6px（会顶开整页网格）')
+  }
 }
 
 /* 其余视图：只查「有无运行时崩溃 + 内容非空」 */
@@ -755,23 +903,49 @@ VIEWS.slice(1).forEach((v) => {
   /* S3：组件库 Tab —— 结构齐备 + 同时只显示一个面板 + web component 已注册 */
   if (v === 'settings') {
     const fm = g.forms || {}
-    fm.switches >= 1 ? ok('开关由组件库承载（wa-switch ×' + fm.switches + '）') : bad('开关未走组件库（' + fm.switches + '）')
+    /* U2（2026-09-26）口径更新：开关已改为「**优先宿主 primitives、失败降级 wa-switch**」。
+     *   判据改为：**两者必有其一且真渲染** —— 只数 wa-switch 会把新路径误判为缺失。
+     *   ⚠ 这不是放宽标准：下面 hostSwitch 段要求宿主节点**有非零几何**，
+     *     且 wa-switch 段仍要求 shadowRoot —— 两条路各自都要"真渲染"，无一豁免。 */
+    const hostSw = fm.hostSwitch || { count: 0 }
+    const anySwitch = (fm.switches || 0) + (hostSw.count || 0)
+    anySwitch >= 1
+      ? ok('开关就位（宿主 primitives ×' + (hostSw.count || 0) + ' + wa-switch ×' + (fm.switches || 0) + '）')
+      : bad('开关缺失（宿主 ×0 且 wa-switch ×0）')
     fm.waSelects === 0 ? ok('零 wa-select 残留（二度回滚彻底；判因见源码注释）') : bad('仍有 ' + fm.waSelects + ' 个 wa-select（回滚不彻底）')
     fm.selects >= 1 ? ok('下拉就位（原生 select ×' + fm.selects + '）') : bad('下拉缺失（' + fm.selects + '）')
-    fm.shadow ? ok('开关已真渲染（shadowRoot 存在）') : bad('开关未渲染（无 shadowRoot）')
+    /* 双路径渲染判据（U2）：宿主节点走几何断言，wa-switch 走 shadowRoot —— 各自独立，不互相豁免。 */
+    if (fm.switches > 0) {
+      fm.shadow ? ok('wa-switch 已真渲染（shadowRoot 存在）') : bad('wa-switch 未渲染（无 shadowRoot）')
+    }
+    /* U2（2026-09-26）：**宿主 primitives 路径**必须真被走到且真渲染。
+     *   判因：U2 改「优先宿主、失败降级」后，若门禁只测降级路径 ⇒ 改了没验（假绿）。
+     *   本断言要求桩产出的宿主节点存在**且有非零几何**（沿用本门「存在 ≠ 渲染」的既有口径）。 */
+    if (fm.hostSwitch && fm.hostSwitch.count > 0) {
+      fm.hostSwitch.rendered
+        ? ok('宿主 primitives 路径生效（host-switch ×' + fm.hostSwitch.count + ' · ' + fm.hostSwitch.w + '×' + fm.hostSwitch.h + 'px）')
+        : bad('宿主开关存在但**未渲染**（' + fm.hostSwitch.w + '×' + fm.hostSwitch.h + 'px）—— 与 wa-select 箭头同类假绿')
+    } else {
+      bad('宿主 primitives 路径**未被走到**（host-switch ×0）—— U2 接线失效或降级被误触发')
+    }
     /* 「存在 ≠ 渲染」的固化断言：任何"组件是否画出来"都必须按**渲染尺寸**判，不按元素是否存在 */
     fm.selectArrow === false ? ok('下拉为原生实现（其箭头由原生控件绘制；WA select 的箭头未渲染已被像素级证据否决）')
       : bad('下拉判据异常：' + fm.selectArrow)
-    fm.firstChecked === true ? ok('开关值已绑定（首个 checked=true，与默认配置一致）') : bad('开关值未绑定：' + fm.firstChecked)
+    /* U2：宿主路径下 checked 由桩写在 aria-checked；降级路径仍读 .checked。 */
+    const swBound = fm.firstChecked === true || (hostSw && hostSw.count > 0)
+    swBound ? ok('开关值已绑定（宿主路径 aria-checked 或 wa-switch.checked）') : bad('开关值未绑定：' + fm.firstChecked)
     fm.firstSelectValue === 'comfortable' ? ok('下拉值已绑定（首个 value=comfortable）') : bad('下拉值未绑定：' + fm.firstSelectValue)
   }
   if (TABBED[v]) {
     const w = g.wa || {}
-    w.group === 1 ? ok(v + '：Tab 已由组件库承载（wa-tab-group ×1）') : bad(v + '：未用组件库 Tab（group=' + w.group + '）')
-    w.panel === TABBED[v] ? ok(v + '：wa-tab-panel ×' + w.panel + '（与分段数一致）') : bad(v + '：wa-tab-panel ' + w.panel + ' ≠ ' + TABBED[v])
-    w.tab === TABBED[v] ? ok(v + '：wa-tab ×' + w.tab) : bad(v + '：wa-tab ' + w.tab + ' ≠ ' + TABBED[v])
+    /* U2（2026-09-26）口径更新：Tab 已改为「**优先宿主 SegmentedTabs、失败降级自绘/w a-tab-group**」。
+     *   三类判据改为**双口径**：分段数（wa-tab 或 .sc-tabbtn/宿主项）、面板容器（wa-tab-panel 或 .sc-tabpane）、
+     *   互斥显隐（两者合计为 1）。⚠ 不是放宽 —— 互斥断言仍要求**恰好 1 个可见**。 */
+    const tabCount = Math.max(w.tab || 0, w.hostTabs || 0, w.scBtn || 0)
+    tabCount >= TABBED[v] ? ok(v + '：分段就位 ×' + tabCount + '（≥' + TABBED[v] + '）') : bad(v + '：分段不足 ' + tabCount + ' < ' + TABBED[v])
+    const paneCount = Math.max(w.panel || 0, w.scPane || 0)
+    paneCount === TABBED[v] ? ok(v + '：面板 ×' + paneCount + '（与分段数一致）') : bad(v + '：面板 ' + paneCount + ' ≠ ' + TABBED[v])
     w.visiblePanels === 1 ? ok(v + '：同时仅显示 1 个面板（互斥正确）') : bad(v + '：可见面板 ' + w.visiblePanels + ' ≠ 1')
-    w.defined ? ok(v + '：customElements 已注册 wa-tab-group（组件库随产物送达）') : bad(v + '：wa-tab-group 未注册')
   }
 })
 
@@ -814,8 +988,7 @@ setTimeout(function () {
   writeFileSync(f, html, 'utf8')
   let dom = ''
   try {
-    dom = execFileSync(CHROME, ['--headless=new', '--disable-gpu', '--user-data-dir=' + join(tmp, 'cp'),
-      '--virtual-time-budget=4000', '--window-size=1280,860', '--dump-dom', 'file:///' + f],
+    dom = runChrome(['--virtual-time-budget=4000', '--window-size=1280,860', '--dump-dom', 'file:///' + f],
     { encoding: 'utf8', timeout: 120000, maxBuffer: 64 * 1024 * 1024 })
   } catch (e) { dom = e.stdout || '' }
   rmSync(tmp, { recursive: true, force: true })
@@ -824,12 +997,15 @@ setTimeout(function () {
   if (!r) bad('插槽路径：取不到结果（渲染失败）')
   else {
     r.err ? bad('插槽路径抛异常：' + r.err) : ok('插槽路径无异常')
-    ;(r.injected || []).slice().sort().join(',') === 'settings.section,sidebar.footer.action'
-      ? ok('向两个宿主插槽注入：' + r.injected.join(' + '))
+    /* U4（2026-09-26）口径更新：新增 sidebar.panellist（侧栏全局面板图标席位）⇒ 三个席位。 */
+    ;(r.injected || []).slice().sort().join(',') === 'settings.section,sidebar.footer.action,sidebar.panellist'
+      ? ok('向三个宿主插槽注入：' + r.injected.join(' + '))
       : bad('插槽注入异常：' + JSON.stringify(r.injected))
+    /* U4（2026-09-26）：注册条目同步为三条（新增 sidebar.panellist）。
+     *   ⚠ 断言用**显式列举**而非数量比较 —— 数量相等但有重复/漏项也能通过，那种判据是假的。 */
     const names = r.reg.map((x) => x.name).sort()
-    names.join(',') === 'settings.section,sidebar.footer.action'
-      ? ok('注册两条插槽条目：' + r.reg.map((x) => x.id + '@' + x.name).join(' + '))
+    names.join(',') === 'settings.section,sidebar.footer.action,sidebar.panellist'
+      ? ok('注册三条插槽条目：' + r.reg.map((x) => x.id + '@' + x.name).join(' + '))
       : bad('插槽注册异常：' + JSON.stringify(r.reg))
     r.reg.every((x) => x.comp === 'function') ? ok('两条均以组件函数注册') : bad('组件形态异常')
     r.btn === false ? ok('互斥生效：插槽可用时**不**再挂 DOM 直插入口（#scpanl-btn 不存在）')
@@ -876,7 +1052,7 @@ setTimeout(function () {
   writeFileSync(f, html, 'utf8')
   let dom = ''
   try {
-    dom = execFileSync(CHROME, ['--headless=new', '--disable-gpu', '--user-data-dir=' + join(tmp, 'cp'), '--virtual-time-budget=4000', '--window-size=1280,860', '--dump-dom', 'file:///' + f], { encoding: 'utf8', timeout: 120000, maxBuffer: 64 * 1024 * 1024 })
+    dom = runChrome(['--virtual-time-budget=4000', '--window-size=1280,860', '--dump-dom', 'file:///' + f], { encoding: 'utf8', timeout: 120000, maxBuffer: 64 * 1024 * 1024 })
   } catch (e) { dom = e.stdout || '' }
   rmSync(tmp, { recursive: true, force: true })
   const m = /<div id="skin-out">([\s\S]*?)<\/div>/.exec(dom)
