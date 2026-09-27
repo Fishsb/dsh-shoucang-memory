@@ -2,13 +2,23 @@
   "toggles": [
     {
       "pane": "cap",
-      "name": "分级策略连败上限 deepSleep.failPolicyMaxRounds",
-      "kind": "none"
+      "name": "AGENT.md 容量门 cap_agent",
+      "kind": "number"
     },
     {
       "pane": "cap",
-      "name": "活性降级 warm 阈值 activityWarmDays",
+      "name": "MEMORY.md 容量门 cap_memory",
       "kind": "number"
+    },
+    {
+      "pane": "cap",
+      "name": "USER.md 容量门 cap_user",
+      "kind": "number"
+    },
+    {
+      "pane": "cap",
+      "name": "分级策略连败上限 deepSleep.failPolicyMaxRounds",
+      "kind": "none"
     },
     {
       "pane": "cap",
@@ -17,8 +27,18 @@
     },
     {
       "pane": "cap",
+      "name": "召回冷条目降权 recallColdFactorPercent",
+      "kind": "number"
+    },
+    {
+      "pane": "cap",
       "name": "容量门是否阻断写入 capacityEnforce",
       "kind": "select"
+    },
+    {
+      "pane": "cap",
+      "name": "活性降级 warm 阈值 activityWarmDays",
+      "kind": "number"
     },
     {
       "pane": "cap",
@@ -36,23 +56,13 @@
       "kind": "number"
     },
     {
-      "pane": "cap",
-      "name": "召回冷条目降权 recallColdFactorPercent",
+      "pane": "inject",
+      "name": "情境槽预算 injectSituationBudgetChars",
       "kind": "number"
     },
     {
-      "pane": "cap",
-      "name": "AGENT.md 容量门 cap_agent",
-      "kind": "number"
-    },
-    {
-      "pane": "cap",
-      "name": "MEMORY.md 容量门 cap_memory",
-      "kind": "number"
-    },
-    {
-      "pane": "cap",
-      "name": "USER.md 容量门 cap_user",
+      "pane": "inject",
+      "name": "新鲜度保底槽 injectFreshSlots",
       "kind": "number"
     },
     {
@@ -62,22 +72,7 @@
     },
     {
       "pane": "inject",
-      "name": "画像 persona 注入档位 injection.persona",
-      "kind": "slider"
-    },
-    {
-      "pane": "inject",
-      "name": "情境槽预算 injectSituationBudgetChars",
-      "kind": "number"
-    },
-    {
-      "pane": "inject",
-      "name": "热记忆注入强度 injection.level",
-      "kind": "slider"
-    },
-    {
-      "pane": "inject",
-      "name": "新鲜度保底槽 injectFreshSlots",
+      "name": "注入总预算 injectBudgetChars",
       "kind": "number"
     },
     {
@@ -92,12 +87,32 @@
     },
     {
       "pane": "inject",
-      "name": "注入总预算 injectBudgetChars",
-      "kind": "number"
+      "name": "热记忆注入强度 injection.level",
+      "kind": "slider"
+    },
+    {
+      "pane": "inject",
+      "name": "画像 persona 注入档位 injection.persona",
+      "kind": "slider"
     },
     {
       "pane": "model",
-      "name": "档位 evalTier",
+      "name": "允许出网 evalEgressAllow",
+      "kind": "checkbox"
+    },
+    {
+      "pane": "model",
+      "name": "向量缓存",
+      "kind": "button"
+    },
+    {
+      "pane": "model",
+      "name": "启用评估通道 evalEnabled",
+      "kind": "checkbox"
+    },
+    {
+      "pane": "model",
+      "name": "服务地址（OpenAI 兼容 /v1 根）",
       "kind": "select"
     },
     {
@@ -107,23 +122,8 @@
     },
     {
       "pane": "model",
-      "name": "服务地址（OpenAI 兼容 /v1 根）",
+      "name": "档位 evalTier",
       "kind": "select"
-    },
-    {
-      "pane": "model",
-      "name": "连通性测试",
-      "kind": "none"
-    },
-    {
-      "pane": "model",
-      "name": "评估模型",
-      "kind": "select"
-    },
-    {
-      "pane": "model",
-      "name": "启用评估通道 evalEnabled",
-      "kind": "checkbox"
     },
     {
       "pane": "model",
@@ -132,13 +132,13 @@
     },
     {
       "pane": "model",
-      "name": "向量缓存",
-      "kind": "none"
+      "name": "蒸馏模型",
+      "kind": "select"
     },
     {
       "pane": "model",
-      "name": "语义检索来源",
-      "kind": "button"
+      "name": "评估模型",
+      "kind": "select"
     },
     {
       "pane": "model",
@@ -147,63 +147,13 @@
     },
     {
       "pane": "model",
-      "name": "允许出网 evalEgressAllow",
-      "kind": "checkbox"
-    },
-    {
-      "pane": "model",
-      "name": "蒸馏模型",
-      "kind": "select"
-    },
-    {
-      "pane": "sched",
-      "name": "本轮最少字符 minTurnChars",
-      "kind": "number"
-    },
-    {
-      "pane": "sched",
-      "name": "材料预算 mclBudgetChars",
-      "kind": "number"
-    },
-    {
-      "pane": "sched",
-      "name": "记忆库 git 版本化 bankGit",
-      "kind": "checkbox"
-    },
-    {
-      "pane": "sched",
-      "name": "空闲唤醒 idleWakeMs",
-      "kind": "number"
-    },
-    {
-      "pane": "sched",
-      "name": "立即处理 pending 候选",
+      "name": "语义检索来源",
       "kind": "button"
     },
     {
-      "pane": "sched",
-      "name": "零成本预筛 distillPrescan",
-      "kind": "checkbox"
-    },
-    {
-      "pane": "sched",
-      "name": "启用认知环 mclEnabled",
-      "kind": "checkbox"
-    },
-    {
-      "pane": "sched",
-      "name": "认知环审计流 mclAudit",
-      "kind": "checkbox"
-    },
-    {
-      "pane": "sched",
-      "name": "守藏蒸馏器 enableDistill",
-      "kind": "checkbox"
-    },
-    {
-      "pane": "sched",
-      "name": "熟悉度阈值 mclFamiliarThreshold",
-      "kind": "number"
+      "pane": "model",
+      "name": "连通性测试",
+      "kind": "button"
     },
     {
       "pane": "sched",
@@ -217,8 +167,58 @@
     },
     {
       "pane": "sched",
+      "name": "启用认知环 mclEnabled",
+      "kind": "checkbox"
+    },
+    {
+      "pane": "sched",
+      "name": "守藏蒸馏器 enableDistill",
+      "kind": "checkbox"
+    },
+    {
+      "pane": "sched",
       "name": "指针条数 mclTopK",
       "kind": "number"
+    },
+    {
+      "pane": "sched",
+      "name": "本轮最少字符 minTurnChars",
+      "kind": "number"
+    },
+    {
+      "pane": "sched",
+      "name": "材料预算 mclBudgetChars",
+      "kind": "number"
+    },
+    {
+      "pane": "sched",
+      "name": "熟悉度阈值 mclFamiliarThreshold",
+      "kind": "number"
+    },
+    {
+      "pane": "sched",
+      "name": "空闲唤醒 idleWakeMs",
+      "kind": "number"
+    },
+    {
+      "pane": "sched",
+      "name": "立即处理 pending 候选",
+      "kind": "button"
+    },
+    {
+      "pane": "sched",
+      "name": "认知环审计流 mclAudit",
+      "kind": "checkbox"
+    },
+    {
+      "pane": "sched",
+      "name": "记忆库 git 版本化 bankGit",
+      "kind": "checkbox"
+    },
+    {
+      "pane": "sched",
+      "name": "零成本预筛 distillPrescan",
+      "kind": "checkbox"
     }
   ],
   "memory": [
@@ -226,6 +226,11 @@
       "pane": "archive",
       "name": "归档区 notes/archive/",
       "kind": "mem-group-title"
+    },
+    {
+      "pane": "growth",
+      "name": "AGENT 画像",
+      "kind": "mem-stat-label"
     },
     {
       "pane": "growth",
@@ -243,18 +248,13 @@
       "kind": "mem-stat-label"
     },
     {
-      "pane": "growth",
-      "name": "AGENT 画像",
-      "kind": "mem-stat-label"
-    },
-    {
       "pane": "index",
-      "name": "库内结构 · 4 个顶层条目（内容 2 · 工具态 1 · 产物 1）",
+      "name": "守藏本地知识区 · suite/knowledge",
       "kind": "mem-group-title"
     },
     {
       "pane": "index",
-      "name": "守藏本地知识区 · suite/knowledge",
+      "name": "库内结构 · 4 个顶层条目（内容 2 · 工具态 1 · 产物 1）",
       "kind": "mem-group-title"
     },
     {
@@ -274,5 +274,5 @@
     }
   ],
   "note": "面板视图契约基线（真机渲染快照）",
-  "at": "2026-09-22T15:23:47.106Z"
+  "at": "2026-09-27T12:53:55.924Z"
 }

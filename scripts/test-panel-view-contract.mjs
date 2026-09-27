@@ -136,9 +136,10 @@ setTimeout(function () {
         if (it.querySelector('button')) return 'button';
         return 'none';
       }
-      var panels = root ? root.querySelectorAll('wa-tab-panel') : [];
+      /* 2026-09-27 U2 后修正：面板容器不再是 wa-tab-panel（U2 移除 WA 后，面板由 ui-kit.tabs 直接挂进 box，id 现在落在 data-pane-id 上）。旧选择器查不到任何 panel、实测 0 项，而门禁报成「缺失 44 项（拆分丢了内容）」——归因错位。 */
+      var panels = root ? root.querySelectorAll('[data-pane-id]') : [];
       for (var p = 0; p < panels.length; p++) {
-        var pid = panels[p].getAttribute('name') || ('pane' + p);
+        var pid = panels[p].getAttribute('data-pane-id') || panels[p].getAttribute('name') || ('pane' + p);
         var rows = panels[p].querySelectorAll('${sel}');
         for (var k = 0; k < rows.length; k++) {
           if ('${by}' === 'item') {
@@ -179,7 +180,7 @@ ${probe(view, by, sel)}
      * Linux/无 X 环境下显式传 \`--user-data-dir\` 会让 Chrome 卡死 ~45s、输出为空，
      * 而本处 \`catch\` 把它读成「渲染失败」⇒ 看起来像页面缺陷。共享出口同时补齐
      * \`--no-sandbox\` / \`--disable-dev-shm-usage\` / \`--disable-background-networking\`。 */
-    dom = runChrome(['--virtual-time-budget=6000', '--window-size=1280,860', '--dump-dom', 'file:///' + f],
+    dom = runChrome(findChrome(), ['--virtual-time-budget=6000', '--window-size=1280,860', '--dump-dom', 'file:///' + f],
     { encoding: 'utf8', timeout: 120000, maxBuffer: 64 * 1024 * 1024 });
   } catch (e) { dom = e.stdout || ''; }
   rmSync(tmp, { recursive: true, force: true });

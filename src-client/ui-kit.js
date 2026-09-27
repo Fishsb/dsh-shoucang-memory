@@ -448,6 +448,14 @@ var UI = {
      *     shadow DOM 里）」，属实现介质差异，非行为回归（标签在两条路径下**用户都看得见、都点得到**）。 */
     defs.forEach(function (d) {
       d.pane.classList.add('sc-tabpane');
+      /* U2 补（2026-09-27）：**把 pane id 落到 DOM 上**。
+       *   判因（实测）：U2 前面板是 wa-tab-panel 属性 name=id，id 在属性上，
+       *   故 `test-panel-view-contract` 能按 pane 分组逐项比对；U2 改成"面板直挂 box"后
+       *   **id 只存在于 JS 闭包 `panes{}` 里**，DOM 上只剩类名 `sc-tabpane` ⇒
+       *   探针查不到 wa-tab-panel 标签、实测 0 项，门禁报「缺失 44 项（拆分可能丢了内容）」
+       *   —— **归因错位**（真因是选择器过时，不是内容丢失）。
+       *   ⇒ 落 `data-pane-id` 补齐这层信息（同时给未来任何遍历 DOM 的消费方）。 */
+      d.pane.setAttribute('data-pane-id', d.id);
       panes[d.id] = d.pane;
       box.appendChild(d.pane);
     });
