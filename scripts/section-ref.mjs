@@ -161,12 +161,29 @@ export function pointersOfRow(line) {
     const stop = i + 1 < toks.length ? toks[i + 1].at : s.length;
     const tail = s.slice(toks[i].end, stop);
     if (!/^\s*§/.test(tail)) continue; // 该文件 token 后没有 § 段 ⇒ 不是小节指针
-    const spec = [];
-    for (const seg of tail.split('/').map((x) => x.trim()).filter(Boolean)) {
+    /* ⚠ 2026-09-26 **解析缺陷修正（实现与契约不符）**：本函数上方注释已写明
+     *   「一行可含多个文件指针与 **§A/§B 并列**」，而原实现按 `/` 天真切分，
+     *   把 `§施工推进/§睡眠重构` 读成**父子** `施工推进/睡眠重构`。第二个 § 即新引用。
+     *   实测后果（check-section-refs 真库）：3 处误判 partial ⇒ 棘轮（基线 0）常红；
+     *   另有 112 处**碰巧**因「同名子节存在」侥幸过关。
+     *   修法：`§` 开头的段**起一条新指针**；仅**无 § 前缀的续段**才算父子的下一级。
+     *   ⚠ 这是**判据归位**不是放宽 —— 原先多条引用被合并成一条虚构路径而漏检，
+     *     现在每条各自接受 exists/missing 判定（受检条数变多，更严）。
+     *   ⚠ 必须与 `src/section-ref.ts#pointersOfRow` 逐例同结论（差分锁守）。 */
+    const segs = tail.split('/').map((x) => x.trim()).filter(Boolean);
+    const specs = [];
+    let cur = [];
+    for (const seg of segs) {
       if (/\.md$/.test(seg)) break; // 已进入下一个文件指针（由上层 token 处理）
-      spec.push(seg.replace(/^§/, '').trim());
+      if (/^§/.test(seg)) {
+        if (cur.length) { specs.push(cur); cur = []; } // 收口上一条并列引用
+        cur.push(seg.replace(/^§/, '').trim());
+      } else {
+        cur.push(seg); // 无 § 前缀 = 上一级的子段
+      }
     }
-    if (spec.length) out.push({ file: toks[i].file, spec: spec.join('/') });
+    if (cur.length) specs.push(cur);
+    for (const sp of specs) if (sp.length) out.push({ file: toks[i].file, spec: sp.join('/') });
   }
   return out;
 }

@@ -706,6 +706,12 @@ const CHECKS = [
   //   均不得高于登记基线（只许降）。判因：此前唯一能报悬空的 `memory-reconcile.mjs` **不在 CHECKS 且恒 exit 0**
   //   ⇒ 链路断了没有任何机制会翻红。含 `--selftest`（先红 + 阴性对照）。
   ['scripts/check-section-refs.mjs'],
+  // 孪生拷贝漂移守卫（2026-09-26 立）：本仓有 21 对同名文件在 scripts/ 与 skill/scripts/ 各存一份，
+  //   此前**无任何机制守一致**（靠手工同步）。实测事故：修 section-ref 解析缺陷时只改了
+  //   skill/ 那份，scripts/ 那份静默停在旧代 —— 直到 check-placement-convergence 的
+  //   「双份逐字一致」断言才撞出来（该断言只覆盖那一对，其余 19 对无人看管）。
+  //   本件对**每一对**做逐字节比较。反例自证：注入漂移 ⇒ 报「漂移 1」；还原 ⇒ 全一致。
+  ['scripts/check-twin-drift.mjs'],
   // P4 直接单测：Record 模型 + 影子写/对账（含 CRLF/LF 混用、无尾换行、损坏影子库、反向证伪）
   ['scripts/test-record-store.mjs'],
   // G1 内容环（2026-09-13）：**每个 kind 必须登记生命周期归属**（新增类型不许默默加一类）+

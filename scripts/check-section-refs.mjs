@@ -131,6 +131,20 @@ console.log(`  库=${LIB} · 主档 ${r.docs} 件 · 含指针行 ${r.rows}`)
 console.log(`  spec 级：exists ${r.spec.exists} · partial ${r.spec.partial} · ambiguous ${r.spec.ambiguous} · **missing ${r.spec.missing}**`)
 console.log(`  去重：partial ${r.uniq.partial.size} 组 · ambiguous ${r.uniq.ambiguous.size} 组 · missing ${r.uniq.missing.size} 组 · 同名小节 ${r.dup.length} 处`)
 ok(r.spec.missing <= BASELINE.missingSpecs, `全不可解析 ${r.spec.missing} ≤ 基线 ${BASELINE.missingSpecs}`)
+/* 明细出口（2026-09-26 补）：原先只报**计数**，红时看不到是**哪几处** —— 判据红而无从下手，
+ *   正是「失败不可观测」。此处把 partial 的具体 key 列出来（存量 3 组，量级极小，
+ *   不是"日志噪音"问题）。⚠ 判据本身不变，只加可观测性。 */
+/* 明细出口（2026-09-26 补）：原先只报**计数**，红时看不到是**哪几处** —— 判据红而无从下手，
+ *   正是「失败不可观测」。此处把 partial / missing 的具体 key 都列出来。
+ *   ⚠ 判据本身不变，只加可观测性。 */
+if (r.uniq.partial.size) {
+  console.log('  partial 明细（' + r.uniq.partial.size + ' 组）：')
+  for (const [k, n] of r.uniq.partial) console.log('    · ' + k + (n > 1 ? ' ×' + n : ''))
+}
+if (r.uniq.missing.size) {
+  console.log('  missing 明细（' + r.uniq.missing.size + ' 组）：')
+  for (const [k, n] of r.uniq.missing) console.log('    · ' + k + (n > 1 ? ' ×' + n : ''))
+}
 ok(r.spec.partial <= BASELINE.partialSpecs, `路径部分悬空 ${r.spec.partial} ≤ 基线 ${BASELINE.partialSpecs}`)
 ok(r.spec.ambiguous <= BASELINE.ambiguousSpecs, `同名歧义 ${r.spec.ambiguous} ≤ 基线 ${BASELINE.ambiguousSpecs}`)
 ok(r.dup.length <= BASELINE.duplicateTitles, `同名小节 ${r.dup.length} ≤ 基线 ${BASELINE.duplicateTitles}`)
