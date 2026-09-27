@@ -95,10 +95,10 @@
         + '#scpanl-root .sc-prog-fill{height:100%;width:0;border-radius:var(--sc-r-pill);background:var(--sc-accent);transition:width var(--sc-t-base) var(--sc-ease);}',
         /* ⚠ 分段（.sc-tabnav/.sc-tabbtn）的规则**不在此处** —— 第 500 行附近已有一份（本轮先加、
          *   后与既有位置重合，被 audit-css-usage 判「同层重复定义 4 个」）。单一来源留在那一处。 */
-        /* U4 侧栏全局面板图标（sidebar.panellist）：尺寸由宿主 size prop 给定 ⇒ 此处不写死尺寸。 */
-        '.sc-panel-icon{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;border:0;border-radius:var(--sc-r-sm);background:transparent;padding:var(--sc-sp-1);color:var(--sc-text);transition:background var(--sc-t-base) var(--sc-ease);}'
-        + '.sc-panel-icon:hover{background:var(--sc-hover);}'
-        + '.sc-panel-icon.on{background:var(--sc-accent-soft);}',
+        /* ⚠ .sc-panel-icon 已随 sidebar.panellist 席位一并移除（2026-09-26）——
+         *   该席位与「纯 DOM 壳 + 浮层」架构不兼容：宿主**自带 button 并独占 onClick**，
+         *   点击走 `selectPanel(主列面板)`，而我们没有 main 面板 ⇒ 图标点了没反应。
+         *   详见 src-client/host-slots.js 的判因块。无使用点即删（免成 audit-css-usage 死规则）。 */
 
         /* ══════════ ② 基础层 ══════════ */
         '#scpanl-root *{box-sizing:border-box;}',

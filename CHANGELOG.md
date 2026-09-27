@@ -2914,6 +2914,32 @@
 - **panel client 迁移到 slot 契约（2026-09-05，解冻前置）**：client.js 注入声明加 `'slots'`，入口从直插侧栏 footArea DOM 改为注册 `sidebar.footer.action` 插槽按钮（无 slots 环境保留直插兜底）；host+client 已注入运行（ef85e372），构建产物 lib/ 重建
 
 ### Fixed
+- **侧栏出现两个入口、上面那个点不开（2026-09-26 · U4 回退）**：
+  【现象】侧栏有**两个**守藏入口：上面（新加的 `sidebar.panellist` 图标行）点**没反应**，
+  下面（原有 `sidebar.footer.action`）正常。
+  【取证】读宿主实现（`dsh-client-ui-sidebar/lib/client.js`）：
+  ```
+  button（**宿主自己建**）{ onClick: () => { selectPanel(id) }
+    children: renderSlot('sidebar.panellist', { size, active }, { only: id }) }
+  ```
+  三条硬事实：
+  · 宿主**自带 button 并独占 onClick** —— 我们 render 的组件在其 children 里，
+    **自身的 onClick 永远不会被调用**（所以"点不开"是必然，不是偶发 bug）；
+  · 点击行为是 `selectPanel(id)`，切的是**主列面板**（`main` 席位的 keyed 面板）；
+    而本插件**刻意没有注册 `main`**（那要求 React 组件 + store + locale 全套，
+    接管等于把纯 DOM 自建壳整套重写）⇒ **没有对应面板 ⇒ 点了无反应**；
+  · 行标题取自宿主的**面板列表元数据**，不是我们 register 时给的 label。
+  【结论】该席位是给「**有 main 面板的插件**」设计的（宿主 plugin-manager / schedule 皆如此），
+  与「纯 DOM 自建壳 + 浮层」的架构**不兼容**。
+  ⚠ **为何没按最初设想「保留上面、取消下面」**：上面那个在功能上**不可能可用**，
+  保留下面的 `footer.action` 才是唯一可用入口（即回到 U4 之前的稳定状态）。
+  【处置】移除 `sidebar.panellist` 注册 + 其专属 CSS（`.sc-panel-icon`，免成死规则）
+  + 门禁席位断言回到两条（仍用**显式列举**，非数量比较）。
+  【我的判断失误】U4 时我据**契约文本**推断"只接入口、不接管 main 即可"，
+  **未验证宿主的消费方式** ⇒ 结论错误。教训：`[原则] 档案事实须复验` —— 契约描述能力面，
+  不描述**宿主怎么用它**；席位类集成必须读宿主实现。
+  验收：`ui-geo-regress` **110 PASS / 0 FAIL** · 出图 12/12 · 席位断言「向两个宿主插槽注入」✅
+
 - **面板不再遮挡宿主审批弹窗（2026-09-26 · UI 架构根治 U1）**：
   面板遮罩原为 `z-index:9900`，而宿主自有的层叠体系是 **引导 900 · 弹窗/拖放/灯箱 1000 · 菜单/Toast/Tooltip 1100**
   （扫宿主 lib 实测）⇒ **面板一打开就把宿主的审批/权限/提问弹窗压在下面**。

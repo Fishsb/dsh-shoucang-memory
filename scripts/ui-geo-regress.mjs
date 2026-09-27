@@ -997,15 +997,16 @@ setTimeout(function () {
   if (!r) bad('插槽路径：取不到结果（渲染失败）')
   else {
     r.err ? bad('插槽路径抛异常：' + r.err) : ok('插槽路径无异常')
-    /* U4（2026-09-26）口径更新：新增 sidebar.panellist（侧栏全局面板图标席位）⇒ 三个席位。 */
-    ;(r.injected || []).slice().sort().join(',') === 'settings.section,sidebar.footer.action,sidebar.panellist'
-      ? ok('向三个宿主插槽注入：' + r.injected.join(' + '))
+    /* 2026-09-26 回退：`sidebar.panellist` 已移除（与「纯 DOM 壳 + 浮层」架构不兼容 ——
+     *   宿主自带 button 并独占 onClick，点击走 selectPanel(主列面板)，而我们没有 main 面板
+     *   ⇒ 图标点了没反应）。席位回到两个。
+     * ⚠ 断言仍用**显式列举**而非数量比较 —— 数量相等但有重复/漏项也能通过，那种判据是假的。 */
+    ;(r.injected || []).slice().sort().join(',') === 'settings.section,sidebar.footer.action'
+      ? ok('向两个宿主插槽注入：' + r.injected.join(' + '))
       : bad('插槽注入异常：' + JSON.stringify(r.injected))
-    /* U4（2026-09-26）：注册条目同步为三条（新增 sidebar.panellist）。
-     *   ⚠ 断言用**显式列举**而非数量比较 —— 数量相等但有重复/漏项也能通过，那种判据是假的。 */
     const names = r.reg.map((x) => x.name).sort()
-    names.join(',') === 'settings.section,sidebar.footer.action,sidebar.panellist'
-      ? ok('注册三条插槽条目：' + r.reg.map((x) => x.id + '@' + x.name).join(' + '))
+    names.join(',') === 'settings.section,sidebar.footer.action'
+      ? ok('注册两条插槽条目：' + r.reg.map((x) => x.id + '@' + x.name).join(' + '))
       : bad('插槽注册异常：' + JSON.stringify(r.reg))
     r.reg.every((x) => x.comp === 'function') ? ok('两条均以组件函数注册') : bad('组件形态异常')
     r.btn === false ? ok('互斥生效：插槽可用时**不**再挂 DOM 直插入口（#scpanl-btn 不存在）')

@@ -94,36 +94,24 @@ export function registerHostSlots (p) {
     })
   }, 'shoucang-panel: settings section')
 
-  /* U4：侧栏**全局面板图标**席位（判因见文件头「为何只接入口」） */
-  ctx.effect(function () {
-    return ctx.slots.inject('sidebar.panellist', function () {
-      var open = openPanel
-      var ShoucangPanelIcon = function (props) {
-        var size = (props && props.size) || 20
-        if (!reactEl || typeof reactEl.createElement !== 'function') return null
-        return reactEl.createElement(
-          'button',
-          {
-            type: 'button',
-            title: tr('守藏面板'),
-            'aria-label': tr('守藏面板'),
-            className: 'sc-panel-icon' + (props && props.active ? ' on' : ''),
-            onClick: function () { open() }
-          },
-          reactEl.createElement('img', {
-            src: SC_ICON, alt: '', width: size, height: size,
-            style: { width: size, height: size, display: 'block', pointerEvents: 'none' }
-          })
-        )
-      }
-      return ctx.slots.register({
-        name: 'sidebar.panellist',
-        id: 'shoucang',
-        order: 60,
-        label: function () { return tr('守藏面板') }
-      }, ShoucangPanelIcon)
-    })
-  }, 'shoucang-panel: panellist icon')
+  /* ── sidebar.panellist 已移除（2026-09-26 · 用户实测反馈 + 源码取证）──────────
+   * 【现象】侧栏出现**两个**守藏入口，上面那个点不开面板。用户要求保留上面、取消下面。
+   * 【取证】读宿主实现（dsh-client-ui-sidebar/lib/client.js）：
+   *     button (宿主自己建) { onClick: () => { selectPanel(id) }
+   *       children: renderSlot('sidebar.panellist', { size, active }, { only: id }) }
+   *   三条硬事实：
+   *     ① 宿主**自带 button 并独占 onClick** —— 我们 render 的组件在其 children 里，
+   *        自身的 onClick **永远不会被调用**（所以"点不开"是必然，不是 bug）。
+   *     ② 点击行为是 `selectPanel(id)` —— 切的是**主列面板**（main 席位的 keyed 面板）。
+   *        而我们**刻意没有注册 main**（那要求 React+store+locale 全套，接管等于重写面板）。
+   *        ⇒ 没有对应 main 面板 ⇒ 点了无任何反应。
+   *     ③ 行标题 label 取自宿主的**面板列表元数据**，不是我们 register 时给的 label。
+   * 【结论】该席位与「纯 DOM 自建壳 + 浮层」的架构**不兼容**——
+   *   它设计给「有 main 面板的插件」（宿主 plugin-manager / schedule 都如此）。
+   *   我当初据契约文本推断"只接入口即可"，**未验证宿主消费方式** —— 那是错的。
+   * ⚠ 因此**不能**按用户最初设想「保留上面、取消下面」：上面那个**功能上不可能可用**，
+   *   保留下面的 footer.action 才是唯一可用入口（也回到 U4 之前的稳定状态）。
+   * 若将来真要这个席位，前提是**先有 main 面板** —— 那是整套 React 重写，须单独评估。 */
 
   return true
 }
