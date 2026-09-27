@@ -21,7 +21,8 @@
   **② 版本钉点三处归位**：此前 `声明 ed878c40 / 锁定 c089c0b4` 不一致（第⑤层缺口）。
     归位过程中发现**真正的阻塞点**：`pnpm install` 因**无关依赖** `@dsh-external/project-nav`
     的声明用了 **WSL UNC 形式**（`file://wsl.localhost/Ubuntu-26.04/...`，Linux 侧解析不到）而整体失败。
-    该 tarball 在 Linux 路径下**确实存在**，仅**路径形式**不可解析 ⇒ 改为 `file:///home/lk/FF/...`。
+    该 tarball 在 Linux 侧路径下**确实存在**，仅**路径形式**不可解析
+    ⇒ 改为 `file:///` + Linux 绝对路径形式（**不在此记录具体路径** —— 公开仓红线）。
     ⚠ 只改**路径形式**、不动版本内容；改前完整备份三件（package.json / pnpm-lock.yaml / .modules.yaml）。
     `pnpm install` 实测 **57s · +2 包 · 未见批量删除拦截** ⇒ 复验 **PASS（三处一致 @ ed878c40）**。
     （副产物：`project-nav` 顺带由 0.13.1 → 0.13.2，与声明一致。）
