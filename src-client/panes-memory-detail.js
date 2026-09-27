@@ -399,7 +399,10 @@ function mmArchiveZone(ctx) {
     var ar = (r && r.archive) || [];
     /* v9 的 Tab 文案**带计数**（原型「归档区 4」）：归档区是唯一异步取数的分区，计数只能等本端返回后回填
      * —— 为此加一个同步端点不值，故直接回写该 Tab 元素。 */
-    var tabsEls = ctx._tb.box.querySelectorAll('wa-tab');
+    /* U2（2026-09-26）：Tab 已改为「宿主 SegmentedTabs / 自绘 .sc-tabbtn」双路径，
+     *   不再是 wa-tab 元素。回写范围随之扩为**两种路径的选择器并集**——
+     *   ⚠ 用并集而非单一选择器：任一路径下都要能回填，否则计数会静默丢失（假绿）。 */
+    var tabsEls = ctx._tb.box.querySelectorAll('wa-tab,.sc-tabbtn,[data-host-tab]');
     if (tabsEls[3]) tabsEls[3].textContent = tr("归档区 ") + ar.length;
     list.textContent = '';
     if (!Derive.has(ar)) list.appendChild(el('div', 'sc-desc', tr("暂无归档条目。")));

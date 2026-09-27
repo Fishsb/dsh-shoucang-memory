@@ -187,11 +187,14 @@ function renderDeepSleep(view) {
           '当前纪元 ' + r.currentEpoch + ' · 窗口 ' + epFrom + ' → ' + epTo));
       }
       var water = el('div', 'sc-prog');
-      var wbar = document.createElement('wa-progress-bar');
-      wbar.className = 'sc-prog-bar';
-      wbar.setAttribute('max', '100');
-      wbar.setAttribute('value', String(idleMs ? Math.min(100, Math.round(stalled / idleMs * 100)) : 0));
-      water.appendChild(wbar);
+      /* U2（2026-09-26）：改自绘轨道（同 ui-kit.js 的 UI.progress）——去除 wa-progress-bar 依赖。
+       *   百分比算法**逐字保持**（idleMs 为 0 时取 0），行为等价。 */
+      var pct = idleMs ? Math.min(100, Math.round(stalled / idleMs * 100)) : 0;
+      var wtrack = el('div', 'sc-prog-track');
+      var wfill = el('div', 'sc-prog-fill');
+      wfill.style.width = Math.max(0, Math.min(100, pct)) + '%';
+      wtrack.appendChild(wfill);
+      water.appendChild(wtrack);
       water.appendChild(el('div', 'sc-prog-txt',
         '睡眠水位 · 已停滞 ' + mMin(stalled) + ' / ' + mMin(idleMs) + ' 分钟'
         + (idleMs ? '（' + Math.min(100, Math.round(stalled / idleMs * 100)) + '%）' : '')));

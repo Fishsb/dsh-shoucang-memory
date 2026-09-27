@@ -13,6 +13,11 @@ import { ICONS, el, svg } from './dom.js'
 import { Bus, Cfg, Fold, Log, Store } from './state.js'
 import { appState } from './app-state.js'
 import { lang, tr } from './i18n.js'
+/* U2（2026-09-26）：宿主 UI 组件接入层。
+ *   判因：我们自带整套 Web Awesome（570KB）只为用 7 个组件，而宿主 primitives
+ *   已含同名同义实现（Button/Switch/Pill/StateDot/DisclosureRow/SegmentedTabs）。
+ *   本件把「优先宿主、失败降级自建」收敛在一处 —— 下方各构件照此模式改。 */
+import { hostComponent, reactEl, mountReact } from './host-ui.js'
 
 /* 页头槽的**渲染轮次**（原在 body.js 渲染层；见本件头注的"状态归属变更"） */
 var headEpoch = 0, headUsed = -1;
@@ -56,7 +61,29 @@ var UI = {
    * 契约读自 switch.d.ts：`checked` 属性 + `change` 事件；parts switch/control/thumb/label。
    * 旧实现挂的 .checkbox-container 类随之退役（对应 CSS 规则已删，避免死规则）。 */
   toggle: function (checked, onChange, label) {
-    var sw = document.createElement('wa-switch');
+    /* U2-a（2026-09-26）：优先宿主 Switch（契约同构：checked/onChange/label/disabled/title）。
+     *   拿不到 ⇒ 降级既有 wa-switch，行为与旧版一致（零回归）。
+     *   ⚠ **必须走 React root**：primitives 组件用 hooks，直接函数调用非法
+     *     （见 host-ui.js 的 mountReact 头注）。 */
+    var HS = hostComponent('Switch'), h = reactEl();
+    if (HS && h) {
+      var box = el('span', 'sc-host-switch');
+      var cur = !!checked;
+      var m = mountReact(box, function () {
+        return h(HS, {
+          checked: cur,
+          label: label || '',
+          onChange: function (next) { cur = !!next; onChange(!!next); m && m.update(); }
+        });
+      });
+      if (m) return box;
+    }
+    /* 降级（U2 · 2026-09-26）：**自绘开关**，彻底去掉 wa-switch 依赖。
+     *   CSS 基座早已在位（.checkbox-container 的 appearance:none 胶囊 + ::after 圆点 +
+     *   checked/disabled 三态，见 styles.js「开关：单一实现」段）——它本就是本面板的既有实现，
+     *   WA switch 反而是后来的替换。此处回落即**回到自有实现**，观感由既有 CSS 保证。 */
+    var sw = el('input', 'checkbox-container');
+    sw.type = 'checkbox';
     sw.checked = !!checked;
     if (label) sw.setAttribute('aria-label', label);
     sw.addEventListener('change', function () { onChange(!!sw.checked); });
@@ -187,23 +214,61 @@ var UI = {
    * API 与行为完全保留（text/onClick/{primary,danger,title,confirm,async,busyText,okText}）⇒ 13 个调用点零改动。 */
   button: function (text, onClick, opts) {
     var o = opts || {};
-    var b = document.createElement('wa-button');
-    b.setAttribute('size', o.size || 's');
-    b.setAttribute('variant', o.danger ? 'danger' : (o.primary ? 'brand' : 'neutral'));
-    b.setAttribute('appearance', (o.primary || o.danger) ? 'filled' : 'outlined');
-    if (o.pill) b.setAttribute('pill', '');
-    if (o.title) b.title = o.title;
-    b.textContent = text;
-    b.onclick = function () {
+    /* U2-e（2026-09-26）：**优先宿主 Button**，拿不到降级 wa-button。
+     *   宿主契约实测：variant = 'primary'|'ghost'|'outline'|'toolbar'（**无 danger**），
+     *     size = 'md'(36px) | 'sm'(28px)。
+     *   ⚠ 映射口径：danger 用 'outline' 承载（宿主无破坏性色族）——**观感差异如实声明**，
+     *     不假装等价；primary→'primary'、其余→'ghost'。
+     *   ⚠ 封装语义（confirm / async / busyText / loading）**与渲染无关，原样保留**：
+     *     它们作用于按钮节点的 disabled 与文本，两种实现下行为一致。 */
+    var HB = hostComponent('Button'), h = reactEl();
+    var b = null, hostMode = false, m = null, curDis = false, curText = text;
+    if (HB && h) {
+      var box = el('span', 'sc-host-btn');
+      hostMode = true;
+      m = mountReact(box, function () {
+        return h(HB, {
+          variant: o.primary ? 'primary' : (o.danger ? 'outline' : 'ghost'),
+          size: 'sm',
+          className: o.pill ? 'sc-pill' : '',
+          disabled: curDis,
+          title: o.title || '',
+          onClick: handleClick
+        }, curText);
+      });
+      if (m) b = box;
+    }
+    if (!hostMode) {
+      /* 降级（U2 · 2026-09-26）：**自绘按钮**，彻底去掉 wa-button 依赖。
+       *   .sc-btn 基座早已在位（30px 高 / 1px 边 / --sc-r-sm 圆角 / hover·disabled 态 /
+       *   .sc-btn-primary 变体），它本就是本面板的既有实现 —— WA button 是后来的替换。
+       *   ⚠ 变体映射：primary→sc-btn-primary、其余→sc-btn（与宿主路径的 variant 映射同源：
+       *     ghost/outline/primary；danger 在宿主无对应色族，两条路径都退为中性，观感一致）。 */
+      b = el('button', 'sc-btn' + (o.primary ? ' sc-btn-primary' : ''));
+      b.type = 'button';
+      if (o.title) b.title = o.title;
+      b.textContent = text;
+      b.onclick = handleClick;
+    }
+    /* 点击行为（两路径共用同一实现 —— 单一逻辑，避免两套分叉） */
+    function handleClick () {
       if (o.confirm && !confirm(o.confirm)) return;
       if (!o.async) { try { onClick(); } catch (e) { appState.failFn(e); } return; }
-      b.disabled = true; b.setAttribute('loading', '');
-      var old = b.textContent; if (o.busyText) b.textContent = o.busyText;
+      setDisabled(true, o.busyText || null);
       Promise.resolve().then(onClick).then(function (r) { Log.info(o.okText || (text + tr(' 完成'))); return r; })
-        .catch(appState.failFn).then(function () {
-          b.disabled = false; b.removeAttribute('loading'); b.textContent = old;
-        });
-    };
+        .catch(appState.failFn).then(function () { setDisabled(false, null); });
+    }
+    function setDisabled (d, busyText) {
+      curDis = !!d;
+      if (busyText != null) curText = busyText; else curText = text;
+      if (hostMode) {
+        if (m) m.update();
+      } else {
+        b.disabled = curDis;
+        if (curDis) b.setAttribute('loading', ''); else b.removeAttribute('loading');
+        b.textContent = curText;
+      }
+    }
     return b;
   },
   /* 徽标 */
@@ -360,36 +425,73 @@ var UI = {
 
   tabs: function (key, defs) {
     var box = el('div', 'sc-tabbox');
-    var group = document.createElement('wa-tab-group');
+    /* U2（2026-09-26）：Tab 改走**宿主 SegmentedTabs**（契约实测：items[{value,label,id,panelId}]
+     *   + value + onChange + label，**面板由调用方持有**——与本函数原有的 d.pane 模式天然契合）。
+     *   ⚠ 语义变化如实声明：宿主 SegmentedTabs 只渲染 **tab 条**，不渲染面板容器；
+     *     故面板改由本函数直接挂进 box（原来是塞进 wa-tab-panel）。**可见行为不变**
+     *     （同一时刻只显示一个 pane，由 .sc-pane-on 类控制），但 DOM 层次与旧版不同。
+     *   ⚠ 持久化与 API **逐字保留**（Cfg('tab:'+key) / select(id) / pane(id)），调用点零改动。 */
     var cur = Cfg.get('tab:' + key, (defs[0] || {}).id);
     var valid = false;
     defs.forEach(function (d) { if (d.id === cur) valid = true; });
     if (!valid) cur = (defs[0] || {}).id;
+    var panes = {};
+    /* 全部 pane **常驻挂载**，非激活者用 .sc-hidden 隐藏 —— 与旧版（wa-tab-group）**DOM 等价**。
+     *   判因（实测取证，两次对照，2026-09-26）：
+     *   · 第一版（本实现）：全挂载 + .sc-hidden ⇒ i18n-parity 抓到的文本长度 **2574 = HEAD 的 2574**
+     *     （逐段 diff 只剩「时间格式 + 4 个 tab 标签」两类差异）⇒ **WA 并不移除未激活 panel 的内容**，
+     *     它只是隐藏。这一点曾被我依据"shadow DOM 里抓不到"误判成"内容不在 DOM"。
+     *   · 第二版（按该误判改成"只挂激活 pane"）：长度掉到 **2068（少 506 字）** ——
+     *     直接把未激活 pane 的内容从 DOM 里**删掉了**，那是**真的行为变更**（调用方可能持有该节点、
+     *     屏幕阅读器/任何遍历 DOM 的消费方都会少读），比"多挂"更危险。故回退。
+     *   ⇒ 结论：**.sc-hidden 是对的**；真正的差异只是「tab 标签本实现落在 light DOM（旧版在 WA 的
+     *     shadow DOM 里）」，属实现介质差异，非行为回归（标签在两条路径下**用户都看得见、都点得到**）。 */
     defs.forEach(function (d) {
-      var tab = document.createElement('wa-tab');
-      tab.setAttribute('slot', 'nav');
-      tab.setAttribute('panel', d.id);
-      tab.textContent = d.label;
-      group.appendChild(tab);
-      var panel = document.createElement('wa-tab-panel');
-      panel.setAttribute('name', d.id);
       d.pane.classList.add('sc-tabpane');
-      panel.appendChild(d.pane);
-      group.appendChild(panel);
+      panes[d.id] = d.pane;
+      box.appendChild(d.pane);
     });
-    group.setAttribute('active', cur);
-    group.addEventListener('wa-tab-show', function (ev) {
-      var n = ev && ev.detail && ev.detail.name;
-      if (n) Cfg.set('tab:' + key, n);
-    });
-    box.appendChild(group);
+    function applyPane(id) {
+      defs.forEach(function (d) {
+        if (d.id === id) d.pane.classList.remove('sc-hidden'); else d.pane.classList.add('sc-hidden');
+      });
+    }
+    function setCur(id) { cur = id; applyPane(id); }
+    var HST = hostComponent('SegmentedTabs'), h = reactEl();
+    var m = null;
+    if (HST && h) {
+      var navBox = el('div', 'sc-tabnav');
+      box.insertBefore(navBox, box.firstChild);
+      m = mountReact(navBox, function () {
+        return h(HST, {
+          items: defs.map(function (d) { return { value: d.id, label: d.label, id: 'tab-' + key + '-' + d.id, panelId: 'panel-' + key + '-' + d.id } }),
+          value: cur,
+          label: key,
+          onChange: function (id) { setCur(id); Cfg.set('tab:' + key, id); if (m) m.update(); }
+        });
+      });
+    }
+    if (!m) {
+      /* 降级：自绘胶囊分段（与宿主观感对齐，去掉 wa-tab-group 依赖） */
+      var nav = el('div', 'sc-tabnav');
+      box.insertBefore(nav, box.firstChild);
+      defs.forEach(function (d) {
+        var t = el('button', 'sc-tabbtn', d.label);
+        t.onclick = function () {
+          defs.forEach(function (x) { x.btn.className = 'sc-tabbtn' });
+          t.className = 'sc-tabbtn sc-on';
+          setCur(d.id); Cfg.set('tab:' + key, d.id);
+        };
+        d.btn = t;
+        nav.appendChild(t);
+      });
+      m = { update: function () {} };
+    }
+    applyPane(cur);
     return {
       box: box,
-      select: function (id) { group.setAttribute('active', id); },
-      pane: function (id) {
-        for (var i = 0; i < defs.length; i++) if (defs[i].id === id) return defs[i].pane;
-        return null;
-      }
+      select: function (id) { setCur(id); if (m) m.update(); },
+      pane: function (id) { return panes[id] || null; }
     };
   },
   kpi: function (top, opts) {
@@ -445,18 +547,24 @@ var UI = {
    *   尺寸/配色由 CSS 侧接管组件变量（见上方 .sc-prog-bar 规则），此处只驱动 `value`。 */
   progress: function (id) {
     var box = el('div', 'sc-prog');
-    var bar = document.createElement('wa-progress-bar');
-    bar.className = 'sc-prog-bar';
-    bar.setAttribute('max', '100');
-    bar.setAttribute('value', '0');
+    /* U2（2026-09-26）：**自绘轨道 + 填充**，去掉最后一个 wa-* 依赖。
+     *   判因：宿主 primitives **没有进度条原语**（组件面 59 项里无 Progress 类），
+     *   故此处不是"换宿主"而是"自绘"——目的是让 wa-progress-bar 彻底退场，
+     *   从而卸掉整个 Web Awesome 与它 300KB 的主题 CSS（实测产物构成：vendor 主题 CSS 300KB）。
+     *   ⚠ 尺寸与配色**沿用组件时代实测过的值**（6px 轨道 / --sc-bg3 底 / --sc-accent 填充）——
+     *     这是当年为对齐方案逐项接管 WA 变量定下来的，自绘必须逐值保持，否则会顶开网格。
+     *     （历史教训：WA 自带 --track-height 是 16px，不接管时 ui-geo-regress 93 → 70 PASS。） */
+    var track = el('div', 'sc-prog-track');
+    var fill = el('div', 'sc-prog-fill');
+    track.appendChild(fill);
     var txt = el('div', 'sc-prog-txt', '');
-    box.appendChild(bar); box.appendChild(txt);
+    box.appendChild(track); box.appendChild(txt);
     function render(p) {
       var s = (p || {})[id];
-      // 显隐用 .sc-hidden（与全站一致）；进度值改走组件的 value 属性（旧实现自绘 fill 的宽度）
+      // 显隐用 .sc-hidden（与全站一致）
       if (!s || !s.on) { box.classList.add('sc-hidden'); return; }
       box.classList.remove('sc-hidden');
-      bar.setAttribute('value', String(s.pct || 0));
+      fill.style.width = Math.max(0, Math.min(100, s.pct || 0)) + '%';
       txt.textContent = (s.label ? s.label + ' · ' : '') + (s.pct || 0) + '% · ' + (s.note || '');
     }
     render(Store.get('progress'));

@@ -51,7 +51,9 @@ export var EN = {
   '需重载': 'Reload required',
   '即时': 'Instant',
   '折叠收口失败：': 'Collapse failed: ',
-  '组件库主题注入失败：': 'Component-library theme injection failed: ',
+  /* U2（2026-09-26）删除：`组件库主题注入失败：` —— 该词条的**唯一调用点**是 body.js 中
+   *   注入 Web Awesome 主题令牌层的 try/catch，而 U2 已删掉那整段（产物不再带组件库，省 574KB）
+   *   ⇒ 词条成孤儿，由 `check-i18n-keys` 断言 A「死键」抓到。删除以恢复双向键集一致。 */
   '设置生效失败（': 'Failed to apply setting (',
   '侧栏入口：已注册宿主插槽 sidebar.footer.action（不挂 DOM 直插入口）': 'Sidebar entry: registered host slot sidebar.footer.action (no direct DOM entry)',
   '侧栏入口：宿主插槽不可用（': 'Sidebar entry: host slot unavailable (',

@@ -1,5358 +1,27 @@
 "use strict";
 (() => {
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.R7QX4M6R.js
-  var MirrorValidator = () => {
-    return {
-      checkValidity(element) {
-        const formControl = element.input;
-        const validity = {
-          message: "",
-          isValid: true,
-          invalidKeys: []
-        };
-        if (!formControl) {
-          return validity;
-        }
-        let isValid = true;
-        if ("checkValidity" in formControl) {
-          isValid = formControl.checkValidity();
-        }
-        if (isValid) {
-          return validity;
-        }
-        validity.isValid = false;
-        if ("validationMessage" in formControl) {
-          validity.message = formControl.validationMessage;
-        }
-        if (!("validity" in formControl)) {
-          validity.invalidKeys.push("customError");
-          return validity;
-        }
-        for (const key in formControl.validity) {
-          if (key === "valid") {
-            continue;
-          }
-          const checkedKey = key;
-          if (formControl.validity[checkedKey]) {
-            validity.invalidKeys.push(checkedKey);
-          }
-        }
-        return validity;
-      }
-    };
-  };
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.VC3BPUZJ.js
-  var WaInvalidEvent = class extends Event {
-    constructor() {
-      super("wa-invalid", { bubbles: true, cancelable: false, composed: true });
-    }
-  };
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.7VGCIHDG.js
-  var __defProp = Object.defineProperty;
-  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
-  var __typeError = (msg) => {
-    throw TypeError(msg);
-  };
-  var __decorateClass = (decorators, target, key, kind) => {
-    var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc(target, key) : target;
-    for (var i7 = decorators.length - 1, decorator; i7 >= 0; i7--)
-      if (decorator = decorators[i7])
-        result = (kind ? decorator(target, key, result) : decorator(result)) || result;
-    if (kind && result) __defProp(target, key, result);
-    return result;
-  };
-  var __accessCheck = (obj, member, msg) => member.has(obj) || __typeError("Cannot " + msg);
-  var __privateGet = (obj, member, getter) => (__accessCheck(obj, member, "read from private field"), getter ? getter.call(obj) : member.get(obj));
-  var __privateAdd = (obj, member, value) => member.has(obj) ? __typeError("Cannot add the same private member more than once") : member instanceof WeakSet ? member.add(obj) : member.set(obj, value);
-  var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "write to private field"), setter ? setter.call(obj, value) : member.set(obj, value), value);
-
-  // node_modules/@lit/reactive-element/css-tag.js
-  var t = globalThis;
-  var e = t.ShadowRoot && (void 0 === t.ShadyCSS || t.ShadyCSS.nativeShadow) && "adoptedStyleSheets" in Document.prototype && "replace" in CSSStyleSheet.prototype;
-  var s = /* @__PURE__ */ Symbol();
-  var o = /* @__PURE__ */ new WeakMap();
-  var n = class {
-    constructor(t6, e8, o9) {
-      if (this._$cssResult$ = true, o9 !== s) throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");
-      this.cssText = t6, this.t = e8;
-    }
-    get styleSheet() {
-      let t6 = this.o;
-      const s4 = this.t;
-      if (e && void 0 === t6) {
-        const e8 = void 0 !== s4 && 1 === s4.length;
-        e8 && (t6 = o.get(s4)), void 0 === t6 && ((this.o = t6 = new CSSStyleSheet()).replaceSync(this.cssText), e8 && o.set(s4, t6));
-      }
-      return t6;
-    }
-    toString() {
-      return this.cssText;
-    }
-  };
-  var r = (t6) => new n("string" == typeof t6 ? t6 : t6 + "", void 0, s);
-  var i = (t6, ...e8) => {
-    const o9 = 1 === t6.length ? t6[0] : e8.reduce((e9, s4, o10) => e9 + ((t7) => {
-      if (true === t7._$cssResult$) return t7.cssText;
-      if ("number" == typeof t7) return t7;
-      throw Error("Value passed to 'css' function must be a 'css' function result: " + t7 + ". Use 'unsafeCSS' to pass non-literal values, but take care to ensure page security.");
-    })(s4) + t6[o10 + 1], t6[0]);
-    return new n(o9, t6, s);
-  };
-  var S = (s4, o9) => {
-    if (e) s4.adoptedStyleSheets = o9.map((t6) => t6 instanceof CSSStyleSheet ? t6 : t6.styleSheet);
-    else for (const e8 of o9) {
-      const o10 = document.createElement("style"), n6 = t.litNonce;
-      void 0 !== n6 && o10.setAttribute("nonce", n6), o10.textContent = e8.cssText, s4.appendChild(o10);
-    }
-  };
-  var c = e ? (t6) => t6 : (t6) => t6 instanceof CSSStyleSheet ? ((t7) => {
-    let e8 = "";
-    for (const s4 of t7.cssRules) e8 += s4.cssText;
-    return r(e8);
-  })(t6) : t6;
-
-  // node_modules/@lit/reactive-element/reactive-element.js
-  var { is: i2, defineProperty: e2, getOwnPropertyDescriptor: h, getOwnPropertyNames: r2, getOwnPropertySymbols: o2, getPrototypeOf: n2 } = Object;
-  var a = globalThis;
-  var c2 = a.trustedTypes;
-  var l = c2 ? c2.emptyScript : "";
-  var p = a.reactiveElementPolyfillSupport;
-  var d = (t6, s4) => t6;
-  var u = { toAttribute(t6, s4) {
-    switch (s4) {
-      case Boolean:
-        t6 = t6 ? l : null;
-        break;
-      case Object:
-      case Array:
-        t6 = null == t6 ? t6 : JSON.stringify(t6);
-    }
-    return t6;
-  }, fromAttribute(t6, s4) {
-    let i7 = t6;
-    switch (s4) {
-      case Boolean:
-        i7 = null !== t6;
-        break;
-      case Number:
-        i7 = null === t6 ? null : Number(t6);
-        break;
-      case Object:
-      case Array:
-        try {
-          i7 = JSON.parse(t6);
-        } catch (t7) {
-          i7 = null;
-        }
-    }
-    return i7;
-  } };
-  var f = (t6, s4) => !i2(t6, s4);
-  var b = { attribute: true, type: String, converter: u, reflect: false, useDefault: false, hasChanged: f };
-  var _a, _b;
-  (_a = Symbol.metadata) != null ? _a : Symbol.metadata = /* @__PURE__ */ Symbol("metadata"), (_b = a.litPropertyMetadata) != null ? _b : a.litPropertyMetadata = /* @__PURE__ */ new WeakMap();
-  var y = class extends HTMLElement {
-    static addInitializer(t6) {
-      var _a8;
-      this._$Ei(), ((_a8 = this.l) != null ? _a8 : this.l = []).push(t6);
-    }
-    static get observedAttributes() {
-      return this.finalize(), this._$Eh && [...this._$Eh.keys()];
-    }
-    static createProperty(t6, s4 = b) {
-      if (s4.state && (s4.attribute = false), this._$Ei(), this.prototype.hasOwnProperty(t6) && ((s4 = Object.create(s4)).wrapped = true), this.elementProperties.set(t6, s4), !s4.noAccessor) {
-        const i7 = /* @__PURE__ */ Symbol(), h3 = this.getPropertyDescriptor(t6, i7, s4);
-        void 0 !== h3 && e2(this.prototype, t6, h3);
-      }
-    }
-    static getPropertyDescriptor(t6, s4, i7) {
-      var _a8;
-      const { get: e8, set: r7 } = (_a8 = h(this.prototype, t6)) != null ? _a8 : { get() {
-        return this[s4];
-      }, set(t7) {
-        this[s4] = t7;
-      } };
-      return { get: e8, set(s5) {
-        const h3 = e8 == null ? void 0 : e8.call(this);
-        r7 == null ? void 0 : r7.call(this, s5), this.requestUpdate(t6, h3, i7);
-      }, configurable: true, enumerable: true };
-    }
-    static getPropertyOptions(t6) {
-      var _a8;
-      return (_a8 = this.elementProperties.get(t6)) != null ? _a8 : b;
-    }
-    static _$Ei() {
-      if (this.hasOwnProperty(d("elementProperties"))) return;
-      const t6 = n2(this);
-      t6.finalize(), void 0 !== t6.l && (this.l = [...t6.l]), this.elementProperties = new Map(t6.elementProperties);
-    }
-    static finalize() {
-      if (this.hasOwnProperty(d("finalized"))) return;
-      if (this.finalized = true, this._$Ei(), this.hasOwnProperty(d("properties"))) {
-        const t7 = this.properties, s4 = [...r2(t7), ...o2(t7)];
-        for (const i7 of s4) this.createProperty(i7, t7[i7]);
-      }
-      const t6 = this[Symbol.metadata];
-      if (null !== t6) {
-        const s4 = litPropertyMetadata.get(t6);
-        if (void 0 !== s4) for (const [t7, i7] of s4) this.elementProperties.set(t7, i7);
-      }
-      this._$Eh = /* @__PURE__ */ new Map();
-      for (const [t7, s4] of this.elementProperties) {
-        const i7 = this._$Eu(t7, s4);
-        void 0 !== i7 && this._$Eh.set(i7, t7);
-      }
-      this.elementStyles = this.finalizeStyles(this.styles);
-    }
-    static finalizeStyles(s4) {
-      const i7 = [];
-      if (Array.isArray(s4)) {
-        const e8 = new Set(s4.flat(1 / 0).reverse());
-        for (const s5 of e8) i7.unshift(c(s5));
-      } else void 0 !== s4 && i7.push(c(s4));
-      return i7;
-    }
-    static _$Eu(t6, s4) {
-      const i7 = s4.attribute;
-      return false === i7 ? void 0 : "string" == typeof i7 ? i7 : "string" == typeof t6 ? t6.toLowerCase() : void 0;
-    }
-    constructor() {
-      super(), this._$Ep = void 0, this.isUpdatePending = false, this.hasUpdated = false, this._$Em = null, this._$Ev();
-    }
-    _$Ev() {
-      var _a8;
-      this._$ES = new Promise((t6) => this.enableUpdating = t6), this._$AL = /* @__PURE__ */ new Map(), this._$E_(), this.requestUpdate(), (_a8 = this.constructor.l) == null ? void 0 : _a8.forEach((t6) => t6(this));
-    }
-    addController(t6) {
-      var _a8, _b2;
-      ((_a8 = this._$EO) != null ? _a8 : this._$EO = /* @__PURE__ */ new Set()).add(t6), void 0 !== this.renderRoot && this.isConnected && ((_b2 = t6.hostConnected) == null ? void 0 : _b2.call(t6));
-    }
-    removeController(t6) {
-      var _a8;
-      (_a8 = this._$EO) == null ? void 0 : _a8.delete(t6);
-    }
-    _$E_() {
-      const t6 = /* @__PURE__ */ new Map(), s4 = this.constructor.elementProperties;
-      for (const i7 of s4.keys()) this.hasOwnProperty(i7) && (t6.set(i7, this[i7]), delete this[i7]);
-      t6.size > 0 && (this._$Ep = t6);
-    }
-    createRenderRoot() {
-      var _a8;
-      const t6 = (_a8 = this.shadowRoot) != null ? _a8 : this.attachShadow(this.constructor.shadowRootOptions);
-      return S(t6, this.constructor.elementStyles), t6;
-    }
-    connectedCallback() {
-      var _a8, _b2;
-      (_a8 = this.renderRoot) != null ? _a8 : this.renderRoot = this.createRenderRoot(), this.enableUpdating(true), (_b2 = this._$EO) == null ? void 0 : _b2.forEach((t6) => {
-        var _a9;
-        return (_a9 = t6.hostConnected) == null ? void 0 : _a9.call(t6);
-      });
-    }
-    enableUpdating(t6) {
-    }
-    disconnectedCallback() {
-      var _a8;
-      (_a8 = this._$EO) == null ? void 0 : _a8.forEach((t6) => {
-        var _a9;
-        return (_a9 = t6.hostDisconnected) == null ? void 0 : _a9.call(t6);
-      });
-    }
-    attributeChangedCallback(t6, s4, i7) {
-      this._$AK(t6, i7);
-    }
-    _$ET(t6, s4) {
-      var _a8;
-      const i7 = this.constructor.elementProperties.get(t6), e8 = this.constructor._$Eu(t6, i7);
-      if (void 0 !== e8 && true === i7.reflect) {
-        const h3 = (void 0 !== ((_a8 = i7.converter) == null ? void 0 : _a8.toAttribute) ? i7.converter : u).toAttribute(s4, i7.type);
-        this._$Em = t6, null == h3 ? this.removeAttribute(e8) : this.setAttribute(e8, h3), this._$Em = null;
-      }
-    }
-    _$AK(t6, s4) {
-      var _a8, _b2, _c;
-      const i7 = this.constructor, e8 = i7._$Eh.get(t6);
-      if (void 0 !== e8 && this._$Em !== e8) {
-        const t7 = i7.getPropertyOptions(e8), h3 = "function" == typeof t7.converter ? { fromAttribute: t7.converter } : void 0 !== ((_a8 = t7.converter) == null ? void 0 : _a8.fromAttribute) ? t7.converter : u;
-        this._$Em = e8;
-        const r7 = h3.fromAttribute(s4, t7.type);
-        this[e8] = (_c = r7 != null ? r7 : (_b2 = this._$Ej) == null ? void 0 : _b2.get(e8)) != null ? _c : r7, this._$Em = null;
-      }
-    }
-    requestUpdate(t6, s4, i7, e8 = false, h3) {
-      var _a8, _b2;
-      if (void 0 !== t6) {
-        const r7 = this.constructor;
-        if (false === e8 && (h3 = this[t6]), i7 != null ? i7 : i7 = r7.getPropertyOptions(t6), !(((_a8 = i7.hasChanged) != null ? _a8 : f)(h3, s4) || i7.useDefault && i7.reflect && h3 === ((_b2 = this._$Ej) == null ? void 0 : _b2.get(t6)) && !this.hasAttribute(r7._$Eu(t6, i7)))) return;
-        this.C(t6, s4, i7);
-      }
-      false === this.isUpdatePending && (this._$ES = this._$EP());
-    }
-    C(t6, s4, { useDefault: i7, reflect: e8, wrapped: h3 }, r7) {
-      var _a8, _b2, _c;
-      i7 && !((_a8 = this._$Ej) != null ? _a8 : this._$Ej = /* @__PURE__ */ new Map()).has(t6) && (this._$Ej.set(t6, (_b2 = r7 != null ? r7 : s4) != null ? _b2 : this[t6]), true !== h3 || void 0 !== r7) || (this._$AL.has(t6) || (this.hasUpdated || i7 || (s4 = void 0), this._$AL.set(t6, s4)), true === e8 && this._$Em !== t6 && ((_c = this._$Eq) != null ? _c : this._$Eq = /* @__PURE__ */ new Set()).add(t6));
-    }
-    async _$EP() {
-      this.isUpdatePending = true;
-      try {
-        await this._$ES;
-      } catch (t7) {
-        Promise.reject(t7);
-      }
-      const t6 = this.scheduleUpdate();
-      return null != t6 && await t6, !this.isUpdatePending;
-    }
-    scheduleUpdate() {
-      return this.performUpdate();
-    }
-    performUpdate() {
-      var _a8, _b2;
-      if (!this.isUpdatePending) return;
-      if (!this.hasUpdated) {
-        if ((_a8 = this.renderRoot) != null ? _a8 : this.renderRoot = this.createRenderRoot(), this._$Ep) {
-          for (const [t8, s5] of this._$Ep) this[t8] = s5;
-          this._$Ep = void 0;
-        }
-        const t7 = this.constructor.elementProperties;
-        if (t7.size > 0) for (const [s5, i7] of t7) {
-          const { wrapped: t8 } = i7, e8 = this[s5];
-          true !== t8 || this._$AL.has(s5) || void 0 === e8 || this.C(s5, void 0, i7, e8);
-        }
-      }
-      let t6 = false;
-      const s4 = this._$AL;
-      try {
-        t6 = this.shouldUpdate(s4), t6 ? (this.willUpdate(s4), (_b2 = this._$EO) == null ? void 0 : _b2.forEach((t7) => {
-          var _a9;
-          return (_a9 = t7.hostUpdate) == null ? void 0 : _a9.call(t7);
-        }), this.update(s4)) : this._$EM();
-      } catch (s5) {
-        throw t6 = false, this._$EM(), s5;
-      }
-      t6 && this._$AE(s4);
-    }
-    willUpdate(t6) {
-    }
-    _$AE(t6) {
-      var _a8;
-      (_a8 = this._$EO) == null ? void 0 : _a8.forEach((t7) => {
-        var _a9;
-        return (_a9 = t7.hostUpdated) == null ? void 0 : _a9.call(t7);
-      }), this.hasUpdated || (this.hasUpdated = true, this.firstUpdated(t6)), this.updated(t6);
-    }
-    _$EM() {
-      this._$AL = /* @__PURE__ */ new Map(), this.isUpdatePending = false;
-    }
-    get updateComplete() {
-      return this.getUpdateComplete();
-    }
-    getUpdateComplete() {
-      return this._$ES;
-    }
-    shouldUpdate(t6) {
-      return true;
-    }
-    update(t6) {
-      this._$Eq && (this._$Eq = this._$Eq.forEach((t7) => this._$ET(t7, this[t7]))), this._$EM();
-    }
-    updated(t6) {
-    }
-    firstUpdated(t6) {
-    }
-  };
-  var _a2;
-  y.elementStyles = [], y.shadowRootOptions = { mode: "open" }, y[d("elementProperties")] = /* @__PURE__ */ new Map(), y[d("finalized")] = /* @__PURE__ */ new Map(), p == null ? void 0 : p({ ReactiveElement: y }), ((_a2 = a.reactiveElementVersions) != null ? _a2 : a.reactiveElementVersions = []).push("2.1.2");
-
-  // node_modules/lit-html/lit-html.js
-  var t2 = globalThis;
-  var i3 = (t6) => t6;
-  var s2 = t2.trustedTypes;
-  var e3 = s2 ? s2.createPolicy("lit-html", { createHTML: (t6) => t6 }) : void 0;
-  var h2 = "$lit$";
-  var o3 = `lit$${Math.random().toFixed(9).slice(2)}$`;
-  var n3 = "?" + o3;
-  var r3 = `<${n3}>`;
-  var l2 = document;
-  var c3 = () => l2.createComment("");
-  var a2 = (t6) => null === t6 || "object" != typeof t6 && "function" != typeof t6;
-  var u2 = Array.isArray;
-  var d2 = (t6) => u2(t6) || "function" == typeof (t6 == null ? void 0 : t6[Symbol.iterator]);
-  var f2 = "[ 	\n\f\r]";
-  var v = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g;
-  var _ = /-->/g;
-  var m = />/g;
-  var p2 = RegExp(`>|${f2}(?:([^\\s"'>=/]+)(${f2}*=${f2}*(?:[^ 	
-\f\r"'\`<>=]|("|')|))|$)`, "g");
-  var g = /'/g;
-  var $ = /"/g;
-  var y2 = /^(?:script|style|textarea|title)$/i;
-  var x = (t6) => (i7, ...s4) => ({ _$litType$: t6, strings: i7, values: s4 });
-  var b2 = x(1);
-  var w = x(2);
-  var T = x(3);
-  var E = /* @__PURE__ */ Symbol.for("lit-noChange");
-  var A = /* @__PURE__ */ Symbol.for("lit-nothing");
-  var C = /* @__PURE__ */ new WeakMap();
-  var P = l2.createTreeWalker(l2, 129);
-  function V(t6, i7) {
-    if (!u2(t6) || !t6.hasOwnProperty("raw")) throw Error("invalid template strings array");
-    return void 0 !== e3 ? e3.createHTML(i7) : i7;
-  }
-  var N = (t6, i7) => {
-    const s4 = t6.length - 1, e8 = [];
-    let n6, l6 = 2 === i7 ? "<svg>" : 3 === i7 ? "<math>" : "", c5 = v;
-    for (let i8 = 0; i8 < s4; i8++) {
-      const s5 = t6[i8];
-      let a4, u4, d3 = -1, f3 = 0;
-      for (; f3 < s5.length && (c5.lastIndex = f3, u4 = c5.exec(s5), null !== u4); ) f3 = c5.lastIndex, c5 === v ? "!--" === u4[1] ? c5 = _ : void 0 !== u4[1] ? c5 = m : void 0 !== u4[2] ? (y2.test(u4[2]) && (n6 = RegExp("</" + u4[2], "g")), c5 = p2) : void 0 !== u4[3] && (c5 = p2) : c5 === p2 ? ">" === u4[0] ? (c5 = n6 != null ? n6 : v, d3 = -1) : void 0 === u4[1] ? d3 = -2 : (d3 = c5.lastIndex - u4[2].length, a4 = u4[1], c5 = void 0 === u4[3] ? p2 : '"' === u4[3] ? $ : g) : c5 === $ || c5 === g ? c5 = p2 : c5 === _ || c5 === m ? c5 = v : (c5 = p2, n6 = void 0);
-      const x2 = c5 === p2 && t6[i8 + 1].startsWith("/>") ? " " : "";
-      l6 += c5 === v ? s5 + r3 : d3 >= 0 ? (e8.push(a4), s5.slice(0, d3) + h2 + s5.slice(d3) + o3 + x2) : s5 + o3 + (-2 === d3 ? i8 : x2);
-    }
-    return [V(t6, l6 + (t6[s4] || "<?>") + (2 === i7 ? "</svg>" : 3 === i7 ? "</math>" : "")), e8];
-  };
-  var S2 = class _S {
-    constructor({ strings: t6, _$litType$: i7 }, e8) {
-      let r7;
-      this.parts = [];
-      let l6 = 0, a4 = 0;
-      const u4 = t6.length - 1, d3 = this.parts, [f3, v2] = N(t6, i7);
-      if (this.el = _S.createElement(f3, e8), P.currentNode = this.el.content, 2 === i7 || 3 === i7) {
-        const t7 = this.el.content.firstChild;
-        t7.replaceWith(...t7.childNodes);
-      }
-      for (; null !== (r7 = P.nextNode()) && d3.length < u4; ) {
-        if (1 === r7.nodeType) {
-          if (r7.hasAttributes()) for (const t7 of r7.getAttributeNames()) if (t7.endsWith(h2)) {
-            const i8 = v2[a4++], s4 = r7.getAttribute(t7).split(o3), e9 = /([.?@])?(.*)/.exec(i8);
-            d3.push({ type: 1, index: l6, name: e9[2], strings: s4, ctor: "." === e9[1] ? I : "?" === e9[1] ? L : "@" === e9[1] ? z : H }), r7.removeAttribute(t7);
-          } else t7.startsWith(o3) && (d3.push({ type: 6, index: l6 }), r7.removeAttribute(t7));
-          if (y2.test(r7.tagName)) {
-            const t7 = r7.textContent.split(o3), i8 = t7.length - 1;
-            if (i8 > 0) {
-              r7.textContent = s2 ? s2.emptyScript : "";
-              for (let s4 = 0; s4 < i8; s4++) r7.append(t7[s4], c3()), P.nextNode(), d3.push({ type: 2, index: ++l6 });
-              r7.append(t7[i8], c3());
-            }
-          }
-        } else if (8 === r7.nodeType) if (r7.data === n3) d3.push({ type: 2, index: l6 });
-        else {
-          let t7 = -1;
-          for (; -1 !== (t7 = r7.data.indexOf(o3, t7 + 1)); ) d3.push({ type: 7, index: l6 }), t7 += o3.length - 1;
-        }
-        l6++;
-      }
-    }
-    static createElement(t6, i7) {
-      const s4 = l2.createElement("template");
-      return s4.innerHTML = t6, s4;
-    }
-  };
-  function M(t6, i7, s4 = t6, e8) {
-    var _a8, _b2, _c;
-    if (i7 === E) return i7;
-    let h3 = void 0 !== e8 ? (_a8 = s4._$Co) == null ? void 0 : _a8[e8] : s4._$Cl;
-    const o9 = a2(i7) ? void 0 : i7._$litDirective$;
-    return (h3 == null ? void 0 : h3.constructor) !== o9 && ((_b2 = h3 == null ? void 0 : h3._$AO) == null ? void 0 : _b2.call(h3, false), void 0 === o9 ? h3 = void 0 : (h3 = new o9(t6), h3._$AT(t6, s4, e8)), void 0 !== e8 ? ((_c = s4._$Co) != null ? _c : s4._$Co = [])[e8] = h3 : s4._$Cl = h3), void 0 !== h3 && (i7 = M(t6, h3._$AS(t6, i7.values), h3, e8)), i7;
-  }
-  var R = class {
-    constructor(t6, i7) {
-      this._$AV = [], this._$AN = void 0, this._$AD = t6, this._$AM = i7;
-    }
-    get parentNode() {
-      return this._$AM.parentNode;
-    }
-    get _$AU() {
-      return this._$AM._$AU;
-    }
-    u(t6) {
-      var _a8;
-      const { el: { content: i7 }, parts: s4 } = this._$AD, e8 = ((_a8 = t6 == null ? void 0 : t6.creationScope) != null ? _a8 : l2).importNode(i7, true);
-      P.currentNode = e8;
-      let h3 = P.nextNode(), o9 = 0, n6 = 0, r7 = s4[0];
-      for (; void 0 !== r7; ) {
-        if (o9 === r7.index) {
-          let i8;
-          2 === r7.type ? i8 = new k(h3, h3.nextSibling, this, t6) : 1 === r7.type ? i8 = new r7.ctor(h3, r7.name, r7.strings, this, t6) : 6 === r7.type && (i8 = new Z(h3, this, t6)), this._$AV.push(i8), r7 = s4[++n6];
-        }
-        o9 !== (r7 == null ? void 0 : r7.index) && (h3 = P.nextNode(), o9++);
-      }
-      return P.currentNode = l2, e8;
-    }
-    p(t6) {
-      let i7 = 0;
-      for (const s4 of this._$AV) void 0 !== s4 && (void 0 !== s4.strings ? (s4._$AI(t6, s4, i7), i7 += s4.strings.length - 2) : s4._$AI(t6[i7])), i7++;
-    }
-  };
-  var k = class _k {
-    get _$AU() {
-      var _a8, _b2;
-      return (_b2 = (_a8 = this._$AM) == null ? void 0 : _a8._$AU) != null ? _b2 : this._$Cv;
-    }
-    constructor(t6, i7, s4, e8) {
-      var _a8;
-      this.type = 2, this._$AH = A, this._$AN = void 0, this._$AA = t6, this._$AB = i7, this._$AM = s4, this.options = e8, this._$Cv = (_a8 = e8 == null ? void 0 : e8.isConnected) != null ? _a8 : true;
-    }
-    get parentNode() {
-      let t6 = this._$AA.parentNode;
-      const i7 = this._$AM;
-      return void 0 !== i7 && 11 === (t6 == null ? void 0 : t6.nodeType) && (t6 = i7.parentNode), t6;
-    }
-    get startNode() {
-      return this._$AA;
-    }
-    get endNode() {
-      return this._$AB;
-    }
-    _$AI(t6, i7 = this) {
-      t6 = M(this, t6, i7), a2(t6) ? t6 === A || null == t6 || "" === t6 ? (this._$AH !== A && this._$AR(), this._$AH = A) : t6 !== this._$AH && t6 !== E && this._(t6) : void 0 !== t6._$litType$ ? this.$(t6) : void 0 !== t6.nodeType ? this.T(t6) : d2(t6) ? this.k(t6) : this._(t6);
-    }
-    O(t6) {
-      return this._$AA.parentNode.insertBefore(t6, this._$AB);
-    }
-    T(t6) {
-      this._$AH !== t6 && (this._$AR(), this._$AH = this.O(t6));
-    }
-    _(t6) {
-      this._$AH !== A && a2(this._$AH) ? this._$AA.nextSibling.data = t6 : this.T(l2.createTextNode(t6)), this._$AH = t6;
-    }
-    $(t6) {
-      var _a8;
-      const { values: i7, _$litType$: s4 } = t6, e8 = "number" == typeof s4 ? this._$AC(t6) : (void 0 === s4.el && (s4.el = S2.createElement(V(s4.h, s4.h[0]), this.options)), s4);
-      if (((_a8 = this._$AH) == null ? void 0 : _a8._$AD) === e8) this._$AH.p(i7);
-      else {
-        const t7 = new R(e8, this), s5 = t7.u(this.options);
-        t7.p(i7), this.T(s5), this._$AH = t7;
-      }
-    }
-    _$AC(t6) {
-      let i7 = C.get(t6.strings);
-      return void 0 === i7 && C.set(t6.strings, i7 = new S2(t6)), i7;
-    }
-    k(t6) {
-      u2(this._$AH) || (this._$AH = [], this._$AR());
-      const i7 = this._$AH;
-      let s4, e8 = 0;
-      for (const h3 of t6) e8 === i7.length ? i7.push(s4 = new _k(this.O(c3()), this.O(c3()), this, this.options)) : s4 = i7[e8], s4._$AI(h3), e8++;
-      e8 < i7.length && (this._$AR(s4 && s4._$AB.nextSibling, e8), i7.length = e8);
-    }
-    _$AR(t6 = this._$AA.nextSibling, s4) {
-      var _a8;
-      for ((_a8 = this._$AP) == null ? void 0 : _a8.call(this, false, true, s4); t6 !== this._$AB; ) {
-        const s5 = i3(t6).nextSibling;
-        i3(t6).remove(), t6 = s5;
-      }
-    }
-    setConnected(t6) {
-      var _a8;
-      void 0 === this._$AM && (this._$Cv = t6, (_a8 = this._$AP) == null ? void 0 : _a8.call(this, t6));
-    }
-  };
-  var H = class {
-    get tagName() {
-      return this.element.tagName;
-    }
-    get _$AU() {
-      return this._$AM._$AU;
-    }
-    constructor(t6, i7, s4, e8, h3) {
-      this.type = 1, this._$AH = A, this._$AN = void 0, this.element = t6, this.name = i7, this._$AM = e8, this.options = h3, s4.length > 2 || "" !== s4[0] || "" !== s4[1] ? (this._$AH = Array(s4.length - 1).fill(new String()), this.strings = s4) : this._$AH = A;
-    }
-    _$AI(t6, i7 = this, s4, e8) {
-      const h3 = this.strings;
-      let o9 = false;
-      if (void 0 === h3) t6 = M(this, t6, i7, 0), o9 = !a2(t6) || t6 !== this._$AH && t6 !== E, o9 && (this._$AH = t6);
-      else {
-        const e9 = t6;
-        let n6, r7;
-        for (t6 = h3[0], n6 = 0; n6 < h3.length - 1; n6++) r7 = M(this, e9[s4 + n6], i7, n6), r7 === E && (r7 = this._$AH[n6]), o9 || (o9 = !a2(r7) || r7 !== this._$AH[n6]), r7 === A ? t6 = A : t6 !== A && (t6 += (r7 != null ? r7 : "") + h3[n6 + 1]), this._$AH[n6] = r7;
-      }
-      o9 && !e8 && this.j(t6);
-    }
-    j(t6) {
-      t6 === A ? this.element.removeAttribute(this.name) : this.element.setAttribute(this.name, t6 != null ? t6 : "");
-    }
-  };
-  var I = class extends H {
-    constructor() {
-      super(...arguments), this.type = 3;
-    }
-    j(t6) {
-      this.element[this.name] = t6 === A ? void 0 : t6;
-    }
-  };
-  var L = class extends H {
-    constructor() {
-      super(...arguments), this.type = 4;
-    }
-    j(t6) {
-      this.element.toggleAttribute(this.name, !!t6 && t6 !== A);
-    }
-  };
-  var z = class extends H {
-    constructor(t6, i7, s4, e8, h3) {
-      super(t6, i7, s4, e8, h3), this.type = 5;
-    }
-    _$AI(t6, i7 = this) {
-      var _a8;
-      if ((t6 = (_a8 = M(this, t6, i7, 0)) != null ? _a8 : A) === E) return;
-      const s4 = this._$AH, e8 = t6 === A && s4 !== A || t6.capture !== s4.capture || t6.once !== s4.once || t6.passive !== s4.passive, h3 = t6 !== A && (s4 === A || e8);
-      e8 && this.element.removeEventListener(this.name, this, s4), h3 && this.element.addEventListener(this.name, this, t6), this._$AH = t6;
-    }
-    handleEvent(t6) {
-      var _a8, _b2;
-      "function" == typeof this._$AH ? this._$AH.call((_b2 = (_a8 = this.options) == null ? void 0 : _a8.host) != null ? _b2 : this.element, t6) : this._$AH.handleEvent(t6);
-    }
-  };
-  var Z = class {
-    constructor(t6, i7, s4) {
-      this.element = t6, this.type = 6, this._$AN = void 0, this._$AM = i7, this.options = s4;
-    }
-    get _$AU() {
-      return this._$AM._$AU;
-    }
-    _$AI(t6) {
-      M(this, t6);
-    }
-  };
-  var j = { M: h2, P: o3, A: n3, C: 1, L: N, R, D: d2, V: M, I: k, H, N: L, U: z, B: I, F: Z };
-  var B = t2.litHtmlPolyfillSupport;
-  var _a3;
-  B == null ? void 0 : B(S2, k), ((_a3 = t2.litHtmlVersions) != null ? _a3 : t2.litHtmlVersions = []).push("3.3.3");
-  var D = (t6, i7, s4) => {
-    var _a8, _b2;
-    const e8 = (_a8 = s4 == null ? void 0 : s4.renderBefore) != null ? _a8 : i7;
-    let h3 = e8._$litPart$;
-    if (void 0 === h3) {
-      const t7 = (_b2 = s4 == null ? void 0 : s4.renderBefore) != null ? _b2 : null;
-      e8._$litPart$ = h3 = new k(i7.insertBefore(c3(), t7), t7, void 0, s4 != null ? s4 : {});
-    }
-    return h3._$AI(t6), h3;
-  };
-
-  // node_modules/lit-element/lit-element.js
-  var s3 = globalThis;
-  var i4 = class extends y {
-    constructor() {
-      super(...arguments), this.renderOptions = { host: this }, this._$Do = void 0;
-    }
-    createRenderRoot() {
-      var _a8, _b2;
-      const t6 = super.createRenderRoot();
-      return (_b2 = (_a8 = this.renderOptions).renderBefore) != null ? _b2 : _a8.renderBefore = t6.firstChild, t6;
-    }
-    update(t6) {
-      const r7 = this.render();
-      this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(t6), this._$Do = D(r7, this.renderRoot, this.renderOptions);
-    }
-    connectedCallback() {
-      var _a8;
-      super.connectedCallback(), (_a8 = this._$Do) == null ? void 0 : _a8.setConnected(true);
-    }
-    disconnectedCallback() {
-      var _a8;
-      super.disconnectedCallback(), (_a8 = this._$Do) == null ? void 0 : _a8.setConnected(false);
-    }
-    render() {
-      return E;
-    }
-  };
-  var _a4;
-  i4._$litElement$ = true, i4["finalized"] = true, (_a4 = s3.litElementHydrateSupport) == null ? void 0 : _a4.call(s3, { LitElement: i4 });
-  var o4 = s3.litElementPolyfillSupport;
-  o4 == null ? void 0 : o4({ LitElement: i4 });
-  var _a5;
-  ((_a5 = s3.litElementVersions) != null ? _a5 : s3.litElementVersions = []).push("4.2.2");
-
-  // node_modules/lit-html/is-server.js
-  var o5 = false;
-
-  // node_modules/@lit/reactive-element/decorators/custom-element.js
-  var t3 = (t6) => (e8, o9) => {
-    void 0 !== o9 ? o9.addInitializer(() => {
-      customElements.define(t6, e8);
-    }) : customElements.define(t6, e8);
-  };
-
-  // node_modules/@lit/reactive-element/decorators/property.js
-  var o6 = { attribute: true, type: String, converter: u, reflect: false, hasChanged: f };
-  var r4 = (t6 = o6, e8, r7) => {
-    const { kind: n6, metadata: i7 } = r7;
-    let s4 = globalThis.litPropertyMetadata.get(i7);
-    if (void 0 === s4 && globalThis.litPropertyMetadata.set(i7, s4 = /* @__PURE__ */ new Map()), "setter" === n6 && ((t6 = Object.create(t6)).wrapped = true), s4.set(r7.name, t6), "accessor" === n6) {
-      const { name: o9 } = r7;
-      return { set(r8) {
-        const n7 = e8.get.call(this);
-        e8.set.call(this, r8), this.requestUpdate(o9, n7, t6, true, r8);
-      }, init(e9) {
-        return void 0 !== e9 && this.C(o9, void 0, t6, e9), e9;
-      } };
-    }
-    if ("setter" === n6) {
-      const { name: o9 } = r7;
-      return function(r8) {
-        const n7 = this[o9];
-        e8.call(this, r8), this.requestUpdate(o9, n7, t6, true, r8);
-      };
-    }
-    throw Error("Unsupported decorator location: " + n6);
-  };
-  function n4(t6) {
-    return (e8, o9) => "object" == typeof o9 ? r4(t6, e8, o9) : ((t7, e9, o10) => {
-      const r7 = e9.hasOwnProperty(o10);
-      return e9.constructor.createProperty(o10, t7), r7 ? Object.getOwnPropertyDescriptor(e9, o10) : void 0;
-    })(t6, e8, o9);
-  }
-
-  // node_modules/@lit/reactive-element/decorators/state.js
-  function r5(r7) {
-    return n4({ ...r7, state: true, attribute: false });
-  }
-
-  // node_modules/@lit/reactive-element/decorators/base.js
-  var e4 = (e8, t6, c5) => (c5.configurable = true, c5.enumerable = true, Reflect.decorate && "object" != typeof t6 && Object.defineProperty(e8, t6, c5), c5);
-
-  // node_modules/@lit/reactive-element/decorators/query.js
-  function e5(e8, r7) {
-    return (n6, s4, i7) => {
-      const o9 = (t6) => {
-        var _a8, _b2;
-        return (_b2 = (_a8 = t6.renderRoot) == null ? void 0 : _a8.querySelector(e8)) != null ? _b2 : null;
-      };
-      if (r7) {
-        const { get: e9, set: r8 } = "object" == typeof s4 ? n6 : i7 != null ? i7 : /* @__PURE__ */ (() => {
-          const t6 = /* @__PURE__ */ Symbol();
-          return { get() {
-            return this[t6];
-          }, set(e10) {
-            this[t6] = e10;
-          } };
-        })();
-        return e4(n6, s4, { get() {
-          let t6 = e9.call(this);
-          return void 0 === t6 && (t6 = o9(this), (null !== t6 || this.hasUpdated) && r8.call(this, t6)), t6;
-        } });
-      }
-      return e4(n6, s4, { get() {
-        return o9(this);
-      } });
-    };
-  }
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.AOKMSJXD.js
-  var host_styles_default = i`
-  :host {
-    box-sizing: border-box;
-  }
-
-  :host *,
-  :host *::before,
-  :host *::after {
-    box-sizing: inherit;
-  }
-
-  [hidden],
-  :host([hidden]) {
-    display: none !important;
-  }
-`;
-  var HAS_ENDING_COLON = /;\s+$/;
-  function camelToKebab(str) {
-    return str.replace(/[A-Z]/g, (c5) => `-${c5.toLowerCase()}`);
-  }
-  function buildStyleAttribute(options) {
-    const { property: property2, value, element } = options;
-    if (value) {
-      let style = element.getAttribute("style") || "";
-      if (style) {
-        if (!style.match(HAS_ENDING_COLON)) {
-          style += ";";
-        }
-        style += " ";
-      }
-      const str = `${property2}: ${value}`;
-      if (style.includes(str)) {
-        return;
-      }
-      return `${style}${str};`;
-    }
-    return null;
-  }
-  var _hasRecordedInitialProperties;
-  var WebAwesomeElement = class extends i4 {
-    constructor() {
-      super();
-      __privateAdd(this, _hasRecordedInitialProperties, false);
-      this.initialReflectedProperties = /* @__PURE__ */ new Map();
-      this.didSSR = o5 || Boolean(this.shadowRoot);
-      this.customStates = {
-        /** Adds or removes the specified custom state. */
-        set: (customState, active) => {
-          var _a8;
-          if (!Boolean((_a8 = this.internals) == null ? void 0 : _a8.states)) return;
-          try {
-            if (active) {
-              this.internals.states.add(customState);
-            } else {
-              this.internals.states.delete(customState);
-            }
-          } catch (e8) {
-            if (String(e8).includes("must start with '--'")) {
-              console.error("Your browser implements an outdated version of CustomStateSet. Consider using a polyfill");
-            } else {
-              throw e8;
-            }
-          }
-        },
-        /** Determines whether or not the element currently has the specified state. */
-        has: (customState) => {
-          var _a8;
-          if (!Boolean((_a8 = this.internals) == null ? void 0 : _a8.states)) return false;
-          try {
-            return this.internals.states.has(customState);
-          } catch {
-            return false;
-          }
-        }
-      };
-      try {
-        this.internals = this.attachInternals();
-      } catch {
-        console.error("Element internals are not supported in your browser. Consider using a polyfill");
-      }
-      this.customStates.set("wa-defined", true);
-      let Self = this.constructor;
-      for (let [property2, spec] of Self.elementProperties) {
-        if (spec.default === "inherit" && spec.initial !== void 0 && typeof property2 === "string") {
-          this.customStates.set(`initial-${property2}-${spec.initial}`, true);
-        }
-      }
-    }
-    /** Prepends host styles to the component's styles. */
-    static get styles() {
-      const styles = Array.isArray(this.css) ? this.css : this.css ? [this.css] : [];
-      return [host_styles_default, ...styles];
-    }
-    connectedCallback() {
-      var _a8;
-      super.connectedCallback();
-      if (!this.didSSR) {
-        (_a8 = this.shadowRoot) == null ? void 0 : _a8.prepend(
-          document.createComment(
-            ` Web Awesome: https://webawesome.com/docs/components/${this.localName.replace("wa-", "")} `
-          )
-        );
-      }
-      if (this.didSSR) {
-        this.updateComplete.then(() => {
-          var _a9;
-          (_a9 = this.shadowRoot) == null ? void 0 : _a9.prepend(
-            document.createComment(
-              ` Web Awesome: https://webawesome.com/docs/components/${this.localName.replace("wa-", "")} `
-            )
-          );
-        });
-      }
-    }
-    attributeChangedCallback(name, oldValue, newValue) {
-      if (!__privateGet(this, _hasRecordedInitialProperties)) {
-        this.constructor.elementProperties.forEach(
-          (obj, prop) => {
-            if (obj.reflect && this[prop] != null) {
-              this.initialReflectedProperties.set(prop, this[prop]);
-            }
-          }
-        );
-        __privateSet(this, _hasRecordedInitialProperties, true);
-      }
-      super.attributeChangedCallback(name, oldValue, newValue);
-    }
-    willUpdate(changedProperties) {
-      super.willUpdate(changedProperties);
-      this.initialReflectedProperties.forEach((value, prop) => {
-        if (changedProperties.has(prop) && this[prop] == null) {
-          this[prop] = value;
-        }
-      });
-    }
-    firstUpdated(changedProperties) {
-      var _a8;
-      super.firstUpdated(changedProperties);
-      if (this.didSSR) {
-        (_a8 = this.shadowRoot) == null ? void 0 : _a8.querySelectorAll("slot").forEach((slotElement) => {
-          slotElement.dispatchEvent(new Event("slotchange", { bubbles: true, composed: false, cancelable: false }));
-        });
-      }
-    }
-    update(changedProperties) {
-      try {
-        super.update(changedProperties);
-      } catch (e8) {
-        if (this.didSSR && !this.hasUpdated) {
-          const event = new Event("lit-hydration-error", { bubbles: true, composed: true, cancelable: false });
-          event.error = e8;
-          this.dispatchEvent(event);
-        }
-        throw e8;
-      }
-    }
-    /**
-     * @internal
-     * Internal way to set styles across both client and server
-     */
-    setStyle(property2, value) {
-      if (!this.style) {
-        const str = buildStyleAttribute({
-          // because this is going to be serialized to an HTML style attribute, need to transform the casing.
-          property: camelToKebab(property2),
-          value,
-          element: this
-        });
-        if (str) {
-          this.setAttribute("style", str);
-        }
-        return;
-      }
-      this.style[property2] = value;
-    }
-    /**
-     * @internal
-     * Internal way to set a CSS custom property across both client and server.
-     */
-    setStyleProperty(property2, value) {
-      if (!this.style) {
-        const str = buildStyleAttribute({
-          // because this is going to be serialized to an HTML style attribute, need to transform the casing.
-          property: property2,
-          value,
-          element: this
-        });
-        if (str) {
-          this.setAttribute("style", str);
-        }
-        return;
-      }
-      this.style.setProperty(property2, value);
-    }
-    /**
-     * @internal Given a native event, this function cancels it and dispatches it again from the host element using the desired
-     * event options.
-     */
-    relayNativeEvent(event, eventOptions) {
-      event.stopImmediatePropagation();
-      this.dispatchEvent(
-        new event.constructor(event.type, {
-          ...event,
-          ...eventOptions
-        })
-      );
-    }
-  };
-  _hasRecordedInitialProperties = /* @__PURE__ */ new WeakMap();
-  __decorateClass([
-    n4()
-  ], WebAwesomeElement.prototype, "dir", 2);
-  __decorateClass([
-    n4()
-  ], WebAwesomeElement.prototype, "lang", 2);
-  __decorateClass([
-    n4({ type: Boolean, reflect: true, attribute: "did-ssr" })
-  ], WebAwesomeElement.prototype, "didSSR", 2);
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.KBXNFZQL.js
-  var CustomErrorValidator = () => {
-    return {
-      observedAttributes: ["custom-error"],
-      checkValidity(element) {
-        const validity = {
-          message: "",
-          isValid: true,
-          invalidKeys: []
-        };
-        if (element.customError) {
-          validity.message = element.customError;
-          validity.isValid = false;
-          validity.invalidKeys = ["customError"];
-        }
-        return validity;
-      }
-    };
-  };
-  var WebAwesomeFormAssociatedElement = class extends WebAwesomeElement {
-    constructor() {
-      super();
-      this.name = null;
-      this.disabled = false;
-      this.required = false;
-      this.assumeInteractionOn = ["input"];
-      this.validators = [];
-      this.valueHasChanged = false;
-      this.hasInteracted = false;
-      this.customError = null;
-      this.emittedEvents = [];
-      this.emitInvalid = (e8) => {
-        if (e8.target !== this) return;
-        this.hasInteracted = true;
-        this.dispatchEvent(new WaInvalidEvent());
-      };
-      this.handleInteraction = (event) => {
-        var _a8;
-        const emittedEvents = this.emittedEvents;
-        if (!emittedEvents.includes(event.type)) {
-          emittedEvents.push(event.type);
-        }
-        if (emittedEvents.length === ((_a8 = this.assumeInteractionOn) == null ? void 0 : _a8.length)) {
-          this.hasInteracted = true;
-        }
-      };
-      if ("addEventListener" in this) {
-        this.addEventListener("invalid", this.emitInvalid);
-      }
-    }
-    /**
-     * Validators are static because they have `observedAttributes`, essentially attributes to "watch"
-     * for changes. Whenever these attributes change, we want to be notified and update the validator.
-     */
-    static get validators() {
-      return o5 ? [] : [CustomErrorValidator()];
-    }
-    // Append all Validator "observedAttributes" into the "observedAttributes" so they can run.
-    static get observedAttributes() {
-      const parentAttrs = new Set(super.observedAttributes || []);
-      for (const validator of this.validators) {
-        if (!validator.observedAttributes) {
-          continue;
-        }
-        for (const attr of validator.observedAttributes) {
-          parentAttrs.add(attr);
-        }
-      }
-      return [...parentAttrs];
-    }
-    connectedCallback() {
-      super.connectedCallback();
-      if (this.didSSR && !this.hasUpdated) {
-        this.updateComplete.then(() => {
-          this.updateValidity();
-        });
-      } else {
-        this.updateValidity();
-      }
-      this.assumeInteractionOn.forEach((event) => {
-        var _a8;
-        (_a8 = this.addEventListener) == null ? void 0 : _a8.call(this, event, this.handleInteraction);
-      });
-    }
-    firstUpdated(...args) {
-      super.firstUpdated(...args);
-      this.updateValidity();
-    }
-    willUpdate(changedProperties) {
-      if (!o5 && changedProperties.has("customError")) {
-        if (!this.customError) {
-          this.customError = null;
-        }
-        this.setCustomValidity(this.customError || "");
-      }
-      if (changedProperties.has("value") || changedProperties.has("disabled") || changedProperties.has("defaultValue")) {
-        const value = this.value;
-        this.updateFormValue(value);
-      }
-      if (changedProperties.has("disabled")) {
-        this.customStates.set("disabled", this.disabled);
-        if (this.hasAttribute("disabled") || !o5 && !this.matches(":disabled")) {
-          this.toggleAttribute("disabled", this.disabled);
-        }
-      }
-      super.willUpdate(changedProperties);
-      if (this.didSSR && !this.hasUpdated) {
-        this.updateComplete.then(() => this.updateValidity());
-      } else {
-        this.updateValidity();
-      }
-    }
-    /**
-     * @internal
-     */
-    updateFormValue(value) {
-      if (Array.isArray(value)) {
-        if (this.name) {
-          const formData = new FormData();
-          for (const val of value) {
-            formData.append(this.name, val);
-          }
-          this.setValue(formData, formData);
-        }
-      } else {
-        this.setValue(value, value);
-      }
-    }
-    get labels() {
-      return this.internals.labels;
-    }
-    getForm() {
-      return this.internals.form;
-    }
-    /**
-     * By default, form controls are associated with the nearest containing `<form>` element. This attribute allows you
-     * to place the form control outside of a form and associate it with the form that has this `id`. The form must be in
-     * the same document or shadow root for this to work.
-     */
-    set form(val) {
-      if (val) {
-        this.setAttribute("form", val);
-      } else {
-        this.removeAttribute("form");
-      }
-    }
-    get form() {
-      return this.internals.form;
-    }
-    get validity() {
-      return this.internals.validity;
-    }
-    // Not sure if this supports `novalidate`. Will need to test.
-    get willValidate() {
-      return this.internals.willValidate;
-    }
-    get validationMessage() {
-      return this.internals.validationMessage;
-    }
-    checkValidity() {
-      this.updateValidity();
-      return this.internals.checkValidity();
-    }
-    reportValidity() {
-      this.updateValidity();
-      this.hasInteracted = true;
-      return this.internals.reportValidity();
-    }
-    /**
-     * Override this to change where constraint validation popups are anchored.
-     */
-    get validationTarget() {
-      return this.input || void 0;
-    }
-    setValidity(...args) {
-      const flags = args[0];
-      const message = args[1];
-      let anchor = args[2];
-      if (!anchor) {
-        anchor = this.validationTarget;
-      }
-      this.internals.setValidity(flags, message, anchor || void 0);
-      this.requestUpdate("validity");
-      this.setCustomStates();
-    }
-    setCustomStates() {
-      const required = Boolean(this.required);
-      const isValid = this.internals.validity.valid;
-      const hasInteracted = this.hasInteracted;
-      this.customStates.set("required", required);
-      this.customStates.set("optional", !required);
-      this.customStates.set("invalid", !isValid);
-      this.customStates.set("valid", isValid);
-      this.customStates.set("user-invalid", !isValid && hasInteracted);
-      this.customStates.set("user-valid", isValid && hasInteracted);
-    }
-    /**
-     * Do not use this when creating a "Validator". This is intended for end users of components.
-     * We track manually defined custom errors so we don't clear them on accident in our validators.
-     *
-     */
-    setCustomValidity(message) {
-      if (!message) {
-        this.customError = null;
-        this.setValidity({});
-        return;
-      }
-      this.customError = message;
-      this.setValidity({ customError: true }, message, this.validationTarget);
-    }
-    formResetCallback() {
-      this.resetValidity();
-      this.hasInteracted = false;
-      this.valueHasChanged = false;
-      this.emittedEvents = [];
-      this.updateValidity();
-    }
-    formDisabledCallback(isDisabled) {
-      this.disabled = isDisabled;
-      this.updateValidity();
-    }
-    /**
-     * Called when the browser is trying to restore element’s state to state in which case reason is "restore", or when
-     * the browser is trying to fulfill autofill on behalf of user in which case reason is "autocomplete". In the case of
-     * "restore", state is a string, File, or FormData object previously set as the second argument to setFormValue.
-     */
-    formStateRestoreCallback(state, reason) {
-      if (this.didSSR && !this.hasUpdated) {
-        this.updateComplete.then(() => {
-          this.value = state;
-          if (reason === "restore") {
-            this.resetValidity();
-          }
-          this.updateValidity();
-        });
-      } else {
-        this.value = state;
-        if (reason === "restore") {
-          this.resetValidity();
-        }
-        this.updateValidity();
-      }
-    }
-    setValue(...args) {
-      const [value, state] = args;
-      this.internals.setFormValue(value, state);
-    }
-    get allValidators() {
-      const staticValidators = this.constructor.validators || [];
-      const validators = this.validators || [];
-      return [...staticValidators, ...validators];
-    }
-    /**
-     * Reset validity is a way of removing manual custom errors and native validation.
-     */
-    resetValidity() {
-      this.setCustomValidity("");
-      this.setValidity({});
-    }
-    updateValidity() {
-      if (this.disabled || this.hasAttribute("disabled") || !this.willValidate) {
-        this.resetValidity();
-        return;
-      }
-      const validators = this.allValidators;
-      if (!(validators == null ? void 0 : validators.length)) {
-        return;
-      }
-      const flags = {
-        // Don't trust custom errors from the Browser. Safari breaks the spec.
-        customError: Boolean(this.customError)
-      };
-      const formControl = this.validationTarget || this.input || void 0;
-      let finalMessage = "";
-      for (const validator of validators) {
-        const { isValid, message, invalidKeys } = validator.checkValidity(this);
-        if (isValid) {
-          continue;
-        }
-        if (!finalMessage) {
-          finalMessage = message;
-        }
-        if ((invalidKeys == null ? void 0 : invalidKeys.length) >= 0) {
-          invalidKeys.forEach((str) => flags[str] = true);
-        }
-      }
-      if (!finalMessage) {
-        finalMessage = this.validationMessage;
-      }
-      this.setValidity(flags, finalMessage, formControl);
-    }
-  };
-  WebAwesomeFormAssociatedElement.formAssociated = true;
-  __decorateClass([
-    n4({ reflect: true })
-  ], WebAwesomeFormAssociatedElement.prototype, "name", 2);
-  __decorateClass([
-    n4({ type: Boolean })
-  ], WebAwesomeFormAssociatedElement.prototype, "disabled", 2);
-  __decorateClass([
-    n4({ state: true, attribute: false })
-  ], WebAwesomeFormAssociatedElement.prototype, "valueHasChanged", 2);
-  __decorateClass([
-    n4({ state: true, attribute: false })
-  ], WebAwesomeFormAssociatedElement.prototype, "hasInteracted", 2);
-  __decorateClass([
-    n4({ attribute: "custom-error", reflect: true })
-  ], WebAwesomeFormAssociatedElement.prototype, "customError", 2);
-  __decorateClass([
-    n4({ attribute: false, state: true, type: Object })
-  ], WebAwesomeFormAssociatedElement.prototype, "validity", 1);
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.RPQJAXXR.js
-  var DEPRECATION_MAP = {
-    small: "s",
-    medium: "m",
-    large: "l"
-  };
-  var warned = /* @__PURE__ */ new Set();
-  function warnDeprecatedSize(tagName, value) {
-    if (value in DEPRECATION_MAP && !warned.has(`${tagName}:${value}`)) {
-      warned.add(`${tagName}:${value}`);
-      console.warn(
-        `[${tagName}] size="${value}" is deprecated. Use size="${DEPRECATION_MAP[value]}" instead. The long-form value will be removed in the next major version.`
-      );
-    }
-  }
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.RWNXKUCF.js
-  var HasSlotController = class {
-    constructor(host, ...slotNames) {
-      this.slotNames = [];
-      this.handleSlotChange = (event) => {
-        const slot = event.target;
-        if (this.slotNames.includes("[default]") && !slot.name || slot.name && this.slotNames.includes(slot.name)) {
-          this.host.requestUpdate();
-        }
-      };
-      (this.host = host).addController(this);
-      this.slotNames = slotNames;
-    }
-    hasDefaultSlot() {
-      if (!this.host.childNodes) {
-        return false;
-      }
-      return [...this.host.childNodes].some((node) => {
-        if (node.nodeType === Node.TEXT_NODE && node.textContent.trim() !== "") {
-          return true;
-        }
-        if (node.nodeType === Node.ELEMENT_NODE) {
-          const el2 = node;
-          const tagName = el2.tagName.toLowerCase();
-          if (tagName === "wa-visually-hidden") {
-            return false;
-          }
-          if (!el2.hasAttribute("slot")) {
-            return true;
-          }
-        }
-        return false;
-      });
-    }
-    hasNamedSlot(name) {
-      var _a8, _b2;
-      return ((_b2 = (_a8 = this.host).querySelector) == null ? void 0 : _b2.call(_a8, `:scope > [slot="${name}"]`)) !== null;
-    }
-    /**
-     * @param slotName     - Name of the slot to look for
-     * @param propertyName - Generally we infer via `withHeader` property on the host, but in cases where its different, you can specify a manual property name.
-     */
-    test(slotName, propertyName) {
-      if (propertyName && this.host.didSSR && !this.host.hasUpdated) {
-        return Boolean(this.host[propertyName]);
-      }
-      return slotName === "[default]" ? this.hasDefaultSlot() : this.hasNamedSlot(slotName);
-    }
-    hostConnected() {
-      const shadowRoot = this.host.shadowRoot;
-      if (shadowRoot && "addEventListener" in shadowRoot) {
-        shadowRoot.addEventListener("slotchange", this.handleSlotChange);
-      }
-    }
-    hostDisconnected() {
-      const shadowRoot = this.host.shadowRoot;
-      if (shadowRoot && "removeEventListener" in shadowRoot) {
-        shadowRoot.removeEventListener("slotchange", this.handleSlotChange);
-      }
-    }
-  };
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.G5ZZIGWB.js
-  var size_styles_default = i`
-  :host([size='xs']) {
-    font-size: var(--wa-font-size-xs);
-  }
-
-  :host([size='s']),
-  :host([size='small']) {
-    font-size: var(--wa-font-size-s);
-  }
-
-  :host([size='m']),
-  :host([size='medium']) {
-    font-size: var(--wa-font-size-m);
-  }
-
-  :host([size='l']),
-  :host([size='large']) {
-    font-size: var(--wa-font-size-l);
-  }
-
-  :host([size='xl']) {
-    font-size: var(--wa-font-size-xl);
-  }
-`;
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.S35PLDPD.js
-  var button_styles_default = i`
-  @layer wa-component {
-    :host {
-      display: inline-block;
-
-      /* Workaround because Chrome doesn't like :host(:has()) below
-       * https://issues.chromium.org/issues/40062355
-       * Firefox doesn't like this nested rule, so both are needed */
-      &:has(wa-badge) {
-        position: relative;
-      }
-    }
-
-    /* Apply relative positioning only when needed to position wa-badge
-     * This avoids creating a new stacking context for every button */
-    :host(:has(wa-badge)) {
-      position: relative;
-    }
-  }
-
-  .button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    text-decoration: none;
-    user-select: none;
-    -webkit-user-select: none;
-    white-space: nowrap;
-    vertical-align: middle;
-    transition-property: background, border, box-shadow, color, opacity, transform;
-    transition-duration: var(--wa-transition-fast);
-    transition-timing-function: var(--wa-transition-easing);
-    transform-origin: center;
-    cursor: pointer;
-    padding: 0 var(--wa-form-control-padding-inline);
-    font-family: inherit;
-    font-size: inherit;
-    font-weight: var(--wa-font-weight-action);
-    height: var(--wa-form-control-height);
-    width: 100%;
-
-    background-color: var(--wa-color-fill-loud, var(--wa-color-neutral-fill-loud));
-
-    border-color: transparent;
-    color: var(--wa-color-on-loud, var(--wa-color-neutral-on-loud));
-    border-start-start-radius: var(--_button-start-start-radius, var(--wa-form-control-border-radius));
-    border-start-end-radius: var(--_button-start-end-radius, var(--wa-form-control-border-radius));
-    border-end-start-radius: var(--_button-end-start-radius, var(--wa-form-control-border-radius));
-    border-end-end-radius: var(--_button-end-end-radius, var(--wa-form-control-border-radius));
-    border-style: var(--wa-form-control-border-style);
-    border-width: var(--wa-form-control-border-width);
-  }
-
-  /* Hover and active transforms */
-  .button:not(.disabled):not(.loading) {
-    @media (hover: hover) {
-      &:hover {
-        transform: var(--wa-button-transform-hover);
-      }
-    }
-    &:active {
-      transform: var(--wa-button-transform-active);
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      &:hover,
-      &:active {
-        transform: none;
-      }
-    }
-  }
-
-  /* Appearance modifiers */
-  :host([appearance='plain']) {
-    /* Indentation overrides for grouping */
-    margin-inline-start: var(--_button-horizontal-indent);
-    margin-block-start: var(--_button-vertical-indent);
-
-    .button {
-      color: var(--wa-color-on-quiet, var(--wa-color-neutral-on-quiet));
-      background-color: transparent;
-      border-color: transparent;
-    }
-    @media (hover: hover) {
-      .button:not(.disabled):not(.loading):hover {
-        color: var(--wa-color-on-quiet, var(--wa-color-neutral-on-quiet));
-        background-color: var(--wa-color-fill-quiet, var(--wa-color-neutral-fill-quiet));
-      }
-    }
-    .button:not(.disabled):not(.loading):active {
-      color: var(--wa-color-on-quiet, var(--wa-color-neutral-on-quiet));
-      background-color: color-mix(
-        in oklab,
-        var(--wa-color-fill-quiet, var(--wa-color-neutral-fill-quiet)),
-        var(--wa-color-mix-active)
-      );
-    }
-  }
-
-  :host([appearance='outlined']) {
-    /* Indentation overrides for grouping outlined */
-    margin-inline-start: var(--_button-horizontal-indent-outlined);
-    margin-block-start: var(--_button-vertical-indent-outlined);
-
-    .button {
-      color: var(--wa-color-on-quiet, var(--wa-color-neutral-on-quiet));
-      background-color: transparent;
-      border-color: var(--wa-color-border-loud, var(--wa-color-neutral-border-loud));
-    }
-    @media (hover: hover) {
-      .button:not(.disabled):not(.loading):hover {
-        color: var(--wa-color-on-quiet, var(--wa-color-neutral-on-quiet));
-        background-color: var(--wa-color-fill-quiet, var(--wa-color-neutral-fill-quiet));
-      }
-    }
-    .button:not(.disabled):not(.loading):active {
-      color: var(--wa-color-on-quiet, var(--wa-color-neutral-on-quiet));
-      background-color: color-mix(
-        in oklab,
-        var(--wa-color-fill-quiet, var(--wa-color-neutral-fill-quiet)),
-        var(--wa-color-mix-active)
-      );
-    }
-  }
-
-  :host([appearance='filled']) {
-    /* Indentation overrides for grouping */
-    margin-inline-start: var(--_button-horizontal-indent);
-    margin-block-start: var(--_button-vertical-indent);
-
-    .button {
-      color: var(--wa-color-on-normal, var(--wa-color-neutral-on-normal));
-      background-color: var(--wa-color-fill-normal, var(--wa-color-neutral-fill-normal));
-      border-color: transparent;
-    }
-    @media (hover: hover) {
-      .button:not(.disabled):not(.loading):hover {
-        color: var(--wa-color-on-normal, var(--wa-color-neutral-on-normal));
-        background-color: color-mix(
-          in oklab,
-          var(--wa-color-fill-normal, var(--wa-color-neutral-fill-normal)),
-          var(--wa-color-mix-hover)
-        );
-      }
-    }
-    .button:not(.disabled):not(.loading):active {
-      color: var(--wa-color-on-normal, var(--wa-color-neutral-on-normal));
-      background-color: color-mix(
-        in oklab,
-        var(--wa-color-fill-normal, var(--wa-color-neutral-fill-normal)),
-        var(--wa-color-mix-active)
-      );
-    }
-  }
-
-  :host([appearance='filled-outlined']) {
-    /* Indentation overrides for grouping outlined */
-    margin-inline-start: var(--_button-horizontal-indent-outlined);
-    margin-block-start: var(--_button-vertical-indent-outlined);
-
-    .button {
-      color: var(--wa-color-on-normal, var(--wa-color-neutral-on-normal));
-      background-color: var(--wa-color-fill-normal, var(--wa-color-neutral-fill-normal));
-      border-color: var(--wa-color-border-normal, var(--wa-color-neutral-border-normal));
-    }
-    @media (hover: hover) {
-      .button:not(.disabled):not(.loading):hover {
-        color: var(--wa-color-on-normal, var(--wa-color-neutral-on-normal));
-        background-color: color-mix(
-          in oklab,
-          var(--wa-color-fill-normal, var(--wa-color-neutral-fill-normal)),
-          var(--wa-color-mix-hover)
-        );
-      }
-    }
-    .button:not(.disabled):not(.loading):active {
-      color: var(--wa-color-on-normal, var(--wa-color-neutral-on-normal));
-      background-color: color-mix(
-        in oklab,
-        var(--wa-color-fill-normal, var(--wa-color-neutral-fill-normal)),
-        var(--wa-color-mix-active)
-      );
-    }
-  }
-
-  :host([appearance='accent']) {
-    /* Indentation overrides for grouping */
-    margin-inline-start: var(--_button-horizontal-indent);
-    margin-block-start: var(--_button-vertical-indent);
-
-    .button {
-      color: var(--wa-color-on-loud, var(--wa-color-neutral-on-loud));
-      background-color: var(--wa-color-fill-loud, var(--wa-color-neutral-fill-loud));
-      border-color: transparent;
-    }
-    @media (hover: hover) {
-      .button:not(.disabled):not(.loading):hover {
-        background-color: color-mix(
-          in oklab,
-          var(--wa-color-fill-loud, var(--wa-color-neutral-fill-loud)),
-          var(--wa-color-mix-hover)
-        );
-      }
-    }
-    .button:not(.disabled):not(.loading):active {
-      background-color: color-mix(
-        in oklab,
-        var(--wa-color-fill-loud, var(--wa-color-neutral-fill-loud)),
-        var(--wa-color-mix-active)
-      );
-    }
-  }
-
-  /* Focus states */
-  .button:focus {
-    outline: none;
-  }
-
-  .button:focus-visible {
-    outline: var(--wa-focus-ring);
-    outline-offset: var(--wa-focus-ring-offset);
-  }
-
-  /* Disabled state */
-  :host([disabled]) {
-    opacity: 0.5;
-    cursor: not-allowed;
-
-    /* When disabled, prevent mouse events from bubbling up from children */
-    .button {
-      pointer-events: none;
-    }
-  }
-
-  /* Keep it last so Safari doesn't stop parsing this block */
-  .button::-moz-focus-inner {
-    border: 0;
-  }
-
-  /* Icon buttons */
-  .button.is-icon-button {
-    outline-offset: 2px;
-    width: var(--wa-form-control-height);
-    aspect-ratio: 1;
-  }
-
-  /* Icon buttons with a caret need to grow to fit both the icon and the caret */
-  .button.is-icon-button.caret {
-    width: auto;
-    aspect-ratio: auto;
-    min-width: var(--wa-form-control-height);
-  }
-
-  /* Pill modifier */
-  :host([pill]) .button {
-    border-start-start-radius: var(--_button-start-start-radius, var(--wa-border-radius-pill));
-    border-start-end-radius: var(--_button-start-end-radius, var(--wa-border-radius-pill));
-    border-end-start-radius: var(--_button-end-start-radius, var(--wa-border-radius-pill));
-    border-end-end-radius: var(--_button-end-end-radius, var(--wa-border-radius-pill));
-  }
-
-  /*
-   * Label
-   */
-
-  .start,
-  .end {
-    flex: 0 0 auto;
-    display: flex;
-    align-items: center;
-    pointer-events: none;
-  }
-
-  .label {
-    display: inline-block;
-  }
-
-  .is-icon-button .label {
-    display: flex;
-    justify-content: center;
-  }
-
-  .label::slotted(wa-icon) {
-    align-self: center;
-  }
-
-  /*
-   * Caret modifier
-   */
-
-  wa-icon[part='caret'] {
-    display: flex;
-    align-self: center;
-    align-items: center;
-
-    &::part(svg) {
-      width: 0.875em;
-      height: 0.875em;
-    }
-
-    .button:has(&) .end {
-      display: none;
-    }
-  }
-
-  /*
-   * Loading modifier
-   */
-
-  .loading {
-    position: relative;
-    cursor: wait;
-
-    .start,
-    .label,
-    .end,
-    .caret {
-      /* Hidden with opacity, not visibility, so the label stays in the accessibility tree */
-      opacity: 0;
-
-      /* Unlike visibility: hidden, opacity leaves the content clickable */
-      pointer-events: none;
-    }
-
-    wa-spinner {
-      --indicator-color: currentColor;
-      --track-color: color-mix(in oklab, currentColor, transparent 90%);
-
-      position: absolute;
-      font-size: 1em;
-      height: 1em;
-      width: 1em;
-      top: calc(50% - 0.5em);
-      left: calc(50% - 0.5em);
-    }
-  }
-
-  /*
-   * Badges
-   */
-
-  .button ::slotted(wa-badge) {
-    border-color: var(--wa-color-surface-default);
-    position: absolute;
-    inset-block-start: 0;
-    inset-inline-end: 0;
-    translate: 50% -50%;
-    pointer-events: none;
-  }
-
-  :host(:dir(rtl)) ::slotted(wa-badge) {
-    translate: -50% -50%;
-  }
-
-  /*
-  * Button spacing
-  */
-
-  slot[name='start']::slotted(*) {
-    margin-inline-end: 0.75em;
-  }
-
-  slot[name='end']::slotted(*),
-  .button:not(.visually-hidden-label) [part='caret'] {
-    margin-inline-start: 0.75em;
-  }
-`;
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.XNTP7DEQ.js
-  var variants_styles_default = i`
-  :where(:root),
-  .wa-neutral,
-  :host([variant='neutral']) {
-    --wa-color-fill-loud: var(--wa-color-neutral-fill-loud);
-    --wa-color-fill-normal: var(--wa-color-neutral-fill-normal);
-    --wa-color-fill-quiet: var(--wa-color-neutral-fill-quiet);
-    --wa-color-border-loud: var(--wa-color-neutral-border-loud);
-    --wa-color-border-normal: var(--wa-color-neutral-border-normal);
-    --wa-color-border-quiet: var(--wa-color-neutral-border-quiet);
-    --wa-color-on-loud: var(--wa-color-neutral-on-loud);
-    --wa-color-on-normal: var(--wa-color-neutral-on-normal);
-    --wa-color-on-quiet: var(--wa-color-neutral-on-quiet);
-  }
-
-  .wa-brand,
-  :host([variant='brand']) {
-    --wa-color-fill-loud: var(--wa-color-brand-fill-loud);
-    --wa-color-fill-normal: var(--wa-color-brand-fill-normal);
-    --wa-color-fill-quiet: var(--wa-color-brand-fill-quiet);
-    --wa-color-border-loud: var(--wa-color-brand-border-loud);
-    --wa-color-border-normal: var(--wa-color-brand-border-normal);
-    --wa-color-border-quiet: var(--wa-color-brand-border-quiet);
-    --wa-color-on-loud: var(--wa-color-brand-on-loud);
-    --wa-color-on-normal: var(--wa-color-brand-on-normal);
-    --wa-color-on-quiet: var(--wa-color-brand-on-quiet);
-  }
-
-  .wa-success,
-  :host([variant='success']) {
-    --wa-color-fill-loud: var(--wa-color-success-fill-loud);
-    --wa-color-fill-normal: var(--wa-color-success-fill-normal);
-    --wa-color-fill-quiet: var(--wa-color-success-fill-quiet);
-    --wa-color-border-loud: var(--wa-color-success-border-loud);
-    --wa-color-border-normal: var(--wa-color-success-border-normal);
-    --wa-color-border-quiet: var(--wa-color-success-border-quiet);
-    --wa-color-on-loud: var(--wa-color-success-on-loud);
-    --wa-color-on-normal: var(--wa-color-success-on-normal);
-    --wa-color-on-quiet: var(--wa-color-success-on-quiet);
-  }
-
-  .wa-warning,
-  :host([variant='warning']) {
-    --wa-color-fill-loud: var(--wa-color-warning-fill-loud);
-    --wa-color-fill-normal: var(--wa-color-warning-fill-normal);
-    --wa-color-fill-quiet: var(--wa-color-warning-fill-quiet);
-    --wa-color-border-loud: var(--wa-color-warning-border-loud);
-    --wa-color-border-normal: var(--wa-color-warning-border-normal);
-    --wa-color-border-quiet: var(--wa-color-warning-border-quiet);
-    --wa-color-on-loud: var(--wa-color-warning-on-loud);
-    --wa-color-on-normal: var(--wa-color-warning-on-normal);
-    --wa-color-on-quiet: var(--wa-color-warning-on-quiet);
-  }
-
-  .wa-danger,
-  :host([variant='danger']) {
-    --wa-color-fill-loud: var(--wa-color-danger-fill-loud);
-    --wa-color-fill-normal: var(--wa-color-danger-fill-normal);
-    --wa-color-fill-quiet: var(--wa-color-danger-fill-quiet);
-    --wa-color-border-loud: var(--wa-color-danger-border-loud);
-    --wa-color-border-normal: var(--wa-color-danger-border-normal);
-    --wa-color-border-quiet: var(--wa-color-danger-border-quiet);
-    --wa-color-on-loud: var(--wa-color-danger-on-loud);
-    --wa-color-on-normal: var(--wa-color-danger-on-normal);
-    --wa-color-on-quiet: var(--wa-color-danger-on-quiet);
-  }
-`;
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.PZAN6FPN.js
-  function watch(propertyName, options) {
-    const resolvedOptions = {
-      waitUntilFirstUpdate: false,
-      ...options
-    };
-    return (proto, decoratedFnName) => {
-      const { update: update2 } = proto;
-      const watchedProperties = Array.isArray(propertyName) ? propertyName : [propertyName];
-      proto.update = function(changedProps) {
-        watchedProperties.forEach((property) => {
-          const key = property;
-          if (changedProps.has(key)) {
-            const oldValue = changedProps.get(key);
-            const newValue = this[key];
-            if (oldValue !== newValue) {
-              if (!resolvedOptions.waitUntilFirstUpdate || this.hasUpdated) {
-                this[decoratedFnName](oldValue, newValue);
-              }
-            }
-          }
-        });
-        update2.call(this, changedProps);
-      };
-    };
-  }
-
-  // node_modules/@shoelace-style/localize/dist/index.js
-  var connectedElements = /* @__PURE__ */ new Set();
-  var translations = /* @__PURE__ */ new Map();
-  var fallback;
-  var documentDirection = "ltr";
-  var documentLanguage = "en";
-  var isClient = typeof MutationObserver !== "undefined" && typeof document !== "undefined" && typeof document.documentElement !== "undefined";
-  if (isClient) {
-    const documentElementObserver = new MutationObserver(update);
-    documentDirection = document.documentElement.dir || "ltr";
-    documentLanguage = document.documentElement.lang || navigator.language;
-    documentElementObserver.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["dir", "lang"]
-    });
-  }
-  function registerTranslation(...translation2) {
-    translation2.map((t6) => {
-      const code = t6.$code.toLowerCase();
-      if (translations.has(code)) {
-        translations.set(code, Object.assign(Object.assign({}, translations.get(code)), t6));
-      } else {
-        translations.set(code, t6);
-      }
-      if (!fallback) {
-        fallback = t6;
-      }
-    });
-    update();
-  }
-  function update() {
-    if (isClient) {
-      documentDirection = document.documentElement.dir || "ltr";
-      documentLanguage = document.documentElement.lang || navigator.language;
-    }
-    [...connectedElements.keys()].map((el2) => {
-      if (typeof el2.requestUpdate === "function") {
-        el2.requestUpdate();
-      }
-    });
-  }
-  var LocalizeController = class {
-    constructor(host) {
-      this.host = host;
-      this.host.addController(this);
-    }
-    hostConnected() {
-      connectedElements.add(this.host);
-    }
-    hostDisconnected() {
-      connectedElements.delete(this.host);
-    }
-    dir() {
-      return `${this.host.dir || documentDirection}`.toLowerCase();
-    }
-    lang() {
-      const lang2 = `${this.host.lang || documentLanguage}`.toLowerCase().replace(/_/g, "-");
-      try {
-        new Intl.Locale(lang2);
-        return lang2;
-      } catch (_a8) {
-        return fallback ? fallback.$code.toLowerCase() : "en";
-      }
-    }
-    getTranslationData(lang2) {
-      var _a8, _b2;
-      let locale;
-      try {
-        locale = new Intl.Locale(lang2.replace(/_/g, "-"));
-      } catch (_c) {
-        return { locale: void 0, language: "", region: "", primary: void 0, secondary: void 0 };
-      }
-      const language = locale.language.toLowerCase();
-      const region = (_b2 = (_a8 = locale.region) === null || _a8 === void 0 ? void 0 : _a8.toLowerCase()) !== null && _b2 !== void 0 ? _b2 : "";
-      const primary = translations.get(`${language}-${region}`);
-      const secondary = translations.get(language);
-      return { locale, language, region, primary, secondary };
-    }
-    exists(key, options) {
-      var _a8;
-      const { primary, secondary } = this.getTranslationData((_a8 = options.lang) !== null && _a8 !== void 0 ? _a8 : this.lang());
-      options = Object.assign({ includeFallback: false }, options);
-      if (primary && primary[key] || secondary && secondary[key] || options.includeFallback && fallback && fallback[key]) {
-        return true;
-      }
-      return false;
-    }
-    term(key, ...args) {
-      const { primary, secondary } = this.getTranslationData(this.lang());
-      let term;
-      if (primary && primary[key]) {
-        term = primary[key];
-      } else if (secondary && secondary[key]) {
-        term = secondary[key];
-      } else if (fallback && fallback[key]) {
-        term = fallback[key];
-      } else {
-        console.error(`No translation found for: ${String(key)}`);
-        return String(key);
-      }
-      if (typeof term === "function") {
-        return term(...args);
-      }
-      return term;
-    }
-    date(dateToFormat, options) {
-      dateToFormat = new Date(dateToFormat);
-      return new Intl.DateTimeFormat(this.lang(), options).format(dateToFormat);
-    }
-    number(numberToFormat, options) {
-      numberToFormat = Number(numberToFormat);
-      return isNaN(numberToFormat) ? "" : new Intl.NumberFormat(this.lang(), options).format(numberToFormat);
-    }
-    relativeTime(value, unit, options) {
-      return new Intl.RelativeTimeFormat(this.lang(), options).format(value, unit);
-    }
-  };
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.KQHZRDPB.js
-  var translation = {
-    $code: "en",
-    $name: "English",
-    $dir: "ltr",
-    am: "AM",
-    autosizeColumn: "Autosize column",
-    captions: "Captions",
-    carousel: "Carousel",
-    chooseDate: "Choose date",
-    chooseDecade: "Choose decade",
-    chooseMonth: "Choose month",
-    chooseTime: "Choose time",
-    chooseYear: "Choose year",
-    clearEntry: "Clear entry",
-    clearFilter: "Clear filter",
-    clearSort: "Clear sort",
-    close: "Close",
-    closeCalendar: "Close calendar",
-    closeTimeInput: "Close time picker",
-    collapseRow: "Collapse row",
-    columnMenu: "Column options",
-    columnMovedToPosition: (label, position, total) => `${label} moved to position ${position} of ${total}`,
-    columns: "Columns",
-    compactPageXOfY: (page, total) => `${page} of ${total}`,
-    copied: "Copied",
-    copy: "Copy",
-    createOption: (value) => `Create "${value}"`,
-    currentlyPlaying: "currently playing",
-    currentValue: "Current value",
-    date: "Date",
-    datePickerKeyboardHelp: "Use arrow keys to change values; press Alt+Down Arrow to open the calendar.",
-    day: "Day",
-    dayPeriod: "AM/PM",
-    decrement: "Decrement",
-    deselectAllRows: "Deselect all rows",
-    dropFileHere: "Drop file here or click to browse",
-    dropFilesHere: "Drop files here or click to browse",
-    empty: "Empty",
-    endDate: "End date",
-    enterFullscreen: "Enter fullscreen",
-    error: "Error",
-    exitFullscreen: "Exit fullscreen",
-    expandRow: "Expand row",
-    filterByColumn: (label) => `Filter by ${label}`,
-    filterFrom: "From",
-    filterMax: "Max",
-    filterMin: "Min",
-    filterTo: "To",
-    firstPage: "First page",
-    goToSlide: (slide, count) => `Go to slide ${slide} of ${count}`,
-    hideColumn: "Hide column",
-    hidePassword: "Hide password",
-    hour: "Hour",
-    incompleteDate: "Enter a valid date.",
-    increment: "Increment",
-    jumpBackwardX: (count) => `Jump back ${count} pages`,
-    jumpForwardX: (count) => `Jump forward ${count} pages`,
-    lastPage: "Last page",
-    loading: "Loading",
-    minute: "Minute",
-    month: "Month",
-    moreOptions: "More Options",
-    mute: "Mute",
-    nextDecade: "Next decade",
-    nextMonth: "Next month",
-    nextPage: "Next page",
-    nextSlide: "Next slide",
-    nextVideo: "Next Video",
-    nextYear: "Next year",
-    noData: "No data",
-    noResults: "No matching results",
-    now: "Now",
-    numCharacters: (num) => {
-      if (num === 1) return "1 character";
-      return `${num} characters`;
-    },
-    numCharactersRemaining: (num) => {
-      if (num === 1) return "1 character remaining";
-      return `${num} characters remaining`;
-    },
-    numOptionsSelected: (num) => {
-      if (num === 0) return "No options selected";
-      if (num === 1) return "1 option selected";
-      return `${num} options selected`;
-    },
-    numRowsCopied: (num) => num === 1 ? "1 row copied" : `${num} rows copied`,
-    numRowsSelected: (num) => num === 1 ? "1 row selected" : `${num} rows selected`,
-    pageXOfY: (page, total) => `Page ${page} of ${total}`,
-    pagination: "Pagination",
-    pause: "Pause",
-    pauseAnimation: "Pause animation",
-    pictureInPicture: "Picture in picture",
-    pinLeft: "Pin left",
-    pinRight: "Pin right",
-    play: "Play",
-    playAnimation: "Play animation",
-    playbackSpeed: "Playback speed",
-    playlist: "Playlist",
-    pm: "PM",
-    previousDecade: "Previous decade",
-    previousMonth: "Previous month",
-    previousPage: "Previous page",
-    previousSlide: "Previous slide",
-    previousVideo: "Previous video",
-    previousYear: "Previous year",
-    progress: "Progress",
-    rangeTooLong: (max) => {
-      if (max === 1) return "Select a range no longer than 1 day";
-      return `Select a range no longer than ${max} days`;
-    },
-    rangeTooShort: (min) => {
-      if (min === 1) return "Select a range at least 1 day long";
-      return `Select a range at least ${min} days long`;
-    },
-    readonly: "Read-only",
-    remove: "Remove",
-    resetColumns: "Reset columns",
-    resize: "Resize",
-    resizeColumn: "Resize column",
-    rowsPerPage: "Rows per page",
-    scrollableRegion: "Scrollable region",
-    scrollToEnd: "Scroll to end",
-    scrollToStart: "Scroll to start",
-    search: "Search",
-    second: "Second",
-    seek: "Seek",
-    seekProgress: (current, duration) => `${current} of ${duration}`,
-    selectAColorFromTheScreen: "Select a color from the screen",
-    selectAllRows: "Select all rows",
-    selected: "Selected",
-    selectedDateLabel: (date) => `Selected: ${date}`,
-    selectedRangeLabel: (range) => `Selected range: ${range}`,
-    selectGroup: "Select group",
-    selectionCleared: "Selection cleared",
-    selectRow: "Select row",
-    showingNofMRows: (shown, total) => `Showing ${shown} of ${total} rows`,
-    showingXtoYofZ: (start, end, total) => `${start}\u2013${end} of ${total}`,
-    showPassword: "Show password",
-    slideNum: (slide) => `Slide ${slide}`,
-    sortAscending: "Sort ascending",
-    sortColumn: "Sort column",
-    sortDescending: "Sort descending",
-    startDate: "Start date",
-    time: "Time",
-    timeInputKeyboardHelp: "Use arrow keys to change values; press Alt+Down Arrow to open the time picker.",
-    today: "Today",
-    toggleColorFormat: "Toggle color format",
-    unmute: "Unmute",
-    unpin: "Unpin",
-    unpinColumn: "Unpin column",
-    videoPlayer: "Video player",
-    volume: "Volume",
-    year: "Year",
-    zoomIn: "Zoom in",
-    zoomOut: "Zoom out"
-  };
-  registerTranslation(translation);
-  var en_default = translation;
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.56IHH3HP.js
-  var LocalizeController2 = class extends LocalizeController {
-    lang() {
-      if (this.host.didSSR && !this.host.hasUpdated) {
-        return this.host.lang || "en";
-      }
-      return super.lang();
-    }
-  };
-  registerTranslation(en_default);
-
-  // node_modules/lit-html/directive.js
-  var t4 = { ATTRIBUTE: 1, CHILD: 2, PROPERTY: 3, BOOLEAN_ATTRIBUTE: 4, EVENT: 5, ELEMENT: 6 };
-  var e6 = (t6) => (...e8) => ({ _$litDirective$: t6, values: e8 });
-  var i5 = class {
-    constructor(t6) {
-    }
-    get _$AU() {
-      return this._$AM._$AU;
-    }
-    _$AT(t6, e8, i7) {
-      this._$Ct = t6, this._$AM = e8, this._$Ci = i7;
-    }
-    _$AS(t6, e8) {
-      return this.update(t6, e8);
-    }
-    update(t6, e8) {
-      return this.render(...e8);
-    }
-  };
-
-  // node_modules/lit-html/directives/class-map.js
-  var e7 = e6(class extends i5 {
-    constructor(t6) {
-      var _a8;
-      if (super(t6), t6.type !== t4.ATTRIBUTE || "class" !== t6.name || ((_a8 = t6.strings) == null ? void 0 : _a8.length) > 2) throw Error("`classMap()` can only be used in the `class` attribute and must be the only part in the attribute.");
-    }
-    render(t6) {
-      return " " + Object.keys(t6).filter((s4) => t6[s4]).join(" ") + " ";
-    }
-    update(s4, [i7]) {
-      var _a8, _b2;
-      if (void 0 === this.st) {
-        this.st = /* @__PURE__ */ new Set(), void 0 !== s4.strings && (this.nt = new Set(s4.strings.join(" ").split(/\s/).filter((t6) => "" !== t6)));
-        for (const t6 in i7) i7[t6] && !((_a8 = this.nt) == null ? void 0 : _a8.has(t6)) && this.st.add(t6);
-        return this.render(i7);
-      }
-      const r7 = s4.element.classList;
-      for (const t6 of this.st) t6 in i7 || (r7.remove(t6), this.st.delete(t6));
-      for (const t6 in i7) {
-        const s5 = !!i7[t6];
-        s5 === this.st.has(t6) || ((_b2 = this.nt) == null ? void 0 : _b2.has(t6)) || (s5 ? (r7.add(t6), this.st.add(t6)) : (r7.remove(t6), this.st.delete(t6)));
-      }
-      return E;
-    }
-  });
-
-  // node_modules/lit-html/directives/if-defined.js
-  var o7 = (o9) => o9 != null ? o9 : A;
-
-  // node_modules/lit-html/static.js
-  var a3 = /* @__PURE__ */ Symbol.for("");
-  var o8 = (t6) => {
-    if ((t6 == null ? void 0 : t6.r) === a3) return t6 == null ? void 0 : t6._$litStatic$;
-  };
-  var i6 = (t6, ...r7) => ({ _$litStatic$: r7.reduce((r8, e8, a4) => r8 + ((t7) => {
-    if (void 0 !== t7._$litStatic$) return t7._$litStatic$;
-    throw Error(`Value passed to 'literal' function must be a 'literal' result: ${t7}. Use 'unsafeStatic' to pass non-literal values, but
-            take care to ensure page security.`);
-  })(e8) + t6[a4 + 1], t6[0]), r: a3 });
-  var l3 = /* @__PURE__ */ new Map();
-  var n5 = (t6) => (r7, ...e8) => {
-    const a4 = e8.length;
-    let s4, i7;
-    const n6 = [], u4 = [];
-    let c5, $3 = 0, f3 = false;
-    for (; $3 < a4; ) {
-      for (c5 = r7[$3]; $3 < a4 && void 0 !== (i7 = e8[$3], s4 = o8(i7)); ) c5 += s4 + r7[++$3], f3 = true;
-      $3 !== a4 && u4.push(i7), n6.push(c5), $3++;
-    }
-    if ($3 === a4 && n6.push(r7[a4]), f3) {
-      const t7 = n6.join("$$lit$$");
-      void 0 === (r7 = l3.get(t7)) && (n6.raw = n6, l3.set(t7, r7 = n6)), e8 = u4;
-    }
-    return t6(r7, ...e8);
-  };
-  var u3 = n5(b2);
-  var c4 = n5(w);
-  var $2 = n5(T);
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.5PQVPZTW.js
-  var WaButton = class extends WebAwesomeFormAssociatedElement {
-    constructor() {
-      super(...arguments);
-      this.assumeInteractionOn = ["click"];
-      this.hasSlotController = new HasSlotController(this, "[default]", "start", "end");
-      this.localize = new LocalizeController2(this);
-      this.invalid = false;
-      this.isIconButton = false;
-      this.title = "";
-      this.variant = "neutral";
-      this.appearance = "accent";
-      this.size = "m";
-      this.withCaret = false;
-      this.withStart = false;
-      this.withEnd = false;
-      this.disabled = false;
-      this.loading = false;
-      this.pill = false;
-      this.type = "button";
-    }
-    static get validators() {
-      return [...super.validators, MirrorValidator()];
-    }
-    handleSizeChange() {
-      warnDeprecatedSize(this.localName, this.size);
-    }
-    constructLightDOMButton() {
-      const button = document.createElement("button");
-      for (const attribute of this.attributes) {
-        if (attribute.name === "style") {
-          continue;
-        }
-        button.setAttribute(attribute.name, attribute.value);
-      }
-      button.type = this.type;
-      button.style.position = "absolute !important";
-      button.style.width = "0 !important";
-      button.style.height = "0 !important";
-      button.style.clipPath = "inset(50%) !important";
-      button.style.overflow = "hidden !important";
-      button.style.whiteSpace = "nowrap !important";
-      if (this.name) {
-        button.name = this.name;
-      }
-      button.value = this.value || "";
-      return button;
-    }
-    handleClick(event) {
-      var _a8;
-      if (this.disabled || this.loading) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        return;
-      }
-      if (this.type !== "submit" && this.type !== "reset") {
-        return;
-      }
-      const form = this.getForm();
-      if (!form) return;
-      const lightDOMButton = this.constructLightDOMButton();
-      (_a8 = this.parentElement) == null ? void 0 : _a8.append(lightDOMButton);
-      lightDOMButton.click();
-      lightDOMButton.remove();
-    }
-    handleInvalid() {
-      this.dispatchEvent(new WaInvalidEvent());
-    }
-    handleLabelSlotChange() {
-      const nodes = this.labelSlot.assignedNodes({ flatten: true });
-      let hasIconLabel = false;
-      let hasIcon = false;
-      let hasText = false;
-      let hasOtherElements = false;
-      [...nodes].forEach((node) => {
-        var _a8;
-        if (node.nodeType === Node.ELEMENT_NODE) {
-          const element = node;
-          if (element.localName === "wa-icon") {
-            hasIcon = true;
-            if (!hasIconLabel) hasIconLabel = element.label !== void 0;
-          } else {
-            hasOtherElements = true;
-          }
-        } else if (node.nodeType === Node.TEXT_NODE) {
-          const text = ((_a8 = node.textContent) == null ? void 0 : _a8.trim()) || "";
-          if (text.length > 0) {
-            hasText = true;
-          }
-        }
-      });
-      this.isIconButton = hasIcon && !hasText && !hasOtherElements;
-      this.customStates.set("icon-button", this.isIconButton);
-      if (this.isIconButton && !hasIconLabel) {
-        console.warn(
-          'Icon buttons must have a label for screen readers. Add <wa-icon label="..."> to remove this warning.',
-          this
-        );
-      }
-    }
-    isButton() {
-      return this.href ? false : true;
-    }
-    isLink() {
-      return this.href ? true : false;
-    }
-    handleDisabledChange() {
-      this.customStates.set("disabled", this.disabled);
-      this.updateValidity();
-    }
-    handleHrefChange() {
-      this.customStates.set("link", this.isLink());
-    }
-    handleLoadingChange() {
-      this.customStates.set("loading", this.loading);
-    }
-    // eslint-disable-next-line
-    setValue(..._args) {
-    }
-    /** Simulates a click on the button. */
-    click() {
-      this.button.click();
-    }
-    /** Sets focus on the button. */
-    focus(options) {
-      this.button.focus(options);
-    }
-    /** Removes focus from the button. */
-    blur() {
-      this.button.blur();
-    }
-    render() {
-      const isLink = this.isLink();
-      const tag = isLink ? i6`a` : i6`button`;
-      return u3`
-      <${tag}
-        part="base button"
-        class=${e7({
-        button: true,
-        caret: this.withCaret,
-        disabled: this.disabled,
-        loading: this.loading,
-        rtl: this.localize.dir() === "rtl",
-        "has-label": this.hasSlotController.test("[default]"),
-        "has-start": this.hasSlotController.test("start", "withStart"),
-        "has-end": this.hasSlotController.test("end", "withEnd"),
-        "is-icon-button": this.isIconButton
-      })}
-        ?disabled=${o7(isLink ? void 0 : this.disabled)}
-        type=${o7(isLink ? void 0 : this.type)}
-        title=${this.title}
-        name=${o7(isLink ? void 0 : this.name)}
-        value=${o7(isLink ? void 0 : this.value)}
-        href=${o7(isLink ? this.href : void 0)}
-        target=${o7(isLink ? this.target : void 0)}
-        download=${o7(isLink ? this.download : void 0)}
-        rel=${o7(isLink && this.rel ? this.rel : void 0)}
-        role=${o7(isLink ? void 0 : "button")}
-        aria-disabled=${o7(isLink && this.disabled ? "true" : void 0)}
-        aria-busy=${this.loading ? "true" : "false"}
-        tabindex=${this.disabled ? "-1" : "0"}
-        @invalid=${this.isButton() ? this.handleInvalid : null}
-        @click=${this.handleClick}
-      >
-        <slot name="start" part="start" class="start"></slot>
-        <slot part="label" class="label" @slotchange=${this.handleLabelSlotChange}></slot>
-        <slot name="end" part="end" class="end"></slot>
-        ${this.withCaret ? u3`
-                <wa-icon part="caret" class="caret" library="system" name="chevron-down" variant="solid"></wa-icon>
-              ` : ""}
-        ${this.loading ? u3`<wa-spinner part="spinner"></wa-spinner>` : ""}
-      </${tag}>
-    `;
-    }
-  };
-  WaButton.shadowRootOptions = { ...WebAwesomeFormAssociatedElement.shadowRootOptions, delegatesFocus: true };
-  WaButton.css = [button_styles_default, variants_styles_default, size_styles_default];
-  __decorateClass([
-    e5(".button")
-  ], WaButton.prototype, "button", 2);
-  __decorateClass([
-    e5("slot:not([name])")
-  ], WaButton.prototype, "labelSlot", 2);
-  __decorateClass([
-    r5()
-  ], WaButton.prototype, "invalid", 2);
-  __decorateClass([
-    r5()
-  ], WaButton.prototype, "isIconButton", 2);
-  __decorateClass([
-    n4()
-  ], WaButton.prototype, "title", 2);
-  __decorateClass([
-    n4({ reflect: true })
-  ], WaButton.prototype, "variant", 2);
-  __decorateClass([
-    n4({ reflect: true })
-  ], WaButton.prototype, "appearance", 2);
-  __decorateClass([
-    n4({ reflect: true })
-  ], WaButton.prototype, "size", 2);
-  __decorateClass([
-    watch("size")
-  ], WaButton.prototype, "handleSizeChange", 1);
-  __decorateClass([
-    n4({ attribute: "with-caret", type: Boolean, reflect: true })
-  ], WaButton.prototype, "withCaret", 2);
-  __decorateClass([
-    n4({ attribute: "with-start", type: Boolean })
-  ], WaButton.prototype, "withStart", 2);
-  __decorateClass([
-    n4({ attribute: "with-end", type: Boolean })
-  ], WaButton.prototype, "withEnd", 2);
-  __decorateClass([
-    n4({ type: Boolean })
-  ], WaButton.prototype, "disabled", 2);
-  __decorateClass([
-    n4({ type: Boolean, reflect: true })
-  ], WaButton.prototype, "loading", 2);
-  __decorateClass([
-    n4({ type: Boolean, reflect: true })
-  ], WaButton.prototype, "pill", 2);
-  __decorateClass([
-    n4()
-  ], WaButton.prototype, "type", 2);
-  __decorateClass([
-    n4({ reflect: true })
-  ], WaButton.prototype, "name", 2);
-  __decorateClass([
-    n4({ reflect: true })
-  ], WaButton.prototype, "value", 2);
-  __decorateClass([
-    n4({ reflect: true })
-  ], WaButton.prototype, "href", 2);
-  __decorateClass([
-    n4()
-  ], WaButton.prototype, "target", 2);
-  __decorateClass([
-    n4()
-  ], WaButton.prototype, "rel", 2);
-  __decorateClass([
-    n4()
-  ], WaButton.prototype, "download", 2);
-  __decorateClass([
-    n4({ attribute: "formaction" })
-  ], WaButton.prototype, "formAction", 2);
-  __decorateClass([
-    n4({ attribute: "formenctype" })
-  ], WaButton.prototype, "formEnctype", 2);
-  __decorateClass([
-    n4({ attribute: "formmethod" })
-  ], WaButton.prototype, "formMethod", 2);
-  __decorateClass([
-    n4({ attribute: "formnovalidate", type: Boolean })
-  ], WaButton.prototype, "formNoValidate", 2);
-  __decorateClass([
-    n4({ attribute: "formtarget" })
-  ], WaButton.prototype, "formTarget", 2);
-  __decorateClass([
-    watch("disabled", { waitUntilFirstUpdate: true })
-  ], WaButton.prototype, "handleDisabledChange", 1);
-  __decorateClass([
-    watch("href")
-  ], WaButton.prototype, "handleHrefChange", 1);
-  __decorateClass([
-    watch("loading", { waitUntilFirstUpdate: true })
-  ], WaButton.prototype, "handleLoadingChange", 1);
-  WaButton = __decorateClass([
-    t3("wa-button")
-  ], WaButton);
-  var _a6;
-  (_a6 = WaButton.disableWarning) == null ? void 0 : _a6.call(WaButton, "change-in-update");
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.W7A2VLCT.js
-  var spinner_styles_default = i`
-  :host {
-    --track-width: 2px;
-    --track-color: var(--wa-color-neutral-fill-normal);
-    --indicator-color: var(--wa-color-brand-fill-loud);
-    --speed: 2s;
-    --size: 1em;
-
-    /*
-      Resizing a spinner element using anything but font-size will break the animation because the animation uses em
-      units. Therefore, if a spinner is used in a flex container without \`flex: none\` applied, the spinner can
-      grow/shrink and break the animation. The use of \`flex: none\` on the host element prevents this by always having
-      the spinner sized according to its actual dimensions.
-    */
-    flex: none;
-    display: inline-flex;
-    width: var(--size);
-    height: var(--size);
-  }
-
-  svg {
-    width: 100%;
-    height: 100%;
-    aspect-ratio: 1;
-    animation: spin var(--speed) linear infinite;
-  }
-
-  .track,
-  .indicator {
-    --radius: calc(var(--size) / 2 - var(--track-width) / 2);
-    --circumference: calc(var(--radius) * 2 * 3.141592654);
-
-    cx: calc(var(--size) / 2);
-    cy: calc(var(--size) / 2);
-    r: var(--radius);
-    fill: none;
-    stroke-width: var(--track-width);
-  }
-
-  .track {
-    stroke: var(--track-color);
-  }
-
-  .indicator {
-    stroke: var(--indicator-color);
-    stroke-linecap: round;
-    stroke-dasharray: calc(0.597 * var(--circumference)), calc(0.796 * var(--circumference));
-    stroke-dashoffset: calc(-0.04 * var(--circumference));
-    animation: dash 1.5s ease-in-out infinite;
-  }
-
-  @keyframes spin {
-    0% {
-      transform: rotate(0deg);
-    }
-    100% {
-      transform: rotate(360deg);
-    }
-  }
-
-  @keyframes dash {
-    0% {
-      stroke-dasharray: calc(0.008 * var(--circumference)), calc(1.194 * var(--circumference));
-      stroke-dashoffset: 0;
-    }
-    50% {
-      stroke-dasharray: calc(0.716 * var(--circumference)), calc(1.194 * var(--circumference));
-      stroke-dashoffset: calc(-0.278 * var(--circumference));
-    }
-    100% {
-      stroke-dasharray: calc(0.716 * var(--circumference)), calc(1.194 * var(--circumference));
-      stroke-dashoffset: calc(-0.987 * var(--circumference));
-    }
-  }
-`;
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.DVA7QY5T.js
-  var WaSpinner = class extends WebAwesomeElement {
-    constructor() {
-      super(...arguments);
-      this.localize = new LocalizeController2(this);
-    }
-    render() {
-      return b2`
-      <svg
-        part="base spinner"
-        role="progressbar"
-        aria-label=${this.localize.term("loading")}
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <circle class="track" />
-        <circle class="indicator" />
-      </svg>
-    `;
-    }
-  };
-  WaSpinner.css = spinner_styles_default;
-  WaSpinner = __decorateClass([
-    t3("wa-spinner")
-  ], WaSpinner);
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.YDQCS2HK.js
-  var WaErrorEvent = class extends Event {
-    constructor() {
-      super("wa-error", { bubbles: true, cancelable: false, composed: true });
-    }
-  };
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.WDIIGUNP.js
-  var WaLoadEvent = class extends Event {
-    constructor() {
-      super("wa-load", { bubbles: true, cancelable: false, composed: true });
-    }
-  };
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.O74G5RVH.js
-  var icon_styles_default = i`
-  :host {
-    --primary-color: currentColor;
-    --primary-opacity: 1;
-    --secondary-color: currentColor;
-    --secondary-opacity: 0.4;
-    --rotate-angle: 0deg;
-
-    box-sizing: content-box;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    vertical-align: -0.125em;
-  }
-
-  /* #region Canvas — the box the icon is centered within (mirrors Font Awesome's icon canvas). Orthogonal to font-size. */
-
-  /* Fixed width (default): 1.25em × 1em (20 × 16px) */
-  :host(:not([canvas])),
-  :host([canvas='fixed']) {
-    width: 1.25em;
-    height: 1em;
-    min-width: 1.25em; /* <-- this is what Safari respects for intrinsic */
-    min-height: 1em;
-  }
-
-  /* Auto: hug the icon's width. \`auto-width\` is the deprecated alias for canvas="auto". */
-  :host([canvas='auto']),
-  :host([auto-width]:not([canvas])) {
-    width: auto;
-    height: 1em;
-  }
-
-  /* Square: 1.25em × 1.25em (20 × 20px) */
-  :host([canvas='square']) {
-    width: 1.25em;
-    height: 1.25em;
-    min-width: 1.25em;
-    min-height: 1.25em;
-  }
-
-  /* Roomy: 1.5em × 1.5em (24 × 24px) */
-  :host([canvas='roomy']) {
-    width: 1.5em;
-    height: 1.5em;
-    min-width: 1.5em;
-    min-height: 1.5em;
-  }
-
-  /* #endregion */
-
-  svg {
-    /* NOTE: Avoid setting fill here. A stylesheet rule beats SVG presentation attributes, breaking stroke-based
-       libraries like Lucide (fill="none" stroke="currentColor") and attribute-based mutators (issue #1733). The default
-       library applies fill="currentColor" in its mutator instead. */
-    height: 1em;
-    overflow: visible;
-    width: auto;
-
-    /* Duotone colors with path-specific opacity fallback */
-    path[data-duotone-primary] {
-      color: var(--primary-color);
-      opacity: var(--path-opacity, var(--primary-opacity));
-    }
-
-    path[data-duotone-secondary] {
-      color: var(--secondary-color);
-      opacity: var(--path-opacity, var(--secondary-opacity));
-    }
-  }
-
-  /* Rotation */
-  :host([rotate]) {
-    transform: rotate(var(--rotate-angle, 0deg));
-  }
-
-  /* Flipping */
-  :host([flip='x']) {
-    transform: scaleX(-1);
-  }
-  :host([flip='y']) {
-    transform: scaleY(-1);
-  }
-  :host([flip='both']) {
-    transform: scale(-1, -1);
-  }
-
-  /* Rotation and Flipping combined */
-  :host([rotate][flip='x']) {
-    transform: rotate(var(--rotate-angle, 0deg)) scaleX(-1);
-  }
-  :host([rotate][flip='y']) {
-    transform: rotate(var(--rotate-angle, 0deg)) scaleY(-1);
-  }
-  :host([rotate][flip='both']) {
-    transform: rotate(var(--rotate-angle, 0deg)) scale(-1, -1);
-  }
-
-  /* #region Animations — ported from Font Awesome 7.3 (--fa-* props mapped to wa-icon's --* names) */
-
-  :host([animation='beat']) {
-    animation-name: beat;
-    animation-delay: var(--animation-delay, 0s);
-    animation-direction: var(--animation-direction, normal);
-    animation-duration: var(--animation-duration, 1s);
-    animation-iteration-count: var(--animation-iteration-count, infinite);
-    animation-timing-function: var(--animation-timing, ease-in-out);
-  }
-
-  :host([animation='bounce']) {
-    animation-name: bounce;
-    animation-delay: var(--animation-delay, 0s);
-    animation-direction: var(--animation-direction, normal);
-    animation-duration: var(--animation-duration, 1s);
-    animation-iteration-count: var(--animation-iteration-count, infinite);
-    animation-timing-function: var(--animation-timing, cubic-bezier(0.28, 0.84, 0.42, 1));
-  }
-
-  :host([animation='fade']) {
-    animation-name: fade;
-    animation-delay: var(--animation-delay, 0s);
-    animation-direction: var(--animation-direction, normal);
-    animation-duration: var(--animation-duration, 1s);
-    animation-iteration-count: var(--animation-iteration-count, infinite);
-    animation-timing-function: var(--animation-timing, ease-in-out);
-  }
-
-  :host([animation='beat-fade']) {
-    animation-name: beat-fade;
-    animation-delay: var(--animation-delay, 0s);
-    animation-direction: var(--animation-direction, normal);
-    animation-duration: var(--animation-duration, 1s);
-    animation-iteration-count: var(--animation-iteration-count, infinite);
-    animation-timing-function: var(--animation-timing, ease-in-out);
-  }
-
-  :host([animation='flip']) {
-    animation-name: flip;
-    animation-delay: var(--animation-delay, 0s);
-    animation-direction: var(--animation-direction, normal);
-    animation-duration: var(--animation-duration, 1.5s);
-    animation-iteration-count: var(--animation-iteration-count, infinite);
-    animation-timing-function: var(--animation-timing, ease-in-out);
-  }
-
-  :host([animation='flip-360']) {
-    animation-name: flip-360;
-    animation-delay: var(--animation-delay, 0s);
-    animation-direction: var(--animation-direction, normal);
-    animation-duration: var(--animation-duration, 1s);
-    animation-iteration-count: var(--animation-iteration-count, infinite);
-    animation-timing-function: var(--animation-timing, ease-in-out);
-  }
-
-  :host([animation='shake']) {
-    animation-name: shake;
-    animation-delay: var(--animation-delay, 0s);
-    animation-direction: var(--animation-direction, normal);
-    animation-duration: var(--animation-duration, 0.75s);
-    animation-iteration-count: var(--animation-iteration-count, infinite);
-    animation-timing-function: var(--animation-timing, ease-in-out);
-  }
-
-  :host([animation='spin']) {
-    animation-name: spin;
-    animation-delay: var(--animation-delay, 0s);
-    animation-direction: var(--animation-direction, normal);
-    animation-duration: var(--animation-duration, 2s);
-    animation-iteration-count: var(--animation-iteration-count, infinite);
-    animation-timing-function: var(--animation-timing, linear);
-  }
-
-  :host([animation='spin-pulse']) {
-    animation-name: spin;
-    animation-delay: var(--animation-delay, 0s);
-    animation-direction: var(--animation-direction, normal);
-    animation-duration: var(--animation-duration, 1s);
-    animation-iteration-count: var(--animation-iteration-count, infinite);
-    animation-timing-function: var(--animation-timing, steps(8));
-  }
-
-  /* spin-reverse is FA's reverse modifier expressed as a standalone value; reverse any spin via --animation-direction: reverse */
-  :host([animation='spin-reverse']) {
-    animation-name: spin;
-    animation-delay: var(--animation-delay, 0s);
-    animation-direction: var(--animation-direction, reverse);
-    animation-duration: var(--animation-duration, 2s);
-    animation-iteration-count: var(--animation-iteration-count, infinite);
-    animation-timing-function: var(--animation-timing, linear);
-  }
-
-  :host([animation='spin-snap']) {
-    animation-name: spin-snap;
-    animation-delay: var(--animation-delay, 0s);
-    animation-direction: var(--animation-direction, normal);
-    animation-duration: var(--animation-duration, 3s);
-    animation-iteration-count: var(--animation-iteration-count, infinite);
-    animation-timing-function: var(--animation-timing, linear);
-  }
-
-  :host([animation='spin-snap-4']) {
-    animation-name: spin-snap-4;
-    animation-delay: var(--animation-delay, 0s);
-    animation-direction: var(--animation-direction, normal);
-    animation-duration: var(--animation-duration, 2.4s);
-    animation-iteration-count: var(--animation-iteration-count, infinite);
-    animation-timing-function: var(--animation-timing, linear);
-  }
-
-  :host([animation='spin-snap-8']) {
-    animation-name: spin-snap-8;
-    animation-delay: var(--animation-delay, 0s);
-    animation-direction: var(--animation-direction, normal);
-    animation-duration: var(--animation-duration, 4s);
-    animation-iteration-count: var(--animation-iteration-count, infinite);
-    animation-timing-function: var(--animation-timing, linear);
-  }
-
-  :host([animation='buzz']) {
-    animation-name: buzz;
-    animation-delay: var(--animation-delay, 0s);
-    animation-direction: var(--animation-direction, normal);
-    animation-duration: var(--animation-duration, 0.6s);
-    animation-iteration-count: var(--animation-iteration-count, infinite);
-    animation-timing-function: var(--animation-timing, linear);
-  }
-
-  :host([animation='wag']) {
-    animation-name: wag;
-    animation-delay: var(--animation-delay, 0s);
-    animation-direction: var(--animation-direction, normal);
-    animation-duration: var(--animation-duration, 0.9s);
-    animation-iteration-count: var(--animation-iteration-count, infinite);
-    animation-timing-function: var(--animation-timing, ease-out);
-    transform-origin: bottom center;
-  }
-
-  :host([animation='float']) {
-    animation-name: float;
-    animation-delay: var(--animation-delay, 0s);
-    animation-direction: var(--animation-direction, normal);
-    animation-duration: var(--animation-duration, 3s);
-    animation-iteration-count: var(--animation-iteration-count, infinite);
-    animation-timing-function: var(--animation-timing, ease-in-out);
-    will-change: transform;
-  }
-
-  :host([animation='swing']) {
-    animation-name: swing;
-    animation-delay: var(--animation-delay, 0s);
-    animation-direction: var(--animation-direction, normal);
-    animation-duration: var(--animation-duration, 1.2s);
-    animation-iteration-count: var(--animation-iteration-count, infinite);
-    animation-timing-function: var(--animation-timing, ease-out);
-    transform-origin: top center;
-  }
-
-  :host([animation='jello']) {
-    animation-name: jello;
-    animation-delay: var(--animation-delay, 0s);
-    animation-direction: var(--animation-direction, normal);
-    animation-duration: var(--animation-duration, 0.9s);
-    animation-iteration-count: var(--animation-iteration-count, infinite);
-    animation-timing-function: var(--animation-timing, ease-out);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    :host([animation='beat']),
-    :host([animation='bounce']),
-    :host([animation='fade']),
-    :host([animation='beat-fade']),
-    :host([animation='flip']),
-    :host([animation='flip-360']),
-    :host([animation='shake']),
-    :host([animation='spin']),
-    :host([animation='spin-pulse']),
-    :host([animation='spin-reverse']),
-    :host([animation='spin-snap']),
-    :host([animation='spin-snap-4']),
-    :host([animation='spin-snap-8']),
-    :host([animation='buzz']),
-    :host([animation='wag']),
-    :host([animation='float']),
-    :host([animation='swing']),
-    :host([animation='jello']) {
-      animation: none !important;
-      transition: none !important;
-    }
-  }
-
-  /* #endregion */
-
-  /* #region Keyframes — ported verbatim from Font Awesome 7.3 */
-
-  @keyframes beat {
-    0% {
-      transform: scale(1);
-    }
-    25% {
-      transform: scale(calc(1.25 * var(--beat-scale, 1.25)));
-    }
-    45% {
-      transform: scale(calc(1.22 * var(--beat-scale, 1.22)));
-    }
-    65% {
-      transform: scale(calc(1.25 * var(--beat-scale, 1.25)));
-    }
-    90% {
-      transform: scale(1);
-    }
-  }
-
-  @keyframes bounce {
-    0% {
-      transform: scale(1, 1) translateY(0);
-      /* No fallback by design (ported from FA 7.3): the first segment uses the user's --animation-timing or the CSS
-         initial ease, while the explicit cubic-beziers on later stops drive the bounce physics. */
-      animation-timing-function: var(--animation-timing);
-    }
-    14% {
-      transform: scale(var(--bounce-start-scale-x, 1.06), var(--bounce-start-scale-y, 0.94))
-        translateY(var(--bounce-anticipation, 3px));
-      animation-timing-function: cubic-bezier(0.33, 0, 0.66, 0.33);
-    }
-    32% {
-      transform: scale(var(--bounce-jump-scale-x, 0.94), var(--bounce-jump-scale-y, 1.12))
-        translateY(calc(-1 * var(--bounce-height, 0.5em)));
-      animation-timing-function: cubic-bezier(0.33, 0.66, 0.66, 1);
-    }
-    52% {
-      transform: scale(1, 1) translateY(calc(-1 * var(--bounce-height, 0.5em) * 1.1));
-      animation-timing-function: cubic-bezier(0.5, 0, 1, 0.5);
-    }
-    70% {
-      transform: scale(var(--bounce-land-scale-x, 1.06), var(--bounce-land-scale-y, 0.92)) translateY(0);
-      animation-timing-function: cubic-bezier(0.33, 0.33, 0.66, 1);
-    }
-    85% {
-      transform: scale(0.98, 1.04) translateY(calc(-2px * var(--bounce-rebound, 1)));
-      animation-timing-function: cubic-bezier(0.33, 0, 0.66, 1);
-    }
-    100% {
-      transform: scale(1, 1) translateY(0);
-    }
-  }
-
-  @keyframes fade {
-    0% {
-      opacity: 1;
-      transform: scale(1);
-      animation-timing-function: cubic-bezier(0.2, 0, 0.4, 1);
-    }
-    40% {
-      opacity: var(--fade-opacity, 0.4);
-      transform: scale(0.98);
-      animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
-    }
-    100% {
-      opacity: 1;
-      transform: scale(1);
-    }
-  }
-
-  @keyframes beat-fade {
-    0% {
-      opacity: var(--beat-fade-opacity, 0.4);
-      transform: scale(1);
-      animation-timing-function: cubic-bezier(0.2, 0, 0.4, 1);
-    }
-    25% {
-      opacity: calc(var(--beat-fade-opacity, 0.4) + 0.4);
-      transform: scale(var(--beat-fade-scale, 1.28));
-      animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
-    }
-    45% {
-      opacity: 1;
-      transform: scale(var(--beat-fade-scale, 1.25));
-      animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    65% {
-      opacity: calc(var(--beat-fade-opacity, 0.4) + 0.4);
-      transform: scale(var(--beat-fade-scale, 1.28));
-      animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
-    }
-    100% {
-      opacity: var(--beat-fade-opacity, 0.4);
-      transform: scale(1);
-    }
-  }
-
-  @keyframes flip {
-    0% {
-      transform: perspective(2em) scale(1) rotate3d(var(--flip-x, 0), var(--flip-y, 1), var(--flip-z, 0), 0deg);
-      animation-timing-function: cubic-bezier(0.2, 0, 0.4, 1);
-    }
-    8% {
-      transform: perspective(2em) scale(var(--flip-anticipation-scale, 0.95))
-        rotate3d(var(--flip-x, 0), var(--flip-y, 1), var(--flip-z, 0), 0deg);
-      animation-timing-function: cubic-bezier(0.33, 0, 0.66, 0.33);
-    }
-    35% {
-      transform: perspective(2em) scale(1)
-        rotate3d(var(--flip-x, 0), var(--flip-y, 1), var(--flip-z, 0), calc(var(--flip-angle, -360deg) * 0.6));
-      animation-timing-function: linear;
-    }
-    65% {
-      transform: perspective(2em) scale(1)
-        rotate3d(var(--flip-x, 0), var(--flip-y, 1), var(--flip-z, 0), calc(var(--flip-angle, -360deg) * 0.5));
-      animation-timing-function: cubic-bezier(0.33, 0.66, 0.66, 1);
-    }
-    92% {
-      transform: perspective(2em) scale(1)
-        rotate3d(
-          var(--flip-x, 0),
-          var(--flip-y, 1),
-          var(--flip-z, 0),
-          calc(var(--flip-angle, -360deg) * var(--flip-overshoot, 1.04))
-        );
-      animation-timing-function: cubic-bezier(0.33, 0, 0.66, 1);
-    }
-    100% {
-      transform: perspective(2em) scale(1)
-        rotate3d(var(--flip-x, 0), var(--flip-y, 1), var(--flip-z, 0), var(--flip-angle, -360deg));
-    }
-  }
-
-  @keyframes flip-360 {
-    0% {
-      transform: perspective(2em) scale(1) rotate3d(var(--flip-x, 0), var(--flip-y, 1), var(--flip-z, 0), 0deg);
-      animation-timing-function: cubic-bezier(0.2, 0, 0.4, 1);
-    }
-    8% {
-      transform: perspective(2em) scale(var(--flip-anticipation-scale, 0.95))
-        rotate3d(var(--flip-x, 0), var(--flip-y, 1), var(--flip-z, 0), 0deg);
-      animation-timing-function: cubic-bezier(0.33, 0, 0.66, 0.33);
-    }
-    50% {
-      transform: perspective(2em) scale(1)
-        rotate3d(var(--flip-x, 0), var(--flip-y, 1), var(--flip-z, 0), calc(var(--flip-angle, -360deg) * 0.6));
-      animation-timing-function: cubic-bezier(0.33, 0.66, 0.66, 1);
-    }
-    80% {
-      transform: perspective(2em) scale(1)
-        rotate3d(
-          var(--flip-x, 0),
-          var(--flip-y, 1),
-          var(--flip-z, 0),
-          calc(var(--flip-angle, -360deg) * var(--flip-overshoot, 1.04))
-        );
-      animation-timing-function: cubic-bezier(0.33, 0, 0.66, 1);
-    }
-    100% {
-      transform: perspective(2em) scale(1)
-        rotate3d(var(--flip-x, 0), var(--flip-y, 1), var(--flip-z, 0), var(--flip-angle, -360deg));
-    }
-  }
-
-  @keyframes shake {
-    0% {
-      transform: rotate(0deg);
-      animation-timing-function: cubic-bezier(0.2, 0, 0.8, 1);
-    }
-    8% {
-      transform: rotate(35deg) translateX(1px);
-      animation-timing-function: cubic-bezier(0.3, 0, 0.7, 1);
-    }
-    20% {
-      transform: rotate(-22deg) translateX(-1px);
-      animation-timing-function: cubic-bezier(0.3, 0, 0.7, 1);
-    }
-    35% {
-      transform: rotate(15deg) translateX(1px);
-      animation-timing-function: cubic-bezier(0.3, 0, 0.7, 1);
-    }
-    50% {
-      transform: rotate(-9deg);
-      animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
-    }
-    65% {
-      transform: rotate(5deg);
-      animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
-    }
-    78% {
-      transform: rotate(-3deg);
-      animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
-    }
-    90% {
-      transform: rotate(1deg);
-      animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    100% {
-      transform: rotate(0deg);
-    }
-  }
-
-  @keyframes spin {
-    0% {
-      transform: rotate(0deg);
-    }
-    100% {
-      transform: rotate(360deg);
-    }
-  }
-
-  @keyframes spin-snap {
-    0% {
-      transform: rotate(0deg);
-      animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
-    }
-    12% {
-      transform: rotate(60deg);
-      animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
-    }
-    16.67% {
-      transform: rotate(60deg);
-      animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
-    }
-    28.67% {
-      transform: rotate(120deg);
-      animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
-    }
-    33.33% {
-      transform: rotate(120deg);
-      animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
-    }
-    45.33% {
-      transform: rotate(180deg);
-      animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
-    }
-    50% {
-      transform: rotate(180deg);
-      animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
-    }
-    62% {
-      transform: rotate(240deg);
-      animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
-    }
-    66.67% {
-      transform: rotate(240deg);
-      animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
-    }
-    78.67% {
-      transform: rotate(300deg);
-      animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
-    }
-    83.33% {
-      transform: rotate(300deg);
-      animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
-    }
-    95.33% {
-      transform: rotate(360deg);
-      animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
-    }
-    100% {
-      transform: rotate(360deg);
-    }
-  }
-
-  @keyframes spin-snap-4 {
-    0% {
-      transform: rotate(0deg);
-      animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
-    }
-    15% {
-      transform: rotate(90deg);
-      animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
-    }
-    25% {
-      transform: rotate(90deg);
-      animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
-    }
-    40% {
-      transform: rotate(180deg);
-      animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
-    }
-    50% {
-      transform: rotate(180deg);
-      animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
-    }
-    65% {
-      transform: rotate(270deg);
-      animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
-    }
-    75% {
-      transform: rotate(270deg);
-      animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
-    }
-    90% {
-      transform: rotate(360deg);
-      animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
-    }
-    100% {
-      transform: rotate(360deg);
-    }
-  }
-
-  @keyframes spin-snap-8 {
-    0% {
-      transform: rotate(0deg);
-      animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
-    }
-    9% {
-      transform: rotate(45deg);
-      animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
-    }
-    12.5% {
-      transform: rotate(45deg);
-      animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
-    }
-    21.5% {
-      transform: rotate(90deg);
-      animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
-    }
-    25% {
-      transform: rotate(90deg);
-      animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
-    }
-    34% {
-      transform: rotate(135deg);
-      animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
-    }
-    37.5% {
-      transform: rotate(135deg);
-      animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
-    }
-    46.5% {
-      transform: rotate(180deg);
-      animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
-    }
-    50% {
-      transform: rotate(180deg);
-      animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
-    }
-    59% {
-      transform: rotate(225deg);
-      animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
-    }
-    62.5% {
-      transform: rotate(225deg);
-      animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
-    }
-    71.5% {
-      transform: rotate(270deg);
-      animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
-    }
-    75% {
-      transform: rotate(270deg);
-      animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
-    }
-    84% {
-      transform: rotate(315deg);
-      animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
-    }
-    87.5% {
-      transform: rotate(315deg);
-      animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
-    }
-    96.5% {
-      transform: rotate(360deg);
-      animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
-    }
-    100% {
-      transform: rotate(360deg);
-    }
-  }
-
-  @keyframes buzz {
-    0% {
-      transform: translateX(0) rotate(0deg);
-      animation-timing-function: cubic-bezier(0.1, 0, 0.9, 1);
-    }
-    5% {
-      transform: translateX(var(--buzz-distance, 4px)) rotate(0.5deg);
-    }
-    10% {
-      transform: translateX(calc(-1 * var(--buzz-distance, 4px))) rotate(-0.5deg);
-    }
-    15% {
-      transform: translateX(var(--buzz-distance, 4px)) rotate(0.3deg);
-    }
-    20% {
-      transform: translateX(calc(-1 * var(--buzz-distance, 4px))) rotate(-0.3deg);
-    }
-    25% {
-      transform: translateX(calc(var(--buzz-distance, 4px) * 0.7)) rotate(0.2deg);
-    }
-    30% {
-      transform: translateX(calc(-1 * var(--buzz-distance, 4px) * 0.7)) rotate(-0.2deg);
-    }
-    35% {
-      transform: translateX(calc(var(--buzz-distance, 4px) * 0.4)) rotate(0.1deg);
-    }
-    40% {
-      transform: translateX(0) rotate(0deg);
-    }
-    100% {
-      transform: translateX(0) rotate(0deg);
-    }
-  }
-
-  @keyframes wag {
-    0% {
-      transform: rotate(0deg);
-      animation-timing-function: cubic-bezier(0.2, 0, 0.6, 1);
-    }
-    12% {
-      transform: rotate(var(--wag-angle, 12deg));
-      animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    24% {
-      transform: rotate(2deg);
-      animation-timing-function: cubic-bezier(0.2, 0, 0.6, 1);
-    }
-    36% {
-      transform: rotate(calc(var(--wag-angle, 12deg) * 0.85));
-      animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    48% {
-      transform: rotate(1deg);
-      animation-timing-function: cubic-bezier(0.2, 0, 0.6, 1);
-    }
-    58% {
-      transform: rotate(calc(var(--wag-angle, 12deg) * 0.6));
-      animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    68% {
-      transform: rotate(0deg);
-    }
-    100% {
-      transform: rotate(0deg);
-    }
-  }
-
-  @keyframes float {
-    0% {
-      transform: translateY(0) translateX(0) rotate(0deg)
-        scale(var(--float-squash-x, 1.02), var(--float-squash-y, 0.98));
-      animation-timing-function: cubic-bezier(0.33, 0, 0.66, 0.33);
-    }
-    15% {
-      transform: translateY(calc(-0.4 * var(--float-height, 6px))) translateX(var(--float-drift, 1px))
-        rotate(var(--float-tilt, 1deg)) scale(1, 1);
-      animation-timing-function: cubic-bezier(0.33, 0.66, 0.66, 1);
-    }
-    35% {
-      transform: translateY(calc(-1 * var(--float-height, 6px))) translateX(0) rotate(0deg)
-        scale(var(--float-stretch-x, 0.98), var(--float-stretch-y, 1.03));
-      animation-timing-function: cubic-bezier(0.5, 0, 0.5, 0);
-    }
-    50% {
-      transform: translateY(calc(-0.92 * var(--float-height, 6px))) translateX(calc(-0.5 * var(--float-drift, 1px)))
-        rotate(calc(-0.5 * var(--float-tilt, 1deg))) scale(0.995, 1.01);
-      animation-timing-function: cubic-bezier(0.33, 0, 0.66, 0.33);
-    }
-    70% {
-      transform: translateY(calc(-0.3 * var(--float-height, 6px))) translateX(calc(-1 * var(--float-drift, 1px)))
-        rotate(calc(-1 * var(--float-tilt, 1deg))) scale(1, 1);
-      animation-timing-function: cubic-bezier(0.33, 0.66, 0.66, 1);
-    }
-    90% {
-      transform: translateY(calc(0.05 * var(--float-height, 6px))) translateX(0) rotate(0deg)
-        scale(var(--float-squash-x, 1.02), var(--float-squash-y, 0.98));
-      animation-timing-function: cubic-bezier(0.33, 0, 0.66, 1);
-    }
-    100% {
-      transform: translateY(0) translateX(0) rotate(0deg)
-        scale(var(--float-squash-x, 1.02), var(--float-squash-y, 0.98));
-    }
-  }
-
-  @keyframes swing {
-    0% {
-      transform: rotate(0deg);
-      animation-timing-function: cubic-bezier(0.2, 0, 0.8, 1);
-    }
-    8% {
-      transform: rotate(var(--swing-angle, 22deg));
-      animation-timing-function: cubic-bezier(0.3, 0, 0.7, 1);
-    }
-    18% {
-      transform: rotate(calc(-1 * var(--swing-angle, 22deg) * 0.85));
-      animation-timing-function: cubic-bezier(0.3, 0, 0.7, 1);
-    }
-    28% {
-      transform: rotate(calc(var(--swing-angle, 22deg) * 0.65));
-      animation-timing-function: cubic-bezier(0.35, 0, 0.65, 1);
-    }
-    38% {
-      transform: rotate(calc(-1 * var(--swing-angle, 22deg) * 0.45));
-      animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
-    }
-    48% {
-      transform: rotate(calc(var(--swing-angle, 22deg) * 0.25));
-      animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
-    }
-    56% {
-      transform: rotate(calc(-1 * var(--swing-angle, 22deg) * 0.1));
-      animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
-    }
-    64% {
-      transform: rotate(0deg);
-    }
-    100% {
-      transform: rotate(0deg);
-    }
-  }
-
-  @keyframes jello {
-    0% {
-      transform: scale(1, 1);
-      animation-timing-function: cubic-bezier(0.2, 0, 0.8, 1);
-    }
-    12% {
-      transform: scale(var(--jello-scale-x, 1.15), calc(2 - var(--jello-scale-x, 1.15)));
-      animation-timing-function: cubic-bezier(0.3, 0, 0.7, 1);
-    }
-    24% {
-      transform: scale(calc(2 - var(--jello-scale-y, 1.12)), var(--jello-scale-y, 1.12));
-      animation-timing-function: cubic-bezier(0.3, 0, 0.7, 1);
-    }
-    36% {
-      transform: scale(
-        calc(1 + (var(--jello-scale-x, 1.15) - 1) * 0.5),
-        calc(2 - (1 + (var(--jello-scale-x, 1.15) - 1) * 0.5))
-      );
-      animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
-    }
-    48% {
-      transform: scale(
-        calc(2 - (1 + (var(--jello-scale-y, 1.12) - 1) * 0.3)),
-        calc(1 + (var(--jello-scale-y, 1.12) - 1) * 0.3)
-      );
-      animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
-    }
-    58% {
-      transform: scale(1.02, 0.98);
-      animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    68% {
-      transform: scale(1, 1);
-    }
-    100% {
-      transform: scale(1, 1);
-    }
-  }
-
-  /* #endregion */
-`;
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.HGBRCPUS.js
-  var iconPath = "";
-  var kitCode = "";
-  function getIconPath() {
-    return iconPath.replace(/\/$/, "");
-  }
-  function setKitCode(code) {
-    kitCode = code;
-  }
-  function getKitCode() {
-    if (!kitCode) {
-      const el2 = document.querySelector("[data-fa-kit-code]");
-      if (el2) {
-        setKitCode(el2.getAttribute("data-fa-kit-code") || "");
-      }
-    }
-    return kitCode;
-  }
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.KKI7M5DP.js
-  var FA_VERSION = "7.3.0";
-  function getIconFolder(_name, family, variant) {
-    let folder = "solid";
-    if (family === "chisel") {
-      folder = "chisel-regular";
-    }
-    if (family === "etch") {
-      folder = "etch-solid";
-    }
-    if (family === "graphite") {
-      folder = "graphite-thin";
-    }
-    if (family === "jelly") {
-      folder = "jelly-regular";
-      if (variant === "duo-regular") folder = "jelly-duo-regular";
-      if (variant === "fill-regular") folder = "jelly-fill-regular";
-    }
-    if (family === "jelly-duo") {
-      folder = "jelly-duo-regular";
-    }
-    if (family === "jelly-fill") {
-      folder = "jelly-fill-regular";
-    }
-    if (family === "notdog") {
-      if (variant === "solid") folder = "notdog-solid";
-      if (variant === "duo-solid") folder = "notdog-duo-solid";
-    }
-    if (family === "notdog-duo") {
-      folder = "notdog-duo-solid";
-    }
-    if (family === "slab") {
-      if (variant === "solid" || variant === "regular") folder = "slab-regular";
-      if (variant === "press-regular") folder = "slab-press-regular";
-    }
-    if (family === "slab-press") {
-      folder = "slab-press-regular";
-    }
-    if (family === "slab-duo") {
-      folder = "slab-duo-regular";
-    }
-    if (family === "slab-press-duo") {
-      folder = "slab-press-duo-regular";
-    }
-    if (family === "thumbprint") {
-      folder = "thumbprint-light";
-    }
-    if (family === "utility") {
-      folder = "utility-semibold";
-    }
-    if (family === "utility-duo") {
-      folder = "utility-duo-semibold";
-    }
-    if (family === "utility-fill") {
-      folder = "utility-fill-semibold";
-    }
-    if (family === "whiteboard") {
-      folder = "whiteboard-semibold";
-    }
-    if (family === "mosaic") {
-      folder = "mosaic-solid";
-    }
-    if (family === "pixel") {
-      folder = "pixel-regular";
-    }
-    if (family === "vellum") {
-      folder = "vellum-solid";
-    }
-    if (family === "classic") {
-      if (variant === "thin") folder = "thin";
-      if (variant === "light") folder = "light";
-      if (variant === "regular") folder = "regular";
-      if (variant === "solid") folder = "solid";
-    }
-    if (family === "duotone") {
-      if (variant === "thin") folder = "duotone-thin";
-      if (variant === "light") folder = "duotone-light";
-      if (variant === "regular") folder = "duotone-regular";
-      if (variant === "solid") folder = "duotone";
-    }
-    if (family === "sharp") {
-      if (variant === "thin") folder = "sharp-thin";
-      if (variant === "light") folder = "sharp-light";
-      if (variant === "regular") folder = "sharp-regular";
-      if (variant === "solid") folder = "sharp-solid";
-    }
-    if (family === "sharp-duotone") {
-      if (variant === "thin") folder = "sharp-duotone-thin";
-      if (variant === "light") folder = "sharp-duotone-light";
-      if (variant === "regular") folder = "sharp-duotone-regular";
-      if (variant === "solid") folder = "sharp-duotone-solid";
-    }
-    if (family === "brands") {
-      folder = "brands";
-    }
-    return folder;
-  }
-  function getIconUrl(name, family, variant) {
-    const folder = getIconFolder(name, family, variant);
-    const iconBase = getIconPath();
-    if (iconBase) {
-      return `${iconBase}/${folder}/${name}.svg`;
-    }
-    const kitCode2 = getKitCode();
-    const isPro = kitCode2.length > 0;
-    return isPro ? `https://ka-p.fontawesome.com/releases/v${FA_VERSION}/svgs/${folder}/${name}.svg?token=${encodeURIComponent(kitCode2)}` : `https://ka-f.fontawesome.com/releases/v${FA_VERSION}/svgs/${folder}/${name}.svg`;
-  }
-  var library = {
-    name: "default",
-    resolver: (name, family = "classic", variant = "solid") => {
-      return getIconUrl(name, family, variant);
-    },
-    mutator: (svg2, hostEl) => {
-      if (!svg2.hasAttribute("fill")) {
-        svg2.setAttribute("fill", "currentColor");
-      }
-      if ((hostEl == null ? void 0 : hostEl.family) && !svg2.hasAttribute("data-duotone-initialized")) {
-        const { family, variant } = hostEl;
-        if (
-          // Duotone
-          family === "duotone" || // Sharp duotone
-          family === "sharp-duotone" || // Notdog duo (correct usage: family="notdog-duo")
-          family === "notdog-duo" || // NOTE: family="notdog" variant="duo-solid" is deprecated
-          family === "notdog" && variant === "duo-solid" || // Jelly duo (correct usage: family="jelly-duo")
-          family === "jelly-duo" || // NOTE: family="jelly" variant="duo-regular" is deprecated
-          family === "jelly" && variant === "duo-regular" || // Utility duo (correct usage: family="utility-duo")
-          family === "utility-duo" || // Slab duo (new in 7.3)
-          family === "slab-duo" || family === "slab-press-duo" || // Thumbprint
-          family === "thumbprint"
-        ) {
-          const paths = [...svg2.querySelectorAll("path")];
-          const primaryPath = paths.find((p4) => !p4.hasAttribute("opacity"));
-          const secondaryPath = paths.find((p4) => p4.hasAttribute("opacity"));
-          if (!primaryPath || !secondaryPath) return;
-          primaryPath.setAttribute("data-duotone-primary", "");
-          secondaryPath.setAttribute("data-duotone-secondary", "");
-          if (hostEl.swapOpacity && primaryPath && secondaryPath) {
-            const originalOpacity = secondaryPath.getAttribute("opacity") || "0.4";
-            primaryPath.style.setProperty("--path-opacity", originalOpacity);
-            secondaryPath.style.setProperty("--path-opacity", "1");
-          }
-          svg2.setAttribute("data-duotone-initialized", "");
-        }
-      }
-    }
-  };
-  var library_default_default = library;
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.44TPNLVU.js
-  function dataUri(svg2) {
-    return `data:image/svg+xml,${encodeURIComponent(svg2)}`;
-  }
-  var icons = {
-    //
-    // Solid variant
-    //
-    solid: {
-      backward: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><!--!Font Awesome Free v7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M236.3 107.1C247.9 96 265 92.9 279.7 99.2C294.4 105.5 304 120 304 136L304 272.3L476.3 107.2C487.9 96 505 92.9 519.7 99.2C534.4 105.5 544 120 544 136L544 504C544 520 534.4 534.5 519.7 540.8C505 547.1 487.9 544 476.3 532.9L304 367.7L304 504C304 520 294.4 534.5 279.7 540.8C265 547.1 247.9 544 236.3 532.9L44.3 348.9C36.5 341.3 32 330.9 32 320C32 309.1 36.5 298.7 44.3 291.1L236.3 107.1z"/></svg>`,
-      "backward-step": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><!--!Font Awesome Free v7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M491 100.8C478.1 93.8 462.3 94.5 450 102.6L192 272.1L192 128C192 110.3 177.7 96 160 96C142.3 96 128 110.3 128 128L128 512C128 529.7 142.3 544 160 544C177.7 544 192 529.7 192 512L192 367.9L450 537.5C462.3 545.6 478 546.3 491 539.3C504 532.3 512 518.8 512 504.1L512 136.1C512 121.4 503.9 107.9 491 100.9z"/></svg>`,
-      "angles-left": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc. --><path d="M77.3 256 214.7 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L77.3 256zm192 0L406.7 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L269.3 256z"/></svg>`,
-      "angles-right": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc. --><path d="M434.7 256 297.3 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L434.7 256zm-192 0L105.3 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L242.7 256z"/></svg>`,
-      check: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc. --><path d="M434.8 70.1c14.3 10.4 17.5 30.4 7.1 44.7l-256 352c-5.5 7.6-14 12.3-23.4 13.1s-18.5-2.7-25.1-9.3l-128-128c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l101.5 101.5 234-321.7c10.4-14.3 30.4-17.5 44.7-7.1z"/></svg>`,
-      "chevron-down": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc. --><path d="M201.4 406.6c12.5 12.5 32.8 12.5 45.3 0l192-192c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L224 338.7 54.6 169.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l192 192z"/></svg>`,
-      "chevron-left": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc. --><path d="M9.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l192 192c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L77.3 256 246.6 86.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-192 192z"/></svg>`,
-      "chevron-right": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc. --><path d="M311.1 233.4c12.5 12.5 12.5 32.8 0 45.3l-192 192c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L243.2 256 73.9 86.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l192 192z"/></svg>`,
-      circle: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc. --><path d="M0 256a256 256 0 1 1 512 0 256 256 0 1 1 -512 0z"/></svg>`,
-      "closed-captioning": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><!--!Font Awesome Free v7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M64 192C64 156.7 92.7 128 128 128L512 128C547.3 128 576 156.7 576 192L576 448C576 483.3 547.3 512 512 512L128 512C92.7 512 64 483.3 64 448L64 192zM216 272L248 272C252.4 272 256 275.6 256 280C256 293.3 266.7 304 280 304C293.3 304 304 293.3 304 280C304 249.1 278.9 224 248 224L216 224C185.1 224 160 249.1 160 280L160 360C160 390.9 185.1 416 216 416L248 416C278.9 416 304 390.9 304 360C304 346.7 293.3 336 280 336C266.7 336 256 346.7 256 360C256 364.4 252.4 368 248 368L216 368C211.6 368 208 364.4 208 360L208 280C208 275.6 211.6 272 216 272zM384 280C384 275.6 387.6 272 392 272L424 272C428.4 272 432 275.6 432 280C432 293.3 442.7 304 456 304C469.3 304 480 293.3 480 280C480 249.1 454.9 224 424 224L392 224C361.1 224 336 249.1 336 280L336 360C336 390.9 361.1 416 392 416L424 416C454.9 416 480 390.9 480 360C480 346.7 469.3 336 456 336C442.7 336 432 346.7 432 360C432 364.4 428.4 368 424 368L392 368C387.6 368 384 364.4 384 360L384 280z"/></svg>`,
-      "closed-captioning-slash": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><!--!Font Awesome Free v7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M39 39.1C48.4 29.7 63.6 29.7 72.9 39.1L161.8 128L512 128C547.3 128 576 156.7 576 192L576 448C576 473.5 561.1 495.4 539.6 505.8L601 567.1C610.4 576.5 610.4 591.7 601 601C591.6 610.3 576.4 610.4 567.1 601L39 73.1C29.7 63.7 29.7 48.5 39 39.1zM384 350.1L384 279.9C384 275.5 387.6 271.9 392 271.9L424 271.9C428.4 271.9 432 275.5 432 279.9C432 293.2 442.7 303.9 456 303.9C469.3 303.9 480 293.2 480 279.9C480 249 454.9 223.9 424 223.9L392 223.9C361.1 223.9 336 249 336 279.9L336 302.1L384 350.1zM445.5 411.6C465.7 403.2 480 383.2 480 359.9C480 346.6 469.3 335.9 456 335.9C442.7 335.9 432 346.6 432 359.9C432 364.3 428.4 367.9 424 367.9L401.8 367.9L445.5 411.6zM162.3 264.1C160.8 269.1 160 274.5 160 280L160 360C160 390.9 185.1 416 216 416L248 416C266.1 416 282.1 407.5 292.4 394.2L410.2 512L128 512C92.7 512 64 483.3 64 448L64 192C64 184.2 65.4 176.7 68 169.8L162.3 264.1zM256.1 357.9C256 358.6 256 359.3 256 360C256 364.4 252.4 368 248 368L216 368C211.6 368 208 364.4 208 360L208 309.8L256.1 357.9z"/></svg>`,
-      compress: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--!Font Awesome Free v7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M160 64c0-17.7-14.3-32-32-32S96 46.3 96 64l0 64-64 0c-17.7 0-32 14.3-32 32s14.3 32 32 32l96 0c17.7 0 32-14.3 32-32l0-96zM32 320c-17.7 0-32 14.3-32 32s14.3 32 32 32l64 0 0 64c0 17.7 14.3 32 32 32s32-14.3 32-32l0-96c0-17.7-14.3-32-32-32l-96 0zM352 64c0-17.7-14.3-32-32-32s-32 14.3-32 32l0 96c0 17.7 14.3 32 32 32l96 0c17.7 0 32-14.3 32-32s-14.3-32-32-32l-64 0 0-64zM320 320c-17.7 0-32 14.3-32 32l0 96c0 17.7 14.3 32 32 32s32-14.3 32-32l0-64 64 0c17.7 0 32-14.3 32-32s-14.3-32-32-32l-96 0z"/></svg>`,
-      ellipsis: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><!--!Font Awesome Free v7.3.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M96 320C96 289.1 121.1 264 152 264C182.9 264 208 289.1 208 320C208 350.9 182.9 376 152 376C121.1 376 96 350.9 96 320zM264 320C264 289.1 289.1 264 320 264C350.9 264 376 289.1 376 320C376 350.9 350.9 376 320 376C289.1 376 264 350.9 264 320zM488 264C518.9 264 544 289.1 544 320C544 350.9 518.9 376 488 376C457.1 376 432 350.9 432 320C432 289.1 457.1 264 488 264z"/></svg>`,
-      "ellipsis-vertical": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><!--!Font Awesome Free v7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M320 208C289.1 208 264 182.9 264 152C264 121.1 289.1 96 320 96C350.9 96 376 121.1 376 152C376 182.9 350.9 208 320 208zM320 432C350.9 432 376 457.1 376 488C376 518.9 350.9 544 320 544C289.1 544 264 518.9 264 488C264 457.1 289.1 432 320 432zM376 320C376 350.9 350.9 376 320 376C289.1 376 264 350.9 264 320C264 289.1 289.1 264 320 264C350.9 264 376 289.1 376 320z"/></svg>`,
-      expand: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><!--!Font Awesome Free v7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M128 96C110.3 96 96 110.3 96 128L96 224C96 241.7 110.3 256 128 256C145.7 256 160 241.7 160 224L160 160L224 160C241.7 160 256 145.7 256 128C256 110.3 241.7 96 224 96L128 96zM160 416C160 398.3 145.7 384 128 384C110.3 384 96 398.3 96 416L96 512C96 529.7 110.3 544 128 544L224 544C241.7 544 256 529.7 256 512C256 494.3 241.7 480 224 480L160 480L160 416zM416 96C398.3 96 384 110.3 384 128C384 145.7 398.3 160 416 160L480 160L480 224C480 241.7 494.3 256 512 256C529.7 256 544 241.7 544 224L544 128C544 110.3 529.7 96 512 96L416 96zM544 416C544 398.3 529.7 384 512 384C494.3 384 480 398.3 480 416L480 480L416 480C398.3 480 384 494.3 384 512C384 529.7 398.3 544 416 544L512 544C529.7 544 544 529.7 544 512L544 416z"/></svg>`,
-      eyedropper: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc. --><path d="M341.6 29.2l-101.6 101.6-9.4-9.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3l-9.4-9.4 101.6-101.6c39-39 39-102.2 0-141.1s-102.2-39-141.1 0zM55.4 323.3c-15 15-23.4 35.4-23.4 56.6l0 42.4-26.6 39.9c-8.5 12.7-6.8 29.6 4 40.4s27.7 12.5 40.4 4l39.9-26.6 42.4 0c21.2 0 41.6-8.4 56.6-23.4l109.4-109.4-45.3-45.3-109.4 109.4c-3 3-7.1 4.7-11.3 4.7l-36.1 0 0-36.1c0-4.2 1.7-8.3 4.7-11.3l109.4-109.4-45.3-45.3-109.4 109.4z"/></svg>`,
-      forward: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><!--!Font Awesome Free v7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M403.7 107.1C392.1 96 375 92.9 360.3 99.2C345.6 105.5 336 120 336 136L336 272.3L163.7 107.2C152.1 96 135 92.9 120.3 99.2C105.6 105.5 96 120 96 136L96 504C96 520 105.6 534.5 120.3 540.8C135 547.1 152.1 544 163.7 532.9L336 367.7L336 504C336 520 345.6 534.5 360.3 540.8C375 547.1 392.1 544 403.7 532.9L595.7 348.9C603.6 341.4 608 330.9 608 320C608 309.1 603.5 298.7 595.7 291.1L403.7 107.1z"/></svg>`,
-      file: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><!--!Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M192 64C156.7 64 128 92.7 128 128L128 512C128 547.3 156.7 576 192 576L448 576C483.3 576 512 547.3 512 512L512 234.5C512 217.5 505.3 201.2 493.3 189.2L386.7 82.7C374.7 70.7 358.5 64 341.5 64L192 64zM453.5 240L360 240C346.7 240 336 229.3 336 216L336 122.5L453.5 240z"/></svg>`,
-      "file-audio": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><!--!Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M128 128C128 92.7 156.7 64 192 64L341.5 64C358.5 64 374.8 70.7 386.8 82.7L493.3 189.3C505.3 201.3 512 217.6 512 234.6L512 512C512 547.3 483.3 576 448 576L192 576C156.7 576 128 547.3 128 512L128 128zM336 122.5L336 216C336 229.3 346.7 240 360 240L453.5 240L336 122.5zM389.8 307.7C380.7 301.4 368.3 303.6 362 312.7C355.7 321.8 357.9 334.2 367 340.5C390.9 357.2 406.4 384.8 406.4 416C406.4 447.2 390.8 474.9 367 491.5C357.9 497.8 355.7 510.3 362 519.3C368.3 528.3 380.8 530.6 389.8 524.3C423.9 500.5 446.4 460.8 446.4 416C446.4 371.2 424 331.5 389.8 307.7zM208 376C199.2 376 192 383.2 192 392L192 440C192 448.8 199.2 456 208 456L232 456L259.2 490C262.2 493.8 266.8 496 271.7 496L272 496C280.8 496 288 488.8 288 480L288 352C288 343.2 280.8 336 272 336L271.7 336C266.8 336 262.2 338.2 259.2 342L232 376L208 376zM336 448.2C336 458.9 346.5 466.4 354.9 459.8C367.8 449.5 376 433.7 376 416C376 398.3 367.8 382.5 354.9 372.2C346.5 365.5 336 373.1 336 383.8L336 448.3z"/></svg>`,
-      "file-code": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><!--!Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M128 128C128 92.7 156.7 64 192 64L341.5 64C358.5 64 374.8 70.7 386.8 82.7L493.3 189.3C505.3 201.3 512 217.6 512 234.6L512 512C512 547.3 483.3 576 448 576L192 576C156.7 576 128 547.3 128 512L128 128zM336 122.5L336 216C336 229.3 346.7 240 360 240L453.5 240L336 122.5zM282.2 359.6C290.8 349.5 289.7 334.4 279.6 325.8C269.5 317.2 254.4 318.3 245.8 328.4L197.8 384.4C190.1 393.4 190.1 406.6 197.8 415.6L245.8 471.6C254.4 481.7 269.6 482.8 279.6 474.2C289.6 465.6 290.8 450.4 282.2 440.4L247.6 400L282.2 359.6zM394.2 328.4C385.6 318.3 370.4 317.2 360.4 325.8C350.4 334.4 349.2 349.6 357.8 359.6L392.4 400L357.8 440.4C349.2 450.5 350.3 465.6 360.4 474.2C370.5 482.8 385.6 481.7 394.2 471.6L442.2 415.6C449.9 406.6 449.9 393.4 442.2 384.4L394.2 328.4z"/></svg>`,
-      "file-excel": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><!--!Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M128 128C128 92.7 156.7 64 192 64L341.5 64C358.5 64 374.8 70.7 386.8 82.7L493.3 189.3C505.3 201.3 512 217.6 512 234.6L512 512C512 547.3 483.3 576 448 576L192 576C156.7 576 128 547.3 128 512L128 128zM336 122.5L336 216C336 229.3 346.7 240 360 240L453.5 240L336 122.5zM292 330.7C284.6 319.7 269.7 316.7 258.7 324C247.7 331.3 244.7 346.3 252 357.3L291.2 416L252 474.7C244.6 485.7 247.6 500.6 258.7 508C269.8 515.4 284.6 512.4 292 501.3L320 459.3L348 501.3C355.4 512.3 370.3 515.3 381.3 508C392.3 500.7 395.3 485.7 388 474.7L348.8 416L388 357.3C395.4 346.3 392.4 331.4 381.3 324C370.2 316.6 355.4 319.6 348 330.7L320 372.7L292 330.7z"/></svg>`,
-      "file-image": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><!--!Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M128 128C128 92.7 156.7 64 192 64L341.5 64C358.5 64 374.8 70.7 386.8 82.7L493.3 189.3C505.3 201.3 512 217.6 512 234.6L512 512C512 547.3 483.3 576 448 576L192 576C156.7 576 128 547.3 128 512L128 128zM336 122.5L336 216C336 229.3 346.7 240 360 240L453.5 240L336 122.5zM256 320C256 302.3 241.7 288 224 288C206.3 288 192 302.3 192 320C192 337.7 206.3 352 224 352C241.7 352 256 337.7 256 320zM220.6 512L419.4 512C435.2 512 448 499.2 448 483.4C448 476.1 445.2 469 440.1 463.7L343.3 361.9C337.3 355.6 328.9 352 320.1 352L319.8 352C311 352 302.7 355.6 296.6 361.9L199.9 463.7C194.8 469 192 476.1 192 483.4C192 499.2 204.8 512 220.6 512z"/></svg>`,
-      "file-pdf": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><!--!Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M128 64C92.7 64 64 92.7 64 128L64 512C64 547.3 92.7 576 128 576L208 576L208 464C208 428.7 236.7 400 272 400L448 400L448 234.5C448 217.5 441.3 201.2 429.3 189.2L322.7 82.7C310.7 70.7 294.5 64 277.5 64L128 64zM389.5 240L296 240C282.7 240 272 229.3 272 216L272 122.5L389.5 240zM272 444C261 444 252 453 252 464L252 592C252 603 261 612 272 612C283 612 292 603 292 592L292 564L304 564C337.1 564 364 537.1 364 504C364 470.9 337.1 444 304 444L272 444zM304 524L292 524L292 484L304 484C315 484 324 493 324 504C324 515 315 524 304 524zM400 444C389 444 380 453 380 464L380 592C380 603 389 612 400 612L432 612C460.7 612 484 588.7 484 560L484 496C484 467.3 460.7 444 432 444L400 444zM420 572L420 484L432 484C438.6 484 444 489.4 444 496L444 560C444 566.6 438.6 572 432 572L420 572zM508 464L508 592C508 603 517 612 528 612C539 612 548 603 548 592L548 548L576 548C587 548 596 539 596 528C596 517 587 508 576 508L548 508L548 484L576 484C587 484 596 475 596 464C596 453 587 444 576 444L528 444C517 444 508 453 508 464z"/></svg>`,
-      "file-powerpoint": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><!--!Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M128 128C128 92.7 156.7 64 192 64L341.5 64C358.5 64 374.8 70.7 386.8 82.7L493.3 189.3C505.3 201.3 512 217.6 512 234.6L512 512C512 547.3 483.3 576 448 576L192 576C156.7 576 128 547.3 128 512L128 128zM336 122.5L336 216C336 229.3 346.7 240 360 240L453.5 240L336 122.5zM280 320C266.7 320 256 330.7 256 344L256 488C256 501.3 266.7 512 280 512C293.3 512 304 501.3 304 488L304 464L328 464C367.8 464 400 431.8 400 392C400 352.2 367.8 320 328 320L280 320zM328 416L304 416L304 368L328 368C341.3 368 352 378.7 352 392C352 405.3 341.3 416 328 416z"/></svg>`,
-      "file-video": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><!--!Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M128 128C128 92.7 156.7 64 192 64L341.5 64C358.5 64 374.8 70.7 386.8 82.7L493.3 189.3C505.3 201.3 512 217.6 512 234.6L512 512C512 547.3 483.3 576 448 576L192 576C156.7 576 128 547.3 128 512L128 128zM336 122.5L336 216C336 229.3 346.7 240 360 240L453.5 240L336 122.5zM208 368L208 464C208 481.7 222.3 496 240 496L336 496C353.7 496 368 481.7 368 464L368 440L403 475C406.2 478.2 410.5 480 415 480C424.4 480 432 472.4 432 463L432 368.9C432 359.5 424.4 351.9 415 351.9C410.5 351.9 406.2 353.7 403 356.9L368 391.9L368 367.9C368 350.2 353.7 335.9 336 335.9L240 335.9C222.3 335.9 208 350.2 208 367.9z"/></svg>`,
-      "file-word": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><!--!Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M128 128C128 92.7 156.7 64 192 64L341.5 64C358.5 64 374.8 70.7 386.8 82.7L493.3 189.3C505.3 201.3 512 217.6 512 234.6L512 512C512 547.3 483.3 576 448 576L192 576C156.7 576 128 547.3 128 512L128 128zM336 122.5L336 216C336 229.3 346.7 240 360 240L453.5 240L336 122.5zM263.4 338.8C260.5 325.9 247.7 317.7 234.8 320.6C221.9 323.5 213.7 336.3 216.6 349.2L248.6 493.2C250.9 503.7 260 511.4 270.8 512C281.6 512.6 291.4 505.9 294.8 495.6L320 419.9L345.2 495.6C348.6 505.8 358.4 512.5 369.2 512C380 511.5 389.1 503.8 391.4 493.2L423.4 349.2C426.3 336.3 418.1 323.4 405.2 320.6C392.3 317.8 379.4 325.9 376.6 338.8L363.4 398.2L342.8 336.4C339.5 326.6 330.4 320 320 320C309.6 320 300.5 326.6 297.2 336.4L276.6 398.2L263.4 338.8z"/></svg>`,
-      "file-zipper": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><!--!Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M128 128C128 92.7 156.7 64 192 64L341.5 64C358.5 64 374.8 70.7 386.8 82.7L493.3 189.3C505.3 201.3 512 217.6 512 234.6L512 512C512 547.3 483.3 576 448 576L192 576C156.7 576 128 547.3 128 512L128 128zM336 122.5L336 216C336 229.3 346.7 240 360 240L453.5 240L336 122.5zM192 136C192 149.3 202.7 160 216 160L264 160C277.3 160 288 149.3 288 136C288 122.7 277.3 112 264 112L216 112C202.7 112 192 122.7 192 136zM192 232C192 245.3 202.7 256 216 256L264 256C277.3 256 288 245.3 288 232C288 218.7 277.3 208 264 208L216 208C202.7 208 192 218.7 192 232zM256 304L224 304C206.3 304 192 318.3 192 336L192 384C192 410.5 213.5 432 240 432C266.5 432 288 410.5 288 384L288 336C288 318.3 273.7 304 256 304zM240 368C248.8 368 256 375.2 256 384C256 392.8 248.8 400 240 400C231.2 400 224 392.8 224 384C224 375.2 231.2 368 240 368z"/></svg>`,
-      "forward-step": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--!Font Awesome Free v7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M21 36.8c12.9-7 28.7-6.3 41 1.8L320 208.1 320 64c0-17.7 14.3-32 32-32s32 14.3 32 32l0 384c0 17.7-14.3 32-32 32s-32-14.3-32-32l0-144.1-258 169.6c-12.3 8.1-28 8.8-41 1.8S0 454.7 0 440L0 72C0 57.3 8.1 43.8 21 36.8z"/></svg>`,
-      gauge: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--!Font Awesome Free v7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M0 256a256 256 0 1 1 512 0 256 256 0 1 1 -512 0zm320 96c0-26.9-16.5-49.9-40-59.3L280 120c0-13.3-10.7-24-24-24s-24 10.7-24 24l0 172.7c-23.5 9.5-40 32.5-40 59.3 0 35.3 28.7 64 64 64s64-28.7 64-64zM144 176a32 32 0 1 0 0-64 32 32 0 1 0 0 64zm-16 80a32 32 0 1 0 -64 0 32 32 0 1 0 64 0zm288 32a32 32 0 1 0 0-64 32 32 0 1 0 0 64zM400 144a32 32 0 1 0 -64 0 32 32 0 1 0 64 0z"/></svg>`,
-      gear: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><!--!Font Awesome Free v7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M259.1 73.5C262.1 58.7 275.2 48 290.4 48L350.2 48C365.4 48 378.5 58.7 381.5 73.5L396 143.5C410.1 149.5 423.3 157.2 435.3 166.3L503.1 143.8C517.5 139 533.3 145 540.9 158.2L570.8 210C578.4 223.2 575.7 239.8 564.3 249.9L511 297.3C511.9 304.7 512.3 312.3 512.3 320C512.3 327.7 511.8 335.3 511 342.7L564.4 390.2C575.8 400.3 578.4 417 570.9 430.1L541 481.9C533.4 495 517.6 501.1 503.2 496.3L435.4 473.8C423.3 482.9 410.1 490.5 396.1 496.6L381.7 566.5C378.6 581.4 365.5 592 350.4 592L290.6 592C275.4 592 262.3 581.3 259.3 566.5L244.9 496.6C230.8 490.6 217.7 482.9 205.6 473.8L137.5 496.3C123.1 501.1 107.3 495.1 99.7 481.9L69.8 430.1C62.2 416.9 64.9 400.3 76.3 390.2L129.7 342.7C128.8 335.3 128.4 327.7 128.4 320C128.4 312.3 128.9 304.7 129.7 297.3L76.3 249.8C64.9 239.7 62.3 223 69.8 209.9L99.7 158.1C107.3 144.9 123.1 138.9 137.5 143.7L205.3 166.2C217.4 157.1 230.6 149.5 244.6 143.4L259.1 73.5zM320.3 400C364.5 399.8 400.2 363.9 400 319.7C399.8 275.5 363.9 239.8 319.7 240C275.5 240.2 239.8 276.1 240 320.3C240.2 364.5 276.1 400.2 320.3 400z"/></svg>`,
-      "grip-vertical": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc. --><path d="M128 40c0-22.1-17.9-40-40-40L40 0C17.9 0 0 17.9 0 40L0 88c0 22.1 17.9 40 40 40l48 0c22.1 0 40-17.9 40-40l0-48zm0 192c0-22.1-17.9-40-40-40l-48 0c-22.1 0-40 17.9-40 40l0 48c0 22.1 17.9 40 40 40l48 0c22.1 0 40-17.9 40-40l0-48zM0 424l0 48c0 22.1 17.9 40 40 40l48 0c22.1 0 40-17.9 40-40l0-48c0-22.1-17.9-40-40-40l-48 0c-22.1 0-40 17.9-40 40zM320 40c0-22.1-17.9-40-40-40L232 0c-22.1 0-40 17.9-40 40l0 48c0 22.1 17.9 40 40 40l48 0c22.1 0 40-17.9 40-40l0-48zM192 232l0 48c0 22.1 17.9 40 40 40l48 0c22.1 0 40-17.9 40-40l0-48c0-22.1-17.9-40-40-40l-48 0c-22.1 0-40 17.9-40 40zM320 424c0-22.1-17.9-40-40-40l-48 0c-22.1 0-40 17.9-40 40l0 48c0 22.1 17.9 40 40 40l48 0c22.1 0 40-17.9 40-40l0-48z"/></svg>`,
-      indeterminate: `<svg part="indeterminate-icon" class="icon" viewBox="0 0 16 16"><g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd" stroke-linecap="round"><g stroke="currentColor" stroke-width="2"><g transform="translate(2.285714 6.857143)"><path d="M10.2857143,1.14285714 L1.14285714,1.14285714"/></g></g></g></svg>`,
-      minus: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc. --><path d="M0 256c0-17.7 14.3-32 32-32l384 0c17.7 0 32 14.3 32 32s-14.3 32-32 32L32 288c-17.7 0-32-14.3-32-32z"/></svg>`,
-      pause: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc. --><path d="M48 32C21.5 32 0 53.5 0 80L0 432c0 26.5 21.5 48 48 48l64 0c26.5 0 48-21.5 48-48l0-352c0-26.5-21.5-48-48-48L48 32zm224 0c-26.5 0-48 21.5-48 48l0 352c0 26.5 21.5 48 48 48l64 0c26.5 0 48-21.5 48-48l0-352c0-26.5-21.5-48-48-48l-64 0z"/></svg>`,
-      "picture-in-picture": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--!Font Awesome Free v7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M448 32c35.3 0 64 28.7 64 64l0 112-64 0 0-112-384 0 0 320 144 0 0 64-144 0-6.5-.3c-30.1-3.1-54.1-27-57.1-57.1L0 416 0 96C0 62.9 25.2 35.6 57.5 32.3L64 32 448 32zm16 224c26.5 0 48 21.5 48 48l0 128c0 26.5-21.5 48-48 48l-160 0c-26.5 0-48-21.5-48-48l0-128c0-26.5 21.5-48 48-48l160 0z"/></svg>`,
-      play: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc. --><path d="M91.2 36.9c-12.4-6.8-27.4-6.5-39.6 .7S32 57.9 32 72l0 368c0 14.1 7.5 27.2 19.6 34.4s27.2 7.5 39.6 .7l336-184c12.8-7 20.8-20.5 20.8-35.1s-8-28.1-20.8-35.1l-336-184z"/></svg>`,
-      "play-circle": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--!Font Awesome Free v7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M0 256a256 256 0 1 1 512 0 256 256 0 1 1 -512 0zM188.3 147.1c-7.6 4.2-12.3 12.3-12.3 20.9l0 176c0 8.7 4.7 16.7 12.3 20.9s16.8 4.1 24.3-.5l144-88c7.1-4.4 11.5-12.1 11.5-20.5s-4.4-16.1-11.5-20.5l-144-88c-7.4-4.5-16.7-4.7-24.3-.5z"/></svg>`,
-      plus: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><!--!Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M352 128C352 110.3 337.7 96 320 96C302.3 96 288 110.3 288 128L288 288L128 288C110.3 288 96 302.3 96 320C96 337.7 110.3 352 128 352L288 352L288 512C288 529.7 302.3 544 320 544C337.7 544 352 529.7 352 512L352 352L512 352C529.7 352 544 337.7 544 320C544 302.3 529.7 288 512 288L352 288L352 128z"/></svg>`,
-      star: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc. --><path d="M309.5-18.9c-4.1-8-12.4-13.1-21.4-13.1s-17.3 5.1-21.4 13.1L193.1 125.3 33.2 150.7c-8.9 1.4-16.3 7.7-19.1 16.3s-.5 18 5.8 24.4l114.4 114.5-25.2 159.9c-1.4 8.9 2.3 17.9 9.6 23.2s16.9 6.1 25 2L288.1 417.6 432.4 491c8 4.1 17.7 3.3 25-2s11-14.2 9.6-23.2L441.7 305.9 556.1 191.4c6.4-6.4 8.6-15.8 5.8-24.4s-10.1-14.9-19.1-16.3L383 125.3 309.5-18.9z"/></svg>`,
-      upload: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><!--!Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M352 173.3L352 384C352 401.7 337.7 416 320 416C302.3 416 288 401.7 288 384L288 173.3L246.6 214.7C234.1 227.2 213.8 227.2 201.3 214.7C188.8 202.2 188.8 181.9 201.3 169.4L297.3 73.4C309.8 60.9 330.1 60.9 342.6 73.4L438.6 169.4C451.1 181.9 451.1 202.2 438.6 214.7C426.1 227.2 405.8 227.2 393.3 214.7L352 173.3zM320 464C364.2 464 400 428.2 400 384L480 384C515.3 384 544 412.7 544 448L544 480C544 515.3 515.3 544 480 544L160 544C124.7 544 96 515.3 96 480L96 448C96 412.7 124.7 384 160 384L240 384C240 428.2 275.8 464 320 464zM464 488C477.3 488 488 477.3 488 464C488 450.7 477.3 440 464 440C450.7 440 440 450.7 440 464C440 477.3 450.7 488 464 488z"/></svg>`,
-      user: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc. --><path d="M224 248a120 120 0 1 0 0-240 120 120 0 1 0 0 240zm-29.7 56C95.8 304 16 383.8 16 482.3 16 498.7 29.3 512 45.7 512l356.6 0c16.4 0 29.7-13.3 29.7-29.7 0-98.5-79.8-178.3-178.3-178.3l-59.4 0z"/></svg>`,
-      volume: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--!Font Awesome Free v7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M48 352l48 0 134.1 119.2c6.4 5.7 14.6 8.8 23.1 8.8 19.2 0 34.8-15.6 34.8-34.8l0-378.4c0-19.2-15.6-34.8-34.8-34.8-8.5 0-16.7 3.1-23.1 8.8L96 160 48 160c-26.5 0-48 21.5-48 48l0 96c0 26.5 21.5 48 48 48zM441.1 107c-10.3-8.4-25.4-6.8-33.8 3.5s-6.8 25.4 3.5 33.8C443.3 170.7 464 210.9 464 256s-20.7 85.3-53.2 111.8c-10.3 8.4-11.8 23.5-3.5 33.8s23.5 11.8 33.8 3.5c43.2-35.2 70.9-88.9 70.9-149s-27.7-113.8-70.9-149zm-60.5 74.5c-10.3-8.4-25.4-6.8-33.8 3.5s-6.8 25.4 3.5 33.8C361.1 227.6 368 241 368 256s-6.9 28.4-17.7 37.3c-10.3 8.4-11.8 23.5-3.5 33.8s23.5 11.8 33.8 3.5C402.1 312.9 416 286.1 416 256s-13.9-56.9-35.5-74.5z"/></svg>`,
-      "volume-low": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--!Font Awesome Free v7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M48 352l48 0 134.1 119.2c6.4 5.7 14.6 8.8 23.1 8.8 19.2 0 34.8-15.6 34.8-34.8l0-378.4c0-19.2-15.6-34.8-34.8-34.8-8.5 0-16.7 3.1-23.1 8.8L96 160 48 160c-26.5 0-48 21.5-48 48l0 96c0 26.5 21.5 48 48 48zM380.6 181.5c-10.3-8.4-25.4-6.8-33.8 3.5s-6.8 25.4 3.5 33.8C361.1 227.6 368 241 368 256s-6.9 28.4-17.7 37.3c-10.3 8.4-11.8 23.5-3.5 33.8s23.5 11.8 33.8 3.5C402.1 312.9 416 286.1 416 256s-13.9-56.9-35.5-74.5z"/></svg>`,
-      "volume-xmark": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--!Font Awesome Free v7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M48 352l48 0 134.1 119.2c6.4 5.7 14.6 8.8 23.1 8.8 19.2 0 34.8-15.6 34.8-34.8l0-378.4c0-19.2-15.6-34.8-34.8-34.8-8.5 0-16.7 3.1-23.1 8.8L96 160 48 160c-26.5 0-48 21.5-48 48l0 96c0 26.5 21.5 48 48 48zM367 175c-9.4 9.4-9.4 24.6 0 33.9l47 47-47 47c-9.4 9.4-9.4 24.6 0 33.9s24.6 9.4 33.9 0l47-47 47 47c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-47-47 47-47c9.4-9.4 9.4-24.6 0-33.9s-24.6-9.4-33.9 0l-47 47-47-47c-9.4-9.4-24.6-9.4-33.9 0z"/></svg>`,
-      xmark: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc. --><path d="M55.1 73.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L147.2 256 9.9 393.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192.5 301.3 329.9 438.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.8 256 375.1 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192.5 210.7 55.1 73.4z"/></svg>`
-    },
-    //
-    // Regular variant
-    //
-    regular: {
-      calendar: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><!--!Font Awesome Free v7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M216 64C229.3 64 240 74.7 240 88L240 128L400 128L400 88C400 74.7 410.7 64 424 64C437.3 64 448 74.7 448 88L448 128L480 128C515.3 128 544 156.7 544 192L544 480C544 515.3 515.3 544 480 544L160 544C124.7 544 96 515.3 96 480L96 192C96 156.7 124.7 128 160 128L192 128L192 88C192 74.7 202.7 64 216 64zM216 176L160 176C151.2 176 144 183.2 144 192L144 240L496 240L496 192C496 183.2 488.8 176 480 176L216 176zM144 288L144 480C144 488.8 151.2 496 160 496L480 496C488.8 496 496 488.8 496 480L496 288L144 288z"/></svg>`,
-      "circle-question": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc. --><path d="M464 256a208 208 0 1 0 -416 0 208 208 0 1 0 416 0zM0 256a256 256 0 1 1 512 0 256 256 0 1 1 -512 0zm256-80c-17.7 0-32 14.3-32 32 0 13.3-10.7 24-24 24s-24-10.7-24-24c0-44.2 35.8-80 80-80s80 35.8 80 80c0 47.2-36 67.2-56 74.5l0 3.8c0 13.3-10.7 24-24 24s-24-10.7-24-24l0-8.1c0-20.5 14.8-35.2 30.1-40.2 6.4-2.1 13.2-5.5 18.2-10.3 4.3-4.2 7.7-10 7.7-19.6 0-17.7-14.3-32-32-32zM224 368a32 32 0 1 1 64 0 32 32 0 1 1 -64 0z"/></svg>`,
-      "circle-xmark": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc. --><path d="M256 48a208 208 0 1 1 0 416 208 208 0 1 1 0-416zm0 464a256 256 0 1 0 0-512 256 256 0 1 0 0 512zM167 167c-9.4 9.4-9.4 24.6 0 33.9l55 55-55 55c-9.4 9.4-9.4 24.6 0 33.9s24.6 9.4 33.9 0l55-55 55 55c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-55-55 55-55c9.4-9.4 9.4-24.6 0-33.9s-24.6-9.4-33.9 0l-55 55-55-55c-9.4-9.4-24.6-9.4-33.9 0z"/></svg>`,
-      clock: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><!--!Font Awesome Free v7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M528 320C528 434.9 434.9 528 320 528C205.1 528 112 434.9 112 320C112 205.1 205.1 112 320 112C434.9 112 528 205.1 528 320zM64 320C64 461.4 178.6 576 320 576C461.4 576 576 461.4 576 320C576 178.6 461.4 64 320 64C178.6 64 64 178.6 64 320zM296 184L296 320C296 328 300 335.5 306.7 340L402.7 404C413.7 411.4 428.6 408.4 436 397.3C443.4 386.2 440.4 371.4 429.3 364L344 307.2L344 184C344 170.7 333.3 160 320 160C306.7 160 296 170.7 296 184z"/></svg>`,
-      copy: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc. --><path d="M384 336l-192 0c-8.8 0-16-7.2-16-16l0-256c0-8.8 7.2-16 16-16l133.5 0c4.2 0 8.3 1.7 11.3 4.7l58.5 58.5c3 3 4.7 7.1 4.7 11.3L400 320c0 8.8-7.2 16-16 16zM192 384l192 0c35.3 0 64-28.7 64-64l0-197.5c0-17-6.7-33.3-18.7-45.3L370.7 18.7C358.7 6.7 342.5 0 325.5 0L192 0c-35.3 0-64 28.7-64 64l0 256c0 35.3 28.7 64 64 64zM64 128c-35.3 0-64 28.7-64 64L0 448c0 35.3 28.7 64 64 64l192 0c35.3 0 64-28.7 64-64l0-16-48 0 0 16c0 8.8-7.2 16-16 16L64 464c-8.8 0-16-7.2-16-16l0-256c0-8.8 7.2-16 16-16l16 0 0-48-16 0z"/></svg>`,
-      eye: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc. --><path d="M288 80C222.8 80 169.2 109.6 128.1 147.7 89.6 183.5 63 226 49.4 256 63 286 89.6 328.5 128.1 364.3 169.2 402.4 222.8 432 288 432s118.8-29.6 159.9-67.7C486.4 328.5 513 286 526.6 256 513 226 486.4 183.5 447.9 147.7 406.8 109.6 353.2 80 288 80zM95.4 112.6C142.5 68.8 207.2 32 288 32s145.5 36.8 192.6 80.6c46.8 43.5 78.1 95.4 93 131.1 3.3 7.9 3.3 16.7 0 24.6-14.9 35.7-46.2 87.7-93 131.1-47.1 43.7-111.8 80.6-192.6 80.6S142.5 443.2 95.4 399.4c-46.8-43.5-78.1-95.4-93-131.1-3.3-7.9-3.3-16.7 0-24.6 14.9-35.7 46.2-87.7 93-131.1zM288 336c44.2 0 80-35.8 80-80 0-29.6-16.1-55.5-40-69.3-1.4 59.7-49.6 107.9-109.3 109.3 13.8 23.9 39.7 40 69.3 40zm-79.6-88.4c2.5 .3 5 .4 7.6 .4 35.3 0 64-28.7 64-64 0-2.6-.2-5.1-.4-7.6-37.4 3.9-67.2 33.7-71.1 71.1zm45.6-115c10.8-3 22.2-4.5 33.9-4.5 8.8 0 17.5 .9 25.8 2.6 .3 .1 .5 .1 .8 .2 57.9 12.2 101.4 63.7 101.4 125.2 0 70.7-57.3 128-128 128-61.6 0-113-43.5-125.2-101.4-1.8-8.6-2.8-17.5-2.8-26.6 0-11 1.4-21.8 4-32 .2-.7 .3-1.3 .5-1.9 11.9-43.4 46.1-77.6 89.5-89.5z"/></svg>`,
-      "eye-slash": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc. --><path d="M41-24.9c-9.4-9.4-24.6-9.4-33.9 0S-2.3-.3 7 9.1l528 528c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-96.4-96.4c2.7-2.4 5.4-4.8 8-7.2 46.8-43.5 78.1-95.4 93-131.1 3.3-7.9 3.3-16.7 0-24.6-14.9-35.7-46.2-87.7-93-131.1-47.1-43.7-111.8-80.6-192.6-80.6-56.8 0-105.6 18.2-146 44.2L41-24.9zM176.9 111.1c32.1-18.9 69.2-31.1 111.1-31.1 65.2 0 118.8 29.6 159.9 67.7 38.5 35.7 65.1 78.3 78.6 108.3-13.6 30-40.2 72.5-78.6 108.3-3.1 2.8-6.2 5.6-9.4 8.4L393.8 328c14-20.5 22.2-45.3 22.2-72 0-70.7-57.3-128-128-128-26.7 0-51.5 8.2-72 22.2l-39.1-39.1zm182 182l-108-108c11.1-5.8 23.7-9.1 37.1-9.1 44.2 0 80 35.8 80 80 0 13.4-3.3 26-9.1 37.1zM103.4 173.2l-34-34c-32.6 36.8-55 75.8-66.9 104.5-3.3 7.9-3.3 16.7 0 24.6 14.9 35.7 46.2 87.7 93 131.1 47.1 43.7 111.8 80.6 192.6 80.6 37.3 0 71.2-7.9 101.5-20.6L352.2 422c-20 6.4-41.4 10-64.2 10-65.2 0-118.8-29.6-159.9-67.7-38.5-35.7-65.1-78.3-78.6-108.3 10.4-23.1 28.6-53.6 54-82.8z"/></svg>`,
-      star: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc. --><path d="M288.1-32c9 0 17.3 5.1 21.4 13.1L383 125.3 542.9 150.7c8.9 1.4 16.3 7.7 19.1 16.3s.5 18-5.8 24.4L441.7 305.9 467 465.8c1.4 8.9-2.3 17.9-9.6 23.2s-17 6.1-25 2L288.1 417.6 143.8 491c-8 4.1-17.7 3.3-25-2s-11-14.2-9.6-23.2L134.4 305.9 20 191.4c-6.4-6.4-8.6-15.8-5.8-24.4s10.1-14.9 19.1-16.3l159.9-25.4 73.6-144.2c4.1-8 12.4-13.1 21.4-13.1zm0 76.8L230.3 158c-3.5 6.8-10 11.6-17.6 12.8l-125.5 20 89.8 89.9c5.4 5.4 7.9 13.1 6.7 20.7l-19.8 125.5 113.3-57.6c6.8-3.5 14.9-3.5 21.8 0l113.3 57.6-19.8-125.5c-1.2-7.6 1.3-15.3 6.7-20.7l89.8-89.9-125.5-20c-7.6-1.2-14.1-6-17.6-12.8L288.1 44.8z"/></svg>`
-    }
-  };
-  var systemLibrary = {
-    name: "system",
-    resolver: (name, _family = "classic", variant = "solid") => {
-      var _a8, _b2;
-      let collection = icons[variant];
-      let svg2 = (_b2 = (_a8 = collection[name]) != null ? _a8 : icons.regular[name]) != null ? _b2 : icons.regular["circle-question"];
-      if (svg2) {
-        return dataUri(svg2);
-      }
-      return "";
-    },
-    mutator: (svg2) => {
-      if (!svg2.hasAttribute("fill")) {
-        svg2.setAttribute("fill", "currentColor");
-      }
-    }
-  };
-  var library_system_default = systemLibrary;
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.ZRLTNBWF.js
-  var defaultIconFamily = "classic";
-  var registry = [library_default_default, library_system_default];
-  var watchedIcons = /* @__PURE__ */ new Set();
-  function watchIcon(icon) {
-    watchedIcons.add(icon);
-  }
-  function unwatchIcon(icon) {
-    watchedIcons.delete(icon);
-  }
-  function getIconLibrary(name) {
-    return registry.find((lib) => lib.name === name);
-  }
-  function registerIconLibrary(name, options) {
-    unregisterIconLibrary(name);
-    registry.push({
-      name,
-      resolver: options.resolver,
-      mutator: options.mutator,
-      spriteSheet: options.spriteSheet
-    });
-    watchedIcons.forEach((icon) => {
-      if (icon.library === name) {
-        icon.setIcon();
-      }
-    });
-  }
-  function unregisterIconLibrary(name) {
-    registry = registry.filter((lib) => lib.name !== name);
-  }
-  function getDefaultIconFamily() {
-    return defaultIconFamily;
-  }
-
-  // node_modules/lit-html/directive-helpers.js
-  var { I: t5 } = j;
-  var l4 = (o9, t6) => void 0 === t6 ? void 0 !== (o9 == null ? void 0 : o9._$litType$) : (o9 == null ? void 0 : o9._$litType$) === t6;
-  var r6 = (o9) => void 0 === o9.strings;
-  var m2 = {};
-  var p3 = (o9, t6 = m2) => o9._$AH = t6;
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.AL6UNYSC.js
-  var CACHEABLE_ERROR = /* @__PURE__ */ Symbol();
-  var RETRYABLE_ERROR = /* @__PURE__ */ Symbol();
-  var parser;
-  var iconCache = /* @__PURE__ */ new Map();
-  var WaIcon = class extends WebAwesomeElement {
-    constructor() {
-      super(...arguments);
-      this.svg = null;
-      this.autoWidth = false;
-      this.swapOpacity = false;
-      this.label = "";
-      this.library = "default";
-      this.rotate = 0;
-      this.resolveIcon = async (url, library2) => {
-        var _a8;
-        let fileData;
-        if (library2 == null ? void 0 : library2.spriteSheet) {
-          if (!this.hasUpdated) {
-            await this.updateComplete;
-          }
-          this.svg = b2`<svg part="svg">
-        <use part="use" href="${url}"></use>
-      </svg>`;
-          await this.updateComplete;
-          const svg2 = this.shadowRoot.querySelector("[part='svg']");
-          if (typeof library2.mutator === "function") {
-            library2.mutator(svg2, this);
-          }
-          return this.svg;
-        }
-        try {
-          fileData = await fetch(url, { mode: "cors" });
-          if (!fileData.ok) return fileData.status === 410 ? CACHEABLE_ERROR : RETRYABLE_ERROR;
-        } catch {
-          return RETRYABLE_ERROR;
-        }
-        try {
-          const div = document.createElement("div");
-          div.innerHTML = await fileData.text();
-          const svg2 = div.firstElementChild;
-          if (((_a8 = svg2 == null ? void 0 : svg2.tagName) == null ? void 0 : _a8.toLowerCase()) !== "svg") return CACHEABLE_ERROR;
-          if (!parser) parser = new DOMParser();
-          const doc = parser.parseFromString(svg2.outerHTML, "text/html");
-          const svgEl = doc.body.querySelector("svg");
-          if (!svgEl) return CACHEABLE_ERROR;
-          svgEl.part.add("svg");
-          return document.adoptNode(svgEl);
-        } catch {
-          return CACHEABLE_ERROR;
-        }
-      };
-    }
-    connectedCallback() {
-      super.connectedCallback();
-      watchIcon(this);
-    }
-    firstUpdated(changedProperties) {
-      super.firstUpdated(changedProperties);
-      if (this.hasAttribute("rotate")) {
-        this.style.setProperty("--rotate-angle", `${this.rotate}deg`);
-      }
-      this.setIcon();
-    }
-    disconnectedCallback() {
-      super.disconnectedCallback();
-      unwatchIcon(this);
-    }
-    async getIconSource() {
-      const library2 = getIconLibrary(this.library);
-      const family = this.family || getDefaultIconFamily();
-      if (this.name && library2) {
-        const autoWidth = this.canvas === "auto" || this.autoWidth;
-        let url;
-        try {
-          url = await library2.resolver(this.name, family, this.variant, autoWidth);
-        } catch {
-          url = void 0;
-        }
-        return { url, fromLibrary: true };
-      }
-      return {
-        url: this.src,
-        fromLibrary: false
-      };
-    }
-    handleLabelChange() {
-      const hasLabel = typeof this.label === "string" && this.label.length > 0;
-      if (hasLabel) {
-        this.setAttribute("role", "img");
-        this.setAttribute("aria-label", this.label);
-        this.removeAttribute("aria-hidden");
-      } else {
-        this.removeAttribute("role");
-        this.removeAttribute("aria-label");
-        this.setAttribute("aria-hidden", "true");
-      }
-    }
-    async setIcon() {
-      var _a8;
-      const { url, fromLibrary } = await this.getIconSource();
-      const library2 = fromLibrary ? getIconLibrary(this.library) : void 0;
-      if (!url) {
-        this.svg = null;
-        return;
-      }
-      let iconResolver = iconCache.get(url);
-      if (!iconResolver) {
-        iconResolver = this.resolveIcon(url, library2);
-        iconCache.set(url, iconResolver);
-      }
-      const svg2 = await iconResolver;
-      if (svg2 === RETRYABLE_ERROR) {
-        iconCache.delete(url);
-      }
-      const sourceAfterFetch = await this.getIconSource();
-      if (url !== sourceAfterFetch.url) {
-        return;
-      }
-      if (l4(svg2)) {
-        this.svg = svg2;
-        return;
-      }
-      switch (svg2) {
-        case RETRYABLE_ERROR:
-        case CACHEABLE_ERROR:
-          this.svg = null;
-          this.dispatchEvent(new WaErrorEvent());
-          break;
-        default:
-          this.svg = svg2.cloneNode(true);
-          (_a8 = library2 == null ? void 0 : library2.mutator) == null ? void 0 : _a8.call(library2, this.svg, this);
-          this.dispatchEvent(new WaLoadEvent());
-      }
-    }
-    willUpdate(changedProperties) {
-      if (!this.style) {
-        this.setStyleProperty("--rotate-angle", `${this.rotate}deg`);
-      }
-      return super.willUpdate(changedProperties);
-    }
-    updated(changedProperties) {
-      var _a8, _b2;
-      super.updated(changedProperties);
-      const library2 = getIconLibrary(this.library);
-      if (this.hasAttribute("rotate")) {
-        this.style.setProperty("--rotate-angle", `${this.rotate}deg`);
-      }
-      const svg2 = (_a8 = this.shadowRoot) == null ? void 0 : _a8.querySelector("svg");
-      if (svg2) {
-        (_b2 = library2 == null ? void 0 : library2.mutator) == null ? void 0 : _b2.call(library2, svg2, this);
-      }
-    }
-    render() {
-      if (this.hasUpdated) {
-        return this.svg;
-      }
-      return b2`<svg part="svg" width="16" height="16" viewBox="0 0 16 16"></svg>`;
-    }
-  };
-  WaIcon.css = icon_styles_default;
-  __decorateClass([
-    r5()
-  ], WaIcon.prototype, "svg", 2);
-  __decorateClass([
-    n4({ reflect: true })
-  ], WaIcon.prototype, "name", 2);
-  __decorateClass([
-    n4({ reflect: true })
-  ], WaIcon.prototype, "family", 2);
-  __decorateClass([
-    n4({ reflect: true })
-  ], WaIcon.prototype, "variant", 2);
-  __decorateClass([
-    n4({ reflect: true })
-  ], WaIcon.prototype, "canvas", 2);
-  __decorateClass([
-    n4({ attribute: "auto-width", type: Boolean, reflect: true })
-  ], WaIcon.prototype, "autoWidth", 2);
-  __decorateClass([
-    n4({ attribute: "swap-opacity", type: Boolean, reflect: true })
-  ], WaIcon.prototype, "swapOpacity", 2);
-  __decorateClass([
-    n4()
-  ], WaIcon.prototype, "src", 2);
-  __decorateClass([
-    n4()
-  ], WaIcon.prototype, "label", 2);
-  __decorateClass([
-    n4({ reflect: true })
-  ], WaIcon.prototype, "library", 2);
-  __decorateClass([
-    n4({ type: Number, reflect: true })
-  ], WaIcon.prototype, "rotate", 2);
-  __decorateClass([
-    n4({ type: String, reflect: true })
-  ], WaIcon.prototype, "flip", 2);
-  __decorateClass([
-    n4({ type: String, reflect: true })
-  ], WaIcon.prototype, "animation", 2);
-  __decorateClass([
-    watch("label")
-  ], WaIcon.prototype, "handleLabelChange", 1);
-  __decorateClass([
-    watch(["family", "name", "library", "variant", "src", "autoWidth", "canvas", "swapOpacity"], {
-      waitUntilFirstUpdate: true
-    })
-  ], WaIcon.prototype, "setIcon", 1);
-  WaIcon = __decorateClass([
-    t3("wa-icon")
-  ], WaIcon);
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.VTVNMJUY.js
-  var progress_bar_styles_default = i`
-  :host {
-    --track-height: 1rem;
-    --track-color: var(--wa-color-neutral-fill-normal);
-    --indicator-color: var(--wa-color-brand-fill-loud);
-
-    display: flex;
-  }
-
-  .progress-bar {
-    flex: 1 1 auto;
-    display: flex;
-    position: relative;
-    overflow: hidden;
-    height: var(--track-height);
-    border-radius: var(--wa-border-radius-pill);
-    background-color: var(--track-color);
-    color: var(--wa-color-brand-on-loud);
-    font-size: var(--wa-font-size-s);
-  }
-
-  .indicator {
-    width: var(--percentage);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background-color: var(--indicator-color);
-    text-align: center;
-    white-space: nowrap;
-    overflow: hidden;
-    line-height: 1;
-    font-weight: var(--wa-font-weight-semibold);
-    transition: all var(--wa-transition-slow, 200ms) var(--wa-transition-easing, ease);
-    user-select: none;
-    -webkit-user-select: none;
-  }
-
-  /* Indeterminate */
-  :host([indeterminate]) .indicator {
-    position: absolute;
-    inset-block: 0;
-    inline-size: 50%;
-    animation: wa-progress-indeterminate 2.5s infinite cubic-bezier(0.37, 0, 0.63, 1);
-  }
-
-  @media (forced-colors: active) {
-    .progress-bar {
-      outline: solid 1px SelectedItem;
-      background-color: var(--wa-color-surface-default);
-    }
-
-    .indicator {
-      outline: solid 1px SelectedItem;
-      background-color: SelectedItem;
-    }
-  }
-
-  @keyframes wa-progress-indeterminate {
-    0% {
-      inset-inline-start: -50%;
-    }
-
-    75%,
-    100% {
-      inset-inline-start: 100%;
-    }
-  }
-`;
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.KNJT7KBU.js
-  function clamp(value, min, max) {
-    const noNegativeZero = (n6) => Object.is(n6, -0) ? 0 : n6;
-    if (value < min) {
-      return noNegativeZero(min);
-    }
-    if (value > max) {
-      return noNegativeZero(max);
-    }
-    return noNegativeZero(value);
-  }
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.JXBEIEPH.js
-  var WaProgressBar = class extends WebAwesomeElement {
-    constructor() {
-      super(...arguments);
-      this.localize = new LocalizeController2(this);
-      this.value = 0;
-      this.indeterminate = false;
-      this.label = "";
-    }
-    willUpdate(changedProperties) {
-      if (this.style == null) {
-        this.setStyleProperty("--percentage", `${clamp(this.value, 0, 100)}%`);
-      }
-      super.willUpdate(changedProperties);
-    }
-    updated(changedProperties) {
-      if (changedProperties.has("value")) {
-        requestAnimationFrame(() => {
-          this.style.setProperty("--percentage", `${clamp(this.value, 0, 100)}%`);
-        });
-      }
-      super.updated(changedProperties);
-    }
-    render() {
-      return b2`
-      <div
-        part="base progress-bar"
-        class="progress-bar"
-        role="progressbar"
-        title=${o7(this.title)}
-        aria-label=${this.label.length > 0 ? this.label : this.localize.term("progress")}
-        aria-valuemin="0"
-        aria-valuemax="100"
-        aria-valuenow=${this.indeterminate ? "0" : this.value}
-      >
-        <div part="indicator" class="indicator">
-          ${!this.indeterminate ? b2` <slot part="label" class="label"></slot> ` : ""}
-        </div>
-      </div>
-    `;
-    }
-  };
-  WaProgressBar.css = progress_bar_styles_default;
-  __decorateClass([
-    n4({ type: Number, reflect: true })
-  ], WaProgressBar.prototype, "value", 2);
-  __decorateClass([
-    n4({ type: Boolean, reflect: true })
-  ], WaProgressBar.prototype, "indeterminate", 2);
-  __decorateClass([
-    n4()
-  ], WaProgressBar.prototype, "label", 2);
-  WaProgressBar = __decorateClass([
-    t3("wa-progress-bar")
-  ], WaProgressBar);
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.YBFCQDTA.js
-  var WaTabHideEvent = class extends Event {
-    constructor(detail) {
-      super("wa-tab-hide", { bubbles: true, cancelable: false, composed: true });
-      this.detail = detail;
-    }
-  };
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.SKLR37OM.js
-  var WaTabShowEvent = class extends Event {
-    constructor(detail) {
-      super("wa-tab-show", { bubbles: true, cancelable: false, composed: true });
-      this.detail = detail;
-    }
-  };
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.NMA53WZH.js
-  var tab_group_styles_default = i`
-  :host {
-    --indicator-color: var(--wa-color-brand-fill-loud);
-    --track-color: var(--wa-color-neutral-fill-normal);
-    --track-width: 0.125rem;
-
-    /* Private */
-    --safe-track-width: max(0.5px, round(var(--track-width), 0.5px));
-
-    display: block;
-  }
-
-  .tab-group {
-    display: flex;
-    border-radius: 0;
-  }
-
-  .tabs {
-    display: flex;
-    position: relative;
-  }
-
-  .indicator {
-    position: absolute;
-  }
-
-  .tab-group-has-scroll-controls .nav-container {
-    position: relative;
-    padding: 0 1.5em;
-  }
-
-  .body {
-    display: block;
-  }
-
-  .scroll-button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 1.5em;
-  }
-
-  .scroll-button-start {
-    inset-inline-start: 0;
-  }
-
-  .scroll-button-end {
-    inset-inline-end: 0;
-  }
-
-  /*
-    * Top
-    */
-
-  .tab-group-top {
-    flex-direction: column;
-  }
-
-  .tab-group-top .nav-container {
-    order: 1;
-  }
-
-  .tab-group-top .nav {
-    display: flex;
-    overflow-x: auto;
-
-    /* Hide scrollbar in Firefox */
-    scrollbar-width: none;
-  }
-
-  /* Hide scrollbar in Chrome/Safari */
-  .tab-group-top .nav::-webkit-scrollbar {
-    width: 0;
-    height: 0;
-  }
-
-  .tab-group-top .tabs {
-    flex: 1 1 auto;
-    position: relative;
-    flex-direction: row;
-    border-bottom: solid var(--safe-track-width) var(--track-color);
-  }
-
-  .tab-group-top .indicator {
-    bottom: calc(-1 * var(--safe-track-width));
-    border-bottom: solid var(--safe-track-width) var(--indicator-color);
-  }
-
-  .tab-group-top .body {
-    order: 2;
-  }
-
-  .tab-group-top ::slotted(wa-tab[active]) {
-    border-block-end: solid var(--safe-track-width) var(--indicator-color);
-    margin-block-end: calc(-1 * var(--safe-track-width));
-  }
-
-  .tab-group-top .body slot::slotted(wa-tab-panel) {
-    --padding: var(--wa-space-xl) 0;
-  }
-
-  /*
-    * Bottom
-    */
-
-  .tab-group-bottom {
-    flex-direction: column;
-  }
-
-  .tab-group-bottom .nav-container {
-    order: 2;
-  }
-
-  .tab-group-bottom .nav {
-    display: flex;
-    overflow-x: auto;
-
-    /* Hide scrollbar in Firefox */
-    scrollbar-width: none;
-  }
-
-  /* Hide scrollbar in Chrome/Safari */
-  .tab-group-bottom .nav::-webkit-scrollbar {
-    width: 0;
-    height: 0;
-  }
-
-  .tab-group-bottom .tabs {
-    flex: 1 1 auto;
-    position: relative;
-    flex-direction: row;
-    border-top: solid var(--safe-track-width) var(--track-color);
-  }
-
-  .tab-group-bottom .indicator {
-    top: calc(-1 * var(--safe-track-width));
-    border-top: solid var(--safe-track-width) var(--indicator-color);
-  }
-
-  .tab-group-bottom .body {
-    order: 1;
-  }
-
-  .tab-group-bottom ::slotted(wa-tab[active]) {
-    border-block-start: solid var(--safe-track-width) var(--indicator-color);
-    margin-block-start: calc(-1 * var(--safe-track-width));
-  }
-
-  .tab-group-bottom .body slot::slotted(wa-tab-panel) {
-    --padding: var(--wa-space-xl) 0;
-  }
-
-  /*
-    * Start
-    */
-
-  .tab-group-start {
-    flex-direction: row;
-  }
-
-  .tab-group-start .nav-container {
-    order: 1;
-  }
-
-  .tab-group-start .tabs {
-    flex: 0 0 auto;
-    flex-direction: column;
-    border-inline-end: solid var(--safe-track-width) var(--track-color);
-  }
-
-  .tab-group-start .indicator {
-    inset-inline-end: calc(-1 * var(--safe-track-width));
-    border-right: solid var(--safe-track-width) var(--indicator-color);
-  }
-
-  .tab-group-start .body {
-    flex: 1 1 auto;
-    order: 2;
-  }
-
-  .tab-group-start ::slotted(wa-tab[active]) {
-    border-inline-end: solid var(--safe-track-width) var(--indicator-color);
-    margin-inline-end: calc(-1 * var(--safe-track-width));
-  }
-
-  .tab-group-start .body slot::slotted(wa-tab-panel) {
-    --padding: 0 var(--wa-space-xl);
-  }
-
-  /*
-    * End
-    */
-
-  .tab-group-end {
-    flex-direction: row;
-  }
-
-  .tab-group-end .nav-container {
-    order: 2;
-  }
-
-  .tab-group-end .tabs {
-    flex: 0 0 auto;
-    flex-direction: column;
-    border-left: solid var(--safe-track-width) var(--track-color);
-  }
-
-  .tab-group-end .indicator {
-    inset-inline-start: calc(-1 * var(--safe-track-width));
-    border-inline-start: solid var(--safe-track-width) var(--indicator-color);
-  }
-
-  .tab-group-end .body {
-    flex: 1 1 auto;
-    order: 1;
-  }
-
-  .tab-group-end ::slotted(wa-tab[active]) {
-    border-inline-start: solid var(--safe-track-width) var(--indicator-color);
-    margin-inline-start: calc(-1 * var(--safe-track-width));
-  }
-
-  .tab-group-end .body slot::slotted(wa-tab-panel) {
-    --padding: 0 var(--wa-space-xl);
-  }
-`;
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.VQZ46MYI.js
-  function getOffset(element, parent) {
-    return {
-      top: Math.round(element.getBoundingClientRect().top - parent.getBoundingClientRect().top),
-      left: Math.round(element.getBoundingClientRect().left - parent.getBoundingClientRect().left)
-    };
-  }
-  function scrollIntoView(element, container, direction = "vertical", behavior = "smooth") {
-    const offset = getOffset(element, container);
-    const offsetTop = offset.top + container.scrollTop;
-    const offsetLeft = offset.left + container.scrollLeft;
-    const minX = container.scrollLeft;
-    const maxX = container.scrollLeft + container.offsetWidth;
-    const minY = container.scrollTop;
-    const maxY = container.scrollTop + container.offsetHeight;
-    if (direction === "horizontal" || direction === "both") {
-      if (offsetLeft < minX) {
-        container.scrollTo({ left: offsetLeft, behavior });
-      } else if (offsetLeft + element.clientWidth > maxX) {
-        container.scrollTo({ left: offsetLeft - container.offsetWidth + element.clientWidth, behavior });
-      }
-    }
-    if (direction === "vertical" || direction === "both") {
-      if (offsetTop < minY) {
-        container.scrollTo({ top: offsetTop, behavior });
-      } else if (offsetTop + element.clientHeight > maxY) {
-        container.scrollTo({ top: offsetTop - container.offsetHeight + element.clientHeight, behavior });
-      }
-    }
-  }
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.UUZ6T3PP.js
-  var WaTabGroup = class extends WebAwesomeElement {
-    constructor() {
-      super(...arguments);
-      this.tabs = [];
-      this.focusableTabs = [];
-      this.panels = [];
-      this.localize = new LocalizeController2(this);
-      this.hasScrollControls = false;
-      this.active = "";
-      this.placement = "top";
-      this.activation = "auto";
-      this.withoutScrollControls = false;
-    }
-    connectedCallback() {
-      super.connectedCallback();
-      if (o5) {
-        return;
-      }
-      this.resizeObserver = new ResizeObserver(() => {
-        this.updateScrollControls();
-      });
-      this.mutationObserver = new MutationObserver((mutations) => {
-        if (mutations.some((m3) => !["aria-labelledby", "aria-controls"].includes(m3.attributeName))) {
-          setTimeout(() => this.setAriaLabels());
-        }
-        const relevantMutations = mutations.filter((m3) => {
-          const target = m3.target;
-          return target.closest("wa-tab-group") === this;
-        });
-        if (relevantMutations.some((m3) => m3.attributeName === "disabled")) {
-          this.syncTabsAndPanels();
-        } else if (relevantMutations.some((m3) => m3.attributeName === "active")) {
-          const tabs = relevantMutations.filter((m3) => m3.attributeName === "active" && m3.target.tagName.toLowerCase() === "wa-tab").map((m3) => m3.target);
-          const newActiveTab = tabs.find((tab) => tab.active);
-          if (newActiveTab && newActiveTab.closest("wa-tab-group") === this) {
-            this.setActiveTab(newActiveTab);
-          }
-        }
-      });
-      this.updateComplete.then(() => {
-        this.syncTabsAndPanels();
-        this.mutationObserver.observe(this, { attributes: true, childList: true, subtree: true });
-        this.resizeObserver.observe(this.nav);
-        const intersectionObserver = new IntersectionObserver((entries, observer) => {
-          var _a8;
-          if (entries[0].intersectionRatio > 0) {
-            this.setAriaLabels();
-            if (this.active) {
-              const tab = this.tabs.find((t6) => t6.panel === this.active);
-              if (tab) {
-                this.setActiveTab(tab);
-              }
-            } else {
-              this.setActiveTab((_a8 = this.getActiveTab()) != null ? _a8 : this.tabs[0], { emitEvents: false });
-            }
-            observer.unobserve(entries[0].target);
-          }
-        });
-        intersectionObserver.observe(this.tabGroup);
-      });
-    }
-    disconnectedCallback() {
-      var _a8, _b2;
-      super.disconnectedCallback();
-      (_a8 = this.mutationObserver) == null ? void 0 : _a8.disconnect();
-      if (this.nav) {
-        (_b2 = this.resizeObserver) == null ? void 0 : _b2.unobserve(this.nav);
-      }
-    }
-    getAllTabs() {
-      const slot = this.shadowRoot.querySelector('slot[name="nav"]');
-      return [...slot.assignedElements()].filter((el2) => {
-        return el2.tagName.toLowerCase() === "wa-tab";
-      });
-    }
-    getAllPanels() {
-      return [...this.defaultSlot.assignedElements()].filter((el2) => el2.tagName.toLowerCase() === "wa-tab-panel");
-    }
-    getActiveTab() {
-      return this.tabs.find((el2) => el2.active);
-    }
-    handleClick(event) {
-      const target = event.target;
-      const tab = target.closest("wa-tab");
-      const tabGroup = tab == null ? void 0 : tab.closest("wa-tab-group");
-      if (tabGroup !== this) {
-        return;
-      }
-      if (tab !== null) {
-        this.setActiveTab(tab, { scrollBehavior: "smooth" });
-      }
-    }
-    handleKeyDown(event) {
-      const target = event.target;
-      const tab = target.closest("wa-tab");
-      const tabGroup = tab == null ? void 0 : tab.closest("wa-tab-group");
-      if (tabGroup !== this) {
-        return;
-      }
-      if (["Enter", " "].includes(event.key)) {
-        if (tab !== null) {
-          this.setActiveTab(tab, { scrollBehavior: "smooth" });
-          event.preventDefault();
-        }
-        return;
-      }
-      if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
-        const activeEl = this.tabs.find((t6) => t6.matches(":focus"));
-        const isRtl = this.localize.dir() === "rtl";
-        let nextTab = null;
-        if ((activeEl == null ? void 0 : activeEl.tagName.toLowerCase()) === "wa-tab") {
-          if (event.key === "Home") {
-            nextTab = this.focusableTabs[0];
-          } else if (event.key === "End") {
-            nextTab = this.focusableTabs[this.focusableTabs.length - 1];
-          } else if (["top", "bottom"].includes(this.placement) && event.key === (isRtl ? "ArrowRight" : "ArrowLeft") || ["start", "end"].includes(this.placement) && event.key === "ArrowUp") {
-            const currentIndex = this.tabs.findIndex((el2) => el2 === activeEl);
-            nextTab = this.findNextFocusableTab(currentIndex, "backward");
-          } else if (["top", "bottom"].includes(this.placement) && event.key === (isRtl ? "ArrowLeft" : "ArrowRight") || ["start", "end"].includes(this.placement) && event.key === "ArrowDown") {
-            const currentIndex = this.tabs.findIndex((el2) => el2 === activeEl);
-            nextTab = this.findNextFocusableTab(currentIndex, "forward");
-          }
-          if (!nextTab) {
-            return;
-          }
-          nextTab.tabIndex = 0;
-          nextTab.focus({ preventScroll: true });
-          if (this.activation === "auto") {
-            this.setActiveTab(nextTab, { scrollBehavior: "smooth" });
-          } else {
-            this.tabs.forEach((tabEl) => {
-              tabEl.tabIndex = tabEl === nextTab ? 0 : -1;
-            });
-          }
-          if (["top", "bottom"].includes(this.placement)) {
-            scrollIntoView(nextTab, this.nav, "horizontal");
-          }
-          event.preventDefault();
-        }
-      }
-    }
-    findNextFocusableTab(currentIndex, direction) {
-      let nextTab = null;
-      const iterator = direction === "forward" ? 1 : -1;
-      let nextIndex = currentIndex + iterator;
-      while (currentIndex < this.tabs.length) {
-        nextTab = this.tabs[nextIndex] || null;
-        if (nextTab === null) {
-          if (direction === "forward") {
-            nextTab = this.focusableTabs[0];
-          } else {
-            nextTab = this.focusableTabs[this.focusableTabs.length - 1];
-          }
-          break;
-        }
-        if (!nextTab.disabled) {
-          break;
-        }
-        nextIndex += iterator;
-      }
-      return nextTab;
-    }
-    handleScrollToStart() {
-      this.nav.scroll({
-        left: this.localize.dir() === "rtl" ? this.nav.scrollLeft + this.nav.clientWidth : this.nav.scrollLeft - this.nav.clientWidth,
-        behavior: "smooth"
-      });
-    }
-    handleScrollToEnd() {
-      this.nav.scroll({
-        left: this.localize.dir() === "rtl" ? this.nav.scrollLeft - this.nav.clientWidth : this.nav.scrollLeft + this.nav.clientWidth,
-        behavior: "smooth"
-      });
-    }
-    setActiveTab(tab, options) {
-      options = {
-        emitEvents: true,
-        scrollBehavior: "auto",
-        ...options
-      };
-      if (tab.closest("wa-tab-group") !== this) {
-        return;
-      }
-      if (tab !== this.activeTab && !tab.disabled) {
-        const previousTab = this.activeTab;
-        this.active = tab.panel;
-        this.activeTab = tab;
-        this.tabs.forEach((el2) => {
-          el2.active = el2 === this.activeTab;
-          el2.tabIndex = el2 === this.activeTab ? 0 : -1;
-        });
-        this.panels.forEach((el2) => {
-          var _a8;
-          return el2.active = el2.name === ((_a8 = this.activeTab) == null ? void 0 : _a8.panel);
-        });
-        if (["top", "bottom"].includes(this.placement)) {
-          scrollIntoView(this.activeTab, this.nav, "horizontal", options.scrollBehavior);
-        }
-        if (options.emitEvents) {
-          if (previousTab) {
-            this.dispatchEvent(new WaTabHideEvent({ name: previousTab.panel }));
-          }
-          this.dispatchEvent(new WaTabShowEvent({ name: this.activeTab.panel }));
-        }
-      }
-    }
-    setAriaLabels() {
-      this.tabs.forEach((tab) => {
-        const panel = this.panels.find((el2) => el2.name === tab.panel);
-        if (panel) {
-          tab.setAttribute("aria-controls", panel.getAttribute("id"));
-          panel.setAttribute("aria-labelledby", tab.getAttribute("id"));
-        }
-      });
-    }
-    // This stores tabs and panels so we can refer to a cache instead of calling querySelectorAll() multiple times.
-    syncTabsAndPanels() {
-      this.tabs = this.getAllTabs();
-      this.focusableTabs = this.tabs.filter((el2) => !el2.disabled);
-      this.panels = this.getAllPanels();
-      this.updateComplete.then(() => this.updateScrollControls());
-    }
-    updateActiveTab() {
-      const tab = this.tabs.find((el2) => el2.panel === this.active);
-      if (tab) {
-        this.setActiveTab(tab, { scrollBehavior: "smooth" });
-      }
-    }
-    updateScrollControls() {
-      if (this.withoutScrollControls) {
-        this.hasScrollControls = false;
-      } else {
-        this.hasScrollControls = ["top", "bottom"].includes(this.placement) && this.nav.scrollWidth > this.nav.clientWidth + 1;
-      }
-    }
-    render() {
-      const isRtl = this.hasUpdated ? this.localize.dir() === "rtl" : this.dir === "rtl";
-      return b2`
-      <div
-        part="base tab-group"
-        class=${e7({
-        "tab-group": true,
-        "tab-group-top": this.placement === "top",
-        "tab-group-bottom": this.placement === "bottom",
-        "tab-group-start": this.placement === "start",
-        "tab-group-end": this.placement === "end",
-        "tab-group-has-scroll-controls": this.hasScrollControls
-      })}
-        @click=${this.handleClick}
-        @keydown=${this.handleKeyDown}
-      >
-        <div class="nav-container" part="nav">
-          ${this.hasScrollControls ? b2`
-                <wa-button
-                  part="scroll-button scroll-button-start"
-                  exportparts="base:scroll-button__base"
-                  class="scroll-button scroll-button-start"
-                  appearance="plain"
-                  @click=${this.handleScrollToStart}
-                >
-                  <wa-icon
-                    name=${isRtl ? "chevron-right" : "chevron-left"}
-                    library="system"
-                    variant="solid"
-                    label=${this.localize.term("scrollToStart")}
-                  ></wa-icon>
-                </wa-button>
-              ` : ""}
-
-          <!-- We have a focus listener because in Firefox (and soon to be Chrome) overflow containers are focusable. -->
-          <div class="nav" @focus=${() => {
-        var _a8;
-        return (_a8 = this.activeTab) == null ? void 0 : _a8.focus({ preventScroll: true });
-      }}>
-            <div part="tabs" class="tabs" role="tablist">
-              <slot name="nav" @slotchange=${this.syncTabsAndPanels}></slot>
-            </div>
-          </div>
-
-          ${this.hasScrollControls ? b2`
-                <wa-button
-                  part="scroll-button scroll-button-end"
-                  class="scroll-button scroll-button-end"
-                  exportparts="base:scroll-button__base"
-                  appearance="plain"
-                  @click=${this.handleScrollToEnd}
-                >
-                  <wa-icon
-                    name=${isRtl ? "chevron-left" : "chevron-right"}
-                    library="system"
-                    variant="solid"
-                    label=${this.localize.term("scrollToEnd")}
-                  ></wa-icon>
-                </wa-button>
-              ` : ""}
-        </div>
-
-        <div part="body" class="body"><slot @slotchange=${this.syncTabsAndPanels}></slot></div>
-      </div>
-    `;
-    }
-  };
-  WaTabGroup.css = tab_group_styles_default;
-  __decorateClass([
-    e5(".tab-group")
-  ], WaTabGroup.prototype, "tabGroup", 2);
-  __decorateClass([
-    e5(".body slot")
-  ], WaTabGroup.prototype, "defaultSlot", 2);
-  __decorateClass([
-    e5(".nav")
-  ], WaTabGroup.prototype, "nav", 2);
-  __decorateClass([
-    r5()
-  ], WaTabGroup.prototype, "hasScrollControls", 2);
-  __decorateClass([
-    n4({ reflect: true })
-  ], WaTabGroup.prototype, "active", 2);
-  __decorateClass([
-    n4()
-  ], WaTabGroup.prototype, "placement", 2);
-  __decorateClass([
-    n4()
-  ], WaTabGroup.prototype, "activation", 2);
-  __decorateClass([
-    n4({ attribute: "without-scroll-controls", type: Boolean })
-  ], WaTabGroup.prototype, "withoutScrollControls", 2);
-  __decorateClass([
-    watch("active")
-  ], WaTabGroup.prototype, "updateActiveTab", 1);
-  __decorateClass([
-    watch("withoutScrollControls", { waitUntilFirstUpdate: true })
-  ], WaTabGroup.prototype, "updateScrollControls", 1);
-  WaTabGroup = __decorateClass([
-    t3("wa-tab-group")
-  ], WaTabGroup);
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.WRIHAZWX.js
-  var tab_panel_styles_default = i`
-  :host {
-    --padding: 0;
-
-    display: none;
-  }
-
-  :host([active]) {
-    display: block;
-  }
-
-  .tab-panel {
-    display: block;
-    padding: var(--padding);
-  }
-`;
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.KQ3Z6T2I.js
-  var id = 0;
-  var WaTabPanel = class extends WebAwesomeElement {
-    constructor() {
-      super(...arguments);
-      this.attrId = ++id;
-      this.componentId = `wa-tab-panel-${this.attrId}`;
-      this.name = "";
-      this.active = false;
-      this.role = "tabpanel";
-    }
-    connectedCallback() {
-      super.connectedCallback();
-      this.id = (this.id || "").length > 0 ? this.id : this.componentId;
-    }
-    handleActiveChange() {
-      this.setAttribute("aria-hidden", this.active ? "false" : "true");
-    }
-    render() {
-      return b2`
-      <slot
-        part="base"
-        class=${e7({
-        "tab-panel": true,
-        "tab-panel-active": this.active
-      })}
-      ></slot>
-    `;
-    }
-  };
-  WaTabPanel.css = tab_panel_styles_default;
-  __decorateClass([
-    n4({ reflect: true })
-  ], WaTabPanel.prototype, "name", 2);
-  __decorateClass([
-    n4({ type: Boolean, reflect: true })
-  ], WaTabPanel.prototype, "active", 2);
-  __decorateClass([
-    n4({ reflect: true })
-  ], WaTabPanel.prototype, "role", 2);
-  __decorateClass([
-    watch("active")
-  ], WaTabPanel.prototype, "handleActiveChange", 1);
-  WaTabPanel = __decorateClass([
-    t3("wa-tab-panel")
-  ], WaTabPanel);
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.R2GHHEHL.js
-  var tab_styles_default = i`
-  :host {
-    display: inline-block;
-    color: var(--wa-color-neutral-on-quiet);
-    font-weight: var(--wa-font-weight-action);
-  }
-
-  .tab {
-    display: inline-flex;
-    align-items: center;
-    font: inherit;
-    padding: 1em 1.5em;
-    white-space: nowrap;
-    user-select: none;
-    -webkit-user-select: none;
-    cursor: pointer;
-    transition: color var(--wa-transition-fast) var(--wa-transition-easing);
-
-    ::slotted(wa-icon:first-child) {
-      margin-inline-end: 0.5em;
-    }
-
-    ::slotted(wa-icon:last-child) {
-      margin-inline-start: 0.5em;
-    }
-  }
-
-  @media (hover: hover) {
-    :host(:hover:not([disabled])) .tab {
-      color: currentColor;
-    }
-  }
-
-  :host(:focus) {
-    outline: transparent;
-  }
-
-  :host(:focus-visible) .tab {
-    outline: var(--wa-focus-ring);
-    outline-offset: calc(-1 * var(--wa-border-width-l) - var(--wa-focus-ring-offset));
-  }
-
-  :host([active]:not([disabled])) {
-    color: var(--wa-color-brand-on-quiet);
-  }
-
-  :host([disabled]) .tab {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  @media (forced-colors: active) {
-    :host([active]:not([disabled])) {
-      outline: solid 1px transparent;
-      outline-offset: -3px;
-    }
-  }
-`;
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.4FOSDR4V.js
-  var id2 = 0;
-  var WaTab = class extends WebAwesomeElement {
-    constructor() {
-      super(...arguments);
-      this.attrId = ++id2;
-      this.componentId = `wa-tab-${this.attrId}`;
-      this.panel = "";
-      this.active = false;
-      this.disabled = false;
-      this.tabIndex = 0;
-      this.slot = "nav";
-      this.role = "tab";
-    }
-    handleActiveChange() {
-      this.setAttribute("aria-selected", this.active ? "true" : "false");
-    }
-    handleDisabledChange() {
-      this.setAttribute("aria-disabled", this.disabled ? "true" : "false");
-      if (this.disabled && !this.active) {
-        this.tabIndex = -1;
-      } else {
-        this.tabIndex = 0;
-      }
-    }
-    render() {
-      var _a8;
-      this.id = ((_a8 = this.id) == null ? void 0 : _a8.length) > 0 ? this.id : this.componentId;
-      return b2`
-      <div
-        part="base tab"
-        class=${e7({
-        tab: true,
-        "tab-active": this.active
-      })}
-      >
-        <slot></slot>
-      </div>
-    `;
-    }
-  };
-  WaTab.css = tab_styles_default;
-  __decorateClass([
-    e5(".tab")
-  ], WaTab.prototype, "tab", 2);
-  __decorateClass([
-    n4({ reflect: true })
-  ], WaTab.prototype, "panel", 2);
-  __decorateClass([
-    n4({ type: Boolean, reflect: true })
-  ], WaTab.prototype, "active", 2);
-  __decorateClass([
-    n4({ type: Boolean, reflect: true })
-  ], WaTab.prototype, "disabled", 2);
-  __decorateClass([
-    n4({ type: Number, reflect: true })
-  ], WaTab.prototype, "tabIndex", 2);
-  __decorateClass([
-    n4({ reflect: true })
-  ], WaTab.prototype, "slot", 2);
-  __decorateClass([
-    n4({ reflect: true })
-  ], WaTab.prototype, "role", 2);
-  __decorateClass([
-    watch("active")
-  ], WaTab.prototype, "handleActiveChange", 1);
-  __decorateClass([
-    watch("disabled")
-  ], WaTab.prototype, "handleDisabledChange", 1);
-  WaTab = __decorateClass([
-    t3("wa-tab")
-  ], WaTab);
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.DWWFIQKG.js
-  var switch_styles_default = i`
-  :host {
-    --height: var(--wa-form-control-toggle-size);
-    --width: calc(var(--height) * 1.75);
-    --thumb-size: 0.75em;
-
-    display: inline-flex;
-    line-height: var(--wa-form-control-value-line-height);
-  }
-
-  label {
-    position: relative;
-    display: flex;
-    align-items: center;
-    font: inherit;
-    color: var(--wa-form-control-value-color);
-    vertical-align: middle;
-    cursor: pointer;
-  }
-
-  .switch {
-    flex: 0 0 auto;
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: var(--width);
-    height: var(--height);
-    background-color: var(--wa-form-control-background-color);
-    border-color: var(--wa-form-control-border-color);
-    border-radius: var(--height);
-    border-style: var(--wa-form-control-border-style);
-    border-width: var(--wa-form-control-border-width);
-    transition-property: translate, background, border-color, box-shadow;
-    transition-duration: var(--wa-transition-normal);
-    transition-timing-function: var(--wa-transition-easing);
-  }
-
-  :host([did-ssr]:not(:defined)) .switch {
-    transition-property: unset;
-    transition-duration: unset;
-    transition-timing-function: unset;
-  }
-
-  .switch .thumb {
-    aspect-ratio: 1 / 1;
-    width: var(--thumb-size);
-    height: var(--thumb-size);
-    background-color: var(--wa-form-control-border-color);
-    border-radius: 50%;
-    translate: calc((var(--width) - var(--height)) / -2);
-    transition: inherit;
-  }
-  .switch .thumb:dir(rtl) {
-    translate: calc((var(--width) - var(--height)) / 2);
-  }
-
-  .input {
-    position: absolute;
-    opacity: 0;
-    padding: 0;
-    margin: 0;
-    pointer-events: none;
-  }
-
-  /* Focus */
-  label:not(.disabled) .input:focus-visible ~ [part~='control'] {
-    outline: var(--wa-focus-ring);
-    outline-offset: var(--wa-focus-ring-offset);
-  }
-
-  /* Checked */
-  .checked .switch {
-    background-color: var(--wa-form-control-activated-color);
-    border-color: var(--wa-form-control-activated-color);
-  }
-
-  .checked .switch .thumb {
-    background-color: var(--wa-color-surface-default);
-    translate: calc((var(--width) - var(--height)) / 2);
-  }
-  .checked .switch .thumb:dir(rtl) {
-    translate: calc((var(--width) - var(--height)) / -2);
-  }
-
-  /* Disabled */
-  label:has(> :disabled) {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  [part~='label'] {
-    display: inline-block;
-    line-height: var(--height);
-    margin-inline-start: 0.5em;
-    user-select: none;
-    -webkit-user-select: none;
-  }
-
-  :host([required]) [part~='label']::after {
-    content: var(--wa-form-control-required-content);
-    color: var(--wa-form-control-required-content-color);
-    margin-inline-start: var(--wa-form-control-required-content-offset);
-  }
-
-  @media (forced-colors: active) {
-    :checked:enabled + .switch:hover .thumb,
-    :checked + .switch .thumb {
-      background-color: ButtonText;
-    }
-  }
-`;
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.JPBXG7RE.js
-  var form_control_styles_default = i`
-  :host {
-    display: flex;
-    flex-direction: column;
-  }
-
-  /* Treat wrapped labels, inputs, and hints as direct children of the host element */
-  [part~='form-control'] {
-    display: contents;
-  }
-
-  /* Label */
-  :is([part~='form-control-label'], [part~='label']):has(*:not(:empty)),
-  :is([part~='form-control-label'], [part~='label']).has-label {
-    display: inline-flex;
-    color: var(--wa-form-control-label-color);
-    font-weight: var(--wa-form-control-label-font-weight);
-    line-height: var(--wa-form-control-label-line-height);
-    margin-block-end: 0.5em;
-  }
-
-  :host([required]) :is([part~='form-control-label'], [part~='label'])::after {
-    content: var(--wa-form-control-required-content);
-    margin-inline-start: var(--wa-form-control-required-content-offset);
-    color: var(--wa-form-control-required-content-color);
-  }
-
-  /* Help text */
-  [part~='hint'] {
-    display: block;
-    color: var(--wa-form-control-hint-color);
-    font-weight: var(--wa-form-control-hint-font-weight);
-    line-height: var(--wa-form-control-hint-line-height);
-    margin-block-start: 0.5em;
-    font-size: var(--wa-font-size-smaller);
-
-    &:not(.has-slotted, .has-hint, .has-count) {
-      display: none;
-    }
-  }
-`;
-
-  // node_modules/lit-html/directives/live.js
-  var l5 = e6(class extends i5 {
-    constructor(r7) {
-      if (super(r7), r7.type !== t4.PROPERTY && r7.type !== t4.ATTRIBUTE && r7.type !== t4.BOOLEAN_ATTRIBUTE) throw Error("The `live` directive is not allowed on child or event bindings");
-      if (!r6(r7)) throw Error("`live` bindings can only contain a single expression");
-    }
-    render(r7) {
-      return r7;
-    }
-    update(i7, [t6]) {
-      if (t6 === E || t6 === A) return t6;
-      const o9 = i7.element, l6 = i7.name;
-      if (i7.type === t4.PROPERTY) {
-        if (t6 === o9[l6]) return E;
-      } else if (i7.type === t4.BOOLEAN_ATTRIBUTE) {
-        if (!!t6 === o9.hasAttribute(l6)) return E;
-      } else if (i7.type === t4.ATTRIBUTE && o9.getAttribute(l6) === t6 + "") return E;
-      return p3(i7), t6;
-    }
-  });
-
-  // node_modules/@awesome.me/webawesome/dist/chunks/chunk.XI4IVCQA.js
-  var WaSwitch = class extends WebAwesomeFormAssociatedElement {
-    constructor() {
-      var _a8;
-      super(...arguments);
-      this.hasSlotController = new HasSlotController(this, "hint");
-      this.localize = new LocalizeController2(this);
-      this.title = "";
-      this.name = null;
-      this._value = (_a8 = this.getAttribute("value")) != null ? _a8 : null;
-      this.size = "m";
-      this.disabled = false;
-      this._checked = null;
-      this.defaultChecked = this.hasAttribute("checked");
-      this.required = false;
-      this.hint = "";
-      this.withHint = false;
-    }
-    static get validators() {
-      return o5 ? [] : [...super.validators, MirrorValidator()];
-    }
-    /** The value of the switch, submitted as a name/value pair with form data. */
-    get value() {
-      var _a8;
-      return (_a8 = this._value) != null ? _a8 : "on";
-    }
-    set value(val) {
-      this._value = val;
-    }
-    handleSizeChange() {
-      warnDeprecatedSize(this.localName, this.size);
-    }
-    get checked() {
-      var _a8;
-      if (this.valueHasChanged) {
-        return Boolean(this._checked);
-      }
-      return (_a8 = this._checked) != null ? _a8 : this.defaultChecked;
-    }
-    set checked(val) {
-      this._checked = Boolean(val);
-      this.valueHasChanged = true;
-    }
-    handleClick() {
-      this.hasInteracted = true;
-      this.checked = !this.checked;
-      this.updateComplete.then(() => {
-        this.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
-      });
-    }
-    handleKeyDown(event) {
-      const isRtl = this.localize.dir() === "rtl";
-      if (event.key === "ArrowLeft") {
-        event.preventDefault();
-        this.checked = isRtl;
-        this.updateComplete.then(() => {
-          this.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
-          this.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true }));
-        });
-      }
-      if (event.key === "ArrowRight") {
-        event.preventDefault();
-        this.checked = !isRtl;
-        this.updateComplete.then(() => {
-          this.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
-          this.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true }));
-        });
-      }
-    }
-    willUpdate(changedProperties) {
-      super.willUpdate(changedProperties);
-      if (changedProperties.has("value") || changedProperties.has("checked") || changedProperties.has("defaultChecked") || changedProperties.has("disabled")) {
-        this.handleValueOrCheckedChange();
-      }
-    }
-    handleValueOrCheckedChange() {
-      if (this.didSSR && !this.hasUpdated) {
-        this.updateComplete.then(() => {
-          this.handleValueOrCheckedChange();
-        });
-        return;
-      }
-      this.setValue(this.checked ? this.value : null, this._value);
-      this.updateValidity();
-    }
-    handleStateChange() {
-      if (this.hasUpdated) {
-        this.input.checked = this.checked;
-      }
-      this.customStates.set("checked", this.checked);
-      this.updateValidity();
-    }
-    handleDisabledChange() {
-      this.updateValidity();
-    }
-    /** Simulates a click on the switch. */
-    click() {
-      this.input.click();
-    }
-    /** Sets focus on the switch. */
-    focus(options) {
-      this.input.focus(options);
-    }
-    /** Removes focus from the switch. */
-    blur() {
-      this.input.blur();
-    }
-    setValue(value, stateValue) {
-      if (!this.checked) {
-        this.internals.setFormValue(null, null);
-        return;
-      }
-      this.internals.setFormValue(value != null ? value : "on", stateValue);
-    }
-    formResetCallback() {
-      this._checked = null;
-      super.formResetCallback();
-      this.handleValueOrCheckedChange();
-    }
-    render() {
-      const hasHintSlot = this.hasSlotController.test("hint", "withHint");
-      const hasHint = this.hint ? true : !!hasHintSlot;
-      const checkedAttribute = this.didSSR && !this.hasUpdated ? this.checked : this.defaultChecked;
-      const checkedProperty = this.didSSR && !this.hasUpdated ? null : l5(this.checked);
-      return b2`
-      <label
-        part="base switch"
-        class=${e7({
-        checked: this.checked,
-        disabled: this.disabled
-      })}
-      >
-        <input
-          class="input"
-          type="checkbox"
-          title=${this.title}
-          name=${o7(this.name)}
-          value=${o7(this.value)}
-          .checked=${o7(checkedProperty)}
-          ?checked=${checkedAttribute}
-          ?disabled=${this.disabled}
-          ?required=${this.required}
-          role="switch"
-          aria-checked=${this.checked ? "true" : "false"}
-          aria-describedby="hint"
-          @click=${this.handleClick}
-          @keydown=${this.handleKeyDown}
-        />
-
-        <span part="control" class="switch">
-          <span part="thumb" class="thumb"></span>
-        </span>
-
-        <slot part="label" class="label"></slot>
-      </label>
-
-      <slot
-        id="hint"
-        name="hint"
-        part="hint"
-        class=${e7({
-        "has-slotted": hasHint
-      })}
-        aria-hidden=${hasHint ? "false" : "true"}
-        >${this.hint}</slot
-      >
-    `;
-    }
-  };
-  WaSwitch.shadowRootOptions = { ...WebAwesomeFormAssociatedElement.shadowRootOptions, delegatesFocus: true };
-  WaSwitch.css = [form_control_styles_default, size_styles_default, switch_styles_default];
-  __decorateClass([
-    e5('input[type="checkbox"]')
-  ], WaSwitch.prototype, "input", 2);
-  __decorateClass([
-    n4()
-  ], WaSwitch.prototype, "title", 2);
-  __decorateClass([
-    n4({ reflect: true })
-  ], WaSwitch.prototype, "name", 2);
-  __decorateClass([
-    n4({ reflect: true })
-  ], WaSwitch.prototype, "value", 1);
-  __decorateClass([
-    n4({ reflect: true })
-  ], WaSwitch.prototype, "size", 2);
-  __decorateClass([
-    watch("size")
-  ], WaSwitch.prototype, "handleSizeChange", 1);
-  __decorateClass([
-    n4({ type: Boolean })
-  ], WaSwitch.prototype, "disabled", 2);
-  __decorateClass([
-    n4({ type: Boolean, attribute: false })
-  ], WaSwitch.prototype, "checked", 1);
-  __decorateClass([
-    n4({ type: Boolean, attribute: "checked", reflect: true })
-  ], WaSwitch.prototype, "defaultChecked", 2);
-  __decorateClass([
-    n4({ type: Boolean, reflect: true })
-  ], WaSwitch.prototype, "required", 2);
-  __decorateClass([
-    n4({ attribute: "hint" })
-  ], WaSwitch.prototype, "hint", 2);
-  __decorateClass([
-    n4({ attribute: "with-hint", type: Boolean })
-  ], WaSwitch.prototype, "withHint", 2);
-  __decorateClass([
-    watch(["checked", "defaultChecked"])
-  ], WaSwitch.prototype, "handleStateChange", 1);
-  __decorateClass([
-    watch("disabled", { waitUntilFirstUpdate: true })
-  ], WaSwitch.prototype, "handleDisabledChange", 1);
-  WaSwitch = __decorateClass([
-    t3("wa-switch")
-  ], WaSwitch);
-  var _a7;
-  (_a7 = WaSwitch.disableWarning) == null ? void 0 : _a7.call(WaSwitch, "change-in-update");
-
-  // src-client/.vendor-css.generated.js
-  var VENDOR_CSS = "/* Order of precedence for all cascade layers in Web Awesome */\n@layer wa-native, wa-base, wa-utilities, wa-color-palette, wa-color-variant, wa-theme, wa-theme-dimension, wa-theme-overrides;\n\n@layer wa-base {\n  /**\n    Because headers are sticky, this is needed to make sure page fragment anchors scroll down past the headers / subheaders and are visible.\n    IE: \\`<a href=\"#id-for-h2\">\\` anchors.\n    */\n  wa-page :is(*, *:after, *:before) {\n    scroll-margin-top: var(--scroll-margin-top);\n  }\n\n  wa-page[view='desktop'] [data-toggle-nav] {\n    display: none;\n  }\n\n  wa-page[view='mobile'] .wa-desktop-only,\n  wa-page[view='desktop'] .wa-mobile-only {\n    display: none !important;\n  }\n}\n\n/* Rules shared by all palettes */\n\n@layer wa-color-variant {\n  :where(#scpanl-root), /* default */\n  .wa-brand-blue {\n    --wa-color-brand-95: var(--wa-color-blue-95);\n    --wa-color-brand-90: var(--wa-color-blue-90);\n    --wa-color-brand-80: var(--wa-color-blue-80);\n    --wa-color-brand-70: var(--wa-color-blue-70);\n    --wa-color-brand-60: var(--wa-color-blue-60);\n    --wa-color-brand-50: var(--wa-color-blue-50);\n    --wa-color-brand-40: var(--wa-color-blue-40);\n    --wa-color-brand-30: var(--wa-color-blue-30);\n    --wa-color-brand-20: var(--wa-color-blue-20);\n    --wa-color-brand-10: var(--wa-color-blue-10);\n    --wa-color-brand-05: var(--wa-color-blue-05);\n    --wa-color-brand: var(--wa-color-blue);\n    --wa-color-brand-on: var(--wa-color-blue-on);\n  }\n\n  .wa-brand-red {\n    --wa-color-brand-95: var(--wa-color-red-95);\n    --wa-color-brand-90: var(--wa-color-red-90);\n    --wa-color-brand-80: var(--wa-color-red-80);\n    --wa-color-brand-70: var(--wa-color-red-70);\n    --wa-color-brand-60: var(--wa-color-red-60);\n    --wa-color-brand-50: var(--wa-color-red-50);\n    --wa-color-brand-40: var(--wa-color-red-40);\n    --wa-color-brand-30: var(--wa-color-red-30);\n    --wa-color-brand-20: var(--wa-color-red-20);\n    --wa-color-brand-10: var(--wa-color-red-10);\n    --wa-color-brand-05: var(--wa-color-red-05);\n    --wa-color-brand: var(--wa-color-red);\n    --wa-color-brand-on: var(--wa-color-red-on);\n  }\n\n  .wa-brand-orange {\n    --wa-color-brand-95: var(--wa-color-orange-95);\n    --wa-color-brand-90: var(--wa-color-orange-90);\n    --wa-color-brand-80: var(--wa-color-orange-80);\n    --wa-color-brand-70: var(--wa-color-orange-70);\n    --wa-color-brand-60: var(--wa-color-orange-60);\n    --wa-color-brand-50: var(--wa-color-orange-50);\n    --wa-color-brand-40: var(--wa-color-orange-40);\n    --wa-color-brand-30: var(--wa-color-orange-30);\n    --wa-color-brand-20: var(--wa-color-orange-20);\n    --wa-color-brand-10: var(--wa-color-orange-10);\n    --wa-color-brand-05: var(--wa-color-orange-05);\n    --wa-color-brand: var(--wa-color-orange);\n    --wa-color-brand-on: var(--wa-color-orange-on);\n  }\n\n  .wa-brand-yellow {\n    --wa-color-brand-95: var(--wa-color-yellow-95);\n    --wa-color-brand-90: var(--wa-color-yellow-90);\n    --wa-color-brand-80: var(--wa-color-yellow-80);\n    --wa-color-brand-70: var(--wa-color-yellow-70);\n    --wa-color-brand-60: var(--wa-color-yellow-60);\n    --wa-color-brand-50: var(--wa-color-yellow-50);\n    --wa-color-brand-40: var(--wa-color-yellow-40);\n    --wa-color-brand-30: var(--wa-color-yellow-30);\n    --wa-color-brand-20: var(--wa-color-yellow-20);\n    --wa-color-brand-10: var(--wa-color-yellow-10);\n    --wa-color-brand-05: var(--wa-color-yellow-05);\n    --wa-color-brand: var(--wa-color-yellow);\n    --wa-color-brand-on: var(--wa-color-yellow-on);\n  }\n\n  .wa-brand-green {\n    --wa-color-brand-95: var(--wa-color-green-95);\n    --wa-color-brand-90: var(--wa-color-green-90);\n    --wa-color-brand-80: var(--wa-color-green-80);\n    --wa-color-brand-70: var(--wa-color-green-70);\n    --wa-color-brand-60: var(--wa-color-green-60);\n    --wa-color-brand-50: var(--wa-color-green-50);\n    --wa-color-brand-40: var(--wa-color-green-40);\n    --wa-color-brand-30: var(--wa-color-green-30);\n    --wa-color-brand-20: var(--wa-color-green-20);\n    --wa-color-brand-10: var(--wa-color-green-10);\n    --wa-color-brand-05: var(--wa-color-green-05);\n    --wa-color-brand: var(--wa-color-green);\n    --wa-color-brand-on: var(--wa-color-green-on);\n  }\n\n  .wa-brand-cyan {\n    --wa-color-brand-95: var(--wa-color-cyan-95);\n    --wa-color-brand-90: var(--wa-color-cyan-90);\n    --wa-color-brand-80: var(--wa-color-cyan-80);\n    --wa-color-brand-70: var(--wa-color-cyan-70);\n    --wa-color-brand-60: var(--wa-color-cyan-60);\n    --wa-color-brand-50: var(--wa-color-cyan-50);\n    --wa-color-brand-40: var(--wa-color-cyan-40);\n    --wa-color-brand-30: var(--wa-color-cyan-30);\n    --wa-color-brand-20: var(--wa-color-cyan-20);\n    --wa-color-brand-10: var(--wa-color-cyan-10);\n    --wa-color-brand-05: var(--wa-color-cyan-05);\n    --wa-color-brand: var(--wa-color-cyan);\n    --wa-color-brand-on: var(--wa-color-cyan-on);\n  }\n\n  .wa-brand-indigo {\n    --wa-color-brand-95: var(--wa-color-indigo-95);\n    --wa-color-brand-90: var(--wa-color-indigo-90);\n    --wa-color-brand-80: var(--wa-color-indigo-80);\n    --wa-color-brand-70: var(--wa-color-indigo-70);\n    --wa-color-brand-60: var(--wa-color-indigo-60);\n    --wa-color-brand-50: var(--wa-color-indigo-50);\n    --wa-color-brand-40: var(--wa-color-indigo-40);\n    --wa-color-brand-30: var(--wa-color-indigo-30);\n    --wa-color-brand-20: var(--wa-color-indigo-20);\n    --wa-color-brand-10: var(--wa-color-indigo-10);\n    --wa-color-brand-05: var(--wa-color-indigo-05);\n    --wa-color-brand: var(--wa-color-indigo);\n    --wa-color-brand-on: var(--wa-color-indigo-on);\n  }\n\n  .wa-brand-purple {\n    --wa-color-brand-95: var(--wa-color-purple-95);\n    --wa-color-brand-90: var(--wa-color-purple-90);\n    --wa-color-brand-80: var(--wa-color-purple-80);\n    --wa-color-brand-70: var(--wa-color-purple-70);\n    --wa-color-brand-60: var(--wa-color-purple-60);\n    --wa-color-brand-50: var(--wa-color-purple-50);\n    --wa-color-brand-40: var(--wa-color-purple-40);\n    --wa-color-brand-30: var(--wa-color-purple-30);\n    --wa-color-brand-20: var(--wa-color-purple-20);\n    --wa-color-brand-10: var(--wa-color-purple-10);\n    --wa-color-brand-05: var(--wa-color-purple-05);\n    --wa-color-brand: var(--wa-color-purple);\n    --wa-color-brand-on: var(--wa-color-purple-on);\n  }\n\n  .wa-brand-pink {\n    --wa-color-brand-95: var(--wa-color-pink-95);\n    --wa-color-brand-90: var(--wa-color-pink-90);\n    --wa-color-brand-80: var(--wa-color-pink-80);\n    --wa-color-brand-70: var(--wa-color-pink-70);\n    --wa-color-brand-60: var(--wa-color-pink-60);\n    --wa-color-brand-50: var(--wa-color-pink-50);\n    --wa-color-brand-40: var(--wa-color-pink-40);\n    --wa-color-brand-30: var(--wa-color-pink-30);\n    --wa-color-brand-20: var(--wa-color-pink-20);\n    --wa-color-brand-10: var(--wa-color-pink-10);\n    --wa-color-brand-05: var(--wa-color-pink-05);\n    --wa-color-brand: var(--wa-color-pink);\n    --wa-color-brand-on: var(--wa-color-pink-on);\n  }\n\n  .wa-brand-gray {\n    --wa-color-brand-95: var(--wa-color-gray-95);\n    --wa-color-brand-90: var(--wa-color-gray-90);\n    --wa-color-brand-80: var(--wa-color-gray-80);\n    --wa-color-brand-70: var(--wa-color-gray-70);\n    --wa-color-brand-60: var(--wa-color-gray-60);\n    --wa-color-brand-50: var(--wa-color-gray-50);\n    --wa-color-brand-40: var(--wa-color-gray-40);\n    --wa-color-brand-30: var(--wa-color-gray-30);\n    --wa-color-brand-20: var(--wa-color-gray-20);\n    --wa-color-brand-10: var(--wa-color-gray-10);\n    --wa-color-brand-05: var(--wa-color-gray-05);\n    --wa-color-brand: var(--wa-color-gray);\n    --wa-color-brand-on: var(--wa-color-gray-on);\n  }\n}\n\n@layer wa-color-variant {\n  :where(#scpanl-root), /* default */\n  .wa-neutral-gray {\n    --wa-color-neutral-95: var(--wa-color-gray-95);\n    --wa-color-neutral-90: var(--wa-color-gray-90);\n    --wa-color-neutral-80: var(--wa-color-gray-80);\n    --wa-color-neutral-70: var(--wa-color-gray-70);\n    --wa-color-neutral-60: var(--wa-color-gray-60);\n    --wa-color-neutral-50: var(--wa-color-gray-50);\n    --wa-color-neutral-40: var(--wa-color-gray-40);\n    --wa-color-neutral-30: var(--wa-color-gray-30);\n    --wa-color-neutral-20: var(--wa-color-gray-20);\n    --wa-color-neutral-10: var(--wa-color-gray-10);\n    --wa-color-neutral-05: var(--wa-color-gray-05);\n    --wa-color-neutral: var(--wa-color-gray);\n    --wa-color-neutral-on: var(--wa-color-gray-on);\n  }\n\n  .wa-neutral-red {\n    --wa-color-neutral-95: var(--wa-color-red-95);\n    --wa-color-neutral-90: var(--wa-color-red-90);\n    --wa-color-neutral-80: var(--wa-color-red-80);\n    --wa-color-neutral-70: var(--wa-color-red-70);\n    --wa-color-neutral-60: var(--wa-color-red-60);\n    --wa-color-neutral-50: var(--wa-color-red-50);\n    --wa-color-neutral-40: var(--wa-color-red-40);\n    --wa-color-neutral-30: var(--wa-color-red-30);\n    --wa-color-neutral-20: var(--wa-color-red-20);\n    --wa-color-neutral-10: var(--wa-color-red-10);\n    --wa-color-neutral-05: var(--wa-color-red-05);\n    --wa-color-neutral: var(--wa-color-red);\n    --wa-color-neutral-on: var(--wa-color-red-on);\n  }\n\n  .wa-neutral-orange {\n    --wa-color-neutral-95: var(--wa-color-orange-95);\n    --wa-color-neutral-90: var(--wa-color-orange-90);\n    --wa-color-neutral-80: var(--wa-color-orange-80);\n    --wa-color-neutral-70: var(--wa-color-orange-70);\n    --wa-color-neutral-60: var(--wa-color-orange-60);\n    --wa-color-neutral-50: var(--wa-color-orange-50);\n    --wa-color-neutral-40: var(--wa-color-orange-40);\n    --wa-color-neutral-30: var(--wa-color-orange-30);\n    --wa-color-neutral-20: var(--wa-color-orange-20);\n    --wa-color-neutral-10: var(--wa-color-orange-10);\n    --wa-color-neutral-05: var(--wa-color-orange-05);\n    --wa-color-neutral: var(--wa-color-orange);\n    --wa-color-neutral-on: var(--wa-color-orange-on);\n  }\n\n  .wa-neutral-yellow {\n    --wa-color-neutral-95: var(--wa-color-yellow-95);\n    --wa-color-neutral-90: var(--wa-color-yellow-90);\n    --wa-color-neutral-80: var(--wa-color-yellow-80);\n    --wa-color-neutral-70: var(--wa-color-yellow-70);\n    --wa-color-neutral-60: var(--wa-color-yellow-60);\n    --wa-color-neutral-50: var(--wa-color-yellow-50);\n    --wa-color-neutral-40: var(--wa-color-yellow-40);\n    --wa-color-neutral-30: var(--wa-color-yellow-30);\n    --wa-color-neutral-20: var(--wa-color-yellow-20);\n    --wa-color-neutral-10: var(--wa-color-yellow-10);\n    --wa-color-neutral-05: var(--wa-color-yellow-05);\n    --wa-color-neutral: var(--wa-color-yellow);\n    --wa-color-neutral-on: var(--wa-color-yellow-on);\n  }\n\n  .wa-neutral-green {\n    --wa-color-neutral-95: var(--wa-color-green-95);\n    --wa-color-neutral-90: var(--wa-color-green-90);\n    --wa-color-neutral-80: var(--wa-color-green-80);\n    --wa-color-neutral-70: var(--wa-color-green-70);\n    --wa-color-neutral-60: var(--wa-color-green-60);\n    --wa-color-neutral-50: var(--wa-color-green-50);\n    --wa-color-neutral-40: var(--wa-color-green-40);\n    --wa-color-neutral-30: var(--wa-color-green-30);\n    --wa-color-neutral-20: var(--wa-color-green-20);\n    --wa-color-neutral-10: var(--wa-color-green-10);\n    --wa-color-neutral-05: var(--wa-color-green-05);\n    --wa-color-neutral: var(--wa-color-green);\n    --wa-color-neutral-on: var(--wa-color-green-on);\n  }\n\n  .wa-neutral-cyan {\n    --wa-color-neutral-95: var(--wa-color-cyan-95);\n    --wa-color-neutral-90: var(--wa-color-cyan-90);\n    --wa-color-neutral-80: var(--wa-color-cyan-80);\n    --wa-color-neutral-70: var(--wa-color-cyan-70);\n    --wa-color-neutral-60: var(--wa-color-cyan-60);\n    --wa-color-neutral-50: var(--wa-color-cyan-50);\n    --wa-color-neutral-40: var(--wa-color-cyan-40);\n    --wa-color-neutral-30: var(--wa-color-cyan-30);\n    --wa-color-neutral-20: var(--wa-color-cyan-20);\n    --wa-color-neutral-10: var(--wa-color-cyan-10);\n    --wa-color-neutral-05: var(--wa-color-cyan-05);\n    --wa-color-neutral: var(--wa-color-cyan);\n    --wa-color-neutral-on: var(--wa-color-cyan-on);\n  }\n\n  .wa-neutral-blue {\n    --wa-color-neutral-95: var(--wa-color-blue-95);\n    --wa-color-neutral-90: var(--wa-color-blue-90);\n    --wa-color-neutral-80: var(--wa-color-blue-80);\n    --wa-color-neutral-70: var(--wa-color-blue-70);\n    --wa-color-neutral-60: var(--wa-color-blue-60);\n    --wa-color-neutral-50: var(--wa-color-blue-50);\n    --wa-color-neutral-40: var(--wa-color-blue-40);\n    --wa-color-neutral-30: var(--wa-color-blue-30);\n    --wa-color-neutral-20: var(--wa-color-blue-20);\n    --wa-color-neutral-10: var(--wa-color-blue-10);\n    --wa-color-neutral-05: var(--wa-color-blue-05);\n    --wa-color-neutral: var(--wa-color-blue);\n    --wa-color-neutral-on: var(--wa-color-blue-on);\n  }\n\n  .wa-neutral-indigo {\n    --wa-color-neutral-95: var(--wa-color-indigo-95);\n    --wa-color-neutral-90: var(--wa-color-indigo-90);\n    --wa-color-neutral-80: var(--wa-color-indigo-80);\n    --wa-color-neutral-70: var(--wa-color-indigo-70);\n    --wa-color-neutral-60: var(--wa-color-indigo-60);\n    --wa-color-neutral-50: var(--wa-color-indigo-50);\n    --wa-color-neutral-40: var(--wa-color-indigo-40);\n    --wa-color-neutral-30: var(--wa-color-indigo-30);\n    --wa-color-neutral-20: var(--wa-color-indigo-20);\n    --wa-color-neutral-10: var(--wa-color-indigo-10);\n    --wa-color-neutral-05: var(--wa-color-indigo-05);\n    --wa-color-neutral: var(--wa-color-indigo);\n    --wa-color-neutral-on: var(--wa-color-indigo-on);\n  }\n\n  .wa-neutral-purple {\n    --wa-color-neutral-95: var(--wa-color-purple-95);\n    --wa-color-neutral-90: var(--wa-color-purple-90);\n    --wa-color-neutral-80: var(--wa-color-purple-80);\n    --wa-color-neutral-70: var(--wa-color-purple-70);\n    --wa-color-neutral-60: var(--wa-color-purple-60);\n    --wa-color-neutral-50: var(--wa-color-purple-50);\n    --wa-color-neutral-40: var(--wa-color-purple-40);\n    --wa-color-neutral-30: var(--wa-color-purple-30);\n    --wa-color-neutral-20: var(--wa-color-purple-20);\n    --wa-color-neutral-10: var(--wa-color-purple-10);\n    --wa-color-neutral-05: var(--wa-color-purple-05);\n    --wa-color-neutral: var(--wa-color-purple);\n    --wa-color-neutral-on: var(--wa-color-purple-on);\n  }\n\n  .wa-neutral-pink {\n    --wa-color-neutral-95: var(--wa-color-pink-95);\n    --wa-color-neutral-90: var(--wa-color-pink-90);\n    --wa-color-neutral-80: var(--wa-color-pink-80);\n    --wa-color-neutral-70: var(--wa-color-pink-70);\n    --wa-color-neutral-60: var(--wa-color-pink-60);\n    --wa-color-neutral-50: var(--wa-color-pink-50);\n    --wa-color-neutral-40: var(--wa-color-pink-40);\n    --wa-color-neutral-30: var(--wa-color-pink-30);\n    --wa-color-neutral-20: var(--wa-color-pink-20);\n    --wa-color-neutral-10: var(--wa-color-pink-10);\n    --wa-color-neutral-05: var(--wa-color-pink-05);\n    --wa-color-neutral: var(--wa-color-pink);\n    --wa-color-neutral-on: var(--wa-color-pink-on);\n  }\n}\n\n@layer wa-color-variant {\n  :where(#scpanl-root), /* default */\n  .wa-success-green {\n    --wa-color-success-95: var(--wa-color-green-95);\n    --wa-color-success-90: var(--wa-color-green-90);\n    --wa-color-success-80: var(--wa-color-green-80);\n    --wa-color-success-70: var(--wa-color-green-70);\n    --wa-color-success-60: var(--wa-color-green-60);\n    --wa-color-success-50: var(--wa-color-green-50);\n    --wa-color-success-40: var(--wa-color-green-40);\n    --wa-color-success-30: var(--wa-color-green-30);\n    --wa-color-success-20: var(--wa-color-green-20);\n    --wa-color-success-10: var(--wa-color-green-10);\n    --wa-color-success-05: var(--wa-color-green-05);\n    --wa-color-success: var(--wa-color-green);\n    --wa-color-success-on: var(--wa-color-green-on);\n  }\n\n  .wa-success-red {\n    --wa-color-success-95: var(--wa-color-red-95);\n    --wa-color-success-90: var(--wa-color-red-90);\n    --wa-color-success-80: var(--wa-color-red-80);\n    --wa-color-success-70: var(--wa-color-red-70);\n    --wa-color-success-60: var(--wa-color-red-60);\n    --wa-color-success-50: var(--wa-color-red-50);\n    --wa-color-success-40: var(--wa-color-red-40);\n    --wa-color-success-30: var(--wa-color-red-30);\n    --wa-color-success-20: var(--wa-color-red-20);\n    --wa-color-success-10: var(--wa-color-red-10);\n    --wa-color-success-05: var(--wa-color-red-05);\n    --wa-color-success: var(--wa-color-red);\n    --wa-color-success-on: var(--wa-color-red-on);\n  }\n\n  .wa-success-orange {\n    --wa-color-success-95: var(--wa-color-orange-95);\n    --wa-color-success-90: var(--wa-color-orange-90);\n    --wa-color-success-80: var(--wa-color-orange-80);\n    --wa-color-success-70: var(--wa-color-orange-70);\n    --wa-color-success-60: var(--wa-color-orange-60);\n    --wa-color-success-50: var(--wa-color-orange-50);\n    --wa-color-success-40: var(--wa-color-orange-40);\n    --wa-color-success-30: var(--wa-color-orange-30);\n    --wa-color-success-20: var(--wa-color-orange-20);\n    --wa-color-success-10: var(--wa-color-orange-10);\n    --wa-color-success-05: var(--wa-color-orange-05);\n    --wa-color-success: var(--wa-color-orange);\n    --wa-color-success-on: var(--wa-color-orange-on);\n  }\n\n  .wa-success-yellow {\n    --wa-color-success-95: var(--wa-color-yellow-95);\n    --wa-color-success-90: var(--wa-color-yellow-90);\n    --wa-color-success-80: var(--wa-color-yellow-80);\n    --wa-color-success-70: var(--wa-color-yellow-70);\n    --wa-color-success-60: var(--wa-color-yellow-60);\n    --wa-color-success-50: var(--wa-color-yellow-50);\n    --wa-color-success-40: var(--wa-color-yellow-40);\n    --wa-color-success-30: var(--wa-color-yellow-30);\n    --wa-color-success-20: var(--wa-color-yellow-20);\n    --wa-color-success-10: var(--wa-color-yellow-10);\n    --wa-color-success-05: var(--wa-color-yellow-05);\n    --wa-color-success: var(--wa-color-yellow);\n    --wa-color-success-on: var(--wa-color-yellow-on);\n  }\n\n  .wa-success-cyan {\n    --wa-color-success-95: var(--wa-color-cyan-95);\n    --wa-color-success-90: var(--wa-color-cyan-90);\n    --wa-color-success-80: var(--wa-color-cyan-80);\n    --wa-color-success-70: var(--wa-color-cyan-70);\n    --wa-color-success-60: var(--wa-color-cyan-60);\n    --wa-color-success-50: var(--wa-color-cyan-50);\n    --wa-color-success-40: var(--wa-color-cyan-40);\n    --wa-color-success-30: var(--wa-color-cyan-30);\n    --wa-color-success-20: var(--wa-color-cyan-20);\n    --wa-color-success-10: var(--wa-color-cyan-10);\n    --wa-color-success-05: var(--wa-color-cyan-05);\n    --wa-color-success: var(--wa-color-cyan);\n    --wa-color-success-on: var(--wa-color-cyan-on);\n  }\n\n  .wa-success-blue {\n    --wa-color-success-95: var(--wa-color-blue-95);\n    --wa-color-success-90: var(--wa-color-blue-90);\n    --wa-color-success-80: var(--wa-color-blue-80);\n    --wa-color-success-70: var(--wa-color-blue-70);\n    --wa-color-success-60: var(--wa-color-blue-60);\n    --wa-color-success-50: var(--wa-color-blue-50);\n    --wa-color-success-40: var(--wa-color-blue-40);\n    --wa-color-success-30: var(--wa-color-blue-30);\n    --wa-color-success-20: var(--wa-color-blue-20);\n    --wa-color-success-10: var(--wa-color-blue-10);\n    --wa-color-success-05: var(--wa-color-blue-05);\n    --wa-color-success: var(--wa-color-blue);\n    --wa-color-success-on: var(--wa-color-blue-on);\n  }\n\n  .wa-success-indigo {\n    --wa-color-success-95: var(--wa-color-indigo-95);\n    --wa-color-success-90: var(--wa-color-indigo-90);\n    --wa-color-success-80: var(--wa-color-indigo-80);\n    --wa-color-success-70: var(--wa-color-indigo-70);\n    --wa-color-success-60: var(--wa-color-indigo-60);\n    --wa-color-success-50: var(--wa-color-indigo-50);\n    --wa-color-success-40: var(--wa-color-indigo-40);\n    --wa-color-success-30: var(--wa-color-indigo-30);\n    --wa-color-success-20: var(--wa-color-indigo-20);\n    --wa-color-success-10: var(--wa-color-indigo-10);\n    --wa-color-success-05: var(--wa-color-indigo-05);\n    --wa-color-success: var(--wa-color-indigo);\n    --wa-color-success-on: var(--wa-color-indigo-on);\n  }\n\n  .wa-success-purple {\n    --wa-color-success-95: var(--wa-color-purple-95);\n    --wa-color-success-90: var(--wa-color-purple-90);\n    --wa-color-success-80: var(--wa-color-purple-80);\n    --wa-color-success-70: var(--wa-color-purple-70);\n    --wa-color-success-60: var(--wa-color-purple-60);\n    --wa-color-success-50: var(--wa-color-purple-50);\n    --wa-color-success-40: var(--wa-color-purple-40);\n    --wa-color-success-30: var(--wa-color-purple-30);\n    --wa-color-success-20: var(--wa-color-purple-20);\n    --wa-color-success-10: var(--wa-color-purple-10);\n    --wa-color-success-05: var(--wa-color-purple-05);\n    --wa-color-success: var(--wa-color-purple);\n    --wa-color-success-on: var(--wa-color-purple-on);\n  }\n\n  .wa-success-pink {\n    --wa-color-success-95: var(--wa-color-pink-95);\n    --wa-color-success-90: var(--wa-color-pink-90);\n    --wa-color-success-80: var(--wa-color-pink-80);\n    --wa-color-success-70: var(--wa-color-pink-70);\n    --wa-color-success-60: var(--wa-color-pink-60);\n    --wa-color-success-50: var(--wa-color-pink-50);\n    --wa-color-success-40: var(--wa-color-pink-40);\n    --wa-color-success-30: var(--wa-color-pink-30);\n    --wa-color-success-20: var(--wa-color-pink-20);\n    --wa-color-success-10: var(--wa-color-pink-10);\n    --wa-color-success-05: var(--wa-color-pink-05);\n    --wa-color-success: var(--wa-color-pink);\n    --wa-color-success-on: var(--wa-color-pink-on);\n  }\n\n  .wa-success-gray {\n    --wa-color-success-95: var(--wa-color-gray-95);\n    --wa-color-success-90: var(--wa-color-gray-90);\n    --wa-color-success-80: var(--wa-color-gray-80);\n    --wa-color-success-70: var(--wa-color-gray-70);\n    --wa-color-success-60: var(--wa-color-gray-60);\n    --wa-color-success-50: var(--wa-color-gray-50);\n    --wa-color-success-40: var(--wa-color-gray-40);\n    --wa-color-success-30: var(--wa-color-gray-30);\n    --wa-color-success-20: var(--wa-color-gray-20);\n    --wa-color-success-10: var(--wa-color-gray-10);\n    --wa-color-success-05: var(--wa-color-gray-05);\n    --wa-color-success: var(--wa-color-gray);\n    --wa-color-success-on: var(--wa-color-gray-on);\n  }\n}\n\n@layer wa-color-variant {\n  :where(#scpanl-root), /* default */\n  .wa-warning-yellow {\n    --wa-color-warning-95: var(--wa-color-yellow-95);\n    --wa-color-warning-90: var(--wa-color-yellow-90);\n    --wa-color-warning-80: var(--wa-color-yellow-80);\n    --wa-color-warning-70: var(--wa-color-yellow-70);\n    --wa-color-warning-60: var(--wa-color-yellow-60);\n    --wa-color-warning-50: var(--wa-color-yellow-50);\n    --wa-color-warning-40: var(--wa-color-yellow-40);\n    --wa-color-warning-30: var(--wa-color-yellow-30);\n    --wa-color-warning-20: var(--wa-color-yellow-20);\n    --wa-color-warning-10: var(--wa-color-yellow-10);\n    --wa-color-warning-05: var(--wa-color-yellow-05);\n    --wa-color-warning: var(--wa-color-yellow);\n    --wa-color-warning-on: var(--wa-color-yellow-on);\n  }\n\n  .wa-warning-red {\n    --wa-color-warning-95: var(--wa-color-red-95);\n    --wa-color-warning-90: var(--wa-color-red-90);\n    --wa-color-warning-80: var(--wa-color-red-80);\n    --wa-color-warning-70: var(--wa-color-red-70);\n    --wa-color-warning-60: var(--wa-color-red-60);\n    --wa-color-warning-50: var(--wa-color-red-50);\n    --wa-color-warning-40: var(--wa-color-red-40);\n    --wa-color-warning-30: var(--wa-color-red-30);\n    --wa-color-warning-20: var(--wa-color-red-20);\n    --wa-color-warning-10: var(--wa-color-red-10);\n    --wa-color-warning-05: var(--wa-color-red-05);\n    --wa-color-warning: var(--wa-color-red);\n    --wa-color-warning-on: var(--wa-color-red-on);\n  }\n\n  .wa-warning-orange {\n    --wa-color-warning-95: var(--wa-color-orange-95);\n    --wa-color-warning-90: var(--wa-color-orange-90);\n    --wa-color-warning-80: var(--wa-color-orange-80);\n    --wa-color-warning-70: var(--wa-color-orange-70);\n    --wa-color-warning-60: var(--wa-color-orange-60);\n    --wa-color-warning-50: var(--wa-color-orange-50);\n    --wa-color-warning-40: var(--wa-color-orange-40);\n    --wa-color-warning-30: var(--wa-color-orange-30);\n    --wa-color-warning-20: var(--wa-color-orange-20);\n    --wa-color-warning-10: var(--wa-color-orange-10);\n    --wa-color-warning-05: var(--wa-color-orange-05);\n    --wa-color-warning: var(--wa-color-orange);\n    --wa-color-warning-on: var(--wa-color-orange-on);\n  }\n\n  .wa-warning-green {\n    --wa-color-warning-95: var(--wa-color-green-95);\n    --wa-color-warning-90: var(--wa-color-green-90);\n    --wa-color-warning-80: var(--wa-color-green-80);\n    --wa-color-warning-70: var(--wa-color-green-70);\n    --wa-color-warning-60: var(--wa-color-green-60);\n    --wa-color-warning-50: var(--wa-color-green-50);\n    --wa-color-warning-40: var(--wa-color-green-40);\n    --wa-color-warning-30: var(--wa-color-green-30);\n    --wa-color-warning-20: var(--wa-color-green-20);\n    --wa-color-warning-10: var(--wa-color-green-10);\n    --wa-color-warning-05: var(--wa-color-green-05);\n    --wa-color-warning: var(--wa-color-green);\n    --wa-color-warning-on: var(--wa-color-green-on);\n  }\n\n  .wa-warning-cyan {\n    --wa-color-warning-95: var(--wa-color-cyan-95);\n    --wa-color-warning-90: var(--wa-color-cyan-90);\n    --wa-color-warning-80: var(--wa-color-cyan-80);\n    --wa-color-warning-70: var(--wa-color-cyan-70);\n    --wa-color-warning-60: var(--wa-color-cyan-60);\n    --wa-color-warning-50: var(--wa-color-cyan-50);\n    --wa-color-warning-40: var(--wa-color-cyan-40);\n    --wa-color-warning-30: var(--wa-color-cyan-30);\n    --wa-color-warning-20: var(--wa-color-cyan-20);\n    --wa-color-warning-10: var(--wa-color-cyan-10);\n    --wa-color-warning-05: var(--wa-color-cyan-05);\n    --wa-color-warning: var(--wa-color-cyan);\n    --wa-color-warning-on: var(--wa-color-cyan-on);\n  }\n\n  .wa-warning-blue {\n    --wa-color-warning-95: var(--wa-color-blue-95);\n    --wa-color-warning-90: var(--wa-color-blue-90);\n    --wa-color-warning-80: var(--wa-color-blue-80);\n    --wa-color-warning-70: var(--wa-color-blue-70);\n    --wa-color-warning-60: var(--wa-color-blue-60);\n    --wa-color-warning-50: var(--wa-color-blue-50);\n    --wa-color-warning-40: var(--wa-color-blue-40);\n    --wa-color-warning-30: var(--wa-color-blue-30);\n    --wa-color-warning-20: var(--wa-color-blue-20);\n    --wa-color-warning-10: var(--wa-color-blue-10);\n    --wa-color-warning-05: var(--wa-color-blue-05);\n    --wa-color-warning: var(--wa-color-blue);\n    --wa-color-warning-on: var(--wa-color-blue-on);\n  }\n\n  .wa-warning-indigo {\n    --wa-color-warning-95: var(--wa-color-indigo-95);\n    --wa-color-warning-90: var(--wa-color-indigo-90);\n    --wa-color-warning-80: var(--wa-color-indigo-80);\n    --wa-color-warning-70: var(--wa-color-indigo-70);\n    --wa-color-warning-60: var(--wa-color-indigo-60);\n    --wa-color-warning-50: var(--wa-color-indigo-50);\n    --wa-color-warning-40: var(--wa-color-indigo-40);\n    --wa-color-warning-30: var(--wa-color-indigo-30);\n    --wa-color-warning-20: var(--wa-color-indigo-20);\n    --wa-color-warning-10: var(--wa-color-indigo-10);\n    --wa-color-warning-05: var(--wa-color-indigo-05);\n    --wa-color-warning: var(--wa-color-indigo);\n    --wa-color-warning-on: var(--wa-color-indigo-on);\n  }\n\n  .wa-warning-purple {\n    --wa-color-warning-95: var(--wa-color-purple-95);\n    --wa-color-warning-90: var(--wa-color-purple-90);\n    --wa-color-warning-80: var(--wa-color-purple-80);\n    --wa-color-warning-70: var(--wa-color-purple-70);\n    --wa-color-warning-60: var(--wa-color-purple-60);\n    --wa-color-warning-50: var(--wa-color-purple-50);\n    --wa-color-warning-40: var(--wa-color-purple-40);\n    --wa-color-warning-30: var(--wa-color-purple-30);\n    --wa-color-warning-20: var(--wa-color-purple-20);\n    --wa-color-warning-10: var(--wa-color-purple-10);\n    --wa-color-warning-05: var(--wa-color-purple-05);\n    --wa-color-warning: var(--wa-color-purple);\n    --wa-color-warning-on: var(--wa-color-purple-on);\n  }\n\n  .wa-warning-pink {\n    --wa-color-warning-95: var(--wa-color-pink-95);\n    --wa-color-warning-90: var(--wa-color-pink-90);\n    --wa-color-warning-80: var(--wa-color-pink-80);\n    --wa-color-warning-70: var(--wa-color-pink-70);\n    --wa-color-warning-60: var(--wa-color-pink-60);\n    --wa-color-warning-50: var(--wa-color-pink-50);\n    --wa-color-warning-40: var(--wa-color-pink-40);\n    --wa-color-warning-30: var(--wa-color-pink-30);\n    --wa-color-warning-20: var(--wa-color-pink-20);\n    --wa-color-warning-10: var(--wa-color-pink-10);\n    --wa-color-warning-05: var(--wa-color-pink-05);\n    --wa-color-warning: var(--wa-color-pink);\n    --wa-color-warning-on: var(--wa-color-pink-on);\n  }\n\n  .wa-warning-gray {\n    --wa-color-warning-95: var(--wa-color-gray-95);\n    --wa-color-warning-90: var(--wa-color-gray-90);\n    --wa-color-warning-80: var(--wa-color-gray-80);\n    --wa-color-warning-70: var(--wa-color-gray-70);\n    --wa-color-warning-60: var(--wa-color-gray-60);\n    --wa-color-warning-50: var(--wa-color-gray-50);\n    --wa-color-warning-40: var(--wa-color-gray-40);\n    --wa-color-warning-30: var(--wa-color-gray-30);\n    --wa-color-warning-20: var(--wa-color-gray-20);\n    --wa-color-warning-10: var(--wa-color-gray-10);\n    --wa-color-warning-05: var(--wa-color-gray-05);\n    --wa-color-warning: var(--wa-color-gray);\n    --wa-color-warning-on: var(--wa-color-gray-on);\n  }\n}\n\n@layer wa-color-variant {\n  :where(#scpanl-root), /* default */\n  .wa-danger-red {\n    --wa-color-danger-95: var(--wa-color-red-95);\n    --wa-color-danger-90: var(--wa-color-red-90);\n    --wa-color-danger-80: var(--wa-color-red-80);\n    --wa-color-danger-70: var(--wa-color-red-70);\n    --wa-color-danger-60: var(--wa-color-red-60);\n    --wa-color-danger-50: var(--wa-color-red-50);\n    --wa-color-danger-40: var(--wa-color-red-40);\n    --wa-color-danger-30: var(--wa-color-red-30);\n    --wa-color-danger-20: var(--wa-color-red-20);\n    --wa-color-danger-10: var(--wa-color-red-10);\n    --wa-color-danger-05: var(--wa-color-red-05);\n    --wa-color-danger: var(--wa-color-red);\n    --wa-color-danger-on: var(--wa-color-red-on);\n  }\n\n  .wa-danger-orange {\n    --wa-color-danger-95: var(--wa-color-orange-95);\n    --wa-color-danger-90: var(--wa-color-orange-90);\n    --wa-color-danger-80: var(--wa-color-orange-80);\n    --wa-color-danger-70: var(--wa-color-orange-70);\n    --wa-color-danger-60: var(--wa-color-orange-60);\n    --wa-color-danger-50: var(--wa-color-orange-50);\n    --wa-color-danger-40: var(--wa-color-orange-40);\n    --wa-color-danger-30: var(--wa-color-orange-30);\n    --wa-color-danger-20: var(--wa-color-orange-20);\n    --wa-color-danger-10: var(--wa-color-orange-10);\n    --wa-color-danger-05: var(--wa-color-orange-05);\n    --wa-color-danger: var(--wa-color-orange);\n    --wa-color-danger-on: var(--wa-color-orange-on);\n  }\n\n  .wa-danger-yellow {\n    --wa-color-danger-95: var(--wa-color-yellow-95);\n    --wa-color-danger-90: var(--wa-color-yellow-90);\n    --wa-color-danger-80: var(--wa-color-yellow-80);\n    --wa-color-danger-70: var(--wa-color-yellow-70);\n    --wa-color-danger-60: var(--wa-color-yellow-60);\n    --wa-color-danger-50: var(--wa-color-yellow-50);\n    --wa-color-danger-40: var(--wa-color-yellow-40);\n    --wa-color-danger-30: var(--wa-color-yellow-30);\n    --wa-color-danger-20: var(--wa-color-yellow-20);\n    --wa-color-danger-10: var(--wa-color-yellow-10);\n    --wa-color-danger-05: var(--wa-color-yellow-05);\n    --wa-color-danger: var(--wa-color-yellow);\n    --wa-color-danger-on: var(--wa-color-yellow-on);\n  }\n\n  .wa-danger-green {\n    --wa-color-danger-95: var(--wa-color-green-95);\n    --wa-color-danger-90: var(--wa-color-green-90);\n    --wa-color-danger-80: var(--wa-color-green-80);\n    --wa-color-danger-70: var(--wa-color-green-70);\n    --wa-color-danger-60: var(--wa-color-green-60);\n    --wa-color-danger-50: var(--wa-color-green-50);\n    --wa-color-danger-40: var(--wa-color-green-40);\n    --wa-color-danger-30: var(--wa-color-green-30);\n    --wa-color-danger-20: var(--wa-color-green-20);\n    --wa-color-danger-10: var(--wa-color-green-10);\n    --wa-color-danger-05: var(--wa-color-green-05);\n    --wa-color-danger: var(--wa-color-green);\n    --wa-color-danger-on: var(--wa-color-green-on);\n  }\n\n  .wa-danger-cyan {\n    --wa-color-danger-95: var(--wa-color-cyan-95);\n    --wa-color-danger-90: var(--wa-color-cyan-90);\n    --wa-color-danger-80: var(--wa-color-cyan-80);\n    --wa-color-danger-70: var(--wa-color-cyan-70);\n    --wa-color-danger-60: var(--wa-color-cyan-60);\n    --wa-color-danger-50: var(--wa-color-cyan-50);\n    --wa-color-danger-40: var(--wa-color-cyan-40);\n    --wa-color-danger-30: var(--wa-color-cyan-30);\n    --wa-color-danger-20: var(--wa-color-cyan-20);\n    --wa-color-danger-10: var(--wa-color-cyan-10);\n    --wa-color-danger-05: var(--wa-color-cyan-05);\n    --wa-color-danger: var(--wa-color-cyan);\n    --wa-color-danger-on: var(--wa-color-cyan-on);\n  }\n\n  .wa-danger-blue {\n    --wa-color-danger-95: var(--wa-color-blue-95);\n    --wa-color-danger-90: var(--wa-color-blue-90);\n    --wa-color-danger-80: var(--wa-color-blue-80);\n    --wa-color-danger-70: var(--wa-color-blue-70);\n    --wa-color-danger-60: var(--wa-color-blue-60);\n    --wa-color-danger-50: var(--wa-color-blue-50);\n    --wa-color-danger-40: var(--wa-color-blue-40);\n    --wa-color-danger-30: var(--wa-color-blue-30);\n    --wa-color-danger-20: var(--wa-color-blue-20);\n    --wa-color-danger-10: var(--wa-color-blue-10);\n    --wa-color-danger-05: var(--wa-color-blue-05);\n    --wa-color-danger: var(--wa-color-blue);\n    --wa-color-danger-on: var(--wa-color-blue-on);\n  }\n\n  .wa-danger-indigo {\n    --wa-color-danger-95: var(--wa-color-indigo-95);\n    --wa-color-danger-90: var(--wa-color-indigo-90);\n    --wa-color-danger-80: var(--wa-color-indigo-80);\n    --wa-color-danger-70: var(--wa-color-indigo-70);\n    --wa-color-danger-60: var(--wa-color-indigo-60);\n    --wa-color-danger-50: var(--wa-color-indigo-50);\n    --wa-color-danger-40: var(--wa-color-indigo-40);\n    --wa-color-danger-30: var(--wa-color-indigo-30);\n    --wa-color-danger-20: var(--wa-color-indigo-20);\n    --wa-color-danger-10: var(--wa-color-indigo-10);\n    --wa-color-danger-05: var(--wa-color-indigo-05);\n    --wa-color-danger: var(--wa-color-indigo);\n    --wa-color-danger-on: var(--wa-color-indigo-on);\n  }\n\n  .wa-danger-purple {\n    --wa-color-danger-95: var(--wa-color-purple-95);\n    --wa-color-danger-90: var(--wa-color-purple-90);\n    --wa-color-danger-80: var(--wa-color-purple-80);\n    --wa-color-danger-70: var(--wa-color-purple-70);\n    --wa-color-danger-60: var(--wa-color-purple-60);\n    --wa-color-danger-50: var(--wa-color-purple-50);\n    --wa-color-danger-40: var(--wa-color-purple-40);\n    --wa-color-danger-30: var(--wa-color-purple-30);\n    --wa-color-danger-20: var(--wa-color-purple-20);\n    --wa-color-danger-10: var(--wa-color-purple-10);\n    --wa-color-danger-05: var(--wa-color-purple-05);\n    --wa-color-danger: var(--wa-color-purple);\n    --wa-color-danger-on: var(--wa-color-purple-on);\n  }\n\n  .wa-danger-pink {\n    --wa-color-danger-95: var(--wa-color-pink-95);\n    --wa-color-danger-90: var(--wa-color-pink-90);\n    --wa-color-danger-80: var(--wa-color-pink-80);\n    --wa-color-danger-70: var(--wa-color-pink-70);\n    --wa-color-danger-60: var(--wa-color-pink-60);\n    --wa-color-danger-50: var(--wa-color-pink-50);\n    --wa-color-danger-40: var(--wa-color-pink-40);\n    --wa-color-danger-30: var(--wa-color-pink-30);\n    --wa-color-danger-20: var(--wa-color-pink-20);\n    --wa-color-danger-10: var(--wa-color-pink-10);\n    --wa-color-danger-05: var(--wa-color-pink-05);\n    --wa-color-danger: var(--wa-color-pink);\n    --wa-color-danger-on: var(--wa-color-pink-on);\n  }\n\n  .wa-danger-gray {\n    --wa-color-danger-95: var(--wa-color-gray-95);\n    --wa-color-danger-90: var(--wa-color-gray-90);\n    --wa-color-danger-80: var(--wa-color-gray-80);\n    --wa-color-danger-70: var(--wa-color-gray-70);\n    --wa-color-danger-60: var(--wa-color-gray-60);\n    --wa-color-danger-50: var(--wa-color-gray-50);\n    --wa-color-danger-40: var(--wa-color-gray-40);\n    --wa-color-danger-30: var(--wa-color-gray-30);\n    --wa-color-danger-20: var(--wa-color-gray-20);\n    --wa-color-danger-10: var(--wa-color-gray-10);\n    --wa-color-danger-05: var(--wa-color-gray-05);\n    --wa-color-danger: var(--wa-color-gray);\n    --wa-color-danger-on: var(--wa-color-gray-on);\n  }\n}\n\n\n\n/* Generates --wa-color-{hue}-on tokens for pairing with any palette's key colors */\n:where(#scpanl-root),\n:host {\n  /**\n    * Conditional tokens to check if the key color is >= 60\n    * Key colors are the most colorful tint in a scale, recorded as --wa-color-{hue} in each palette\n    * The numeric value of the key is isolated as --wa-color-{hue}-key\n    * If key < 60, the result is 0%\n    * If key >= 60, the result is 100%\n    * Intended to be used in the color-mix() functions below\n    */\n\n  --wa-color-red-gte-60: calc(100% - (clamp(0, 60 - var(--wa-color-red-key), 1) * 100%));\n  --wa-color-orange-gte-60: calc(100% - (clamp(0, 60 - var(--wa-color-orange-key), 1) * 100%));\n  --wa-color-yellow-gte-60: calc(100% - (clamp(0, 60 - var(--wa-color-yellow-key), 1) * 100%));\n  --wa-color-green-gte-60: calc(100% - (clamp(0, 60 - var(--wa-color-green-key), 1) * 100%));\n  --wa-color-cyan-gte-60: calc(100% - (clamp(0, 60 - var(--wa-color-cyan-key), 1) * 100%));\n  --wa-color-blue-gte-60: calc(100% - (clamp(0, 60 - var(--wa-color-blue-key), 1) * 100%));\n  --wa-color-indigo-gte-60: calc(100% - (clamp(0, 60 - var(--wa-color-indigo-key), 1) * 100%));\n  --wa-color-purple-gte-60: calc(100% - (clamp(0, 60 - var(--wa-color-purple-key), 1) * 100%));\n  --wa-color-pink-gte-60: calc(100% - (clamp(0, 60 - var(--wa-color-pink-key), 1) * 100%));\n  --wa-color-gray-gte-60: calc(100% - (clamp(0, 60 - var(--wa-color-gray-key), 1) * 100%));\n\n  /**\n    * Tokens to set text color with appropriate WCAG 2.1 contrast\n    * If key < 60, the text color is white\n    * If key >= 60, the text color is {hue}-10\n    */\n\n  --wa-color-red-on: color-mix(in oklab, var(--wa-color-red-10) var(--wa-color-red-gte-60), white);\n  --wa-color-orange-on: color-mix(in oklab, var(--wa-color-orange-10) var(--wa-color-orange-gte-60), white);\n  --wa-color-yellow-on: color-mix(in oklab, var(--wa-color-yellow-10) var(--wa-color-yellow-gte-60), white);\n  --wa-color-green-on: color-mix(in oklab, var(--wa-color-green-10) var(--wa-color-green-gte-60), white);\n  --wa-color-cyan-on: color-mix(in oklab, var(--wa-color-cyan-10) var(--wa-color-cyan-gte-60), white);\n  --wa-color-blue-on: color-mix(in oklab, var(--wa-color-blue-10) var(--wa-color-blue-gte-60), white);\n  --wa-color-indigo-on: color-mix(in oklab, var(--wa-color-indigo-10) var(--wa-color-indigo-gte-60), white);\n  --wa-color-purple-on: color-mix(in oklab, var(--wa-color-purple-10) var(--wa-color-purple-gte-60), white);\n  --wa-color-pink-on: color-mix(in oklab, var(--wa-color-pink-10) var(--wa-color-pink-gte-60), white);\n  --wa-color-gray-on: color-mix(in oklab, var(--wa-color-gray-10) var(--wa-color-gray-gte-60), white);\n}\n\n\n@layer wa-color-palette {\n  :where(#scpanl-root),\n  .wa-palette-default {\n    --wa-color-red-95: #fff0ef /* oklch(96.667% 0.01632 22.08) */;\n    --wa-color-red-90: #ffdedc /* oklch(92.735% 0.03679 21.966) */;\n    --wa-color-red-80: #ffb8b6 /* oklch(84.803% 0.08289 20.771) */;\n    --wa-color-red-70: #fd8f90 /* oklch(76.801% 0.13322 20.052) */;\n    --wa-color-red-60: #f3676c /* oklch(68.914% 0.17256 20.646) */;\n    --wa-color-red-50: #dc3146 /* oklch(58.857% 0.20512 20.223) */;\n    --wa-color-red-40: #b30532 /* oklch(48.737% 0.19311 18.413) */;\n    --wa-color-red-30: #8a132c /* oklch(41.17% 0.1512 16.771) */;\n    --wa-color-red-20: #631323 /* oklch(33.297% 0.11208 14.847) */;\n    --wa-color-red-10: #3e0913 /* oklch(24.329% 0.08074 15.207) */;\n    --wa-color-red-05: #2a040b /* oklch(19.016% 0.06394 13.71) */;\n    --wa-color-red: var(--wa-color-red-50);\n    --wa-color-red-key: 50;\n\n    --wa-color-orange-95: #fff0e6 /* oklch(96.426% 0.02105 56.133) */;\n    --wa-color-orange-90: #ffdfca /* oklch(92.468% 0.04529 55.325) */;\n    --wa-color-orange-80: #ffbb94 /* oklch(84.588% 0.09454 50.876) */;\n    --wa-color-orange-70: #ff9266 /* oklch(76.744% 0.14429 42.309) */;\n    --wa-color-orange-60: #f46a45 /* oklch(68.848% 0.17805 35.951) */;\n    --wa-color-orange-50: #cd491c /* oklch(58.195% 0.17597 37.577) */;\n    --wa-color-orange-40: #9f3501 /* oklch(47.889% 0.14981 39.957) */;\n    --wa-color-orange-30: #802700 /* oklch(40.637% 0.1298 39.149) */;\n    --wa-color-orange-20: #601b00 /* oklch(33.123% 0.10587 39.117) */;\n    --wa-color-orange-10: #3c0d00 /* oklch(24.043% 0.07768 38.607) */;\n    --wa-color-orange-05: #280600 /* oklch(18.644% 0.0607 38.252) */;\n    --wa-color-orange: var(--wa-color-orange-60);\n    --wa-color-orange-key: 60;\n\n    --wa-color-yellow-95: #fef3cd /* oklch(96.322% 0.05069 93.748) */;\n    --wa-color-yellow-90: #ffe495 /* oklch(92.377% 0.10246 91.296) */;\n    --wa-color-yellow-80: #fac22b /* oklch(84.185% 0.16263 85.991) */;\n    --wa-color-yellow-70: #ef9d00 /* oklch(75.949% 0.16251 72.13) */;\n    --wa-color-yellow-60: #da7e00 /* oklch(67.883% 0.15587 62.246) */;\n    --wa-color-yellow-50: #b45f04 /* oklch(57.449% 0.13836 56.585) */;\n    --wa-color-yellow-40: #8c4602 /* oklch(47.319% 0.11666 54.663) */;\n    --wa-color-yellow-30: #6f3601 /* oklch(40.012% 0.09892 54.555) */;\n    --wa-color-yellow-20: #532600 /* oklch(32.518% 0.08157 53.927) */;\n    --wa-color-yellow-10: #331600 /* oklch(23.846% 0.05834 56.02) */;\n    --wa-color-yellow-05: #220c00 /* oklch(18.585% 0.04625 54.588) */;\n    --wa-color-yellow: var(--wa-color-yellow-80);\n    --wa-color-yellow-key: 80;\n\n    --wa-color-green-95: #e3f9e3 /* oklch(96.006% 0.03715 145.28) */;\n    --wa-color-green-90: #c2f2c1 /* oklch(91.494% 0.08233 144.35) */;\n    --wa-color-green-80: #93da98 /* oklch(82.445% 0.11601 146.11) */;\n    --wa-color-green-70: #5dc36f /* oklch(73.554% 0.15308 147.59) */;\n    --wa-color-green-60: #00ac49 /* oklch(64.982% 0.18414 148.83) */;\n    --wa-color-green-50: #00883c /* oklch(54.765% 0.15165 149.77) */;\n    --wa-color-green-40: #036730 /* oklch(45.004% 0.11963 151.06) */;\n    --wa-color-green-30: #0a5027 /* oklch(37.988% 0.09487 151.62) */;\n    --wa-color-green-20: #0a3a1d /* oklch(30.876% 0.07202 152.23) */;\n    --wa-color-green-10: #052310 /* oklch(22.767% 0.05128 152.45) */;\n    --wa-color-green-05: #031608 /* oklch(17.84% 0.03957 151.36) */;\n    --wa-color-green: var(--wa-color-green-60);\n    --wa-color-green-key: 60;\n\n    --wa-color-cyan-95: #e3f6fb /* oklch(96.063% 0.02111 215.26) */;\n    --wa-color-cyan-90: #c5ecf7 /* oklch(91.881% 0.04314 216.7) */;\n    --wa-color-cyan-80: #7fd6ec /* oklch(82.906% 0.08934 215.86) */;\n    --wa-color-cyan-70: #2fbedc /* oklch(74.18% 0.12169 215.86) */;\n    --wa-color-cyan-60: #00a3c0 /* oklch(65.939% 0.11738 216.42) */;\n    --wa-color-cyan-50: #078098 /* oklch(55.379% 0.09774 217.32) */;\n    --wa-color-cyan-40: #026274 /* oklch(45.735% 0.08074 216.18) */;\n    --wa-color-cyan-30: #014c5b /* oklch(38.419% 0.06817 216.88) */;\n    --wa-color-cyan-20: #003844 /* oklch(31.427% 0.05624 217.32) */;\n    --wa-color-cyan-10: #002129 /* oklch(22.851% 0.04085 217.17) */;\n    --wa-color-cyan-05: #00151b /* oklch(18.055% 0.03231 217.31) */;\n    --wa-color-cyan: var(--wa-color-cyan-70);\n    --wa-color-cyan-key: 70;\n\n    --wa-color-blue-95: #e8f3ff /* oklch(95.944% 0.01996 250.38) */;\n    --wa-color-blue-90: #d1e8ff /* oklch(92.121% 0.03985 248.26) */;\n    --wa-color-blue-80: #9fceff /* oklch(83.572% 0.08502 249.92) */;\n    --wa-color-blue-70: #6eb3ff /* oklch(75.256% 0.1308 252.03) */;\n    --wa-color-blue-60: #3e96ff /* oklch(67.196% 0.17661 254.97) */;\n    --wa-color-blue-50: #0071ec /* oklch(56.972% 0.20461 257.29) */;\n    --wa-color-blue-40: #0053c0 /* oklch(47.175% 0.1846 259.19) */;\n    --wa-color-blue-30: #003f9c /* oklch(39.805% 0.16217 259.98) */;\n    --wa-color-blue-20: #002d77 /* oklch(32.436% 0.1349 260.35) */;\n    --wa-color-blue-10: #001a4e /* oklch(23.965% 0.10161 260.68) */;\n    --wa-color-blue-05: #000f35 /* oklch(18.565% 0.07904 260.75) */;\n    --wa-color-blue: var(--wa-color-blue-50);\n    --wa-color-blue-key: 50;\n\n    --wa-color-indigo-95: #f0f2ff /* oklch(96.341% 0.0175 279.06) */;\n    --wa-color-indigo-90: #dfe5ff /* oklch(92.527% 0.0359 275.35) */;\n    --wa-color-indigo-80: #bcc7ff /* oklch(84.053% 0.07938 275.91) */;\n    --wa-color-indigo-70: #9da9ff /* oklch(75.941% 0.12411 276.95) */;\n    --wa-color-indigo-60: #808aff /* oklch(67.977% 0.17065 277.16) */;\n    --wa-color-indigo-50: #6163f2 /* oklch(57.967% 0.20943 277.04) */;\n    --wa-color-indigo-40: #4945cb /* oklch(48.145% 0.20042 277.08) */;\n    --wa-color-indigo-30: #3933a7 /* oklch(40.844% 0.17864 277.26) */;\n    --wa-color-indigo-20: #292381 /* oklch(33.362% 0.15096 277.21) */;\n    --wa-color-indigo-10: #181255 /* oklch(24.534% 0.11483 277.73) */;\n    --wa-color-indigo-05: #0d0a3a /* oklch(19.092% 0.08825 276.76) */;\n    --wa-color-indigo: var(--wa-color-indigo-50);\n    --wa-color-indigo-key: 50;\n\n    --wa-color-purple-95: #f7f0ff /* oklch(96.49% 0.02119 306.84) */;\n    --wa-color-purple-90: #eedfff /* oklch(92.531% 0.04569 306.6) */;\n    --wa-color-purple-80: #ddbdff /* oklch(84.781% 0.09615 306.52) */;\n    --wa-color-purple-70: #ca99ff /* oklch(76.728% 0.14961 305.27) */;\n    --wa-color-purple-60: #b678f5 /* oklch(68.906% 0.1844 304.96) */;\n    --wa-color-purple-50: #9951db /* oklch(58.603% 0.20465 304.87) */;\n    --wa-color-purple-40: #7936b3 /* oklch(48.641% 0.18949 304.79) */;\n    --wa-color-purple-30: #612692 /* oklch(41.23% 0.16836 304.92) */;\n    --wa-color-purple-20: #491870 /* oklch(33.663% 0.14258 305.12) */;\n    --wa-color-purple-10: #2d0b48 /* oklch(24.637% 0.10612 304.95) */;\n    --wa-color-purple-05: #1e0532 /* oklch(19.393% 0.08461 305.26) */;\n    --wa-color-purple: var(--wa-color-purple-50);\n    --wa-color-purple-key: 50;\n\n    --wa-color-pink-95: #feeff9 /* oklch(96.676% 0.02074 337.69) */;\n    --wa-color-pink-90: #feddf0 /* oklch(93.026% 0.04388 342.45) */;\n    --wa-color-pink-80: #fcb5d8 /* oklch(84.928% 0.09304 348.21) */;\n    --wa-color-pink-70: #f78dbf /* oklch(77.058% 0.14016 351.19) */;\n    --wa-color-pink-60: #e66ba3 /* oklch(69.067% 0.16347 353.69) */;\n    --wa-color-pink-50: #c84382 /* oklch(58.707% 0.17826 354.82) */;\n    --wa-color-pink-40: #9e2a6c /* oklch(48.603% 0.16439 350.08) */;\n    --wa-color-pink-30: #7d1e58 /* oklch(41.017% 0.14211 347.77) */;\n    --wa-color-pink-20: #5e1342 /* oklch(33.442% 0.11808 347.01) */;\n    --wa-color-pink-10: #3c0828 /* oklch(24.601% 0.08768 347.8) */;\n    --wa-color-pink-05: #28041a /* oklch(19.199% 0.06799 346.97) */;\n    --wa-color-pink: var(--wa-color-pink-50);\n    --wa-color-pink-key: 50;\n\n    --wa-color-gray-95: #f1f2f3 /* oklch(96.067% 0.00172 247.84) */;\n    --wa-color-gray-90: #e4e5e9 /* oklch(92.228% 0.0055 274.96) */;\n    --wa-color-gray-80: #c7c9d0 /* oklch(83.641% 0.00994 273.33) */;\n    --wa-color-gray-70: #abaeb9 /* oklch(75.183% 0.01604 273.78) */;\n    --wa-color-gray-60: #9194a2 /* oklch(66.863% 0.02088 276.18) */;\n    --wa-color-gray-50: #717584 /* oklch(56.418% 0.02359 273.77) */;\n    --wa-color-gray-40: #545868 /* oklch(46.281% 0.02644 274.26) */;\n    --wa-color-gray-30: #424554 /* oklch(39.355% 0.02564 276.27) */;\n    --wa-color-gray-20: #2f323f /* oklch(31.97% 0.02354 274.82) */;\n    --wa-color-gray-10: #1b1d26 /* oklch(23.277% 0.01762 275.14) */;\n    --wa-color-gray-05: #101219 /* oklch(18.342% 0.01472 272.42) */;\n    --wa-color-gray: var(--wa-color-gray-40);\n    --wa-color-gray-key: 40;\n  }\n}\n\n\n@layer wa-theme {\n  :where(#scpanl-root),\n  .wa-theme-default,\n  .wa-light,\n  .wa-dark .wa-invert,\n  .wa-light .wa-theme-default,\n  .wa-dark .wa-theme-default.wa-invert,\n  .wa-dark .wa-theme-default .wa-invert {\n    /* #region Colors (Light) ~~~~~~~~~~~~~~~~~~~~~ */\n    color-scheme: light;\n    color: var(--wa-color-text-normal);\n\n    --wa-color-surface-raised: white;\n    --wa-color-surface-default: white;\n    --wa-color-surface-lowered: var(--wa-color-neutral-95);\n    --wa-color-surface-border: var(--wa-color-neutral-90);\n\n    --wa-color-text-normal: var(--wa-color-neutral-10);\n    --wa-color-text-quiet: var(--wa-color-neutral-40);\n    --wa-color-text-link: var(--wa-color-brand-40);\n\n    --wa-color-overlay-modal: color-mix(in oklab, var(--wa-color-neutral-05) 50%, transparent);\n    --wa-color-overlay-inline: color-mix(in oklab, var(--wa-color-neutral-80) 25%, transparent);\n\n    --wa-color-shadow: color-mix(\n      in oklab,\n      var(--wa-color-neutral-05) calc(var(--wa-shadow-blur-scale) * 4% + 8%),\n      transparent\n    );\n\n    --wa-color-focus: var(--wa-color-brand-60);\n\n    --wa-color-mix-hover: oklch(from currentColor calc(1 - l) c h) 10%;\n    --wa-color-mix-active: var(--wa-color-surface-default) 10%;\n\n    --wa-color-brand-fill-quiet: var(--wa-color-brand-95);\n    --wa-color-brand-fill-normal: var(--wa-color-brand-90);\n    --wa-color-brand-fill-loud: var(--wa-color-brand-50);\n    --wa-color-brand-border-quiet: var(--wa-color-brand-90);\n    --wa-color-brand-border-normal: var(--wa-color-brand-80);\n    --wa-color-brand-border-loud: var(--wa-color-brand-60);\n    --wa-color-brand-on-quiet: var(--wa-color-brand-40);\n    --wa-color-brand-on-normal: var(--wa-color-brand-30);\n    --wa-color-brand-on-loud: white;\n\n    --wa-color-success-fill-quiet: var(--wa-color-success-95);\n    --wa-color-success-fill-normal: var(--wa-color-success-90);\n    --wa-color-success-fill-loud: var(--wa-color-success-50);\n    --wa-color-success-border-quiet: var(--wa-color-success-90);\n    --wa-color-success-border-normal: var(--wa-color-success-80);\n    --wa-color-success-border-loud: var(--wa-color-success-60);\n    --wa-color-success-on-quiet: var(--wa-color-success-40);\n    --wa-color-success-on-normal: var(--wa-color-success-30);\n    --wa-color-success-on-loud: white;\n\n    --wa-color-warning-fill-quiet: var(--wa-color-warning-95);\n    --wa-color-warning-fill-normal: var(--wa-color-warning-90);\n    --wa-color-warning-fill-loud: var(--wa-color-warning-50);\n    --wa-color-warning-border-quiet: var(--wa-color-warning-90);\n    --wa-color-warning-border-normal: var(--wa-color-warning-80);\n    --wa-color-warning-border-loud: var(--wa-color-warning-60);\n    --wa-color-warning-on-quiet: var(--wa-color-warning-40);\n    --wa-color-warning-on-normal: var(--wa-color-warning-30);\n    --wa-color-warning-on-loud: white;\n\n    --wa-color-danger-fill-quiet: var(--wa-color-danger-95);\n    --wa-color-danger-fill-normal: var(--wa-color-danger-90);\n    --wa-color-danger-fill-loud: var(--wa-color-danger-50);\n    --wa-color-danger-border-quiet: var(--wa-color-danger-90);\n    --wa-color-danger-border-normal: var(--wa-color-danger-80);\n    --wa-color-danger-border-loud: var(--wa-color-danger-60);\n    --wa-color-danger-on-quiet: var(--wa-color-danger-40);\n    --wa-color-danger-on-normal: var(--wa-color-danger-30);\n    --wa-color-danger-on-loud: white;\n\n    --wa-color-neutral-fill-quiet: var(--wa-color-neutral-95);\n    --wa-color-neutral-fill-normal: var(--wa-color-neutral-90);\n    --wa-color-neutral-fill-loud: var(--wa-color-neutral-20);\n    --wa-color-neutral-border-quiet: var(--wa-color-neutral-90);\n    --wa-color-neutral-border-normal: var(--wa-color-neutral-80);\n    --wa-color-neutral-border-loud: var(--wa-color-neutral-60);\n    --wa-color-neutral-on-quiet: var(--wa-color-neutral-40);\n    --wa-color-neutral-on-normal: var(--wa-color-neutral-30);\n    --wa-color-neutral-on-loud: white;\n    /* #endregion */\n  }\n\n  .wa-dark,\n  .wa-invert,\n  .wa-dark .wa-theme-default,\n  .wa-light .wa-theme-default.wa-invert,\n  .wa-light .wa-theme-default .wa-invert {\n    /* #region Colors (Dark) ~~~~~~~~~~~~~~~~~~~~~~ */\n    color-scheme: dark;\n    color: var(--wa-color-text-normal);\n\n    --wa-color-surface-raised: var(--wa-color-neutral-10);\n    --wa-color-surface-default: var(--wa-color-neutral-05);\n    --wa-color-surface-lowered: color-mix(in oklab, var(--wa-color-surface-default), black 20%);\n    --wa-color-surface-border: var(--wa-color-neutral-20);\n\n    --wa-color-text-normal: var(--wa-color-neutral-95);\n    --wa-color-text-quiet: var(--wa-color-neutral-60);\n    --wa-color-text-link: var(--wa-color-brand-70);\n\n    --wa-color-overlay-modal: color-mix(in oklab, black 60%, transparent);\n    --wa-color-overlay-inline: color-mix(in oklab, var(--wa-color-neutral-50) 10%, transparent);\n\n    --wa-color-shadow: color-mix(\n      in oklab,\n      var(--wa-color-surface-lowered) calc(var(--wa-shadow-blur-scale) * 32% + 40%),\n      transparent\n    );\n\n    --wa-color-focus: var(--wa-color-brand-60);\n\n    --wa-color-mix-hover: oklch(from currentColor calc(1 - l) c h) 20%;\n    --wa-color-mix-active: var(--wa-color-surface-default) 20%;\n\n    --wa-color-brand-fill-quiet: var(--wa-color-brand-10);\n    --wa-color-brand-fill-normal: var(--wa-color-brand-20);\n    --wa-color-brand-fill-loud: var(--wa-color-brand-50);\n    --wa-color-brand-border-quiet: var(--wa-color-brand-20);\n    --wa-color-brand-border-normal: var(--wa-color-brand-30);\n    --wa-color-brand-border-loud: var(--wa-color-brand-40);\n    --wa-color-brand-on-quiet: var(--wa-color-brand-60);\n    --wa-color-brand-on-normal: var(--wa-color-brand-70);\n    --wa-color-brand-on-loud: white;\n\n    --wa-color-success-fill-quiet: var(--wa-color-success-10);\n    --wa-color-success-fill-normal: var(--wa-color-success-20);\n    --wa-color-success-fill-loud: var(--wa-color-success-50);\n    --wa-color-success-border-quiet: var(--wa-color-success-20);\n    --wa-color-success-border-normal: var(--wa-color-success-30);\n    --wa-color-success-border-loud: var(--wa-color-success-40);\n    --wa-color-success-on-quiet: var(--wa-color-success-60);\n    --wa-color-success-on-normal: var(--wa-color-success-70);\n    --wa-color-success-on-loud: white;\n\n    --wa-color-warning-fill-quiet: var(--wa-color-warning-10);\n    --wa-color-warning-fill-normal: var(--wa-color-warning-20);\n    --wa-color-warning-fill-loud: var(--wa-color-warning-50);\n    --wa-color-warning-border-quiet: var(--wa-color-warning-20);\n    --wa-color-warning-border-normal: var(--wa-color-warning-30);\n    --wa-color-warning-border-loud: var(--wa-color-warning-40);\n    --wa-color-warning-on-quiet: var(--wa-color-warning-60);\n    --wa-color-warning-on-normal: var(--wa-color-warning-70);\n    --wa-color-warning-on-loud: white;\n\n    --wa-color-danger-fill-quiet: var(--wa-color-danger-10);\n    --wa-color-danger-fill-normal: var(--wa-color-danger-20);\n    --wa-color-danger-fill-loud: var(--wa-color-danger-50);\n    --wa-color-danger-border-quiet: var(--wa-color-danger-20);\n    --wa-color-danger-border-normal: var(--wa-color-danger-30);\n    --wa-color-danger-border-loud: var(--wa-color-danger-40);\n    --wa-color-danger-on-quiet: var(--wa-color-danger-60);\n    --wa-color-danger-on-normal: var(--wa-color-danger-70);\n    --wa-color-danger-on-loud: white;\n\n    --wa-color-neutral-fill-quiet: var(--wa-color-neutral-10);\n    --wa-color-neutral-fill-normal: var(--wa-color-neutral-20);\n    --wa-color-neutral-fill-loud: var(--wa-color-neutral-90);\n    --wa-color-neutral-border-quiet: var(--wa-color-neutral-20);\n    --wa-color-neutral-border-normal: var(--wa-color-neutral-30);\n    --wa-color-neutral-border-loud: var(--wa-color-neutral-40);\n    --wa-color-neutral-on-quiet: var(--wa-color-neutral-60);\n    --wa-color-neutral-on-normal: var(--wa-color-neutral-70);\n    --wa-color-neutral-on-loud: var(--wa-color-neutral-05);\n    /* #endregion */\n  }\n\n  :where(#scpanl-root),\n  .wa-theme-default,\n  .wa-light,\n  .wa-dark,\n  .wa-invert {\n    font-family: var(--wa-font-family-body);\n\n    /* #region Fonts ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */\n    --wa-font-family-body: ui-sans-serif, system-ui, sans-serif;\n    --wa-font-family-heading: var(--wa-font-family-body);\n    --wa-font-family-code: ui-monospace, monospace;\n    --wa-font-family-longform: ui-serif, serif;\n\n    /* Font sizes use a ratio of 1.125 to scale sizes proportionally.\n     * For larger font sizes, each size is twice 1.125x larger to maximize impact.\n     * Each value uses `rem` units and is rounded to the nearest whole pixel when rendered. */\n    --wa-font-size-scale: 1;\n    --wa-font-size-3xs: round(calc(var(--wa-font-size-2xs) / 1.125), 1px); /* 10px */\n    --wa-font-size-2xs: round(calc(var(--wa-font-size-xs) / 1.125), 1px); /* 11px */\n    --wa-font-size-xs: round(calc(var(--wa-font-size-s) / 1.125), 1px); /* 12px */\n    --wa-font-size-s: round(calc(var(--wa-font-size-m) / 1.125), 1px); /* 14px */\n    --wa-font-size-m: calc(1rem * var(--wa-font-size-scale)); /* 16px */\n    --wa-font-size-l: round(calc(var(--wa-font-size-m) * 1.125 * 1.125), 1px); /* 20px */\n    --wa-font-size-xl: round(calc(var(--wa-font-size-l) * 1.125 * 1.125), 1px); /* 25px */\n    --wa-font-size-2xl: round(calc(var(--wa-font-size-xl) * 1.125 * 1.125), 1px); /* 32px */\n    --wa-font-size-3xl: round(calc(var(--wa-font-size-2xl) * 1.125 * 1.125), 1px); /* 41px */\n    --wa-font-size-4xl: round(calc(var(--wa-font-size-3xl) * 1.125 * 1.125), 1px); /* 52px */\n    --wa-font-size-5xl: round(calc(var(--wa-font-size-4xl) * 1.125 * 1.125), 1px); /* 66px */\n\n    --wa-font-size-smaller: round(calc(1em / 1.125), 1px);\n    --wa-font-size-larger: round(calc(1em * 1.125 * 1.125), 1px);\n\n    --wa-font-weight-light: 300;\n    --wa-font-weight-normal: 400;\n    --wa-font-weight-semibold: 500;\n    --wa-font-weight-bold: 600;\n\n    --wa-font-weight-body: var(--wa-font-weight-normal);\n    --wa-font-weight-heading: var(--wa-font-weight-bold);\n    --wa-font-weight-code: var(--wa-font-weight-normal);\n    --wa-font-weight-longform: var(--wa-font-weight-normal);\n    --wa-font-weight-action: var(--wa-font-weight-semibold);\n\n    --wa-line-height-condensed: 1.2;\n    --wa-line-height-normal: 1.6;\n    --wa-line-height-expanded: 2;\n\n    --wa-link-decoration-default: underline color-mix(in oklab, currentColor 70%, transparent) dotted;\n    --wa-link-decoration-hover: underline;\n    /* #endregion */\n\n    /* #region Space ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */\n    --wa-space-scale: 1;\n    --wa-space-3xs: calc(var(--wa-space-scale) * 0.125rem); /* 2px */\n    --wa-space-2xs: calc(var(--wa-space-scale) * 0.25rem); /* 4px */\n    --wa-space-xs: calc(var(--wa-space-scale) * 0.5rem); /* 8px */\n    --wa-space-s: calc(var(--wa-space-scale) * 0.75rem); /* 12px */\n    --wa-space-m: calc(var(--wa-space-scale) * 1rem); /* 16px */\n    --wa-space-l: calc(var(--wa-space-scale) * 1.5rem); /* 24px */\n    --wa-space-xl: calc(var(--wa-space-scale) * 2rem); /* 32px */\n    --wa-space-2xl: calc(var(--wa-space-scale) * 2.5rem); /* 40px */\n    --wa-space-3xl: calc(var(--wa-space-scale) * 3rem); /* 48px */\n    --wa-space-4xl: calc(var(--wa-space-scale) * 4rem); /* 64px */\n    --wa-space-5xl: calc(var(--wa-space-scale) * 5rem); /* 80px */\n\n    --wa-content-spacing: var(--wa-space-l);\n    /* #endregion */\n\n    /* #region Borders ~~~~~~~~~~~~~~~~~~~~~~~~~~ */\n    --wa-border-style: solid;\n\n    --wa-border-width-scale: 1;\n    --wa-border-width-s: calc(var(--wa-border-width-scale) * 0.0625rem);\n    --wa-border-width-m: calc(var(--wa-border-width-scale) * 0.125rem);\n    --wa-border-width-l: calc(var(--wa-border-width-scale) * 0.1875rem);\n    /* #endregion */\n\n    /* #region Rounding ~~~~~~~~~~~~~~~~~~~~~~~~~ */\n    --wa-border-radius-scale: 1;\n    --wa-border-radius-s: calc(var(--wa-border-radius-scale) * 0.1875rem);\n    --wa-border-radius-m: calc(var(--wa-border-radius-scale) * 0.375rem);\n    --wa-border-radius-l: calc(var(--wa-border-radius-scale) * 0.75rem);\n\n    --wa-border-radius-pill: 9999px;\n    --wa-border-radius-circle: 50%;\n    --wa-border-radius-square: 0px;\n    /* #endregion */\n\n    /* #region Focus ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */\n    --wa-focus-ring-style: solid;\n    --wa-focus-ring-width: 0.1875rem; /* 3px */\n    --wa-focus-ring: var(--wa-focus-ring-style) var(--wa-focus-ring-width) var(--wa-color-focus);\n    --wa-focus-ring-offset: 0.0625rem; /* 1px */\n    /* #endregion */\n\n    /* #region Shadows ~~~~~~~~~~~~~~~~~~~~~~~~~~ */\n    --wa-shadow-offset-x-scale: 0;\n    --wa-shadow-offset-x-s: calc(var(--wa-shadow-offset-x-scale) * 0.125rem);\n    --wa-shadow-offset-x-m: calc(var(--wa-shadow-offset-x-scale) * 0.25rem);\n    --wa-shadow-offset-x-l: calc(var(--wa-shadow-offset-x-scale) * 0.5rem);\n\n    --wa-shadow-offset-y-scale: 1;\n    --wa-shadow-offset-y-s: calc(var(--wa-shadow-offset-y-scale) * 0.125rem);\n    --wa-shadow-offset-y-m: calc(var(--wa-shadow-offset-y-scale) * 0.25rem);\n    --wa-shadow-offset-y-l: calc(var(--wa-shadow-offset-y-scale) * 0.5rem);\n\n    --wa-shadow-blur-scale: 1;\n    --wa-shadow-blur-s: calc(var(--wa-shadow-blur-scale) * 0.125rem);\n    --wa-shadow-blur-m: calc(var(--wa-shadow-blur-scale) * 0.25rem);\n    --wa-shadow-blur-l: calc(var(--wa-shadow-blur-scale) * 0.5rem);\n\n    --wa-shadow-spread-scale: -0.5;\n    --wa-shadow-spread-s: calc(var(--wa-shadow-spread-scale) * 0.125rem);\n    --wa-shadow-spread-m: calc(var(--wa-shadow-spread-scale) * 0.25rem);\n    --wa-shadow-spread-l: calc(var(--wa-shadow-spread-scale) * 0.5rem);\n\n    --wa-shadow-s: var(--wa-shadow-offset-x-s) var(--wa-shadow-offset-y-s) var(--wa-shadow-blur-s)\n      var(--wa-shadow-spread-s) var(--wa-color-shadow);\n    --wa-shadow-m: var(--wa-shadow-offset-x-m) var(--wa-shadow-offset-y-m) var(--wa-shadow-blur-m)\n      var(--wa-shadow-spread-m) var(--wa-color-shadow);\n    --wa-shadow-l: var(--wa-shadow-offset-x-l) var(--wa-shadow-offset-y-l) var(--wa-shadow-blur-l)\n      var(--wa-shadow-spread-l) var(--wa-color-shadow);\n    /* #endregion */\n\n    /* #region Transitions ~~~~~~~~~~~~~~~~~~~~~~ */\n    --wa-transition-easing: ease;\n    --wa-transition-slow: 300ms;\n    --wa-transition-normal: 150ms;\n    --wa-transition-fast: 75ms;\n    /* #endregion */\n\n    /* #region Components ~~~~~~~~~~~~~~~~~~~~~~~ */\n    /* Form Controls */\n    --wa-form-control-background-color: var(--wa-color-surface-default);\n\n    --wa-form-control-border-color: var(--wa-color-neutral-border-loud);\n    --wa-form-control-border-style: var(--wa-border-style);\n    --wa-form-control-border-width: var(--wa-border-width-s);\n    --wa-form-control-border-radius: var(--wa-border-radius-m);\n\n    --wa-form-control-activated-color: var(--wa-color-brand-fill-loud);\n\n    --wa-form-control-label-color: var(--wa-color-text-normal);\n    --wa-form-control-label-font-weight: var(--wa-font-weight-semibold);\n    --wa-form-control-label-line-height: var(--wa-line-height-condensed);\n\n    --wa-form-control-value-color: var(--wa-color-text-normal);\n    --wa-form-control-value-font-weight: var(--wa-font-weight-body);\n    --wa-form-control-value-line-height: var(--wa-line-height-condensed);\n\n    --wa-form-control-hint-color: var(--wa-color-text-quiet);\n    --wa-form-control-hint-font-weight: var(--wa-font-weight-body);\n    --wa-form-control-hint-line-height: var(--wa-line-height-normal);\n\n    --wa-form-control-placeholder-color: var(--wa-color-gray-50);\n\n    --wa-form-control-required-content: '*';\n    --wa-form-control-required-content-color: inherit;\n    --wa-form-control-required-content-offset: 0.1em;\n\n    --wa-form-control-padding-block: 0.75em;\n    --wa-form-control-padding-inline: 1em;\n    --wa-form-control-height: round(\n      calc(2 * var(--wa-form-control-padding-block) + 1em * var(--wa-form-control-value-line-height)),\n      1px\n    );\n    --wa-form-control-toggle-size: round(1.25em, 1px);\n\n    /* Buttons */\n    --wa-button-transform-hover: none;\n    --wa-button-transform-active: scale(0.9875);\n\n    /* Panels */\n    --wa-panel-border-style: var(--wa-border-style);\n    --wa-panel-border-width: var(--wa-border-width-s);\n    --wa-panel-border-radius: var(--wa-border-radius-l);\n\n    /* Tooltips */\n    --wa-tooltip-arrow-size: 0.375rem;\n\n    --wa-tooltip-background-color: var(--wa-color-text-normal);\n\n    --wa-tooltip-border-color: var(--wa-tooltip-background-color);\n    --wa-tooltip-border-style: var(--wa-border-style);\n    --wa-tooltip-border-width: var(--wa-border-width-s);\n    --wa-tooltip-border-radius: var(--wa-border-radius-s);\n\n    --wa-tooltip-content-color: var(--wa-color-surface-default);\n    --wa-tooltip-font-size: var(--wa-font-size-s);\n    --wa-tooltip-line-height: var(--wa-line-height-normal);\n    /* #endregion */\n  }\n\n  :is(#scpanl-root, #scpanl-root):has(wa-page) {\n    min-height: 100%;\n    padding: 0;\n    margin: 0;\n  }\n}\n";
-
-  // src-client/vendor.js
-  if (typeof window !== "undefined") window.__SC_VENDOR_CSS__ = VENDOR_CSS;
-  var ICONS = {
-    "chevron-down": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill="currentColor" d="M4.2 6.2 8 10l3.8-3.8 1 1L8 12 3.2 7.2z"/></svg>',
-    "chevron-up": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill="currentColor" d="M8 4l4.8 4.8-1 1L8 6l-3.8 3.8-1-1z"/></svg>',
-    x: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill="currentColor" d="M4.5 3.4 8 6.9l3.5-3.5 1.1 1.1L9.1 8l3.5 3.5-1.1 1.1L8 9.1l-3.5 3.5-1.1-1.1L6.9 8 3.4 4.5z"/></svg>',
-    check: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill="currentColor" d="M6.2 11.4 3 8.2l1.1-1.1 2.1 2.1 5-5L12.3 5z"/></svg>',
-    search: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill="currentColor" d="M6.5 2a4.5 4.5 0 1 0 2.8 8l3.3 3.3 1.1-1.1-3.3-3.3A4.5 4.5 0 0 0 6.5 2m0 1.5a3 3 0 1 1 0 6 3 3 0 0 1 0-6"/></svg>'
-  };
-  try {
-    registerIconLibrary("default", {
-      resolver: (name) => "data:image/svg+xml," + encodeURIComponent(ICONS[name] || ICONS["chevron-down"]),
-      mutator: (svg2) => {
-        try {
-          svg2.setAttribute("fill", "currentColor");
-        } catch (e8) {
-        }
-      }
-    });
-  } catch (e8) {
-    if (typeof console !== "undefined") console.warn("[shoucang] \u56FE\u6807\u5E93\u6CE8\u518C\u5931\u8D25\uFF1A" + (e8 && e8.message));
-  }
-
   // src-client/panel-contract.generated.js
   var PANEL_CONTRACT = {
-    "$comment": "\u751F\u6210\u7269\uFF08npm run build:host && node scripts/gen-panel-contract.mjs\uFF09\u2014\u2014 \u52FF\u624B\u6539\uFF1B\u6E90 = src/panel-contract.ts",
+    "$comment": "生成物（npm run build:host && node scripts/gen-panel-contract.mjs）—— 勿手改；源 = src/panel-contract.ts",
     "plugin": "dsh-shoucang-memory",
     "prefix": "/api/shoucang-panel",
     "routeCount": 47,
     "routes": [
       {
         "path": "/roots",
-        "summary": "\u5DF2\u767B\u8BB0\u6839\u76EE\u5F55\u5217\u8868",
+        "summary": "已登记根目录列表",
         "required": [],
         "fields": null
       },
       {
         "path": "/get_root",
-        "summary": "\u5F53\u524D\u6FC0\u6D3B\u6839\u76EE\u5F55",
+        "summary": "当前激活根目录",
         "required": [],
         "fields": null
       },
       {
         "path": "/root/bootstrap",
-        "summary": "\u5EFA\u5355\u5E93\u9AA8\u67B6",
+        "summary": "建单库骨架",
         "required": [],
         "fields": [
           {
@@ -5369,7 +38,7 @@
       },
       {
         "path": "/set_root",
-        "summary": "\u5207\u6362/\u767B\u8BB0\u6839\u76EE\u5F55",
+        "summary": "切换/登记根目录",
         "required": [
           "path"
         ],
@@ -5388,13 +57,13 @@
       },
       {
         "path": "/config",
-        "summary": "\u8BFB\u914D\u7F6E\u539F\u6587",
+        "summary": "读配置原文",
         "required": [],
         "fields": null
       },
       {
         "path": "/save",
-        "summary": "\u5199\u914D\u7F6E\u539F\u6587",
+        "summary": "写配置原文",
         "required": [
           "text"
         ],
@@ -5408,7 +77,7 @@
       },
       {
         "path": "/toggle",
-        "summary": "\u7FFB\u8F6C\u5E03\u5C14\u952E",
+        "summary": "翻转布尔键",
         "required": [
           "key"
         ],
@@ -5422,7 +91,7 @@
       },
       {
         "path": "/set",
-        "summary": "\u8BBE\u7F6E\u6807\u91CF\u952E\uFF08\u952E\u96C6 = SET_SCALAR_KEYS\uFF0C\u8D8A\u754C\u7531\u670D\u52A1\u7AEF\u5939\u53D6\u6216 400\uFF09",
+        "summary": "设置标量键（键集 = SET_SCALAR_KEYS，越界由服务端夹取或 400）",
         "required": [
           "key"
         ],
@@ -5441,121 +110,121 @@
       },
       {
         "path": "/memory/overview",
-        "summary": "\u7D22\u5F15/\u5BB9\u91CF/\u5019\u9009\u603B\u89C8",
+        "summary": "索引/容量/候选总览",
         "required": [],
         "fields": null
       },
       {
         "path": "/memory/sections",
-        "summary": "\u7D22\u5F15\u5C0F\u8282\u5217\u8868",
+        "summary": "索引小节列表",
         "required": [],
         "fields": null
       },
       {
         "path": "/suite",
-        "summary": "suite \u88C5\u914D\u77E9\u9635",
+        "summary": "suite 装配矩阵",
         "required": [],
         "fields": null
       },
       {
         "path": "/mcl/status",
-        "summary": "\u8BA4\u77E5\u73AF\u72B6\u6001",
+        "summary": "认知环状态",
         "required": [],
         "fields": null
       },
       {
         "path": "/reconcile",
-        "summary": "\u8BB0\u5FC6\u5BF9\u8D26",
+        "summary": "记忆对账",
         "required": [],
         "fields": null
       },
       {
         "path": "/maturation/scan",
-        "summary": "\u6210\u719F\u5EA6\u626B\u63CF",
+        "summary": "成熟度扫描",
         "required": [],
         "fields": null
       },
       {
         "path": "/selfcheck",
-        "summary": "\u81EA\u68C0\u7ED3\u679C",
+        "summary": "自检结果",
         "required": [],
         "fields": null
       },
       {
         "path": "/selfcheck/run",
-        "summary": "\u8FD0\u884C\u81EA\u68C0",
+        "summary": "运行自检",
         "required": [],
         "fields": null
       },
       {
         "path": "/rings",
-        "summary": "\u4E94\u73AF KPI \u4E0E\u73AF\u4E8B\u4EF6\u5BF9\u8D26",
+        "summary": "五环 KPI 与环事件对账",
         "required": [],
         "fields": null
       },
       {
         "path": "/config/recent",
-        "summary": "\u8FD1\u671F\u914D\u7F6E\u53D8\u66F4",
+        "summary": "近期配置变更",
         "required": [],
         "fields": null
       },
       {
         "path": "/criteria",
-        "summary": "\u5224\u636E\u6CE8\u518C\u8868 + \u53F0\u8D26",
+        "summary": "判据注册表 + 台账",
         "required": [],
         "fields": null
       },
       {
         "path": "/sleep/reports",
-        "summary": "\u7761\u7720\u6C47\u62A5\u5217\u8868\uFF08\u65E5\u5386\u5F0F\u7559\u5B58\uFF1A\u4EFD\u6570 \xB7 \u6BB5\u6570 \xB7 \u6700\u8FD1\u4E00\u4EFD\uFF09",
+        "summary": "睡眠汇报列表（日历式留存：份数 · 段数 · 最近一份）",
         "required": [],
         "fields": null
       },
       {
         "path": "/sleep/issues",
-        "summary": "\u7761\u7720\u95EE\u9898\u7EDF\u8BA1\uFF08suspect-recall=\u53EC\u56DE\u9762 / suspect-quality=\u8BB0\u5FC6\u9762\uFF09",
+        "summary": "睡眠问题统计（suspect-recall=召回面 / suspect-quality=记忆面）",
         "required": [],
         "fields": null
       },
       {
         "path": "/content-types",
-        "summary": "\u5185\u5BB9\u7C7B\u578B\u5951\u7EA6\uFF1A\u7C7B\u578B\u5206\u5E03 \xB7 \u53EF\u8FBE\u6027 \xB7 \u901A\u8DEF\u63A5\u7EBF",
+        "summary": "内容类型契约：类型分布 · 可达性 · 通路接线",
         "required": [],
         "fields": null
       },
       {
         "path": "/cognition/report",
-        "summary": "\u6DF1\u7761\u56DE\u6267/\u6D3B\u6027/\u5F52\u6863",
+        "summary": "深睡回执/活性/归档",
         "required": [],
         "fields": null
       },
       {
         "path": "/llm/models",
-        "summary": "\u6A21\u578B\u6E05\u5355",
+        "summary": "模型清单",
         "required": [],
         "fields": null
       },
       {
         "path": "/deepsleep",
-        "summary": "\u6DF1\u7761\u72B6\u6001",
+        "summary": "深睡状态",
         "required": [],
         "fields": null
       },
       {
         "path": "/deepsleep/trigger",
-        "summary": "\u624B\u52A8\u89E6\u53D1\u6DF1\u7761",
+        "summary": "手动触发深睡",
         "required": [],
         "fields": null
       },
       {
         "path": "/distill/run",
-        "summary": "\u624B\u52A8\u89E6\u53D1\u84B8\u998F",
+        "summary": "手动触发蒸馏",
         "required": [],
         "fields": null
       },
       {
         "path": "/deepsleep/config",
-        "summary": "\u6DF1\u7761\u914D\u7F6E\u8BFB\u5199\uFF08\u767D\u540D\u5355\u8865\u4E01\uFF09",
+        "summary": "深睡配置读写（白名单补丁）",
         "required": [],
         "fields": [
           {
@@ -5587,7 +256,7 @@
       },
       {
         "path": "/distill/config",
-        "summary": "\u84B8\u998F\u914D\u7F6E\u8BFB\u5199\uFF08\u767D\u540D\u5355\u8865\u4E01\uFF09",
+        "summary": "蒸馏配置读写（白名单补丁）",
         "required": [],
         "fields": [
           {
@@ -5654,13 +323,13 @@
       },
       {
         "path": "/vector/status2",
-        "summary": "\u5411\u91CF\u6863\u72B6\u6001",
+        "summary": "向量档状态",
         "required": [],
         "fields": null
       },
       {
         "path": "/embed/config",
-        "summary": "\u5D4C\u5165\u914D\u7F6E\u8BFB\u5199\uFF08\u767D\u540D\u5355\u8865\u4E01\uFF09",
+        "summary": "嵌入配置读写（白名单补丁）",
         "required": [],
         "fields": [
           {
@@ -5687,7 +356,7 @@
       },
       {
         "path": "/embed/test",
-        "summary": "\u5D4C\u5165\u8FDE\u901A\u6027\u6D4B\u8BD5",
+        "summary": "嵌入连通性测试",
         "required": [
           "baseUrl"
         ],
@@ -5706,7 +375,7 @@
       },
       {
         "path": "/eval/config",
-        "summary": "\u8BC4\u4F30\u901A\u9053\u914D\u7F6E\u8BFB\u5199\uFF08\u767D\u540D\u5355\u8865\u4E01\uFF09",
+        "summary": "评估通道配置读写（白名单补丁）",
         "required": [],
         "fields": [
           {
@@ -5743,19 +412,19 @@
       },
       {
         "path": "/eval/test",
-        "summary": "\u8BC4\u4F30\u901A\u9053\u8FDE\u901A\u6027\u6D4B\u8BD5\uFF08\u53EA\u8BFB\uFF1B\u4E0D\u843D\u5E93\uFF09",
+        "summary": "评估通道连通性测试（只读；不落库）",
         "required": [],
         "fields": null
       },
       {
         "path": "/eval/stats",
-        "summary": "\u8BC4\u4F30\u901A\u9053\u5224\u5B9A\u7EDF\u8BA1\uFF08\u53EA\u8BFB\uFF1B\u6298\u7EDF\u4E00\u53F0\u8D26 type=eval.decision\uFF09",
+        "summary": "评估通道判定统计（只读；折统一台账 type=eval.decision）",
         "required": [],
         "fields": null
       },
       {
         "path": "/vector/cache/clear",
-        "summary": "\u6E05\u5411\u91CF\u7F13\u5B58",
+        "summary": "清向量缓存",
         "required": [
           "rel",
           "section"
@@ -5780,7 +449,7 @@
       },
       {
         "path": "/memory/section-edit",
-        "summary": "\u6539\u5199\u5C0F\u8282\u6B63\u6587",
+        "summary": "改写小节正文",
         "required": [
           "rel",
           "section"
@@ -5805,7 +474,7 @@
       },
       {
         "path": "/memory/edit",
-        "summary": "\u884C\u7EA7\u7F16\u8F91",
+        "summary": "行级编辑",
         "required": [
           "file",
           "line",
@@ -5831,7 +500,7 @@
       },
       {
         "path": "/memory/remove",
-        "summary": "\u884C\u7EA7\u5220\u9664",
+        "summary": "行级删除",
         "required": [
           "file",
           "line"
@@ -5856,7 +525,7 @@
       },
       {
         "path": "/memory/approve",
-        "summary": "\u91C7\u7EB3/\u5FFD\u7565\u5019\u9009\uFF08root \u6307\u5B9A\u53CC\u6839\uFF1Baction=approve|ignore \u8BED\u4E49\u5206\u79BB\uFF09",
+        "summary": "采纳/忽略候选（root 指定双根；action=approve|ignore 语义分离）",
         "required": [
           "pendingFile"
         ],
@@ -5880,43 +549,43 @@
       },
       {
         "path": "/inject/preview",
-        "summary": "\u70ED\u8BB0\u5FC6\u6CE8\u5165\u9884\u89C8",
+        "summary": "热记忆注入预览",
         "required": [],
         "fields": null
       },
       {
         "path": "/inject/stats",
-        "summary": "\u6CE8\u5165\u7EDF\u8BA1",
+        "summary": "注入统计",
         "required": [],
         "fields": null
       },
       {
         "path": "/arch/records",
-        "summary": "\u8BB0\u5F55\u5C42\uFF1Astore \u4EBA\u53E3 \xB7 md\u2194store \u9010\u8F7D\u4F53\u5BF9\u8D26 \xB7 \u5199\u65F6\u81EA\u8BC1 \xB7 \u8DE8\u6587\u4EF6\u540C\u6587 \xB7 \u884C\u5BFB\u5740\u53E3\u5F84",
+        "summary": "记录层：store 人口 · md↔store 逐载体对账 · 写时自证 · 跨文件同文 · 行寻址口径",
         "required": [],
         "fields": null
       },
       {
         "path": "/arch/graph",
-        "summary": "\u65AD\u8A00\u56FE\uFF1A\u8282\u70B9/\u8FB9/\u5404 rel/\u60AC\u7A7A\u8BC1\u636E\uFF08\u7EAF\u8BA1\u6570\uFF0C\u96F6\u5411\u91CF\uFF09",
+        "summary": "断言图：节点/边/各 rel/悬空证据（纯计数，零向量）",
         "required": [],
         "fields": null
       },
       {
         "path": "/arch/observability",
-        "summary": "\u89C2\u6D4B\u9762\uFF1A\u7EDF\u4E00\u53F0\u8D26\u5B9E\u51B5\uFF08\u6309 type \u5206\u5E03/\u4FE1\u5C01\u5B8C\u6574\u6027\uFF09\xB7 audit \u76EE\u5F55 \xB7 legacy \u6D41\u5B58\u5426 \xB7 \u65CF\xD7\u57DF\u53E3\u5F84",
+        "summary": "观测面：统一台账实况（按 type 分布/信封完整性）· audit 目录 · legacy 流存否 · 族×域口径",
         "required": [],
         "fields": null
       },
       {
         "path": "/arch/assembly",
-        "summary": "\u88C5\u914D\u9762\uFF1Acomposition root \u5C31\u7EEA\u5EA6\uFF08\u6865=0\uFF09\xB7 \u5951\u7EA6\u8DEF\u7531\u6570 \xB7 \u5DF2\u88C5\u65B0\u67B6\u6784\u6A21\u5757\u76D8\u70B9",
+        "summary": "装配面：composition root 就绪度（桥=0）· 契约路由数 · 已装新架构模块盘点",
         "required": [],
         "fields": null
       },
       {
         "path": "/mcl/config",
-        "summary": "\u8BA4\u77E5\u73AF\u65CB\u94AE\uFF08\u767D\u540D\u5355\u8865\u4E01\uFF1A\u9608\u503C/\u4E0A\u9650/\u9884\u7B97/topK/P2b/REM\uFF09",
+        "summary": "认知环旋钮（白名单补丁：阈值/上限/预算/topK/P2b/REM）",
         "required": [],
         "fields": [
           {
@@ -5969,29 +638,29 @@
 
   // src-client/dom.js
   function el(tag, cls, text) {
-    var n6 = document.createElement(tag);
-    if (cls) n6.className = cls;
-    if (text != null) n6.textContent = text;
-    return n6;
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
   }
   function svg(paths) {
-    var s4 = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    s4.setAttribute("viewBox", "0 0 24 24");
-    s4.setAttribute("width", "18");
-    s4.setAttribute("height", "18");
-    s4.setAttribute("fill", "none");
-    s4.setAttribute("stroke", "currentColor");
-    s4.setAttribute("stroke-width", "1.8");
-    s4.setAttribute("stroke-linecap", "round");
-    s4.setAttribute("stroke-linejoin", "round");
-    paths.split("|").forEach(function(d3) {
-      var p4 = document.createElementNS("http://www.w3.org/2000/svg", "path");
-      p4.setAttribute("d", d3);
-      s4.appendChild(p4);
+    var s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    s.setAttribute("viewBox", "0 0 24 24");
+    s.setAttribute("width", "18");
+    s.setAttribute("height", "18");
+    s.setAttribute("fill", "none");
+    s.setAttribute("stroke", "currentColor");
+    s.setAttribute("stroke-width", "1.8");
+    s.setAttribute("stroke-linecap", "round");
+    s.setAttribute("stroke-linejoin", "round");
+    paths.split("|").forEach(function(d) {
+      var p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      p.setAttribute("d", d);
+      s.appendChild(p);
     });
-    return s4;
+    return s;
   }
-  var ICONS2 = {
+  var ICONS = {
     vault: "M4 20h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-8l-2-3H4a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1z",
     toggles: "M4 21v-7|M4 10V3|M12 21v-9|M12 8V3|M20 21v-5|M20 12V3|M2 14h4|M10 8h4|M18 16h4",
     file: "M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z|M14 3v5h5|M9 13h6|M9 17h6",
@@ -6012,7 +681,7 @@
 
   // src-client/i18n.js
   var NS = "shoucang";
-  var S3 = /* @__PURE__ */ (function() {
+  var S = /* @__PURE__ */ (function() {
     return {
       lang: "zh",
       // 当前语言 id
@@ -6034,25 +703,25 @@
   }
   function tr(key, zh, params) {
     var source = zh === void 0 ? key : zh;
-    if (S3.bound === null) return source;
-    var s4;
+    if (S.bound === null) return source;
+    var s;
     try {
-      s4 = S3.bound(key, params);
-    } catch (e8) {
+      s = S.bound(key, params);
+    } catch (e) {
       return source;
     }
-    if (s4 === void 0 || s4 === null || s4 === "") {
+    if (s === void 0 || s === null || s === "") {
       noteMiss(key);
       return source;
     }
-    if (s4 === key) {
+    if (s === key) {
       noteMiss(key);
       return source;
     }
-    return s4;
+    return s;
   }
   function lang() {
-    return S3.lang;
+    return S.lang;
   }
   function applyLang(loc) {
     var next = "zh";
@@ -6060,13 +729,13 @@
       try {
         var snap = loc.getLocale();
         if (snap && typeof snap.active === "string") next = snap.active;
-      } catch (e8) {
+      } catch (e) {
         next = "zh";
       }
     }
-    if (next === S3.lang) return false;
-    S3.lang = next;
-    S3.bound = loc && next !== "zh" && typeof loc.bind === "function" ? loc.bind(NS) : null;
+    if (next === S.lang) return false;
+    S.lang = next;
+    S.bound = loc && next !== "zh" && typeof loc.bind === "function" ? loc.bind(NS) : null;
     return true;
   }
   function registerDicts(loc, dicts) {
@@ -6074,38 +743,38 @@
     try {
       if (dicts.zh) offs.push(loc.register(NS, "zh", dicts.zh));
       if (dicts.en) offs.push(loc.register(NS, "en", dicts.en));
-    } catch (e8) {
+    } catch (e) {
       return null;
     }
     return function() {
       offs.forEach(function(off) {
         try {
           off();
-        } catch (e8) {
+        } catch (e) {
         }
       });
     };
   }
   function attachLocale(ctx, dicts, hooks) {
-    var h3 = hooks || {};
+    var h = hooks || {};
     var loc = null;
     try {
       loc = ctx && typeof ctx.get === "function" ? ctx.get("locale") : null;
-    } catch (e8) {
+    } catch (e) {
       loc = null;
     }
     if (loc) {
-      S3.attached = true;
-      if (h3.effect && typeof loc.subscribe === "function") {
-        h3.effect(function() {
+      S.attached = true;
+      if (h.effect && typeof loc.subscribe === "function") {
+        h.effect(function() {
           var offSub = loc.subscribe(function() {
-            if (applyLang(loc) && h3.onChange) h3.onChange();
+            if (applyLang(loc) && h.onChange) h.onChange();
           });
           var offReg = registerDicts(loc, dicts);
           return function() {
             try {
               offSub();
-            } catch (e8) {
+            } catch (e) {
             }
             if (offReg) offReg();
           };
@@ -6119,90 +788,90 @@
     try {
       if (ctx && typeof ctx.inject === "function") {
         ctx.inject(["locale"], function(scoped) {
-          var s4 = scoped && scoped.locale ? scoped.locale : null;
-          if (!s4) return;
-          S3.attached = true;
-          if (h3.effect && typeof s4.subscribe === "function") {
-            h3.effect(function() {
-              var offSub = s4.subscribe(function() {
-                if (applyLang(s4) && h3.onChange) h3.onChange();
+          var s = scoped && scoped.locale ? scoped.locale : null;
+          if (!s) return;
+          S.attached = true;
+          if (h.effect && typeof s.subscribe === "function") {
+            h.effect(function() {
+              var offSub = s.subscribe(function() {
+                if (applyLang(s) && h.onChange) h.onChange();
               });
-              var offReg = registerDicts(s4, dicts);
+              var offReg = registerDicts(s, dicts);
               return function() {
                 try {
                   offSub();
-                } catch (e8) {
+                } catch (e) {
                 }
                 ;
                 if (offReg) offReg();
               };
             });
           } else {
-            registerDicts(s4, dicts);
+            registerDicts(s, dicts);
           }
-          if (applyLang(s4) && h3.onChange) h3.onChange();
+          if (applyLang(s) && h.onChange) h.onChange();
         });
         return true;
       }
-    } catch (e8) {
+    } catch (e) {
     }
-    S3.lang = "zh";
-    S3.bound = null;
+    S.lang = "zh";
+    S.bound = null;
     return false;
   }
 
   // src-client/state.js
   var Bus = /* @__PURE__ */ (function() {
-    var m3 = {};
+    var m = {};
     return {
-      on: function(k2, fn) {
-        (m3[k2] = m3[k2] || []).push(fn);
+      on: function(k, fn) {
+        (m[k] = m[k] || []).push(fn);
         return function() {
-          m3[k2] = (m3[k2] || []).filter(function(f3) {
-            return f3 !== fn;
+          m[k] = (m[k] || []).filter(function(f) {
+            return f !== fn;
           });
         };
       },
-      emit: function(k2, p4) {
-        (m3[k2] || []).slice().forEach(function(f3) {
+      emit: function(k, p) {
+        (m[k] || []).slice().forEach(function(f) {
           try {
-            f3(p4);
-          } catch (e8) {
+            f(p);
+          } catch (e) {
           }
         });
       }
     };
   })();
   var Store = /* @__PURE__ */ (function() {
-    var s4 = { view: "file", logs: [], progress: {}, metrics: {}, errors: [] };
+    var s = { view: "file", logs: [], progress: {}, metrics: {}, errors: [] };
     var subs = [];
     return {
-      get: function(k2) {
-        return k2 === void 0 ? s4 : s4[k2];
+      get: function(k) {
+        return k === void 0 ? s : s[k];
       },
-      set: function(k2, v2) {
-        var old = s4[k2];
-        if (old === v2) return v2;
-        s4[k2] = v2;
-        subs.forEach(function(f3) {
+      set: function(k, v) {
+        var old = s[k];
+        if (old === v) return v;
+        s[k] = v;
+        subs.forEach(function(f) {
           try {
-            f3(k2, v2, old);
-          } catch (e8) {
+            f(k, v, old);
+          } catch (e) {
           }
         });
-        Bus.emit("store:" + k2, v2);
-        return v2;
+        Bus.emit("store:" + k, v);
+        return v;
       },
-      patch: function(k2, o9) {
-        var base = typeof s4[k2] === "object" && s4[k2] ? s4[k2] : {};
-        var next = Object.assign({}, base, o9 || {});
-        return Store.set(k2, next);
+      patch: function(k, o) {
+        var base = typeof s[k] === "object" && s[k] ? s[k] : {};
+        var next = Object.assign({}, base, o || {});
+        return Store.set(k, next);
       },
       sub: function(fn) {
         subs.push(fn);
         return function() {
-          subs = subs.filter(function(f3) {
-            return f3 !== fn;
+          subs = subs.filter(function(f) {
+            return f !== fn;
           });
         };
       }
@@ -6210,8 +879,8 @@
   })();
   var statusSinkBox = /* @__PURE__ */ (function() {
     var fn = null;
-    return { set: function(f3) {
-      fn = f3;
+    return { set: function(f) {
+      fn = f;
     }, get: function() {
       return fn;
     } };
@@ -6220,27 +889,27 @@
   var Log = /* @__PURE__ */ (function() {
     var MAX = 500;
     function add(level, msg, ctx) {
-      var e8 = { t: Date.now(), level: level || "info", msg: String(msg), ctx: ctx || null };
-      var a4 = (Store.get("logs") || []).concat([e8]);
-      if (a4.length > MAX) a4 = a4.slice(a4.length - MAX);
-      Store.set("logs", a4);
-      Bus.emit("log", e8);
+      var e = { t: Date.now(), level: level || "info", msg: String(msg), ctx: ctx || null };
+      var a = (Store.get("logs") || []).concat([e]);
+      if (a.length > MAX) a = a.slice(a.length - MAX);
+      Store.set("logs", a);
+      Bus.emit("log", e);
       if (level === "error") {
         var _s = statusSinkBox.get();
         if (_s) _s(msg, "error");
       }
-      return e8;
+      return e;
     }
     return {
       add,
-      info: function(m3, c5) {
-        return add("info", m3, c5);
+      info: function(m, c) {
+        return add("info", m, c);
       },
-      warn: function(m3, c5) {
-        return add("warn", m3, c5);
+      warn: function(m, c) {
+        return add("warn", m, c);
       },
-      error: function(m3, c5) {
-        return add("error", m3, c5);
+      error: function(m, c) {
+        return add("error", m, c);
       },
       clear: function() {
         Store.set("logs", []);
@@ -6249,27 +918,27 @@
     };
   })();
   var Prog = {
-    start: function(id3, label) {
-      Store.patch("progress", Object.assign({}, Store.get("progress"), make(id3, { id: id3, label: label || "", pct: 0, note: tr("\u8FDB\u884C\u4E2D"), on: true })));
+    start: function(id, label) {
+      Store.patch("progress", Object.assign({}, Store.get("progress"), make(id, { id, label: label || "", pct: 0, note: tr("进行中"), on: true })));
       Bus.emit("progress", Store.get("progress"));
     },
-    set: function(id3, pct, note) {
-      var cur = (Store.get("progress") || {})[id3];
+    set: function(id, pct, note) {
+      var cur = (Store.get("progress") || {})[id];
       if (!cur) return;
-      Store.patch("progress", Object.assign({}, Store.get("progress"), make(id3, Object.assign({}, cur, { pct: Math.max(0, Math.min(100, pct || 0)), note: note || cur.note }))));
+      Store.patch("progress", Object.assign({}, Store.get("progress"), make(id, Object.assign({}, cur, { pct: Math.max(0, Math.min(100, pct || 0)), note: note || cur.note }))));
       Bus.emit("progress", Store.get("progress"));
     },
-    done: function(id3, ok, msg) {
-      var cur = (Store.get("progress") || {})[id3];
+    done: function(id, ok, msg) {
+      var cur = (Store.get("progress") || {})[id];
       if (!cur) return;
-      var p4 = Object.assign({}, Store.get("progress"));
-      p4[id3] = Object.assign({}, cur, { on: false, pct: 100, note: msg || (ok ? tr("\u5B8C\u6210") : tr("\u5931\u8D25")), ok: ok !== false });
-      Store.set("progress", p4);
-      Bus.emit("progress", p4);
+      var p = Object.assign({}, Store.get("progress"));
+      p[id] = Object.assign({}, cur, { on: false, pct: 100, note: msg || (ok ? tr("完成") : tr("失败")), ok: ok !== false });
+      Store.set("progress", p);
+      Bus.emit("progress", p);
       var self = this;
       setTimeout(function() {
         var q = Object.assign({}, Store.get("progress"));
-        delete q[id3];
+        delete q[id];
         Store.set("progress", q);
         Bus.emit("progress", q);
       }, ok === false ? 6e3 : 1800);
@@ -6310,34 +979,34 @@
       try {
         var raw = localStorage.getItem(KEY);
         if (raw) {
-          var o9 = JSON.parse(raw);
-          if (o9 && typeof o9 === "object") cache = Object.assign(cache, o9);
+          var o = JSON.parse(raw);
+          if (o && typeof o === "object") cache = Object.assign(cache, o);
         }
-      } catch (e8) {
+      } catch (e) {
       }
       return cache;
     }
     return {
-      get: function(k2, d3) {
-        var c5 = load();
-        return k2 === void 0 ? c5 : c5[k2] !== void 0 ? c5[k2] : d3;
+      get: function(k, d) {
+        var c = load();
+        return k === void 0 ? c : c[k] !== void 0 ? c[k] : d;
       },
-      set: function(k2, v2) {
-        var c5 = load();
-        c5[k2] = v2;
-        cache = c5;
+      set: function(k, v) {
+        var c = load();
+        c[k] = v;
+        cache = c;
         try {
-          localStorage.setItem(KEY, JSON.stringify(c5));
-        } catch (e8) {
+          localStorage.setItem(KEY, JSON.stringify(c));
+        } catch (e) {
         }
-        Bus.emit("cfg:" + k2, v2);
-        return v2;
+        Bus.emit("cfg:" + k, v);
+        return v;
       },
       reset: function() {
         cache = Object.assign({}, DEF);
         try {
           localStorage.removeItem(KEY);
-        } catch (e8) {
+        } catch (e) {
         }
         Bus.emit("cfg", cache);
         return cache;
@@ -6348,23 +1017,23 @@
     };
   })();
   var Fold = /* @__PURE__ */ (function() {
-    var m3 = {};
+    var m = {};
     var hasOwn = Object.prototype.hasOwnProperty;
-    function norm(k2) {
-      return String(k2 === void 0 || k2 === null ? "" : k2);
+    function norm(k) {
+      return String(k === void 0 || k === null ? "" : k);
     }
     return {
       /* 读：未登记 ⇒ 用调用方给的默认值（默认值不入库，各处可各自定义缺省） */
       get: function(key, dflt) {
-        var s4 = norm(key);
-        return hasOwn.call(m3, s4) ? m3[s4] : !!dflt;
+        var s = norm(key);
+        return hasOwn.call(m, s) ? m[s] : !!dflt;
       },
       /* 写：同值不广播（避免 paint↔set 回环） */
-      set: function(key, v2) {
-        var s4 = norm(key), next = !!v2;
-        if (hasOwn.call(m3, s4) && m3[s4] === next) return next;
-        m3[s4] = next;
-        Bus.emit("fold", { key: s4, open: next });
+      set: function(key, v) {
+        var s = norm(key), next = !!v;
+        if (hasOwn.call(m, s) && m[s] === next) return next;
+        m[s] = next;
+        Bus.emit("fold", { key: s, open: next });
         return next;
       },
       toggle: function(key, dflt) {
@@ -6372,24 +1041,24 @@
       },
       /* 清空：按前缀或全清。切视图 / 换数据源时调用，防止旧 key 的状态残留到新数据上。 */
       clear: function(prefix) {
-        var p4 = prefix === void 0 || prefix === null ? null : String(prefix);
-        var hit = Object.keys(m3).filter(function(s4) {
-          return p4 === null || s4.indexOf(p4) === 0;
+        var p = prefix === void 0 || prefix === null ? null : String(prefix);
+        var hit = Object.keys(m).filter(function(s) {
+          return p === null || s.indexOf(p) === 0;
         });
-        hit.forEach(function(s4) {
-          delete m3[s4];
+        hit.forEach(function(s) {
+          delete m[s];
         });
-        if (hit.length) Bus.emit("fold:clear", { prefix: p4, keys: hit });
+        if (hit.length) Bus.emit("fold:clear", { prefix: p, keys: hit });
         return hit.length;
       },
       keys: function() {
-        return Object.keys(m3);
+        return Object.keys(m);
       },
       size: function() {
-        return Object.keys(m3).length;
+        return Object.keys(m).length;
       },
       _raw: function() {
-        return m3;
+        return m;
       }
     };
   })();
@@ -6464,6 +1133,73 @@
     renderNoteSections: null
   };
 
+  // src-client/host-ui.js
+  var S2 = {
+    /** 模块加载器给出的 require（由 body.js 启动时注入）。 */
+    requireFn: null,
+    /** 宿主模块缓存：undefined = 未探测，null = 探测过但拿不到。 */
+    react: void 0,
+    reactDomClient: void 0,
+    primitives: void 0,
+    probed: false
+  };
+  function setRequire(fn) {
+    S2.requireFn = typeof fn === "function" ? fn : null;
+  }
+  function tryRequire(name) {
+    if (!S2.requireFn) return null;
+    try {
+      return S2.requireFn(name);
+    } catch (e) {
+      return null;
+    }
+  }
+  function probe() {
+    if (S2.probed) return;
+    S2.probed = true;
+    S2.react = tryRequire("react");
+    S2.reactDomClient = tryRequire("react-dom/client");
+    S2.primitives = tryRequire("@deepseek-ai/dsh-client-ui-primitives");
+  }
+  function hostPrimitives() {
+    probe();
+    return S2.primitives || null;
+  }
+  function hostComponent(name) {
+    const p = hostPrimitives();
+    return p && typeof p[name] === "function" ? p[name] : null;
+  }
+  function reactEl() {
+    probe();
+    return S2.react && S2.react.createElement || null;
+  }
+  function mountReact(container, renderFn) {
+    probe();
+    if (!container || !S2.react || !S2.reactDomClient || !S2.reactDomClient.createRoot) return null;
+    let root;
+    try {
+      root = S2.reactDomClient.createRoot(container);
+    } catch (e) {
+      return null;
+    }
+    const update = function() {
+      try {
+        root.render(renderFn());
+      } catch (e) {
+      }
+    };
+    update();
+    return {
+      update,
+      unmount: function() {
+        try {
+          root.unmount();
+        } catch (e) {
+        }
+      }
+    };
+  }
+
   // src-client/ui-kit.js
   var headEpoch = 0;
   var headUsed = -1;
@@ -6487,19 +1223,19 @@
     *   现只留 children：行形状**唯一** —— [info] [children…]，次序与内容由调用方决定。
     *   （extra 唯一使用点 panes-settings.js 已改；wrapControl 随之无消费者，一并删除。） */
     item: function(name, desc, control, opts) {
-      var o9 = opts || {};
-      var row = el("div", "setting-item" + (o9.cls ? " " + o9.cls : ""));
+      var o = opts || {};
+      var row = el("div", "setting-item" + (o.cls ? " " + o.cls : ""));
       var info = el("div", "setting-item-info");
       if (name) info.appendChild(el("div", "setting-item-name", name));
       if (desc) info.appendChild(el("div", "setting-item-desc", desc));
       row.appendChild(info);
       if (control) {
-        var c5 = el("div", "setting-item-control");
-        c5.appendChild(control);
-        row.appendChild(c5);
+        var c = el("div", "setting-item-control");
+        c.appendChild(control);
+        row.appendChild(c);
       }
-      (o9.children || []).forEach(function(n6) {
-        if (n6) row.appendChild(n6);
+      (o.children || []).forEach(function(n) {
+        if (n) row.appendChild(n);
       });
       return row;
     },
@@ -6510,7 +1246,25 @@
      * 契约读自 switch.d.ts：`checked` 属性 + `change` 事件；parts switch/control/thumb/label。
      * 旧实现挂的 .checkbox-container 类随之退役（对应 CSS 规则已删，避免死规则）。 */
     toggle: function(checked, onChange, label) {
-      var sw = document.createElement("wa-switch");
+      var HS = hostComponent("Switch"), h = reactEl();
+      if (HS && h) {
+        var box = el("span", "sc-host-switch");
+        var cur = !!checked;
+        var m = mountReact(box, function() {
+          return h(HS, {
+            checked: cur,
+            label: label || "",
+            onChange: function(next) {
+              cur = !!next;
+              onChange(!!next);
+              m && m.update();
+            }
+          });
+        });
+        if (m) return box;
+      }
+      var sw = el("input", "checkbox-container");
+      sw.type = "checkbox";
       sw.checked = !!checked;
       if (label) sw.setAttribute("aria-label", label);
       sw.addEventListener("change", function() {
@@ -6524,19 +1278,19 @@
      * opts: { sub } 卡头副文本；{ right } 卡头右侧节点（数组或单节点，v9 放路由 chip / pill）。
      * 返回 { box, head, body }：**后续内容 append 到 body**（= v9 的 .card > .bd）。 */
     card: function(title, opts) {
-      var o9 = opts || {};
+      var o = opts || {};
       var box = el("div", "sc-card");
       var head = null;
       if (title) {
         head = el("div", "sc-card-hd");
         head.appendChild(el("span", null, title));
-        if (o9.sub) head.appendChild(el("span", "sub", o9.sub));
-        if (o9.right) {
-          var r7 = el("div", "right");
-          (Array.isArray(o9.right) ? o9.right : [o9.right]).forEach(function(n6) {
-            if (n6) r7.appendChild(n6);
+        if (o.sub) head.appendChild(el("span", "sub", o.sub));
+        if (o.right) {
+          var r = el("div", "right");
+          (Array.isArray(o.right) ? o.right : [o.right]).forEach(function(n) {
+            if (n) r.appendChild(n);
           });
-          head.appendChild(r7);
+          head.appendChild(r);
         }
         box.appendChild(head);
       }
@@ -6547,15 +1301,15 @@
     /* 卡进 Tab 面板（v9 §7）：原型的每个 Tab 内是**一张卡**（div.card.plain，卡体直接含设置行），
      * 面板此前是裸行平铺 ⇒ 少一层容器。返回卡体，调用方直接 appendChild 设置行。 */
     cardIn: function(pane, opts) {
-      var c5 = UI.card(null, opts);
-      if (pane) pane.appendChild(c5.box);
-      return c5.body;
+      var c = UI.card(null, opts);
+      if (pane) pane.appendChild(c.box);
+      return c.body;
     },
     /* 页头：统一「标题 + 描述 + 分隔线」节奏（替代各处裸拼 sc-h1 / sc-desc）。
      * v9 对齐：页头挂在固定槽 #scpanl-headslot（**不随内容滚动**），渲染时自清上一次的页头；
      * 槽不可用时（老结构/单测夹具）回退为返回游离节点，调用方 appendChild 仍可用。 */
     pageHead: function(title, desc, opts) {
-      var o9 = opts || {};
+      var o = opts || {};
       var box = el("div", "sc-pagehead");
       var main = el("div", "sc-ph-main");
       main.appendChild(el("h2", "sc-h1", title));
@@ -6564,42 +1318,42 @@
         descEl = el("div", "sc-desc", desc);
         main.appendChild(descEl);
       }
-      if (o9.routes && o9.routes.length) {
-        if (o9.routesInline && descEl) {
-          o9.routes.forEach(function(r7) {
-            descEl.appendChild(el("span", "sc-src", r7));
+      if (o.routes && o.routes.length) {
+        if (o.routesInline && descEl) {
+          o.routes.forEach(function(r) {
+            descEl.appendChild(el("span", "sc-src", r));
           });
         } else {
           var row = el("div", "sc-routes");
-          o9.routes.forEach(function(r7) {
-            row.appendChild(el("span", "sc-src", r7));
+          o.routes.forEach(function(r) {
+            row.appendChild(el("span", "sc-src", r));
           });
           main.appendChild(row);
         }
       }
       box.appendChild(main);
       var acts = el("div", "sc-ph-acts");
-      if (o9.search) {
+      if (o.search) {
         var srch = el("label", "sc-srch");
-        srch.appendChild(svg(ICONS2.search));
+        srch.appendChild(svg(ICONS.search));
         var inp = document.createElement("input");
         inp.type = "search";
-        inp.placeholder = o9.search.placeholder || tr("\u8FC7\u6EE4\u2026");
-        inp.setAttribute("aria-label", o9.search.placeholder || tr("\u8FC7\u6EE4"));
+        inp.placeholder = o.search.placeholder || tr("过滤…");
+        inp.setAttribute("aria-label", o.search.placeholder || tr("过滤"));
         inp.oninput = function() {
-          if (o9.search.onInput) o9.search.onInput(String(inp.value || "").trim());
+          if (o.search.onInput) o.search.onInput(String(inp.value || "").trim());
         };
         srch.appendChild(inp);
         acts.appendChild(srch);
       }
-      if (o9.refresh) {
-        acts.appendChild(UI.button(tr("\u5237\u65B0"), function() {
+      if (o.refresh) {
+        acts.appendChild(UI.button(tr("刷新"), function() {
           appState.refreshView();
-          appState.statusFn(tr("\u5DF2\u91CD\u65B0\u53D6\u6570"));
-        }, { title: tr("\u91CD\u65B0\u53D6\u6570\u5E76\u91CD\u7ED8\u672C\u9875") }));
+          appState.statusFn(tr("已重新取数"));
+        }, { title: tr("重新取数并重绘本页") }));
       }
-      (o9.actions || []).forEach(function(n6) {
-        if (n6) acts.appendChild(n6);
+      (o.actions || []).forEach(function(n) {
+        if (n) acts.appendChild(n);
       });
       if (acts.children.length) box.appendChild(acts);
       var slot = document.getElementById("scpanl-headslot");
@@ -6613,20 +1367,20 @@
     },
     /* 文本/数字输入 */
     input: function(value, onChange, opts) {
-      var o9 = opts || {};
-      var i7 = document.createElement("input");
-      i7.type = o9.type || "text";
-      i7.value = value === void 0 || value === null ? "" : String(value);
-      if (o9.placeholder) i7.placeholder = o9.placeholder;
-      if (o9.ariaLabel) i7.setAttribute("aria-label", o9.ariaLabel);
-      if (o9.width) i7.style.setProperty("--sc-in-w", o9.width);
-      if (o9.onEnter) i7.onkeydown = function(e8) {
-        if (e8.key === "Enter") o9.onEnter(i7.value);
+      var o = opts || {};
+      var i = document.createElement("input");
+      i.type = o.type || "text";
+      i.value = value === void 0 || value === null ? "" : String(value);
+      if (o.placeholder) i.placeholder = o.placeholder;
+      if (o.ariaLabel) i.setAttribute("aria-label", o.ariaLabel);
+      if (o.width) i.style.setProperty("--sc-in-w", o.width);
+      if (o.onEnter) i.onkeydown = function(e) {
+        if (e.key === "Enter") o.onEnter(i.value);
       };
-      else if (onChange) i7.onchange = function() {
-        onChange(i7.value);
+      else if (onChange) i.onchange = function() {
+        onChange(i.value);
       };
-      return i7;
+      return i;
     },
     /* 下拉 */
     /* 下拉：**原生 <select>**（S3 二度回滚 · 2026-09-13）。
@@ -6638,19 +1392,19 @@
      * 结论：WA select 的采用**前置未真正满足**（图标 registry 注册了但图标没渲染出来）。原生 select 三项都对，
      * 故回滚；要再采用，先把「图标真能渲染」用**渲染尺寸断言**证明，再谈替换。 */
     select: function(options, value, onChange, ariaLabel) {
-      var s4 = document.createElement("select");
-      if (ariaLabel) s4.setAttribute("aria-label", ariaLabel);
+      var s = document.createElement("select");
+      if (ariaLabel) s.setAttribute("aria-label", ariaLabel);
       (options || []).forEach(function(op) {
-        var o9 = document.createElement("option");
-        o9.value = String(op.value);
-        o9.textContent = op.label;
-        if (String(op.value) === String(value)) o9.selected = true;
-        s4.appendChild(o9);
+        var o = document.createElement("option");
+        o.value = String(op.value);
+        o.textContent = op.label;
+        if (String(op.value) === String(value)) o.selected = true;
+        s.appendChild(o);
       });
-      s4.onchange = function() {
-        onChange(s4.value);
+      s.onchange = function() {
+        onChange(s.value);
       };
-      return s4;
+      return s;
     },
     /* 按钮 */
     /* 按钮（S3：组件库 <wa-button>，2026-09-13 前置条件达成后**重做**）。
@@ -6661,43 +1415,68 @@
      * 契约读自 webawesome button.d.ts：variant neutral|brand|danger、appearance filled|outlined、size、loading、pill。
      * API 与行为完全保留（text/onClick/{primary,danger,title,confirm,async,busyText,okText}）⇒ 13 个调用点零改动。 */
     button: function(text, onClick, opts) {
-      var o9 = opts || {};
-      var b3 = document.createElement("wa-button");
-      b3.setAttribute("size", o9.size || "s");
-      b3.setAttribute("variant", o9.danger ? "danger" : o9.primary ? "brand" : "neutral");
-      b3.setAttribute("appearance", o9.primary || o9.danger ? "filled" : "outlined");
-      if (o9.pill) b3.setAttribute("pill", "");
-      if (o9.title) b3.title = o9.title;
-      b3.textContent = text;
-      b3.onclick = function() {
-        if (o9.confirm && !confirm(o9.confirm)) return;
-        if (!o9.async) {
+      var o = opts || {};
+      var HB = hostComponent("Button"), h = reactEl();
+      var b = null, hostMode = false, m = null, curDis = false, curText = text;
+      if (HB && h) {
+        var box = el("span", "sc-host-btn");
+        hostMode = true;
+        m = mountReact(box, function() {
+          return h(HB, {
+            variant: o.primary ? "primary" : o.danger ? "outline" : "ghost",
+            size: "sm",
+            className: o.pill ? "sc-pill" : "",
+            disabled: curDis,
+            title: o.title || "",
+            onClick: handleClick
+          }, curText);
+        });
+        if (m) b = box;
+      }
+      if (!hostMode) {
+        b = el("button", "sc-btn" + (o.primary ? " sc-btn-primary" : ""));
+        b.type = "button";
+        if (o.title) b.title = o.title;
+        b.textContent = text;
+        b.onclick = handleClick;
+      }
+      function handleClick() {
+        if (o.confirm && !confirm(o.confirm)) return;
+        if (!o.async) {
           try {
             onClick();
-          } catch (e8) {
-            appState.failFn(e8);
+          } catch (e) {
+            appState.failFn(e);
           }
           return;
         }
-        b3.disabled = true;
-        b3.setAttribute("loading", "");
-        var old = b3.textContent;
-        if (o9.busyText) b3.textContent = o9.busyText;
-        Promise.resolve().then(onClick).then(function(r7) {
-          Log.info(o9.okText || text + tr(" \u5B8C\u6210"));
-          return r7;
+        setDisabled(true, o.busyText || null);
+        Promise.resolve().then(onClick).then(function(r) {
+          Log.info(o.okText || text + tr(" 完成"));
+          return r;
         }).catch(appState.failFn).then(function() {
-          b3.disabled = false;
-          b3.removeAttribute("loading");
-          b3.textContent = old;
+          setDisabled(false, null);
         });
-      };
-      return b3;
+      }
+      function setDisabled(d, busyText) {
+        curDis = !!d;
+        if (busyText != null) curText = busyText;
+        else curText = text;
+        if (hostMode) {
+          if (m) m.update();
+        } else {
+          b.disabled = curDis;
+          if (curDis) b.setAttribute("loading", "");
+          else b.removeAttribute("loading");
+          b.textContent = curText;
+        }
+      }
+      return b;
     },
     /* 徽标 */
     badge: function(text, kind) {
-      var b3 = el("span", "sc-badge" + (kind ? " sc-badge-" + kind : ""), text);
-      return b3;
+      var b = el("span", "sc-badge" + (kind ? " sc-badge-" + kind : ""), text);
+      return b;
     },
     /* 状态徽标（sc-ds-badge：圆点 + 文本）—— 后台进程状态行的**唯一构造入口**。
      * 此前 10 处各写三行「建 div → 塞 dot → 塞文本」，其中 3 枚还要异步回填，
@@ -6706,36 +1485,36 @@
     dsBadge: function(text, kind) {
       var box = el("div", "sc-ds-badge" + (kind ? " " + kind : ""));
       box.appendChild(el("span", "dot"));
-      var t6 = el("span", null, "");
-      box.appendChild(t6);
-      function render(s4) {
-        t6.textContent = "";
-        var str = String(s4 === void 0 || s4 === null ? "" : s4);
-        var m3 = /^(.*?)([^\s]*\d[^\s]*)\s*$/.exec(str);
-        if (m3 && m3[1]) {
-          t6.appendChild(document.createTextNode(m3[1]));
-          t6.appendChild(el("b", null, m3[2]));
+      var t = el("span", null, "");
+      box.appendChild(t);
+      function render(s) {
+        t.textContent = "";
+        var str = String(s === void 0 || s === null ? "" : s);
+        var m = /^(.*?)([^\s]*\d[^\s]*)\s*$/.exec(str);
+        if (m && m[1]) {
+          t.appendChild(document.createTextNode(m[1]));
+          t.appendChild(el("b", null, m[2]));
         } else {
-          t6.textContent = str;
+          t.textContent = str;
         }
       }
-      var h3 = {
+      var h = {
         box,
-        setText: function(s4) {
-          render(s4);
-          return h3;
+        setText: function(s) {
+          render(s);
+          return h;
         },
-        setKind: function(k2) {
-          box.className = "sc-ds-badge" + (k2 ? " " + k2 : "");
-          return h3;
+        setKind: function(k) {
+          box.className = "sc-ds-badge" + (k ? " " + k : "");
+          return h;
         },
-        setTitle: function(s4) {
-          box.title = s4;
-          return h3;
+        setTitle: function(s) {
+          box.title = s;
+          return h;
         }
       };
       render(text);
-      return h3;
+      return h;
     },
     /* ── 折叠原语：展开/收起的**唯一实现**（collapsible / more / 小节树全部经它） ──
      * 关键差异（对比旧实现）：状态存在 Fold 里而不是 DOM class 或闭包变量，
@@ -6750,10 +1529,10 @@
      *   emptyText seal() 时 body 为空则补此占位；传 false 关闭该行为
      * 返回控件：{ box, head, body, nodes, open(), setOpen(v), sync(), busy(v), seal(), appendTo(host) } */
     fold: function(opts) {
-      var o9 = opts || {};
-      var isMore = o9.variant === "more";
-      var dflt = !!o9.open;
-      var label = o9.label || tr("\u5C55\u5F00");
+      var o = opts || {};
+      var isMore = o.variant === "more";
+      var dflt = !!o.open;
+      var label = o.label || tr("展开");
       var nodes = [];
       var box = isMore ? null : el("div", "sc-fold");
       var head = isMore ? el("button", "sc-more-btn") : el("div", "sc-fold-head");
@@ -6764,75 +1543,75 @@
         nodes.push(head, body);
       } else {
         head.appendChild(arrow);
-        head.appendChild(el("span", null, o9.title || ""));
-        if (o9.summary) head.appendChild(el("span", "sc-fold-summary", o9.summary));
+        head.appendChild(el("span", null, o.title || ""));
+        if (o.summary) head.appendChild(el("span", "sc-fold-summary", o.summary));
         box.appendChild(head);
         box.appendChild(body);
         nodes.push(box);
       }
-      var ctl = { box, head, body, nodes, key: String(o9.key) };
+      var ctl = { box, head, body, nodes, key: String(o.key) };
       function current() {
-        return Fold.get(o9.key, dflt);
+        return Fold.get(o.key, dflt);
       }
       function paint(open) {
         if (isMore) {
           body.classList.toggle("sc-hidden", !open);
-          head.textContent = open ? tr("\u6536\u8D77 \u25B4") : label + " \u25BE";
+          head.textContent = open ? tr("收起 ▴") : label + " ▾";
         } else {
           box.classList.toggle("open", open);
-          arrow.textContent = open ? "\u25BE" : "\u25B8";
+          arrow.textContent = open ? "▾" : "▸";
         }
         head.setAttribute("aria-expanded", open ? "true" : "false");
       }
       ctl.isOpen = current;
-      ctl.setOpen = function(v2) {
-        paint(Fold.set(o9.key, v2));
+      ctl.setOpen = function(v) {
+        paint(Fold.set(o.key, v));
         return ctl;
       };
       ctl.sync = function() {
         paint(current());
         return ctl;
       };
-      ctl.busy = function(v2) {
-        body.classList.toggle("sc-loading", !!v2);
+      ctl.busy = function(v) {
+        body.classList.toggle("sc-loading", !!v);
         return ctl;
       };
       ctl.empty = function() {
         return body.childNodes.length === 0;
       };
       ctl.seal = function() {
-        if (ctl.empty() && o9.emptyText !== false) {
-          body.appendChild(el("div", "sc-mem-empty", o9.emptyText || tr("\uFF08\u65E0\u5185\u5BB9\uFF09")));
+        if (ctl.empty() && o.emptyText !== false) {
+          body.appendChild(el("div", "sc-mem-empty", o.emptyText || tr("（无内容）")));
         }
         return ctl;
       };
       ctl.appendTo = function(host) {
-        nodes.forEach(function(n6) {
-          host.appendChild(n6);
+        nodes.forEach(function(n) {
+          host.appendChild(n);
         });
         return ctl;
       };
       function act() {
-        if (o9.disabled) return;
-        paint(Fold.toggle(o9.key, dflt));
+        if (o.disabled) return;
+        paint(Fold.toggle(o.key, dflt));
       }
       head.onclick = act;
       if (!isMore) {
         head.setAttribute("role", "button");
         head.setAttribute("tabindex", "0");
-        head.onkeydown = function(e8) {
-          if (e8.key === "Enter" || e8.key === " ") {
-            e8.preventDefault();
+        head.onkeydown = function(e) {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
             act();
           }
         };
       }
-      if (o9.disabled) head.setAttribute("aria-disabled", "true");
+      if (o.disabled) head.setAttribute("aria-disabled", "true");
       paint(current());
       var everMounted = false;
       function alive() {
-        var any = nodes.some(function(n6) {
-          return n6.isConnected === true;
+        var any = nodes.some(function(n) {
+          return n.isConnected === true;
         });
         if (any) {
           everMounted = true;
@@ -6844,12 +1623,12 @@
         off1();
         off2();
       }
-      var off1 = Bus.on("fold", function(p4) {
+      var off1 = Bus.on("fold", function(p) {
         if (!alive()) {
           unsubscribe();
           return;
         }
-        if (p4 && p4.key === ctl.key) ctl.sync();
+        if (p && p.key === ctl.key) ctl.sync();
       });
       var off2 = Bus.on("fold:clear", function() {
         if (!alive()) {
@@ -6867,18 +1646,18 @@
      *   active 属性设初始态；wa-tab-show 事件回写 Cfg ⇒ 选中态持久化与旧实现等价；parts: nav/tabs/body。
      * 返回句柄与旧实现**完全一致**（{ box, select(id), pane(id) }），故调用点零改动、可随时回滚。 */
     collapsible: function(title, bodyNode, opts) {
-      var o9 = opts || {};
-      var f3 = UI.fold({
-        key: o9.key || "fold:" + title,
+      var o = opts || {};
+      var f = UI.fold({
+        key: o.key || "fold:" + title,
         variant: "card",
         title,
-        summary: o9.summary,
-        open: o9.open,
-        disabled: o9.disabled,
-        emptyText: o9.emptyText
+        summary: o.summary,
+        open: o.open,
+        disabled: o.disabled,
+        emptyText: o.emptyText
       });
-      if (bodyNode) f3.body.appendChild(bodyNode);
-      return f3.box;
+      if (bodyNode) f.body.appendChild(bodyNode);
+      return f.box;
     },
     /* 容量/指标 KPI 卡（P3）：**画像 / 记忆库 / 运行总览三处共用的唯一实现**。
      * v9 裁决：容量类信息统一为「大数值 + 百分比 + 进度条」；无容量门的载体给 .na 虚线空槽保持槽位一致。
@@ -6886,113 +1665,149 @@
      * 返回 { box, set(val, sub, isTxt), fill(pct, kind) } */
     tabs: function(key, defs) {
       var box = el("div", "sc-tabbox");
-      var group = document.createElement("wa-tab-group");
       var cur = Cfg.get("tab:" + key, (defs[0] || {}).id);
       var valid = false;
-      defs.forEach(function(d3) {
-        if (d3.id === cur) valid = true;
+      defs.forEach(function(d) {
+        if (d.id === cur) valid = true;
       });
       if (!valid) cur = (defs[0] || {}).id;
-      defs.forEach(function(d3) {
-        var tab = document.createElement("wa-tab");
-        tab.setAttribute("slot", "nav");
-        tab.setAttribute("panel", d3.id);
-        tab.textContent = d3.label;
-        group.appendChild(tab);
-        var panel = document.createElement("wa-tab-panel");
-        panel.setAttribute("name", d3.id);
-        d3.pane.classList.add("sc-tabpane");
-        panel.appendChild(d3.pane);
-        group.appendChild(panel);
+      var panes = {};
+      defs.forEach(function(d) {
+        d.pane.classList.add("sc-tabpane");
+        panes[d.id] = d.pane;
+        box.appendChild(d.pane);
       });
-      group.setAttribute("active", cur);
-      group.addEventListener("wa-tab-show", function(ev) {
-        var n6 = ev && ev.detail && ev.detail.name;
-        if (n6) Cfg.set("tab:" + key, n6);
-      });
-      box.appendChild(group);
+      function applyPane(id) {
+        defs.forEach(function(d) {
+          if (d.id === id) d.pane.classList.remove("sc-hidden");
+          else d.pane.classList.add("sc-hidden");
+        });
+      }
+      function setCur(id) {
+        cur = id;
+        applyPane(id);
+      }
+      var HST = hostComponent("SegmentedTabs"), h = reactEl();
+      var m = null;
+      if (HST && h) {
+        var navBox = el("div", "sc-tabnav");
+        box.insertBefore(navBox, box.firstChild);
+        m = mountReact(navBox, function() {
+          return h(HST, {
+            items: defs.map(function(d) {
+              return { value: d.id, label: d.label, id: "tab-" + key + "-" + d.id, panelId: "panel-" + key + "-" + d.id };
+            }),
+            value: cur,
+            label: key,
+            onChange: function(id) {
+              setCur(id);
+              Cfg.set("tab:" + key, id);
+              if (m) m.update();
+            }
+          });
+        });
+      }
+      if (!m) {
+        var nav = el("div", "sc-tabnav");
+        box.insertBefore(nav, box.firstChild);
+        defs.forEach(function(d) {
+          var t = el("button", "sc-tabbtn", d.label);
+          t.onclick = function() {
+            defs.forEach(function(x) {
+              x.btn.className = "sc-tabbtn";
+            });
+            t.className = "sc-tabbtn sc-on";
+            setCur(d.id);
+            Cfg.set("tab:" + key, d.id);
+          };
+          d.btn = t;
+          nav.appendChild(t);
+        });
+        m = { update: function() {
+        } };
+      }
+      applyPane(cur);
       return {
         box,
-        select: function(id3) {
-          group.setAttribute("active", id3);
+        select: function(id) {
+          setCur(id);
+          if (m) m.update();
         },
-        pane: function(id3) {
-          for (var i7 = 0; i7 < defs.length; i7++) if (defs[i7].id === id3) return defs[i7].pane;
-          return null;
+        pane: function(id) {
+          return panes[id] || null;
         }
       };
     },
     kpi: function(top, opts) {
-      var o9 = opts || {};
-      var c5 = el("div", "sc-kpi");
+      var o = opts || {};
+      var c = el("div", "sc-kpi");
       var topEl = el("div", "sc-kpi-top");
       var DOTK = { ended: "ok", running: "ok", probing: "info", suspect: "warn", stalled: "err" };
-      var dotCls = function(k2) {
-        return "sc-dot " + (DOTK[k2] || k2 || "ok");
+      var dotCls = function(k) {
+        return "sc-dot " + (DOTK[k] || k || "ok");
       };
       var dot = null;
-      if (o9.kind) {
-        dot = el("span", dotCls(o9.kind));
+      if (o.kind) {
+        dot = el("span", dotCls(o.kind));
         topEl.appendChild(dot);
       }
       topEl.appendChild(el("span", null, top));
-      c5.appendChild(topEl);
-      var v2 = el("div", "sc-kpi-val" + (o9.txt ? " txt" : ""), o9.val === void 0 || o9.val === null ? "\u2014" : String(o9.val));
-      c5.appendChild(v2);
-      var sub = el("div", "sc-kpi-sub", o9.sub || "");
-      c5.appendChild(sub);
+      c.appendChild(topEl);
+      var v = el("div", "sc-kpi-val" + (o.txt ? " txt" : ""), o.val === void 0 || o.val === null ? "—" : String(o.val));
+      c.appendChild(v);
+      var sub = el("div", "sc-kpi-sub", o.sub || "");
+      c.appendChild(sub);
       var bar = null;
-      if (!o9.plain) {
-        bar = el("div", "sc-kpi-bar" + (o9.pct === null || o9.pct === void 0 ? " na" : ""));
-        var fill = el("i", o9.kind || "");
-        if (o9.pct !== null && o9.pct !== void 0) fill.style.setProperty("--sc-pct", o9.pct + "%");
+      if (!o.plain) {
+        bar = el("div", "sc-kpi-bar" + (o.pct === null || o.pct === void 0 ? " na" : ""));
+        var fill = el("i", o.kind || "");
+        if (o.pct !== null && o.pct !== void 0) fill.style.setProperty("--sc-pct", o.pct + "%");
         bar.appendChild(fill);
-        c5.appendChild(bar);
+        c.appendChild(bar);
       }
-      var h3 = {
-        box: c5,
+      var h = {
+        box: c,
         set: function(val, subText, isTxt) {
-          v2.textContent = val === void 0 || val === null ? "\u2014" : String(val);
-          v2.className = "sc-kpi-val" + (isTxt ? " txt" : "");
+          v.textContent = val === void 0 || val === null ? "—" : String(val);
+          v.className = "sc-kpi-val" + (isTxt ? " txt" : "");
           if (subText !== void 0) sub.textContent = subText || "";
-          return h3;
+          return h;
         },
         fill: function(pct, kind) {
           if (dot && kind !== void 0) dot.className = dotCls(kind);
-          if (!bar) return h3;
+          if (!bar) return h;
           if (pct === null || pct === void 0) {
             bar.classList.add("na");
-            return h3;
+            return h;
           }
           bar.classList.remove("na");
           bar.firstChild.style.setProperty("--sc-pct", pct + "%");
           if (kind !== void 0) bar.firstChild.className = kind === "ended" ? "ok" : kind;
-          return h3;
+          return h;
         }
       };
-      return h3;
+      return h;
     },
     /* 进度条（C1）。P0-1（2026-09-13）：条体改由组件库承载 ——
      *   外壳 `div.sc-prog` 保留（承载行间距与下方文字），`<wa-progress-bar>` 负责条本身。
      *   尺寸/配色由 CSS 侧接管组件变量（见上方 .sc-prog-bar 规则），此处只驱动 `value`。 */
-    progress: function(id3) {
+    progress: function(id) {
       var box = el("div", "sc-prog");
-      var bar = document.createElement("wa-progress-bar");
-      bar.className = "sc-prog-bar";
-      bar.setAttribute("max", "100");
-      bar.setAttribute("value", "0");
+      var track = el("div", "sc-prog-track");
+      var fill = el("div", "sc-prog-fill");
+      track.appendChild(fill);
       var txt = el("div", "sc-prog-txt", "");
-      box.appendChild(bar);
+      box.appendChild(track);
       box.appendChild(txt);
-      function render(p4) {
-        var s4 = (p4 || {})[id3];
-        if (!s4 || !s4.on) {
+      function render(p) {
+        var s = (p || {})[id];
+        if (!s || !s.on) {
           box.classList.add("sc-hidden");
           return;
         }
         box.classList.remove("sc-hidden");
-        bar.setAttribute("value", String(s4.pct || 0));
-        txt.textContent = (s4.label ? s4.label + " \xB7 " : "") + (s4.pct || 0) + "% \xB7 " + (s4.note || "");
+        fill.style.width = Math.max(0, Math.min(100, s.pct || 0)) + "%";
+        txt.textContent = (s.label ? s.label + " · " : "") + (s.pct || 0) + "% · " + (s.note || "");
       }
       render(Store.get("progress"));
       Bus.on("progress", render);
@@ -7000,14 +1815,14 @@
     },
     /* 键值对（信息密度） */
     kv: function(pairs) {
-      var w2 = el("div", "sc-kv");
-      (pairs || []).forEach(function(p4) {
-        var r7 = el("div", "sc-kv-row");
-        r7.appendChild(el("span", "sc-kv-k", p4[0]));
-        r7.appendChild(el("span", "sc-kv-v", p4[1]));
-        w2.appendChild(r7);
+      var w = el("div", "sc-kv");
+      (pairs || []).forEach(function(p) {
+        var r = el("div", "sc-kv-row");
+        r.appendChild(el("span", "sc-kv-k", p[0]));
+        r.appendChild(el("span", "sc-kv-v", p[1]));
+        w.appendChild(r);
       });
-      return w2;
+      return w;
     }
   };
   function numSetting(name, desc, val, key, unit, step) {
@@ -7021,9 +1836,9 @@
     inp.value = String(val);
     var unitEl = el("span", "sc-range-label", unit || "");
     inp.onchange = function() {
-      var v2 = String(isFloat ? Math.max(0, parseFloat(inp.value) || 0) : Math.max(0, parseInt(inp.value, 10) || 0));
-      appState.api("/set", { method: "POST", body: JSON.stringify({ key, value: v2 }) }).then(function() {
-        appState.statusFn("\u2713 " + key + " = " + v2);
+      var v = String(isFloat ? Math.max(0, parseFloat(inp.value) || 0) : Math.max(0, parseInt(inp.value, 10) || 0));
+      appState.api("/set", { method: "POST", body: JSON.stringify({ key, value: v }) }).then(function() {
+        appState.statusFn("✓ " + key + " = " + v);
       }).catch(appState.failFn);
     };
     wrap.appendChild(inp);
@@ -7033,49 +1848,133 @@
   function enumSetting(name, desc, val, key, options) {
     var wrap = el("div", "sc-num-wrap");
     var sel = el("select", "sc-input");
-    (options || []).forEach(function(o9) {
+    (options || []).forEach(function(o) {
       var opt = el("option");
-      opt.value = o9.v;
-      opt.textContent = o9.label;
-      if (String(o9.v) === String(val)) opt.selected = true;
+      opt.value = o.v;
+      opt.textContent = o.label;
+      if (String(o.v) === String(val)) opt.selected = true;
       sel.appendChild(opt);
     });
     sel.onchange = function() {
-      var v2 = String(sel.value);
-      appState.api("/set", { method: "POST", body: JSON.stringify({ key, value: v2 }) }).then(function() {
-        appState.statusFn("\u2713 " + key + " = " + v2);
+      var v = String(sel.value);
+      appState.api("/set", { method: "POST", body: JSON.stringify({ key, value: v }) }).then(function() {
+        appState.statusFn("✓ " + key + " = " + v);
       }).catch(appState.failFn);
     };
     wrap.appendChild(sel);
     return UI.item(name, desc, null, { children: [appState.metaBadges(key), wrap] });
   }
 
+  // src-client/host-slots.js
+  function registerHostSlots(p) {
+    var ctx = p.ctx;
+    var reactEl2 = p.reactEl;
+    var openPanel = p.openPanel;
+    var SC_ICON = p.iconSrc;
+    var tr2 = p.Tr;
+    var ShoucangSettingsSection = p.SettingsSection;
+    var SLOT_OK = !!(reactEl2 && typeof reactEl2.createElement === "function" && ctx && typeof ctx.effect === "function" && ctx.slots && typeof ctx.slots.inject === "function" && typeof ctx.slots.register === "function");
+    if (!SLOT_OK) return false;
+    ctx.effect(function() {
+      return ctx.slots.inject("sidebar.footer.action", function() {
+        var open = openPanel;
+        var ShoucangToggle = function() {
+          if (!reactEl2 || typeof reactEl2.createElement !== "function") return null;
+          return reactEl2.createElement(
+            "button",
+            { type: "button", title: tr2("守藏面板"), className: "sc-trigger", onClick: function() {
+              open();
+            } },
+            reactEl2.createElement("img", { src: SC_ICON, alt: tr2("守"), style: { width: 22, height: 22, display: "block" } }),
+            reactEl2.createElement("span", { className: "sc-trigger-label" }, tr2("守藏"))
+          );
+        };
+        return ctx.slots.register({
+          name: "sidebar.footer.action",
+          id: "shoucang-panel-toggle",
+          label: function() {
+            return tr2("守藏面板");
+          }
+        }, ShoucangToggle);
+      });
+    }, "shoucang-panel: footer action");
+    ctx.effect(function() {
+      return ctx.slots.inject("settings.section", function() {
+        return ctx.slots.register({
+          name: "settings.section",
+          id: "shoucang",
+          order: 60,
+          label: function() {
+            return tr2("守藏");
+          }
+        }, ShoucangSettingsSection);
+      });
+    }, "shoucang-panel: settings section");
+    ctx.effect(function() {
+      return ctx.slots.inject("sidebar.panellist", function() {
+        var open = openPanel;
+        var ShoucangPanelIcon = function(props) {
+          var size = props && props.size || 20;
+          if (!reactEl2 || typeof reactEl2.createElement !== "function") return null;
+          return reactEl2.createElement(
+            "button",
+            {
+              type: "button",
+              title: tr2("守藏面板"),
+              "aria-label": tr2("守藏面板"),
+              className: "sc-panel-icon" + (props && props.active ? " on" : ""),
+              onClick: function() {
+                open();
+              }
+            },
+            reactEl2.createElement("img", {
+              src: SC_ICON,
+              alt: "",
+              width: size,
+              height: size,
+              style: { width: size, height: size, display: "block", pointerEvents: "none" }
+            })
+          );
+        };
+        return ctx.slots.register({
+          name: "sidebar.panellist",
+          id: "shoucang",
+          order: 60,
+          label: function() {
+            return tr2("守藏面板");
+          }
+        }, ShoucangPanelIcon);
+      });
+    }, "shoucang-panel: panellist icon");
+    return true;
+  }
+
   // src-client/derive.js
   var Derive = /* @__PURE__ */ (function() {
     var VEC_DOWN = { off: "stalled", unreachable: "stalled" };
     var VEC_LABEL = {
-      fusion: "\u878D\u5408",
-      "gpu-ready": "\u672C\u673A\u5C31\u7EEA",
-      lexical: "\u8BCD\u6CD5",
-      cloud: "\u4E91\u7AEF",
-      unreachable: "\u670D\u52A1\u672A\u8FDE",
-      off: "\u5173"
+      fusion: "融合",
+      "gpu-ready": "本机就绪",
+      lexical: "词法",
+      cloud: "云端",
+      unreachable: "服务未连",
+      off: "关"
     };
     var CAP_PCT = { stalled: 85, suspect: 60 };
     var BACKREF_LIMIT = 8;
     var SUITE_STATUS = {
-      both: { text: "\u5DF2\u88C5\u914D", kind: "ok", tip: "\u6CE8\u5165\u5668 + profile \u53CC\u57FA\u51C6" },
-      injected: { text: "\u5DF2\u88C5\u914D", kind: "ok", tip: "\u6CE8\u5165\u5668\u88C5\u914D" },
-      profile: { text: "\u5DF2\u88C5\u914D", kind: "ok", tip: "profile \u88C5\u914D" },
-      missing: { text: "\u672A\u88C5\u914D", kind: "error", tip: "\u4E24\u57FA\u51C6\u5747\u672A\u88C5\u914D\uFF08member \u72EC\u7ACB\u53EF\u88C5\uFF09" }
+      both: { text: "已装配", kind: "ok", tip: "注入器 + profile 双基准" },
+      injected: { text: "已装配", kind: "ok", tip: "注入器装配" },
+      profile: { text: "已装配", kind: "ok", tip: "profile 装配" },
+      missing: { text: "未装配", kind: "error", tip: "两基准均未装配（member 独立可装）" }
     };
-    var SUITE_FALLBACK = { text: "\u672A\u88C5\u914D", kind: "info", tip: "\u72B6\u6001\u672A\u77E5" };
-    function s4(v2, dflt) {
-      return String(v2 === void 0 || v2 === null || v2 === "" ? dflt : v2);
+    var SUITE_FALLBACK = { text: "未装配", kind: "info", tip: "状态未知" };
+    function s(v, dflt) {
+      return String(v === void 0 || v === null || v === "" ? dflt : v);
     }
     var hasOwn2 = Object.prototype.hasOwnProperty;
-    function pick(o9, k2, dflt) {
-      return hasOwn2.call(o9, k2) ? o9[k2] : dflt;
+    function pick(o, k, dflt) {
+      return hasOwn2.call(o, k) ? o[k] : dflt;
     }
     return {
       CAP_PCT,
@@ -7084,41 +1983,41 @@
       VEC_DOWN,
       SUITE_STATUS,
       /* provider → 徽章 kind。running 档由调用方显式给出（各视图口径不同，见上注）。 */
-      providerKind: function(p4, runningList) {
-        var k2 = s4(p4, "off");
-        if (runningList && runningList.indexOf(k2) >= 0) return "running";
-        return pick(VEC_DOWN, k2, "ended");
+      providerKind: function(p, runningList) {
+        var k = s(p, "off");
+        if (runningList && runningList.indexOf(k) >= 0) return "running";
+        return pick(VEC_DOWN, k, "ended");
       },
       /* provider 是否未就绪（off / unreachable）——决定是否出兜底/引导提示。
       * 注意不做 'off' 兜底：原判据 `p === 'off' || p === 'unreachable'` 在 p 缺失时为 false
       * （记忆板块 §7 传的是裸 `data.vector.provider`），兜底会把「未上报」误判成「已关闭」。 */
-      providerDown: function(p4) {
-        return hasOwn2.call(VEC_DOWN, String(p4));
+      providerDown: function(p) {
+        return hasOwn2.call(VEC_DOWN, String(p));
       },
-      vecLabel: function(p4) {
-        return pick(VEC_LABEL, s4(p4, "off"), tr("\u5173"));
+      vecLabel: function(p) {
+        return pick(VEC_LABEL, s(p, "off"), tr("关"));
       },
       capKind: function(pct) {
-        var n6 = Number(pct) || 0;
-        return n6 >= CAP_PCT.stalled ? "stalled" : n6 >= CAP_PCT.suspect ? "suspect" : "ended";
+        var n = Number(pct) || 0;
+        return n >= CAP_PCT.stalled ? "stalled" : n >= CAP_PCT.suspect ? "suspect" : "ended";
       },
       suiteStatus: function(st) {
         return pick(SUITE_STATUS, String(st), SUITE_FALLBACK);
       },
       /* 判空：替代散落的 `x && x.length`（20+ 处）。注意与 `!x.length` 的差异——
          后者在 x 为 null/undefined 时直接抛错，has() 返回 false（把崩溃变成空态）。 */
-      has: function(v2) {
-        return !!(v2 && v2.length);
+      has: function(v) {
+        return !!(v && v.length);
       },
       /* 取数：替代 `(x || []).length`（取值场景用，缺省 0） */
-      count: function(v2) {
-        return v2 && v2.length || 0;
+      count: function(v) {
+        return v && v.length || 0;
       },
       /* 千分位（v9 对齐：`3,204` / `3,100 / 5,000 字符`；此前裸数字） */
-      num: function(v2) {
-        if (v2 === null || v2 === void 0 || v2 === "") return "\u2014";
-        var s5 = String(v2);
-        return /^-?\d+$/.test(s5) ? s5.replace(/\B(?=(\d{3})+(?!\d))/g, ",") : s5;
+      num: function(v) {
+        if (v === null || v === void 0 || v === "") return "—";
+        var s2 = String(v);
+        return /^-?\d+$/.test(s2) ? s2.replace(/\B(?=(\d{3})+(?!\d))/g, ",") : s2;
       },
       /* 向量区可见性：原判据 `data.vector && data.vector.enabled !== false` */
       vectorOn: function(data) {
@@ -7127,14 +2026,14 @@
     };
   })();
   function fmtTime(iso) {
-    if (!iso) return "\u2014";
+    if (!iso) return "—";
     try {
-      var d3 = new Date(iso);
-      var p4 = function(n6) {
-        return (n6 < 10 ? "0" : "") + n6;
+      var d = new Date(iso);
+      var p = function(n) {
+        return (n < 10 ? "0" : "") + n;
       };
-      return p4(d3.getMonth() + 1) + "-" + p4(d3.getDate()) + " " + p4(d3.getHours()) + ":" + p4(d3.getMinutes());
-    } catch (e8) {
+      return p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+    } catch (e) {
       return String(iso).slice(0, 16);
     }
   }
@@ -7142,41 +2041,41 @@
   // src-client/tag-label.js
   var TAG_LABELS = {
     // —— agent 索引侧（英文键）——
-    env: ["\u73AF\u5883", "Environment"],
-    tool: ["\u5DE5\u5177", "Tool"],
-    flow: ["\u6D41\u7A0B", "Flow"],
-    lesson: ["\u6559\u8BAD", "Lesson"],
-    release: ["\u53D1\u5E03", "Release"],
-    user: ["\u7528\u6237", "User"],
-    agent: ["\u667A\u80FD\u4F53", "Agent"],
+    env: ["环境", "Environment"],
+    tool: ["工具", "Tool"],
+    flow: ["流程", "Flow"],
+    lesson: ["教训", "Lesson"],
+    release: ["发布", "Release"],
+    user: ["用户", "User"],
+    agent: ["智能体", "Agent"],
     // —— 用户索引侧（中文键）——
-    "\u8EAB\u4EFD": ["\u8EAB\u4EFD", "Identity"],
-    "\u4F7F\u547D": ["\u4F7F\u547D", "Mission"],
-    "\u8FB9\u754C": ["\u8FB9\u754C", "Boundary"],
-    "\u6027\u683C": ["\u6027\u683C", "Trait"],
-    "\u8BA4\u77E5": ["\u8BA4\u77E5", "Cognition"],
-    "\u6F14\u5316": ["\u6F14\u5316", "Evolution"],
-    "\u504F\u597D": ["\u504F\u597D", "Preference"],
-    "\u4E60\u60EF": ["\u4E60\u60EF", "Habit"],
-    "\u539F\u5219": ["\u539F\u5219", "Principle"],
-    "\u8DEF\u5F84": ["\u8DEF\u5F84", "Task path"],
-    "\u7ECF\u9A8C": ["\u7ECF\u9A8C", "Experience"],
-    "\u6559\u8BAD": ["\u6559\u8BAD", "Lesson"],
-    "\u73AF\u5883": ["\u73AF\u5883", "Environment"],
-    "\u786C\u4EF6": ["\u786C\u4EF6", "Hardware"]
+    "身份": ["身份", "Identity"],
+    "使命": ["使命", "Mission"],
+    "边界": ["边界", "Boundary"],
+    "性格": ["性格", "Trait"],
+    "认知": ["认知", "Cognition"],
+    "演化": ["演化", "Evolution"],
+    "偏好": ["偏好", "Preference"],
+    "习惯": ["习惯", "Habit"],
+    "原则": ["原则", "Principle"],
+    "路径": ["路径", "Task path"],
+    "经验": ["经验", "Experience"],
+    "教训": ["教训", "Lesson"],
+    "环境": ["环境", "Environment"],
+    "硬件": ["硬件", "Hardware"]
   };
   function tagLabel(tag, loc, onMiss) {
-    var t6 = String(tag == null ? "" : tag).trim();
-    if (!t6) return "?";
-    var row = TAG_LABELS[t6];
+    var t = String(tag == null ? "" : tag).trim();
+    if (!t) return "?";
+    var row = TAG_LABELS[t];
     if (!row) {
       if (typeof onMiss === "function") {
         try {
-          onMiss(t6);
-        } catch (e8) {
+          onMiss(t);
+        } catch (e) {
         }
       }
-      return t6;
+      return t;
     }
     return loc === "zh" ? row[0] : row[1];
   }
@@ -7184,24 +2083,24 @@
   // src-client/panes-memory.js
   function openMemoryNote(pointer, autoSection, returnRender) {
     if (!pointer) {
-      appState.statusFn(tr("\u8BE5\u6761\u76EE\u65E0 notes \u8DF3\u8F6C\u76EE\u6807"));
+      appState.statusFn(tr("该条目无 notes 跳转目标"));
       return;
     }
-    var rel = String(pointer).split("\xA7")[0].trim();
+    var rel = String(pointer).split("§")[0].trim();
     if (!/^notes\/[a-z]+\.md$/.test(rel)) {
-      appState.statusFn(tr("\u6307\u9488\u76EE\u6807\u975E notes \u767D\u540D\u5355\uFF1A") + pointer);
+      appState.statusFn(tr("指针目标非 notes 白名单：") + pointer);
       return;
     }
     appState.memoryViewScroll = appState.refs.view.scrollTop;
     appState.noteReturnRender = returnRender || null;
-    appState.api("/memory/sections?rel=" + encodeURIComponent(rel)).then(function(r7) {
-      if (!r7 || !r7.present) {
-        appState.statusFn(r7 && r7.error || tr("\u5C0F\u8282\u4E0D\u53EF\u7528"));
+    appState.api("/memory/sections?rel=" + encodeURIComponent(rel)).then(function(r) {
+      if (!r || !r.present) {
+        appState.statusFn(r && r.error || tr("小节不可用"));
         return;
       }
       Fold.clear("note:");
-      appState.renderNoteSections(appState.refs.view, r7);
-      if (autoSection) locateSection(appState.refs.view, autoSection, r7);
+      appState.renderNoteSections(appState.refs.view, r);
+      if (autoSection) locateSection(appState.refs.view, autoSection, r);
     }).catch(appState.failFn);
   }
   function locateSection(view, autoSection, data) {
@@ -7214,14 +2113,14 @@
       if (!foldKey) return false;
       Fold.set(foldKey, true);
       var target = null;
-      Array.prototype.forEach.call(heads, function(h3) {
-        if (h3.getAttribute("data-fold-key") === foldKey) target = h3;
+      Array.prototype.forEach.call(heads, function(h) {
+        if (h.getAttribute("data-fold-key") === foldKey) target = h;
       });
       if (!target) return false;
       var scroll = function() {
         try {
           if (target.scrollIntoView) target.scrollIntoView({ block: "center", behavior: "smooth" });
-        } catch (e8) {
+        } catch (e) {
         }
       };
       if (window.requestAnimationFrame) window.requestAnimationFrame(scroll);
@@ -7229,20 +2128,20 @@
       return true;
     };
     if (!ent) {
-      appState.statusFn(tr("\u5C0F\u8282\u672A\u627E\u5230\uFF08\u6307\u9488\u951A\uFF1A") + raw + tr("\uFF09\u2014\u2014\u5DF2\u663E\u793A\u6574\u7BC7\uFF0C\u672A\u81EA\u52A8\u5C55\u5F00"));
+      appState.statusFn(tr("小节未找到（指针锚：") + raw + tr("）——已显示整篇，未自动展开"));
       return;
     }
     if (ent.resolveState === "exists" || ent.resolveState === "partial") {
       if (setAndScroll(ent.foldKey)) return;
-      appState.statusFn(tr("\u5C0F\u8282\u672A\u627E\u5230\uFF08\u6307\u9488\u951A\uFF1A") + raw + tr("\uFF09\u2014\u2014\u5DF2\u663E\u793A\u6574\u7BC7\uFF0C\u672A\u81EA\u52A8\u5C55\u5F00"));
+      appState.statusFn(tr("小节未找到（指针锚：") + raw + tr("）——已显示整篇，未自动展开"));
       return;
     }
     if (ent.resolveState === "ambiguous") {
       var names = Derive.has(ent.cands) ? ent.cands.slice(0, 4).join(" / ") : "";
-      appState.statusFn(tr("\u8BE5\u6307\u9488\u547D\u4E2D ") + Derive.count(ent.cands) + tr(" \u4E2A\u540C\u540D/\u5305\u542B\u5C0F\u8282\uFF0C\u65E0\u6CD5\u552F\u4E00\u5B9A\u4F4D\uFF08\u672A\u5C55\u5F00\uFF09\uFF1A") + names);
+      appState.statusFn(tr("该指针命中 ") + Derive.count(ent.cands) + tr(" 个同名/包含小节，无法唯一定位（未展开）：") + names);
       return;
     }
-    appState.statusFn(tr("\u5C0F\u8282\u672A\u627E\u5230\uFF08\u6307\u9488\u951A\uFF1A") + raw + tr("\uFF09\u2014\u2014\u5DF2\u663E\u793A\u6574\u7BC7\uFF0C\u672A\u81EA\u52A8\u5C55\u5F00"));
+    appState.statusFn(tr("小节未找到（指针锚：") + raw + tr("）——已显示整篇，未自动展开"));
   }
   function makeMemoryPointerRow(title, pointer, meta, summary) {
     var row = el("div", "sc-pointer");
@@ -7253,75 +2152,75 @@
     main.appendChild(head);
     if (summary) main.appendChild(el("div", "sc-pointer-summary", summary));
     row.appendChild(main);
-    if (pointer) row.appendChild(el("span", "sc-pointer-go", "\u2197"));
-    var p4 = pointer, sec = String(pointer || "").split("\xA7")[1] || "";
+    if (pointer) row.appendChild(el("span", "sc-pointer-go", "↗"));
+    var p = pointer, sec = String(pointer || "").split("§")[1] || "";
     row.addEventListener("click", function() {
-      openMemoryNote(p4, sec.trim() || null);
+      openMemoryNote(p, sec.trim() || null);
     });
     return row;
   }
   function idxHue(tag) {
-    var map = { env: 180, tool: 212, flow: 262, lesson: 28, release: 320, \u8EAB\u4EFD: 330, \u504F\u597D: 348, \u4E60\u60EF: 12, \u786C\u4EF6: 200, \u73AF\u5883: 190, \u6F14\u5316: 150, \u7ECF\u9A8C: 45 };
+    var map = { env: 180, tool: 212, flow: 262, lesson: 28, release: 320, 身份: 330, 偏好: 348, 习惯: 12, 硬件: 200, 环境: 190, 演化: 150, 经验: 45 };
     return map[tag] != null ? map[tag] : 254;
   }
   function idxPill(tag) {
-    var h3 = idxHue(tag);
+    var h = idxHue(tag);
     var name = tagLabel(tag, lang(), function(miss) {
       try {
-        Log.warn(tr("\u6807\u7B7E\u672A\u767B\u8BB0\u4E8E\u6620\u5C04\u8868\uFF1A") + miss + tr("\uFF08\u5DF2\u6309\u539F\u6837\u663E\u793A\uFF1B\u8BF7\u540C\u6B65 tag-label.js\uFF09"));
-      } catch (e8) {
+        Log.warn(tr("标签未登记于映射表：") + miss + tr("（已按原样显示；请同步 tag-label.js）"));
+      } catch (e) {
       }
     });
     var text = name;
     var pill = el("span", "sc-idx-tag hued", text);
-    pill.style.setProperty("--sc-tag-h", String(h3));
+    pill.style.setProperty("--sc-tag-h", String(h));
     pill.title = tag || "";
     pill.setAttribute("aria-label", (tag || "") + (name !== tag ? " (" + name + ")" : ""));
     return pill;
   }
   var TAG_ORDER = [
     "env",
-    "\u73AF\u5883",
+    "环境",
     "tool",
     "flow",
     "lesson",
-    "\u6559\u8BAD",
+    "教训",
     "release",
     "user",
     "agent",
-    "\u539F\u5219",
-    "\u8DEF\u5F84",
-    "\u7ECF\u9A8C",
-    "\u8EAB\u4EFD",
-    "\u4F7F\u547D",
-    "\u8FB9\u754C",
-    "\u6027\u683C",
-    "\u8BA4\u77E5",
-    "\u6F14\u5316",
-    "\u504F\u597D",
-    "\u4E60\u60EF",
-    "\u786C\u4EF6"
+    "原则",
+    "路径",
+    "经验",
+    "身份",
+    "使命",
+    "边界",
+    "性格",
+    "认知",
+    "演化",
+    "偏好",
+    "习惯",
+    "硬件"
   ];
   var TAG_ORDER_ZH = [
-    "\u73AF\u5883",
-    "\u5DE5\u5177",
-    "\u6D41\u7A0B",
-    "\u6559\u8BAD",
-    "\u53D1\u5E03",
-    "\u7528\u6237",
-    "\u667A\u80FD\u4F53",
-    "\u539F\u5219",
-    "\u8DEF\u5F84",
-    "\u7ECF\u9A8C",
-    "\u8EAB\u4EFD",
-    "\u4F7F\u547D",
-    "\u8FB9\u754C",
-    "\u6027\u683C",
-    "\u8BA4\u77E5",
-    "\u6F14\u5316",
-    "\u504F\u597D",
-    "\u4E60\u60EF",
-    "\u786C\u4EF6"
+    "环境",
+    "工具",
+    "流程",
+    "教训",
+    "发布",
+    "用户",
+    "智能体",
+    "原则",
+    "路径",
+    "经验",
+    "身份",
+    "使命",
+    "边界",
+    "性格",
+    "认知",
+    "演化",
+    "偏好",
+    "习惯",
+    "硬件"
   ];
   function renderIndexRows(container, lines, returnRender) {
     var arr = (lines || []).slice();
@@ -7333,64 +2232,64 @@
     });
     if (bad) {
       try {
-        Log.warn(tr("renderIndexRows\uFF1A\u8DF3\u8FC7 ") + bad + tr(" \u6761\u683C\u5F0F\u5F02\u5E38\u7D22\u5F15\u884C\uFF08\u671F\u671B { tag, subject, pointer }\uFF09"));
-      } catch (e8) {
+        Log.warn(tr("renderIndexRows：跳过 ") + bad + tr(" 条格式异常索引行（期望 { tag, subject, pointer }）"));
+      } catch (e) {
       }
-      container.appendChild(el("div", "sc-mem-empty", "\u26A0 " + bad + tr(" \u6761\u7D22\u5F15\u884C\u6570\u636E\u683C\u5F0F\u5F02\u5E38\u5DF2\u8DF3\u8FC7\uFF08\u671F\u671B { tag, subject, pointer }\uFF09")));
+      container.appendChild(el("div", "sc-mem-empty", "⚠ " + bad + tr(" 条索引行数据格式异常已跳过（期望 { tag, subject, pointer }）")));
     }
-    arr.sort(function(a4, b3) {
-      var ia = TAG_ORDER.indexOf(String(a4.tag || "").toLowerCase());
+    arr.sort(function(a, b) {
+      var ia = TAG_ORDER.indexOf(String(a.tag || "").toLowerCase());
       if (ia === -1) ia = TAG_ORDER.length;
-      var ib = TAG_ORDER.indexOf(String(b3.tag || "").toLowerCase());
+      var ib = TAG_ORDER.indexOf(String(b.tag || "").toLowerCase());
       if (ib === -1) ib = TAG_ORDER.length;
       return ia - ib;
     });
     var tagCount = {};
-    arr.forEach(function(l6) {
-      var t6 = String(l6.tag || "").trim();
-      if (t6) tagCount[t6] = (tagCount[t6] || 0) + 1;
+    arr.forEach(function(l) {
+      var t = String(l.tag || "").trim();
+      if (t) tagCount[t] = (tagCount[t] || 0) + 1;
     });
     var lastTag = null;
     arr.forEach(function(ln) {
-      var t6 = String(ln.tag || "").trim();
-      if (t6 !== lastTag) {
-        lastTag = t6;
+      var t = String(ln.tag || "").trim();
+      if (t !== lastTag) {
+        lastTag = t;
         var head = el("div", "sc-idx-group");
         head.appendChild(idxPill(ln.tag));
-        head.appendChild(el("span", "sc-idx-group-n", Derive.num(tagCount[t6] || 1) + tr(" \u6761")));
+        head.appendChild(el("span", "sc-idx-group-n", Derive.num(tagCount[t] || 1) + tr(" 条")));
         container.appendChild(head);
       }
       var row = el("div", "sc-idx-row");
       row.appendChild(el("span", "sc-idx-subject", ln.subject || ""));
       if (ln.pointer) row.appendChild(el("span", "sc-idx-pointer", ln.pointer));
-      var ptr = ln.pointer, sec = String(ln.pointer || "").split("\xA7")[1] || "";
+      var ptr = ln.pointer, sec = String(ln.pointer || "").split("§")[1] || "";
       row.addEventListener("click", function() {
         openMemoryNote(ptr, sec.trim() || null, returnRender);
       });
-      row.title = (ln.subject || "") + (ln.pointer ? " \u2192 " + ln.pointer : "") + tr(" \xB7 \u70B9\u51FB\u8FDB\u8BE6\u60C5");
+      row.title = (ln.subject || "") + (ln.pointer ? " → " + ln.pointer : "") + tr(" · 点击进详情");
       container.appendChild(row);
     });
   }
   function renderPersona(view, data) {
     view.textContent = "";
-    UI.pageHead(tr("\u753B\u50CF"), tr("USER.md\uFF08\u7528\u6237\u753B\u50CF\uFF09\u4E0E AGENT.md\uFF08Agent \u753B\u50CF\uFF09\u7684\u552F\u4E00\u5C55\u793A\u4F4D\u3002"), {
+    UI.pageHead(tr("画像"), tr("USER.md（用户画像）与 AGENT.md（Agent 画像）的唯一展示位。"), {
       routes: ["/memory/overview"],
-      actions: [el("span", "sc-proto-note", tr("\u538B\u7F29\u6267\u884C\u4F4D\uFF1A\u4E0B\u65B9 USER.md \u5361"))]
+      actions: [el("span", "sc-proto-note", tr("压缩执行位：下方 USER.md 卡"))]
     });
     if (!data || !data.present || !Derive.has(data.indexes)) {
-      appState.statusFn(data && data.error || tr("\u8BB0\u5FC6\u5E93\u753B\u50CF\u4E0D\u53EF\u7528"));
+      appState.statusFn(data && data.error || tr("记忆库画像不可用"));
       return;
     }
-    var pair = data.indexes.filter(function(f3) {
-      return f3.name === "USER.md" || f3.name === "AGENT.md";
+    var pair = data.indexes.filter(function(f) {
+      return f.name === "USER.md" || f.name === "AGENT.md";
     });
     var totalRows = 0;
     var grid = el("div", "sc-kpis sc-kpis-2");
-    pair.forEach(function(f3) {
-      var pct = f3.cap ? Math.round((f3.chars || 0) / f3.cap * 100) : null;
-      grid.appendChild(UI.kpi(f3.name.replace(".md", "") + tr(" \u5BB9\u91CF"), {
-        val: pct === null ? Derive.num(f3.chars || 0) : pct + "%",
-        sub: Derive.num(f3.chars || 0) + " / " + Derive.num(f3.cap || "\u2014") + tr(" \u5B57\u7B26 \xB7 ") + Derive.count(f3.lines) + tr(" \u6761\u753B\u50CF"),
+    pair.forEach(function(f) {
+      var pct = f.cap ? Math.round((f.chars || 0) / f.cap * 100) : null;
+      grid.appendChild(UI.kpi(f.name.replace(".md", "") + tr(" 容量"), {
+        val: pct === null ? Derive.num(f.chars || 0) : pct + "%",
+        sub: Derive.num(f.chars || 0) + " / " + Derive.num(f.cap || "—") + tr(" 字符 · ") + Derive.count(f.lines) + tr(" 条画像"),
         pct,
         kind: pct === null ? "" : Derive.capKind(pct)
       }).box);
@@ -7398,123 +2297,123 @@
     view.appendChild(grid);
     var statGrid = el("div", "sc-mem-grid");
     statGrid.style.gridTemplateColumns = "repeat(2, minmax(0, 1fr))";
-    pair.forEach(function(f3) {
+    pair.forEach(function(f) {
       var byTag = {};
-      (f3.lines || []).forEach(function(ln) {
-        var t6 = String(ln && ln.tag || "").trim();
-        if (!t6) return;
-        var disp = tagLabel(t6, lang());
+      (f.lines || []).forEach(function(ln) {
+        var t = String(ln && ln.tag || "").trim();
+        if (!t) return;
+        var disp = tagLabel(t, lang());
         byTag[disp] = (byTag[disp] || 0) + 1;
       });
-      var parts = Object.keys(byTag).sort(function(a4, b3) {
-        var ia = TAG_ORDER_ZH.indexOf(a4);
+      var parts = Object.keys(byTag).sort(function(a, b) {
+        var ia = TAG_ORDER_ZH.indexOf(a);
         if (ia === -1) ia = TAG_ORDER_ZH.length;
-        var ib = TAG_ORDER_ZH.indexOf(b3);
+        var ib = TAG_ORDER_ZH.indexOf(b);
         if (ib === -1) ib = TAG_ORDER_ZH.length;
-        return ia - ib || a4.localeCompare(b3);
-      }).map(function(k2) {
-        return k2 + " " + byTag[k2];
+        return ia - ib || a.localeCompare(b);
+      }).map(function(k) {
+        return k + " " + byTag[k];
       });
-      var pct = f3.cap ? Math.round((f3.chars || 0) / f3.cap * 100) : null;
-      var tip = pct !== null && pct >= 80 ? tr("\u5BB9\u91CF ") + Derive.num(f3.chars) + " / " + Derive.num(f3.cap) + tr(" \u2014\u2014 \u8D85\u8FC7 80% \u65F6\u5728\u6B64\u663E\u793A\u4E00\u884C\u63D0\u793A\uFF1B\u7EA2\u7EBF\u7531 write_gate \u5199\u5165\u65F6\u5F3A\u5236\u3002") : f3.cap ? tr("\u5BB9\u91CF ") + Derive.num(f3.chars) + " / " + Derive.num(f3.cap) + tr(" \u2014\u2014 [\u539F\u5219] / [\u8DEF\u5F84] \u884C\u6570\u5728\u300C\u603B\u89C8 \xB7 \u672C\u6708\u6210\u957F\u300D\u6309\u6708\u8DDF\u8E2A\u3002") : tr("\u6682\u65E0\u5BB9\u91CF\u95E8\u3002");
-      var s4 = el("div", "sc-mem-stat");
-      s4.appendChild(el("div", "sc-mem-stat-label", f3.name.replace(".md", "") + tr(" \u6784\u6210")));
-      s4.appendChild(el("div", "sc-mem-stat-value", Derive.count(f3.lines) + tr(" \u6761")));
-      s4.appendChild(el("div", "sc-mem-stat-sub", Derive.has(parts) ? parts.join(" \xB7 ") : tr("\uFF08\u6682\u65E0\u6807\u7B7E\u884C\uFF09")));
-      s4.appendChild(el("div", "sc-mem-stat-rule", tip));
-      statGrid.appendChild(s4);
+      var pct = f.cap ? Math.round((f.chars || 0) / f.cap * 100) : null;
+      var tip = pct !== null && pct >= 80 ? tr("容量 ") + Derive.num(f.chars) + " / " + Derive.num(f.cap) + tr(" —— 超过 80% 时在此显示一行提示；红线由 write_gate 写入时强制。") : f.cap ? tr("容量 ") + Derive.num(f.chars) + " / " + Derive.num(f.cap) + tr(" —— [原则] / [路径] 行数在「总览 · 本月成长」按月跟踪。") : tr("暂无容量门。");
+      var s = el("div", "sc-mem-stat");
+      s.appendChild(el("div", "sc-mem-stat-label", f.name.replace(".md", "") + tr(" 构成")));
+      s.appendChild(el("div", "sc-mem-stat-value", Derive.count(f.lines) + tr(" 条")));
+      s.appendChild(el("div", "sc-mem-stat-sub", Derive.has(parts) ? parts.join(" · ") : tr("（暂无标签行）")));
+      s.appendChild(el("div", "sc-mem-stat-rule", tip));
+      statGrid.appendChild(s);
     });
     view.appendChild(statGrid);
     var mat = data.maturity || {};
     var matBins = Array.isArray(mat.bins) ? mat.bins : [];
     var matTotal = Number(mat.total || 0);
     var matGate = Number(mat.gate || 0.5);
-    var matMax = Math.max.apply(null, [1].concat(matBins.map(function(n6) {
-      return Number(n6) || 0;
+    var matMax = Math.max.apply(null, [1].concat(matBins.map(function(n) {
+      return Number(n) || 0;
     })));
-    var matCard = UI.card(tr("\u6210\u719F\u5EA6\u5206\u5E03"), {
-      sub: tr("v4 \u65B0\u589E \xB7 \u6309 0.2 \u5206\u6863\u7EDF\u8BA1\u5E93\u5185\u5C0F\u8282\u6570"),
+    var matCard = UI.card(tr("成熟度分布"), {
+      sub: tr("v4 新增 · 按 0.2 分档统计库内小节数"),
       right: [el("span", "sc-src", "/memory/overview")]
     });
     var histWrap = el("div", "sc-hist-wrap");
     var hist = el("div", "sc-hist");
-    ["0\u2013.2", ".2\u2013.4", ".4\u2013.6", ".6\u2013.8", ".8\u20131"].forEach(function(b3, bi) {
-      var n6 = Number(matBins[bi] || 0);
+    ["0–.2", ".2–.4", ".4–.6", ".6–.8", ".8–1"].forEach(function(b, bi) {
+      var n = Number(matBins[bi] || 0);
       var bar = el("i");
-      if (n6 > 0) bar.style.height = Math.round(n6 / matMax * 100) + "%";
-      bar.title = b3 + "\uFF1A" + n6 + tr(" \u8282");
-      bar.appendChild(el("b", null, b3));
+      if (n > 0) bar.style.height = Math.round(n / matMax * 100) + "%";
+      bar.title = b + "：" + n + tr(" 节");
+      bar.appendChild(el("b", null, b));
       hist.appendChild(bar);
     });
     histWrap.appendChild(hist);
     matCard.body.appendChild(histWrap);
-    matCard.body.appendChild(el("div", "sc-mem-stat-rule", matTotal ? tr("\u5171 ") + matTotal + tr(" \u8282\uFF1AA \u2265 ") + matGate + tr("\uFF08\u5347\u683C\u7EBF\uFF09\u624D\u5177\u5907\u5347\u683C\u4E3A [\u539F\u5219] / [\u8DEF\u5F84] \u7684\u7A33\u5B9A\u6761\u4EF6\u3002") + tr("\u53E3\u5F84\uFF1A\u5E93\u5185 audit/maturation.jsonl \u6309 A \u503C 0.2 \u5206\u6863\u7684\u5C0F\u8282\u6570\u3002") : tr("\u6210\u719F\u5EA6\u53F0\u8D26\u4E3A\u7A7A\uFF1A\u5E93\u5185 audit/maturation.jsonl \u5C1A\u65E0\u8BB0\u5F55\uFF08\u8DD1\u4E00\u6B21\u6210\u719F\u5EA6\u626B\u63CF\u5373\u5199\u5165\uFF09\u3002")));
+    matCard.body.appendChild(el("div", "sc-mem-stat-rule", matTotal ? tr("共 ") + matTotal + tr(" 节：A ≥ ") + matGate + tr("（升格线）才具备升格为 [原则] / [路径] 的稳定条件。") + tr("口径：库内 audit/maturation.jsonl 按 A 值 0.2 分档的小节数。") : tr("成熟度台账为空：库内 audit/maturation.jsonl 尚无记录（跑一次成熟度扫描即写入）。")));
     view.appendChild(matCard.box);
-    pair.forEach(function(f3, idx) {
-      totalRows += Derive.count(f3.lines);
-      var title = f3.name && f3.label ? String(f3.name) + " \xB7 " + String(f3.label) : f3.label || String(f3.name || "").replace(/\.md$/, "");
-      var right = [el("span", "sc-src", "/memory/overview \xB7 " + String(f3.name || ""))];
+    pair.forEach(function(f, idx) {
+      totalRows += Derive.count(f.lines);
+      var title = f.name && f.label ? String(f.name) + " · " + String(f.label) : f.label || String(f.name || "").replace(/\.md$/, "");
+      var right = [el("span", "sc-src", "/memory/overview · " + String(f.name || ""))];
       if (idx === 0) {
-        right.push(UI.button(tr("\u538B\u7F29\u753B\u50CF"), function() {
-          appState.statusFn(tr("\u753B\u50CF\u538B\u7F29\uFF08\u6DF1\u5EA6\u7761\u7720\u5F52\u7EB3\uFF09\u89E6\u53D1\u4E2D\u2026"));
+        right.push(UI.button(tr("压缩画像"), function() {
+          appState.statusFn(tr("画像压缩（深度睡眠归纳）触发中…"));
           return appState.api("/deepsleep/trigger", { method: "POST", body: "{}" }).then(function(rr) {
-            appState.statusFn(rr && rr.ok ? tr("\u2713 \u5DF2\u89E6\u53D1\u6DF1\u7761\u5F52\u7EB3\uFF08\u9AD8\u5206\u91CD\u590D\u6761\u76EE\u5C06\u6298\u53E0\u4E3A\u7D22\u5F15\u9879\uFF09") : tr("\u26A0 \u89E6\u53D1\u5931\u8D25\uFF1A") + (rr && rr.error || ""));
+            appState.statusFn(rr && rr.ok ? tr("✓ 已触发深睡归纳（高分重复条目将折叠为索引项）") : tr("⚠ 触发失败：") + (rr && rr.error || ""));
           });
         }, {
           async: true,
-          busyText: tr("\u538B\u7F29\u4E2D\u2026"),
-          okText: tr("\u5DF2\u89E6\u53D1\u5F52\u7EB3"),
-          title: tr("\u753B\u50CF\u538B\u7F29\uFF1A\u89E6\u53D1\u4E00\u6B21\u6DF1\u5EA6\u7761\u7720\u5F52\u7EB3\uFF0C\u7531\u6811\u6574\u7406\u628A\u9AD8\u5206\u91CD\u590D\u6761\u76EE\u6298\u53E0\u4E3A\u7D22\u5F15\u9879\uFF08\u65E0\u72EC\u7ACB\u7AEF\u70B9\uFF09"),
-          confirm: tr("\u300C\u538B\u7F29\u753B\u50CF\u300D= \u89E6\u53D1\u4E00\u6B21\u6DF1\u5EA6\u7761\u7720\u5F52\u7EB3\uFF0C\u7531\u6DF1\u7761\u6811\u6574\u7406\u6298\u53E0\u9AD8\u5206\u91CD\u590D\u6761\u76EE\u3002\u7ACB\u5373\u6267\u884C\uFF1F")
+          busyText: tr("压缩中…"),
+          okText: tr("已触发归纳"),
+          title: tr("画像压缩：触发一次深度睡眠归纳，由树整理把高分重复条目折叠为索引项（无独立端点）"),
+          confirm: tr("「压缩画像」= 触发一次深度睡眠归纳，由深睡树整理折叠高分重复条目。立即执行？")
         }));
       }
-      var c5 = UI.card(title, {
-        sub: Derive.count(f3.lines) + tr(" \u6761"),
+      var c = UI.card(title, {
+        sub: Derive.count(f.lines) + tr(" 条"),
         right
       });
-      view.appendChild(c5.box);
-      if (!Derive.has(f3.lines)) {
-        c5.body.appendChild(el("div", "sc-mem-empty", tr("\uFF08\u6682\u65E0\u6307\u9488\u884C\uFF09")));
+      view.appendChild(c.box);
+      if (!Derive.has(f.lines)) {
+        c.body.appendChild(el("div", "sc-mem-empty", tr("（暂无指针行）")));
         return;
       }
       var list = el("div", "sc-idx-list");
-      renderIndexRows(list, f3.lines, renderPersona);
-      c5.body.appendChild(list);
+      renderIndexRows(list, f.lines, renderPersona);
+      c.body.appendChild(list);
     });
-    view.appendChild(el("div", "sc-note", tr("\u6CE8\uFF1A\u5BB9\u91CF\u767E\u5206\u6BD4\u4E0E\u5BB9\u91CF\u6761\u6309 write_gate \u7684\u5B9E\u9645\u4E0A\u9650\u8BA1\u7B97\uFF1B\u6307\u9488\u884C\u70B9\u51FB\u53EF\u76F4\u8FBE notes/ \u5BF9\u5E94\u5C0F\u8282\u3002")));
-    appState.statusFn(tr("\u753B\u50CF \xB7 ") + totalRows + tr(" \u6761\u6307\u9488"));
+    view.appendChild(el("div", "sc-note", tr("注：容量百分比与容量条按 write_gate 的实际上限计算；指针行点击可直达 notes/ 对应小节。")));
+    appState.statusFn(tr("画像 · ") + totalRows + tr(" 条指针"));
   }
 
   // src-client/panes-overview.js
   function ovCRow(title, desc, right) {
-    var r7 = el("div", "sc-crow");
-    var l6 = el("div");
-    l6.appendChild(el("div", "sc-ct", title));
-    if (desc) l6.appendChild(el("div", "sc-cd", desc));
-    r7.appendChild(l6);
+    var r = el("div", "sc-crow");
+    var l = el("div");
+    l.appendChild(el("div", "sc-ct", title));
+    if (desc) l.appendChild(el("div", "sc-cd", desc));
+    r.appendChild(l);
     var rr = el("div", "sc-right");
-    (right || []).forEach(function(n6) {
-      if (n6) rr.appendChild(n6);
+    (right || []).forEach(function(n) {
+      if (n) rr.appendChild(n);
     });
-    r7.appendChild(rr);
-    return r7;
+    r.appendChild(rr);
+    return r;
   }
   function ovPill(text, kind, mono) {
     return el("span", "sc-pill" + (kind ? " " + kind : "") + (mono ? " mono" : ""), text);
   }
   function ovAgo(ts) {
-    var t6 = typeof ts === "number" ? ts : ts ? Date.parse(String(ts)) : 0;
-    if (!t6 || isNaN(t6)) return "";
-    var m3 = Math.max(0, Math.round((Date.now() - t6) / 6e4));
-    if (m3 < 1) return tr("\u521A\u521A");
-    if (m3 < 60) return m3 + tr(" \u5206\u949F\u524D");
-    if (m3 < 1440) return Math.round(m3 / 60) + tr(" \u5C0F\u65F6\u524D");
-    return Math.round(m3 / 1440) + tr(" \u5929\u524D");
+    var t = typeof ts === "number" ? ts : ts ? Date.parse(String(ts)) : 0;
+    if (!t || isNaN(t)) return "";
+    var m = Math.max(0, Math.round((Date.now() - t) / 6e4));
+    if (m < 1) return tr("刚刚");
+    if (m < 60) return m + tr(" 分钟前");
+    if (m < 1440) return Math.round(m / 60) + tr(" 小时前");
+    return Math.round(m / 1440) + tr(" 天前");
   }
   function ovMorningCard() {
-    var card = UI.card(tr("\u7761\u7720\u6C47\u62A5"), { sub: tr("\u8BFB\u53D6\u4E2D\u2026"), right: [el("span", "sc-src", "/sleep/reports \xB7 /sleep/issues")] });
+    var card = UI.card(tr("睡眠汇报"), { sub: tr("读取中…"), right: [el("span", "sc-src", "/sleep/reports · /sleep/issues")] });
     var box = el("div");
-    box.appendChild(el("div", "sc-desc", tr("\u8BFB\u53D6\u4E2D\u2026")));
+    box.appendChild(el("div", "sc-desc", tr("读取中…")));
     card.body.appendChild(box);
     Promise.all([
       appState.api("/sleep/reports").catch(function() {
@@ -7527,43 +2426,43 @@
       var rep = rs[0] || {}, iss = rs[1] || {}, round = iss.lastRound || {}, st = round.stats || {};
       var days = rep.days || [];
       var sub = card.head && card.head.querySelector(".sub");
-      if (sub) sub.textContent = rep.present ? tr("\u5171 ") + Derive.num(rep.count || 0) + tr(" \u671F \xB7 \u6700\u8FD1 ") + String((days[0] || {}).date || "") : tr("\u5C1A\u65E0\u6C47\u62A5");
+      if (sub) sub.textContent = rep.present ? tr("共 ") + Derive.num(rep.count || 0) + tr(" 期 · 最近 ") + String((days[0] || {}).date || "") : tr("尚无汇报");
       box.textContent = "";
       if (!rep.present || !iss.lastRound) {
-        box.appendChild(el("div", "sc-desc", tr("\u5C1A\u672A\u4EA7\u51FA\u7761\u7720\u6C47\u62A5\uFF08\u6DF1\u7761\u8F6E\u8DD1\u5B8C\u624D\u6709\uFF09\u3002")));
+        box.appendChild(el("div", "sc-desc", tr("尚未产出睡眠汇报（深睡轮跑完才有）。")));
         return;
       }
       var byTag = iss.byTag || {};
       var produced = Number(round.added || 0) + Number(round.replaced || 0);
       box.appendChild(ovCRow(
-        tr("\u63D0\u5B58"),
-        tr("\u65B0\u589E ") + Derive.num(round.added || 0) + tr(" \xB7 \u66FF\u6362 ") + Derive.num(round.replaced || 0) + (round.produceOff ? tr(" \xB7 \u672C\u6708\u505C\u4EA7\uFF08\u53E3\u5F84\uFF09") : ""),
+        tr("提存"),
+        tr("新增 ") + Derive.num(round.added || 0) + tr(" · 替换 ") + Derive.num(round.replaced || 0) + (round.produceOff ? tr(" · 本月停产（口径）") : ""),
         [ovPill("+" + Derive.num(produced), "ok")]
       ));
       box.appendChild(ovCRow(
-        tr("\u538B\u7F29"),
-        tr("\u6811 ") + Derive.num(round.tree || 0) + tr(" \xB7 \u6307\u9488 ") + Derive.num(round.pointers || 0) + tr(" \xB7 \u5F52\u6863 ") + Derive.num(round.archived || 0),
-        [ovPill(tr("\u4FDD\u7559 ") + Derive.num(round.kept || 0), null, true)]
+        tr("压缩"),
+        tr("树 ") + Derive.num(round.tree || 0) + tr(" · 指针 ") + Derive.num(round.pointers || 0) + tr(" · 归档 ") + Derive.num(round.archived || 0),
+        [ovPill(tr("保留 ") + Derive.num(round.kept || 0), null, true)]
       ));
       box.appendChild(ovCRow(
-        tr("\u95EE\u9898"),
-        tr("\u672A\u5904\u7406 ") + Derive.num(iss.issues || 0) + tr(" \u6761 \xB7 \u53EC\u56DE\u9762 ") + Derive.num(byTag["suspect-recall"] || 0) + tr(" / \u8BB0\u5FC6\u9762 ") + Derive.num(byTag["suspect-quality"] || 0),
-        [ovPill(tr("\u5206\u6BCD \u5F71\u54CD\u8D26 ") + Derive.num(st.rows || 0) + tr(" \u6761"))]
+        tr("问题"),
+        tr("未处理 ") + Derive.num(iss.issues || 0) + tr(" 条 · 召回面 ") + Derive.num(byTag["suspect-recall"] || 0) + tr(" / 记忆面 ") + Derive.num(byTag["suspect-quality"] || 0),
+        [ovPill(tr("分母 影响账 ") + Derive.num(st.rows || 0) + tr(" 条"))]
       ));
-      var recent = days.slice(0, 3).map(function(d3) {
-        return String(d3.date) + " \xB7 " + Derive.num(d3.sections || 0) + tr(" \u6BB5");
+      var recent = days.slice(0, 3).map(function(d) {
+        return String(d.date) + " · " + Derive.num(d.sections || 0) + tr(" 段");
       });
-      box.appendChild(ovCRow(tr("\u6700\u8FD1\u51E0\u671F"), recent.join("\u3000\xB7\u3000") || "\u2014", [ovPill(tr("\u53EF\u56DE\u770B"), "info")]));
+      box.appendChild(ovCRow(tr("最近几期"), recent.join("　·　") || "—", [ovPill(tr("可回看"), "info")]));
     }).catch(function() {
       box.textContent = "";
-      box.appendChild(el("div", "sc-desc", tr("\u7761\u7720\u6C47\u62A5\u8BFB\u53D6\u5931\u8D25\uFF08/sleep/reports\uFF09\u3002")));
+      box.appendChild(el("div", "sc-desc", tr("睡眠汇报读取失败（/sleep/reports）。")));
     });
     return card.box;
   }
   function ovTimelineCard() {
-    var card = UI.card(tr("\u6700\u8FD1\u52A8\u6001"), { right: [ovPill(tr("\u6700\u8FD1 24 \u5C0F\u65F6"))] });
+    var card = UI.card(tr("最近动态"), { right: [ovPill(tr("最近 24 小时"))] });
     var tl = el("div", "sc-tl");
-    tl.appendChild(el("div", "sc-desc", tr("\u8BFB\u53D6\u4E2D\u2026")));
+    tl.appendChild(el("div", "sc-desc", tr("读取中…")));
     card.body.appendChild(tl);
     Promise.all([
       appState.api("/memory/overview").catch(function() {
@@ -7573,169 +2472,169 @@
         return {};
       })
     ]).then(function(rs) {
-      var d3 = rs[0] || {}, sl = rs[1] || {};
-      var ds = d3.distillStats || {}, g2 = d3.growth || {}, pend = d3.pending || {};
+      var d = rs[0] || {}, sl = rs[1] || {};
+      var ds = d.distillStats || {}, g = d.growth || {}, pend = d.pending || {};
       var it = [];
       if (ds.last && ds.last.at) {
         it.push({
           t: Date.parse(ds.last.at) || 0,
           k: "ok",
-          title: tr("\u84B8\u998F\u5B8C\u6210 \xB7 \u672C\u6708 ") + Derive.num(ds.runs || 0) + tr(" \u6B21"),
-          desc: tr("\u7D2F\u8BA1\u5165\u5E93 ") + Derive.num(ds.added || 0) + tr(" \u6761 \xB7 \u5F02\u5E38 ") + Derive.num(ds.failed || 0) + tr(" \u6761"),
+          title: tr("蒸馏完成 · 本月 ") + Derive.num(ds.runs || 0) + tr(" 次"),
+          desc: tr("累计入库 ") + Derive.num(ds.added || 0) + tr(" 条 · 异常 ") + Derive.num(ds.failed || 0) + tr(" 条"),
           time: ovAgo(ds.last.at)
         });
       }
-      if (g2.sleep && g2.sleep.passes) {
+      if (g.sleep && g.sleep.passes) {
         it.push({
           t: Number(sl.lastDeepSleepAt) || 0,
           k: "ok",
-          title: tr("\u6DF1\u5EA6\u7761\u7720\u6574\u7406 \xB7 \u672C\u6708 ") + Derive.num(g2.sleep.passes) + tr(" \u6B21"),
-          desc: tr("\u4E60\u5F97\u539F\u5219 ") + Derive.num(g2.sleep.principleAdded || 0) + tr(" \xB7 \u66FF\u6362 ") + Derive.num(g2.sleep.replaced || 0) + tr(" \xB7 \u753B\u50CF ") + Derive.num(g2.sleep.profilesAdded || 0),
-          time: sl.lastDeepSleepAt ? ovAgo(sl.lastDeepSleepAt) : tr("\u672C\u6708")
+          title: tr("深度睡眠整理 · 本月 ") + Derive.num(g.sleep.passes) + tr(" 次"),
+          desc: tr("习得原则 ") + Derive.num(g.sleep.principleAdded || 0) + tr(" · 替换 ") + Derive.num(g.sleep.replaced || 0) + tr(" · 画像 ") + Derive.num(g.sleep.profilesAdded || 0),
+          time: sl.lastDeepSleepAt ? ovAgo(sl.lastDeepSleepAt) : tr("本月")
         });
       }
-      (d3.indexes || []).forEach(function(f3) {
-        if (!f3 || !f3.cap) return;
-        var pct = Math.round((f3.chars || 0) / f3.cap * 100);
+      (d.indexes || []).forEach(function(f) {
+        if (!f || !f.cap) return;
+        var pct = Math.round((f.chars || 0) / f.cap * 100);
         if (pct < 80) return;
         it.push({
           t: 0,
           k: "warn",
-          title: tr("\u5BB9\u91CF\u9884\u8B66 \xB7 ") + String(f3.name || "") + tr(" \u8FBE ") + pct + "%",
-          desc: tr("\u7EA2\u7EBF\u7531 write_gate \u5199\u5165\u65F6\u5F3A\u5236\uFF1B\u5EFA\u8BAE\u5728\u4E0B\u4E00\u6B21\u6DF1\u7761\u4E2D\u6267\u884C\u753B\u50CF\u538B\u7F29"),
-          time: tr("\u9608\u503C 80%")
+          title: tr("容量预警 · ") + String(f.name || "") + tr(" 达 ") + pct + "%",
+          desc: tr("红线由 write_gate 写入时强制；建议在下一次深睡中执行画像压缩"),
+          time: tr("阈值 80%")
         });
       });
       if (pend.count) {
         it.push({
           t: 0,
           k: pend.count > 5 ? "warn" : "",
-          title: tr("\u5019\u9009\u5F85\u88C1\u51B3 \xB7 ") + Derive.num(pend.count) + tr(" \u6761"),
-          desc: tr("24h \u5185\u65B0\u589E ") + Derive.num(pend.last24h || 0) + tr(" \u6761"),
-          time: tr("\u5F85\u5904\u7406")
+          title: tr("候选待裁决 · ") + Derive.num(pend.count) + tr(" 条"),
+          desc: tr("24h 内新增 ") + Derive.num(pend.last24h || 0) + tr(" 条"),
+          time: tr("待处理")
         });
       }
       tl.textContent = "";
       if (!Derive.has(it)) {
-        tl.appendChild(el("div", "sc-desc", tr("\u6682\u65E0\u52A8\u6001\u3002")));
+        tl.appendChild(el("div", "sc-desc", tr("暂无动态。")));
         return;
       }
-      it.sort(function(a4, b3) {
-        return (b3.t || 0) - (a4.t || 0);
+      it.sort(function(a, b) {
+        return (b.t || 0) - (a.t || 0);
       });
-      it.slice(0, 4).forEach(function(x2) {
-        var box = el("div", "sc-tl-item" + (x2.k ? " " + x2.k : ""));
-        box.appendChild(el("div", "sc-tl-t", x2.title));
-        box.appendChild(el("div", "sc-tl-d", x2.desc));
-        box.appendChild(el("div", "sc-tl-time", x2.time));
+      it.slice(0, 4).forEach(function(x) {
+        var box = el("div", "sc-tl-item" + (x.k ? " " + x.k : ""));
+        box.appendChild(el("div", "sc-tl-t", x.title));
+        box.appendChild(el("div", "sc-tl-d", x.desc));
+        box.appendChild(el("div", "sc-tl-time", x.time));
         tl.appendChild(box);
       });
     });
     return card.box;
   }
   function ovCriteriaCard() {
-    var card = UI.card(tr("\u5224\u636E\u4E0E\u91CD\u6392\u95E8"), {
-      sub: tr("\u73B0\u72B6\u5DF2\u6709 \xB7 \u4EC5\u6539\u5F52\u5C5E"),
+    var card = UI.card(tr("判据与重排门"), {
+      sub: tr("现状已有 · 仅改归属"),
       right: [el("span", "sc-src", "GET /criteria")]
     });
     var mini = el("div", "sc-mini");
-    var note = el("div", "sc-mem-stat-rule", tr("\u8BFB\u53D6\u4E2D\u2026"));
+    var note = el("div", "sc-mem-stat-rule", tr("读取中…"));
     card.body.appendChild(mini);
     card.body.appendChild(note);
-    appState.api("/criteria").then(function(c5) {
-      var o9 = c5 || {};
-      var gate = o9.rerankGate || {}, h3 = o9.health || {}, bg = o9.bankGit || {}, led = o9.ledger || {};
+    appState.api("/criteria").then(function(c) {
+      var o = c || {};
+      var gate = o.rerankGate || {}, h = o.health || {}, bg = o.bankGit || {}, led = o.ledger || {};
       mini.textContent = "";
-      var put = function(k2, v2) {
-        mini.appendChild(el("div", "k", k2));
-        mini.appendChild(el("div", "v", v2));
+      var put = function(k, v) {
+        mini.appendChild(el("div", "k", k));
+        mini.appendChild(el("div", "v", v));
       };
-      put(tr("\u5224\u636E\u7248\u672C"), String(o9.version || "\u2014"));
-      put(tr("\u53F0\u8D26\u884C\u6570"), Derive.num(led.rows || 0));
-      put(tr("notes \u544A\u8B66\u9608\u503C"), h3.notesWarn == null ? "\u2014" : Derive.num(h3.notesWarn));
-      put(tr("\u91CD\u6392\u95E8"), Derive.num(gate.indexRows || 0) + " / " + Derive.num(gate.threshold || 0) + tr(" \xB7 \u884C\u6570\u95E8") + (gate.ready ? tr("\u5DF2\u8FBE") : tr("\u672A\u8FBE")));
-      put(tr("\u5E93\u7248\u672C"), Derive.num(bg.commits || 0) + tr(" \u63D0\u4EA4"));
-      note.textContent = tr("\u5065\u5EB7\u5EA6 health.R / K \u4E0E caps \u7531 criteria-gate.json \u63D0\u4F9B\uFF1B\u672C\u5361\u53EA\u8BFB\u3002");
+      put(tr("判据版本"), String(o.version || "—"));
+      put(tr("台账行数"), Derive.num(led.rows || 0));
+      put(tr("notes 告警阈值"), h.notesWarn == null ? "—" : Derive.num(h.notesWarn));
+      put(tr("重排门"), Derive.num(gate.indexRows || 0) + " / " + Derive.num(gate.threshold || 0) + tr(" · 行数门") + (gate.ready ? tr("已达") : tr("未达")));
+      put(tr("库版本"), Derive.num(bg.commits || 0) + tr(" 提交"));
+      note.textContent = tr("健康度 health.R / K 与 caps 由 criteria-gate.json 提供；本卡只读。");
     }).catch(function() {
-      note.textContent = tr("\u5224\u636E\u53F0\u8D26\u8BFB\u53D6\u5931\u8D25\uFF08GET /criteria\uFF09\u3002");
+      note.textContent = tr("判据台账读取失败（GET /criteria）。");
     });
     return card.box;
   }
   function ovQuickCard() {
-    var card = UI.card(tr("\u5FEB\u6377\u64CD\u4F5C"));
+    var card = UI.card(tr("快捷操作"));
     var row = el("div", "sc-toolbar");
     row.style.flexWrap = "wrap";
     var res = el("div", "sc-desc", "");
-    row.appendChild(UI.button(tr("\u6D4B\u8BD5\u5D4C\u5165\u8FDE\u901A"), function() {
-      res.textContent = tr("\u8BFB\u53D6\u914D\u7F6E\u2026");
-      return appState.api("/embed/config").then(function(c5) {
-        var g2 = c5 && c5.effective || c5 && c5.persisted || {};
-        var baseUrl = String(g2.baseUrl || g2.embedBaseUrl || "").trim();
+    row.appendChild(UI.button(tr("测试嵌入连通"), function() {
+      res.textContent = tr("读取配置…");
+      return appState.api("/embed/config").then(function(c) {
+        var g = c && c.effective || c && c.persisted || {};
+        var baseUrl = String(g.baseUrl || g.embedBaseUrl || "").trim();
         if (!baseUrl) {
-          res.textContent = tr("\u2717 \u672A\u914D\u7F6E embedBaseUrl\uFF08\u4E14\u7F3A\u7701\u4E0D\u53EF\u7528\uFF09");
+          res.textContent = tr("✗ 未配置 embedBaseUrl（且缺省不可用）");
           return;
         }
-        var dflt = c5 && c5.isDefault || {};
-        var src = dflt.embedBaseUrl ? tr("\uFF08\u7F3A\u7701\u5728\u7528\uFF09") : tr("\uFF08\u5DF2\u843D\u76D8\uFF09");
-        res.textContent = tr("\u6D4B\u8BD5\u4E2D\u2026 ") + baseUrl + src;
+        var dflt = c && c.isDefault || {};
+        var src = dflt.embedBaseUrl ? tr("（缺省在用）") : tr("（已落盘）");
+        res.textContent = tr("测试中… ") + baseUrl + src;
         return appState.apiCtx("/embed/test", {
           method: "POST",
-          body: JSON.stringify({ baseUrl, apiKey: String(g2.apiKey || g2.embedApiKey || "").trim() })
-        }, tr("\u5D4C\u5165\u8FDE\u901A\u6027")).then(function(r7) {
-          res.textContent = r7 && r7.error ? "\u2717 " + r7.error + " \xB7 " + baseUrl + src : tr("\u2713 \u53EF\u8FBE \xB7 ") + Derive.count(r7 && r7.models) + tr(" \u4E2A\u6A21\u578B \xB7 ") + baseUrl + src;
+          body: JSON.stringify({ baseUrl, apiKey: String(g.apiKey || g.embedApiKey || "").trim() })
+        }, tr("嵌入连通性")).then(function(r) {
+          res.textContent = r && r.error ? "✗ " + r.error + " · " + baseUrl + src : tr("✓ 可达 · ") + Derive.count(r && r.models) + tr(" 个模型 · ") + baseUrl + src;
         });
-      }).catch(function(e8) {
-        res.textContent = "\u2717 " + e8.message;
+      }).catch(function(e) {
+        res.textContent = "✗ " + e.message;
       });
-    }, { async: true, busyText: tr("\u6D4B\u8BD5\u4E2D\u2026"), okText: tr("\u5D4C\u5165\u8FDE\u901A\u6027\u6D4B\u8BD5\u5B8C\u6210"), title: tr("POST /embed/test \u2014\u2014 \u9A8C\u8BC1\u5F53\u524D embedding \u914D\u7F6E\u662F\u5426\u53EF\u7528") }));
-    row.appendChild(UI.button(tr("\u6839\u76EE\u5F55\u5F15\u5BFC"), function() {
-      res.textContent = tr("\u6267\u884C\u4E2D\u2026");
-      return appState.apiCtx("/root/bootstrap", { method: "POST", body: JSON.stringify({}) }, tr("\u6839\u76EE\u5F55\u5F15\u5BFC")).then(function(r7) {
-        res.textContent = "\u2713 " + JSON.stringify(r7).slice(0, 200);
-      }).catch(function(e8) {
-        res.textContent = "\u2717 " + e8.message;
+    }, { async: true, busyText: tr("测试中…"), okText: tr("嵌入连通性测试完成"), title: tr("POST /embed/test —— 验证当前 embedding 配置是否可用") }));
+    row.appendChild(UI.button(tr("根目录引导"), function() {
+      res.textContent = tr("执行中…");
+      return appState.apiCtx("/root/bootstrap", { method: "POST", body: JSON.stringify({}) }, tr("根目录引导")).then(function(r) {
+        res.textContent = "✓ " + JSON.stringify(r).slice(0, 200);
+      }).catch(function(e) {
+        res.textContent = "✗ " + e.message;
       });
-    }, { async: true, busyText: tr("\u6267\u884C\u4E2D\u2026"), okText: tr("\u6839\u76EE\u5F55\u5F15\u5BFC\u5B8C\u6210"), confirm: tr("\u6267\u884C\u6839\u76EE\u5F55\u5F15\u5BFC\u4F1A\u5C1D\u8BD5\u521B\u5EFA\u7F3A\u5931\u7684\u76EE\u5F55\u7ED3\u6784\uFF0C\u786E\u8BA4\u7EE7\u7EED\uFF1F") }));
-    row.appendChild(UI.button(tr("\u6210\u719F\u5EA6\u626B\u63CF"), function() {
-      res.textContent = tr("\u626B\u63CF\u4E2D\u2026");
-      return appState.apiCtx("/maturation/scan", { method: "POST", body: JSON.stringify({}) }, tr("\u6210\u719F\u5EA6\u626B\u63CF")).then(function(r7) {
-        res.textContent = r7 && r7.active ? tr("\u2713 \u626B\u63CF\u5B8C\u6210\uFF08\u5206\u6863\u5DF2\u5199\u5165 audit/maturation.jsonl\uFF09") : "\u26A0 " + (r7 && r7.error || tr("\u672A\u751F\u6210"));
-      }).catch(function(e8) {
-        res.textContent = "\u2717 " + e8.message;
+    }, { async: true, busyText: tr("执行中…"), okText: tr("根目录引导完成"), confirm: tr("执行根目录引导会尝试创建缺失的目录结构，确认继续？") }));
+    row.appendChild(UI.button(tr("成熟度扫描"), function() {
+      res.textContent = tr("扫描中…");
+      return appState.apiCtx("/maturation/scan", { method: "POST", body: JSON.stringify({}) }, tr("成熟度扫描")).then(function(r) {
+        res.textContent = r && r.active ? tr("✓ 扫描完成（分档已写入 audit/maturation.jsonl）") : "⚠ " + (r && r.error || tr("未生成"));
+      }).catch(function(e) {
+        res.textContent = "✗ " + e.message;
       });
-    }, { async: true, busyText: tr("\u626B\u63CF\u4E2D\u2026"), okText: tr("\u6210\u719F\u5EA6\u626B\u63CF\u5B8C\u6210"), title: tr("POST /maturation/scan \u2014\u2014 \u91CD\u7B97\u5E93\u5185\u5C0F\u8282\u6210\u719F\u5EA6\u5E76\u8986\u76D6\u53F0\u8D26\uFF08\u53EA\u5199\u53F0\u8D26\uFF0C\u4E0D\u6539\u8BB0\u5FC6\u5185\u5BB9\uFF09") }));
-    row.appendChild(UI.button(tr("\u8D26\u672C\u5BF9\u8D26"), function() {
-      res.textContent = tr("\u5BF9\u8D26\u4E2D\u2026");
-      return appState.apiCtx("/reconcile", { method: "POST", body: JSON.stringify({}) }, tr("\u8D26\u672C\u5BF9\u8D26")).then(function(r7) {
-        res.textContent = r7 && r7.active ? tr("\u2713 \u5BF9\u8D26\u5B8C\u6210") : "\u26A0 " + (r7 && r7.error || tr("\u5931\u8D25"));
-      }).catch(function(e8) {
-        res.textContent = "\u2717 " + e8.message;
+    }, { async: true, busyText: tr("扫描中…"), okText: tr("成熟度扫描完成"), title: tr("POST /maturation/scan —— 重算库内小节成熟度并覆盖台账（只写台账，不改记忆内容）") }));
+    row.appendChild(UI.button(tr("账本对账"), function() {
+      res.textContent = tr("对账中…");
+      return appState.apiCtx("/reconcile", { method: "POST", body: JSON.stringify({}) }, tr("账本对账")).then(function(r) {
+        res.textContent = r && r.active ? tr("✓ 对账完成") : "⚠ " + (r && r.error || tr("失败"));
+      }).catch(function(e) {
+        res.textContent = "✗ " + e.message;
       });
-    }, { async: true, busyText: tr("\u5BF9\u8D26\u4E2D\u2026"), okText: tr("\u8D26\u672C\u5BF9\u8D26\u5B8C\u6210"), title: tr("POST /reconcile \u2014\u2014 \u8BB0\u5FC6\u5E93\u5BF9\u8D26\uFF08\u53EA\u8BFB\u6C47\u603B\uFF09") }));
+    }, { async: true, busyText: tr("对账中…"), okText: tr("账本对账完成"), title: tr("POST /reconcile —— 记忆库对账（只读汇总）") }));
     card.body.appendChild(row);
     card.body.appendChild(res);
     return card.box;
   }
   function renderViewOverview(view) {
     view.textContent = "";
-    UI.pageHead(tr("\u8FD0\u884C\u603B\u89C8"), tr("\u4E00\u5C4F\u56DE\u7B54\u300C\u73B0\u5728\u600E\u4E48\u6837\u300D\u3002\u5FBD\u7AE0\u884C = \u539F\u8BB0\u5FC6\u677F\u5757 \xA70 \u7684 7 \u679A\u72B6\u6001\u5FBD\u7AE0\uFF0C\u6574\u4F53\u63D0\u5347\u4E3A\u72EC\u7ACB\u9996\u5C4F\u3002"), {
+    UI.pageHead(tr("运行总览"), tr("一屏回答「现在怎么样」。徽章行 = 原记忆板块 §0 的 7 枚状态徽章，整体提升为独立首屏。"), {
       routes: ["/memory/overview", "/cognition/report", "/mcl/status"],
       refresh: true,
-      actions: [el("span", "sc-proto-note", tr("\u84B8\u998F\u6267\u884C\u4F4D\uFF1A\u4E0B\u65B9\u64CD\u4F5C\u5361\uFF08\u672C\u9875\u4EC5\u4E00\u5904\uFF09"))]
+      actions: [el("span", "sc-proto-note", tr("蒸馏执行位：下方操作卡（本页仅一处）"))]
     });
     var badges = el("div", "sc-ds-badges");
-    function bd(t6, k2) {
-      var h3 = UI.dsBadge(t6, k2);
-      badges.appendChild(h3.box);
-      return h3;
+    function bd(t, k) {
+      var h = UI.dsBadge(t, k);
+      badges.appendChild(h.box);
+      return h;
     }
-    var bDistill = bd(tr("\u84B8\u998F \u2026"));
-    var bVec = bd(tr("\u5411\u91CF \u2026"));
-    var bPend = bd(tr("\u5019\u9009 \u2026"));
-    var bMem = bd(tr("\u8BB0\u5FC6\u5E93 \u2026"));
-    var bMcl = bd(tr("\u8BA4\u77E5\u73AF \u2026"));
-    var bCrit = bd(tr("\u5224\u636E\u53F0\u8D26 \u2026"));
-    var bGit = bd(tr("\u5E93\u7248\u672C \u2026"));
+    var bDistill = bd(tr("蒸馏 …"));
+    var bVec = bd(tr("向量 …"));
+    var bPend = bd(tr("候选 …"));
+    var bMem = bd(tr("记忆库 …"));
+    var bMcl = bd(tr("认知环 …"));
+    var bCrit = bd(tr("判据台账 …"));
+    var bGit = bd(tr("库版本 …"));
     view.appendChild(badges);
     var alertBox = el("div", "sc-ds-alert warn sc-hidden");
     alertBox.setAttribute("role", "status");
@@ -7748,48 +2647,48 @@
       alertBox.textContent = "";
       var body = el("div");
       body.appendChild(el("b", null, head));
-      if (detail) body.appendChild(el("span", null, " \u2014\u2014 " + detail));
+      if (detail) body.appendChild(el("span", null, " —— " + detail));
       if (linkText) {
-        var a4 = el("a", null, linkText);
-        a4.setAttribute("role", "button");
-        a4.onclick = function() {
+        var a = el("a", null, linkText);
+        a.setAttribute("role", "button");
+        a.onclick = function() {
           if (typeof linkGo === "function") linkGo();
         };
-        body.appendChild(a4);
+        body.appendChild(a);
       }
       alertBox.appendChild(body);
       alertBox.classList.remove("sc-hidden");
     }
     var ops = el("div", "sc-opgrid");
-    ops.appendChild(appState.opCard(tr("\u7ACB\u5373\u84B8\u998F"), tr("\u904D\u5386\u6839\u4F1A\u8BDD\u84B8\u998F\uFF0C\u643A\u5E26 pending \u5019\u9009\u56DE\u6D41\uFF1B\u7B49\u4EF7\u4E8E\u7B49\u4F1A\u8BDD\u7A7A\u95F2\u81EA\u52A8\u89E6\u53D1\u3002"), "POST /distill/run", tr("\u84B8\u998F"), function() {
-      return appState.apiCtx("/distill/run", { method: "POST", body: JSON.stringify({}) }, tr("\u84B8\u998F")).then(function(r7) {
-        appState.statusFn(r7 && r7.ok ? "\u2713 " + (r7.note || tr("\u84B8\u998F\u5B8C\u6210")) : "\u26A0 " + (r7 && r7.note || tr("\u672A\u89E6\u53D1\uFF1A\u6839\u4F1A\u8BDD\u6D3B\u8DC3\u4E2D\u4F1A\u8DF3\u8FC7\uFF0C\u7B49\u95F2\u7F6E\u81EA\u52A8\u8DD1")));
+    ops.appendChild(appState.opCard(tr("立即蒸馏"), tr("遍历根会话蒸馏，携带 pending 候选回流；等价于等会话空闲自动触发。"), "POST /distill/run", tr("蒸馏"), function() {
+      return appState.apiCtx("/distill/run", { method: "POST", body: JSON.stringify({}) }, tr("蒸馏")).then(function(r) {
+        appState.statusFn(r && r.ok ? "✓ " + (r.note || tr("蒸馏完成")) : "⚠ " + (r && r.note || tr("未触发：根会话活跃中会跳过，等闲置自动跑")));
         appState.refreshView();
       });
-    }, { icon: "M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1", busyText: tr("\u84B8\u998F\u4E2D\u2026"), okText: tr("\u84B8\u998F\u5B8C\u6210") }));
-    ops.appendChild(appState.opCard(tr("\u7ACB\u5373\u8FDB\u5165\u6DF1\u7761"), tr("\u79BB\u7EBF\u56DE\u60F3\uFF0C\u63D0\u70BC\u300C[\u539F\u5219]/[\u8DEF\u5F84]\u300D\u5E76\u505A\u7ED3\u6784\u6574\u7406\u4E0E\u5F52\u6863\uFF08\u7981\u76F4\u5220\uFF09\u3002\u9884\u8BA1 1\u20133 \u5206\u949F\u3002"), "POST /deepsleep/trigger", tr("\u6DF1\u7761"), function() {
-      return appState.apiCtx("/deepsleep/trigger", { method: "POST", body: JSON.stringify({}) }, tr("\u6DF1\u7761")).then(function() {
-        appState.statusFn(tr("\u2713 \u5DF2\u89E6\u53D1\u6DF1\u7761\u5F52\u7EB3\uFF08\u540E\u53F0\u6267\u884C\uFF0C\u56DE\u6267\u89C1\u300C\u6DF1\u5EA6\u7761\u7720\u300D\uFF09"));
+    }, { icon: "M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1", busyText: tr("蒸馏中…"), okText: tr("蒸馏完成") }));
+    ops.appendChild(appState.opCard(tr("立即进入深睡"), tr("离线回想，提炼「[原则]/[路径]」并做结构整理与归档（禁直删）。预计 1–3 分钟。"), "POST /deepsleep/trigger", tr("深睡"), function() {
+      return appState.apiCtx("/deepsleep/trigger", { method: "POST", body: JSON.stringify({}) }, tr("深睡")).then(function() {
+        appState.statusFn(tr("✓ 已触发深睡归纳（后台执行，回执见「深度睡眠」）"));
       });
-    }, { icon: "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z", confirm: tr("\u7ACB\u5373\u89E6\u53D1\u4E00\u6B21\u6DF1\u5EA6\u7761\u7720\u5F52\u7EB3\uFF1F\u5C06\u8C03\u7528\u5F52\u7EB3\u5B50\u4EE3\u7406\u56DE\u987E\u5F53\u5929\u8BB0\u5FC6\u75D5\u8FF9\u3002") }));
-    ops.appendChild(appState.opCard(tr("\u8FD0\u884C\u81EA\u68C0"), tr("\u6821\u9A8C\u5224\u636E\u95E8 / \u8F7D\u4F53\u95E8 / \u5206\u5C42 / \u6210\u719F\u5EA6 / \u5F71\u5B50 / \u5BF9\u8D26\u516D\u9879\uFF1B\u8D85\u65F6\u4E0A\u9650 180s\u3002"), "POST /selfcheck/run", tr("\u81EA\u68C0"), function() {
-      return appState.apiCtx("/selfcheck/run", { method: "POST", body: JSON.stringify({}) }, tr("\u81EA\u68C0")).then(function() {
-        appState.statusFn(tr("\u2713 \u81EA\u68C0\u5DF2\u6267\u884C\uFF0C\u7ED3\u679C\u89C1\u300C\u8FD0\u884C\u89C2\u6D4B\u300D"));
+    }, { icon: "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z", confirm: tr("立即触发一次深度睡眠归纳？将调用归纳子代理回顾当天记忆痕迹。") }));
+    ops.appendChild(appState.opCard(tr("运行自检"), tr("校验判据门 / 载体门 / 分层 / 成熟度 / 影子 / 对账六项；超时上限 180s。"), "POST /selfcheck/run", tr("自检"), function() {
+      return appState.apiCtx("/selfcheck/run", { method: "POST", body: JSON.stringify({}) }, tr("自检")).then(function() {
+        appState.statusFn(tr("✓ 自检已执行，结果见「运行观测」"));
       });
-    }, { icon: "M20 6L9 17l-5-5", busyText: tr("\u81EA\u68C0\u4E2D\u2026"), confirm: tr("\u7ACB\u5373\u8DD1\u4E00\u6B21\u8FD0\u884C\u81EA\u68C0\uFF1F\u6267\u884C\u671F\u95F4\u8BF7\u52FF\u5173\u95ED\u9762\u677F\u3002") }));
+    }, { icon: "M20 6L9 17l-5-5", busyText: tr("自检中…"), confirm: tr("立即跑一次运行自检？执行期间请勿关闭面板。") }));
     view.appendChild(ops);
     var kpis = el("div", "sc-kpis");
-    var kMem = UI.kpi(tr("\u8BB0\u5FC6\u5E93\u5BB9\u91CF"), { val: "\u2014", sub: "MEMORY.md", pct: 0, kind: "ended" });
-    var kLevel = UI.kpi(tr("\u84B8\u998F\u6C34\u4F4D"), { val: "\u2014", sub: tr("\u672C\u8F6E\u84B8\u998F\u4E8B\u4EF6"), pct: 0, kind: "ended" });
-    var kSleep = UI.kpi(tr("\u6DF1\u5EA6\u7761\u7720"), { val: "\u2014", txt: true, sub: "\u2014", pct: null, kind: "probing" });
-    var kVec = UI.kpi(tr("\u5411\u91CF\u6863"), { val: tr("\u672A\u542F\u7528"), sub: tr("\u8BCD\u6CD5\u53EC\u56DE\u515C\u5E95"), pct: null, kind: "ended" });
-    [kMem, kLevel, kSleep, kVec].forEach(function(c5) {
-      kpis.appendChild(c5.box);
+    var kMem = UI.kpi(tr("记忆库容量"), { val: "—", sub: "MEMORY.md", pct: 0, kind: "ended" });
+    var kLevel = UI.kpi(tr("蒸馏水位"), { val: "—", sub: tr("本轮蒸馏事件"), pct: 0, kind: "ended" });
+    var kSleep = UI.kpi(tr("深度睡眠"), { val: "—", txt: true, sub: "—", pct: null, kind: "probing" });
+    var kVec = UI.kpi(tr("向量档"), { val: tr("未启用"), sub: tr("词法召回兜底"), pct: null, kind: "ended" });
+    [kMem, kLevel, kSleep, kVec].forEach(function(c) {
+      kpis.appendChild(c.box);
     });
     view.appendChild(kpis);
     var cols2 = el("div", "sc-cols2");
-    var gCard = UI.card(tr("\u672C\u6708\u6210\u957F"), { right: [el("span", "sc-src", "/memory/overview \xB7 growth")] });
-    var sCard = UI.card(tr("\u7CFB\u7EDF\u72B6\u6001"), { right: [el("span", "sc-src", "/mcl/status \xB7 /inject/stats")] });
+    var gCard = UI.card(tr("本月成长"), { right: [el("span", "sc-src", "/memory/overview · growth")] });
+    var sCard = UI.card(tr("系统状态"), { right: [el("span", "sc-src", "/mcl/status · /inject/stats")] });
     var colL = el("div"), colR = el("div");
     colL.appendChild(gCard.box);
     colL.appendChild(ovMorningCard());
@@ -7803,86 +2702,86 @@
     var growthBox = gCard.body;
     var sysBox = sCard.body;
     function ovStat(label, value, sub) {
-      var c5 = el("div", "sc-mem-stat");
-      c5.appendChild(el("div", "sc-mem-stat-label", label));
-      c5.appendChild(el("div", "sc-mem-stat-value", value));
-      if (sub) c5.appendChild(el("div", "sc-mem-stat-sub", sub));
-      return c5;
+      var c = el("div", "sc-mem-stat");
+      c.appendChild(el("div", "sc-mem-stat-label", label));
+      c.appendChild(el("div", "sc-mem-stat-value", value));
+      if (sub) c.appendChild(el("div", "sc-mem-stat-sub", sub));
+      return c;
     }
-    appState.api("/memory/overview").then(function(r7) {
-      var d3 = r7 || {};
-      var ds = d3.distillStats || {};
-      bDistill.setText(tr("\u84B8\u998F \xB7 ") + (ds.last && ds.last.at ? ovAgo(ds.last.at) : tr("\u5F85\u547D\u4E2D"))).setKind(ds.runs || 0 ? "ended" : "running");
-      if (Derive.vectorOn(d3)) {
-        var vp = d3.vector.provider || "off";
-        bVec.setText(tr("\u5411\u91CF ") + String(vp)).setKind(Derive.providerKind(vp, ["fusion"]));
+    appState.api("/memory/overview").then(function(r) {
+      var d = r || {};
+      var ds = d.distillStats || {};
+      bDistill.setText(tr("蒸馏 · ") + (ds.last && ds.last.at ? ovAgo(ds.last.at) : tr("待命中"))).setKind(ds.runs || 0 ? "ended" : "running");
+      if (Derive.vectorOn(d)) {
+        var vp = d.vector.provider || "off";
+        bVec.setText(tr("向量 ") + String(vp)).setKind(Derive.providerKind(vp, ["fusion"]));
       } else {
-        bVec.setText(tr("\u5411\u91CF \u672A\u542F\u7528")).setKind("stalled");
+        bVec.setText(tr("向量 未启用")).setKind("stalled");
       }
-      var pend = d3.pending || {};
-      bPend.setText(tr("\u5019\u9009 ") + String(pend.count || 0)).setKind(pend.count || 0 ? "suspect" : "ended");
+      var pend = d.pending || {};
+      bPend.setText(tr("候选 ") + String(pend.count || 0)).setKind(pend.count || 0 ? "suspect" : "ended");
       var mf = null;
-      (d3.indexes || []).forEach(function(f3) {
-        if (f3.name === "MEMORY.md") mf = f3;
+      (d.indexes || []).forEach(function(f) {
+        if (f.name === "MEMORY.md") mf = f;
       });
       if (mf) {
         var pct = mf.cap ? Math.round((mf.chars || 0) / mf.cap * 100) : null;
-        bMem.setText(tr("\u8BB0\u5FC6\u5E93 \xB7 ") + (pct === null ? tr("\u6B63\u5E38") : Derive.capKind(pct) !== "ended" ? tr("\u6C34\u4F4D\u504F\u9AD8") : tr("\u6B63\u5E38"))).setKind(pct === null ? "ended" : Derive.capKind(pct));
-        kMem.set(pct === null ? Derive.num(mf.chars || 0) : pct + "%", Derive.num(mf.chars || 0) + " / " + Derive.num(mf.cap || "\u2014") + tr(" \u5B57\u7B26") + (Derive.count(mf.lines) ? " \xB7 " + Derive.count(mf.lines) + tr(" \u884C") : ""));
+        bMem.setText(tr("记忆库 · ") + (pct === null ? tr("正常") : Derive.capKind(pct) !== "ended" ? tr("水位偏高") : tr("正常"))).setKind(pct === null ? "ended" : Derive.capKind(pct));
+        kMem.set(pct === null ? Derive.num(mf.chars || 0) : pct + "%", Derive.num(mf.chars || 0) + " / " + Derive.num(mf.cap || "—") + tr(" 字符") + (Derive.count(mf.lines) ? " · " + Derive.count(mf.lines) + tr(" 行") : ""));
         kMem.fill(pct, pct === null ? "" : Derive.capKind(pct));
-        if (appState.refs.navHealth) appState.refs.navHealth(pct === null ? tr("\u6B63\u5E38") : Derive.capKind(pct) !== "ended" ? tr("\u6C34\u4F4D\u504F\u9AD8") : tr("\u6B63\u5E38"), pct === null ? "ended" : Derive.capKind(pct));
+        if (appState.refs.navHealth) appState.refs.navHealth(pct === null ? tr("正常") : Derive.capKind(pct) !== "ended" ? tr("水位偏高") : tr("正常"), pct === null ? "ended" : Derive.capKind(pct));
       }
-      var dLast = d3.distill && d3.distill.last;
+      var dLast = d.distill && d.distill.last;
       if (dLast && dLast.lastSeq != null) {
-        kLevel.set(String(dLast.lastSeq), tr("\u672C\u8F6E\u84B8\u998F\u4E8B\u4EF6 \xB7 ") + fmtTime(dLast.at));
+        kLevel.set(String(dLast.lastSeq), tr("本轮蒸馏事件 · ") + fmtTime(dLast.at));
         kLevel.fill(100, "ok");
       } else {
-        kLevel.set("\u2014", tr("\u5C1A\u65E0\u84B8\u998F\u4E8B\u4EF6"));
+        kLevel.set("—", tr("尚无蒸馏事件"));
       }
-      if (Derive.vectorOn(d3)) {
-        kVec.set(Derive.num(d3.vector.cacheLines || 0), tr("\u884C \xB7 ") + (d3.vector.provider || "\u2014") + (d3.vector.enabled === false ? tr(" \xB7 \u5DF2\u5173\u95ED") : tr(" \xB7 \u5DF2\u542F\u7528")));
+      if (Derive.vectorOn(d)) {
+        kVec.set(Derive.num(d.vector.cacheLines || 0), tr("行 · ") + (d.vector.provider || "—") + (d.vector.enabled === false ? tr(" · 已关闭") : tr(" · 已启用")));
         kVec.fill(null);
       }
-      var g2 = d3.growth;
-      if (g2) {
+      var g = d.growth;
+      if (g) {
         if (gCard.head) {
           var subEl = gCard.head.querySelector(".sub");
-          if (subEl) subEl.textContent = "\xB7 " + g2.month;
+          if (subEl) subEl.textContent = "· " + g.month;
         }
         var g3 = el("div", "sc-mem-grid");
-        var s32 = g2.sleep || {}, d32 = g2.distill || {}, n32 = g2.now || {};
-        g3.appendChild(ovStat(tr("\u6DF1\u7761\u5F52\u7EB3"), Derive.num(s32.passes || 0) + tr(" \u6B21"), tr("\u4E60\u5F97 ") + Derive.num(s32.principleAdded || 0) + tr(" \xB7 \u66FF\u6362 ") + Derive.num(s32.replaced || 0) + tr(" \xB7 \u753B\u50CF ") + Derive.num(s32.profilesAdded || 0)));
-        g3.appendChild(ovStat(tr("\u84B8\u998F"), Derive.num(d32.runs || 0) + tr(" \u6B21"), tr("\u6210\u529F ") + Derive.num(d32.ok || 0) + tr(" \xB7 \u5F02\u5E38 ") + Derive.num(d32.bad || 0) + tr(" \xB7 \u9884\u7B5B\u8DF3\u8FC7 ") + Derive.num(d32.skips || 0)));
-        g3.appendChild(ovStat(tr("AGENT \u753B\u50CF"), Derive.num(n32.tagRows != null ? n32.tagRows : "\u2014") + tr(" \u884C"), tr("\u539F\u5219 ") + Derive.num(n32.principleRows || 0) + tr(" \xB7 \u8DEF\u5F84 ") + Derive.num(n32.pathRows || 0) + " \xB7 " + Derive.num(n32.agentChars || 0) + tr(" \u5B57\u7B26")));
+        var s3 = g.sleep || {}, d3 = g.distill || {}, n3 = g.now || {};
+        g3.appendChild(ovStat(tr("深睡归纳"), Derive.num(s3.passes || 0) + tr(" 次"), tr("习得 ") + Derive.num(s3.principleAdded || 0) + tr(" · 替换 ") + Derive.num(s3.replaced || 0) + tr(" · 画像 ") + Derive.num(s3.profilesAdded || 0)));
+        g3.appendChild(ovStat(tr("蒸馏"), Derive.num(d3.runs || 0) + tr(" 次"), tr("成功 ") + Derive.num(d3.ok || 0) + tr(" · 异常 ") + Derive.num(d3.bad || 0) + tr(" · 预筛跳过 ") + Derive.num(d3.skips || 0)));
+        g3.appendChild(ovStat(tr("AGENT 画像"), Derive.num(n3.tagRows != null ? n3.tagRows : "—") + tr(" 行"), tr("原则 ") + Derive.num(n3.principleRows || 0) + tr(" · 路径 ") + Derive.num(n3.pathRows || 0) + " · " + Derive.num(n3.agentChars || 0) + tr(" 字符")));
         growthBox.appendChild(g3);
       }
       var warn = [];
-      if (pend.count) warn.push(tr("\u5019\u9009\u533A ") + pend.count + tr(" \u6761\u5F85\u88C1\u51B3"));
-      if ((d3.queue || {}).undone) warn.push(tr("\u5F85\u5F52\u6863\u4F1A\u8BDD ") + d3.queue.undone + tr(" \u4E2A"));
-      if (Derive.vectorOn(d3) && Derive.providerDown(d3.vector.provider)) warn.push(tr("\u5D4C\u5165\u670D\u52A1\u4E0D\u53EF\u8FBE\uFF0C\u5411\u91CF\u53EC\u56DE\u5DF2\u964D\u7EA7\u4E3A\u8BCD\u6CD5"));
-      if (Derive.has(warn)) setAlert(warn.length + tr(" \u9879\u5F85\u5904\u7406"), warn.join("\uFF1B"), tr("\u524D\u5F80\u5904\u7406"), function() {
+      if (pend.count) warn.push(tr("候选区 ") + pend.count + tr(" 条待裁决"));
+      if ((d.queue || {}).undone) warn.push(tr("待归档会话 ") + d.queue.undone + tr(" 个"));
+      if (Derive.vectorOn(d) && Derive.providerDown(d.vector.provider)) warn.push(tr("嵌入服务不可达，向量召回已降级为词法"));
+      if (Derive.has(warn)) setAlert(warn.length + tr(" 项待处理"), warn.join("；"), tr("前往处理"), function() {
         appState.show("memory");
       });
       else setAlert("");
     }).catch(appState.failFn);
-    appState.api("/mcl/status").then(function(m3) {
-      bMcl.setText(tr("\u8BA4\u77E5\u73AF ") + (m3 && m3.active ? tr("\u5FEB") + (m3.fast || 0) + tr("/\u6162") + (m3.slow || 0) : tr("\u672A\u88C5\u914D"))).setKind(m3 && m3.active ? "ended" : "stalled");
+    appState.api("/mcl/status").then(function(m) {
+      bMcl.setText(tr("认知环 ") + (m && m.active ? tr("快") + (m.fast || 0) + tr("/慢") + (m.slow || 0) : tr("未装配"))).setKind(m && m.active ? "ended" : "stalled");
     }).catch(function() {
-      bMcl.setText(tr("\u8BA4\u77E5\u73AF \u8BFB\u53D6\u5931\u8D25")).setKind("stalled");
+      bMcl.setText(tr("认知环 读取失败")).setKind("stalled");
     });
-    appState.api("/criteria").then(function(c5) {
-      bCrit.setText(tr("\u5224\u636E\u53F0\u8D26 \xB7 ") + (c5 && c5.active ? tr("\u5DF2\u5C31\u7EEA") : tr("\u4E0D\u53EF\u8BFB"))).setKind(c5 && c5.active ? "ended" : "stalled");
-      var bg = (c5 || {}).bankGit || {};
-      bGit.setText(tr("\u5E93\u7248\u672C \xB7 ") + (bg.commits || 0 ? tr("\u5DF2\u542F\u7528") : tr("\u672A\u521D\u59CB\u5316"))).setKind(bg.commits || 0 ? "ended" : "stalled");
+    appState.api("/criteria").then(function(c) {
+      bCrit.setText(tr("判据台账 · ") + (c && c.active ? tr("已就绪") : tr("不可读"))).setKind(c && c.active ? "ended" : "stalled");
+      var bg = (c || {}).bankGit || {};
+      bGit.setText(tr("库版本 · ") + (bg.commits || 0 ? tr("已启用") : tr("未初始化"))).setKind(bg.commits || 0 ? "ended" : "stalled");
     }).catch(function() {
-      bGit.setText(tr("\u5E93\u7248\u672C \u8BFB\u53D6\u5931\u8D25"));
+      bGit.setText(tr("库版本 读取失败"));
     });
-    appState.api("/deepsleep").then(function(d3) {
-      var st = d3 || {};
-      var mode = st.running ? tr("\u6DF1\u7761\u6574\u7406\u4E2D") : st.ended || st.ended === 0 ? tr("\u6D45\u7761") : "\u2014";
-      kSleep.set(mode, (st.idleMs ? tr("\u7A7A\u95F2 ") + Math.round(st.idleMs / 6e4) + tr(" \u5206\u949F \xB7 ") : "") + (st.nextEligibleAt ? tr("\u4E0B\u6B21\u53EF\u7761 ") + fmtTime(st.nextEligibleAt) : tr("\u6309\u6C34\u4F4D\u89E6\u53D1")), true);
+    appState.api("/deepsleep").then(function(d) {
+      var st = d || {};
+      var mode = st.running ? tr("深睡整理中") : st.ended || st.ended === 0 ? tr("浅睡") : "—";
+      kSleep.set(mode, (st.idleMs ? tr("空闲 ") + Math.round(st.idleMs / 6e4) + tr(" 分钟 · ") : "") + (st.nextEligibleAt ? tr("下次可睡 ") + fmtTime(st.nextEligibleAt) : tr("按水位触发")), true);
     }).catch(function() {
-      kSleep.set("\u2014", tr("\u8BFB\u53D6\u5931\u8D25"), true);
+      kSleep.set("—", tr("读取失败"), true);
     });
     Promise.all([
       appState.api("/get_root").catch(function() {
@@ -7898,105 +2797,105 @@
         return {};
       })
     ]).then(function(rs) {
-      var r0 = rs[0] || {}, m3 = rs[1] || {}, s4 = rs[2] || {}, v2 = rs[3] || {};
+      var r0 = rs[0] || {}, m = rs[1] || {}, s = rs[2] || {}, v = rs[3] || {};
       sysBox.textContent = "";
-      var root = r0.root || r0.path || r0.active || "\u2014";
-      sysBox.appendChild(ovCRow(tr("\u5F53\u524D\u6839\u76EE\u5F55"), String(root), [
-        ovPill(r0.active ? tr("\u5DF2\u6FC0\u6D3B") : tr("\u672A\u6FC0\u6D3B"), r0.active ? "ok" : "warn")
+      var root = r0.root || r0.path || r0.active || "—";
+      sysBox.appendChild(ovCRow(tr("当前根目录"), String(root), [
+        ovPill(r0.active ? tr("已激活") : tr("未激活"), r0.active ? "ok" : "warn")
       ]));
-      var ch = m3.active ? String(m3.mode) === "slow" ? tr("\u6162\u901A\u9053") : tr("\u5FEB\u901A\u9053") : tr("\u672A\u88C5\u914D");
+      var ch = m.active ? String(m.mode) === "slow" ? tr("慢通道") : tr("快通道") : tr("未装配");
       sysBox.appendChild(ovCRow(
-        tr("MCL \u8BA4\u77E5\u73AF"),
-        tr("\u719F\u6089\u5EA6 ") + (m3.familiarity != null ? m3.familiarity : "\u2014") + " \xB7 " + ch,
-        [ovPill(ch, m3.active ? "brand" : "warn")]
+        tr("MCL 认知环"),
+        tr("熟悉度 ") + (m.familiarity != null ? m.familiarity : "—") + " · " + ch,
+        [ovPill(ch, m.active ? "brand" : "warn")]
       ));
       sysBox.appendChild(ovCRow(
-        tr("\u6CE8\u5165\u7EDF\u8BA1"),
-        tr("\u672C\u6B21\u4F1A\u8BDD ") + Derive.num(s4.calls || 0) + tr(" \u6B21") + (s4.lastAt ? tr(" \xB7 \u6700\u8FD1 ") + ovAgo(s4.lastAt) : "") + (s4.root ? " \xB7 root=" + s4.root : ""),
-        [ovPill(Derive.num(s4.calls || 0))]
+        tr("注入统计"),
+        tr("本次会话 ") + Derive.num(s.calls || 0) + tr(" 次") + (s.lastAt ? tr(" · 最近 ") + ovAgo(s.lastAt) : "") + (s.root ? " · root=" + s.root : ""),
+        [ovPill(Derive.num(s.calls || 0))]
       ));
-      var sc = s4.stableChannel || null;
+      var sc = s.stableChannel || null;
       if (sc) {
         var okMounted = sc.mounted === true;
-        var trunc = function(t6) {
-          var s22 = String(t6);
-          return s22.length > 40 ? s22.slice(0, 40) + "\u2026" : s22;
+        var trunc = function(t) {
+          var s2 = String(t);
+          return s2.length > 40 ? s2.slice(0, 40) + "…" : s2;
         };
         var scReason = sc.mountErr ? trunc(sc.mountErr) : sc.lastErr ? trunc(sc.lastErr) : "";
-        var scDetail = okMounted ? tr("\u5DF2\u6302 section \xB7 \u8282\u70B90\u8C41\u514D") + " \xB7 " + Derive.num(sc.calls || 0) + tr(" \u6B21") + (sc.lastLen > 0 ? " \xB7 " + Derive.num(sc.lastLen) + tr(" \u5B57\u7B26") : "") : tr("\u672A\u6302\u8F7D \u21D2 \u968F context \u6CE8\u5165\uFF08\u53EF\u538B\u533A\uFF09") + (scReason ? tr(" \xB7 \u539F\u56E0\uFF1A") + scReason : "");
-        sysBox.appendChild(ovCRow(tr("\u6052\u5B9A\u9762\u901A\u9053"), scDetail, [ovPill(okMounted ? tr("\u8C41\u514D") : tr("\u53EF\u538B"), okMounted ? "ok" : "warn")]));
+        var scDetail = okMounted ? tr("已挂 section · 节点0豁免") + " · " + Derive.num(sc.calls || 0) + tr(" 次") + (sc.lastLen > 0 ? " · " + Derive.num(sc.lastLen) + tr(" 字符") : "") : tr("未挂载 ⇒ 随 context 注入（可压区）") + (scReason ? tr(" · 原因：") + scReason : "");
+        sysBox.appendChild(ovCRow(tr("恒定面通道"), scDetail, [ovPill(okMounted ? tr("豁免") : tr("可压"), okMounted ? "ok" : "warn")]));
       }
-      var bc = s4.supplyUsage && s4.supplyUsage.budgetClamped || null;
+      var bc = s.supplyUsage && s.supplyUsage.budgetClamped || null;
       if (bc && bc.length) {
         sysBox.appendChild(ovCRow(
-          tr("\u989D\u5EA6\u5939\u53D6"),
-          bc.join(" \xB7 ") + " " + tr("\uFF08\u4F60\u8BBE\u7684\u503C\u8D8A\u754C \u21D2 \u5DF2\u6309\u8303\u56F4\u5939\u56DE\uFF0C\u672A\u91C7\u539F\u503C\uFF09"),
-          [ovPill(tr("\u5DF2\u5939\u53D6"), "warn")]
+          tr("额度夹取"),
+          bc.join(" · ") + " " + tr("（你设的值越界 ⇒ 已按范围夹回，未采原值）"),
+          [ovPill(tr("已夹取"), "warn")]
         ));
       }
       sysBox.appendChild(ovCRow(
-        tr("\u5D4C\u5165\u670D\u52A1"),
-        "provider=" + String(v2.provider || "off") + " \xB7 " + Derive.num(v2.rows || 0) + tr(" \u884C"),
-        [ovPill(v2.present ? tr("\u53EF\u8FBE") : tr("\u672A\u542F\u7528"), v2.present ? "ok" : "warn")]
+        tr("嵌入服务"),
+        "provider=" + String(v.provider || "off") + " · " + Derive.num(v.rows || 0) + tr(" 行"),
+        [ovPill(v.present ? tr("可达") : tr("未启用"), v.present ? "ok" : "warn")]
       ));
     });
   }
 
   // src-client/panes-memory-detail.js
   function renderCognitionReport(view, mode) {
-    appState.api("/cognition/report").then(function(r7) {
-      if (!r7 || !r7.ok) return;
+    appState.api("/cognition/report").then(function(r) {
+      if (!r || !r.ok) return;
       var host = view;
       var box = view;
-      var group = function(t6) {
+      var group = function(t) {
         if (mode === "sleep") {
-          var c5 = UI.card(t6);
-          host.appendChild(c5.box);
-          box = c5.body;
+          var c = UI.card(t);
+          host.appendChild(c.box);
+          box = c.body;
         } else {
-          box.appendChild(el("div", "sc-mem-group-title", t6));
+          box.appendChild(el("div", "sc-mem-group-title", t));
         }
       };
-      var sleeps = r7.sleeps || [], last = Derive.has(sleeps) ? sleeps[sleeps.length - 1] : null;
+      var sleeps = r.sleeps || [], last = Derive.has(sleeps) ? sleeps[sleeps.length - 1] : null;
       if (mode === "sleep") {
-        group(tr("\u672C\u8F6E\u4EA7\u51FA\u56DE\u6267") + (last && last.at ? " \xB7 " + fmtTime(last.at) : ""));
+        group(tr("本轮产出回执") + (last && last.at ? " · " + fmtTime(last.at) : ""));
         if (!last) {
-          box.appendChild(el("div", "sc-mem-empty", tr("\uFF08\u5C1A\u65E0\u6DF1\u7761\u8BB0\u5F55\uFF09")));
+          box.appendChild(el("div", "sc-mem-empty", tr("（尚无深睡记录）")));
         } else {
           var kpiRow = function(defs) {
-            var g2 = el("div", "sc-kpis");
-            defs.forEach(function(d3) {
-              g2.appendChild(UI.kpi(d3[0], { val: String(d3[1] == null ? 0 : d3[1]), sub: d3[2], plain: true }).box);
+            var g = el("div", "sc-kpis");
+            defs.forEach(function(d) {
+              g.appendChild(UI.kpi(d[0], { val: String(d[1] == null ? 0 : d[1]), sub: d[2], plain: true }).box);
             });
-            return g2;
+            return g;
           };
-          box.appendChild(kpiRow([[tr("\u65B0\u589E\u539F\u5219"), last.added, "added"], [tr("\u66FF\u6362\u539F\u5219"), last.replaced, "replaced"], [tr("\u753B\u50CF\u66F4\u65B0"), last.profiles, "profiles"]]));
+          box.appendChild(kpiRow([[tr("新增原则"), last.added, "added"], [tr("替换原则"), last.replaced, "replaced"], [tr("画像更新"), last.profiles, "profiles"]]));
           box.appendChild(kpiRow([
-            [tr("\u6307\u9488\u66F4\u65B0"), last.pointers, "pointers"],
-            [tr("\u6811\u64CD\u4F5C"), last.tree, "tree"],
-            [tr("\u5F52\u6863"), last.forgetArchived, "forgetArchived"],
-            [tr("\u4FDD\u7559"), last.forgetKept, "forgetKept"]
+            [tr("指针更新"), last.pointers, "pointers"],
+            [tr("树操作"), last.tree, "tree"],
+            [tr("归档"), last.forgetArchived, "forgetArchived"],
+            [tr("保留"), last.forgetKept, "forgetKept"]
           ]));
           if (last.stop && last.stop !== "completed") {
-            box.appendChild(el("div", "sc-ds-alert", tr("\u26A0 \u4E0A\u6B21\u672A\u5B8C\u6210\uFF08stop=") + last.stop + tr("\uFF09\u2014\u2014\u6309\u300C\u6DF1\u7761\u6C34\u4F4D\u62A4\u680F\u300D\u6C34\u4F4D\u5DF2\u56DE\u6EDA\uFF0C\u540C\u6279\u75D5\u8FF9\u4E0B\u8F6E\u91CD\u8BD5")));
+            box.appendChild(el("div", "sc-ds-alert", tr("⚠ 上次未完成（stop=") + last.stop + tr("）——按「深睡水位护栏」水位已回滚，同批痕迹下轮重试")));
           }
         }
-        var m3 = r7.materials || {};
-        group(tr("\u4E0B\u8F6E\u6750\u6599\u9884\u4F30") + (r7.day ? " \xB7 " + r7.day : ""));
+        var m = r.materials || {};
+        group(tr("下轮材料预估") + (r.day ? " · " + r.day : ""));
         [
-          [tr("\u9057\u5FD8\u5019\u9009"), tr("cold \u4E14 \u226590 \u5929\u96F6\u547D\u4E2D"), m3.forget],
-          [tr("\u52A0\u6DF1\u5019\u9009"), "hits30 \u2265 5", m3.hot],
-          [tr("\u4E92\u6291\u5019\u9009"), tr("\xA7 \u540D\u91CD\u53E0 0.5\u20130.66"), m3.interference]
+          [tr("遗忘候选"), tr("cold 且 ≥90 天零命中"), m.forget],
+          [tr("加深候选"), "hits30 ≥ 5", m.hot],
+          [tr("互抑候选"), tr("§ 名重叠 0.5–0.66"), m.interference]
         ].forEach(function(kv) {
-          box.appendChild(ovCRow(kv[0], kv[1], [el("b", null, String(kv[2] == null ? 0 : kv[2]) + tr(" \u6761"))]));
+          box.appendChild(ovCRow(kv[0], kv[1], [el("b", null, String(kv[2] == null ? 0 : kv[2]) + tr(" 条"))]));
         });
       } else {
-        var ar = r7.archive || [];
+        var ar = r.archive || [];
         if (Derive.has(ar)) {
-          group(tr("\u5F52\u6863\u533A notes/archive/ \xB7 ") + ar.length + tr(" \u4E2A\u6587\u4EF6\uFF08forgetOps \u4EA7\u7269\uFF0C\u590D\u5236\u56DE notes/ \u5373\u6062\u590D\uFF09"));
-          box.appendChild(el("div", "sc-mem-sub", ar.map(function(x2) {
-            return x2.file + "\uFF08" + x2.chars + tr(" \u5B57\uFF09");
-          }).join(" \xB7 ")));
+          group(tr("归档区 notes/archive/ · ") + ar.length + tr(" 个文件（forgetOps 产物，复制回 notes/ 即恢复）"));
+          box.appendChild(el("div", "sc-mem-sub", ar.map(function(x) {
+            return x.file + "（" + x.chars + tr(" 字）");
+          }).join(" · ")));
         }
       }
     }).catch(function() {
@@ -8004,19 +2903,19 @@
   }
   function renderMemoryExpanded(view, data) {
     view.textContent = "";
-    UI.pageHead(tr("\u8BB0\u5FC6\u5E93"), tr("MEMORY.md \u7D22\u5F15\u3001\u5019\u9009\u3001\u7B14\u8BB0\u4E0E\u5F52\u6863\u533A\uFF0C\u6309\u300C\u5E93 \u2192 \u5F85\u6D88\u5316 \u2192 \u8BE6\u60C5 \u2192 \u5DF2\u5F52\u6863\u300D\u7684\u751F\u547D\u5468\u671F\u6392\u5E8F\u3002"), { routes: ["/memory/overview", "/memory/sections", "/memory/approve"], search: { placeholder: tr("\u8FC7\u6EE4\u7D22\u5F15 / \u5019\u9009 / \u7B14\u8BB0\u2026"), onInput: appState.filterViewRows }, refresh: true });
-    var cap = UI.card(tr("\u5BB9\u91CF\u5360\u7528"), { sub: tr("\u5199\u5165\u7531 write_gate \u5F3A\u5236\u7EA2\u7EBF") });
+    UI.pageHead(tr("记忆库"), tr("MEMORY.md 索引、候选、笔记与归档区，按「库 → 待消化 → 详情 → 已归档」的生命周期排序。"), { routes: ["/memory/overview", "/memory/sections", "/memory/approve"], search: { placeholder: tr("过滤索引 / 候选 / 笔记…"), onInput: appState.filterViewRows }, refresh: true });
+    var cap = UI.card(tr("容量占用"), { sub: tr("写入由 write_gate 强制红线") });
     view.appendChild(cap.box);
     var capGrid = el("div", "sc-cap3");
     cap.body.appendChild(capGrid);
-    cap.body.appendChild(el("div", "sc-cap-note", tr("\u53EA\u6709\u5B58\u5728\u771F\u5B9E\u5BB9\u91CF\u95E8\u7684\u8F7D\u4F53\u624D\u7ED9\u767E\u5206\u6BD4\u4E0E\u8FDB\u5EA6\u6761\uFF1AMEMORY.md\uFF08cap_memory\uFF09\u4E0E\u753B\u50CF\uFF08cap_user / cap_agent\uFF09\uFF1Bnotes / pending \u65E0\u5BB9\u91CF\u95E8 \u21D2 \u53EA\u62A5\u7EDD\u5BF9\u91CF\u3002\u662F\u5426\u56E0\u8D85\u9650**\u963B\u65AD**\u5199\u5165\u7531\u300C\u53C2\u6570\u8C03\u8282 \u2192 \u8BB0\u5FC6\u4E0E\u5BB9\u91CF\u300D\u7684\u5BB9\u91CF\u95E8\u5F00\u5173\u51B3\u5B9A\uFF08\u7F3A\u7701\u5173\u95ED = \u7167\u5199\u5E76\u7559\u4E00\u6761 capacity-over \u7559\u75D5\uFF09\u3002")));
+    cap.body.appendChild(el("div", "sc-cap-note", tr("只有存在真实容量门的载体才给百分比与进度条：MEMORY.md（cap_memory）与画像（cap_user / cap_agent）；notes / pending 无容量门 ⇒ 只报绝对量。是否因超限**阻断**写入由「参数调节 → 记忆与容量」的容量门开关决定（缺省关闭 = 照写并留一条 capacity-over 留痕）。")));
     if (!data || !data.present) {
-      appState.statusFn(data && data.error || tr("\u8BB0\u5FC6\u5E93\u4E0D\u53EF\u7528"));
+      appState.statusFn(data && data.error || tr("记忆库不可用"));
       return;
     }
     var memoryFile = null;
-    (data.indexes || []).forEach(function(f3) {
-      if (f3.name === "MEMORY.md") memoryFile = f3;
+    (data.indexes || []).forEach(function(f) {
+      if (f.name === "MEMORY.md") memoryFile = f;
     });
     var pM1 = el("div");
     var pM2 = el("div");
@@ -8024,13 +2923,13 @@
     var pM4 = el("div");
     var pM5 = el("div");
     var _tb = UI.tabs("memory", [
-      { id: "index", label: tr("\u77E5\u8BC6\u7D22\u5F15 ") + String(Derive.count(memoryFile && memoryFile.lines)), pane: pM1 },
-      { id: "pending", label: tr("\u5019\u9009\u533A ") + String((data.pending || {}).count || 0), pane: pM2 },
-      { id: "notes", label: tr("\u7B14\u8BB0 ") + String(Derive.count(data.notes)) + tr(" \u7C7B"), pane: pM3 },
+      { id: "index", label: tr("知识索引 ") + String(Derive.count(memoryFile && memoryFile.lines)), pane: pM1 },
+      { id: "pending", label: tr("候选区 ") + String((data.pending || {}).count || 0), pane: pM2 },
+      { id: "notes", label: tr("笔记 ") + String(Derive.count(data.notes)) + tr(" 类"), pane: pM3 },
       /* v9（原型第 4 枚 Tab）：归档区。面板此前无此 Tab（上轮"无独立数据源"未造）——
        * 数据其实来自 `/cognition/report` 的 `archive:[{file,chars}]`，本轮补齐。 */
-      { id: "archive", label: tr("\u5F52\u6863\u533A"), pane: pM5 },
-      { id: "growth", label: tr("\u7EDF\u8BA1"), pane: pM4 }
+      { id: "archive", label: tr("归档区"), pane: pM5 },
+      { id: "growth", label: tr("统计"), pane: pM4 }
     ]);
     cap.body.appendChild(_tb.box);
     var ds = data.distillStats;
@@ -8052,9 +2951,9 @@
       var mf = memoryFile;
       var pct = mf && mf.cap ? Math.round((mf.chars || 0) / mf.cap * 100) : null;
       capGrid.appendChild(mkCapItem(
-        "MEMORY.md \u5BB9\u91CF",
-        pct === null ? Derive.num(mf ? mf.chars : "\u2014") : pct + "%",
-        mf ? Derive.num(mf.chars) + " / " + Derive.num(mf.cap) + " \u5B57\u7B26 \xB7 " + Derive.count(mf.lines) + " \u6761" : "\u2014",
+        "MEMORY.md 容量",
+        pct === null ? Derive.num(mf ? mf.chars : "—") : pct + "%",
+        mf ? Derive.num(mf.chars) + " / " + Derive.num(mf.cap) + " 字符 · " + Derive.count(mf.lines) + " 条" : "—",
         pct,
         pct === null ? "" : Derive.capKind(pct)
       ));
@@ -8063,21 +2962,21 @@
         secCount += Derive.count(nf.sections);
       });
       capGrid.appendChild(mkCapItem(
-        "notes \xB7 \u7B14\u8BB0",
+        "notes · 笔记",
         Derive.num(Derive.count(data.notes)),
-        "\u4E2A\u6587\u4EF6 \xB7 " + Derive.num(secCount) + " \u4E2A\u5C0F\u8282 \xB7 \u65E0\u5BB9\u91CF\u95E8",
+        "个文件 · " + Derive.num(secCount) + " 个小节 · 无容量门",
         null
       ));
       capGrid.appendChild(mkCapItem(
-        "pending \u5019\u9009",
+        "pending 候选",
         Derive.num(pMeta0.count || 0),
-        "\u6761\u5F85\u88C1\u51B3 \xB7 \u65E0\u5BB9\u91CF\u95E8\uFF08ADD-only \u6682\u5B58\uFF09",
+        "条待裁决 · 无容量门（ADD-only 暂存）",
         null
       ));
     })();
     if (appState.refs.navHealth) {
       var navPct = memoryFile && memoryFile.cap ? Math.round((memoryFile.chars || 0) / memoryFile.cap * 100) : null;
-      appState.refs.navHealth(navPct === null ? tr("\u6B63\u5E38") : Derive.capKind(navPct) !== "ended" ? tr("\u6C34\u4F4D\u504F\u9AD8") : tr("\u6B63\u5E38"), navPct === null ? "ended" : Derive.capKind(navPct));
+      appState.refs.navHealth(navPct === null ? tr("正常") : Derive.capKind(navPct) !== "ended" ? tr("水位偏高") : tr("正常"), navPct === null ? "ended" : Derive.capKind(navPct));
     }
     renderCognitionReport(_tb.pane("growth"), "memory");
     var ctx = { _tb, data, view, memoryFile, cap };
@@ -8088,7 +2987,7 @@
     mmArchiveZone(ctx);
     mmSuiteZone(ctx);
     mmGrowthDelta(ctx);
-    appState.statusFn(tr("\u8BB0\u5FC6 \xB7 MEMORY ") + (memoryFile ? Derive.num(memoryFile.chars) + "/" + Derive.num(memoryFile.cap) + " \xB7 " + Derive.count(memoryFile.lines) + tr(" \u884C") : tr("\u4E0D\u53EF\u7528")) + tr(" \xB7 \u84B8\u998F ") + (ds ? Derive.num(ds.runs || 0) + tr(" \u6B21") : "\u2014"));
+    appState.statusFn(tr("记忆 · MEMORY ") + (memoryFile ? Derive.num(memoryFile.chars) + "/" + Derive.num(memoryFile.cap) + " · " + Derive.count(memoryFile.lines) + tr(" 行") : tr("不可用")) + tr(" · 蒸馏 ") + (ds ? Derive.num(ds.runs || 0) + tr(" 次") : "—"));
     appState.flushFolds();
   }
   var mkStat = function(label, value, sub) {
@@ -8101,87 +3000,87 @@
   function mmGrowthMonth(ctx) {
     var host = ctx._tb.pane("growth");
     var data = ctx.data, view = ctx.view, memoryFile = ctx.memoryFile, cap = ctx.cap;
-    var group = function(t6) {
-      host.appendChild(el("div", "sc-mem-group-title", t6));
+    var group = function(t) {
+      host.appendChild(el("div", "sc-mem-group-title", t));
     };
     var gGrowth = data.growth;
     if (gGrowth) {
-      group(tr("\u672C\u6708\u6210\u957F \xB7 ") + gGrowth.month);
+      group(tr("本月成长 · ") + gGrowth.month);
       var g3 = el("div", "sc-mem-grid");
-      var s32 = gGrowth.sleep || {}, d3 = gGrowth.distill || {}, n32 = gGrowth.now || {};
-      g3.appendChild(mkStat(tr("\u6DF1\u7761\u5F52\u7EB3"), String(s32.passes || 0) + tr(" \u6B21"), tr("\u4E60\u5F97 ") + String(s32.principleAdded || 0) + tr(" \xB7 \u66FF\u6362 ") + String(s32.replaced || 0) + tr(" \xB7 \u753B\u50CF ") + String(s32.profilesAdded || 0)));
-      g3.appendChild(mkStat(tr("\u84B8\u998F"), String(d3.runs || 0) + tr(" \u6B21"), tr("\u6210\u529F ") + String(d3.ok || 0) + tr(" \xB7 \u5F02\u5E38 ") + String(d3.bad || 0) + tr(" \xB7 \u9884\u7B5B\u8DF3\u8FC7 ") + String(d3.skips || 0)));
-      g3.appendChild(mkStat(tr("AGENT \u753B\u50CF"), String(n32.tagRows != null ? n32.tagRows : "\u2014") + tr(" \u884C"), tr("\u539F\u5219 ") + String(n32.principleRows || 0) + tr(" \xB7 \u8DEF\u5F84 ") + String(n32.pathRows || 0) + " \xB7 " + String(n32.agentChars || 0) + tr(" \u5B57\u7B26")));
+      var s3 = gGrowth.sleep || {}, d3 = gGrowth.distill || {}, n3 = gGrowth.now || {};
+      g3.appendChild(mkStat(tr("深睡归纳"), String(s3.passes || 0) + tr(" 次"), tr("习得 ") + String(s3.principleAdded || 0) + tr(" · 替换 ") + String(s3.replaced || 0) + tr(" · 画像 ") + String(s3.profilesAdded || 0)));
+      g3.appendChild(mkStat(tr("蒸馏"), String(d3.runs || 0) + tr(" 次"), tr("成功 ") + String(d3.ok || 0) + tr(" · 异常 ") + String(d3.bad || 0) + tr(" · 预筛跳过 ") + String(d3.skips || 0)));
+      g3.appendChild(mkStat(tr("AGENT 画像"), String(n3.tagRows != null ? n3.tagRows : "—") + tr(" 行"), tr("原则 ") + String(n3.principleRows || 0) + tr(" · 路径 ") + String(n3.pathRows || 0) + " · " + String(n3.agentChars || 0) + tr(" 字符")));
       host.appendChild(g3);
       var rds = gGrowth.recentDeep || [];
       if (Derive.has(rds)) {
-        host.appendChild(el("div", "sc-mem-group-title", tr("\u672C\u6708\u6709\u6548\u6DF1\u7761\u4EA7\u51FA")));
+        host.appendChild(el("div", "sc-mem-group-title", tr("本月有效深睡产出")));
         var dl3 = el("div", "sc-idx-list");
-        rds.forEach(function(r7) {
-          dl3.appendChild(el("div", "sc-mem-sub", String(r7.at || "").slice(0, 10) + tr("  \u539F\u5219 +") + String(r7.added || 0) + tr("/\u66FF\u6362 ") + String(r7.replaced || 0) + tr(" \xB7 \u753B\u50CF +") + String(r7.profiles || 0) + " \xB7 gate=" + String(r7.gate || "")));
+        rds.forEach(function(r) {
+          dl3.appendChild(el("div", "sc-mem-sub", String(r.at || "").slice(0, 10) + tr("  原则 +") + String(r.added || 0) + tr("/替换 ") + String(r.replaced || 0) + tr(" · 画像 +") + String(r.profiles || 0) + " · gate=" + String(r.gate || "")));
         });
         host.appendChild(dl3);
-      } else if ((s32.passes || 0) > 0) {
-        host.appendChild(el("div", "sc-mem-empty", tr("\u672C\u6708\u6DF1\u7761\u6709\u8FD0\u884C\u4F46\u65E0\u4EA7\u51FA\uFF08\u5185\u5BB9\u5224\u636E\u5408\u89C4\u4FDD\u5B88\uFF1A\u6750\u6599\u4E0D\u8DB3\u5B81\u7F3A\u6BCB\u6EE5\uFF09")));
+      } else if ((s3.passes || 0) > 0) {
+        host.appendChild(el("div", "sc-mem-empty", tr("本月深睡有运行但无产出（内容判据合规保守：材料不足宁缺毋滥）")));
       }
     }
   }
-  function fmtBytesOf(n6) {
-    var v2 = Number(n6) || 0;
-    if (v2 < 1024) return v2 + " B";
-    if (v2 < 1024 * 1024) return (v2 / 1024).toFixed(1) + " KB";
-    return (v2 / 1048576).toFixed(1) + " MB";
+  function fmtBytesOf(n) {
+    var v = Number(n) || 0;
+    if (v < 1024) return v + " B";
+    if (v < 1024 * 1024) return (v / 1024).toFixed(1) + " KB";
+    return (v / 1048576).toFixed(1) + " MB";
   }
   function mmIndexRows(ctx) {
     var host = ctx._tb.pane("index");
     var data = ctx.data, view = ctx.view, memoryFile = ctx.memoryFile, cap = ctx.cap;
-    var group = function(t6) {
-      host.appendChild(el("div", "sc-mem-group-title", t6));
+    var group = function(t) {
+      host.appendChild(el("div", "sc-mem-group-title", t));
     };
     var st5 = data.structure;
     if (st5 && Derive.has(st5.entries)) {
       var s5 = st5.summary || {};
-      group(tr("\u5E93\u5185\u7ED3\u6784 \xB7 ") + Derive.count(st5.entries) + tr(" \u4E2A\u9876\u5C42\u6761\u76EE\uFF08\u5185\u5BB9 ") + String(s5.content || 0) + tr(" \xB7 \u5DE5\u5177\u6001 ") + String(s5.tooling || 0) + tr(" \xB7 \u4EA7\u7269 ") + String(s5.artifact || 0) + "\uFF09");
-      var kindLabelOf = function(k2) {
-        if (k2 === "content") return tr("\u5185\u5BB9");
-        if (k2 === "tooling") return tr("\u5DE5\u5177\u6001");
-        return tr("\u4EA7\u7269");
+      group(tr("库内结构 · ") + Derive.count(st5.entries) + tr(" 个顶层条目（内容 ") + String(s5.content || 0) + tr(" · 工具态 ") + String(s5.tooling || 0) + tr(" · 产物 ") + String(s5.artifact || 0) + "）");
+      var kindLabelOf = function(k) {
+        if (k === "content") return tr("内容");
+        if (k === "tooling") return tr("工具态");
+        return tr("产物");
       };
       ["content", "artifact", "tooling"].forEach(function(kind) {
-        var list = (st5.entries || []).filter(function(e8) {
-          return e8.kind === kind;
+        var list = (st5.entries || []).filter(function(e) {
+          return e.kind === kind;
         });
         if (!Derive.has(list)) return;
         if (kind !== "content") {
-          host.appendChild(el("div", "sc-mem-sub", kindLabelOf(kind) + tr("\uFF08\u53EA\u62A5\u8BA1\u6570\uFF0C\u4E0D\u5C55\u5F00\uFF09\uFF1A") + list.map(function(e8) {
-            return e8.name + " " + Derive.count(e8.files) + tr(" \u4EF6");
-          }).join(" \xB7 ")));
+          host.appendChild(el("div", "sc-mem-sub", kindLabelOf(kind) + tr("（只报计数，不展开）：") + list.map(function(e) {
+            return e.name + " " + Derive.count(e.files) + tr(" 件");
+          }).join(" · ")));
           return;
         }
-        host.appendChild(el("div", "sc-mem-sub", tr("\u5185\u5BB9\u6863\uFF08\u627F\u8F7D\u77E5\u8BC6\u7684\u677F\u5757\uFF09")));
+        host.appendChild(el("div", "sc-mem-sub", tr("内容档（承载知识的板块）")));
         var box = el("div", "sc-idx-list");
-        list.forEach(function(e8) {
+        list.forEach(function(e) {
           var row = el("div", "sc-idx-row");
-          row.appendChild(el("span", "sc-idx-tag", e8.doc ? tr("\u6587\u6863") : tr("\u677F\u5757")));
-          row.appendChild(el("span", "sc-idx-subject", e8.name));
-          var sizeTxt = Number(e8.bytes) > 0 ? Derive.count(e8.files) + tr(" \u4EF6 \xB7 ") + fmtBytesOf(e8.bytes) : Derive.count(e8.files) + tr(" \u4EF6");
+          row.appendChild(el("span", "sc-idx-tag", e.doc ? tr("文档") : tr("板块")));
+          row.appendChild(el("span", "sc-idx-subject", e.name));
+          var sizeTxt = Number(e.bytes) > 0 ? Derive.count(e.files) + tr(" 件 · ") + fmtBytesOf(e.bytes) : Derive.count(e.files) + tr(" 件");
           row.appendChild(el("span", "sc-idx-pointer", sizeTxt));
           box.appendChild(row);
         });
         host.appendChild(box);
-        host.appendChild(el("div", "sc-desc", tr("\u53E3\u5F84\uFF1A\u76EE\u5F55\u4E3A\u9012\u5F52\u6587\u4EF6\u6570\uFF1B\u5DE5\u5177\u6001\u6863\uFF08.git/.obsidian/scripts \u7B49\uFF09**\u53EA\u62A5\u6587\u4EF6\u6570\u4E0D\u62A5\u4F53\u91CF**\uFF08.git \u9012\u5F52\u53EF\u8FBE\u6570\u5341 MB\uFF0C\u4F1A\u628A\u300C\u5E93\u6709\u591A\u5927\u300D\u8FD9\u4E2A\u8BFB\u6570\u6C61\u67D3\uFF09\u3002\u679A\u4E3E\u7531\u540E\u7AEF readdirSync \u6D3E\u751F\uFF0C\u672A\u767B\u8BB0\u7684\u65B0\u6761\u76EE\u9ED8\u8BA4\u843D\u5185\u5BB9\u6863\uFF08\u5B81\u53EF\u591A\u62A5\u4E0D\u9759\u9ED8\u4E22\uFF09\u3002")));
+        host.appendChild(el("div", "sc-desc", tr("口径：目录为递归文件数；工具态档（.git/.obsidian/scripts 等）**只报文件数不报体量**（.git 递归可达数十 MB，会把「库有多大」这个读数污染）。枚举由后端 readdirSync 派生，未登记的新条目默认落内容档（宁可多报不静默丢）。")));
       });
     }
     if (Derive.has(memoryFile && memoryFile.lines)) {
-      group(tr("\u77E5\u8BC6\u7D22\u5F15 MEMORY.md \xB7 ") + memoryFile.lines.length + tr(" \u6761"));
-      host.appendChild(el("div", "sc-desc", tr("\u70B9\u51FB\u884C\u76F4\u8FBE notes \u8BE6\u60C5\u5C0F\u8282\uFF08\u53EA\u8BFB\uFF09\u3002")));
+      group(tr("知识索引 MEMORY.md · ") + memoryFile.lines.length + tr(" 条"));
+      host.appendChild(el("div", "sc-desc", tr("点击行直达 notes 详情小节（只读）。")));
       var idxWrap = el("div");
       idxWrap.classList.add("sc-box");
       var IDX_PREVIEW = 8;
       var allLines = memoryFile.lines || [];
       renderIndexRows(idxWrap, allLines.slice(0, IDX_PREVIEW), renderMemoryExpanded);
       if (allLines.length > IDX_PREVIEW) {
-        var moreBtn = el("button", "sc-idx-more", tr("\u5C55\u5F00\u5168\u90E8 ") + allLines.length + tr(" \u6761"));
+        var moreBtn = el("button", "sc-idx-more", tr("展开全部 ") + allLines.length + tr(" 条"));
         moreBtn.type = "button";
         moreBtn.addEventListener("click", function() {
           idxWrap.textContent = "";
@@ -8195,87 +3094,87 @@
   function mmPendingRows(ctx) {
     var host = ctx._tb.pane("pending");
     var data = ctx.data, view = ctx.view, memoryFile = ctx.memoryFile, cap = ctx.cap;
-    var group = function(t6) {
-      host.appendChild(el("div", "sc-mem-group-title", t6));
+    var group = function(t) {
+      host.appendChild(el("div", "sc-mem-group-title", t));
     };
     var groups = [
       { root: "suite", src: data.suite && data.suite.pending || null },
       { root: "flow-candidates", src: data.suite && data.suite.flowCandidates || null },
       { root: "memory", src: data.pending || null }
     ];
-    var labelOfRoot = function(r7) {
-      if (r7 === "suite") return tr("suite \xB7 knowledge/pending");
-      if (r7 === "flow-candidates") return tr("suite \xB7 flow-candidates");
-      return tr("\u8BB0\u5FC6\u5E93 \xB7 pending");
+    var labelOfRoot = function(r) {
+      if (r === "suite") return tr("suite · knowledge/pending");
+      if (r === "flow-candidates") return tr("suite · flow-candidates");
+      return tr("记忆库 · pending");
     };
-    var numOf = function(v2) {
-      return typeof v2 === "number" && v2 > 0 ? v2 : 0;
+    var numOf = function(v) {
+      return typeof v === "number" && v > 0 ? v : 0;
     };
     var total = 0;
-    groups.forEach(function(g2) {
-      if (g2.src) total += numOf(g2.src.count);
+    groups.forEach(function(g) {
+      if (g.src) total += numOf(g.src.count);
     });
     if (total > 0) {
-      group(tr("\u5019\u9009\u533A \xB7 ") + total + tr(" \u6761\uFF08\u53CC\u6839\u5408\u5E76\uFF09"));
-      groups.forEach(function(g2) {
-        var n6 = g2.src ? numOf(g2.src.count) : 0;
-        if (!n6) return;
-        host.appendChild(el("div", "sc-mem-sub", labelOfRoot(g2.root) + " \xB7 " + n6 + tr(" \u6761")));
+      group(tr("候选区 · ") + total + tr(" 条（双根合并）"));
+      groups.forEach(function(g) {
+        var n = g.src ? numOf(g.src.count) : 0;
+        if (!n) return;
+        host.appendChild(el("div", "sc-mem-sub", labelOfRoot(g.root) + " · " + n + tr(" 条")));
         var plist = el("div", "sc-pointer-list");
-        (g2.src.recent || []).forEach(function(p22) {
-          var fname = String(p22.name || "");
-          var row = makeMemoryPointerRow(fname.replace(/\.md$/, ""), null, (p22.mtime || "").slice(0, 10));
+        (g.src.recent || []).forEach(function(p2) {
+          var fname = String(p2.name || "");
+          var row = makeMemoryPointerRow(fname.replace(/\.md$/, ""), null, (p2.mtime || "").slice(0, 10));
           var act = el("div", "sc-row-gap");
-          var okBtn = el("button", "sc-btn subtle", tr("\u6279\u51C6"));
+          var okBtn = el("button", "sc-btn subtle", tr("批准"));
           okBtn.type = "button";
           okBtn.classList.add("sc-btn-xs", "sc-btn-ok");
           okBtn.addEventListener("click", function() {
-            appState.api("/memory/approve", { method: "POST", body: JSON.stringify({ pendingFile: fname, root: g2.root, action: "approve" }) }).then(function(r7) {
-              appState.statusFn(tr("\u2713 \u5DF2\u6279\u51C6 ") + fname + tr("\uFF08\u79FB ") + (r7 && r7.moved || ".processed") + tr("\uFF0C\u5185\u5BB9\u7531\u84B8\u998F\u6B63\u5E38\u5165\u518C\uFF09"));
+            appState.api("/memory/approve", { method: "POST", body: JSON.stringify({ pendingFile: fname, root: g.root, action: "approve" }) }).then(function(r) {
+              appState.statusFn(tr("✓ 已批准 ") + fname + tr("（移 ") + (r && r.moved || ".processed") + tr("，内容由蒸馏正常入册）"));
             }).catch(appState.failFn);
           });
-          var rmBtn = UI.button(tr("\u5FFD\u7565"), function() {
-            return appState.api("/memory/approve", { method: "POST", body: JSON.stringify({ pendingFile: fname, root: g2.root, action: "ignore" }) }).then(function(r7) {
-              appState.statusFn(tr("\u5DF2\u5FFD\u7565 ") + fname + tr("\uFF08\u79FB ") + (r7 && r7.moved || ".ignored") + tr("\uFF0C\u4E0D\u5165\u518C\uFF09"));
+          var rmBtn = UI.button(tr("忽略"), function() {
+            return appState.api("/memory/approve", { method: "POST", body: JSON.stringify({ pendingFile: fname, root: g.root, action: "ignore" }) }).then(function(r) {
+              appState.statusFn(tr("已忽略 ") + fname + tr("（移 ") + (r && r.moved || ".ignored") + tr("，不入册）"));
             });
-          }, { danger: true, async: true, busyText: tr("\u5FFD\u7565\u4E2D\u2026"), okText: tr("\u5DF2\u5FFD\u7565"), confirm: tr("\u5FFD\u7565\u5E76\u79FB\u51FA\u5019\u9009\u961F\u5217\uFF08\u79FB\u5165 .ignored\uFF0C\u4E0D\u5165\u518C\uFF09\uFF1A") + fname + "\uFF1F" });
+          }, { danger: true, async: true, busyText: tr("忽略中…"), okText: tr("已忽略"), confirm: tr("忽略并移出候选队列（移入 .ignored，不入册）：") + fname + "？" });
           act.appendChild(okBtn);
           act.appendChild(rmBtn);
           row.appendChild(act);
           plist.appendChild(row);
         });
         host.appendChild(plist);
-        var shown = Derive.count(g2.src.recent);
-        if (n6 > shown) host.appendChild(el("div", "sc-desc", tr("\uFF08\u672C\u6839\u4EC5\u663E\u793A\u6700\u8FD1 ") + shown + tr(" \u6761\uFF0C\u5171 ") + n6 + tr(" \u6761\uFF09")));
+        var shown = Derive.count(g.src.recent);
+        if (n > shown) host.appendChild(el("div", "sc-desc", tr("（本根仅显示最近 ") + shown + tr(" 条，共 ") + n + tr(" 条）")));
       });
-      host.appendChild(el("div", "sc-desc", tr("\u5171 ") + total + tr(" \u6761 \xB7 \u6279\u51C6=\u786E\u8BA4\u6709\u4EF7\u503C\u5165\u518C\uFF08\u79FB .processed\uFF09\uFF0C\u5FFD\u7565=\u79FB\u51FA\u961F\u5217\uFF08\u79FB .ignored\uFF0C\u4E0D\u5165\u518C\uFF09")));
+      host.appendChild(el("div", "sc-desc", tr("共 ") + total + tr(" 条 · 批准=确认有价值入册（移 .processed），忽略=移出队列（移 .ignored，不入册）")));
       var pTip = el("div", "sc-ds-alert info");
-      pTip.appendChild(el("div", null, tr("\u5347\u683C / \u964D\u683C\u8D70 /memory/approve\uFF0C\u7531 L0 \u5224\u636E\u88C1\u51B3\u3002\u7D22\u5F15\u884C\u53EA\u8BFB\uFF0C\u6B63\u6587\u7F16\u8F91\u8D70 /memory/section-edit\u3002")));
+      pTip.appendChild(el("div", null, tr("升格 / 降格走 /memory/approve，由 L0 判据裁决。索引行只读，正文编辑走 /memory/section-edit。")));
       host.appendChild(pTip);
     } else {
-      host.appendChild(el("div", "sc-mem-empty", tr("\u6682\u65E0\u5019\u9009\uFF08\u5DF2\u67E5 \u8BB0\u5FC6\u5E93 / suite / flow-candidates \u4E09\u5904\uFF09")));
+      host.appendChild(el("div", "sc-mem-empty", tr("暂无候选（已查 记忆库 / suite / flow-candidates 三处）")));
     }
   }
   function mmNotesChips(ctx) {
     var host = ctx._tb.pane("notes");
     var data = ctx.data, view = ctx.view, memoryFile = ctx.memoryFile, cap = ctx.cap;
-    var group = function(t6) {
-      host.appendChild(el("div", "sc-mem-group-title", t6));
+    var group = function(t) {
+      host.appendChild(el("div", "sc-mem-group-title", t));
     };
-    group(tr("notes \u8BE6\u60C5\u5C0F\u8282"));
+    group(tr("notes 详情小节"));
     var nw = el("div", "sc-notes-list");
     (data.notes || []).forEach(function(nf) {
       var chip = el("div", "sc-note-chip");
       chip.appendChild(el("span", null, nf.name));
       chip.appendChild(el("span", "sc-tag", String(nf.sections.length)));
-      chip.title = nf.rel + " \xB7 " + nf.sections.map(function(s4) {
-        return s4.title;
+      chip.title = nf.rel + " · " + nf.sections.map(function(s) {
+        return s.title;
       }).join(" / ");
       chip.addEventListener("click", function() {
         appState.memoryViewScroll = view.scrollTop;
         appState.noteReturnRender = null;
-        appState.api("/memory/sections?rel=" + encodeURIComponent(nf.rel)).then(function(r7) {
-          renderNoteSections(view, r7);
+        appState.api("/memory/sections?rel=" + encodeURIComponent(nf.rel)).then(function(r) {
+          renderNoteSections(view, r);
         }).catch(appState.failFn);
       });
       nw.appendChild(chip);
@@ -8284,59 +3183,59 @@
   }
   function mmArchiveZone(ctx) {
     var host = ctx._tb.pane("archive");
-    host.appendChild(el("div", "sc-mem-group-title", tr("\u5F52\u6863\u533A notes/archive/")));
+    host.appendChild(el("div", "sc-mem-group-title", tr("归档区 notes/archive/")));
     var list = el("div");
     host.appendChild(list);
-    list.appendChild(el("div", "sc-desc", tr("\u8BFB\u53D6\u4E2D\u2026")));
-    appState.api("/cognition/report").then(function(r7) {
-      var ar = r7 && r7.archive || [];
-      var tabsEls = ctx._tb.box.querySelectorAll("wa-tab");
-      if (tabsEls[3]) tabsEls[3].textContent = tr("\u5F52\u6863\u533A ") + ar.length;
+    list.appendChild(el("div", "sc-desc", tr("读取中…")));
+    appState.api("/cognition/report").then(function(r) {
+      var ar = r && r.archive || [];
+      var tabsEls = ctx._tb.box.querySelectorAll("wa-tab,.sc-tabbtn,[data-host-tab]");
+      if (tabsEls[3]) tabsEls[3].textContent = tr("归档区 ") + ar.length;
       list.textContent = "";
-      if (!Derive.has(ar)) list.appendChild(el("div", "sc-desc", tr("\u6682\u65E0\u5F52\u6863\u6761\u76EE\u3002")));
-      else ar.forEach(function(a4) {
+      if (!Derive.has(ar)) list.appendChild(el("div", "sc-desc", tr("暂无归档条目。")));
+      else ar.forEach(function(a) {
         list.appendChild(ovCRow(
-          String(a4.file || "\u2014"),
-          tr("notes/archive/ \xB7 \u4EC5\u5F52\u6863\u4E0D\u5220\u9664"),
-          [ovPill(Derive.num(a4.chars || 0) + tr(" \u5B57\u7B26"))]
+          String(a.file || "—"),
+          tr("notes/archive/ · 仅归档不删除"),
+          [ovPill(Derive.num(a.chars || 0) + tr(" 字符"))]
         ));
       });
       var tip = el("div", "sc-ds-alert ok");
-      tip.appendChild(el("div", null, tr("\u4E3B\u52A8\u9057\u5FD8\u53EA\u5F52\u6863\u3001\u4E0D\u5220\u9664 \u2014\u2014 applyForgetOps \u7981\u76F4\u5220\uFF0C\u70ED\u8282\u4E0E\u753B\u50CF\u8282\u6709\u5B88\u536B\u3002") + tr("\u5982\u9700\u6062\u590D\uFF0C\u628A notes/archive/ \u4E0B\u7684\u6587\u4EF6\u79FB\u56DE notes/ \u5373\u53EF\uFF08\u9762\u677F\u4E0D\u63D0\u4F9B\u5199\u5165\u53E3\uFF09\u3002")));
+      tip.appendChild(el("div", null, tr("主动遗忘只归档、不删除 —— applyForgetOps 禁直删，热节与画像节有守卫。") + tr("如需恢复，把 notes/archive/ 下的文件移回 notes/ 即可（面板不提供写入口）。")));
       host.appendChild(tip);
     }).catch(function() {
       list.textContent = "";
-      list.appendChild(el("div", "sc-desc", tr("\u5F52\u6863\u533A\u8BFB\u53D6\u5931\u8D25\uFF08/cognition/report\uFF09\u3002")));
+      list.appendChild(el("div", "sc-desc", tr("归档区读取失败（/cognition/report）。")));
     });
   }
   function mmSuiteZone(ctx) {
     var host = ctx._tb.pane("index");
     var data = ctx.data, view = ctx.view, memoryFile = ctx.memoryFile, cap = ctx.cap;
-    var group = function(t6) {
-      host.appendChild(el("div", "sc-mem-group-title", t6));
+    var group = function(t) {
+      host.appendChild(el("div", "sc-mem-group-title", t));
     };
     var suite = data.suite;
     if (suite && suite.present) {
-      group(tr("\u5B88\u85CF\u672C\u5730\u77E5\u8BC6\u533A \xB7 suite/knowledge"));
+      group(tr("守藏本地知识区 · suite/knowledge"));
       var sMemory = null;
-      (suite.indexes || []).forEach(function(f3) {
-        if (f3.name === "MEMORY.md") sMemory = f3;
+      (suite.indexes || []).forEach(function(f) {
+        if (f.name === "MEMORY.md") sMemory = f;
       });
-      host.appendChild(el("div", "sc-desc", tr("\u5B88\u85CF\u84B8\u998F\u5668\u4E8B\u5B9E\u6E90\uFF08ADR-0002\uFF09\uFF1AMEMORY ") + (sMemory ? Derive.num(sMemory.chars) + "/" + Derive.num(sMemory.cap) + " \xB7 " + Derive.count(sMemory.lines) + tr(" \u884C") : "\u2014") + " \xB7 pending " + String(suite.pending ? suite.pending.count : 0) + tr(" \u6761\u3002")));
+      host.appendChild(el("div", "sc-desc", tr("守藏蒸馏器事实源（ADR-0002）：MEMORY ") + (sMemory ? Derive.num(sMemory.chars) + "/" + Derive.num(sMemory.cap) + " · " + Derive.count(sMemory.lines) + tr(" 行") : "—") + " · pending " + String(suite.pending ? suite.pending.count : 0) + tr(" 条。")));
       if (Derive.has(suite.notes)) {
         var snw = el("div", "sc-notes-list");
         suite.notes.forEach(function(nf) {
           var chip = el("div", "sc-note-chip");
           chip.appendChild(el("span", null, nf.name));
           chip.appendChild(el("span", "sc-tag", String(nf.sections.length)));
-          chip.title = "suite \xB7 " + nf.rel + " \xB7 " + nf.sections.map(function(s4) {
-            return s4.title;
+          chip.title = "suite · " + nf.rel + " · " + nf.sections.map(function(s) {
+            return s.title;
           }).join(" / ");
           chip.addEventListener("click", function() {
             appState.memoryViewScroll = view.scrollTop;
             appState.noteReturnRender = null;
-            appState.api("/memory/sections?rel=" + encodeURIComponent(nf.rel) + "&root=suite").then(function(r7) {
-              renderNoteSections(view, r7);
+            appState.api("/memory/sections?rel=" + encodeURIComponent(nf.rel) + "&root=suite").then(function(r) {
+              renderNoteSections(view, r);
             }).catch(appState.failFn);
           });
           snw.appendChild(chip);
@@ -8344,17 +3243,17 @@
         host.appendChild(snw);
       }
     } else {
-      host.appendChild(el("div", "sc-mem-empty", tr("\u5B88\u85CF\u672C\u5730\u77E5\u8BC6\u533A\u672A\u542F\u7528\uFF08suite/knowledge \u4E0D\u5B58\u5728\uFF09")));
+      host.appendChild(el("div", "sc-mem-empty", tr("守藏本地知识区未启用（suite/knowledge 不存在）")));
     }
   }
   function mmGrowthDelta(ctx) {
     var host = ctx._tb.pane("growth");
     var data = ctx.data, view = ctx.view, memoryFile = ctx.memoryFile, cap = ctx.cap;
-    var group = function(t6) {
-      host.appendChild(el("div", "sc-mem-group-title", t6));
+    var group = function(t) {
+      host.appendChild(el("div", "sc-mem-group-title", t));
     };
     if (data.delta && data.delta.present && Derive.has(data.delta.rows)) {
-      group(tr("\u6700\u8FD1\u6210\u957F delta \xB7 \u6DF1\u7761\u4EA7\u51FA"));
+      group(tr("最近成长 delta · 深睡产出"));
       var dl8 = el("div", "sc-idx-list");
       data.delta.rows.forEach(function(row) {
         var r8 = el("div", "sc-idx-row");
@@ -8366,35 +3265,35 @@
       if (data.delta.staleAt) {
         try {
           var remain = Math.max(0, new Date(data.delta.staleAt) - Date.now());
-          staleNote = tr(" \xB7 \u5269\u4F59 ") + Math.ceil(remain / 36e5) + tr("h \u6709\u6548");
-        } catch (e8) {
+          staleNote = tr(" · 剩余 ") + Math.ceil(remain / 36e5) + tr("h 有效");
+        } catch (e) {
         }
       }
-      host.appendChild(el("div", "sc-mem-sub muted", tr("\u672C\u6B21\u6DF1\u7761\u5F52\u7EB3\u4EA7\u51FA\uFF0848h \u6709\u6548") + staleNote + tr("\uFF09\xB7 \u5DF2\u5728\u4F1A\u8BDD\u6CE8\u5165\u53EF\u89C1")));
+      host.appendChild(el("div", "sc-mem-sub muted", tr("本次深睡归纳产出（48h 有效") + staleNote + tr("）· 已在会话注入可见")));
     }
     if (data.weekDiff && (data.weekDiff.deepAdded || 0) > 0) {
-      group(tr("\u672C\u5468\u6210\u957F \xB7 \u589E\u91CF"));
+      group(tr("本周成长 · 增量"));
       var g9 = el("div", "sc-mem-grid");
-      g9.appendChild(mkStat(tr("\u6DF1\u7761\u65B0\u4E60\u5F97"), String(data.weekDiff.deepAdded || 0) + tr(" \u6761"), tr("\u8FD1 7 \u5929 [\u539F\u5219]/[\u8DEF\u5F84] \u5F52\u7EB3")));
+      g9.appendChild(mkStat(tr("深睡新习得"), String(data.weekDiff.deepAdded || 0) + tr(" 条"), tr("近 7 天 [原则]/[路径] 归纳")));
       host.appendChild(g9);
     }
   }
   function secFoldKey(rel, path, title) {
-    return "note:" + (rel || "") + ":" + (path || "") + "\xA7" + (title || "");
+    return "note:" + (rel || "") + ":" + (path || "") + "§" + (title || "");
   }
   function renderNoteSections(view, data) {
     if (!data || !data.present || !data.sections) {
-      appState.statusFn(data && data.error || tr("\u65E0\u5C0F\u8282"));
+      appState.statusFn(data && data.error || tr("无小节"));
       return;
     }
     view.textContent = "";
-    UI.pageHead(data.name, (data.root === "suite" ? tr("suite \u77E5\u8BC6\u533A \xB7 ") : "") + data.rel + " \xB7 " + data.sections.length + tr(" \u4E2A\u5C0F\u8282\uFF08\u767D\u540D\u5355\u53EA\u8BFB\uFF09"));
-    var back = el("button", "sc-btn subtle", tr("\u2190 \u8FD4\u56DE") + (appState.noteReturnRender === renderPersona ? tr("\u753B\u50CF\u677F\u5757") : data.root === "suite" ? tr("\u5B88\u85CF\u77E5\u8BC6\u533A") : tr("\u8BB0\u5FC6\u5E93")));
+    UI.pageHead(data.name, (data.root === "suite" ? tr("suite 知识区 · ") : "") + data.rel + " · " + data.sections.length + tr(" 个小节（白名单只读）"));
+    var back = el("button", "sc-btn subtle", tr("← 返回") + (appState.noteReturnRender === renderPersona ? tr("画像板块") : data.root === "suite" ? tr("守藏知识区") : tr("记忆库")));
     back.type = "button";
     back.addEventListener("click", function() {
       var backRender = appState.noteReturnRender || renderMemoryExpanded;
-      appState.api("/memory/overview").then(function(r7) {
-        backRender(view, r7);
+      appState.api("/memory/overview").then(function(r) {
+        backRender(view, r);
         requestAnimationFrame(function() {
           view.scrollTop = appState.memoryViewScroll;
         });
@@ -8404,7 +3303,7 @@
     view.scrollTop = 0;
     if (Derive.has(data.backrefs)) {
       var bl = el("div");
-      bl.appendChild(el("div", "sc-mem-group-title", tr("\u88AB\u5F15\u7528 \xB7 ") + data.backrefs.length));
+      bl.appendChild(el("div", "sc-mem-group-title", tr("被引用 · ") + data.backrefs.length));
       var bList = el("div", "sc-idx-list");
       data.backrefs.slice(0, 8).forEach(function(br) {
         var row = el("div", "sc-idx-row");
@@ -8414,7 +3313,7 @@
         bList.appendChild(row);
       });
       bl.appendChild(bList);
-      if (data.backrefs.length > Derive.BACKREF_LIMIT) bl.appendChild(el("div", "sc-mem-sub muted", tr("\u2026 \u5171 ") + data.backrefs.length + tr(" \u5904\u5F15\u7528")));
+      if (data.backrefs.length > Derive.BACKREF_LIMIT) bl.appendChild(el("div", "sc-mem-sub muted", tr("… 共 ") + data.backrefs.length + tr(" 处引用")));
       view.appendChild(bl);
     }
     function renderSecNode(sec, depth, container, path) {
@@ -8425,13 +3324,13 @@
       var arrow = el("span", "sc-sec-arrow");
       head.appendChild(arrow);
       head.appendChild(document.createTextNode(sec.title));
-      head.title = tr("\u70B9\u51FB\u5C55\u5F00/\u6536\u8D77") + (depth > 0 ? tr("\uFF08\u5B50\u6811\uFF09") : "");
+      head.title = tr("点击展开/收起") + (depth > 0 ? tr("（子树）") : "");
       head.classList.add("sc-card-head");
       head.setAttribute("data-fold-key", key);
       if (pad) head.style.setProperty("--sc-indent", pad + "px");
       var body = el("div", "sc-card-body");
-      body.textContent = sec.body || (hasKids ? "" : tr("\uFF08\u7A7A\u5C0F\u8282\uFF09"));
-      var editSec = el("button", "sc-btn subtle sc-edit-sec", tr("\u270E \u7F16\u8F91\u6B64\u5C0F\u8282"));
+      body.textContent = sec.body || (hasKids ? "" : tr("（空小节）"));
+      var editSec = el("button", "sc-btn subtle sc-edit-sec", tr("✎ 编辑此小节"));
       editSec.type = "button";
       if (pad) editSec.style.setProperty("--sc-indent", pad + "px");
       editSec.addEventListener("click", function() {
@@ -8442,27 +3341,27 @@
         body.classList.toggle("sc-hidden", !open);
         editSec.classList.toggle("sc-hidden", !open);
         kidsWrap.classList.toggle("sc-hidden", !open || !hasKids);
-        arrow.textContent = open ? "\u25BE" : "\u25B8";
+        arrow.textContent = open ? "▾" : "▸";
         head.classList.toggle("sc-on", open);
       }
       paint(Fold.get(key, false));
       head.addEventListener("click", function() {
         paint(Fold.toggle(key, false));
       });
-      var off = Bus.on("fold", function(p4) {
+      var off = Bus.on("fold", function(p) {
         if (!head.isConnected && !body.isConnected) {
           off();
           return;
         }
-        if (p4 && p4.key === key) paint(Fold.get(key, false));
+        if (p && p.key === key) paint(Fold.get(key, false));
       });
       container.appendChild(head);
       container.appendChild(body);
       container.appendChild(editSec);
       if (hasKids) {
         var kidPath = (path ? path + "/" : "") + sec.title;
-        (sec.children || []).forEach(function(c5) {
-          renderSecNode(c5, depth + 1, kidsWrap, kidPath);
+        (sec.children || []).forEach(function(c) {
+          renderSecNode(c, depth + 1, kidsWrap, kidPath);
         });
         container.appendChild(kidsWrap);
       }
@@ -8470,7 +3369,7 @@
     (data.sections || []).forEach(function(sec) {
       renderSecNode(sec, 0, view, "");
     });
-    appState.statusFn(data.rel + " \xB7 " + Derive.count(data.sections) + tr(" \u9876\u5C42\u5C0F\u8282\uFF08\u6811\u72B6\uFF0C\u70B9\u51FB\u9010\u5C42\u5C55\u5F00\uFF1B\u7F16\u8F91\u5728\u8282\u70B9\u7EC6\u8282\uFF09"));
+    appState.statusFn(data.rel + " · " + Derive.count(data.sections) + tr(" 顶层小节（树状，点击逐层展开；编辑在节点细节）"));
   }
   function editNoteSection(data, sec, view) {
     if (!data || !data.rel || !sec) return;
@@ -8478,31 +3377,31 @@
     var ta = el("textarea", "sc-input sc-ta");
     ta.value = bodyTxt;
     var wrap = el("div");
-    wrap.appendChild(el("div", "sc-desc", tr("\u7F16\u8F91 \xA7") + sec.title + tr(" \u6B63\u6587\uFF08") + data.rel + tr("\uFF09\u2014\u2014\u4FDD\u7559\u5F00\u5934\u6458\u8981\u884C\u6700\u4F73\uFF1B\u4FDD\u5B58\u8D70\u5199\u95E8\uFF08\u5907\u4EFD+\u5BB9\u91CF\u7EA2\u7EBF\uFF09\uFF0C\u7D22\u5F15\u6307\u9488\u4E0D\u53D8\u3002")));
+    wrap.appendChild(el("div", "sc-desc", tr("编辑 §") + sec.title + tr(" 正文（") + data.rel + tr("）——保留开头摘要行最佳；保存走写门（备份+容量红线），索引指针不变。")));
     wrap.appendChild(ta);
     var bar = el("div", "sc-toolbar");
-    var saveBtn = el("button", "sc-btn", tr("\u4FDD\u5B58\u6B63\u6587"));
+    var saveBtn = el("button", "sc-btn", tr("保存正文"));
     saveBtn.type = "button";
     saveBtn.addEventListener("click", function() {
       var next = ta.value.trim();
       if (!next) {
-        appState.statusFn(tr("\u6B63\u6587\u4E0D\u80FD\u4E3A\u7A7A\u2014\u2014\u5982\u9700\u6E05\u7A7A\u8BF7\u7528\u5220\u9664"));
+        appState.statusFn(tr("正文不能为空——如需清空请用删除"));
         return;
       }
       saveBtn.disabled = true;
-      saveBtn.textContent = tr("\u4FDD\u5B58\u4E2D\u2026");
+      saveBtn.textContent = tr("保存中…");
       appState.api("/memory/section-edit", { method: "POST", body: JSON.stringify({ rel: data.rel, section: sec.title, newBody: next }) }).then(function() {
-        appState.statusFn("\u2713 \xA7" + sec.title + tr(" \u6B63\u6587\u5DF2\u4FDD\u5B58\uFF08write_gate \u901A\u8FC7\uFF09"));
-        appState.api("/memory/sections?rel=" + encodeURIComponent(data.rel) + (data.root === "suite" ? "&root=suite" : "")).then(function(r7) {
-          renderNoteSections(view, r7);
+        appState.statusFn("✓ §" + sec.title + tr(" 正文已保存（write_gate 通过）"));
+        appState.api("/memory/sections?rel=" + encodeURIComponent(data.rel) + (data.root === "suite" ? "&root=suite" : "")).then(function(r) {
+          renderNoteSections(view, r);
         }).catch(appState.failFn);
-      }).catch(function(e8) {
+      }).catch(function(e) {
         saveBtn.disabled = false;
-        saveBtn.textContent = tr("\u4FDD\u5B58\u6B63\u6587");
-        appState.failFn(e8);
+        saveBtn.textContent = tr("保存正文");
+        appState.failFn(e);
       });
     });
-    var cancelBtn = el("button", "sc-btn subtle", tr("\u53D6\u6D88"));
+    var cancelBtn = el("button", "sc-btn subtle", tr("取消"));
     cancelBtn.type = "button";
     cancelBtn.addEventListener("click", function() {
       view.removeChild(wrap);
@@ -8516,23 +3415,23 @@
   // src-client/panes-config.js
   function renderViewRoots(view, rootListWrap) {
     view.textContent = "";
-    UI.pageHead(tr("\u5B88\u85CF\u6839\u76EE\u5F55"), tr("\u6307\u5411\u542B shoucang.config.yaml \u7684\u5DE5\u4F5C\u533A\u76EE\u5F55\u3002\u8BE5\u76EE\u5F55\u672C\u8EAB\u5373\u4E3A Obsidian \u517C\u5BB9 vault\uFF08Markdown + frontmatter + [[\u53CC\u94FE]]\uFF09\uFF0C\u53EF\u7528 Obsidian \u76F4\u63A5\u6253\u5F00\u3002"), { routes: ["/roots", "/get_root", "/root/bootstrap"] });
+    UI.pageHead(tr("守藏根目录"), tr("指向含 shoucang.config.yaml 的工作区目录。该目录本身即为 Obsidian 兼容 vault（Markdown + frontmatter + [[双链]]），可用 Obsidian 直接打开。"), { routes: ["/roots", "/get_root", "/root/bootstrap"] });
     var listWrap = el("div");
     rootListWrap(listWrap);
     view.appendChild(listWrap);
     var addItem = el("div", "setting-item");
     var info = el("div", "setting-item-info");
-    info.appendChild(el("div", "setting-item-name", tr("\u6DFB\u52A0\u6839\u76EE\u5F55")));
-    info.appendChild(el("div", "setting-item-desc", tr("\u7EDD\u5BF9\u8DEF\u5F84\uFF0C\u987B\u5305\u542B shoucang.config.yaml")));
+    info.appendChild(el("div", "setting-item-name", tr("添加根目录")));
+    info.appendChild(el("div", "setting-item-desc", tr("绝对路径，须包含 shoucang.config.yaml")));
     var input = el("input", "sc-input");
-    input.placeholder = tr("\u8BF7\u8F93\u5165 vault \u7684\u7EDD\u5BF9\u8DEF\u5F84");
-    var btn = el("button", "sc-btn", tr("\u6DFB\u52A0\u5E76\u542F\u7528"));
+    input.placeholder = tr("请输入 vault 的绝对路径");
+    var btn = el("button", "sc-btn", tr("添加并启用"));
     btn.onclick = function() {
-      var p4 = input.value.trim();
-      if (!p4) return;
-      appState.api("/set_root", { method: "POST", body: JSON.stringify({ path: p4 }) }).then(function() {
+      var p = input.value.trim();
+      if (!p) return;
+      appState.api("/set_root", { method: "POST", body: JSON.stringify({ path: p }) }).then(function() {
         input.value = "";
-        appState.statusFn(tr("\u2713 \u6839\u76EE\u5F55\u5DF2\u542F\u7528"));
+        appState.statusFn(tr("✓ 根目录已启用"));
         appState.refreshView();
       }).catch(appState.failFn);
     };
@@ -8540,26 +3439,26 @@
     addItem.appendChild(input);
     addItem.appendChild(btn);
     view.appendChild(addItem);
-    function draw(r7) {
+    function draw(r) {
       listWrap.textContent = "";
-      if (!Derive.has(r7.roots)) {
+      if (!Derive.has(r.roots)) {
         var empty = el("div", "setting-item");
-        empty.appendChild(el("div", "setting-item-desc", tr("\u5C1A\u672A\u767B\u8BB0\u4EFB\u4F55\u6839\u76EE\u5F55\u2014\u2014\u5728\u4E0A\u65B9\u8F93\u5165\u8DEF\u5F84\u6DFB\u52A0\u3002")));
+        empty.appendChild(el("div", "setting-item-desc", tr("尚未登记任何根目录——在上方输入路径添加。")));
         listWrap.appendChild(empty);
         return;
       }
-      r7.roots.forEach(function(root) {
-        var item = el("div", "setting-item sc-rootitem" + (root.id === r7.active ? " active" : ""));
-        var dot = el("span", "sc-dot" + (root.id === r7.active ? " on" : ""));
+      r.roots.forEach(function(root) {
+        var item = el("div", "setting-item sc-rootitem" + (root.id === r.active ? " active" : ""));
+        var dot = el("span", "sc-dot" + (root.id === r.active ? " on" : ""));
         void dot;
         item.appendChild(dot.cloneNode ? dot : dot);
         item.appendChild(el("span", "sc-rootname", root.name));
         item.appendChild(el("span", "sc-rootpath", root.path)).title = root.path;
-        var useBtn = el("button", "sc-btn subtle", root.id === r7.active ? tr("\u5F53\u524D") : tr("\u542F\u7528"));
-        if (root.id === r7.active) useBtn.disabled = true;
+        var useBtn = el("button", "sc-btn subtle", root.id === r.active ? tr("当前") : tr("启用"));
+        if (root.id === r.active) useBtn.disabled = true;
         else useBtn.onclick = function() {
           appState.api("/set_root", { method: "POST", body: JSON.stringify({ path: root.path }) }).then(function() {
-            appState.statusFn(tr("\u2713 \u5DF2\u542F\u7528 ") + root.name);
+            appState.statusFn(tr("✓ 已启用 ") + root.name);
             appState.refreshView();
           }).catch(appState.failFn);
         };
@@ -8571,26 +3470,26 @@
   }
   function renderViewYaml(view, ta, saveRow) {
     view.textContent = "";
-    UI.pageHead(tr("\u914D\u7F6E\u539F\u6587"), tr("\u76F4\u63A5\u7F16\u8F91 shoucang.config.yaml \u5168\u6587\u3002\u4FDD\u5B58\u65F6\u539F\u6587\u4EF6\u81EA\u52A8\u5907\u4EFD\u4E3A .bak-\u65F6\u95F4\u6233\u3002"), { routes: ["/config", "/save"] });
+    UI.pageHead(tr("配置原文"), tr("直接编辑 shoucang.config.yaml 全文。保存时原文件自动备份为 .bak-时间戳。"), { routes: ["/config", "/save"] });
     ta.id = "sc-yaml";
     ta.spellcheck = false;
     view.appendChild(ta);
     saveRow.className = "setting-item";
     var spacer = el("div", "setting-item-info");
     saveRow.appendChild(spacer);
-    saveRow.appendChild(saveRow._btn = el("button", "sc-btn", tr("\u4FDD\u5B58")));
+    saveRow.appendChild(saveRow._btn = el("button", "sc-btn", tr("保存")));
     view.appendChild(saveRow);
-    view.appendChild(el("div", "sc-mem-group-title", tr("\u6700\u8FD1\u6539\u52A8\uFF085 \u6761\uFF09")));
+    view.appendChild(el("div", "sc-mem-group-title", tr("最近改动（5 条）")));
     var recentBox = el("div", "sc-recent");
-    recentBox.appendChild(el("div", "sc-recent-row", tr("\u8BFB\u53D6\u4E2D\u2026")));
+    recentBox.appendChild(el("div", "sc-recent-row", tr("读取中…")));
     view.appendChild(recentBox);
-    appState.api("/config/recent").then(function(r7) {
+    appState.api("/config/recent").then(function(r) {
       recentBox.textContent = "";
-      var cfg = r7 && r7.configMtime ? tr("\u914D\u7F6E\u6587\u4EF6\u6539\u52A8\uFF1A") + fmtTime(r7.configMtime) : tr("\u914D\u7F6E\u6587\u4EF6\u5C1A\u65E0\u8BB0\u5F55");
+      var cfg = r && r.configMtime ? tr("配置文件改动：") + fmtTime(r.configMtime) : tr("配置文件尚无记录");
       recentBox.appendChild(el("div", "sc-recent-row", cfg));
-      var items = r7 && r7.recent || [];
+      var items = r && r.recent || [];
       if (!Derive.has(items)) {
-        recentBox.appendChild(el("div", "sc-recent-row", tr("\u8BB0\u5FC6\u5E93\u5C1A\u65E0 git \u5FEB\u7167\uFF08\u5199\u5165\u4E00\u6B21\u5373\u51FA\u73B0\uFF09")));
+        recentBox.appendChild(el("div", "sc-recent-row", tr("记忆库尚无 git 快照（写入一次即出现）")));
         return;
       }
       items.forEach(function(it) {
@@ -8602,7 +3501,7 @@
       });
     }).catch(function() {
       recentBox.textContent = "";
-      recentBox.appendChild(el("div", "sc-recent-row", tr("\u8BFB\u53D6\u5931\u8D25\uFF08/config/recent\uFF09")));
+      recentBox.appendChild(el("div", "sc-recent-row", tr("读取失败（/config/recent）")));
     });
   }
   function renderConfigRaw(host) {
@@ -8611,33 +3510,33 @@
     var ta = document.createElement("textarea");
     appState.refs.ta = ta;
     var saveRow = el("div");
-    renderViewRoots(rootSection, function(w2) {
-      appState.refs.rootListWrap = w2;
+    renderViewRoots(rootSection, function(w) {
+      appState.refs.rootListWrap = w;
     });
     renderViewYaml(yamlSection, ta, saveRow);
     host.appendChild(rootSection);
     host.appendChild(yamlSection);
-    appState.api("/roots").then(function(r7) {
-      if (renderViewRoots._draw) renderViewRoots._draw(r7);
+    appState.api("/roots").then(function(r) {
+      if (renderViewRoots._draw) renderViewRoots._draw(r);
     }).catch(appState.failFn);
     if (saveRow._btn) {
       saveRow._btn.onclick = function() {
         appState.api("/save", { method: "POST", body: JSON.stringify({ text: ta.value }) }).then(function() {
-          appState.statusFn(tr("\u2713 \u5DF2\u4FDD\u5B58\uFF0C\u539F\u6587\u4EF6\u5DF2\u5907\u4EFD\u4E3A .bak-*"));
+          appState.statusFn(tr("✓ 已保存，原文件已备份为 .bak-*"));
         }).catch(appState.failFn);
       };
     }
-    appState.api("/config").then(function(r7) {
-      ta.value = r7.text || "";
-      if (!r7.text) appState.statusFn(r7.error === "no-active-root" ? tr("\u672A\u6FC0\u6D3B\u6839\u76EE\u5F55\u2014\u2014\u8BF7\u5728\u300C\u9AD8\u7EA7 \xB7 \u6839\u76EE\u5F55\u300D\u533A\u6DFB\u52A0\u3002") : r7.error || "");
+    appState.api("/config").then(function(r) {
+      ta.value = r.text || "";
+      if (!r.text) appState.statusFn(r.error === "no-active-root" ? tr("未激活根目录——请在「高级 · 根目录」区添加。") : r.error || "");
     }).catch(appState.failFn);
   }
 
   // src-client/panes-arch.js
   function renderFacts(host, obj, depth) {
-    var d3 = depth || 0;
+    var d = depth || 0;
     if (obj === null || obj === void 0) {
-      host.appendChild(el("div", "sc-desc", "\u2014"));
+      host.appendChild(el("div", "sc-desc", "—"));
       return;
     }
     if (typeof obj !== "object") {
@@ -8646,358 +3545,358 @@
     }
     if (Array.isArray(obj)) {
       if (obj.length === 0) {
-        host.appendChild(el("div", "sc-desc", tr("\uFF08\u7A7A\uFF09")));
+        host.appendChild(el("div", "sc-desc", tr("（空）")));
         return;
       }
       var rows = obj.slice(0, 12);
       rows.forEach(function(it) {
         if (it && typeof it === "object") {
           var sub = el("div", "sc-facts-row");
-          var line = Object.keys(it).slice(0, 6).map(function(k2) {
-            return k2 + "=" + String(it[k2]).slice(0, 40);
-          }).join(" \xB7 ");
+          var line = Object.keys(it).slice(0, 6).map(function(k) {
+            return k + "=" + String(it[k]).slice(0, 40);
+          }).join(" · ");
           sub.appendChild(el("div", "sc-desc", line));
           host.appendChild(sub);
-        } else host.appendChild(el("div", "sc-desc", "\xB7 " + String(it)));
+        } else host.appendChild(el("div", "sc-desc", "· " + String(it)));
       });
-      if (obj.length > rows.length) host.appendChild(el("div", "sc-desc", tr("\u2026 \u53E6\u6709 ") + (obj.length - rows.length) + tr(" \u6761")));
+      if (obj.length > rows.length) host.appendChild(el("div", "sc-desc", tr("… 另有 ") + (obj.length - rows.length) + tr(" 条")));
       return;
     }
     var pairs = [];
-    Object.keys(obj).forEach(function(k2) {
-      var v2 = obj[k2];
-      if (v2 === null || v2 === void 0) pairs.push([k2, "\u2014"]);
-      else if (typeof v2 === "object") {
-        if (Array.isArray(v2)) pairs.push([k2, "[" + v2.length + tr(" \u6761]")]);
-        else pairs.push([k2, "{" + Object.keys(v2).length + tr(" \u952E}")]);
-      } else pairs.push([k2, String(v2)]);
+    Object.keys(obj).forEach(function(k) {
+      var v = obj[k];
+      if (v === null || v === void 0) pairs.push([k, "—"]);
+      else if (typeof v === "object") {
+        if (Array.isArray(v)) pairs.push([k, "[" + v.length + tr(" 条]")]);
+        else pairs.push([k, "{" + Object.keys(v).length + tr(" 键}")]);
+      } else pairs.push([k, String(v)]);
     });
     try {
       host.appendChild(UI.kv(pairs));
-    } catch (e8) {
+    } catch (e) {
       host.appendChild(el("div", "sc-desc", JSON.stringify(obj).slice(0, 400)));
     }
-    if (d3 < 1) {
-      Object.keys(obj).forEach(function(k2) {
-        var v2 = obj[k2];
-        if (v2 && typeof v2 === "object" && !Array.isArray(v2)) {
-          host.appendChild(el("div", "sc-sub", k2));
-          renderFacts(host, v2, d3 + 1);
-        } else if (Array.isArray(v2) && v2.length && typeof v2[0] === "object") {
-          host.appendChild(el("div", "sc-sub", k2 + "\uFF08" + v2.length + tr(" \u6761\uFF09")));
-          renderFacts(host, v2, d3 + 1);
+    if (d < 1) {
+      Object.keys(obj).forEach(function(k) {
+        var v = obj[k];
+        if (v && typeof v === "object" && !Array.isArray(v)) {
+          host.appendChild(el("div", "sc-sub", k));
+          renderFacts(host, v, d + 1);
+        } else if (Array.isArray(v) && v.length && typeof v[0] === "object") {
+          host.appendChild(el("div", "sc-sub", k + "（" + v.length + tr(" 条）")));
+          renderFacts(host, v, d + 1);
         }
       });
     }
   }
   function rawDetails(host, obj) {
     var det = document.createElement("details");
-    det.appendChild(el("summary", "sc-desc", tr("\u539F\u59CB JSON")));
+    det.appendChild(el("summary", "sc-desc", tr("原始 JSON")));
     var pre = el("pre", "sc-code", JSON.stringify(obj, null, 2));
     det.appendChild(pre);
     host.appendChild(det);
   }
   function renderViewArch(view) {
     view.textContent = "";
-    var safeFail = function(e8) {
-      var msg = e8 && (e8.message || e8.error) ? String(e8.message || e8.error) : tr("\u53D6\u6570\u5931\u8D25\uFF08\u7AEF\u70B9\u4E0D\u53EF\u8FBE\u6216\u8FD4\u56DE\u975E JSON\uFF09");
+    var safeFail = function(e) {
+      var msg = e && (e.message || e.error) ? String(e.message || e.error) : tr("取数失败（端点不可达或返回非 JSON）");
       try {
-        host.appendChild(el("div", "sc-desc", "\u26A0 " + msg));
-      } catch (_2) {
+        host.appendChild(el("div", "sc-desc", "⚠ " + msg));
+      } catch (_) {
       }
     };
     var guard = function(path) {
       return function() {
         try {
-          host.appendChild(el("div", "sc-desc", "\u26A0 " + path + tr(" \u53D6\u6570\u5931\u8D25\uFF08\u7AEF\u70B9\u4E0D\u53EF\u8FBE\uFF09")));
-        } catch (_2) {
+          host.appendChild(el("div", "sc-desc", "⚠ " + path + tr(" 取数失败（端点不可达）")));
+        } catch (_) {
         }
       };
     };
     var host = view;
     try {
       renderArchBody(view, safeFail);
-    } catch (e8) {
-      view.appendChild(el("div", "sc-desc", tr("\u26A0 \u67B6\u6784\u89C6\u56FE\u6E32\u67D3\u5931\u8D25\uFF1A") + String(e8 && e8.message || e8)));
+    } catch (e) {
+      view.appendChild(el("div", "sc-desc", tr("⚠ 架构视图渲染失败：") + String(e && e.message || e)));
     }
   }
   function renderArchBody(view, safeFail) {
     var fail = safeFail;
     var fail = function() {
     };
-    UI.pageHead(tr("\u67B6\u6784"), tr("\u91CD\u6784\u540E\u7684\u4E8B\u5B9E\u9762\u4E0E\u65CB\u94AE\uFF1A\u5185\u5BB9\u73AF KPI \xB7 \u8BB0\u5F55\u5C42\u5BF9\u8D26\u4E0E\u81EA\u8BC1 \xB7 \u7EDF\u4E00\u53F0\u8D26\u4E0E legacy \u6D41 \xB7 \u88C5\u914D\u6839\u5C31\u7EEA\u5EA6 \xB7 \u65AD\u8A00\u56FE \xB7 \u8BA4\u77E5\u73AF\u53C2\u6570\u3002\u6570\u636E\u5168\u90E8\u6765\u81EA\u53EA\u8BFB\u7AEF\u70B9\uFF0C\u552F\u4E00\u5199\u5165\u53E3\u662F\u8BA4\u77E5\u73AF\u65CB\u94AE\uFF08\u767D\u540D\u5355\u8865\u4E01\uFF09\u3002"), {
+    UI.pageHead(tr("架构"), tr("重构后的事实面与旋钮：内容环 KPI · 记录层对账与自证 · 统一台账与 legacy 流 · 装配根就绪度 · 断言图 · 认知环参数。数据全部来自只读端点，唯一写入口是认知环旋钮（白名单补丁）。"), {
       routes: ["/rings", "/arch/records", "/arch/graph", "/arch/observability", "/arch/assembly", "/mcl/config"],
       refresh: true
     });
     var ops = el("div", "sc-opgrid");
-    ops.appendChild(appState.opCard(tr("\u5185\u5BB9\u73AF\u4E0E\u53F0\u8D26"), tr("\u4E94\u73AF KPI \u4E0E\u73AF\u4E8B\u4EF6\u5BF9\u8D26 + \u7EDF\u4E00\u53F0\u8D26\u6309 type \u5206\u5E03\uFF08\u7F3A `at` \u884C\u6570 = \u4FE1\u5C01\u5B8C\u6574\u6027\uFF09\u3002"), "GET /rings \xB7 /arch/observability", tr("\u770B\u89C2\u6D4B"), function() {
+    ops.appendChild(appState.opCard(tr("内容环与台账"), tr("五环 KPI 与环事件对账 + 统一台账按 type 分布（缺 `at` 行数 = 信封完整性）。"), "GET /rings · /arch/observability", tr("看观测"), function() {
       tb.select("obs");
       return Promise.resolve();
-    }, { icon: "M3 12h4l2.5-6 4 13L16 12h5", okText: tr("\u5DF2\u5207\u5230\u300C\u89C2\u6D4B\u300D") }));
-    ops.appendChild(appState.opCard(tr("\u8BA4\u77E5\u73AF\u65CB\u94AE"), tr("\u719F\u6089\u5EA6\u9608\u503C / \u518D\u5F15\u5BFC\u4E0A\u9650 / \u6750\u6599\u9884\u7B97 / topK / \u6750\u6599\u53BB\u5411\uFF08P2b\uFF09/ REM \u2014\u2014 \u767D\u540D\u5355\u8865\u4E01\u5199 scheduler.json\u3002"), "GET|POST /mcl/config", tr("\u53BB\u8C03\u53C2"), function() {
+    }, { icon: "M3 12h4l2.5-6 4 13L16 12h5", okText: tr("已切到「观测」") }));
+    ops.appendChild(appState.opCard(tr("认知环旋钮"), tr("熟悉度阈值 / 再引导上限 / 材料预算 / topK / 材料去向（P2b）/ REM —— 白名单补丁写 scheduler.json。"), "GET|POST /mcl/config", tr("去调参"), function() {
       tb.select("mcl");
       return Promise.resolve();
-    }, { icon: "M4 21v-7|M4 10V3|M12 21v-9|M12 8V3|M20 21v-5|M20 12V3|M2 14h4|M10 8h4|M18 16h4", okText: tr("\u5DF2\u5207\u5230\u300C\u8BA4\u77E5\u73AF\u65CB\u94AE\u300D") }));
-    ops.appendChild(appState.opCard(tr("\u91CD\u53D6\u67B6\u6784\u5FEB\u7167"), tr("\u91CD\u65B0\u62C9\u53D6\u8BB0\u5F55\u5C42 / \u65AD\u8A00\u56FE / \u89C2\u6D4B / \u88C5\u914D\u56DB\u4E2A\u53EA\u8BFB\u7AEF\u70B9\uFF08\u5404\u9875\u7B7E\u540C\u65F6\u5237\u65B0\uFF09\u3002"), "GET /arch/*", tr("\u5237\u65B0"), function() {
+    }, { icon: "M4 21v-7|M4 10V3|M12 21v-9|M12 8V3|M20 21v-5|M20 12V3|M2 14h4|M10 8h4|M18 16h4", okText: tr("已切到「认知环旋钮」") }));
+    ops.appendChild(appState.opCard(tr("重取架构快照"), tr("重新拉取记录层 / 断言图 / 观测 / 装配四个只读端点（各页签同时刷新）。"), "GET /arch/*", tr("刷新"), function() {
       renderArchBody(view, safeFail);
       return Promise.resolve();
-    }, { icon: "M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1", busyText: tr("\u53D6\u6570\u4E2D\u2026"), okText: tr("\u5DF2\u5237\u65B0") }));
+    }, { icon: "M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1", busyText: tr("取数中…"), okText: tr("已刷新") }));
     view.appendChild(ops);
     var kpis = el("div", "sc-kpis");
-    var kRec = UI.kpi(tr("\u8BB0\u5FC6\u8BB0\u5F55"), { val: "\u2014", sub: "store census", pct: 0, kind: "ended" });
-    var kPar = UI.kpi(tr("\u8F7D\u4F53\u5BF9\u8D26"), { val: "\u2014", sub: tr("md \u2194 store \u9010\u4EF6"), pct: 0, kind: "ended" });
-    var kSelf = UI.kpi(tr("\u5199\u65F6\u81EA\u8BC1"), { val: "\u2014", sub: tr("\u53EF\u8FD8\u539F / \u5206\u6B67"), pct: 0, kind: "ended" });
-    var kAsm = UI.kpi(tr("\u88C5\u914D\u9762"), { val: "\u2014", sub: tr("\u60F0\u6027\u6865 / \u65B0\u67B6\u6784\u6A21\u5757"), pct: 0, kind: "ended" });
-    [kRec, kPar, kSelf, kAsm].forEach(function(c5) {
-      kpis.appendChild(c5.box);
+    var kRec = UI.kpi(tr("记忆记录"), { val: "—", sub: "store census", pct: 0, kind: "ended" });
+    var kPar = UI.kpi(tr("载体对账"), { val: "—", sub: tr("md ↔ store 逐件"), pct: 0, kind: "ended" });
+    var kSelf = UI.kpi(tr("写时自证"), { val: "—", sub: tr("可还原 / 分歧"), pct: 0, kind: "ended" });
+    var kAsm = UI.kpi(tr("装配面"), { val: "—", sub: tr("惰性桥 / 新架构模块"), pct: 0, kind: "ended" });
+    [kRec, kPar, kSelf, kAsm].forEach(function(c) {
+      kpis.appendChild(c.box);
     });
     view.appendChild(kpis);
     var pane = function(text) {
-      var p4 = el("div");
-      p4.appendChild(el("div", "sc-desc", text));
-      return p4;
+      var p = el("div");
+      p.appendChild(el("div", "sc-desc", text));
+      return p;
     };
-    var pRings = pane(tr("\u8BFB\u53D6\u4E2D\u2026\u82E5\u957F\u671F\u5982\u6B64\u8BF4\u660E /rings \u7AEF\u70B9\u4E0D\u53EF\u8FBE"));
-    var pRec = pane(tr("\u8BFB\u53D6\u4E2D\u2026\u82E5\u957F\u671F\u5982\u6B64\u8BF4\u660E /arch/records \xB7 /arch/graph \u7AEF\u70B9\u4E0D\u53EF\u8FBE"));
-    var pObs = pane(tr("\u8BFB\u53D6\u4E2D\u2026\u82E5\u957F\u671F\u5982\u6B64\u8BF4\u660E /arch/observability \u7AEF\u70B9\u4E0D\u53EF\u8FBE"));
-    var pAsm = pane(tr("\u8BFB\u53D6\u4E2D\u2026\u82E5\u957F\u671F\u5982\u6B64\u8BF4\u660E /arch/assembly \u7AEF\u70B9\u4E0D\u53EF\u8FBE"));
-    var pMcl = pane(tr("\u8BFB\u53D6\u4E2D\u2026\u82E5\u957F\u671F\u5982\u6B64\u8BF4\u660E /mcl/config \u7AEF\u70B9\u4E0D\u53EF\u8FBE"));
+    var pRings = pane(tr("读取中…若长期如此说明 /rings 端点不可达"));
+    var pRec = pane(tr("读取中…若长期如此说明 /arch/records · /arch/graph 端点不可达"));
+    var pObs = pane(tr("读取中…若长期如此说明 /arch/observability 端点不可达"));
+    var pAsm = pane(tr("读取中…若长期如此说明 /arch/assembly 端点不可达"));
+    var pMcl = pane(tr("读取中…若长期如此说明 /mcl/config 端点不可达"));
     var tb = UI.tabs("arch", [
-      { id: "rings", label: tr("\u5185\u5BB9\u73AF"), pane: pRings },
-      { id: "rec", label: tr("\u8BB0\u5F55\u4E0E\u56FE"), pane: pRec },
-      { id: "obs", label: tr("\u89C2\u6D4B"), pane: pObs },
-      { id: "asm", label: tr("\u88C5\u914D"), pane: pAsm },
-      { id: "mcl", label: tr("\u8BA4\u77E5\u73AF\u65CB\u94AE"), pane: pMcl }
+      { id: "rings", label: tr("内容环"), pane: pRings },
+      { id: "rec", label: tr("记录与图"), pane: pRec },
+      { id: "obs", label: tr("观测"), pane: pObs },
+      { id: "asm", label: tr("装配"), pane: pAsm },
+      { id: "mcl", label: tr("认知环旋钮"), pane: pMcl }
     ]);
     view.appendChild(tb.box);
-    appState.api("/rings").then(function(r7) {
+    appState.api("/rings").then(function(r) {
       pRings.textContent = "";
-      var c5 = UI.card(tr("\u4E94\u73AF KPI \u4E0E\u73AF\u4E8B\u4EF6\u5BF9\u8D26"));
-      pRings.appendChild(c5.box);
-      renderFacts(c5.body, r7, 0);
-      rawDetails(c5.body, r7);
+      var c = UI.card(tr("五环 KPI 与环事件对账"));
+      pRings.appendChild(c.box);
+      renderFacts(c.body, r, 0);
+      rawDetails(c.body, r);
     }).catch(appState.failFn);
-    appState.api("/arch/records").then(function(r7) {
+    appState.api("/arch/records").then(function(r) {
       pRec.textContent = "";
-      var c1 = UI.card(tr("\u8BB0\u5F55\u5C42\uFF08Record \u4E8B\u5B9E\u6E90\uFF09"));
+      var c1 = UI.card(tr("记录层（Record 事实源）"));
       pRec.appendChild(c1.box);
-      var st = r7.store || {};
-      kRec.set(String(st.records || 0), tr("\u65E0\u6807\u7B7E ") + String(st.untagged || 0) + tr(" \u6761"));
+      var st = r.store || {};
+      kRec.set(String(st.records || 0), tr("无标签 ") + String(st.untagged || 0) + tr(" 条"));
       c1.body.appendChild(UI.kv([
-        [tr("\u8BB0\u5F55\u6570"), String(st.records || 0)],
-        [tr("\u65E0\u6807\u7B7E\u5F85\u5F52\u7C7B"), String(st.untagged || 0)],
-        [tr("md\u2194store \u5BF9\u8D26"), String(r7.carriersOk || 0) + " / " + String(r7.carriersTotal || 0) + tr(" \u8F7D\u4F53\u4E00\u81F4")]
+        [tr("记录数"), String(st.records || 0)],
+        [tr("无标签待归类"), String(st.untagged || 0)],
+        [tr("md↔store 对账"), String(r.carriersOk || 0) + " / " + String(r.carriersTotal || 0) + tr(" 载体一致")]
       ]));
-      var sh = r7.shadow || {};
-      kPar.set(String(r7.carriersOk || 0) + " / " + String(r7.carriersTotal || 0), tr("md \u2194 store \u9010\u4EF6\u4E00\u81F4"));
-      if (r7.carriersTotal) kPar.fill(Math.round((r7.carriersOk || 0) / r7.carriersTotal * 100), r7.carriersOk === r7.carriersTotal ? "ended" : "suspect");
-      kSelf.set(String(sh.verified || 0) + " / " + String(sh.diverged || 0), tr("\u5199 ") + String(sh.writes || 0) + tr(" \u6B21 \xB7 \u53EF\u8FD8\u539F / \u5206\u6B67"));
+      var sh = r.shadow || {};
+      kPar.set(String(r.carriersOk || 0) + " / " + String(r.carriersTotal || 0), tr("md ↔ store 逐件一致"));
+      if (r.carriersTotal) kPar.fill(Math.round((r.carriersOk || 0) / r.carriersTotal * 100), r.carriersOk === r.carriersTotal ? "ended" : "suspect");
+      kSelf.set(String(sh.verified || 0) + " / " + String(sh.diverged || 0), tr("写 ") + String(sh.writes || 0) + tr(" 次 · 可还原 / 分歧"));
       kSelf.fill(sh.diverged ? 0 : 100, sh.diverged ? "stalled" : "ended");
       c1.body.appendChild(UI.kv([
-        [tr("\u5199\u65F6\u81EA\u8BC1"), tr("\u5199 ") + String(sh.writes || 0) + tr(" \xB7 \u53EF\u8FD8\u539F ") + String(sh.verified || 0) + tr(" \xB7 **\u5206\u6B67 ") + String(sh.diverged || 0) + "**"],
-        [tr("\u672B\u6B21"), String(sh.lastAt || "\u2014") + "\uFF08" + String(sh.lastFile || "\u2014") + "\uFF09"]
+        [tr("写时自证"), tr("写 ") + String(sh.writes || 0) + tr(" · 可还原 ") + String(sh.verified || 0) + tr(" · **分歧 ") + String(sh.diverged || 0) + "**"],
+        [tr("末次"), String(sh.lastAt || "—") + "（" + String(sh.lastFile || "—") + "）"]
       ]));
-      c1.body.appendChild(el("div", "sc-sub", tr("\u8F7D\u4F53\u9010\u4EF6\u5BF9\u8D26")));
-      renderFacts(c1.body, (r7.carriers || []).map(function(x2) {
-        return { \u6587\u4EF6: x2.file, md: x2.mdBytes, store: x2.storeBytes, \u4E00\u81F4: x2.ok ? tr("\u662F") : tr("\u5426"), \u539F\u56E0: x2.reason || "" };
+      c1.body.appendChild(el("div", "sc-sub", tr("载体逐件对账")));
+      renderFacts(c1.body, (r.carriers || []).map(function(x) {
+        return { 文件: x.file, md: x.mdBytes, store: x.storeBytes, 一致: x.ok ? tr("是") : tr("否"), 原因: x.reason || "" };
       }), 1);
-      c1.body.appendChild(el("div", "sc-sub", tr("\u8DE8\u6587\u4EF6\u9010\u5B57\u8282\u540C\u6587\uFF08\u53EA\u62A5\u544A\u4E0D\u5220\u2014\u2014\u5185\u5BB9\u5C5E\u7528\u6237\uFF09")));
-      var dups = r7.dups || [];
-      if (dups.length === 0) c1.body.appendChild(el("div", "sc-desc", tr("\u65E0\uFF08\u9664\u7D22\u5F15/\u8BE6\u60C5\u540C\u540D\u6807\u9898\u8FD9\u7C7B\u7ED3\u6784\u6027\u91CD\u540D\uFF09")));
+      c1.body.appendChild(el("div", "sc-sub", tr("跨文件逐字节同文（只报告不删——内容属用户）")));
+      var dups = r.dups || [];
+      if (dups.length === 0) c1.body.appendChild(el("div", "sc-desc", tr("无（除索引/详情同名标题这类结构性重名）")));
       dups.slice(0, 8).forEach(function(dd) {
         var box = el("div", "sc-facts-row");
-        box.appendChild(el("div", "sc-desc", "\xD7" + dd.count + " " + JSON.stringify(String(dd.text || "").slice(0, 60))));
-        box.appendChild(el("div", "sc-desc", (dd.files || []).map(function(f3) {
-          return f3.file + "#" + f3.order;
+        box.appendChild(el("div", "sc-desc", "×" + dd.count + " " + JSON.stringify(String(dd.text || "").slice(0, 60))));
+        box.appendChild(el("div", "sc-desc", (dd.files || []).map(function(f) {
+          return f.file + "#" + f.order;
         }).join("  |  ")));
         c1.body.appendChild(box);
       });
-      c1.body.appendChild(el("div", "sc-desc", r7.address && r7.address.note || ""));
-      appState.api("/arch/graph").then(function(g2) {
+      c1.body.appendChild(el("div", "sc-desc", r.address && r.address.note || ""));
+      appState.api("/arch/graph").then(function(g) {
         pObs.textContent = "";
-        var c22 = UI.card(tr("\u65AD\u8A00\u56FE\uFF08\u5173\u7CFB\u5373\u4E8B\u5B9E\uFF09"));
-        pRec.appendChild(c22.box);
-        c22.body.appendChild(UI.kv([
-          [tr("\u8282\u70B9"), String(g2.nodes || 0) + tr("\uFF08\u8BB0\u5F55 ") + String(g2.recordNodes || 0) + tr(" + \u951A ") + String(g2.anchors || 0) + "\uFF09"],
-          [tr("\u8FB9"), String(g2.edges || 0)],
-          [tr("\u60AC\u7A7A\u8BC1\u636E"), String(g2.danglingEvidence || 0)],
-          [tr("\u6D3B\u8DC3 / \u5931\u6548"), String(g2.live || 0) + " / " + String(g2.expired || 0)]
+        var c2 = UI.card(tr("断言图（关系即事实）"));
+        pRec.appendChild(c2.box);
+        c2.body.appendChild(UI.kv([
+          [tr("节点"), String(g.nodes || 0) + tr("（记录 ") + String(g.recordNodes || 0) + tr(" + 锚 ") + String(g.anchors || 0) + "）"],
+          [tr("边"), String(g.edges || 0)],
+          [tr("悬空证据"), String(g.danglingEvidence || 0)],
+          [tr("活跃 / 失效"), String(g.live || 0) + " / " + String(g.expired || 0)]
         ]));
-        c22.body.appendChild(UI.kv([
-          ["answers", String(g2.answers || 0)],
-          ["collision", String(g2.collision || 0)],
-          ["commitment", String(g2.commitment || 0)],
-          ["relation", String(g2.relation || 0)],
-          ["pointsTo", String(g2.pointsTo || 0)],
-          ["provenance", String(g2.provenance || 0)],
-          ["supersede", String(g2.supersede || 0)]
+        c2.body.appendChild(UI.kv([
+          ["answers", String(g.answers || 0)],
+          ["collision", String(g.collision || 0)],
+          ["commitment", String(g.commitment || 0)],
+          ["relation", String(g.relation || 0)],
+          ["pointsTo", String(g.pointsTo || 0)],
+          ["provenance", String(g.provenance || 0)],
+          ["supersede", String(g.supersede || 0)]
         ]));
       }).catch(appState.failFn);
     }).catch(appState.failFn);
-    appState.api("/arch/observability").then(function(r7) {
+    appState.api("/arch/observability").then(function(r) {
       pObs.textContent = "";
-      var c5 = UI.card(tr("\u7EDF\u4E00\u53F0\u8D26\u4E0E\u89C2\u6D4B\u9762"));
-      pObs.appendChild(c5.box);
-      var lg = r7.ledger || {};
-      c5.body.appendChild(UI.kv([
-        [tr("\u53F0\u8D26\u884C\u6570"), String(lg.lines || 0)],
-        [tr("\u7F3A at \u884C\uFF08\u4FE1\u5C01\u5B8C\u6574\u6027\uFF09"), String(lg.missingAt || 0) + (r7.envelope && r7.envelope.ok ? " \u2713" : " \u26A0")],
-        [tr("\u53F0\u8D26\u8DEF\u5F84"), String(lg.path || "")]
+      var c = UI.card(tr("统一台账与观测面"));
+      pObs.appendChild(c.box);
+      var lg = r.ledger || {};
+      c.body.appendChild(UI.kv([
+        [tr("台账行数"), String(lg.lines || 0)],
+        [tr("缺 at 行（信封完整性）"), String(lg.missingAt || 0) + (r.envelope && r.envelope.ok ? " ✓" : " ⚠")],
+        [tr("台账路径"), String(lg.path || "")]
       ]));
-      c5.body.appendChild(el("div", "sc-sub", tr("\u6309 type \u5206\u5E03")));
-      renderFacts(c5.body, lg.byType || [], 1);
-      c5.body.appendChild(el("div", "sc-sub", tr("audit \u76EE\u5F55\u5B9E\u51B5")));
-      renderFacts(c5.body, r7.files || [], 1);
-      c5.body.appendChild(el("div", "sc-sub", tr("legacy \u6D41\uFF08\u5DF2\u5E76\u5165\u53F0\u8D26\uFF0C\u4EC5\u5B58\u5386\u53F2\uFF09")));
-      renderFacts(c5.body, (r7.legacy || []).map(function(x2) {
-        return { \u6D41: x2.name, \u4ECD\u5728: x2.present ? tr("\u662F") : tr("\u5426") };
+      c.body.appendChild(el("div", "sc-sub", tr("按 type 分布")));
+      renderFacts(c.body, lg.byType || [], 1);
+      c.body.appendChild(el("div", "sc-sub", tr("audit 目录实况")));
+      renderFacts(c.body, r.files || [], 1);
+      c.body.appendChild(el("div", "sc-sub", tr("legacy 流（已并入台账，仅存历史）")));
+      renderFacts(c.body, (r.legacy || []).map(function(x) {
+        return { 流: x.name, 仍在: x.present ? tr("是") : tr("否") };
       }), 1);
-      var reg = r7.registry || {};
-      c5.body.appendChild(el("div", "sc-sub", tr("\u53E3\u5F84\uFF08\u65CF \xD7 \u57DF\uFF09")));
-      c5.body.appendChild(el("div", "sc-desc", tr("\u65CF\uFF1A") + (reg.families || []).join(" \xB7 ")));
-      c5.body.appendChild(el("div", "sc-desc", tr("\u57DF\uFF1A") + (reg.domains || []).join(" \xB7 ")));
-      c5.body.appendChild(el("div", "sc-desc", tr("\u6743\u5A01\uFF1A") + String(reg.authority || "") + tr("\uFF08suite \u57DF\u4E8B\u4EF6\u6D41\u76EE\u6807 = ") + String((reg.baseline || {}).suiteEventStreams) + "\uFF09"));
+      var reg = r.registry || {};
+      c.body.appendChild(el("div", "sc-sub", tr("口径（族 × 域）")));
+      c.body.appendChild(el("div", "sc-desc", tr("族：") + (reg.families || []).join(" · ")));
+      c.body.appendChild(el("div", "sc-desc", tr("域：") + (reg.domains || []).join(" · ")));
+      c.body.appendChild(el("div", "sc-desc", tr("权威：") + String(reg.authority || "") + tr("（suite 域事件流目标 = ") + String((reg.baseline || {}).suiteEventStreams) + "）"));
     }).catch(appState.failFn);
-    appState.api("/arch/assembly").then(function(r7) {
+    appState.api("/arch/assembly").then(function(r) {
       pAsm.textContent = "";
-      var c5 = UI.card(tr("\u88C5\u914D\u6839\uFF08composition root\uFF09\u4E0E\u5DF2\u88C5\u80FD\u529B"));
-      pAsm.appendChild(c5.box);
-      var cp = r7.composition || {};
-      c5.body.appendChild(UI.kv([
-        [tr("\u60F0\u6027\u6865\u8FB9\u6570"), String(cp.bridges) + (cp.bridges === 0 ? tr(" \u2713\uFF08\u4E09\u6761\u6865\u5DF2\u9000\u5F79\uFF09") : " \u26A0")],
-        [tr("\u5951\u7EA6\u8DEF\u7531\u6570"), String((r7.routes || {}).declared || 0)]
+      var c = UI.card(tr("装配根（composition root）与已装能力"));
+      pAsm.appendChild(c.box);
+      var cp = r.composition || {};
+      c.body.appendChild(UI.kv([
+        [tr("惰性桥边数"), String(cp.bridges) + (cp.bridges === 0 ? tr(" ✓（三条桥已退役）") : " ⚠")],
+        [tr("契约路由数"), String((r.routes || {}).declared || 0)]
       ]));
-      var st2 = r7.store || {};
-      c5.body.appendChild(UI.item(
-        tr("\u5B58\u50A8\u6A21\u5F0F storeMode"),
-        tr("md = \u53EA\u5199 md \u6295\u5F71\uFF1Bdual = md \u2194 Record \u53CC\u5199\uFF08\u5199\u65F6\u81EA\u8BC1\uFF1A\u53EF\u8FD8\u539F / \u5206\u6B67\uFF09\u3002") + (st2.note ? "\u26A0 " + st2.note : ""),
+      var st2 = r.store || {};
+      c.body.appendChild(UI.item(
+        tr("存储模式 storeMode"),
+        tr("md = 只写 md 投影；dual = md ↔ Record 双写（写时自证：可还原 / 分歧）。") + (st2.note ? "⚠ " + st2.note : ""),
         UI.select(
-          [{ value: "md", label: tr("md\uFF08\u53EA\u7528 md \u6295\u5F71\uFF09") }, { value: "dual", label: tr("dual\uFF08md \u2194 Record \u53CC\u5199\uFF09") }],
+          [{ value: "md", label: tr("md（只用 md 投影）") }, { value: "dual", label: tr("dual（md ↔ Record 双写）") }],
           st2.mode === "dual" ? "dual" : "md",
-          function(v2) {
-            appState.api("/set", { method: "POST", body: JSON.stringify({ key: "storeMode", value: v2 }) }).then(function(res) {
-              appState.statusFn(res && res.ok ? "\u2713 storeMode = " + v2 + tr("\uFF08\u5DF2\u5199 scheduler.json\uFF09") : tr("\u26A0 \u672A\u751F\u6548"));
+          function(v) {
+            appState.api("/set", { method: "POST", body: JSON.stringify({ key: "storeMode", value: v }) }).then(function(res) {
+              appState.statusFn(res && res.ok ? "✓ storeMode = " + v + tr("（已写 scheduler.json）") : tr("⚠ 未生效"));
               renderArchBody(view, safeFail);
             }).catch(function() {
-              appState.statusFn(tr("\u26A0 storeMode \u5199\u5165\u5931\u8D25\uFF08\u679A\u4E3E\u6216\u767D\u540D\u5355\u62D2\u7EDD\uFF09"), "error");
+              appState.statusFn(tr("⚠ storeMode 写入失败（枚举或白名单拒绝）"), "error");
             });
           },
-          tr("\u5B58\u50A8\u6A21\u5F0F")
+          tr("存储模式")
         ),
         {}
       ));
-      renderFacts(c5.body, cp.handles || [], 1);
-      var pl = r7.plugin || {};
+      renderFacts(c.body, cp.handles || [], 1);
+      var pl = r.plugin || {};
       var mods = pl.modules || [];
-      var modsOk = mods.filter(function(m3) {
-        return m3.present;
+      var modsOk = mods.filter(function(m) {
+        return m.present;
       }).length;
-      kAsm.set(String(cp.bridges) + tr(" \u6865"), modsOk + " / " + mods.length + tr(" \u65B0\u67B6\u6784\u6A21\u5757\u5728"));
+      kAsm.set(String(cp.bridges) + tr(" 桥"), modsOk + " / " + mods.length + tr(" 新架构模块在"));
       kAsm.fill(cp.bridges === 0 && modsOk === mods.length ? 100 : 0, cp.bridges === 0 && modsOk === mods.length ? "ended" : "suspect");
-      c5.body.appendChild(UI.kv([[tr("\u63D2\u4EF6\u7248\u672C"), String(pl.version || "")], [tr("lib \u6587\u4EF6\u6570"), String(pl.libFiles || 0)]]));
-      c5.body.appendChild(el("div", "sc-sub", tr("\u91CD\u6784\u540E\u65B0\u589E\u6A21\u5757\uFF08\u88C5\u4E0A\u53BB\u7684\u90A3\u4EFD\u662F\u5426\u5E26\u7740\uFF09")));
-      renderFacts(c5.body, (pl.modules || []).map(function(m3) {
-        return { \u6A21\u5757: m3.name, \u5728: m3.present ? "\u2713" : "\u2717" };
+      c.body.appendChild(UI.kv([[tr("插件版本"), String(pl.version || "")], [tr("lib 文件数"), String(pl.libFiles || 0)]]));
+      c.body.appendChild(el("div", "sc-sub", tr("重构后新增模块（装上去的那份是否带着）")));
+      renderFacts(c.body, (pl.modules || []).map(function(m) {
+        return { 模块: m.name, 在: m.present ? "✓" : "✗" };
       }), 1);
-      c5.body.appendChild(el("div", "sc-desc", cp.note || ""));
+      c.body.appendChild(el("div", "sc-desc", cp.note || ""));
     }).catch(appState.failFn);
     function renderMclKnobs() {
       pMcl.textContent = "";
-      appState.api("/mcl/config").then(function(r7) {
+      appState.api("/mcl/config").then(function(r) {
         pMcl.textContent = "";
-        var cur = r7.persisted || {};
-        var run = r7.running || {};
-        var c5 = UI.card(tr("\u8BA4\u77E5\u73AF\uFF08MCL\uFF09\u65CB\u94AE"), { desc: tr("\u767D\u540D\u5355\u8865\u4E01\u5199 `scheduler.json`\uFF1B**\u91CD\u8F7D\u540E\u751F\u6548**\u3002\u5F53\u524D\u8FD0\u884C\u6001\uFF1A") + (r7.active ? tr("\u5DF2\u88C5\u914D") : tr("\u672A\u88C5\u914D")) });
-        pMcl.appendChild(c5.box);
-        c5.body.appendChild(UI.kv([
-          [tr("\u8FD0\u884C\u6001\u901A\u9053\u8BA1\u6570"), "steps=" + String(run.steps || 0) + " \xB7 slow=" + String(run.slow || 0) + " \xB7 injected=" + String(run.injected || 0)],
-          [tr("\u6750\u6599\u53BB\u5411"), (cur.mclMaterialInSystem ? tr("systemPrompt \u6BB5\uFF08P2b \u5F00\uFF09") : tr("\u6D88\u606F\u9762")) + tr("\uFF08\u6309\u6301\u4E45\u914D\u7F6E\uFF09")],
-          [tr("\u6750\u6599\u9001\u8FBE\u8BA1\u6570"), "sysBlockNonEmpty=" + String(run.sysBlockNonEmpty || 0) + tr(" \xB7 \u672B\u6B21 ") + String(run.sysBlockLastChars || 0) + tr(" \u5B57\u7B26")]
+        var cur = r.persisted || {};
+        var run = r.running || {};
+        var c = UI.card(tr("认知环（MCL）旋钮"), { desc: tr("白名单补丁写 `scheduler.json`；**重载后生效**。当前运行态：") + (r.active ? tr("已装配") : tr("未装配")) });
+        pMcl.appendChild(c.box);
+        c.body.appendChild(UI.kv([
+          [tr("运行态通道计数"), "steps=" + String(run.steps || 0) + " · slow=" + String(run.slow || 0) + " · injected=" + String(run.injected || 0)],
+          [tr("材料去向"), (cur.mclMaterialInSystem ? tr("systemPrompt 段（P2b 开）") : tr("消息面")) + tr("（按持久配置）")],
+          [tr("材料送达计数"), "sysBlockNonEmpty=" + String(run.sysBlockNonEmpty || 0) + tr(" · 末次 ") + String(run.sysBlockLastChars || 0) + tr(" 字符")]
         ]));
         var save = function(key, val) {
           var patch = {};
           patch[key] = val;
           appState.api("/mcl/config", { method: "POST", body: JSON.stringify(patch) }).then(function() {
-            appState.statusFn("\u2713 " + key + " = " + val + tr("\uFF08\u5DF2\u5199\u5165 scheduler.json\uFF0C\u91CD\u8F7D\u540E\u751F\u6548\uFF09"));
+            appState.statusFn("✓ " + key + " = " + val + tr("（已写入 scheduler.json，重载后生效）"));
             renderMclKnobs();
           }).catch(appState.failFn);
         };
-        var lim = r7.limits || {};
+        var lim = r.limits || {};
         var defs = lim.defaults || {};
-        c5.body.appendChild(UI.item(
-          tr("\u719F\u6089\u5EA6\u9608\u503C mclFamiliarThreshold"),
-          tr("\u7EDD\u5BF9\u4F59\u5F26\u53E3\u5F84\uFF1B\u2265 \u9608\u503C\u4E14\u547D\u4E2D\u9AD8\u7F6E\u4FE1\u6807\u7B7E\u624D\u8D70\u5FEB\u901A\u9053\uFF08\u7F3A\u7701 ") + String(defs.familiarThreshold) + tr("\uFF09\u3002\u6570\u636E\u63D0\u793A\uFF1A\u672C\u5E93 936 \u6B65\u5B9E\u6D4B 86% \u7684\u6B65**\u65E0\u53EC\u56DE\u547D\u4E2D**\u2014\u2014\u5148\u67E5\u53EC\u56DE\uFF0C\u518D\u8C03\u6B64\u503C\u3002"),
-          UI.input(cur.mclFamiliarThreshold != null ? cur.mclFamiliarThreshold : defs.familiarThreshold, function(v2) {
-            var n6 = parseFloat(v2);
-            if (!isNaN(n6)) save("mclFamiliarThreshold", n6);
-          }, { type: "number", width: "120px", ariaLabel: tr("\u719F\u6089\u5EA6\u9608\u503C") }),
+        c.body.appendChild(UI.item(
+          tr("熟悉度阈值 mclFamiliarThreshold"),
+          tr("绝对余弦口径；≥ 阈值且命中高置信标签才走快通道（缺省 ") + String(defs.familiarThreshold) + tr("）。数据提示：本库 936 步实测 86% 的步**无召回命中**——先查召回，再调此值。"),
+          UI.input(cur.mclFamiliarThreshold != null ? cur.mclFamiliarThreshold : defs.familiarThreshold, function(v) {
+            var n = parseFloat(v);
+            if (!isNaN(n)) save("mclFamiliarThreshold", n);
+          }, { type: "number", width: "120px", ariaLabel: tr("熟悉度阈值") }),
           {}
         ));
-        c5.body.appendChild(UI.item(
-          tr("\u518D\u5F15\u5BFC\u4E0A\u9650 mclMaxNudges"),
-          tr("\u6162\u901A\u9053\u672A\u5F15\u7528\u6750\u6599\u65F6\u7684\u518D\u5F15\u5BFC\u6B21\u6570\uFF080 = \u53EA\u6CE8\u5165\u4E0D\u5F15\u5BFC\uFF1B\u7F3A\u7701 ") + String(defs.maxNudges) + "\uFF09",
-          UI.input(cur.mclMaxNudges != null ? cur.mclMaxNudges : defs.maxNudges, function(v2) {
-            var n6 = parseInt(v2, 10);
-            if (!isNaN(n6)) save("mclMaxNudges", n6);
-          }, { type: "number", width: "120px", ariaLabel: tr("\u518D\u5F15\u5BFC\u4E0A\u9650") }),
+        c.body.appendChild(UI.item(
+          tr("再引导上限 mclMaxNudges"),
+          tr("慢通道未引用材料时的再引导次数（0 = 只注入不引导；缺省 ") + String(defs.maxNudges) + "）",
+          UI.input(cur.mclMaxNudges != null ? cur.mclMaxNudges : defs.maxNudges, function(v) {
+            var n = parseInt(v, 10);
+            if (!isNaN(n)) save("mclMaxNudges", n);
+          }, { type: "number", width: "120px", ariaLabel: tr("再引导上限") }),
           {}
         ));
-        c5.body.appendChild(UI.item(
-          tr("\u6750\u6599\u9884\u7B97 mclBudgetChars"),
-          tr("\u6162\u901A\u9053\u6750\u6599\u786C\u9884\u7B97\uFF08\u5B57\u7B26\uFF1B\u7F3A\u7701 ") + String(defs.budgetChars) + "\uFF09",
-          UI.input(cur.mclBudgetChars != null ? cur.mclBudgetChars : defs.budgetChars, function(v2) {
-            var n6 = parseInt(v2, 10);
-            if (!isNaN(n6)) save("mclBudgetChars", n6);
-          }, { type: "number", width: "140px", ariaLabel: tr("\u6750\u6599\u9884\u7B97") }),
+        c.body.appendChild(UI.item(
+          tr("材料预算 mclBudgetChars"),
+          tr("慢通道材料硬预算（字符；缺省 ") + String(defs.budgetChars) + "）",
+          UI.input(cur.mclBudgetChars != null ? cur.mclBudgetChars : defs.budgetChars, function(v) {
+            var n = parseInt(v, 10);
+            if (!isNaN(n)) save("mclBudgetChars", n);
+          }, { type: "number", width: "140px", ariaLabel: tr("材料预算") }),
           {}
         ));
-        c5.body.appendChild(UI.item(
-          tr("\u6307\u9488\u6761\u6570 mclTopK"),
-          tr("\u6162\u901A\u9053\u6CE8\u5165\u7684\u6307\u9488\u6761\u6570\uFF08\u7F3A\u7701 ") + String(defs.topK) + "\uFF09",
-          UI.input(cur.mclTopK != null ? cur.mclTopK : defs.topK, function(v2) {
-            var n6 = parseInt(v2, 10);
-            if (!isNaN(n6)) save("mclTopK", n6);
-          }, { type: "number", width: "120px", ariaLabel: tr("\u6307\u9488\u6761\u6570") }),
+        c.body.appendChild(UI.item(
+          tr("指针条数 mclTopK"),
+          tr("慢通道注入的指针条数（缺省 ") + String(defs.topK) + "）",
+          UI.input(cur.mclTopK != null ? cur.mclTopK : defs.topK, function(v) {
+            var n = parseInt(v, 10);
+            if (!isNaN(n)) save("mclTopK", n);
+          }, { type: "number", width: "120px", ariaLabel: tr("指针条数") }),
           {}
         ));
-        c5.body.appendChild(UI.item(
-          tr("\u6750\u6599\u5165 systemPrompt \u6BB5\uFF08P2b\uFF09"),
-          tr("\u5F00 = \u6750\u6599\u6302\u6CE8\u5165\u9762\u3001\u4E0D\u8FDB\u8F6C\u5F55\uFF08\u5B9E\u6D4B `sysBlockNonEmpty` \u4F1A\u6DA8\uFF09\uFF1B\u5173 = \u8D70\u6D88\u606F\u9762\uFF08\u9001\u8FBE\u6709\u636E\uFF09"),
-          UI.toggle(cur.mclMaterialInSystem === true, function(v2) {
-            save("mclMaterialInSystem", v2);
+        c.body.appendChild(UI.item(
+          tr("材料入 systemPrompt 段（P2b）"),
+          tr("开 = 材料挂注入面、不进转录（实测 `sysBlockNonEmpty` 会涨）；关 = 走消息面（送达有据）"),
+          UI.toggle(cur.mclMaterialInSystem === true, function(v) {
+            save("mclMaterialInSystem", v);
           }),
           {}
         ));
-        c5.body.appendChild(UI.item(
-          tr("\u8BA4\u77E5\u73AF\u5F00\u5173 mclEnabled"),
-          tr("\u4E00\u952E\u56DE\u6EDA\u5F00\u5173"),
-          UI.toggle(cur.mclEnabled !== false, function(v2) {
-            save("mclEnabled", v2);
+        c.body.appendChild(UI.item(
+          tr("认知环开关 mclEnabled"),
+          tr("一键回滚开关"),
+          UI.toggle(cur.mclEnabled !== false, function(v) {
+            save("mclEnabled", v);
           }),
           {}
         ));
-        c5.body.appendChild(UI.item(
-          tr("\u5BA1\u8BA1\u6D41 mclAudit"),
-          tr("\u5199\u7EDF\u4E00\u53F0\u8D26\uFF08type=mcl*\uFF09"),
-          UI.toggle(cur.mclAudit !== false, function(v2) {
-            save("mclAudit", v2);
+        c.body.appendChild(UI.item(
+          tr("审计流 mclAudit"),
+          tr("写统一台账（type=mcl*）"),
+          UI.toggle(cur.mclAudit !== false, function(v) {
+            save("mclAudit", v);
           }),
           {}
         ));
-        c5.body.appendChild(UI.item(
-          tr("REM \u76F8 enableRemPass"),
-          tr("\u6DF1\u7761\u540C pass \u5185\u505A\u8DE8\u4E3B\u9898\u8054\u60F3\uFF08\u7F3A\u7701\u5173\uFF1B\u4EA7\u7269\u4F1A\u5E76\u5165\u753B\u50CF\uFF0C\u566A\u58F0\u4EE3\u4EF7\u9AD8\uFF09"),
-          UI.toggle(cur.enableRemPass === true, function(v2) {
-            save("enableRemPass", v2);
+        c.body.appendChild(UI.item(
+          tr("REM 相 enableRemPass"),
+          tr("深睡同 pass 内做跨主题联想（缺省关；产物会并入画像，噪声代价高）"),
+          UI.toggle(cur.enableRemPass === true, function(v) {
+            save("enableRemPass", v);
           }),
           {}
         ));
-        c5.body.appendChild(el("div", "sc-desc", tr("\u63A2\u9488\uFF08\u5B9A\u4F4D P2b \u7528\uFF09\uFF1A\u5BBF\u4E3B\u4F20\u5165 context \u952E = ") + String(run.sysBlockCtxKeys || "\u2014") + tr(" \xB7 \u89E3\u6790\u51FA\u7684\u4F1A\u8BDD = ") + String(run.sysBlockLastSid || "\u2014")));
+        c.body.appendChild(el("div", "sc-desc", tr("探针（定位 P2b 用）：宿主传入 context 键 = ") + String(run.sysBlockCtxKeys || "—") + tr(" · 解析出的会话 = ") + String(run.sysBlockLastSid || "—")));
         if (run.trace && run.trace.length) {
-          c5.body.appendChild(el("div", "sc-sub", tr("\u65F6\u5E8F\u8F68\u8FF9\uFF08cap \u6355\u83B7 \xB7 set \u5199\u6750\u6599 \xB7 ren \u6E32\u67D3\uFF09")));
-          renderFacts(c5.body, run.trace, 1);
+          c.body.appendChild(el("div", "sc-sub", tr("时序轨迹（cap 捕获 · set 写材料 · ren 渲染）")));
+          renderFacts(c.body, run.trace, 1);
         }
-        rawDetails(c5.body, r7);
+        rawDetails(c.body, r);
       }).catch(appState.failFn);
     }
     renderMclKnobs();
@@ -9007,32 +3906,32 @@
   function renderViewObserve(view) {
     view.textContent = "";
     var logsAll = Store.get("logs") || [];
-    UI.pageHead(tr("\u8FD0\u884C\u89C2\u6D4B"), tr("\u6267\u884C\u8FDB\u5EA6\u3001\u8C03\u7528\u65E5\u5FD7\u3001\u9519\u8BEF\u5B9A\u4F4D\u4E0E\u5173\u952E\u6307\u6807\u3002\u65E5\u5FD7\u4FDD\u7559\u6700\u8FD1 500 \u6761\uFF0C\u9519\u8BEF\u5E26\u7AEF\u70B9/\u53C2\u6570/\u5806\u6808\uFF0C\u4FBF\u4E8E\u5B9A\u4F4D\u800C\u975E\u53EA\u5269\u4E00\u884C\u63D0\u793A\u3002"), {
+    UI.pageHead(tr("运行观测"), tr("执行进度、调用日志、错误定位与关键指标。日志保留最近 500 条，错误带端点/参数/堆栈，便于定位而非只剩一行提示。"), {
       routes: ["/cognition/report", "/selfcheck", "/reconcile", "/embed/test"],
       refresh: true,
       actions: [
-        UI.button(tr("\u5BFC\u51FA"), function() {
+        UI.button(tr("导出"), function() {
           var blob = new Blob([JSON.stringify({ logs: logsAll, errors: Store.get("errors") || [], metrics: Store.get("metrics") || {} }, null, 2)], { type: "application/json" });
-          var a4 = document.createElement("a");
-          a4.href = URL.createObjectURL(blob);
-          a4.download = "shoucang-observe-" + (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace(/[:T]/g, "") + ".json";
-          a4.click();
-          URL.revokeObjectURL(a4.href);
-          appState.statusFn(tr("\u2713 \u89C2\u6D4B\u6570\u636E\u5DF2\u5BFC\u51FA\uFF08") + logsAll.length + tr(" \u6761\u65E5\u5FD7\uFF09"));
-        }, { title: tr("\u4E0B\u8F7D\u5F53\u524D\u65E5\u5FD7/\u9519\u8BEF/\u6307\u6807\uFF08JSON\uFF09") }),
-        UI.button(tr("\u6E05\u7A7A\u65E5\u5FD7"), function() {
+          var a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = "shoucang-observe-" + (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace(/[:T]/g, "") + ".json";
+          a.click();
+          URL.revokeObjectURL(a.href);
+          appState.statusFn(tr("✓ 观测数据已导出（") + logsAll.length + tr(" 条日志）"));
+        }, { title: tr("下载当前日志/错误/指标（JSON）") }),
+        UI.button(tr("清空日志"), function() {
           Store.set("logs", []);
           Store.set("errors", []);
           appState.refreshView();
-          appState.statusFn(tr("\u5DF2\u6E05\u7A7A\u65E5\u5FD7\u4E0E\u9519\u8BEF\u8BB0\u5F55"));
-        }, { danger: true, confirm: tr("\u786E\u8BA4\u6E05\u7A7A\u5168\u90E8\u65E5\u5FD7\u4E0E\u9519\u8BEF\u8BB0\u5F55\uFF1F") })
+          appState.statusFn(tr("已清空日志与错误记录"));
+        }, { danger: true, confirm: tr("确认清空全部日志与错误记录？") })
       ]
     });
     (function() {
       var msList = [];
       var failCount = 0;
-      logsAll.forEach(function(l6) {
-        var msg = String(l6 && l6.message || "");
+      logsAll.forEach(function(l) {
+        var msg = String(l && l.message || "");
         var mt = /(\d+(?:\.\d+)?)\s*ms/.exec(msg);
         if (mt) msList.push(parseFloat(mt[1]));
         if (/✗|error|失败/.test(msg)) failCount++;
@@ -9040,23 +3939,23 @@
       var errCount = Derive.count(Store.get("errors"));
       var total = logsAll.length;
       var okCount = Math.max(0, total - failCount);
-      var avgMs = msList.length ? Math.round(msList.reduce(function(a4, b3) {
-        return a4 + b3;
+      var avgMs = msList.length ? Math.round(msList.reduce(function(a, b) {
+        return a + b;
       }, 0) / msList.length) : 0;
       var okPct = total ? Math.round(okCount / total * 100) : null;
       var grid2 = el("div", "sc-kpis");
-      grid2.appendChild(UI.kpi(tr("\u8BF7\u6C42\u603B\u6570"), { val: Derive.num(total), sub: tr("\u672C\u5730\u4FDD\u7559\uFF08\u4E0A\u9650 500 \u6761\uFF09"), plain: true }).box);
-      grid2.appendChild(UI.kpi(tr("\u6210\u529F\u7387"), { val: total ? Math.round(okCount / total * 1e3) / 10 + "%" : "\u2014", sub: tr("\u975E\u5931\u8D25\u8BF7\u6C42\u5360\u6BD4"), plain: true }).box);
-      grid2.appendChild(UI.kpi(tr("\u5E73\u5747\u8017\u65F6"), { val: avgMs + "ms", sub: msList.length ? tr("\u6309 ") + msList.length + tr(" \u6761\u5E26\u8017\u65F6\u8BB0\u5F55\u5747\u7B97") : tr("\u6682\u65E0\u5E26\u8017\u65F6\u7684\u8BB0\u5F55"), plain: true }).box);
-      grid2.appendChild(UI.kpi(tr("\u9519\u8BEF"), { val: Derive.num(errCount), sub: errCount ? tr("\u89C1\u4E0B\u65B9\u300C\u9519\u8BEF\u5B9A\u4F4D\u300D") : tr("\u65E0\u8BB0\u5F55"), plain: true }).box);
+      grid2.appendChild(UI.kpi(tr("请求总数"), { val: Derive.num(total), sub: tr("本地保留（上限 500 条）"), plain: true }).box);
+      grid2.appendChild(UI.kpi(tr("成功率"), { val: total ? Math.round(okCount / total * 1e3) / 10 + "%" : "—", sub: tr("非失败请求占比"), plain: true }).box);
+      grid2.appendChild(UI.kpi(tr("平均耗时"), { val: avgMs + "ms", sub: msList.length ? tr("按 ") + msList.length + tr(" 条带耗时记录均算") : tr("暂无带耗时的记录"), plain: true }).box);
+      grid2.appendChild(UI.kpi(tr("错误"), { val: Derive.num(errCount), sub: errCount ? tr("见下方「错误定位」") : tr("无记录"), plain: true }).box);
       view.appendChild(grid2);
     })();
-    var pc = UI.card(tr("\u6267\u884C\u8FDB\u5EA6"), { sub: tr("\u672C\u6B21\u4F1A\u8BDD\u7684\u6DF1\u7761 / \u84B8\u998F\u8FDB\u5EA6"), right: [el("span", "sc-src", "/cognition/report")] });
-    var p4 = Store.get("progress") || {};
-    var ids = Object.keys(p4);
-    if (!Derive.has(ids)) pc.body.appendChild(el("div", "sc-desc", tr("\u5F53\u524D\u65E0\u8FDB\u884C\u4E2D\u7684\u4EFB\u52A1\u3002")));
-    else ids.forEach(function(id3) {
-      pc.body.appendChild(UI.progress(id3));
+    var pc = UI.card(tr("执行进度"), { sub: tr("本次会话的深睡 / 蒸馏进度"), right: [el("span", "sc-src", "/cognition/report")] });
+    var p = Store.get("progress") || {};
+    var ids = Object.keys(p);
+    if (!Derive.has(ids)) pc.body.appendChild(el("div", "sc-desc", tr("当前无进行中的任务。")));
+    else ids.forEach(function(id) {
+      pc.body.appendChild(UI.progress(id));
     });
     view.appendChild(pc.box);
     var obLogs = el("div");
@@ -9064,195 +3963,195 @@
     var obOps = el("div");
     var obMetrics = el("div");
     var _ob = UI.tabs("observe", [
-      { id: "logs", label: tr("\u8C03\u7528\u65E5\u5FD7 ") + Derive.count(Store.get("logs")), pane: obLogs },
-      { id: "errors", label: tr("\u9519\u8BEF\u5B9A\u4F4D ") + Derive.count(Store.get("errors")), pane: obErrs },
-      { id: "ops", label: tr("\u8FD0\u7EF4\u64CD\u4F5C"), pane: obOps },
-      { id: "metrics", label: tr("\u5173\u952E\u6307\u6807"), pane: obMetrics }
+      { id: "logs", label: tr("调用日志 ") + Derive.count(Store.get("logs")), pane: obLogs },
+      { id: "errors", label: tr("错误定位 ") + Derive.count(Store.get("errors")), pane: obErrs },
+      { id: "ops", label: tr("运维操作"), pane: obOps },
+      { id: "metrics", label: tr("关键指标"), pane: obMetrics }
     ]);
     view.appendChild(_ob.box);
     var errs = Store.get("errors") || [];
     var ebox = el("div");
-    if (!Derive.has(errs)) ebox.appendChild(el("div", "sc-desc", tr("\u6682\u65E0\u9519\u8BEF\u3002")));
+    if (!Derive.has(errs)) ebox.appendChild(el("div", "sc-desc", tr("暂无错误。")));
     else {
       var list = el("div");
-      errs.slice().reverse().slice(0, 30).forEach(function(r7) {
-        var ctx = r7.ctx;
-        var where = ctx ? (ctx.method || "") + " " + (ctx.path || "") + (ctx.params ? " " + JSON.stringify(ctx.params) : "") : "\u2014";
+      errs.slice().reverse().slice(0, 30).forEach(function(r) {
+        var ctx = r.ctx;
+        var where = ctx ? (ctx.method || "") + " " + (ctx.path || "") + (ctx.params ? " " + JSON.stringify(ctx.params) : "") : "—";
         list.appendChild(UI.collapsible(
-          new Date(r7.t).toLocaleTimeString() + "  " + r7.message,
-          UI.kv([[tr("\u7AEF\u70B9"), where], [tr("\u5806\u6808"), r7.stack || "\u2014"]]),
+          new Date(r.t).toLocaleTimeString() + "  " + r.message,
+          UI.kv([[tr("端点"), where], [tr("堆栈"), r.stack || "—"]]),
           {}
         ));
       });
       ebox.appendChild(list);
-      ebox.appendChild(UI.button(tr("\u6E05\u7A7A\u9519\u8BEF"), function() {
+      ebox.appendChild(UI.button(tr("清空错误"), function() {
         Store.set("errors", []);
         appState.refreshView();
-      }, { danger: true, confirm: tr("\u786E\u8BA4\u6E05\u7A7A\u9519\u8BEF\u8BB0\u5F55\uFF1F") }));
+      }, { danger: true, confirm: tr("确认清空错误记录？") }));
     }
     obErrs.appendChild(ebox);
     var mbox = el("div");
-    var m3 = Store.get("metrics") || {};
-    var mk = Object.keys(m3);
-    if (!Derive.has(mk)) mbox.appendChild(el("div", "sc-desc", tr("\u6682\u65E0\u6307\u6807\uFF08\u5207\u6362\u5404\u89C6\u56FE\u4F1A\u81EA\u52A8\u91C7\u96C6\uFF09\u3002")));
-    else mbox.appendChild(UI.kv(mk.map(function(k2) {
-      return [k2, String(m3[k2])];
+    var m = Store.get("metrics") || {};
+    var mk = Object.keys(m);
+    if (!Derive.has(mk)) mbox.appendChild(el("div", "sc-desc", tr("暂无指标（切换各视图会自动采集）。")));
+    else mbox.appendChild(UI.kv(mk.map(function(k) {
+      return [k, String(m[k])];
     })));
     obMetrics.appendChild(mbox);
     appState.renderRunExtras(obMetrics);
     obLogs.appendChild(buildLogPanel(400));
     var ops = el("div");
-    var embedRes = el("div", "sc-desc", tr("\u672A\u6D4B\u8BD5"));
+    var embedRes = el("div", "sc-desc", tr("未测试"));
     ops.appendChild(UI.item(
-      tr("\u5D4C\u5165\u670D\u52A1\u8FDE\u901A\u6027"),
-      tr("POST /embed/test \u2014\u2014 \u9A8C\u8BC1\u5F53\u524D embedding \u914D\u7F6E\u662F\u5426\u53EF\u7528\uFF08\u914D\u5B8C\u5373\u53EF\u9A8C\u8BC1\uFF0C\u4E0D\u5FC5\u7B49\u5B9E\u9645\u8C03\u7528\u5931\u8D25\uFF09\u3002"),
-      UI.button(tr("\u6D4B\u8BD5\u8FDE\u63A5"), function() {
-        embedRes.textContent = tr("\u8BFB\u53D6\u914D\u7F6E\u2026");
-        return appState.api("/embed/config").then(function(c5) {
-          var g2 = c5 && c5.global || {};
-          var baseUrl = String(g2.embedBaseUrl || "").trim();
+      tr("嵌入服务连通性"),
+      tr("POST /embed/test —— 验证当前 embedding 配置是否可用（配完即可验证，不必等实际调用失败）。"),
+      UI.button(tr("测试连接"), function() {
+        embedRes.textContent = tr("读取配置…");
+        return appState.api("/embed/config").then(function(c) {
+          var g = c && c.global || {};
+          var baseUrl = String(g.embedBaseUrl || "").trim();
           if (!baseUrl) {
-            embedRes.textContent = tr("\u2717 \u672A\u914D\u7F6E embedBaseUrl\uFF0C\u8BF7\u5148\u5230\u300C\u53C2\u6570\u8C03\u8282\u300D\u586B\u5199\u3002");
+            embedRes.textContent = tr("✗ 未配置 embedBaseUrl，请先到「参数调节」填写。");
             return;
           }
-          embedRes.textContent = tr("\u6D4B\u8BD5\u4E2D\u2026 ") + baseUrl;
+          embedRes.textContent = tr("测试中… ") + baseUrl;
           return appState.apiCtx("/embed/test", {
             method: "POST",
-            body: JSON.stringify({ baseUrl, apiKey: String(g2.embedApiKey || "").trim() })
-          }, tr("\u5D4C\u5165\u8FDE\u901A\u6027")).then(function(r7) {
-            var n6 = Derive.count(r7 && r7.models);
-            embedRes.textContent = r7 && r7.error ? "\u2717 " + r7.error : tr("\u2713 \u53EF\u8FBE \xB7 ") + n6 + tr(" \u4E2A\u6A21\u578B");
-            Log.info(tr("\u5D4C\u5165\u670D\u52A1\u8FDE\u901A\u6027\u6D4B\u8BD5") + (r7 && r7.error ? tr("\u5931\u8D25\uFF1A") + r7.error : tr("\u901A\u8FC7")));
+            body: JSON.stringify({ baseUrl, apiKey: String(g.embedApiKey || "").trim() })
+          }, tr("嵌入连通性")).then(function(r) {
+            var n = Derive.count(r && r.models);
+            embedRes.textContent = r && r.error ? "✗ " + r.error : tr("✓ 可达 · ") + n + tr(" 个模型");
+            Log.info(tr("嵌入服务连通性测试") + (r && r.error ? tr("失败：") + r.error : tr("通过")));
           });
-        }).catch(function(e8) {
-          embedRes.textContent = "\u2717 " + e8.message;
+        }).catch(function(e) {
+          embedRes.textContent = "✗ " + e.message;
         });
-      }, { async: true, busyText: tr("\u6D4B\u8BD5\u4E2D\u2026"), okText: tr("\u5D4C\u5165\u8FDE\u901A\u6027\u6D4B\u8BD5\u5B8C\u6210") }),
+      }, { async: true, busyText: tr("测试中…"), okText: tr("嵌入连通性测试完成") }),
       {}
     ));
     ops.appendChild(embedRes);
-    var evalRes = el("div", "sc-desc", tr("\u672A\u6D4B\u8BD5"));
+    var evalRes = el("div", "sc-desc", tr("未测试"));
     ops.appendChild(UI.item(
-      tr("\u8BC4\u4F30\u901A\u9053\u8FDE\u901A\u6027"),
-      tr("POST /eval/test \u2014\u2014 \u9A8C\u8BC1\u8BC4\u4F30\u901A\u9053\u662F\u5426\u53EF\u7528\uFF08\u9ED8\u8BA4\u5173\u95ED\uFF1B\u672C\u673A\u7AEF\u70B9\u514D key\uFF0C\u8FDC\u7AEF\u7AEF\u70B9\u987B\u53E6\u5F00\u51FA\u7F51\u8BB8\u53EF\uFF09\u3002"),
-      UI.button(tr("\u6D4B\u8BD5\u8FDE\u63A5"), function() {
-        evalRes.textContent = tr("\u8BFB\u53D6\u914D\u7F6E\u2026");
-        return appState.api("/eval/config").then(function(c5) {
-          var e8 = c5 && c5.effective || {};
-          var enabled = e8.evalEnabled === true;
-          var allow = e8.evalEgressAllow === true;
+      tr("评估通道连通性"),
+      tr("POST /eval/test —— 验证评估通道是否可用（默认关闭；本机端点免 key，远端端点须另开出网许可）。"),
+      UI.button(tr("测试连接"), function() {
+        evalRes.textContent = tr("读取配置…");
+        return appState.api("/eval/config").then(function(c) {
+          var e = c && c.effective || {};
+          var enabled = e.evalEnabled === true;
+          var allow = e.evalEgressAllow === true;
           if (!enabled) {
-            evalRes.textContent = tr("\u901A\u9053\u5DF2\u5173\u95ED\uFF08\u7F3A\u7701\uFF09\u3002\u5230\u300C\u53C2\u6570\u8C03\u8282\u300D\u5F00\u542F evalEnabled \u540E\u518D\u6D4B\u3002");
+            evalRes.textContent = tr("通道已关闭（缺省）。到「参数调节」开启 evalEnabled 后再测。");
             return;
           }
-          evalRes.textContent = tr("\u6D4B\u8BD5\u4E2D\u2026 ") + String(e8.evalBaseUrl || "") + (allow ? tr("\uFF08\u5DF2\u5141\u8BB8\u51FA\u7F51\uFF09") : "");
-          return appState.apiCtx("/eval/test", { method: "POST", body: "{}" }, tr("\u8BC4\u4F30\u901A\u9053")).then(function(r7) {
-            var o9 = String(r7 && r7.outcome || "");
-            var why = String(r7 && r7.why || "");
-            evalRes.textContent = r7 && r7.ok ? tr("\u2713 \u53EF\u8FBE \xB7 ") + String(r7.model || "") + " \xB7 " + String(r7.latencyMs || 0) + "ms \xB7 " + o9 : "\u2717 " + o9 + (why ? " \xB7 " + why : "");
-            Log.info(tr("\u8BC4\u4F30\u901A\u9053\u8FDE\u901A\u6027\u6D4B\u8BD5") + (r7 && r7.ok ? tr("\u901A\u8FC7") : tr("\u5931\u8D25\uFF1A") + o9 + " " + why));
+          evalRes.textContent = tr("测试中… ") + String(e.evalBaseUrl || "") + (allow ? tr("（已允许出网）") : "");
+          return appState.apiCtx("/eval/test", { method: "POST", body: "{}" }, tr("评估通道")).then(function(r) {
+            var o = String(r && r.outcome || "");
+            var why = String(r && r.why || "");
+            evalRes.textContent = r && r.ok ? tr("✓ 可达 · ") + String(r.model || "") + " · " + String(r.latencyMs || 0) + "ms · " + o : "✗ " + o + (why ? " · " + why : "");
+            Log.info(tr("评估通道连通性测试") + (r && r.ok ? tr("通过") : tr("失败：") + o + " " + why));
           });
-        }).catch(function(e8) {
-          evalRes.textContent = "\u2717 " + e8.message;
+        }).catch(function(e) {
+          evalRes.textContent = "✗ " + e.message;
         });
-      }, { async: true, busyText: tr("\u6D4B\u8BD5\u4E2D\u2026"), okText: tr("\u8BC4\u4F30\u901A\u9053\u8FDE\u901A\u6027\u6D4B\u8BD5\u5B8C\u6210") }),
+      }, { async: true, busyText: tr("测试中…"), okText: tr("评估通道连通性测试完成") }),
       {}
     ));
     ops.appendChild(evalRes);
-    var evalStats = el("div", "sc-desc", tr("\u672A\u7EDF\u8BA1"));
+    var evalStats = el("div", "sc-desc", tr("未统计"));
     ops.appendChild(UI.item(
-      tr("\u8BC4\u4F30\u901A\u9053\u7EDF\u8BA1"),
-      tr("GET /eval/stats \u2014\u2014 \u6298\u7EDF\u4E00\u53F0\u8D26 type=eval.decision\uFF1A\u5206\u6001\u5206\u5E03 / \u6765\u6E90 / \u771F\u51FA\u673A\u6B21\u6570 / \u56DE\u843D\u6B21\u6570\u3002"),
-      UI.button(tr("\u5237\u65B0\u7EDF\u8BA1"), function() {
-        return appState.api("/eval/stats").then(function(s4) {
-          var oc = s4 && s4.byOutcome || {};
+      tr("评估通道统计"),
+      tr("GET /eval/stats —— 折统一台账 type=eval.decision：分态分布 / 来源 / 真出机次数 / 回落次数。"),
+      UI.button(tr("刷新统计"), function() {
+        return appState.api("/eval/stats").then(function(s) {
+          var oc = s && s.byOutcome || {};
           var keys = Object.keys(oc);
-          evalStats.textContent = s4 && s4.total ? "total " + s4.total + " \xB7 outcomes " + keys.length + " (" + keys.map(function(k2) {
-            return k2 + ":" + oc[k2];
-          }).join(" ") + ") \xB7 egress " + (s4.egressOk || 0) + " \xB7 fallback " + (s4.fellBack || 0) : tr("\u5C1A\u65E0\u5224\u5B9A\u8BB0\u5F55\uFF08\u901A\u9053\u672A\u5F00\u542F\u6216\u672A\u8DD1\u8FC7\uFF09");
-          var rec = s4 && s4.recent || [];
+          evalStats.textContent = s && s.total ? "total " + s.total + " · outcomes " + keys.length + " (" + keys.map(function(k) {
+            return k + ":" + oc[k];
+          }).join(" ") + ") · egress " + (s.egressOk || 0) + " · fallback " + (s.fellBack || 0) : tr("尚无判定记录（通道未开启或未跑过）");
+          var rec = s && s.recent || [];
           if (rec.length) {
-            evalStats.textContent += " \uFF5C " + rec.slice(-3).map(function(r7) {
-              return r7.outcome + "@" + (r7.destLoopback ? "local" : r7.destHost) + (r7.fellBack ? "\u21A9" : "") + " " + r7.latencyMs + "ms";
-            }).join(" \xB7 ");
+            evalStats.textContent += " ｜ " + rec.slice(-3).map(function(r) {
+              return r.outcome + "@" + (r.destLoopback ? "local" : r.destHost) + (r.fellBack ? "↩" : "") + " " + r.latencyMs + "ms";
+            }).join(" · ");
           }
-          Log.info(tr("\u8BC4\u4F30\u901A\u9053\u7EDF\u8BA1") + " " + evalStats.textContent);
-        }).catch(function(e8) {
-          evalStats.textContent = "\u2717 " + e8.message;
+          Log.info(tr("评估通道统计") + " " + evalStats.textContent);
+        }).catch(function(e) {
+          evalStats.textContent = "✗ " + e.message;
         });
-      }, { async: true, busyText: tr("\u7EDF\u8BA1\u4E2D\u2026"), okText: tr("\u7EDF\u8BA1\u5B8C\u6210") }),
+      }, { async: true, busyText: tr("统计中…"), okText: tr("统计完成") }),
       {}
     ));
     ops.appendChild(evalStats);
-    var bootRes = el("div", "sc-desc", tr("\u672A\u6267\u884C"));
+    var bootRes = el("div", "sc-desc", tr("未执行"));
     ops.appendChild(UI.item(
-      tr("\u6839\u76EE\u5F55\u5F15\u5BFC"),
-      tr("POST /root/bootstrap \u2014\u2014 \u521D\u59CB\u5316/\u4FEE\u590D\u8BB0\u5FC6\u6839\u76EE\u5F55\u7ED3\u6784\u3002"),
-      UI.button(tr("\u6267\u884C\u5F15\u5BFC"), function() {
-        bootRes.textContent = tr("\u6267\u884C\u4E2D\u2026");
-        return appState.apiCtx("/root/bootstrap", { method: "POST", body: JSON.stringify({}) }, tr("\u6839\u76EE\u5F55\u5F15\u5BFC")).then(function(r7) {
-          bootRes.textContent = "\u2713 " + JSON.stringify(r7).slice(0, 240);
-        }).catch(function(e8) {
-          bootRes.textContent = "\u2717 " + e8.message;
+      tr("根目录引导"),
+      tr("POST /root/bootstrap —— 初始化/修复记忆根目录结构。"),
+      UI.button(tr("执行引导"), function() {
+        bootRes.textContent = tr("执行中…");
+        return appState.apiCtx("/root/bootstrap", { method: "POST", body: JSON.stringify({}) }, tr("根目录引导")).then(function(r) {
+          bootRes.textContent = "✓ " + JSON.stringify(r).slice(0, 240);
+        }).catch(function(e) {
+          bootRes.textContent = "✗ " + e.message;
         });
-      }, { async: true, busyText: tr("\u6267\u884C\u4E2D\u2026"), confirm: tr("\u6267\u884C\u6839\u76EE\u5F55\u5F15\u5BFC\u4F1A\u5C1D\u8BD5\u521B\u5EFA\u7F3A\u5931\u7684\u76EE\u5F55\u7ED3\u6784\uFF0C\u786E\u8BA4\u7EE7\u7EED\uFF1F") }),
+      }, { async: true, busyText: tr("执行中…"), confirm: tr("执行根目录引导会尝试创建缺失的目录结构，确认继续？") }),
       {}
     ));
     ops.appendChild(bootRes);
     obOps.appendChild(ops);
     var adv = el("div");
-    adv.appendChild(el("div", "sc-desc", tr("\u26A0 \u884C\u7EA7\u76F4\u63A5\u6539\u5199\u8BB0\u5FC6\u6587\u4EF6\u3002\u6539\u7D22\u5F15\u884C\u53EF\u80FD\u5BFC\u81F4\u6307\u9488\u4E0E notes \u6B63\u6587\u4E0D\u4E00\u81F4\uFF08\u8BE6\u89C1 R3\uFF09\uFF0C\u5E38\u89C4\u7F16\u8F91\u8BF7\u7528\u300C\u8BB0\u5FC6\u677F\u5757 \u2192 \u5C0F\u8282\u7F16\u8F91\u300D\u3002")));
-    var fInp = UI.input("MEMORY.md", null, { placeholder: tr("\u6587\u4EF6\uFF0C\u5982 MEMORY.md / notes/lessons.md"), width: "260px", ariaLabel: tr("\u8BB0\u5FC6\u6587\u4EF6") });
-    var lInp = UI.input("", null, { placeholder: tr("\u5F85\u5339\u914D\u7684\u539F\u59CB\u884C\u6587\u672C"), width: "320px", ariaLabel: tr("\u539F\u59CB\u884C") });
-    var nInp = UI.input("", null, { placeholder: tr("\u65B0\u884C\u6587\u672C\uFF08\u4EC5\u7F16\u8F91\u9700\u8981\uFF09"), width: "320px", ariaLabel: tr("\u65B0\u884C") });
-    adv.appendChild(UI.item(tr("\u76EE\u6807\u6587\u4EF6"), tr("isWritable \u767D\u540D\u5355\u5185\u7684\u8BB0\u5FC6\u6587\u4EF6\u3002"), fInp, {}));
-    adv.appendChild(UI.item(tr("\u539F\u59CB\u884C"), tr("\u5FC5\u987B\u4E0E\u539F\u6587\u4EF6\u4E2D\u7684\u4E00\u884C\u5B8C\u5168\u4E00\u81F4\uFF08\u540E\u7AEF\u6309\u884C\u5339\u914D\uFF09\u3002"), lInp, {}));
-    adv.appendChild(UI.item(tr("\u65B0\u884C\u6587\u672C"), tr("\u7F16\u8F91\u65F6\u5FC5\u586B\uFF1B\u5220\u9664\u65F6\u5FFD\u7565\u3002"), nInp, {}));
-    var advRes = el("div", "sc-desc", tr("\u672A\u6267\u884C"));
+    adv.appendChild(el("div", "sc-desc", tr("⚠ 行级直接改写记忆文件。改索引行可能导致指针与 notes 正文不一致（详见 R3），常规编辑请用「记忆板块 → 小节编辑」。")));
+    var fInp = UI.input("MEMORY.md", null, { placeholder: tr("文件，如 MEMORY.md / notes/lessons.md"), width: "260px", ariaLabel: tr("记忆文件") });
+    var lInp = UI.input("", null, { placeholder: tr("待匹配的原始行文本"), width: "320px", ariaLabel: tr("原始行") });
+    var nInp = UI.input("", null, { placeholder: tr("新行文本（仅编辑需要）"), width: "320px", ariaLabel: tr("新行") });
+    adv.appendChild(UI.item(tr("目标文件"), tr("isWritable 白名单内的记忆文件。"), fInp, {}));
+    adv.appendChild(UI.item(tr("原始行"), tr("必须与原文件中的一行完全一致（后端按行匹配）。"), lInp, {}));
+    adv.appendChild(UI.item(tr("新行文本"), tr("编辑时必填；删除时忽略。"), nInp, {}));
+    var advRes = el("div", "sc-desc", tr("未执行"));
     var row = el("div", "sc-toolbar");
-    row.appendChild(UI.button(tr("\u6309\u884C\u7F16\u8F91"), function() {
+    row.appendChild(UI.button(tr("按行编辑"), function() {
       var file = fInp.value.trim(), line = lInp.value.trim(), nt = nInp.value.trim();
       if (!file || !line || !nt) {
-        advRes.textContent = tr("\u2717 \u6587\u4EF6 / \u539F\u59CB\u884C / \u65B0\u884C \u4E09\u9879\u5747\u5FC5\u586B");
+        advRes.textContent = tr("✗ 文件 / 原始行 / 新行 三项均必填");
         return;
       }
-      return appState.apiCtx("/memory/edit", { method: "POST", body: JSON.stringify({ file, line, newText: nt }) }, tr("\u884C\u7EA7\u7F16\u8F91")).then(function() {
-        advRes.textContent = tr("\u2713 \u5DF2\u6539\u5199\u8BE5\u884C");
-        Log.warn(tr("\u884C\u7EA7\u7F16\u8F91\u5DF2\u6267\u884C\uFF08\u53EF\u80FD\u9700\u540C\u6B65\u7D22\u5F15\uFF09\uFF1A") + file);
-      }).catch(function(e8) {
-        advRes.textContent = "\u2717 " + e8.message;
+      return appState.apiCtx("/memory/edit", { method: "POST", body: JSON.stringify({ file, line, newText: nt }) }, tr("行级编辑")).then(function() {
+        advRes.textContent = tr("✓ 已改写该行");
+        Log.warn(tr("行级编辑已执行（可能需同步索引）：") + file);
+      }).catch(function(e) {
+        advRes.textContent = "✗ " + e.message;
       });
-    }, { async: true, busyText: tr("\u63D0\u4EA4\u4E2D\u2026") }));
-    row.appendChild(UI.button(tr("\u6309\u884C\u5220\u9664"), function() {
+    }, { async: true, busyText: tr("提交中…") }));
+    row.appendChild(UI.button(tr("按行删除"), function() {
       var file = fInp.value.trim(), line = lInp.value.trim();
       if (!file || !line) {
-        advRes.textContent = tr("\u2717 \u6587\u4EF6\u4E0E\u539F\u59CB\u884C\u5FC5\u586B");
+        advRes.textContent = tr("✗ 文件与原始行必填");
         return;
       }
-      if (!confirm("\u786E\u8BA4\u5220\u9664\u8BE5\u884C\uFF1F\u6B64\u64CD\u4F5C\u4E0D\u53EF\u64A4\u9500\uFF08\u4F1A\u7531\u5199\u95E8\u5907\u4EFD\uFF09\u3002\n\n" + line)) return;
-      return appState.apiCtx("/memory/remove", { method: "POST", body: JSON.stringify({ file, line }) }, tr("\u884C\u7EA7\u5220\u9664")).then(function() {
-        advRes.textContent = tr("\u2713 \u5DF2\u5220\u9664\u8BE5\u884C");
-        Log.warn(tr("\u884C\u7EA7\u5220\u9664\u5DF2\u6267\u884C\uFF08\u53EF\u80FD\u9700\u540C\u6B65\u7D22\u5F15\uFF09\uFF1A") + file);
-      }).catch(function(e8) {
-        advRes.textContent = "\u2717 " + e8.message;
+      if (!confirm("确认删除该行？此操作不可撤销（会由写门备份）。\n\n" + line)) return;
+      return appState.apiCtx("/memory/remove", { method: "POST", body: JSON.stringify({ file, line }) }, tr("行级删除")).then(function() {
+        advRes.textContent = tr("✓ 已删除该行");
+        Log.warn(tr("行级删除已执行（可能需同步索引）：") + file);
+      }).catch(function(e) {
+        advRes.textContent = "✗ " + e.message;
       });
-    }, { async: true, busyText: tr("\u63D0\u4EA4\u4E2D\u2026"), danger: true, confirm: tr("\u786E\u8BA4\u6267\u884C\u884C\u7EA7\u5220\u9664\uFF1F") }));
+    }, { async: true, busyText: tr("提交中…"), danger: true, confirm: tr("确认执行行级删除？") }));
     adv.appendChild(row);
     adv.appendChild(advRes);
-    obOps.appendChild(UI.collapsible(tr("\u9AD8\u7EA7\uFF1A\u884C\u7EA7\u7F16\u8F91 / \u5220\u9664\uFF08\u8C28\u614E\uFF09"), adv, { open: false }));
+    obOps.appendChild(UI.collapsible(tr("高级：行级编辑 / 删除（谨慎）"), adv, { open: false }));
   }
   function buildLogPanel(maxH, opts) {
-    var o9 = opts || {};
+    var o = opts || {};
     var wrap = el("div", "sc-logwrap");
     if (maxH) wrap.style.setProperty("--sc-log-h", maxH + "px");
-    if (o9.collapsed) wrap.classList.add("sc-log-collapsed");
+    if (o.collapsed) wrap.classList.add("sc-log-collapsed");
     var head = el("div", "sc-log-head");
-    var arrow = el("span", "sc-sec-arrow", o9.collapsed ? "\u25B8" : "\u25BE");
-    if (o9.collapsible) {
+    var arrow = el("span", "sc-sec-arrow", o.collapsed ? "▸" : "▾");
+    if (o.collapsible) {
       head.classList.add("sc-log-toggle");
       head.setAttribute("role", "button");
       head.setAttribute("tabindex", "0");
-      head.setAttribute("aria-expanded", o9.collapsed ? "false" : "true");
+      head.setAttribute("aria-expanded", o.collapsed ? "false" : "true");
       head.onclick = function(ev) {
         if (ev && ev.target && ev.target.tagName === "SELECT") return;
         Cfg.set("showLogs", !!Cfg.get("showLogs", true) ? false : true);
@@ -9266,21 +4165,21 @@
       };
     }
     head.appendChild(arrow);
-    head.appendChild(el("span", null, tr("\u65E5\u5FD7")));
+    head.appendChild(el("span", null, tr("日志")));
     var lvSel = UI.select(
-      [{ value: "info", label: tr("\u5168\u90E8") }, { value: "warn", label: tr("\u8B66\u544A+") }, { value: "error", label: tr("\u4EC5\u9519\u8BEF") }],
+      [{ value: "info", label: tr("全部") }, { value: "warn", label: tr("警告+") }, { value: "error", label: tr("仅错误") }],
       Cfg.get("logLevel", "info"),
-      function(v2) {
-        Cfg.set("logLevel", v2);
+      function(v) {
+        Cfg.set("logLevel", v);
         render();
       }
     );
-    lvSel.setAttribute("aria-label", tr("\u65E5\u5FD7\u7EA7\u522B"));
+    lvSel.setAttribute("aria-label", tr("日志级别"));
     head.appendChild(lvSel);
     var cnt = el("span", null, "");
     head.appendChild(cnt);
     head.appendChild(el("span", "sc-spacer"));
-    head.appendChild(UI.button(tr("\u6E05\u7A7A"), function() {
+    head.appendChild(UI.button(tr("清空"), function() {
       Log.clear();
       render();
     }));
@@ -9290,30 +4189,30 @@
     var ORDER = { info: 0, warn: 1, error: 2 };
     function render() {
       var min = ORDER[Cfg.get("logLevel", "info")] || 0;
-      var all = (Store.get("logs") || []).filter(function(l6) {
-        return (ORDER[l6.level] || 0) >= min;
+      var all = (Store.get("logs") || []).filter(function(l) {
+        return (ORDER[l.level] || 0) >= min;
       });
-      cnt.textContent = all.length + tr(" \u6761");
+      cnt.textContent = all.length + tr(" 条");
       body.textContent = "";
       if (!Derive.has(all)) {
-        body.appendChild(el("div", "sc-log-row", tr("\uFF08\u65E0\uFF09")));
+        body.appendChild(el("div", "sc-log-row", tr("（无）")));
         return;
       }
-      var LVICON = { info: "\xB7", warn: "!", error: "\u2717" };
-      all.slice(-200).reverse().forEach(function(l6) {
-        var row = el("div", "sc-log-row sc-log-" + l6.level);
-        var c5 = l6.ctx || {};
-        row.appendChild(el("span", "sc-log-lv", LVICON[l6.level] || "\xB7"));
-        if (c5.path) {
-          row.appendChild(el("span", "sc-log-m", c5.method || "GET"));
-          row.appendChild(el("span", "sc-log-p", String(c5.path)));
-          if (c5.ms !== void 0) row.appendChild(el("span", "sc-log-ms", c5.ms + "ms"));
-          if (c5.status !== void 0) row.appendChild(el("span", "sc-log-st", String(c5.status)));
+      var LVICON = { info: "·", warn: "!", error: "✗" };
+      all.slice(-200).reverse().forEach(function(l) {
+        var row = el("div", "sc-log-row sc-log-" + l.level);
+        var c = l.ctx || {};
+        row.appendChild(el("span", "sc-log-lv", LVICON[l.level] || "·"));
+        if (c.path) {
+          row.appendChild(el("span", "sc-log-m", c.method || "GET"));
+          row.appendChild(el("span", "sc-log-p", String(c.path)));
+          if (c.ms !== void 0) row.appendChild(el("span", "sc-log-ms", c.ms + "ms"));
+          if (c.status !== void 0) row.appendChild(el("span", "sc-log-st", String(c.status)));
         } else {
-          row.appendChild(el("span", "sc-log-msg", l6.msg));
+          row.appendChild(el("span", "sc-log-msg", l.msg));
         }
         row.appendChild(el("span", "sc-spacer"));
-        row.appendChild(el("span", "sc-log-t", new Date(l6.t).toLocaleTimeString()));
+        row.appendChild(el("span", "sc-log-t", new Date(l.t).toLocaleTimeString()));
         body.appendChild(row);
       });
     }
@@ -9324,11 +4223,11 @@
   function renderRunExtras(view) {
     var gHost = view;
     var gRoot = view;
-    var group2 = function(t6) {
-      var c5 = UI.card(t6);
-      gRoot.appendChild(c5.box);
-      gHost = c5.body;
-      return c5.body;
+    var group2 = function(t) {
+      var c = UI.card(t);
+      gRoot.appendChild(c.box);
+      gHost = c.body;
+      return c.body;
     };
     var mk = function(label, value, sub) {
       var card = el("div", "sc-mem-stat");
@@ -9337,347 +4236,348 @@
       if (sub) card.appendChild(el("div", "sc-mem-stat-sub", sub));
       return card;
     };
-    group2(tr("\u8D26\u672C\u5BF9\u8D26\u4E0E\u4EA7\u51FA\u5065\u5EB7\uFF08v2.1 M3\uFF09"));
+    group2(tr("账本对账与产出健康（v2.1 M3）"));
     var rw = el("div", "sc-mem-stats");
-    rw.appendChild(mk(tr("\u5BF9\u8D26"), "\u2026", tr("\u8BFB\u53D6\u4E2D")));
+    rw.appendChild(mk(tr("对账"), "…", tr("读取中")));
     gHost.appendChild(rw);
-    appState.api("/reconcile").then(function(r7) {
+    appState.api("/reconcile").then(function(r) {
       rw.textContent = "";
-      if (!r7 || !r7.active) {
-        rw.appendChild(mk(tr("\u5BF9\u8D26"), tr("\u672A\u5C31\u7EEA"), r7 && r7.error || tr("memory-reconcile.mjs \u672A\u90E8\u7F72")));
+      if (!r || !r.active) {
+        rw.appendChild(mk(tr("对账"), tr("未就绪"), r && r.error || tr("memory-reconcile.mjs 未部署")));
         return;
       }
-      var cl = r7.closure || {};
-      var h3 = r7.health || {};
-      var ly = (r7.layers || {}).counts || {};
-      var P2 = ly.P || { index: 0, profile: 0 }, R2 = ly.R || { index: 0, profile: 0 }, E2 = ly.E || { index: 0, profile: 0 };
-      rw.appendChild(mk(tr("\u8D26\u672C\u95ED\u5408"), cl.ok === null ? tr("\u6837\u672C\u4E0D\u8DB3") : cl.ok ? tr("\u2705 \u5DEE\u5F02 0") : tr("\u26A0 \u6709\u5DEE\u5F02"), tr("\u53F0\u8D26 ") + ((r7.window || {}).ledgerRows || 0) + tr(" \u884C \xB7 \u5199\u4E8B\u4EF6 ") + (h3.writeEvents || 0) + tr(" \u6B21")));
-      rw.appendChild(mk(tr("\u4E0A\u6B21\u6709\u6548\u6DF1\u7761"), h3.lastSuccessfulWrite ? fmtTime(h3.lastSuccessfulWrite) : tr("\uFF08\u65E0\uFF09"), tr("\u8FDE\u7EED\u7A7A\u8F6C ") + (h3.idleStreak || 0) + tr(" \u8F6E \xB7 \u6DF1\u7761\u8F6E\u6B21 ") + (h3.deepSleepRounds || 0)));
-      var byCh = h3.byChannel || {};
-      var chRows = Object.keys(byCh).map(function(k2) {
-        var v2 = byCh[k2] || {};
-        var pct = v2.rejectRate === null || v2.rejectRate === void 0 ? "\u2014" : (v2.rejectRate * 100).toFixed(0) + "%";
-        return k2 + " " + pct;
+      var cl = r.closure || {};
+      var h = r.health || {};
+      var ly = (r.layers || {}).counts || {};
+      var P = ly.P || { index: 0, profile: 0 }, R = ly.R || { index: 0, profile: 0 }, E = ly.E || { index: 0, profile: 0 };
+      rw.appendChild(mk(tr("账本闭合"), cl.ok === null ? tr("样本不足") : cl.ok ? tr("✅ 差异 0") : tr("⚠ 有差异"), tr("台账 ") + ((r.window || {}).ledgerRows || 0) + tr(" 行 · 写事件 ") + (h.writeEvents || 0) + tr(" 次")));
+      rw.appendChild(mk(tr("上次有效深睡"), h.lastSuccessfulWrite ? fmtTime(h.lastSuccessfulWrite) : tr("（无）"), tr("连续空转 ") + (h.idleStreak || 0) + tr(" 轮 · 深睡轮次 ") + (h.deepSleepRounds || 0)));
+      var byCh = h.byChannel || {};
+      var chRows = Object.keys(byCh).map(function(k) {
+        var v = byCh[k] || {};
+        var pct = v.rejectRate === null || v.rejectRate === void 0 ? "—" : (v.rejectRate * 100).toFixed(0) + "%";
+        return k + " " + pct;
       }).sort();
-      rw.appendChild(mk(tr("\u5199\u5165\u88AB\u62D2\u7387"), h3.rejectRate === null || h3.rejectRate === void 0 ? "n/a" : (h3.rejectRate * 100).toFixed(0) + "%", tr("\u62D2 ") + (h3.rejectedWrites || 0) + tr(" / \u5199\u4E8B\u4EF6 ") + (h3.writeEvents || 0) + tr(" \xB7 \u5C1D\u8BD5 ") + (h3.attemptedTotal || 0) + tr(" \u6761") + (chRows.length ? tr(" \xB7 \u6309\u901A\u9053\uFF1A") + chRows.join(" / ") : "")));
-      var gd = h3.gateRejectsDetail;
+      rw.appendChild(mk(tr("写入被拒率"), h.rejectRate === null || h.rejectRate === void 0 ? "n/a" : (h.rejectRate * 100).toFixed(0) + "%", tr("拒 ") + (h.rejectedWrites || 0) + tr(" / 写事件 ") + (h.writeEvents || 0) + tr(" · 尝试 ") + (h.attemptedTotal || 0) + tr(" 条") + (chRows.length ? tr(" · 按通道：") + chRows.join(" / ") : "")));
+      var gd = h.gateRejectsDetail;
       if (gd && gd.total) {
-        var gRows = Object.keys(gd.byTarget || {}).map(function(k2) {
-          return k2 + "\xD7" + gd.byTarget[k2];
+        var gRows = Object.keys(gd.byTarget || {}).map(function(k) {
+          return k + "×" + gd.byTarget[k];
         }).sort();
-        rw.appendChild(mk(tr("\u95E8\u7981\u62D2\u6536\uFF08\u6309\u76EE\u6807\uFF09"), String(gd.total) + tr(" \u6B21"), gRows.join(" / ") + (gd.lastAt ? tr(" \xB7 \u6700\u8FD1 ") + fmtTime(gd.lastAt) + " " + (gd.lastTarget || "") + (gd.lastReason ? "\uFF1A" + gd.lastReason : "") : "")));
+        rw.appendChild(mk(tr("门禁拒收（按目标）"), String(gd.total) + tr(" 次"), gRows.join(" / ") + (gd.lastAt ? tr(" · 最近 ") + fmtTime(gd.lastAt) + " " + (gd.lastTarget || "") + (gd.lastReason ? "：" + gd.lastReason : "") : "")));
       }
-      rw.appendChild(mk(tr("\u4E09\u5C42\u5360\u6BD4"), "P " + (P2.index + P2.profile) + " \xB7 R " + R2.index + " \xB7 E " + (E2.index + E2.profile), tr("P=\u6052\u5E38\uFF08\u7D22\u5F15+P \u5C42\u753B\u50CF\u884C \u2264") + ((r7.layers || {}).profileCap || 3) + tr("/\u6863\uFF09\xB7 R=\u4EFB\u52A1\u95E8\u63A7 \xB7 E=\u76F8\u5173\u6027\u95E8\u63A7")));
+      rw.appendChild(mk(tr("三层占比"), "P " + (P.index + P.profile) + " · R " + R.index + " · E " + (E.index + E.profile), tr("P=恒常（索引+P 层画像行 ≤") + ((r.layers || {}).profileCap || 3) + tr("/档）· R=任务门控 · E=相关性门控")));
     }).catch(function() {
       rw.textContent = "";
-      rw.appendChild(mk(tr("\u5BF9\u8D26"), tr("\u8BFB\u53D6\u5931\u8D25"), "/reconcile"));
+      rw.appendChild(mk(tr("对账"), tr("读取失败"), "/reconcile"));
     });
   }
 
   // src-client/panes-suite.js
   function renderSuite(view, data) {
     view.textContent = "";
-    UI.pageHead(tr("\u63D2\u4EF6\u96C6\u5408"), tr("suite \u88C5\u914D\u77E9\u9635\u7531 targets.ts \u7684 suiteAssemblyMatrix() \u5355\u4E00\u5B9E\u73B0\uFF1B\u9762\u677F\u4E0E scheduler \u5171\u7528\u3002"), {
+    UI.pageHead(tr("插件集合"), tr("suite 装配矩阵由 targets.ts 的 suiteAssemblyMatrix() 单一实现；面板与 scheduler 共用。"), {
       routes: ["/suite"],
       routesInline: true,
-      actions: [UI.button(tr("\u91CD\u65B0\u88C5\u914D"), function() {
+      actions: [UI.button(tr("重新装配"), function() {
         appState.refreshView();
-        appState.statusFn(tr("\u5DF2\u6309\u6CE8\u5165\u5668 registry + profiles \u91CD\u65B0\u6838\u88C5\u914D"));
-      }, { title: tr("\u91CD\u53D6\u88C5\u914D\u77E9\u9635\uFF08/suite\uFF09") })]
+        appState.statusFn(tr("已按注入器 registry + profiles 重新核装配"));
+      }, { title: tr("重取装配矩阵（/suite）") })]
     });
     var members = data && data.members || [];
     var grid = el("div", "sc-pgrid");
-    var iconOf = function(m3) {
-      var k2 = String(m3 && (m3.id || m3.package) || "").toLowerCase();
-      if (k2.indexOf("memory") >= 0 || k2.indexOf("skill") >= 0) return "vault";
-      if (k2.indexOf("core") >= 0) return "persona";
-      if (k2.indexOf("sched") >= 0) return "sleep";
-      if (k2.indexOf("panel") >= 0) return "overview";
+    var iconOf = function(m) {
+      var k = String(m && (m.id || m.package) || "").toLowerCase();
+      if (k.indexOf("memory") >= 0 || k.indexOf("skill") >= 0) return "vault";
+      if (k.indexOf("core") >= 0) return "persona";
+      if (k.indexOf("sched") >= 0) return "sleep";
+      if (k.indexOf("panel") >= 0) return "overview";
       return "suite";
     };
-    members.forEach(function(m3) {
-      var st = Derive.suiteStatus(m3.status);
-      var c5 = el("div", "sc-pcard");
+    members.forEach(function(m) {
+      var st = Derive.suiteStatus(m.status);
+      var c = el("div", "sc-pcard");
       var ph = el("div", "ph");
       var ic = el("span", "ic");
-      ic.appendChild(svg(ICONS2[iconOf(m3)] || ICONS2.suite));
+      ic.appendChild(svg(ICONS[iconOf(m)] || ICONS.suite));
       ph.appendChild(ic);
-      ph.appendChild(el("b", null, String(m3.id || m3.name || m3.package || "?")));
-      c5.appendChild(ph);
-      c5.appendChild(el("div", "pd", String(m3.role || m3.desc || m3.description || m3.detail || "\u2014")));
+      ph.appendChild(el("b", null, String(m.id || m.name || m.package || "?")));
+      c.appendChild(ph);
+      c.appendChild(el("div", "pd", String(m.role || m.desc || m.description || m.detail || "—")));
       var meta = el("div", "pmeta");
-      meta.appendChild(el("span", null, String(m3.repo || m3.package || "")));
+      meta.appendChild(el("span", null, String(m.repo || m.package || "")));
       var stSpan = el("span", null, st.text);
       if (st.tip) stSpan.title = st.tip;
       meta.appendChild(stSpan);
-      c5.appendChild(meta);
-      grid.appendChild(c5);
+      c.appendChild(meta);
+      grid.appendChild(c);
     });
     var add = el("div", "sc-pcard is-add");
     var aph = el("div", "ph");
     var aic = el("span", "ic");
-    aic.appendChild(svg(ICONS2.suite));
+    aic.appendChild(svg(ICONS.suite));
     aph.appendChild(aic);
-    aph.appendChild(el("b", null, tr("\u6DFB\u52A0\u76EE\u6807\u5E93")));
+    aph.appendChild(el("b", null, tr("添加目标库")));
     add.appendChild(aph);
-    add.appendChild(el("div", "pd", tr("\u9700\u5728\u767D\u540D\u5355\u5185\u767B\u8BB0\uFF08target-registry / members \u914D\u7F6E\uFF09")));
+    add.appendChild(el("div", "pd", tr("需在白名单内登记（target-registry / members 配置）")));
     grid.appendChild(add);
     view.appendChild(grid);
-    var mtx = UI.card(tr("suite \u88C5\u914D\u77E9\u9635"), { sub: tr("\u5355\u4E00\u5B9E\u73B0\uFF1Atargets.ts \xB7 suiteAssemblyMatrix()"), right: [el("span", "sc-src", "GET /suite")] });
+    var mtx = UI.card(tr("suite 装配矩阵"), { sub: tr("单一实现：targets.ts · suiteAssemblyMatrix()"), right: [el("span", "sc-src", "GET /suite")] });
     view.appendChild(mtx.box);
     var tbl = el("table", "sc-table");
     var thead = el("thead");
     var htr = el("tr");
-    [tr("\u76EE\u6807\u5E93"), tr("\u5BB9\u91CF"), tr("\u5DF2\u7528"), tr("\u88C5\u914D\u5185\u5BB9"), tr("\u72B6\u6001")].forEach(function(h3) {
-      htr.appendChild(el("th", null, h3));
+    [tr("目标库"), tr("容量"), tr("已用"), tr("装配内容"), tr("状态")].forEach(function(h) {
+      htr.appendChild(el("th", null, h));
     });
     thead.appendChild(htr);
     tbl.appendChild(thead);
     var tbody = el("tbody");
     tbl.appendChild(tbody);
     mtx.body.appendChild(tbl);
-    var CONTENT = { "MEMORY.md": tr("\u539F\u5219 + \u8DEF\u5F84"), "USER.md": tr("\u753B\u50CF + \u504F\u597D"), "AGENT.md": tr("\u7ECF\u9A8C + \u53CD\u4F8B") };
+    var CONTENT = { "MEMORY.md": tr("原则 + 路径"), "USER.md": tr("画像 + 偏好"), "AGENT.md": tr("经验 + 反例") };
     var pill = function(ok, text) {
       return el("span", "pill" + (ok ? " ok" : " warn"), text);
     };
     var addRow = function(name, used, content, ok) {
       var tr2 = el("tr");
       tr2.appendChild(el("td", "tgt", name));
-      tr2.appendChild(el("td", "num", tr2("\u4E0D\u9650")));
+      tr2.appendChild(el("td", "num", tr2("不限")));
       tr2.appendChild(el("td", "num", used));
       tr2.appendChild(el("td", null, content));
       var td = el("td");
-      td.appendChild(pill(ok !== false, ok === false ? tr2("\u6C34\u4F4D\u504F\u9AD8") : tr2("\u6B63\u5E38")));
+      td.appendChild(pill(ok !== false, ok === false ? tr2("水位偏高") : tr2("正常")));
       tr2.appendChild(td);
       tbody.appendChild(tr2);
     };
     var fill = function(idx) {
       tbody.textContent = "";
       if (!Derive.has(idx)) {
-        tbody.appendChild(el("tr", null, tr("\uFF08\u65E0\u5BB9\u91CF\u6CE8\u518C\u8868\u6570\u636E\uFF09")));
+        tbody.appendChild(el("tr", null, tr("（无容量注册表数据）")));
         return;
       }
-      idx.forEach(function(f3) {
-        var pct = f3.cap ? Math.round((f3.chars || 0) / f3.cap * 100) : null;
+      idx.forEach(function(f) {
+        var pct = f.cap ? Math.round((f.chars || 0) / f.cap * 100) : null;
         var kind = pct === null ? "ended" : Derive.capKind(pct);
         var tr2 = el("tr");
-        tr2.appendChild(el("td", "tgt", String(f3.name || "").replace(/\.md$/i, "")));
-        tr2.appendChild(el("td", "num", f3.cap ? Derive.num(f3.cap) : tr2("\u4E0D\u9650")));
-        tr2.appendChild(el("td", "num", Derive.num(f3.chars || 0)));
-        tr2.appendChild(el("td", null, CONTENT[f3.name] || "\u2014"));
+        tr2.appendChild(el("td", "tgt", String(f.name || "").replace(/\.md$/i, "")));
+        tr2.appendChild(el("td", "num", f.cap ? Derive.num(f.cap) : tr2("不限")));
+        tr2.appendChild(el("td", "num", Derive.num(f.chars || 0)));
+        tr2.appendChild(el("td", null, CONTENT[f.name] || "—"));
         var td = el("td");
-        td.appendChild(pill(kind === "ended", kind === "ended" ? tr2("\u6B63\u5E38") : kind === "stalled" ? tr2("\u8D85\u9608") : tr2("\u6C34\u4F4D\u504F\u9AD8")));
+        td.appendChild(pill(kind === "ended", kind === "ended" ? tr2("正常") : kind === "stalled" ? tr2("超阈") : tr2("水位偏高")));
         tr2.appendChild(td);
         tbody.appendChild(tr2);
       });
     };
     fill(data && data.indexes || null);
     if (data && data.summary) mtx.body.appendChild(el("div", "sc-note", String(data.summary)));
-    appState.api("/memory/overview").then(function(r7) {
-      fill(r7 && r7.indexes || null);
-      var n6 = Derive.count(r7 && r7.notes);
-      if (n6) addRow("notes/", n6 + tr(" \u6761"), tr("\u4FBF\u7B7E"), true);
+    appState.api("/memory/overview").then(function(r) {
+      fill(r && r.indexes || null);
+      var n = Derive.count(r && r.notes);
+      if (n) addRow("notes/", n + tr(" 条"), tr("便签"), true);
     }).catch(function() {
     });
-    appState.api("/cognition/report").then(function(r7) {
-      var ar = r7 && r7.archive || [];
-      if (!r7 || !r7.ok || !Derive.has(ar)) return;
-      addRow("archive/", ar.length + tr(" \u6761"), tr("\u5F52\u6863"), true);
+    appState.api("/cognition/report").then(function(r) {
+      var ar = r && r.archive || [];
+      if (!r || !r.ok || !Derive.has(ar)) return;
+      addRow("archive/", ar.length + tr(" 条"), tr("归档"), true);
     }).catch(function() {
     });
   }
   function renderDeepSleep(view) {
     view.textContent = "";
-    UI.pageHead(tr("\u6DF1\u5EA6\u7761\u7720 \xB7 \u4F1A\u8BDD\u72B6\u6001\u673A"), tr("\u5168\u90E8\u6839\u4F1A\u8BDD\u505C\u6EDE \u2265 \u9608\u503C\u540E\u81EA\u52A8\u56DE\u60F3\u5F53\u5929\u8BB0\u5FC6\u3001\u63D0\u70BC\u539F\u5219\u5C42 PRINCIPLES.md\u3002\u72B6\u6001\u673A\u533A\u5206\u300C\u6B63\u5E38\u957F\u4EFB\u52A1 / \u5361\u4F4F / \u5F02\u5E38\u9000\u51FA\u300D\uFF1A\u4EC5\u957F\u4EFB\u52A1\u6B63\u5728\u63A8\u8FDB\u624D\u62E6\u7761\uFF0C\u5176\u4F59\u6B63\u5E38\u7761\u3002"), { routes: ["/deepsleep", "/deepsleep/trigger", "/deepsleep/config"] });
+    UI.pageHead(tr("深度睡眠 · 会话状态机"), tr("全部根会话停滞 ≥ 阈值后自动回想当天记忆、提炼原则层 PRINCIPLES.md。状态机区分「正常长任务 / 卡住 / 异常退出」：仅长任务正在推进才拦睡，其余正常睡。"), { routes: ["/deepsleep", "/deepsleep/trigger", "/deepsleep/config"] });
     var smSlot = el("div");
     view.appendChild(smSlot);
     var distSlot = el("div");
     view.appendChild(distSlot);
     var cogSlot = el("div", "sc-stack");
     view.appendChild(cogSlot);
-    appState.api("/deepsleep").then(function(r7) {
-      if (!r7.active) {
-        view.appendChild(el("div", "sc-desc", tr("\u6DF1\u5EA6\u7761\u7720\u5F52\u7EB3\u5668\u5F53\u524D\u672A\u6FC0\u6D3B\uFF08\u84B8\u998F\u5668 enableDistill \u672A\u542F\u7528\u6216\u5C1A\u672A\u5C31\u7EEA\uFF09\u3002")));
+    appState.api("/deepsleep").then(function(r) {
+      if (!r.active) {
+        view.appendChild(el("div", "sc-desc", tr("深度睡眠归纳器当前未激活（蒸馏器 enableDistill 未启用或尚未就绪）。")));
         return;
       }
       (function() {
         var now = Date.now();
-        var idleMs = Number(r7.idleMs) || 0;
-        var probeMs = Number(r7.probeAfterMs) || idleMs;
-        var act = Number(r7.lastActivityAt) || 0;
+        var idleMs = Number(r.idleMs) || 0;
+        var probeMs = Number(r.probeAfterMs) || idleMs;
+        var act = Number(r.lastActivityAt) || 0;
         var stalled = act ? Math.max(0, now - act) : 0;
         var stage = idleMs > 0 && stalled >= idleMs ? 3 : probeMs > 0 && stalled >= probeMs ? 2 : 1;
         var mMin = function(ms) {
           return Math.round(Number(ms) / 6e4);
         };
-        var smCard = UI.card("\u72B6\u6001\u673A", {
-          sub: "\u505C\u6EDE \u2265 " + mMin(idleMs) + " \u5206\u949F\u89E6\u53D1\u4E00\u6B21\u7ED3\u6784\u6574\u7406\uFF08\u5224\u5B9A\u7EBF " + mMin(probeMs) + " \u5206\u949F\uFF09" + (r7.lastDeepSleepAt ? " \xB7 \u4E0A\u6B21\u5165\u7761 " + dsFmtTime(r7.lastDeepSleepAt) : ""),
+        var smCard = UI.card("状态机", {
+          sub: "停滞 ≥ " + mMin(idleMs) + " 分钟触发一次结构整理（判定线 " + mMin(probeMs) + " 分钟）" + (r.lastDeepSleepAt ? " · 上次入睡 " + dsFmtTime(r.lastDeepSleepAt) : ""),
           right: [el("span", "sc-src", "/deepsleep")]
         });
         smSlot.appendChild(smCard.box);
         var sm = el("div", "sc-sm");
         [
-          ["\u6E05\u9192", "M20 6L9 17l-5-5", "\u4F1A\u8BDD\u6709\u6D3B\u52A8\uFF0C\u4E0D\u89E6\u53D1\u6574\u7406"],
-          ["\u5224\u5B9A\u4E2D", "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z", "\u5DF2\u505C\u6EDE \u2265 " + mMin(probeMs) + " \u5206\u949F\uFF0C\u7B49\u5F85\u5224\u5B9A\u662F\u957F\u4EFB\u52A1\u8FD8\u662F\u5361\u4F4F"],
-          ["\u53EF\u5165\u7761", "M12 3v12|M6 9l6 6 6-6|M5 21h14", "\u505C\u6EDE \u2265 " + mMin(idleMs) + " \u5206\u949F\uFF0C\u6EE1\u8DB3\u81EA\u52A8\u5F52\u7EB3\u6761\u4EF6"]
-        ].forEach(function(n6, i7) {
-          var idx = i7 + 1;
+          ["清醒", "M20 6L9 17l-5-5", "会话有活动，不触发整理"],
+          ["判定中", "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z", "已停滞 ≥ " + mMin(probeMs) + " 分钟，等待判定是长任务还是卡住"],
+          ["可入睡", "M12 3v12|M6 9l6 6 6-6|M5 21h14", "停滞 ≥ " + mMin(idleMs) + " 分钟，满足自动归纳条件"]
+        ].forEach(function(n, i) {
+          var idx = i + 1;
           var node = el("div", "sc-sm-node" + (idx < stage ? " done" : idx === stage ? " on" : ""));
-          node.title = n6[2];
+          node.title = n[2];
           var cir = el("div", "sc-sm-circle");
-          cir.appendChild(svg(n6[1]));
+          cir.appendChild(svg(n[1]));
           node.appendChild(cir);
-          node.appendChild(el("div", "sc-sm-label", idx === stage ? n6[0] + tr(" \xB7 \u5F53\u524D") : n6[0]));
+          node.appendChild(el("div", "sc-sm-label", idx === stage ? n[0] + tr(" · 当前") : n[0]));
           sm.appendChild(node);
-          if (i7 < 2) sm.appendChild(el("div", "sc-sm-seg" + (idx < stage ? " done" : "")));
+          if (i < 2) sm.appendChild(el("div", "sc-sm-seg" + (idx < stage ? " done" : "")));
         });
         smCard.body.appendChild(sm);
-        if (r7.currentEpoch) {
-          var epFrom = r7.epochSince ? dsFmtTime(r7.epochSince) : "\uFF08\u8D77\u70B9\u672A\u77E5\uFF09";
-          var epTo = r7.lastDeepSleepAt ? dsFmtTime(r7.lastDeepSleepAt) : "\u8FDB\u884C\u4E2D";
+        if (r.currentEpoch) {
+          var epFrom = r.epochSince ? dsFmtTime(r.epochSince) : "（起点未知）";
+          var epTo = r.lastDeepSleepAt ? dsFmtTime(r.lastDeepSleepAt) : "进行中";
           smCard.body.appendChild(el(
             "div",
             "sc-desc",
-            "\u5F53\u524D\u7EAA\u5143 " + r7.currentEpoch + " \xB7 \u7A97\u53E3 " + epFrom + " \u2192 " + epTo
+            "当前纪元 " + r.currentEpoch + " · 窗口 " + epFrom + " → " + epTo
           ));
         }
         var water = el("div", "sc-prog");
-        var wbar = document.createElement("wa-progress-bar");
-        wbar.className = "sc-prog-bar";
-        wbar.setAttribute("max", "100");
-        wbar.setAttribute("value", String(idleMs ? Math.min(100, Math.round(stalled / idleMs * 100)) : 0));
-        water.appendChild(wbar);
+        var pct = idleMs ? Math.min(100, Math.round(stalled / idleMs * 100)) : 0;
+        var wtrack = el("div", "sc-prog-track");
+        var wfill = el("div", "sc-prog-fill");
+        wfill.style.width = Math.max(0, Math.min(100, pct)) + "%";
+        wtrack.appendChild(wfill);
+        water.appendChild(wtrack);
         water.appendChild(el(
           "div",
           "sc-prog-txt",
-          "\u7761\u7720\u6C34\u4F4D \xB7 \u5DF2\u505C\u6EDE " + mMin(stalled) + " / " + mMin(idleMs) + " \u5206\u949F" + (idleMs ? "\uFF08" + Math.min(100, Math.round(stalled / idleMs * 100)) + "%\uFF09" : "")
+          "睡眠水位 · 已停滞 " + mMin(stalled) + " / " + mMin(idleMs) + " 分钟" + (idleMs ? "（" + Math.min(100, Math.round(stalled / idleMs * 100)) + "%）" : "")
         ));
         smCard.body.appendChild(water);
       })();
       (function() {
-        var segs = [["running", r7.running], ["ended", r7.ended], ["probing", r7.probing], ["suspect", r7.suspect], ["stalled", r7.stalled]];
-        var sum = segs.reduce(function(a4, s4) {
-          return a4 + (Number(s4[1]) || 0);
+        var segs = [["running", r.running], ["ended", r.ended], ["probing", r.probing], ["suspect", r.suspect], ["stalled", r.stalled]];
+        var sum = segs.reduce(function(a, s) {
+          return a + (Number(s[1]) || 0);
         }, 0);
         if (!sum) return;
-        var idleMin = Math.round((r7.idleMs || 0) / 6e4);
-        var distCard = UI.card("\u7761\u7720\u72B6\u6001\u5206\u5E03", {
-          sub: "idle " + idleMin + " \u5206\u949F \xB7 \u4E0B\u6B21\u53EF\u7761 " + (r7.nextEligibleAt ? dsFmtTime(r7.nextEligibleAt) : "\u2014"),
-          right: [el("span", "sc-src", "GET /deepsleep"), UI.button("\u7ACB\u5373\u8FDB\u5165\u6DF1\u7761", function() {
-            appState.statusFn(tr("\u6DF1\u5EA6\u7761\u7720\u5F52\u7EB3\u4E2D\u2026"));
+        var idleMin = Math.round((r.idleMs || 0) / 6e4);
+        var distCard = UI.card("睡眠状态分布", {
+          sub: "idle " + idleMin + " 分钟 · 下次可睡 " + (r.nextEligibleAt ? dsFmtTime(r.nextEligibleAt) : "—"),
+          right: [el("span", "sc-src", "GET /deepsleep"), UI.button("立即进入深睡", function() {
+            appState.statusFn(tr("深度睡眠归纳中…"));
             return appState.api("/deepsleep/trigger", { method: "POST", body: "{}" }).then(function(rr) {
-              appState.statusFn(rr.ok ? tr("\u2713 \u5DF2\u89E6\u53D1\u5F52\u7EB3\uFF08\u89C1\u65E5\u5FD7\uFF09") : tr("\u26A0 \u89E6\u53D1\u5931\u8D25\uFF1A") + (rr.error || ""));
+              appState.statusFn(rr.ok ? tr("✓ 已触发归纳（见日志）") : tr("⚠ 触发失败：") + (rr.error || ""));
             });
-          }, { primary: true, async: true, busyText: "\u5F52\u7EB3\u4E2D\u2026", okText: "\u5DF2\u89E6\u53D1\u5F52\u7EB3", confirm: "\u7ACB\u5373\u89E6\u53D1\u4E00\u6B21\u6DF1\u5EA6\u7761\u7720\u5F52\u7EB3\uFF1F\u5C06\u8C03\u7528\u5F52\u7EB3\u5B50\u4EE3\u7406\u56DE\u987E\u5F53\u5929\u8BB0\u5FC6\u75D5\u8FF9\u3002" })]
+          }, { primary: true, async: true, busyText: "归纳中…", okText: "已触发归纳", confirm: "立即触发一次深度睡眠归纳？将调用归纳子代理回顾当天记忆痕迹。" })]
         });
         distSlot.appendChild(distCard.box);
         var byState = {};
-        segs.forEach(function(s4) {
-          byState[s4[0]] = (byState[s4[0]] || 0) + Number(s4[1] || 0);
+        segs.forEach(function(s) {
+          byState[s[0]] = (byState[s[0]] || 0) + Number(s[1] || 0);
         });
-        var merged = Object.keys(byState).map(function(k2) {
-          return [k2, byState[k2]];
+        var merged = Object.keys(byState).map(function(k) {
+          return [k, byState[k]];
         });
         var bar = el("div", "sc-dseg");
-        merged.forEach(function(s4) {
-          if (Number(s4[1]) > 0) {
-            var i7 = el("i", dsStateKind(s4[0]));
-            i7.style.flex = String(s4[1]);
-            bar.appendChild(i7);
+        merged.forEach(function(s) {
+          if (Number(s[1]) > 0) {
+            var i = el("i", dsStateKind(s[0]));
+            i.style.flex = String(s[1]);
+            bar.appendChild(i);
           }
         });
         distCard.body.appendChild(bar);
         var legend = el("div", "sc-dlegend");
-        merged.forEach(function(s4) {
+        merged.forEach(function(s) {
           var it = el("span", "sc-dlegend-i");
-          it.appendChild(el("i", "sc-segdot " + dsStateKind(s4[0])));
-          it.appendChild(el("span", null, dsStateLabel(s4[0]) + " " + String(s4[1] || 0)));
+          it.appendChild(el("i", "sc-segdot " + dsStateKind(s[0])));
+          it.appendChild(el("span", null, dsStateLabel(s[0]) + " " + String(s[1] || 0)));
           legend.appendChild(it);
         });
         distCard.body.appendChild(legend);
       })();
       renderCognitionReport(cogSlot, "sleep");
-      var scRun = UI.button(tr("\u8FD0\u884C\u81EA\u68C0"), function() {
+      var scRun = UI.button(tr("运行自检"), function() {
         return appState.api("/selfcheck/run", { method: "POST", body: "{}" }).then(function(rr) {
-          appState.statusFn(tr("\u2713 \u81EA\u68C0\u5B8C\u6210\uFF1A") + (rr.verdict || "?"));
+          appState.statusFn(tr("✓ 自检完成：") + (rr.verdict || "?"));
           renderDeepSleep(view);
         });
-      }, { async: true, busyText: tr("\u81EA\u68C0\u4E2D\u2026"), okText: tr("\u81EA\u68C0\u5B8C\u6210") });
-      var scWrap = UI.card(tr("\u7761\u7720\u671F\u81EA\u68C0\uFF08\u5224\u636E\u95E8 / \u8F7D\u4F53\u95E8 / \u5206\u5C42 / \u6210\u719F\u5EA6 / \u5F71\u5B50 / \u5BF9\u8D26\uFF09"), {
-        sub: tr("\u4E0A\u6B21\u7ED3\u679C\u8BFB selfcheck-latest.json\uFF08GET\uFF09\uFF1B\u6267\u884C\u8D70 POST"),
-        right: [el("span", "sc-src", "GET /selfcheck \xB7 POST /selfcheck/run"), scRun]
+      }, { async: true, busyText: tr("自检中…"), okText: tr("自检完成") });
+      var scWrap = UI.card(tr("睡眠期自检（判据门 / 载体门 / 分层 / 成熟度 / 影子 / 对账）"), {
+        sub: tr("上次结果读 selfcheck-latest.json（GET）；执行走 POST"),
+        right: [el("span", "sc-src", "GET /selfcheck · POST /selfcheck/run"), scRun]
       });
       view.appendChild(scWrap.box);
       var scBox = el("div", "sc-mem-stats");
       var scCard = function(label, value, sub) {
-        var c5 = el("div", "sc-mem-stat");
-        c5.appendChild(el("div", "sc-mem-stat-label", label));
-        c5.appendChild(el("div", "sc-mem-stat-value", value));
-        if (sub) c5.appendChild(el("div", "sc-mem-stat-sub", sub));
-        return c5;
+        var c = el("div", "sc-mem-stat");
+        c.appendChild(el("div", "sc-mem-stat-label", label));
+        c.appendChild(el("div", "sc-mem-stat-value", value));
+        if (sub) c.appendChild(el("div", "sc-mem-stat-sub", sub));
+        return c;
       };
-      scBox.appendChild(scCard(tr("\u81EA\u68C0"), "\u2026", tr("\u8BFB\u53D6\u4E2D")));
+      scBox.appendChild(scCard(tr("自检"), "…", tr("读取中")));
       scWrap.body.appendChild(scBox);
-      appState.api("/selfcheck").then(function(s4) {
+      appState.api("/selfcheck").then(function(s) {
         scBox.textContent = "";
-        if (!s4 || !s4.active) {
-          scBox.appendChild(scCard(tr("\u81EA\u68C0"), tr("\u5C1A\u672A\u8DD1\u8FC7"), s4 && s4.error || tr("\u5B9A\u65F6\u5668/\u6DF1\u7761\u540E\u4F1A\u81EA\u52A8\u6267\u884C")));
+        if (!s || !s.active) {
+          scBox.appendChild(scCard(tr("自检"), tr("尚未跑过"), s && s.error || tr("定时器/深睡后会自动执行")));
         } else {
-          var v2 = String(s4.verdict || "?");
-          var sm = s4.summary || {};
+          var v = String(s.verdict || "?");
+          var sm = s.summary || {};
           var ck = sm.checks || {};
-          scBox.appendChild(scCard(tr("\u88C1\u51B3"), v2 === "ok" ? "\u2705 ok" : v2 === "adjust" ? "\u{1F527} adjust" : "\u26A0 warn", tr("\u4E8E ") + fmtTime(s4.at)));
-          scBox.appendChild(scCard(tr("\u516D\u9879\u68C0\u6D4B"), Object.keys(ck).map(function(k2) {
-            return (ck[k2] === "pass" ? "\u2705" : ck[k2] === "skipped" ? "\u23ED" : "\u274C") + k2;
-          }).join(" "), tr("\u5F71\u5B50 flipReady=") + sm.flipScoreWeights + tr(" \xB7 \u6210\u719F\u5EA6\u5C31\u7EEA=") + sm.maturationReady + tr(" \xB7 \u95ED\u5408=") + (sm.closureOk === null ? "n/a" : sm.closureOk)));
-          scBox.appendChild(scCard(tr("\u767D\u540D\u5355\u8C03\u6574"), Derive.has(s4.adjustments) ? s4.adjustments.map(function(a4) {
-            return a4.id;
-          }).join(" \xB7 ") : tr("\u65E0"), tr("\u4EC5\u7A84\u52A8\u4F5C\u4E14\u53EF\u56DE\u6EDA\uFF1B\u6539 \u03B1/gate/\u5224\u636E \u4E00\u5F8B\u53EA\u5EFA\u8BAE")));
+          scBox.appendChild(scCard(tr("裁决"), v === "ok" ? "✅ ok" : v === "adjust" ? "🔧 adjust" : "⚠ warn", tr("于 ") + fmtTime(s.at)));
+          scBox.appendChild(scCard(tr("六项检测"), Object.keys(ck).map(function(k) {
+            return (ck[k] === "pass" ? "✅" : ck[k] === "skipped" ? "⏭" : "❌") + k;
+          }).join(" "), tr("影子 flipReady=") + sm.flipScoreWeights + tr(" · 成熟度就绪=") + sm.maturationReady + tr(" · 闭合=") + (sm.closureOk === null ? "n/a" : sm.closureOk)));
+          scBox.appendChild(scCard(tr("白名单调整"), Derive.has(s.adjustments) ? s.adjustments.map(function(a) {
+            return a.id;
+          }).join(" · ") : tr("无"), tr("仅窄动作且可回滚；改 α/gate/判据 一律只建议")));
         }
       }).catch(function() {
         scBox.textContent = "";
-        scBox.appendChild(scCard(tr("\u81EA\u68C0"), tr("\u8BFB\u53D6\u5931\u8D25"), "/selfcheck"));
+        scBox.appendChild(scCard(tr("自检"), tr("读取失败"), "/selfcheck"));
       });
-      if (Derive.has(r7.sessions)) {
-        var sessCard = UI.card(tr("\u6700\u8FD1\u4F1A\u8BDD"), { sub: r7.sessions.length + tr(" \u6761\u5728\u518C") });
+      if (Derive.has(r.sessions)) {
+        var sessCard = UI.card(tr("最近会话"), { sub: r.sessions.length + tr(" 条在册") });
         view.appendChild(sessCard.box);
-        r7.sessions.forEach(function(s4) {
-          var sub = dsFmtAgo(s4.state === "ended" ? s4.lastEndAt : s4.lastEventAt);
-          if (s4.probeResult) sub += " \xB7 " + (DS_PROBE_TEXT[s4.probeResult] || s4.probeResult);
-          var pk = s4.state === "stalled" || s4.state === "suspect" ? "warn" : s4.state === "probing" ? "info" : "ok";
-          var ttl = String(s4.title || "");
-          if (ttl.length > 14) ttl = ttl.slice(0, 14) + "\u2026";
-          var nm = [s4.workspace, ttl, s4.sid].filter(function(x2) {
-            return !!x2;
-          }).join(" \xB7 ");
-          sessCard.body.appendChild(ovCRow(nm, sub, [ovPill(dsStateLabel(s4.state), pk)]));
+        r.sessions.forEach(function(s) {
+          var sub = dsFmtAgo(s.state === "ended" ? s.lastEndAt : s.lastEventAt);
+          if (s.probeResult) sub += " · " + (DS_PROBE_TEXT[s.probeResult] || s.probeResult);
+          var pk = s.state === "stalled" || s.state === "suspect" ? "warn" : s.state === "probing" ? "info" : "ok";
+          var ttl = String(s.title || "");
+          if (ttl.length > 14) ttl = ttl.slice(0, 14) + "…";
+          var nm = [s.workspace, ttl, s.sid].filter(function(x) {
+            return !!x;
+          }).join(" · ");
+          sessCard.body.appendChild(ovCRow(nm, sub, [ovPill(dsStateLabel(s.state), pk)]));
         });
       }
-      var hasStall = r7.stalled > 0 || (r7.sessions || []).some(function(s4) {
-        return s4.probeResult === "stall";
+      var hasStall = r.stalled > 0 || (r.sessions || []).some(function(s) {
+        return s.probeResult === "stall";
       });
       if (hasStall) {
-        view.appendChild(el("div", "sc-ds-alert", tr("\u26A0 \u68C0\u6D4B\u5230\u7591\u4F3C\u5361\u4F4F\u7684\u4F1A\u8BDD\uFF08\u65E0\u8F93\u51FA\u589E\u957F\u4F46\u4F1A\u8BDD\u4ECD\u5728\uFF09\uFF1A\u5DF2\u6B63\u5E38\u8BA1\u5165\u505C\u6EDE\u5E76\u5B89\u6392\u7761\u7720\uFF0C\u4F46\u5EFA\u8BAE\u4F60\u786E\u8BA4\u8BE5\u4EFB\u52A1\u662F\u5426\u771F\u7684\u5361\u4F4F\u2014\u2014\u5FC5\u8981\u65F6\u624B\u52A8\u91CD\u542F\u8BE5\u4F1A\u8BDD\u3002")));
+        view.appendChild(el("div", "sc-ds-alert", tr("⚠ 检测到疑似卡住的会话（无输出增长但会话仍在）：已正常计入停滞并安排睡眠，但建议你确认该任务是否真的卡住——必要时手动重启该会话。")));
       }
-    }).catch(function(e8) {
-      view.appendChild(el("div", "sc-desc", tr("\u52A0\u8F7D\u5931\u8D25\uFF1A") + (e8 && e8.message ? e8.message : e8)));
+    }).catch(function(e) {
+      view.appendChild(el("div", "sc-desc", tr("加载失败：") + (e && e.message ? e.message : e)));
     });
   }
   function dsFmtAgo(ts) {
-    if (!ts) return "\u2014";
-    var s4 = Math.max(0, Math.floor((Date.now() - ts) / 1e3));
-    if (s4 < 60) return s4 + tr(" \u79D2");
-    var m3 = Math.floor(s4 / 60);
-    if (m3 < 60) return m3 + tr(" \u5206\u949F");
-    var h3 = Math.floor(m3 / 60);
-    if (h3 < 24) return h3 + tr(" \u5C0F\u65F6 ") + m3 % 60 + tr(" \u5206");
-    return Math.floor(h3 / 24) + tr(" \u5929 ") + h3 % 24 + tr(" \u5C0F\u65F6");
+    if (!ts) return "—";
+    var s = Math.max(0, Math.floor((Date.now() - ts) / 1e3));
+    if (s < 60) return s + tr(" 秒");
+    var m = Math.floor(s / 60);
+    if (m < 60) return m + tr(" 分钟");
+    var h = Math.floor(m / 60);
+    if (h < 24) return h + tr(" 小时 ") + m % 60 + tr(" 分");
+    return Math.floor(h / 24) + tr(" 天 ") + h % 24 + tr(" 小时");
   }
   function dsFmtTime(ts) {
-    if (!ts) return tr("\u4ECE\u672A");
+    if (!ts) return tr("从未");
     try {
       return new Date(ts).toLocaleString("zh-CN", { hour12: false });
-    } catch (e8) {
+    } catch (e) {
       return String(ts);
     }
   }
@@ -9685,17 +4585,17 @@
     return state === "stalled" ? "stalled" : "running";
   }
   function dsStateLabel(state) {
-    if (state === "stalled") return tr("\u505C\u6EDE");
-    return tr("\u5F85\u84B8\u998F");
+    if (state === "stalled") return tr("停滞");
+    return tr("待蒸馏");
   }
   var DS_PROBE_TEXT = {
-    "long-run": "\u957F\u4EFB\u52A1\u8FDB\u884C\u4E2D",
-    "suspect": "\u5F85\u4E0B\u8F6E\u590D\u6838",
-    "conflict": "\u72B6\u6001\u6D3B\u8DC3\u4F46\u65E0\u8F93\u51FA\u589E\u957F",
-    "stall": "\u5DF2\u786E\u8BA4\u65E0\u8F93\u51FA",
-    "exit": "\u4F1A\u8BDD\u5DF2\u9000\u51FA",
-    "no-transcript": "\u63A2\u9488\u4E0D\u53EF\u7528",
-    "error": "\u63A2\u6D4B\u5F02\u5E38"
+    "long-run": "长任务进行中",
+    "suspect": "待下轮复核",
+    "conflict": "状态活跃但无输出增长",
+    "stall": "已确认无输出",
+    "exit": "会话已退出",
+    "no-transcript": "探针不可用",
+    "error": "探测异常"
   };
 
   // src-client/i18n-nav.js
@@ -9710,53 +4610,53 @@
     ["toggles", "nav.toggles", "toggles", "nav.group.config"],
     ["settings", "nav.settings", "settings", "nav.group.config"]
   ];
-  function navLabelById(id3) {
-    if (id3 === "overview") return tr("\u8FD0\u884C\u603B\u89C8");
-    if (id3 === "memory") return tr("\u8BB0\u5FC6\u5E93");
-    if (id3 === "persona") return tr("\u753B\u50CF");
-    if (id3 === "suite") return tr("\u63D2\u4EF6\u96C6\u5408");
-    if (id3 === "deepsleep") return tr("\u6DF1\u5EA6\u7761\u7720");
-    if (id3 === "observe") return tr("\u8FD0\u884C\u89C2\u6D4B");
-    if (id3 === "arch") return tr("\u67B6\u6784");
-    if (id3 === "toggles") return tr("\u53C2\u6570");
-    if (id3 === "settings") return tr("\u8BBE\u7F6E");
-    return id3;
+  function navLabelById(id) {
+    if (id === "overview") return tr("运行总览");
+    if (id === "memory") return tr("记忆库");
+    if (id === "persona") return tr("画像");
+    if (id === "suite") return tr("插件集合");
+    if (id === "deepsleep") return tr("深度睡眠");
+    if (id === "observe") return tr("运行观测");
+    if (id === "arch") return tr("架构");
+    if (id === "toggles") return tr("参数");
+    if (id === "settings") return tr("设置");
+    return id;
   }
   function navGroupByKey(key) {
-    if (key === "nav.group.overview") return tr("\u603B\u89C8");
-    if (key === "nav.group.memory") return tr("\u8BB0\u5FC6");
-    if (key === "nav.group.run") return tr("\u8FD0\u884C");
-    if (key === "nav.group.config") return tr("\u914D\u7F6E");
+    if (key === "nav.group.overview") return tr("总览");
+    if (key === "nav.group.memory") return tr("记忆");
+    if (key === "nav.group.run") return tr("运行");
+    if (key === "nav.group.config") return tr("配置");
     return key;
   }
   function relabelChrome(rootSel) {
     var root = rootSel || "#scpanl-root";
     try {
       var items = document.querySelectorAll(root + " .sc-nav-item[data-view]");
-      for (var i7 = 0; i7 < items.length; i7++) {
-        var id3 = items[i7].getAttribute("data-view");
-        var lbl = navLabelById(id3);
-        var span = items[i7].querySelector("span");
+      for (var i = 0; i < items.length; i++) {
+        var id = items[i].getAttribute("data-view");
+        var lbl = navLabelById(id);
+        var span = items[i].querySelector("span");
         if (span) span.textContent = lbl;
-        items[i7].setAttribute("aria-label", lbl);
+        items[i].setAttribute("aria-label", lbl);
       }
       var groups = document.querySelectorAll(root + " .sc-nav-group");
       var seen = [];
-      VIEWS.forEach(function(v2) {
-        if (v2[3] && seen.indexOf(v2[3]) === -1) seen.push(v2[3]);
+      VIEWS.forEach(function(v) {
+        if (v[3] && seen.indexOf(v[3]) === -1) seen.push(v[3]);
       });
-      for (var k2 = 0; k2 < groups.length && k2 < seen.length; k2++) groups[k2].textContent = navGroupByKey(seen[k2]);
+      for (var k = 0; k < groups.length && k < seen.length; k++) groups[k].textContent = navGroupByKey(seen[k]);
       var title = document.querySelector(root + " .sc-nav-title");
-      if (title) title.textContent = tr("\u5B88\u85CF SHOUCANG");
+      if (title) title.textContent = tr("守藏 SHOUCANG");
       var modal = document.getElementById("scpanl-modal");
-      if (modal) modal.setAttribute("aria-label", tr("\u5B88\u85CF\u8BB0\u5FC6\u9762\u677F"));
+      if (modal) modal.setAttribute("aria-label", tr("守藏记忆面板"));
       var lblBtn = document.getElementById("scpanl-btn");
       if (lblBtn) {
-        lblBtn.title = tr("\u5B88\u85CF\u9762\u677F");
+        lblBtn.title = tr("守藏面板");
         var lab = lblBtn.querySelector("span, [data-slot] span");
-        if (lab) lab.textContent = tr("\u5B88\u85CF");
+        if (lab) lab.textContent = tr("守藏");
       }
-    } catch (e8) {
+    } catch (e) {
     }
   }
 
@@ -9772,138 +4672,138 @@
   }
   function renderViewSettings(view) {
     view.textContent = "";
-    UI.pageHead(tr("\u8BBE\u7F6E"), tr("\u754C\u9762\u504F\u597D\u4E0E\u9AD8\u7EA7\u64CD\u4F5C\u3002\u914D\u7F6E\u539F\u6587\uFF08YAML\uFF09\u4E0E\u884C\u7EA7\u7F16\u8F91\u6536\u5728\u6B64\u5904\uFF0C\u914D\u98CE\u9669\u63D0\u793A\u3002"), {
+    UI.pageHead(tr("设置"), tr("界面偏好与高级操作。配置原文（YAML）与行级编辑收在此处，配风险提示。"), {
       routes: ["/config", "/save", "/roots", "/memory/edit"],
-      actions: [UI.button(tr("\u5BFC\u51FA\u5FEB\u7167"), function() {
-        return appState.api("/config").then(function(c5) {
+      actions: [UI.button(tr("导出快照"), function() {
+        return appState.api("/config").then(function(c) {
           var snap = {
             at: (/* @__PURE__ */ new Date()).toISOString(),
-            config: { file: c5 && c5.file || "", text: c5 && c5.text || "" },
+            config: { file: c && c.file || "", text: c && c.text || "" },
             ui: Cfg.get()
           };
           var blob = new Blob([JSON.stringify(snap, null, 2)], { type: "application/json" });
-          var a4 = document.createElement("a");
-          a4.href = URL.createObjectURL(blob);
-          a4.download = "shoucang-config-snapshot-" + (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace(/[:T]/g, "") + ".json";
-          a4.click();
-          URL.revokeObjectURL(a4.href);
-          appState.statusFn(tr("\u2713 \u914D\u7F6E\u5FEB\u7167\u5DF2\u5BFC\u51FA"));
+          var a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = "shoucang-config-snapshot-" + (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace(/[:T]/g, "") + ".json";
+          a.click();
+          URL.revokeObjectURL(a.href);
+          appState.statusFn(tr("✓ 配置快照已导出"));
         });
-      }, { async: true, busyText: tr("\u5BFC\u51FA\u4E2D\u2026"), okText: tr("\u914D\u7F6E\u5FEB\u7167\u5DF2\u5BFC\u51FA"), title: tr("\u5BFC\u51FA\u914D\u7F6E\u539F\u6587 + \u754C\u9762\u504F\u597D\uFF08JSON\uFF09") })]
+      }, { async: true, busyText: tr("导出中…"), okText: tr("配置快照已导出"), title: tr("导出配置原文 + 界面偏好（JSON）") })]
     });
     var pLook = el("div");
     var pAdv = el("div");
-    var _tb = UI.tabs("settings", [{ id: "pref", label: tr("\u754C\u9762\u504F\u597D"), pane: pLook }, { id: "advanced", label: tr("\u9AD8\u7EA7"), pane: pAdv }]);
+    var _tb = UI.tabs("settings", [{ id: "pref", label: tr("界面偏好"), pane: pLook }, { id: "advanced", label: tr("高级"), pane: pAdv }]);
     view.appendChild(_tb.box);
     var host = _tb.pane("pref");
     var pref = UI.card(null);
     host.appendChild(pref.box);
     var box = pref.body;
     box.appendChild(UI.item(
-      tr("\u663E\u793A\u5BC6\u5EA6"),
-      tr("\u7D27\u51D1\u6A21\u5F0F\u9690\u85CF\u63CF\u8FF0\u6587\u5B57\u3001\u538B\u7F29\u884C\u9AD8\uFF0C\u63D0\u5347\u4FE1\u606F\u5BC6\u5EA6\u3002"),
+      tr("显示密度"),
+      tr("紧凑模式隐藏描述文字、压缩行高，提升信息密度。"),
       UI.select(
-        [{ value: "comfortable", label: tr("\u8212\u9002") }, { value: "compact", label: tr("\u7D27\u51D1") }],
+        [{ value: "comfortable", label: tr("舒适") }, { value: "compact", label: tr("紧凑") }],
         Cfg.get("density", "comfortable"),
-        function(v2) {
-          Cfg.set("density", v2);
+        function(v) {
+          Cfg.set("density", v);
           applyDensity();
         }
       ),
       {}
     ));
     box.appendChild(UI.item(
-      tr("\u5BFC\u822A\u5BBD\u5EA6"),
-      tr("\u5DE6\u4FA7\u5BFC\u822A\u50CF\u7D20\u5BBD\u5EA6\uFF08140\u2013320\uFF09\uFF1B\u7A84\u5C4F\uFF08\u2264900px\uFF09\u7531\u54CD\u5E94\u5F0F\u65AD\u70B9\u63A5\u7BA1\u3002"),
-      UI.input(Cfg.get("navWidth", 216), function(v2) {
-        var n6 = parseInt(v2, 10);
-        if (isNaN(n6)) return;
-        Cfg.set("navWidth", Math.max(140, Math.min(320, n6)));
+      tr("导航宽度"),
+      tr("左侧导航像素宽度（140–320）；窄屏（≤900px）由响应式断点接管。"),
+      UI.input(Cfg.get("navWidth", 216), function(v) {
+        var n = parseInt(v, 10);
+        if (isNaN(n)) return;
+        Cfg.set("navWidth", Math.max(140, Math.min(320, n)));
         applyNavWidth();
-      }, { type: "number", width: "120px", ariaLabel: tr("\u5BFC\u822A\u5BBD\u5EA6") }),
+      }, { type: "number", width: "120px", ariaLabel: tr("导航宽度") }),
       {}
     ));
     box.appendChild(UI.item(
-      tr("\u6253\u5F00\u65F6\u81EA\u52A8\u5237\u65B0"),
-      tr("\u6253\u5F00\u9762\u677F\u5373\u91CD\u65B0\u62C9\u53D6\u5F53\u524D\u89C6\u56FE\u6570\u636E\u3002"),
-      UI.toggle(Cfg.get("autoRefresh", true), function(v2) {
-        Cfg.set("autoRefresh", v2);
+      tr("打开时自动刷新"),
+      tr("打开面板即重新拉取当前视图数据。"),
+      UI.toggle(Cfg.get("autoRefresh", true), function(v) {
+        Cfg.set("autoRefresh", v);
       }),
       {}
     ));
     box.appendChild(UI.item(
-      tr("\u8F6E\u8BE2\u95F4\u9694\uFF08\u6BEB\u79D2\uFF09"),
-      tr("0 = \u5173\u95ED\u8F6E\u8BE2\u3002\u5F71\u54CD\u8FD0\u884C\u6001\u6570\u636E\u5237\u65B0\u9891\u7387\u3002"),
-      UI.input(Cfg.get("refreshMs", 6e4), function(v2) {
-        var n6 = parseInt(v2, 10);
-        if (isNaN(n6)) return;
-        Cfg.set("refreshMs", Math.max(0, n6));
+      tr("轮询间隔（毫秒）"),
+      tr("0 = 关闭轮询。影响运行态数据刷新频率。"),
+      UI.input(Cfg.get("refreshMs", 6e4), function(v) {
+        var n = parseInt(v, 10);
+        if (isNaN(n)) return;
+        Cfg.set("refreshMs", Math.max(0, n));
         restartPolling();
-      }, { type: "number", width: "140px", ariaLabel: tr("\u8F6E\u8BE2\u95F4\u9694") }),
+      }, { type: "number", width: "140px", ariaLabel: tr("轮询间隔") }),
       {}
     ));
     box.appendChild(UI.item(
-      tr("\u6982\u89C8\u2014\u8BE6\u60C5\u5206\u5C42"),
-      tr("\u5217\u8868\u9ED8\u8BA4\u6298\u53E0\u8BE6\u60C5\uFF0C\u5148\u7ED9\u6982\u89C8\u518D\u6309\u9700\u5C55\u5F00\u3002"),
-      UI.toggle(Cfg.get("overviewMode", true), function(v2) {
-        Cfg.set("overviewMode", v2);
+      tr("概览—详情分层"),
+      tr("列表默认折叠详情，先给概览再按需展开。"),
+      UI.toggle(Cfg.get("overviewMode", true), function(v) {
+        Cfg.set("overviewMode", v);
       }),
       {}
     ));
     box.appendChild(UI.item(
-      tr("\u957F\u5217\u8868\u6298\u53E0\u9608\u503C"),
-      tr("\u8D85\u8FC7\u8BE5\u884C\u6570\u7684\u5217\u8868\u9ED8\u8BA4\u6298\u53E0\u3002"),
-      UI.input(Cfg.get("maxRows", 50), function(v2) {
-        var n6 = parseInt(v2, 10);
-        if (isNaN(n6)) return;
-        Cfg.set("maxRows", Math.max(5, Math.min(500, n6)));
-      }, { type: "number", width: "120px", ariaLabel: tr("\u6298\u53E0\u9608\u503C") }),
+      tr("长列表折叠阈值"),
+      tr("超过该行数的列表默认折叠。"),
+      UI.input(Cfg.get("maxRows", 50), function(v) {
+        var n = parseInt(v, 10);
+        if (isNaN(n)) return;
+        Cfg.set("maxRows", Math.max(5, Math.min(500, n)));
+      }, { type: "number", width: "120px", ariaLabel: tr("折叠阈值") }),
       {}
     ));
     box.appendChild(UI.item(
-      tr("\u663E\u793A\u65E5\u5FD7\u9762\u677F"),
-      tr("\u5728\u72B6\u6001\u680F\u4E0A\u65B9\u5E38\u9A7B\u663E\u793A\u8C03\u7528\u65E5\u5FD7\u3002"),
-      UI.toggle(Cfg.get("showLogs", true), function(v2) {
-        Cfg.set("showLogs", v2);
+      tr("显示日志面板"),
+      tr("在状态栏上方常驻显示调用日志。"),
+      UI.toggle(Cfg.get("showLogs", true), function(v) {
+        Cfg.set("showLogs", v);
         applyLogPanel();
       }),
       {}
     ));
     box.appendChild(UI.item(
-      tr("\u65E5\u5FD7\u7EA7\u522B"),
-      tr("\u8FC7\u6EE4\u65E5\u5FD7\u9762\u677F\u663E\u793A\u7684\u6700\u4F4E\u7EA7\u522B\uFF08\u5168\u90E8 / \u8B66\u544A+ / \u4EC5\u9519\u8BEF\uFF09\u3002"),
+      tr("日志级别"),
+      tr("过滤日志面板显示的最低级别（全部 / 警告+ / 仅错误）。"),
       UI.select(
-        [{ value: "info", label: tr("\u5168\u90E8") }, { value: "warn", label: tr("\u8B66\u544A+") }, { value: "error", label: tr("\u4EC5\u9519\u8BEF") }],
+        [{ value: "info", label: tr("全部") }, { value: "warn", label: tr("警告+") }, { value: "error", label: tr("仅错误") }],
         Cfg.get("logLevel", "info"),
-        function(v2) {
-          Cfg.set("logLevel", v2);
+        function(v) {
+          Cfg.set("logLevel", v);
           Bus.emit("log", null);
         }
       ),
       {}
     ));
     box.appendChild(UI.item(
-      tr("\u542F\u52A8\u65F6\u89C6\u56FE"),
-      tr("\u6253\u5F00\u9762\u677F\u540E\u9ED8\u8BA4\u843D\u5730\u7684\u9875\u9762\u3002\u4F18\u5148\u7EA7\uFF1A#sc=<\u89C6\u56FE\u540D> \u6DF1\u94FE > \u4E0A\u6B21\u89C6\u56FE\u8BB0\u5FC6 > \u6B64\u9879\u3002"),
+      tr("启动时视图"),
+      tr("打开面板后默认落地的页面。优先级：#sc=<视图名> 深链 > 上次视图记忆 > 此项。"),
       UI.select(
-        appState.views.map(function(v2) {
-          return { value: v2[0], label: navLabelById(v2[0]) };
+        appState.views.map(function(v) {
+          return { value: v[0], label: navLabelById(v[0]) };
         }),
         Cfg.get("startView", "overview"),
-        function(v2) {
-          Cfg.set("startView", v2);
+        function(v) {
+          Cfg.set("startView", v);
         }
       ),
       {}
     ));
     box.appendChild(UI.item(
-      tr("\u754C\u9762\u76AE\u80A4"),
-      tr("v9 = \u65B9\u6848\u8C03\u8272\u677F\uFF08\u9ED8\u8BA4\uFF09\uFF1B\u5BBF\u4E3B = \u8DDF\u968F DSH \u4E3B\u9898\u4EE4\u724C\uFF08\u4E0E\u5BBF\u4E3B\u540C\u8272\uFF09\u3002"),
+      tr("界面皮肤"),
+      tr("v9 = 方案调色板（默认）；宿主 = 跟随 DSH 主题令牌（与宿主同色）。"),
       UI.select(
-        [{ value: "v9", label: tr("v9 \u65B9\u6848\u76AE\u80A4") }, { value: "host", label: tr("\u5BBF\u4E3B\u539F\u751F\u76AE\u80A4") }],
+        [{ value: "v9", label: tr("v9 方案皮肤") }, { value: "host", label: tr("宿主原生皮肤") }],
         Cfg.get("skin", "v9"),
-        function(v2) {
-          Cfg.set("skin", v2);
+        function(v) {
+          Cfg.set("skin", v);
           syncTheme();
           appState.refreshView();
         }
@@ -9911,60 +4811,60 @@
       {}
     ));
     box.appendChild(UI.item(
-      tr("\u5BFC\u822A\u5206\u7EC4\u663E\u793A"),
-      tr("\u6309\u8BED\u4E49\u663E\u793A\u5206\u7EC4\u6807\u9898\uFF08\u5B88\u85CF / \u603B\u89C8 / \u8BB0\u5FC6 / \u8FD0\u884C / \u914D\u7F6E\uFF09\u3002"),
-      UI.toggle(Cfg.get("navGroups", true), function(v2) {
-        Cfg.set("navGroups", v2);
+      tr("导航分组显示"),
+      tr("按语义显示分组标题（守藏 / 总览 / 记忆 / 运行 / 配置）。"),
+      UI.toggle(Cfg.get("navGroups", true), function(v) {
+        Cfg.set("navGroups", v);
         applyNavGroups();
       }),
       {}
     ));
     box.appendChild(UI.item(
-      tr("\u9875\u811A\u5065\u5EB7\u6761"),
-      tr("\u5E38\u9A7B\u663E\u793A\u8BB0\u5FC6\u5E93\u72B6\u6001\u4E0E\u5E93\u8DEF\u5F84\u3002"),
-      UI.toggle(Cfg.get("footBar", true), function(v2) {
-        Cfg.set("footBar", v2);
+      tr("页脚健康条"),
+      tr("常驻显示记忆库状态与库路径。"),
+      UI.toggle(Cfg.get("footBar", true), function(v) {
+        Cfg.set("footBar", v);
         applyFootBar();
       }),
       {}
     ));
-    var keys = UI.card(tr("\u5FEB\u6377\u952E"), { sub: tr("\u9762\u677F\u5185\u53EF\u7528") });
-    keys.body.appendChild(ovCRow(tr("\u6253\u5F00 / \u5173\u95ED\u9762\u677F"), tr("\u5168\u5C40"), [ovPill("Ctrl/\u2318 + Shift + S", "", true)]));
-    keys.body.appendChild(ovCRow(tr("\u5207\u6362\u65E5\u5FD7\u9762\u677F"), tr("\u9762\u677F\u5185"), [ovPill("Ctrl/\u2318 + Shift + L", "", true)]));
-    keys.body.appendChild(ovCRow(tr("\u5173\u95ED\u9762\u677F"), tr("\u9762\u677F\u5185"), [ovPill("Esc", "", true)]));
+    var keys = UI.card(tr("快捷键"), { sub: tr("面板内可用") });
+    keys.body.appendChild(ovCRow(tr("打开 / 关闭面板"), tr("全局"), [ovPill("Ctrl/⌘ + Shift + S", "", true)]));
+    keys.body.appendChild(ovCRow(tr("切换日志面板"), tr("面板内"), [ovPill("Ctrl/⌘ + Shift + L", "", true)]));
+    keys.body.appendChild(ovCRow(tr("关闭面板"), tr("面板内"), [ovPill("Esc", "", true)]));
     host.appendChild(keys.box);
     var adv = el("div");
-    adv.appendChild(el("div", "sc-desc", tr("\u914D\u7F6E\u539F\u6587\uFF08shoucang.config.yaml\uFF09\u4FDD\u5B58\u540E\u81EA\u52A8\u5907\u4EFD .bak-*\uFF1B\u6839\u76EE\u5F55\u5207\u6362\u4E0E\u65B0\u589E\u5728\u6B64\u3002")));
+    adv.appendChild(el("div", "sc-desc", tr("配置原文（shoucang.config.yaml）保存后自动备份 .bak-*；根目录切换与新增在此。")));
     renderConfigRaw(adv);
     host = _tb.pane("advanced");
-    host.appendChild(UI.collapsible(tr("\u9AD8\u7EA7 \xB7 \u914D\u7F6E\u539F\u6587\u4E0E\u6839\u76EE\u5F55"), adv, { open: false }));
+    host.appendChild(UI.collapsible(tr("高级 · 配置原文与根目录"), adv, { open: false }));
     var dsAdv = el("div");
-    dsAdv.appendChild(el("div", "sc-desc", tr("\u5199\u5165 ~/.dsh/suite/scheduler.json\uFF1B\u6539\u540E\u9700\u91CD\u8F7D\u63D2\u4EF6\u751F\u6548\u3002")));
-    host.appendChild(UI.collapsible(tr("\u6DF1\u5EA6\u7761\u7720\u9608\u503C"), dsAdv, { open: false, key: "settings:dsadv" }));
+    dsAdv.appendChild(el("div", "sc-desc", tr("写入 ~/.dsh/suite/scheduler.json；改后需重载插件生效。")));
+    host.appendChild(UI.collapsible(tr("深度睡眠阈值"), dsAdv, { open: false, key: "settings:dsadv" }));
     appState.api("/deepsleep/config").then(function(cfg) {
       var run = cfg.running || {};
-      dsAdv.appendChild(makeToggle("enableDeepSleep", tr("\u542F\u7528\u6DF1\u5EA6\u7761\u7720\u81EA\u52A8\u5F52\u7EB3 enableDeepSleep"), tr("\u5168\u90E8\u4F1A\u8BDD\u505C\u6EDE \u2265 \u9608\u503C\u540E\u81EA\u52A8\u63D0\u70BC\u539F\u5219\u5C42\uFF08\u5173\u95ED = \u6682\u505C\uFF0C\u7B49\u4E8E\u539F\u300C\u6682\u505C\u5230\u660E\u5929\u300D\uFF09\u3002"), !!run.enableDeepSleep, function(key, sw) {
+      dsAdv.appendChild(makeToggle("enableDeepSleep", tr("启用深度睡眠自动归纳 enableDeepSleep"), tr("全部会话停滞 ≥ 阈值后自动提炼原则层（关闭 = 暂停，等于原「暂停到明天」）。"), !!run.enableDeepSleep, function(key, sw) {
         appState.api("/deepsleep/config", { method: "POST", body: JSON.stringify({ enableDeepSleep: sw.checked }) }).then(function() {
-          appState.statusFn(tr("\u2713 \u5DF2\u4FDD\u5B58\uFF08\u91CD\u8F7D\u751F\u6548\uFF09"));
-        }).catch(function(e8) {
-          appState.failFn(e8);
+          appState.statusFn(tr("✓ 已保存（重载生效）"));
+        }).catch(function(e) {
+          appState.failFn(e);
           sw.checked = !sw.checked;
         });
       }));
-      dsAdv.appendChild(appState.dsNumber(tr("\u505C\u6EDE\u9608\u503C deepSleepIdleMs"), tr("\u5168\u90E8\u4F1A\u8BDD\u65E0\u6D3B\u52A8\u6301\u7EED\u6EE1\u6B64\u6BEB\u79D2\u6570\u624D\u89E6\u53D1\uFF08\u9ED8\u8BA4 3 \u5C0F\u65F6\uFF09\u3002"), Math.round((run.deepSleepIdleMs || 108e5) / 6e4), 10, 720, tr("\u5206\u949F"), function(m3) {
-        return m3 * 6e4;
+      dsAdv.appendChild(appState.dsNumber(tr("停滞阈值 deepSleepIdleMs"), tr("全部会话无活动持续满此毫秒数才触发（默认 3 小时）。"), Math.round((run.deepSleepIdleMs || 108e5) / 6e4), 10, 720, tr("分钟"), function(m) {
+        return m * 6e4;
       }, "deepSleepIdleMs"));
-      dsAdv.appendChild(appState.dsNumber(tr("\u63A2\u6D4B\u53D1\u8D77\u5EF6\u8FDF deepSleepProbeAfterMs"), tr("running \u65E0\u4E8B\u4EF6\u6301\u7EED\u6B64\u6BEB\u79D2\u540E\u53D1\u8D77\u8F93\u51FA\u589E\u957F\u63A2\u6D4B\uFF08\u9ED8\u8BA4 3 \u5C0F\u65F6\uFF09\u3002"), Math.round((run.deepSleepProbeAfterMs || 108e5) / 6e4), 10, 720, tr("\u5206\u949F"), function(m3) {
-        return m3 * 6e4;
+      dsAdv.appendChild(appState.dsNumber(tr("探测发起延迟 deepSleepProbeAfterMs"), tr("running 无事件持续此毫秒后发起输出增长探测（默认 3 小时）。"), Math.round((run.deepSleepProbeAfterMs || 108e5) / 6e4), 10, 720, tr("分钟"), function(m) {
+        return m * 6e4;
       }, "deepSleepProbeAfterMs"));
-      dsAdv.appendChild(appState.dsNumber(tr("\u63A2\u6D4B\u91C7\u6837\u95F4\u9694 deepSleepProbeWindowMs"), tr("\u4E24\u8F6E\u91C7\u6837\u4E4B\u95F4\u7684\u95F4\u9694\uFF08\u9ED8\u8BA4 60 \u79D2\uFF09\u3002"), Math.round((run.deepSleepProbeWindowMs || 6e4) / 1e3), 5, 600, tr("\u79D2"), function(s4) {
-        return s4 * 1e3;
+      dsAdv.appendChild(appState.dsNumber(tr("探测采样间隔 deepSleepProbeWindowMs"), tr("两轮采样之间的间隔（默认 60 秒）。"), Math.round((run.deepSleepProbeWindowMs || 6e4) / 1e3), 5, 600, tr("秒"), function(s) {
+        return s * 1e3;
       }, "deepSleepProbeWindowMs"));
-    }).catch(function(e8) {
-      dsAdv.appendChild(el("div", "sc-mem-empty", tr("\u9608\u503C\u52A0\u8F7D\u5931\u8D25\uFF1A") + (e8 && e8.message ? e8.message : e8)));
+    }).catch(function(e) {
+      dsAdv.appendChild(el("div", "sc-mem-empty", tr("阈值加载失败：") + (e && e.message ? e.message : e)));
     });
     var acts = el("div", "sc-acts");
-    acts.appendChild(UI.button(tr("\u6062\u590D\u9ED8\u8BA4\u8BBE\u7F6E"), function() {
+    acts.appendChild(UI.button(tr("恢复默认设置"), function() {
       Cfg.reset();
       applyDensity();
       applyNavWidth();
@@ -9973,9 +4873,9 @@
       applyLogPanel();
       restartPolling();
       appState.refreshView();
-      Log.info(tr("\u754C\u9762\u8BBE\u7F6E\u5DF2\u6062\u590D\u9ED8\u8BA4"));
-    }, { confirm: tr("\u786E\u8BA4\u6062\u590D\u5168\u90E8\u754C\u9762\u8BBE\u7F6E\u4E3A\u9ED8\u8BA4\u503C\uFF1F") }));
-    acts.appendChild(el("span", "sc-acts-note", tr("\u91CD\u7F6E 10 \u9879\u754C\u9762\u504F\u597D\u5E76\u7ACB\u5373\u91CD\u7ED8\uFF08\u5BC6\u5EA6 / \u5BFC\u822A\u5BBD\u5EA6 / \u65E5\u5FD7\u9762\u677F / \u8F6E\u8BE2\u5168\u90E8\u91CD\u65B0\u5E94\u7528\uFF09")));
+      Log.info(tr("界面设置已恢复默认"));
+    }, { confirm: tr("确认恢复全部界面设置为默认值？") }));
+    acts.appendChild(el("span", "sc-acts-note", tr("重置 10 项界面偏好并立即重绘（密度 / 导航宽度 / 日志面板 / 轮询全部重新应用）")));
     host.appendChild(acts);
   }
   function dsNumber(name, desc, initial, min, max, unit, encode, key) {
@@ -9997,10 +4897,10 @@
       lab.textContent = range.value + " " + unit;
     });
     range.addEventListener("change", function() {
-      var o9 = {};
-      o9[key] = encode(range.value);
-      appState.api("/deepsleep/config", { method: "POST", body: JSON.stringify(o9) }).then(function() {
-        appState.statusFn("\u2713 " + name + " = " + range.value + " " + unit + tr("\uFF08\u91CD\u8F7D\u751F\u6548\uFF09"));
+      var o = {};
+      o[key] = encode(range.value);
+      appState.api("/deepsleep/config", { method: "POST", body: JSON.stringify(o) }).then(function() {
+        appState.statusFn("✓ " + name + " = " + range.value + " " + unit + tr("（重载生效）"));
       }).catch(appState.failFn);
     });
     wrap.appendChild(lab);
@@ -10010,16 +4910,16 @@
     return item;
   }
   function applyDensity() {
-    var m3 = document.getElementById("scpanl-modal");
-    if (!m3) return;
-    m3.classList.toggle("sc-density-compact", Cfg.get("density", "comfortable") === "compact");
+    var m = document.getElementById("scpanl-modal");
+    if (!m) return;
+    m.classList.toggle("sc-density-compact", Cfg.get("density", "comfortable") === "compact");
   }
   function applyNavWidth() {
-    var m3 = document.getElementById("scpanl-modal");
-    if (!m3) return;
-    var n6 = parseInt(Cfg.get("navWidth", 216), 10);
-    if (!n6) n6 = 216;
-    m3.style.setProperty("--sc-nav-w", Math.max(140, Math.min(320, n6)) + "px");
+    var m = document.getElementById("scpanl-modal");
+    if (!m) return;
+    var n = parseInt(Cfg.get("navWidth", 216), 10);
+    if (!n) n = 216;
+    m.style.setProperty("--sc-nav-w", Math.max(140, Math.min(320, n)) + "px");
   }
   function applyLogPanel() {
     var main = document.querySelector(".sc-main");
@@ -10033,12 +4933,12 @@
     else main.appendChild(lp);
   }
   function applyNavGroups() {
-    var m3 = document.getElementById("scpanl-modal");
-    if (m3) m3.classList.toggle("sc-nogroups", !Cfg.get("navGroups", true));
+    var m = document.getElementById("scpanl-modal");
+    if (m) m.classList.toggle("sc-nogroups", !Cfg.get("navGroups", true));
   }
   function applyFootBar() {
-    var m3 = document.getElementById("scpanl-modal");
-    if (m3) m3.classList.toggle("sc-nofoot", !Cfg.get("footBar", true));
+    var m = document.getElementById("scpanl-modal");
+    if (m) m.classList.toggle("sc-nofoot", !Cfg.get("footBar", true));
   }
   function restartPolling() {
     if (appState.pollTimer) {
@@ -10054,54 +4954,52 @@
     }, ms);
   }
   function collectMetrics() {
-    var m3 = {};
-    function put(k2, v2) {
-      m3[k2] = v2;
-      Store.patch("metrics", m3);
+    var m = {};
+    function put(k, v) {
+      m[k] = v;
+      Store.patch("metrics", m);
     }
-    appState.api("/mcl/status").then(function(r7) {
-      put(tr("MCL \u72B6\u6001"), r7 && (r7.mode || r7.state) || "\u2014");
-      if (r7 && r7.familiarity != null) put(tr("\u719F\u6089\u5EA6"), String(r7.familiarity));
+    appState.api("/mcl/status").then(function(r) {
+      put(tr("MCL 状态"), r && (r.mode || r.state) || "—");
+      if (r && r.familiarity != null) put(tr("熟悉度"), String(r.familiarity));
     }).catch(function() {
-      put(tr("MCL \u72B6\u6001"), tr("\u83B7\u53D6\u5931\u8D25"));
+      put(tr("MCL 状态"), tr("获取失败"));
     });
-    appState.api("/vector/status2").then(function(r7) {
-      put(tr("\u5411\u91CF\u6863"), r7 && r7.present ? String(r7.rows || 0) + tr(" \u884C") : tr("\u672A\u542F\u7528"));
+    appState.api("/vector/status2").then(function(r) {
+      put(tr("向量档"), r && r.present ? String(r.rows || 0) + tr(" 行") : tr("未启用"));
     }).catch(function() {
-      put(tr("\u5411\u91CF\u6863"), tr("\u83B7\u53D6\u5931\u8D25"));
+      put(tr("向量档"), tr("获取失败"));
     });
-    appState.api("/inject/stats").then(function(r7) {
-      put(tr("\u6CE8\u5165\u7EDF\u8BA1"), r7 && typeof r7 === "object" ? JSON.stringify(r7).slice(0, 160) : String(r7));
+    appState.api("/inject/stats").then(function(r) {
+      put(tr("注入统计"), r && typeof r === "object" ? JSON.stringify(r).slice(0, 160) : String(r));
     }).catch(function() {
-      put(tr("\u6CE8\u5165\u7EDF\u8BA1"), tr("\u83B7\u53D6\u5931\u8D25"));
+      put(tr("注入统计"), tr("获取失败"));
     });
-    appState.api("/get_root").then(function(r7) {
-      put(tr("\u5F53\u524D\u6839"), r7 && (r7.root || r7.path || r7.active) || "\u2014");
+    appState.api("/get_root").then(function(r) {
+      put(tr("当前根"), r && (r.root || r.path || r.active) || "—");
     }).catch(function() {
-      put(tr("\u5F53\u524D\u6839"), tr("\u83B7\u53D6\u5931\u8D25"));
+      put(tr("当前根"), tr("获取失败"));
     });
   }
   function syncTheme() {
     var root = document.getElementById("scpanl-root");
     if (!root) return;
-    var probe = document.querySelector('.hHd-Xa_settingsArea, .hHd-Xa_footerActions, [class*="sidebar"], body');
-    var bg = probe ? getComputedStyle(probe).backgroundColor : "";
-    var m3 = /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/.exec(bg || "");
+    var probe2 = document.querySelector('.hHd-Xa_settingsArea, .hHd-Xa_footerActions, [class*="sidebar"], body');
+    var bg = probe2 ? getComputedStyle(probe2).backgroundColor : "";
+    var m = /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/.exec(bg || "");
     var dark = true;
-    if (m3) {
-      var lum = (Number(m3[1]) * 299 + Number(m3[2]) * 587 + Number(m3[3]) * 114) / 1e3;
+    if (m) {
+      var lum = (Number(m[1]) * 299 + Number(m[2]) * 587 + Number(m[3]) * 114) / 1e3;
       dark = lum < 140;
     }
     var skin = String(Cfg.get("skin", "v9")) === "host" ? "host" : "v9";
     root.classList.toggle("sc-dark", dark);
     root.classList.toggle("sc-light", !dark);
-    root.classList.toggle("wa-dark", dark);
-    root.classList.toggle("wa-light", !dark);
     root.classList.toggle("sc-skin-v9", skin === "v9");
     root.classList.toggle("sc-skin-host", skin === "host");
     try {
       Cfg.set("theme", dark ? "dark" : "light");
-    } catch (e8) {
+    } catch (e) {
     }
   }
 
@@ -10115,8 +5013,8 @@
   function loadCatalog() {
     if (CACHE.rows) return Promise.resolve(CACHE.rows);
     if (CACHE.inflight) return CACHE.inflight;
-    CACHE.inflight = appState.api("/llm/models").then(function(r7) {
-      var rows = r7 && r7.models || [];
+    CACHE.inflight = appState.api("/llm/models").then(function(r) {
+      var rows = r && r.models || [];
       CACHE.rows = rows;
       CACHE.inflight = null;
       return rows;
@@ -10131,39 +5029,39 @@
     CACHE.inflight = null;
   }
   function enumerateEndpoint(baseUrl) {
-    var b3 = String(baseUrl || "").trim().replace(/\/+$/, "");
-    var root = b3.replace(/\/v1$/, "");
-    if (!root) return Promise.resolve({ models: [], note: tr("\u5148\u586B\u5199\u670D\u52A1\u5730\u5740") });
+    var b = String(baseUrl || "").trim().replace(/\/+$/, "");
+    var root = b.replace(/\/v1$/, "");
+    if (!root) return Promise.resolve({ models: [], note: tr("先填写服务地址") });
     try {
-      var u4 = new URL(root);
-      if (u4.protocol !== "http:" && u4.protocol !== "https:") throw new Error("x");
-    } catch (e8) {
-      return Promise.resolve({ models: [], note: tr("URL \u65E0\u6548\uFF08\u9700 http(s):// \u5F00\u5934\uFF09") });
+      var u = new URL(root);
+      if (u.protocol !== "http:" && u.protocol !== "https:") throw new Error("x");
+    } catch (e) {
+      return Promise.resolve({ models: [], note: tr("URL 无效（需 http(s):// 开头）") });
     }
-    return fetch(root + "/v1/models", { signal: AbortSignal.timeout(6e3) }).then(function(r7) {
-      if (!r7.ok) throw new Error("HTTP " + r7.status);
-      return r7.json();
-    }).then(function(j2) {
-      var models = (j2 && j2.data || []).map(function(m3) {
-        return String(m3.id);
+    return fetch(root + "/v1/models", { signal: AbortSignal.timeout(6e3) }).then(function(r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    }).then(function(j) {
+      var models = (j && j.data || []).map(function(m) {
+        return String(m.id);
       }).filter(Boolean);
       return { models, note: "" };
     }).catch(function() {
-      return fetch(root + "/health", { signal: AbortSignal.timeout(5e3) }).then(function(r7) {
-        if (!r7.ok) throw new Error("x");
-        return r7.json();
-      }).then(function(j2) {
-        var f3 = j2 && j2.model || "";
-        return { models: f3 ? [f3] : [], note: tr("\u670D\u52A1\u5728\u4F46\u65E0 /models \u679A\u4E3E\uFF08\u7528\u56FA\u5B9A\u6A21\u578B\uFF09") };
+      return fetch(root + "/health", { signal: AbortSignal.timeout(5e3) }).then(function(r) {
+        if (!r.ok) throw new Error("x");
+        return r.json();
+      }).then(function(j) {
+        var f = j && j.model || "";
+        return { models: f ? [f] : [], note: tr("服务在但无 /models 枚举（用固定模型）") };
       }).catch(function() {
-        return { models: [], note: tr("\u65E0\u6CD5\u8FDE\u63A5\u8BE5\u670D\u52A1\uFF08/v1/models \u4E0E /health \u5747\u65E0\u54CD\u5E94\uFF09") };
+        return { models: [], note: tr("无法连接该服务（/v1/models 与 /health 均无响应）") };
       });
     });
   }
   function modelPicker(opts) {
-    var o9 = opts || {};
-    var mode = o9.source === "endpoint" ? "endpoint" : "host";
-    var val = { provider: String(o9.provider || ""), model: String(o9.model || ""), effort: String(o9.effort || "") };
+    var o = opts || {};
+    var mode = o.source === "endpoint" ? "endpoint" : "host";
+    var val = { provider: String(o.provider || ""), model: String(o.model || ""), effort: String(o.effort || "") };
     var rows = null;
     var enumNote = "";
     var box = el("div", "sc-col-end");
@@ -10172,7 +5070,7 @@
     var mFree = el("input", "sc-input sc-w-lg");
     var eSel = el("select", "sc-input sc-w-md");
     var note = el("div", "sc-mem-sub muted");
-    mFree.placeholder = o9.customPlaceholder || tr("\u6A21\u578B\u540D\uFF08\u5982 qwen3.5:2b\uFF09");
+    mFree.placeholder = o.customPlaceholder || tr("模型名（如 qwen3.5:2b）");
     function opt(sel, value, label) {
       var op = el("option");
       op.value = String(value);
@@ -10181,62 +5079,62 @@
       return op;
     }
     function normEfforts(list) {
-      return (list || []).map(function(e8) {
-        return e8 && typeof e8 === "object" ? { id: String(e8.id), label: String(e8.label || e8.id) } : { id: String(e8), label: String(e8) };
-      }).filter(function(e8) {
-        return e8.id;
+      return (list || []).map(function(e) {
+        return e && typeof e === "object" ? { id: String(e.id), label: String(e.label || e.id) } : { id: String(e), label: String(e) };
+      }).filter(function(e) {
+        return e.id;
       });
     }
     function providerIds() {
       var seen = {}, out = [];
-      (rows || []).forEach(function(r7) {
-        if (r7 && r7.provider && !seen[r7.provider]) {
-          seen[r7.provider] = 1;
-          out.push(r7.provider);
+      (rows || []).forEach(function(r) {
+        if (r && r.provider && !seen[r.provider]) {
+          seen[r.provider] = 1;
+          out.push(r.provider);
         }
       });
       return out;
     }
     function modelsOfHost(prov) {
-      return (rows || []).filter(function(r7) {
-        return r7 && r7.provider === prov;
-      }).map(function(r7) {
-        return r7.id;
+      return (rows || []).filter(function(r) {
+        return r && r.provider === prov;
+      }).map(function(r) {
+        return r.id;
       });
     }
     function entryOf(prov, model) {
       var hit = null;
-      (rows || []).forEach(function(r7) {
-        if (r7 && r7.provider === prov && r7.id === model) hit = r7;
+      (rows || []).forEach(function(r) {
+        if (r && r.provider === prov && r.id === model) hit = r;
       });
       return hit;
     }
     function efforts() {
-      if (mode === "endpoint") return normEfforts(o9.efforts);
-      var e8 = entryOf(val.provider, val.model);
-      return normEfforts(e8 && e8.efforts);
+      if (mode === "endpoint") return normEfforts(o.efforts);
+      var e = entryOf(val.provider, val.model);
+      return normEfforts(e && e.efforts);
     }
     function drawProviders() {
       pSel.textContent = "";
       if (mode === "endpoint") {
-        (o9.providers || []).forEach(function(p4) {
-          opt(pSel, p4.id, p4.label || p4.id);
+        (o.providers || []).forEach(function(p) {
+          opt(pSel, p.id, p.label || p.id);
         });
-        if (o9.allowCustom !== false) opt(pSel, "__custom__", tr("\u81EA\u5B9A\u4E49\uFF08\u624B\u586B\u5730\u5740\u4E0E\u6A21\u578B\u540D\uFF09"));
-        pSel.value = (o9.providers || []).some(function(p4) {
-          return p4.id === val.provider;
-        }) ? val.provider : ((o9.providers || [])[0] || {}).id || "__custom__";
+        if (o.allowCustom !== false) opt(pSel, "__custom__", tr("自定义（手填地址与模型名）"));
+        pSel.value = (o.providers || []).some(function(p) {
+          return p.id === val.provider;
+        }) ? val.provider : ((o.providers || [])[0] || {}).id || "__custom__";
         return;
       }
-      if (o9.includeInherit !== false) opt(pSel, INHERIT, o9.labels && o9.labels.inherit || tr("\u7EE7\u627F\u4E3B\u6A21\u578B\uFF08\u9ED8\u8BA4\uFF09"));
-      providerIds().forEach(function(p4) {
-        opt(pSel, p4, p4);
+      if (o.includeInherit !== false) opt(pSel, INHERIT, o.labels && o.labels.inherit || tr("继承主模型（默认）"));
+      providerIds().forEach(function(p) {
+        opt(pSel, p, p);
       });
-      if (o9.allowCustom !== false) opt(pSel, "__custom__", tr("\u81EA\u5B9A\u4E49\uFF08\u624B\u586B\u6A21\u578B\u540D\uFF09"));
+      if (o.allowCustom !== false) opt(pSel, "__custom__", tr("自定义（手填模型名）"));
       var known = providerIds().indexOf(val.provider) > -1;
       if (!val.provider) pSel.value = INHERIT;
       else if (known) pSel.value = val.provider;
-      else if (o9.allowCustom !== false) {
+      else if (o.allowCustom !== false) {
         pSel.value = "__custom__";
         mFree.value = val.model;
       } else pSel.value = providerIds()[0] || INHERIT;
@@ -10252,45 +5150,45 @@
       }
       mSel.textContent = "";
       if (isEndpoint) {
-        opt(mSel, INHERIT, tr("\u70B9\u51FB\u300C\u679A\u4E3E\u6A21\u578B\u300D\u52A0\u8F7D\u2026"));
+        opt(mSel, INHERIT, tr("点击「枚举模型」加载…"));
         mSel.value = INHERIT;
         return;
       }
       var list = modelsOfHost(pSel.value);
       if (!Derive.has(list)) {
-        opt(mSel, INHERIT, pSel.value ? tr("\uFF08\u8BE5 provider \u672A\u679A\u4E3E\u5230\u6A21\u578B\uFF09") : tr("\uFF08\u5148\u9009\u670D\u52A1\uFF09"));
+        opt(mSel, INHERIT, pSel.value ? tr("（该 provider 未枚举到模型）") : tr("（先选服务）"));
         mSel.value = INHERIT;
         return;
       }
-      list.forEach(function(id3) {
-        var e8 = entryOf(pSel.value, id3);
-        opt(mSel, id3, id3 + (e8 && e8.name && e8.name !== id3 ? " \xB7 " + e8.name : ""));
+      list.forEach(function(id) {
+        var e = entryOf(pSel.value, id);
+        opt(mSel, id, id + (e && e.name && e.name !== id ? " · " + e.name : ""));
       });
       mSel.value = list.indexOf(val.model) > -1 ? val.model : list[0];
     }
     function drawEfforts() {
       eSel.textContent = "";
       var list = efforts();
-      opt(eSel, INHERIT, mode === "endpoint" ? tr("\uFF08\u4E0D\u6307\u5B9A\uFF09") : tr("\u6CBF\u7528\u6A21\u578B\u9ED8\u8BA4"));
-      list.forEach(function(e8) {
-        opt(eSel, e8.id, e8.label);
+      opt(eSel, INHERIT, mode === "endpoint" ? tr("（不指定）") : tr("沿用模型默认"));
+      list.forEach(function(e) {
+        opt(eSel, e.id, e.label);
       });
-      eSel.value = list.some(function(e8) {
-        return e8.id === val.effort;
+      eSel.value = list.some(function(e) {
+        return e.id === val.effort;
       }) ? val.effort : INHERIT;
       var has = list.length > 0;
       eSel.disabled = !has;
-      eSel.title = has ? tr("\u6863\u4F4D\uFF08reasoning effort / \u6210\u672C\u7ED3\u6784\u5206\u6863\uFF09") : mode === "endpoint" ? tr("\u8BE5\u901A\u9053\u672A\u5B9A\u4E49\u6863\u4F4D \u2014\u2014 \u4FDD\u6301\u300C\u4E0D\u6307\u5B9A\u300D") : tr("\u8BE5\u6A21\u578B\u672A\u58F0\u660E\u53EF\u9009\u6863\u4F4D \u2014\u2014 \u6CBF\u7528\u6A21\u578B\u9ED8\u8BA4");
+      eSel.title = has ? tr("档位（reasoning effort / 成本结构分档）") : mode === "endpoint" ? tr("该通道未定义档位 —— 保持「不指定」") : tr("该模型未声明可选档位 —— 沿用模型默认");
     }
     function emit(patch) {
-      if (typeof o9.onChange === "function") o9.onChange(patch);
+      if (typeof o.onChange === "function") o.onChange(patch);
     }
     pSel.addEventListener("change", function() {
       if (mode === "endpoint") {
-        var p4 = (o9.providers || []).filter(function(x2) {
-          return x2.id === pSel.value;
+        var p = (o.providers || []).filter(function(x) {
+          return x.id === pSel.value;
         })[0];
-        var base = p4 ? String(p4.base || "") : "";
+        var base = p ? String(p.base || "") : "";
         var provId = pSel.value === "__custom__" ? "" : pSel.value;
         var patch = { provider: provId };
         if (pSel.value !== "__custom__") {
@@ -10320,16 +5218,16 @@
       emit({ provider: val.provider, model: val.model, effort: val.effort });
     });
     function commitFree() {
-      var v2 = mFree.value.trim();
-      if (v2 === val.model) return;
-      val.model = v2;
+      var v = mFree.value.trim();
+      if (v === val.model) return;
+      val.model = v;
       if (mode !== "endpoint") val.effort = "";
       drawEfforts();
       emit({ provider: val.provider, model: val.model, effort: val.effort });
     }
     mFree.addEventListener("change", commitFree);
-    mFree.onkeydown = function(e8) {
-      if (e8.key === "Enter") commitFree();
+    mFree.onkeydown = function(e) {
+      if (e.key === "Enter") commitFree();
     };
     eSel.addEventListener("change", function() {
       val.effort = eSel.value === INHERIT ? "" : eSel.value || "";
@@ -10337,31 +5235,31 @@
     });
     function row(label, ctl) {
       if (!label) return ctl;
-      var w2 = el("div", "sc-row");
-      w2.appendChild(el("span", "sc-range-label", label));
-      w2.appendChild(ctl);
-      return w2;
+      var w = el("div", "sc-row");
+      w.appendChild(el("span", "sc-range-label", label));
+      w.appendChild(ctl);
+      return w;
     }
     var enumBtn = null;
     if (mode === "endpoint") {
-      enumBtn = el("button", "sc-btn subtle sc-btn-xs", tr("\u679A\u4E3E\u6A21\u578B"));
+      enumBtn = el("button", "sc-btn subtle sc-btn-xs", tr("枚举模型"));
       enumBtn.type = "button";
       enumBtn.onclick = function() {
         enumBtn.disabled = true;
-        enumBtn.textContent = tr("\u679A\u4E3E\u4E2D\u2026");
-        return enumerateEndpoint(o9.baseUrl || "").then(function(r7) {
+        enumBtn.textContent = tr("枚举中…");
+        return enumerateEndpoint(o.baseUrl || "").then(function(r) {
           enumBtn.disabled = false;
-          enumBtn.textContent = tr("\u679A\u4E3E\u6A21\u578B");
-          enumNote = r7.note || "";
-          if (r7.models && r7.models.length) {
+          enumBtn.textContent = tr("枚举模型");
+          enumNote = r.note || "";
+          if (r.models && r.models.length) {
             mSel.textContent = "";
-            r7.models.forEach(function(id3) {
-              opt(mSel, id3, id3);
+            r.models.forEach(function(id) {
+              opt(mSel, id, id);
             });
-            if (r7.models.indexOf(val.model) > -1) mSel.value = val.model;
+            if (r.models.indexOf(val.model) > -1) mSel.value = val.model;
             else {
-              mSel.value = r7.models[0];
-              val.model = r7.models[0];
+              mSel.value = r.models[0];
+              val.model = r.models[0];
               emit({ provider: val.provider, model: val.model });
             }
           }
@@ -10371,17 +5269,17 @@
       };
     }
     function paintNote() {
-      var n6 = mode === "endpoint" ? rows || [] : rows || [];
+      var n = mode === "endpoint" ? rows || [] : rows || [];
       if (mode === "endpoint") {
-        note.textContent = enumNote || tr("\u672C\u673A\u7AEF\u70B9\u6A21\u578B\u4E0D\u5728\u5BBF\u4E3B\u76EE\u5F55\u91CC \u2014\u2014 \u7528\u300C\u679A\u4E3E\u6A21\u578B\u300D\u5217\u51FA\u6765\uFF0C\u6216\u76F4\u63A5\u624B\u586B\u6A21\u578B\u540D");
+        note.textContent = enumNote || tr("本机端点模型不在宿主目录里 —— 用「枚举模型」列出来，或直接手填模型名");
         return;
       }
-      note.textContent = n6 && n6.length ? tr("\u5BBF\u4E3B\u53EF\u7528 ") + n6.length + tr(" \u4E2A\u6A21\u578B") : tr("\u5BBF\u4E3B\u6A21\u578B\u76EE\u5F55\u4E3A\u7A7A \u2014\u2014 \u53EF\u5728\u300C\u81EA\u5B9A\u4E49\u300D\u91CC\u624B\u586B\u6A21\u578B\u540D\uFF0C\u6216\u5148\u5728 Harness \u91CC\u914D\u597D\u6A21\u578B");
+      note.textContent = n && n.length ? tr("宿主可用 ") + n.length + tr(" 个模型") : tr("宿主模型目录为空 —— 可在「自定义」里手填模型名，或先在 Harness 里配好模型");
     }
-    box.appendChild(row(o9.labels && o9.labels.provider, pSel));
-    box.appendChild(row(o9.labels && o9.labels.model, mSel));
+    box.appendChild(row(o.labels && o.labels.provider, pSel));
+    box.appendChild(row(o.labels && o.labels.model, mSel));
     box.appendChild(row(null, mFree));
-    box.appendChild(row(o9.labels && o9.labels.effort, eSel));
+    box.appendChild(row(o.labels && o.labels.effort, eSel));
     if (enumBtn) {
       var bw = el("div", "sc-row");
       bw.appendChild(enumBtn);
@@ -10396,8 +5294,8 @@
       drawEfforts();
       paintNote();
     }
-    loadCatalog().then(function(r7) {
-      rows = r7;
+    loadCatalog().then(function(r) {
+      rows = r;
       redraw();
     }).catch(function() {
       rows = [];
@@ -10408,17 +5306,17 @@
       get: function() {
         return { provider: val.provider, model: val.model, effort: val.effort };
       },
-      set: function(p4) {
-        val.provider = String(p4 && p4.provider || "");
-        val.model = String(p4 && p4.model || "");
-        val.effort = String(p4 && p4.effort || "");
+      set: function(p) {
+        val.provider = String(p && p.provider || "");
+        val.model = String(p && p.model || "");
+        val.effort = String(p && p.effort || "");
         redraw();
         return this;
       },
       reload: function() {
         invalidateCatalog();
-        return loadCatalog().then(function(r7) {
-          rows = r7;
+        return loadCatalog().then(function(r) {
+          rows = r;
           redraw();
         });
       },
@@ -10438,41 +5336,41 @@
   var TIER_IDS = ["local", "fast", "native", "llm"];
   function renderEvalCard(host) {
     var PROVIDER_LABEL = {
-      ollama: tr("\u672C\u673A Ollama\uFF08\u96F6\u6210\u672C \xB7 \u514D key\uFF09"),
-      arbiter: tr("\u672C\u673A arbiter\uFF08Laya / Jev \u5FEB\u6A21\u578B\uFF09"),
-      cloud: tr("\u81EA\u5B9A\u4E49 OpenAI \u517C\u5BB9\uFF08\u4E91\u7AEF\uFF09")
+      ollama: tr("本机 Ollama（零成本 · 免 key）"),
+      arbiter: tr("本机 arbiter（Laya / Jev 快模型）"),
+      cloud: tr("自定义 OpenAI 兼容（云端）")
     };
     var TIER_LABEL = {
-      local: tr("\u672C\u673A\uFF08\u96F6\u6210\u672C \xB7 \u514D key\uFF09"),
-      fast: tr("\u8FDC\u7A0B\u5C0F\u5FEB\u6A21\u578B"),
-      native: tr("\u539F\u751F\u6821\u51C6\u578B"),
-      llm: tr("\u73B0\u6709\u5927\u6A21\u578B")
+      local: tr("本机（零成本 · 免 key）"),
+      fast: tr("远程小快模型"),
+      native: tr("原生校准型"),
+      llm: tr("现有大模型")
     };
-    var PROVIDERS = PROVIDER_ROWS.map(function(p4) {
-      return { id: p4.id, base: p4.base, label: PROVIDER_LABEL[p4.id] };
+    var PROVIDERS = PROVIDER_ROWS.map(function(p) {
+      return { id: p.id, base: p.base, label: PROVIDER_LABEL[p.id] };
     });
-    var TIERS = TIER_IDS.map(function(id3) {
-      return { id: id3, label: TIER_LABEL[id3] };
+    var TIERS = TIER_IDS.map(function(id) {
+      return { id, label: TIER_LABEL[id] };
     });
     var wrap = el("div");
-    wrap.appendChild(el("div", "sc-h3", tr("\u8BC4\u4F30\u901A\u9053\uFF08\u53EF\u914D\u7F6E\u6A21\u578B \xB7 \u6309\u9700\u5F00\u542F\uFF09")));
-    wrap.appendChild(el("div", "sc-desc", tr("\u628A\u300C\u7B54\u6848\u53EF\u679A\u4E3E\u3001\u4F46\u5224\u636E\u5199\u4E0D\u6210\u4EE3\u7801\u300D\u7684\u5224\u5B9A\u4EA4\u7ED9\u4E00\u4E2A\u53EF\u914D\u7F6E\u6A21\u578B\u3002**\u9ED8\u8BA4\u5173\u95ED**\uFF1A\u5173\u95ED\u65F6\u884C\u4E3A\u4E0E\u672A\u88C5\u6B64\u80FD\u529B\u9010\u5B57\u8282\u4E00\u81F4\u3002\u6539\u52A8\u5199 ~/.dsh/suite/scheduler.json\uFF0C**\u91CD\u8F7D\u63D2\u4EF6\u540E\u751F\u6548**\u3002")));
+    wrap.appendChild(el("div", "sc-h3", tr("评估通道（可配置模型 · 按需开启）")));
+    wrap.appendChild(el("div", "sc-desc", tr("把「答案可枚举、但判据写不成代码」的判定交给一个可配置模型。**默认关闭**：关闭时行为与未装此能力逐字节一致。改动写 ~/.dsh/suite/scheduler.json，**重载插件后生效**。")));
     var zone = el("div");
-    zone.appendChild(el("div", "sc-desc", tr("\u8BFB\u53D6\u4E2D\u2026")));
+    zone.appendChild(el("div", "sc-desc", tr("读取中…")));
     wrap.appendChild(zone);
     host.appendChild(wrap);
     function save(patch, okMsg, onFail) {
       return appState.api("/eval/config", { method: "POST", body: JSON.stringify(patch) }).then(function() {
-        appState.statusFn("\u2713 " + (okMsg || tr("\u5DF2\u5199\u5165")) + tr("\uFF08\u91CD\u8F7D\u540E\u751F\u6548\uFF09"));
-      }).catch(function(e8) {
-        appState.failFn(e8);
+        appState.statusFn("✓ " + (okMsg || tr("已写入")) + tr("（重载后生效）"));
+      }).catch(function(e) {
+        appState.failFn(e);
         if (onFail) onFail();
       });
     }
-    appState.api("/eval/config").then(function(c5) {
-      var eff = c5 && c5.effective || {};
-      var persisted = c5 && c5.persisted || {};
-      var tiers = c5 && c5.tiers || ["local", "fast", "native", "llm"];
+    appState.api("/eval/config").then(function(c) {
+      var eff = c && c.effective || {};
+      var persisted = c && c.persisted || {};
+      var tiers = c && c.tiers || ["local", "fast", "native", "llm"];
       var isOn = eff.evalEnabled === true;
       var baseUrl = String(eff.evalBaseUrl || "");
       zone.textContent = "";
@@ -10480,28 +5378,28 @@
       sw.type = "checkbox";
       sw.checked = isOn;
       sw.onchange = function() {
-        save({ evalEnabled: sw.checked }, sw.checked ? tr("\u8BC4\u4F30\u901A\u9053 \u5F00") : tr("\u8BC4\u4F30\u901A\u9053 \u5173"), function() {
+        save({ evalEnabled: sw.checked }, sw.checked ? tr("评估通道 开") : tr("评估通道 关"), function() {
           sw.checked = !sw.checked;
         });
       };
       zone.appendChild(UI.item(
-        tr("\u542F\u7528\u8BC4\u4F30\u901A\u9053 evalEnabled"),
-        tr("\u5F00=\u7C7B\u578B\u5316\u5224\u5B9A\u53EF\u7528\uFF08choice / boolean / score\uFF09\uFF1B\u5173=\u901A\u9053\u6574\u4F53\u505C\u7528\uFF08\u7F3A\u7701\u5173\uFF0Cfail-closed\uFF09\u3002\u5199\u5165 scheduler.json\u3002"),
+        tr("启用评估通道 evalEnabled"),
+        tr("开=类型化判定可用（choice / boolean / score）；关=通道整体停用（缺省关，fail-closed）。写入 scheduler.json。"),
         sw
       ));
       var dlist = el("datalist");
       dlist.id = "sc-eval-endpoints";
-      PROVIDERS.forEach(function(p4) {
-        if (p4.base) {
-          var o9 = el("option");
-          o9.value = p4.base;
-          dlist.appendChild(o9);
+      PROVIDERS.forEach(function(p) {
+        if (p.base) {
+          var o = el("option");
+          o.value = p.base;
+          dlist.appendChild(o);
         }
       });
       ["https://api.openai.com/v1", "https://api.deepseek.com/v1"].forEach(function(ep) {
-        var o9 = el("option");
-        o9.value = ep;
-        dlist.appendChild(o9);
+        var o = el("option");
+        o.value = ep;
+        dlist.appendChild(o);
       });
       document.body.appendChild(dlist);
       var urlInp = el("input", "sc-input sc-w-xl");
@@ -10510,13 +5408,13 @@
       urlInp.setAttribute("list", "sc-eval-endpoints");
       var keyInp = el("input", "sc-input sc-w-md");
       keyInp.value = String(eff.evalApiKeyEnv || "");
-      keyInp.placeholder = tr("key \u73AF\u5883\u53D8\u91CF\u540D\uFF08\u672C\u673A\u514D\u586B\uFF09");
+      keyInp.placeholder = tr("key 环境变量名（本机免填）");
       var eRow = el("div", "sc-col-end");
       eRow.appendChild(urlInp);
       eRow.appendChild(keyInp);
       zone.appendChild(UI.item(
-        tr("\u670D\u52A1\u5730\u5740\uFF08OpenAI \u517C\u5BB9 /v1 \u6839\uFF09\u4E0E key \u73AF\u5883\u53D8\u91CF"),
-        tr("\u672C\u673A\u7AEF\u70B9\u514D key\uFF1B\u8FDC\u7AEF\u7AEF\u70B9\u987B\u53E6\u5F00\u51FA\u7F51\u8BB8\u53EF\uFF08\u89C1\u4E0B\uFF09\u3002\u5730\u5740\u6309**\u89E3\u6790\u540E\u7684\u4E3B\u673A\u540D**\u5224\u662F\u5426\u672C\u673A\u2014\u2014127.0.0.1.evil.com \u8FD9\u7C7B\u4F2A\u9020\u4E0D\u4F1A\u88AB\u5F53\u6210\u672C\u673A\u3002"),
+        tr("服务地址（OpenAI 兼容 /v1 根）与 key 环境变量"),
+        tr("本机端点免 key；远端端点须另开出网许可（见下）。地址按**解析后的主机名**判是否本机——127.0.0.1.evil.com 这类伪造不会被当成本机。"),
         null,
         { children: [eRow] }
       ));
@@ -10527,25 +5425,25 @@
         efforts: TIERS,
         providers: PROVIDERS,
         baseUrl,
-        customPlaceholder: tr("\u6A21\u578B\u540D\uFF08\u5982 qwen3.5:2b / jev-latest\uFF09"),
-        labels: { provider: tr("\u670D\u52A1"), model: tr("\u6A21\u578B"), effort: tr("\u6863\u4F4D") },
-        onChange: function(p4) {
-          if (p4.base !== void 0) {
-            urlInp.value = String(p4.base || "");
-            picker && (picker.baseUrl = p4.base);
+        customPlaceholder: tr("模型名（如 qwen3.5:2b / jev-latest）"),
+        labels: { provider: tr("服务"), model: tr("模型"), effort: tr("档位") },
+        onChange: function(p) {
+          if (p.base !== void 0) {
+            urlInp.value = String(p.base || "");
+            picker && (picker.baseUrl = p.base);
           }
           var patch = {};
-          if (p4.model !== void 0) patch.evalModel = p4.model || "";
-          if (p4.effort !== void 0) patch.evalTier = p4.effort || "local";
-          if (Object.keys(patch).length) save(patch, tr("\u8BC4\u4F30\u901A\u9053\u914D\u7F6E\u5DF2\u8BBE"));
+          if (p.model !== void 0) patch.evalModel = p.model || "";
+          if (p.effort !== void 0) patch.evalTier = p.effort || "local";
+          if (Object.keys(patch).length) save(patch, tr("评估通道配置已设"));
         }
       });
       if (picker && urlInp) urlInp.addEventListener("change", function() {
         picker.noteEl && (picker.noteEl.textContent = "");
       });
       zone.appendChild(UI.item(
-        tr("\u8BC4\u4F30\u6A21\u578B"),
-        tr("\u4E09\u7EA7\u9009\u62E9\uFF08\u670D\u52A1 \u2192 \u6A21\u578B \u2192 \u6863\u4F4D\uFF09\u3002\u670D\u52A1\u9009\u597D\u5148\u300C\u679A\u4E3E\u6A21\u578B\u300D\uFF08\u6D4F\u89C8\u5668\u76F4\u8FDE\u8BE5\u7AEF\u70B9\uFF09\uFF0C\u6216\u76F4\u63A5\u624B\u586B\u6A21\u578B\u540D\u2014\u2014\u672C\u673A Ollama \u7684\u6A21\u578B\u4E0D\u5728\u5BBF\u4E3B\u76EE\u5F55\u91CC\uFF0C\u624B\u586B\u662F\u5E38\u6001\u3002"),
+        tr("评估模型"),
+        tr("三级选择（服务 → 模型 → 档位）。服务选好先「枚举模型」（浏览器直连该端点），或直接手填模型名——本机 Ollama 的模型不在宿主目录里，手填是常态。"),
         null,
         { children: [picker.box] }
       ));
@@ -10553,107 +5451,107 @@
       egress.type = "checkbox";
       egress.checked = eff.evalEgressAllow === true;
       egress.onchange = function() {
-        save({ evalEgressAllow: egress.checked }, egress.checked ? tr("\u5DF2\u5141\u8BB8\u51FA\u7F51") : tr("\u5DF2\u7981\u6B62\u51FA\u7F51"), function() {
+        save({ evalEgressAllow: egress.checked }, egress.checked ? tr("已允许出网") : tr("已禁止出网"), function() {
           egress.checked = !egress.checked;
         });
       };
       zone.appendChild(UI.item(
-        tr("\u5141\u8BB8\u51FA\u7F51 evalEgressAllow"),
-        tr("\u4E0E\u5F00\u5173**\u5206\u79BB**\u7684\u4E24\u9879\u6388\u6743\uFF1A\u300C\u5141\u8BB8\u88C5\u5916\u90E8\u670D\u52A1\u300D\u2260\u300C\u5141\u8BB8\u8BB0\u5FC6\u5185\u5BB9\u51FA\u673A\u300D\u3002\u7F3A\u7701 false\uFF1B\u586B\u4E86\u8FDC\u7AEF\u5730\u5740\u4F46\u672A\u52FE\u6B64\u9879 \u21D2 \u62D2\u53D1\u5E76\u5982\u5B9E\u8BB0 egress-denied\u3002"),
+        tr("允许出网 evalEgressAllow"),
+        tr("与开关**分离**的两项授权：「允许装外部服务」≠「允许记忆内容出机」。缺省 false；填了远端地址但未勾此项 ⇒ 拒发并如实记 egress-denied。"),
         egress
       ));
       var tierSel = el("select", "sc-input sc-w-lg");
-      TIERS.forEach(function(t6) {
-        if (tiers.indexOf(t6.id) === -1) return;
-        var o9 = el("option");
-        o9.value = t6.id;
-        o9.textContent = t6.label;
-        tierSel.appendChild(o9);
+      TIERS.forEach(function(t) {
+        if (tiers.indexOf(t.id) === -1) return;
+        var o = el("option");
+        o.value = t.id;
+        o.textContent = t.label;
+        tierSel.appendChild(o);
       });
       tierSel.value = String(eff.evalTier || "local");
-      var saveBtn = el("button", "sc-btn", tr("\u4FDD\u5B58\u7AEF\u70B9\u4E0E\u6863\u4F4D"));
+      var saveBtn = el("button", "sc-btn", tr("保存端点与档位"));
       saveBtn.type = "button";
       saveBtn.onclick = function() {
         saveBtn.disabled = true;
-        saveBtn.textContent = tr("\u4FDD\u5B58\u4E2D\u2026");
+        saveBtn.textContent = tr("保存中…");
         save({
           evalBaseUrl: urlInp.value.trim(),
           evalApiKeyEnv: keyInp.value.trim() || "EVAL_API_KEY",
           evalTier: tierSel.value
-        }, tr("\u7AEF\u70B9\u4E0E\u6863\u4F4D\u5DF2\u8BBE"), function() {
+        }, tr("端点与档位已设"), function() {
           saveBtn.disabled = false;
-          saveBtn.textContent = tr("\u4FDD\u5B58\u7AEF\u70B9\u4E0E\u6863\u4F4D");
+          saveBtn.textContent = tr("保存端点与档位");
         }).then(function() {
           saveBtn.disabled = false;
-          saveBtn.textContent = tr("\u4FDD\u5B58\u7AEF\u70B9\u4E0E\u6863\u4F4D");
+          saveBtn.textContent = tr("保存端点与档位");
         });
       };
       var tierRow = el("div", "sc-col-end");
       tierRow.appendChild(tierSel);
       tierRow.appendChild(saveBtn);
       zone.appendChild(UI.item(
-        tr("\u6863\u4F4D evalTier"),
-        tr("\u6309**\u6210\u672C\u7ED3\u6784**\u5206\u6863\uFF08\u4E0D\u662F\u6309\u5382\u5546\uFF09\uFF1A\u672C\u673A\u96F6\u6210\u672C / \u8FDC\u7A0B\u5C0F\u5FEB / \u539F\u751F\u6821\u51C6 / \u73B0\u6709\u5927\u6A21\u578B\u3002\u6863\u4F4D\u51B3\u5B9A**\u8D85\u65F6\u9884\u7B97**\uFF08\u672C\u673A\u63A8\u7406\u542B\u6A21\u578B\u52A0\u8F7D\u7ED9 60s\u3001\u8FDC\u7AEF\u5FEB\u6A21\u578B 15s\uFF09\u4E0E**\u7F6E\u4FE1\u9608\u503C\u53E3\u5F84**\uFF08\u539F\u751F\u6863\u7528\u6821\u51C6\u9608\u503C\uFF0C\u5176\u4F59\u7528\u4FDD\u5B88\u9608\u503C\uFF09\u3002"),
+        tr("档位 evalTier"),
+        tr("按**成本结构**分档（不是按厂商）：本机零成本 / 远程小快 / 原生校准 / 现有大模型。档位决定**超时预算**（本机推理含模型加载给 60s、远端快模型 15s）与**置信阈值口径**（原生档用校准阈值，其余用保守阈值）。"),
         null,
         { children: [tierRow] }
       ));
-      var res = el("div", "sc-desc", tr("\u672A\u6D4B\u8BD5"));
-      var testBtn = UI.button(tr("\u6D4B\u8BD5\u8FDE\u901A\u6027"), function() {
-        res.textContent = tr("\u6D4B\u8BD5\u4E2D\u2026") + " " + String(urlInp.value || "");
-        return appState.apiCtx("/eval/test", { method: "POST", body: "{}" }, tr("\u8BC4\u4F30\u901A\u9053")).then(function(r7) {
-          if (!r7) {
-            res.textContent = tr("\u65E0\u54CD\u5E94");
+      var res = el("div", "sc-desc", tr("未测试"));
+      var testBtn = UI.button(tr("测试连通性"), function() {
+        res.textContent = tr("测试中…") + " " + String(urlInp.value || "");
+        return appState.apiCtx("/eval/test", { method: "POST", body: "{}" }, tr("评估通道")).then(function(r) {
+          if (!r) {
+            res.textContent = tr("无响应");
             return;
           }
-          if (r7.ok) res.textContent = "\u2713 " + tr("\u53EF\u7528") + " \xB7 " + String(r7.latencyMs || 0) + "ms \xB7 " + String(r7.outcome || "");
-          else if (r7.outcome === "off") res.textContent = "\u26A0 " + tr("\u901A\u9053\u5DF2\u5173\u95ED\u2014\u2014\u5148\u6253\u5F00\u4E0A\u65B9\u5F00\u5173\u5E76\u91CD\u8F7D") + "\uFF08why=" + String(r7.why || "") + "\uFF09";
-          else res.textContent = "\u2717 " + String(r7.outcome || "") + " \xB7 " + String(r7.why || "");
+          if (r.ok) res.textContent = "✓ " + tr("可用") + " · " + String(r.latencyMs || 0) + "ms · " + String(r.outcome || "");
+          else if (r.outcome === "off") res.textContent = "⚠ " + tr("通道已关闭——先打开上方开关并重载") + "（why=" + String(r.why || "") + "）";
+          else res.textContent = "✗ " + String(r.outcome || "") + " · " + String(r.why || "");
         });
-      }, { async: true, busyText: tr("\u6D4B\u8BD5\u4E2D\u2026"), okText: tr("\u8BC4\u4F30\u901A\u9053\u8FDE\u901A\u6027\u6D4B\u8BD5\u5B8C\u6210") });
+      }, { async: true, busyText: tr("测试中…"), okText: tr("评估通道连通性测试完成") });
       zone.appendChild(UI.item(
-        tr("\u8FDE\u901A\u6027\u6D4B\u8BD5"),
-        tr("POST /eval/test \u2014\u2014 \u53D1\u4E00\u6B21\u6700\u5C0F\u5224\u5B9A\uFF0C\u8FD4\u56DE**\u5206\u6001**\u7ED3\u679C\uFF08ok / off / egress-denied / key-missing / unreachable / bad-body / type-violation\uFF09\uFF0C\u4E0D\u843D\u5E93\u3002"),
+        tr("连通性测试"),
+        tr("POST /eval/test —— 发一次最小判定，返回**分态**结果（ok / off / egress-denied / key-missing / unreachable / bad-body / type-violation），不落库。"),
         testBtn
       ));
       zone.appendChild(res);
       if (persisted.evalEnabled === false) {
-        zone.appendChild(el("div", "sc-desc", tr("\u5F53\u524D\u4E3A\u663E\u5F0F\u5173\u95ED\u6001\uFF08scheduler.json \u91CC evalEnabled=false\uFF09\u3002")));
+        zone.appendChild(el("div", "sc-desc", tr("当前为显式关闭态（scheduler.json 里 evalEnabled=false）。")));
       }
-    }).catch(function(e8) {
+    }).catch(function(e) {
       zone.textContent = "";
-      zone.appendChild(el("div", "sc-desc", tr("\u26A0 \u8BC4\u4F30\u901A\u9053\u914D\u7F6E\u8BFB\u53D6\u5931\u8D25\uFF1A") + e8.message));
+      zone.appendChild(el("div", "sc-desc", tr("⚠ 评估通道配置读取失败：") + e.message));
     });
   }
 
   // src-client/panes-capacity.js
-  function renderTogglesCap(host, g2, deps) {
-    function gVal(key, fallback2) {
-      return g2[key] !== void 0 && g2[key] !== null ? g2[key] : fallback2;
+  function renderTogglesCap(host, g, deps) {
+    function gVal(key, fallback) {
+      return g[key] !== void 0 && g[key] !== null ? g[key] : fallback;
     }
     var enforce = gVal("capacityEnforce", false) === true;
-    var overDesc = enforce ? tr("\u5199\u5165\u8D85\u9650\u4F1A\u88AB\u62D2\uFF08\u5F53\u524D\uFF1A\u963B\u65AD\u5DF2\u5F00\u542F\uFF09") : tr("\u5199\u5165\u8D85\u9650\u4E0D\u518D\u963B\u65AD\uFF08\u5F53\u524D\uFF1A\u963B\u65AD\u5DF2\u5173\u95ED\uFF0C\u8D85\u9650\u7167\u5199\u5E76\u7559\u4E00\u6761 capacity-over \u5BA1\u8BA1\u75D5\uFF09");
-    host.appendChild(el("div", "sc-desc", tr("\u5BB9\u91CF\u95E8 = \u8BB0\u5FC6\u5E93\u80FD\u957F\u591A\u5927\uFF08\u8D85\u9650\u662F\u5426\u963B\u65AD\u7531\u4E0B\u65B9\u5F00\u5173\u51B3\u5B9A\uFF09\uFF1B\u6D3B\u6027/\u9057\u5FD8\u4E3A\u5929\u7EA7\u9608\u503C\u3002")));
+    var overDesc = enforce ? tr("写入超限会被拒（当前：阻断已开启）") : tr("写入超限不再阻断（当前：阻断已关闭，超限照写并留一条 capacity-over 审计痕）");
+    host.appendChild(el("div", "sc-desc", tr("容量门 = 记忆库能长多大（超限是否阻断由下方开关决定）；活性/遗忘为天级阈值。")));
     host.appendChild(enumSetting(
-      tr("\u5BB9\u91CF\u95E8\u662F\u5426\u963B\u65AD\u5199\u5165 capacityEnforce"),
-      tr("\u7F3A\u7701\u300C\u5173\u95ED\u300D= \u8D85\u9650\u7167\u5199\uFF08\u5E76\u843D\u4E00\u6761 capacity-over \u7559\u75D5\uFF09\u3002\u5F00=\u8D85\u9650\u62D2\u5199\uFF08\u6539\u9020\u524D\u753B\u50CF\u884C\u4E3A\uFF09\u3002\u53EA\u5F71\u54CD\u5BB9\u91CF\u8FD9\u4E00\u652F\uFF1A\u6E90\u6307\u9488\u60AC\u7A7A / \u884C\u683C\u5F0F / \u7591\u4F3C\u51ED\u636E\u4E09\u9053\u95E8\u59CB\u7EC8\u786C\u62D2\uFF0C\u4E0D\u53D7\u6B64\u5F00\u5173\u5F71\u54CD\u3002\u6539\u540E\u5373\u65F6\u751F\u6548\uFF08\u5199\u95E8\u6BCF\u8F6E\u91CD\u8BFB\uFF09\u3002"),
+      tr("容量门是否阻断写入 capacityEnforce"),
+      tr("缺省「关闭」= 超限照写（并落一条 capacity-over 留痕）。开=超限拒写（改造前画像行为）。只影响容量这一支：源指针悬空 / 行格式 / 疑似凭据三道门始终硬拒，不受此开关影响。改后即时生效（写门每轮重读）。"),
       enforce ? "on" : "off",
       "injection.capacity_enforce",
-      [{ v: "off", label: tr("\u5173\u95ED\uFF08\u7F3A\u7701\xB7\u8D85\u9650\u7167\u5199\u5E76\u7559\u75D5\uFF09") }, { v: "on", label: tr("\u5F00\u542F\uFF08\u8D85\u9650\u62D2\u5199\uFF09") }]
+      [{ v: "off", label: tr("关闭（缺省·超限照写并留痕）") }, { v: "on", label: tr("开启（超限拒写）") }]
     ));
-    var actualChars = g2 && g2.actual || { agent: 0, user: 0, memory: 0 };
-    host.appendChild(numSetting(tr("AGENT.md \u5BB9\u91CF\u95E8 cap_agent"), tr("agent \u753B\u50CF\u8BB0\u5FC6\u5E93\u5BB9\u91CF\uFF08\u5B57\u7B26\uFF09\uFF1A") + overDesc + tr("\uFF08AGENT.md \u5F53\u524D\u5B9E\u9645 ") + (actualChars.agent || 0) + tr(" \u5B57\u7B26\uFF09\u3002\u4E0D\u5F71\u54CD\u4EFB\u52A1\u6267\u884C\u6CE8\u5165\u2014\u2014\u6CE8\u5165\u603B\u770B\u5B8C\u6574\u753B\u50CF"), gVal("cap_agent", 3e3), "injection.cap_agent", tr("\u5B57\u7B26")));
-    host.appendChild(numSetting(tr("USER.md \u5BB9\u91CF\u95E8 cap_user"), tr("\u7528\u6237\u753B\u50CF\u8BB0\u5FC6\u5E93\u5BB9\u91CF\uFF08\u5B57\u7B26\uFF09\uFF1A") + overDesc + tr("\uFF08\u5F53\u524D\u5B9E\u9645 ") + (actualChars.user || 0) + tr(" \u5B57\u7B26\uFF09\u3002\u4E0D\u5F71\u54CD\u4EFB\u52A1\u6267\u884C\u6CE8\u5165"), gVal("cap_user", 3e3), "injection.cap_user", tr("\u5B57\u7B26")));
-    host.appendChild(numSetting(tr("MEMORY.md \u5BB9\u91CF\u95E8 cap_memory"), tr("\u77E5\u8BC6\u7D22\u5F15\u8BB0\u5FC6\u5E93\u5BB9\u91CF\uFF08\u5B57\u7B26\uFF09\uFF1A") + overDesc + tr("\uFF08\u5F53\u524D\u5B9E\u9645 ") + (actualChars.memory || 0) + tr(" \u5B57\u7B26\uFF09\u3002\u6CE8\u5165\u6309\u6863\u4F4D\u884C\u6570\u4E0D\u53D7\u6B64\u9650"), gVal("cap_memory", 5e3), "injection.cap_memory", tr("\u5B57\u7B26")));
-    host.appendChild(el("div", "sc-h3", tr("\u6D3B\u6027 / \u9057\u5FD8\u9608\u503C\uFF08v7\uFF09")));
-    host.appendChild(el("div", "sc-desc", tr("\u8BB0\u5FC6\u6761\u76EE\u6D3B\u6027\u72B6\u6001\u673A\uFF08active\u2192warm\u2192cold\uFF09\u4E0E\u9057\u5FD8/\u52A0\u6DF1\u5019\u9009\u7684\u5224\u5B9A\u9608\u503C\uFF0C\u4EE5\u53CA\u878D\u5408\u53EC\u56DE\u5BF9 cold/retired \u6761\u76EE\u7684\u964D\u6743\u7CFB\u6570\u3002\u6539\u52A8\u7ECF /set \u5373\u65F6\u5199\u56DE scheduler.json\uFF08\u4E0E\u6CE8\u5165/\u84B8\u998F\u914D\u7F6E\u540C\u901A\u9053\uFF0C\u91CD\u8F7D\u540E\u6309\u65B0\u9608\u503C\u8FD0\u884C\uFF09\u3002")));
-    host.appendChild(numSetting(tr("\u6D3B\u6027\u964D\u7EA7 warm \u9608\u503C activityWarmDays"), tr("active\u2192warm \u65E0\u547D\u4E2D\u5929\u6570\uFF08\u7F3A\u7701 14\uFF09"), gVal("activityWarmDays", 14), "activityWarmDays", tr("\u5929")));
-    host.appendChild(numSetting(tr("\u9057\u5FD8\u51B7\u964D cold \u9608\u503C activityColdDays"), tr("warm\u2192cold \u65E0\u547D\u4E2D\u5929\u6570\uFF08\u7F3A\u7701 44 = warm+30\uFF09"), gVal("activityColdDays", 44), "activityColdDays", tr("\u5929")));
-    host.appendChild(numSetting(tr("\u9057\u5FD8\u5019\u9009 archive \u9608\u503C activityArchiveDays"), tr("cold \u540E\u8D85\u6B64\u5929\u6570\u672A\u547D\u4E2D \u2192 \u9057\u5FD8\u5019\u9009\u6E05\u5355\uFF08\u7F3A\u7701 90\uFF0C\u53EA\u5EFA\u8BAE\u4E0D\u5220\u9664\uFF09"), gVal("activityArchiveDays", 90), "activityArchiveDays", tr("\u5929")));
-    host.appendChild(numSetting(tr("\u52A0\u6DF1\u5019\u9009\u547D\u4E2D\u6570 activityHotHits"), tr("\u8FD1 30 \u5929\u547D\u4E2D \u2265 \u6B64\u503C \u2192 \u52A0\u6DF1\u5019\u9009 B\uFF08\u7F3A\u7701 5\uFF0C\u5582\u6DF1\u7761\u5F52\u7EB3\uFF09"), gVal("activityHotHits", 5), "activityHotHits", tr("\u6B21")));
+    var actualChars = g && g.actual || { agent: 0, user: 0, memory: 0 };
+    host.appendChild(numSetting(tr("AGENT.md 容量门 cap_agent"), tr("agent 画像记忆库容量（字符）：") + overDesc + tr("（AGENT.md 当前实际 ") + (actualChars.agent || 0) + tr(" 字符）。不影响任务执行注入——注入总看完整画像"), gVal("cap_agent", 3e3), "injection.cap_agent", tr("字符")));
+    host.appendChild(numSetting(tr("USER.md 容量门 cap_user"), tr("用户画像记忆库容量（字符）：") + overDesc + tr("（当前实际 ") + (actualChars.user || 0) + tr(" 字符）。不影响任务执行注入"), gVal("cap_user", 3e3), "injection.cap_user", tr("字符")));
+    host.appendChild(numSetting(tr("MEMORY.md 容量门 cap_memory"), tr("知识索引记忆库容量（字符）：") + overDesc + tr("（当前实际 ") + (actualChars.memory || 0) + tr(" 字符）。注入按档位行数不受此限"), gVal("cap_memory", 5e3), "injection.cap_memory", tr("字符")));
+    host.appendChild(el("div", "sc-h3", tr("活性 / 遗忘阈值（v7）")));
+    host.appendChild(el("div", "sc-desc", tr("记忆条目活性状态机（active→warm→cold）与遗忘/加深候选的判定阈值，以及融合召回对 cold/retired 条目的降权系数。改动经 /set 即时写回 scheduler.json（与注入/蒸馏配置同通道，重载后按新阈值运行）。")));
+    host.appendChild(numSetting(tr("活性降级 warm 阈值 activityWarmDays"), tr("active→warm 无命中天数（缺省 14）"), gVal("activityWarmDays", 14), "activityWarmDays", tr("天")));
+    host.appendChild(numSetting(tr("遗忘冷降 cold 阈值 activityColdDays"), tr("warm→cold 无命中天数（缺省 44 = warm+30）"), gVal("activityColdDays", 44), "activityColdDays", tr("天")));
+    host.appendChild(numSetting(tr("遗忘候选 archive 阈值 activityArchiveDays"), tr("cold 后超此天数未命中 → 遗忘候选清单（缺省 90，只建议不删除）"), gVal("activityArchiveDays", 90), "activityArchiveDays", tr("天")));
+    host.appendChild(numSetting(tr("加深候选命中数 activityHotHits"), tr("近 30 天命中 ≥ 此值 → 加深候选 B（缺省 5，喂深睡归纳）"), gVal("activityHotHits", 5), "activityHotHits", tr("次")));
     var pctItem = el("div", "setting-item");
     var pctInfo = el("div", "setting-item-info");
-    pctInfo.appendChild(el("div", "setting-item-name", tr("\u53EC\u56DE\u51B7\u6761\u76EE\u964D\u6743 recallColdFactorPercent")));
-    pctInfo.appendChild(el("div", "setting-item-desc", tr("cold/retired \u5C0F\u8282\u5728\u878D\u5408\u53EC\u56DE\u4E2D\u7684\u964D\u6743\u7CFB\u6570\uFF08\u767E\u5206\u6BD4 \u2192 /100\uFF1B\u7F3A\u7701 35%\uFF0C\u540E\u7AEF\u8303\u56F4\u6821\u9A8C [5,95] \u515C\u5E95\uFF09")));
+    pctInfo.appendChild(el("div", "setting-item-name", tr("召回冷条目降权 recallColdFactorPercent")));
+    pctInfo.appendChild(el("div", "setting-item-desc", tr("cold/retired 小节在融合召回中的降权系数（百分比 → /100；缺省 35%，后端范围校验 [5,95] 兜底）")));
     var pctWrap = el("div", "sc-num-wrap");
     var pctInp = el("input");
     pctInp.type = "number";
@@ -10666,10 +5564,10 @@
     pctInp.onchange = function() {
       var raw = parseInt(pctInp.value, 10);
       if (isNaN(raw)) raw = 35;
-      var v2 = Math.max(5, Math.min(95, raw));
-      pctInp.value = String(v2);
-      appState.api("/set", { method: "POST", body: JSON.stringify({ key: "recallColdFactorPercent", value: String(v2) }) }).then(function() {
-        appState.statusFn("\u2713 recallColdFactorPercent = " + v2 + "%");
+      var v = Math.max(5, Math.min(95, raw));
+      pctInp.value = String(v);
+      appState.api("/set", { method: "POST", body: JSON.stringify({ key: "recallColdFactorPercent", value: String(v) }) }).then(function() {
+        appState.statusFn("✓ recallColdFactorPercent = " + v + "%");
       }).catch(appState.failFn);
     };
     pctWrap.appendChild(pctInp);
@@ -10680,50 +5578,50 @@
     var injectInfo = el("div", "sc-desc");
     injectInfo.classList.add("sc-inline-note");
     host.appendChild(injectInfo);
-    appState.api("/inject/preview").then(function(r7) {
-      var txt = r7 && r7.text || "";
+    appState.api("/inject/preview").then(function(r) {
+      var txt = r && r.text || "";
       if (!txt) {
-        injectInfo.textContent = tr("\u5F53\u524D\u6CE8\u5165\uFF1A\u7A7A\uFF08hot_memory \u5173\u6216\u753B\u50CF/\u8BB0\u5FC6\u4E3A\u7A7A\uFF09");
+        injectInfo.textContent = tr("当前注入：空（hot_memory 关或画像/记忆为空）");
         return;
       }
       var chars = txt.replace(/\s+/g, "").length;
       var tokens = Math.ceil(chars / 2);
-      var lineCount = txt.split("\n").filter(function(l6) {
-        return l6.trim().indexOf("- [") === 0;
+      var lineCount = txt.split("\n").filter(function(l) {
+        return l.trim().indexOf("- [") === 0;
       }).length;
-      injectInfo.textContent = tr("\u5F53\u524D\u76F4\u63A5\u6CE8\u5165 \u2248 ") + tokens + " token\uFF08" + chars + tr(" \u5B57\u7B26 \xB7 \u53CC\u753B\u50CF+\u8BB0\u5FC6\u6307\u9488 ") + lineCount + tr(" \u6761\uFF09\u2014\u2014\u6BCF\u8F6E\u968F\u63D0\u793A\u8BCD\u6CE8\u5165");
+      injectInfo.textContent = tr("当前直接注入 ≈ ") + tokens + " token（" + chars + tr(" 字符 · 双画像+记忆指针 ") + lineCount + tr(" 条）——每轮随提示词注入");
     }).catch(function() {
       injectInfo.textContent = "";
     });
-    host.appendChild(el("div", "sc-h3", tr("\u6DF1\u7761\u672A\u6D88\u5316\u7B56\u7565")));
-    host.appendChild(el("div", "sc-desc", tr("\u6DF1\u7761\u6BCF\u8F6E\u7528 deepSleepLanded \u5224\u5B9A\u672C\u8F6E\u662F\u5426\u300C\u5DF2\u6D88\u5316\u300D\u3002\u672A\u6D88\u5316\u65F6\u7684\u4E24\u79CD\u53D6\u5411\u5728\u6B64\u5207\u6362\u2014\u2014\u5168\u91CD\u635E\u4FDD\u8BC1\u4E0D\u4E22\u6599\u4F46\u53EF\u80FD\u65E0\u9650\u91CD\u8BD5\uFF1B\u5206\u7EA7\u5728\u8FDE\u8D25\u8FBE\u4E0A\u9650\u540E\u653E\u884C\u5E76\u544A\u8B66\uFF0C\u907F\u514D\u65E0\u9650\u91CD\u8BD5\u70E7 LLM\u3002")));
+    host.appendChild(el("div", "sc-h3", tr("深睡未消化策略")));
+    host.appendChild(el("div", "sc-desc", tr("深睡每轮用 deepSleepLanded 判定本轮是否「已消化」。未消化时的两种取向在此切换——全重捞保证不丢料但可能无限重试；分级在连败达上限后放行并告警，避免无限重试烧 LLM。")));
     host.appendChild(UI.item(
-      tr("\u6DF1\u7761\u672A\u6D88\u5316\u7B56\u7565 deepSleep.failPolicy"),
-      tr("\u5168\u91CD\u635E\uFF08retry\uFF09= \u6C38\u4E0D\u653E\u5F03\uFF0C\u672A\u6D88\u5316\u5C31\u4E00\u76F4\u91CD\u635E\u672C\u6279\uFF08\u4FDD\u8BC1\u4E0D\u4E22\u6599\uFF1B\u6750\u6599\u6C38\u4E45\u5931\u8D25\u65F6\u6BCF\u8F6E\u90FD\u4F1A\u91CD\u8BD5\uFF09\uFF1B\u5206\u7EA7\uFF08graded\uFF09= \u8FDE\u7EED\u5931\u8D25\u8FBE N \u8F6E\u540E\u653E\u884C\u6C34\u4F4D\u5E76\u8BB0\u5BA1\u8BA1\u544A\u8B66\uFF08\u907F\u514D\u65E0\u9650\u91CD\u8BD5\u70E7 LLM\uFF09\u3002\u7F3A\u7701 graded\u3002"),
+      tr("深睡未消化策略 deepSleep.failPolicy"),
+      tr("全重捞（retry）= 永不放弃，未消化就一直重捞本批（保证不丢料；材料永久失败时每轮都会重试）；分级（graded）= 连续失败达 N 轮后放行水位并记审计告警（避免无限重试烧 LLM）。缺省 graded。"),
       UI.select([
-        { value: "retry", label: tr("\u5168\u91CD\u635E\uFF08\u4E0D\u4E22\u6599\uFF0C\u6C38\u4E0D\u653E\u5F03\uFF09") },
-        { value: "graded", label: tr("\u5206\u7EA7\uFF08\u8FDE\u8D25 N \u8F6E\u540E\u653E\u884C\u5E76\u544A\u8B66\uFF09") }
-      ], String(gVal("deepSleepFailPolicy", "graded")), function(v2) {
-        appState.api("/set", { method: "POST", body: JSON.stringify({ key: "deepSleep.failPolicy", value: v2 }) }).then(function() {
-          appState.statusFn(tr("\u2713 \u6DF1\u7761\u672A\u6D88\u5316\u7B56\u7565 = ") + v2);
+        { value: "retry", label: tr("全重捞（不丢料，永不放弃）") },
+        { value: "graded", label: tr("分级（连败 N 轮后放行并告警）") }
+      ], String(gVal("deepSleepFailPolicy", "graded")), function(v) {
+        appState.api("/set", { method: "POST", body: JSON.stringify({ key: "deepSleep.failPolicy", value: v }) }).then(function() {
+          appState.statusFn(tr("✓ 深睡未消化策略 = ") + v);
         }).catch(appState.failFn);
       }, "deepSleep.failPolicy")
     ));
     var roundsInput = UI.input(String(gVal("deepSleepFailMaxRounds", 3)), function(raw) {
-      var n6 = parseInt(raw, 10);
-      if (isNaN(n6)) n6 = 3;
-      n6 = Math.max(1, Math.min(100, n6));
-      roundsInput.value = String(n6);
-      appState.api("/set", { method: "POST", body: JSON.stringify({ key: "deepSleep.failPolicyMaxRounds", value: String(n6) }) }).then(function() {
-        appState.statusFn(tr("\u2713 \u5206\u7EA7\u7B56\u7565\u8FDE\u8D25\u4E0A\u9650 = ") + n6 + tr(" \u8F6E"));
+      var n = parseInt(raw, 10);
+      if (isNaN(n)) n = 3;
+      n = Math.max(1, Math.min(100, n));
+      roundsInput.value = String(n);
+      appState.api("/set", { method: "POST", body: JSON.stringify({ key: "deepSleep.failPolicyMaxRounds", value: String(n) }) }).then(function() {
+        appState.statusFn(tr("✓ 分级策略连败上限 = ") + n + tr(" 轮"));
       }).catch(appState.failFn);
     }, { type: "number", width: "120px", ariaLabel: "deepSleep.failPolicyMaxRounds" });
     roundsInput.min = "1";
     roundsInput.max = "100";
     roundsInput.step = "1";
     host.appendChild(UI.item(
-      tr("\u5206\u7EA7\u7B56\u7565\u8FDE\u8D25\u4E0A\u9650 deepSleep.failPolicyMaxRounds"),
-      tr("\u4EC5\u5728\u300C\u5206\u7EA7\u300D\u7B56\u7565\u4E0B\u751F\u6548\uFF081\u2013100\uFF0C\u7F3A\u7701 3\uFF09\uFF1A\u8FDE\u7EED\u5931\u8D25\u8FBE\u6B64\u8F6E\u6570\u540E\u653E\u884C\u6DF1\u7761\u6C34\u4F4D\u5E76\u8BB0\u4E00\u6761\u5BA1\u8BA1\u544A\u8B66\uFF1B\u5168\u91CD\u635E\u7B56\u7565\u4E0B\u6B64\u9879\u4E0D\u53C2\u4E0E\u5224\u5B9A\u3002"),
+      tr("分级策略连败上限 deepSleep.failPolicyMaxRounds"),
+      tr("仅在「分级」策略下生效（1–100，缺省 3）：连续失败达此轮数后放行深睡水位并记一条审计告警；全重捞策略下此项不参与判定。"),
       roundsInput
     ));
   }
@@ -10731,18 +5629,18 @@
   // src-client/panes-toggles.js
   function renderViewToggles(view, parsed, global) {
     view.textContent = "";
-    UI.pageHead(tr("\u53C2\u6570\u8C03\u8282"), tr("\u6CE8\u5165\u53C2\u6570\uFF08\u5168\u5C40\uFF0C\u5199 ~/.dsh/suite/scheduler.json\uFF09\u4E0E\u8FD0\u884C\u65F6\u901A\u9053\u3002\u6539\u52A8\u5373\u65F6\u5199\u56DE\uFF08scheduler.json \u5907\u4EFD\u5148\u884C\uFF09\u3002\u6CE8\u5165\u914D\u7F6E\u5DF2\u8FC1\u5168\u5C40\uFF0C\u4E0D\u518D\u968F root \u5207\u6362\u53D8\u5316\uFF08root YAML \u4EC5\u5269\u300C\u914D\u7F6E\u539F\u6587\u300D\u9875\u53EF\u76F4\u63A5\u7F16\u8F91\uFF09\u3002"), { routes: ["/config", "/save", "/toggle"] });
+    UI.pageHead(tr("参数调节"), tr("注入参数（全局，写 ~/.dsh/suite/scheduler.json）与运行时通道。改动即时写回（scheduler.json 备份先行）。注入配置已迁全局，不再随 root 切换变化（root YAML 仅剩「配置原文」页可直接编辑）。"), { routes: ["/config", "/save", "/toggle"] });
     var pT1 = el("div");
     var pT2 = el("div");
     var pT3 = el("div");
     var pT4 = el("div");
-    var _tb = UI.tabs("toggles", [{ id: "inject", label: tr("\u2460 \u6CE8\u5165\u4E0E\u753B\u50CF"), pane: pT1 }, { id: "cap", label: tr("\u2461 \u8BB0\u5FC6\u4E0E\u5BB9\u91CF"), pane: pT2 }, { id: "model", label: tr("\u2462 \u6A21\u578B\u4E0E\u5411\u91CF"), pane: pT3 }, { id: "sched", label: tr("\u2463 \u540E\u53F0\u4E0E\u8C03\u5EA6"), pane: pT4 }]);
+    var _tb = UI.tabs("toggles", [{ id: "inject", label: tr("① 注入与画像"), pane: pT1 }, { id: "cap", label: tr("② 记忆与容量"), pane: pT2 }, { id: "model", label: tr("③ 模型与向量"), pane: pT3 }, { id: "sched", label: tr("④ 后台与调度"), pane: pT4 }]);
     view.appendChild(_tb.box);
-    var g2 = global || {};
-    renderTogglesInject(UI.cardIn(_tb.pane("inject")), view, parsed, g2);
-    renderTogglesCap(UI.cardIn(_tb.pane("cap")), g2, { numSetting: numSetting2 });
+    var g = global || {};
+    renderTogglesInject(UI.cardIn(_tb.pane("inject")), view, parsed, g);
+    renderTogglesCap(UI.cardIn(_tb.pane("cap")), g, { numSetting: numSetting2 });
     renderTogglesModel(UI.cardIn(_tb.pane("model")));
-    renderTogglesSched(UI.cardIn(_tb.pane("sched")), g2);
+    renderTogglesSched(UI.cardIn(_tb.pane("sched")), g);
     appState.flushFolds();
   }
   function numSetting2(name, desc, val, key, unit, step) {
@@ -10756,24 +5654,24 @@
     inp.value = String(val);
     var unitEl = el("span", "sc-range-label", unit || "");
     inp.onchange = function() {
-      var v2 = String(isFloat ? Math.max(0, parseFloat(inp.value) || 0) : Math.max(0, parseInt(inp.value, 10) || 0));
-      appState.api("/set", { method: "POST", body: JSON.stringify({ key, value: v2 }) }).then(function() {
-        appState.statusFn("\u2713 " + key + " = " + v2);
+      var v = String(isFloat ? Math.max(0, parseFloat(inp.value) || 0) : Math.max(0, parseInt(inp.value, 10) || 0));
+      appState.api("/set", { method: "POST", body: JSON.stringify({ key, value: v }) }).then(function() {
+        appState.statusFn("✓ " + key + " = " + v);
       }).catch(appState.failFn);
     };
     wrap.appendChild(inp);
     wrap.appendChild(unitEl);
     return UI.item(name, desc, null, { children: [appState.metaBadges(key), wrap] });
   }
-  function renderTogglesInject(host, view, parsed, g2) {
-    function gVal(key, fallback2) {
-      return g2[key] !== void 0 && g2[key] !== null ? g2[key] : fallback2;
+  function renderTogglesInject(host, view, parsed, g) {
+    function gVal(key, fallback) {
+      return g[key] !== void 0 && g[key] !== null ? g[key] : fallback;
     }
     (function() {
       var bar = el("div", "sc-search-bar");
       var q = el("input", "sc-input");
       q.type = "search";
-      q.placeholder = tr("\u68C0\u7D22\u53C2\u6570\uFF08\u540D\u79F0 / \u952E\u540D / \u8BF4\u660E\uFF09\u2026");
+      q.placeholder = tr("检索参数（名称 / 键名 / 说明）…");
       var cnt = el("span", "sc-search-count", "");
       bar.appendChild(q);
       bar.appendChild(cnt);
@@ -10782,20 +5680,20 @@
         var items = view.querySelectorAll(".setting-item");
         var hit = 0;
         items.forEach(function(it) {
-          var t6 = (it.textContent || "").toLowerCase();
-          var show = !kw || t6.indexOf(kw) > -1;
+          var t = (it.textContent || "").toLowerCase();
+          var show = !kw || t.indexOf(kw) > -1;
           it.classList.toggle("sc-filtered", !show);
           if (show) hit++;
         });
-        cnt.textContent = kw ? tr("\u5339\u914D ") + hit + " / " + items.length + tr(" \u9879") : "";
+        cnt.textContent = kw ? tr("匹配 ") + hit + " / " + items.length + tr(" 项") : "";
       };
       host.appendChild(bar);
     })();
-    host.appendChild(el("div", "sc-desc", tr("\u5373\u65F6\u751F\u6548\uFF1A\u6539\u52A8\u76F4\u63A5\u5199 ~/.dsh/suite/scheduler.json\uFF08\u5199\u524D\u5907\u4EFD\uFF09\u3002")));
+    host.appendChild(el("div", "sc-desc", tr("即时生效：改动直接写 ~/.dsh/suite/scheduler.json（写前备份）。")));
     var personaMode = String(gVal("persona", "both"));
-    var PERSONA_TIERS = [["off", tr("\u5173\u95ED")], ["me", tr("\u4EC5\u6CE8\u5165\u6211")], ["you", tr("\u4EC5\u6CE8\u5165\u4F60")], ["both", tr("\u5168\u6CE8\u5165")]];
+    var PERSONA_TIERS = [["off", tr("关闭")], ["me", tr("仅注入我")], ["you", tr("仅注入你")], ["both", tr("全注入")]];
     var slider = el("div", "sc-persona-slider");
-    PERSONA_TIERS.forEach(function(tier, i7) {
+    PERSONA_TIERS.forEach(function(tier, i) {
       var cell = el("button", "sc-persona-cell" + (tier[0] === personaMode ? " active" : ""));
       cell.type = "button";
       cell.setAttribute("role", "radio");
@@ -10803,10 +5701,10 @@
       cell.textContent = tier[1];
       cell.onclick = function() {
         appState.api("/set", { method: "POST", body: JSON.stringify({ key: "injection.persona", value: tier[0] }) }).then(function() {
-          appState.statusFn(tr("\u2713 persona \u6863\u4F4D = ") + tier[1]);
-          slider.querySelectorAll(".sc-persona-cell").forEach(function(c5) {
-            c5.classList.remove("active");
-            c5.setAttribute("aria-checked", "false");
+          appState.statusFn(tr("✓ persona 档位 = ") + tier[1]);
+          slider.querySelectorAll(".sc-persona-cell").forEach(function(c) {
+            c.classList.remove("active");
+            c.setAttribute("aria-checked", "false");
           });
           cell.classList.add("active");
           cell.setAttribute("aria-checked", "true");
@@ -10814,15 +5712,15 @@
       };
       slider.appendChild(cell);
     });
-    host.appendChild(UI.item(tr("\u753B\u50CF persona \u6CE8\u5165\u6863\u4F4D injection.persona"), tr("v17 \u5DF2\u751F\u6548\uFF1A\u5173\u95ED=\u4E0D\u6CE8\u5165\u753B\u50CF\uFF1B\u4EC5\u6CE8\u5165\u6211=\u53EA\u6CE8\u5165 agent \u753B\u50CF AGENT.md\uFF08\u542B [\u539F\u5219] \u4E60\u5F97\u539F\u5219\u4E0E [\u8DEF\u5F84] \u4EFB\u52A1\u8DEF\u5F84\uFF09\uFF1B\u4EC5\u6CE8\u5165\u4F60=\u53EA\u6CE8\u5165\u7528\u6237\u753B\u50CF USER.md\uFF1B\u5168\u6CE8\u5165=\u53CC\u753B\u50CF\uFF08\u9ED8\u8BA4\uFF09"), null, { children: [appState.metaBadges("injection.persona"), slider] }));
+    host.appendChild(UI.item(tr("画像 persona 注入档位 injection.persona"), tr("v17 已生效：关闭=不注入画像；仅注入我=只注入 agent 画像 AGENT.md（含 [原则] 习得原则与 [路径] 任务路径）；仅注入你=只注入用户画像 USER.md；全注入=双画像（默认）"), null, { children: [appState.metaBadges("injection.persona"), slider] }));
     appState.switchKeys().forEach(function(it) {
       var cur = it[0] === "injection.hot_memory" ? gVal("hot_memory", true) : parsed.flags[it[0]];
       if (typeof cur !== "boolean") return;
       host.appendChild(appState.makeToggle(it[0], it[1], it[2], cur, function(key, sw) {
         appState.api("/toggle", { method: "POST", body: JSON.stringify({ key }) }).then(function() {
-          appState.statusFn(tr("\u2713 \u5DF2\u5207\u6362 ") + key);
-        }).catch(function(e8) {
-          appState.failFn(e8);
+          appState.statusFn(tr("✓ 已切换 ") + key);
+        }).catch(function(e) {
+          appState.failFn(e);
           sw.checked = !sw.checked;
         });
       }));
@@ -10830,7 +5728,7 @@
     var levelMode = String(gVal("level", "smart"));
     var LEVEL_TIERS = [["off", "off"], ["low", "low"], ["medium", "medium"], ["high", "high"], ["smart", "smart"]];
     var lSlider = el("div", "sc-persona-slider");
-    LEVEL_TIERS.forEach(function(tier, i7) {
+    LEVEL_TIERS.forEach(function(tier, i) {
       var cell = el("button", "sc-persona-cell" + (tier[0] === levelMode ? " active" : ""));
       cell.type = "button";
       cell.setAttribute("role", "radio");
@@ -10839,10 +5737,10 @@
       cell.title = "injection.level = " + tier[0];
       cell.onclick = function() {
         appState.api("/set", { method: "POST", body: JSON.stringify({ key: "injection.level", value: tier[0] }) }).then(function() {
-          appState.statusFn("\u2713 injection.level = " + tier[0]);
-          lSlider.querySelectorAll(".sc-persona-cell").forEach(function(c5) {
-            c5.classList.remove("active");
-            c5.setAttribute("aria-checked", "false");
+          appState.statusFn("✓ injection.level = " + tier[0]);
+          lSlider.querySelectorAll(".sc-persona-cell").forEach(function(c) {
+            c.classList.remove("active");
+            c.setAttribute("aria-checked", "false");
           });
           cell.classList.add("active");
           cell.setAttribute("aria-checked", "true");
@@ -10850,30 +5748,30 @@
       };
       lSlider.appendChild(cell);
     });
-    host.appendChild(UI.item(tr("\u70ED\u8BB0\u5FC6\u6CE8\u5165\u5F3A\u5EA6 injection.level"), tr("off=\u4E0D\u6CE8\u5165 / low(2 \u6761) / medium(4 \u6761) / high(8 \u6761) / smart=\u667A\u80FD\u4E0A\u9650(10 \u6761)\uFF1B\u5F53\u524D\uFF1A") + levelMode + tr("\uFF1B\u6539\u52A8\u5373\u65F6\u751F\u6548\uFF08\u7F13\u5B58\u4F5C\u5E9F\uFF09"), null, { children: [appState.metaBadges("injection.level"), lSlider] }));
-    host.appendChild(appState.makeToggle("injectRelevance", tr("\u6CE8\u5165\u76F8\u5173\u6027\u91CD\u6392 injectRelevance"), tr("\u5F00=\u6309\u76F8\u5173\u6027\u9009\u884C\uFF08\u7F3A\u7701\uFF09\uFF1B\u5173=\u56DE\u843D\u300C\u57FA\u7EBF + \u65B0\u9C9C\u5EA6\u300D\u9009\u884C\u3002\u5373\u65F6\u751F\u6548\uFF08\u4E0B\u6B21\u6CE8\u5165\u5373\u7528\uFF09"), gVal("injectRelevance", true) !== false, function(key, sw) {
+    host.appendChild(UI.item(tr("热记忆注入强度 injection.level"), tr("off=不注入 / low(2 条) / medium(4 条) / high(8 条) / smart=智能上限(10 条)；当前：") + levelMode + tr("；改动即时生效（缓存作废）"), null, { children: [appState.metaBadges("injection.level"), lSlider] }));
+    host.appendChild(appState.makeToggle("injectRelevance", tr("注入相关性重排 injectRelevance"), tr("开=按相关性选行（缺省）；关=回落「基线 + 新鲜度」选行。即时生效（下次注入即用）"), gVal("injectRelevance", true) !== false, function(key, sw) {
       appState.api("/toggle", { method: "POST", body: JSON.stringify({ key }) }).then(function() {
-        appState.statusFn(tr("\u2713 \u5DF2\u5207\u6362 ") + key + tr("\uFF08\u5373\u65F6\uFF09"));
-      }).catch(function(e8) {
-        appState.failFn(e8);
+        appState.statusFn(tr("✓ 已切换 ") + key + tr("（即时）"));
+      }).catch(function(e) {
+        appState.failFn(e);
         sw.checked = !sw.checked;
       });
     }));
-    host.appendChild(numSetting2(tr("\u65B0\u9C9C\u5EA6\u4FDD\u5E95\u69FD injectFreshSlots"), tr("\u6CE8\u5165\u65F6\u4F18\u5148\u4FDD\u7559\u300C\u6700\u8FD1\u65B0\u589E\u6761\u76EE\u300D\u7684\u69FD\u4F4D\u6570\uFF080\u20136\uFF0C\u7F3A\u7701 2\uFF09"), gVal("injectFreshSlots", 2), "injectFreshSlots", tr("\u6761"), 1));
+    host.appendChild(numSetting2(tr("新鲜度保底槽 injectFreshSlots"), tr("注入时优先保留「最近新增条目」的槽位数（0–6，缺省 2）"), gVal("injectFreshSlots", 2), "injectFreshSlots", tr("条"), 1));
     host.appendChild(numSetting2(
-      tr("\u6CE8\u5165\u603B\u9884\u7B97 injectBudgetChars"),
-      tr("\u6CE8\u5165\u6587\u672C\u7684\u5B57\u7B26\u603B\u9884\u7B97\uFF08**\u53C2\u4E0E\u9650\u989D\u7684\u4E09\u5C42\u4E4B\u548C**\uFF1A\u7A33\u5B9A\u9762 + \u52A8\u6001\u9762 + \u4E00\u6B21\u6027\uFF1B\u8303\u56F4 800\u201320000\uFF0C\u7F3A\u7701 4000\uFF09\u3002\u8D8A\u754C\u7531\u670D\u52A1\u7AEF\u5939\u56DE\u5E76\u5728\u9762\u677F\u6807\u300C\u5DF2\u5939\u53D6\u300D"),
+      tr("注入总预算 injectBudgetChars"),
+      tr("注入文本的字符总预算（**参与限额的三层之和**：稳定面 + 动态面 + 一次性；范围 800–20000，缺省 4000）。越界由服务端夹回并在面板标「已夹取」"),
       gVal("injectBudgetChars", 4e3),
       "injectBudgetChars",
-      tr("\u5B57\u7B26"),
+      tr("字符"),
       100
     ));
     host.appendChild(numSetting2(
-      tr("\u60C5\u5883\u69FD\u9884\u7B97 injectSituationBudgetChars"),
-      tr("\u60C5\u5883\u69FD\uFF08\u73AF\u8BB0\u5F55\u6309\u60C5\u5883\u952E\u5339\u914D\uFF09\u7684\u5B57\u7B26\u9884\u7B97\uFF08\u8303\u56F4 0\u20134000\uFF0C\u7F3A\u7701 1200\uFF09\u3002\u5B83**\u72EC\u7ACB\u4E8E**\u6CE8\u5165\u603B\u9884\u7B97\uFF0C\u4E0D\u5403\u4E09\u5C42\u989D\u5EA6"),
+      tr("情境槽预算 injectSituationBudgetChars"),
+      tr("情境槽（环记录按情境键匹配）的字符预算（范围 0–4000，缺省 1200）。它**独立于**注入总预算，不吃三层额度"),
       gVal("injectSituationBudgetChars", 1200),
       "injectSituationBudgetChars",
-      tr("\u5B57\u7B26"),
+      tr("字符"),
       100
     ));
     host.appendChild(levelCapsSetting(gVal("injectLevelCaps", null)));
@@ -10883,30 +5781,30 @@
     var caps = cur && typeof cur === "object" && !Array.isArray(cur) ? cur : DEF;
     var wrap = el("div", "sc-num-wrap");
     var inputs = {};
-    ["low", "medium", "high", "smart"].forEach(function(k2) {
-      var cell = el("span", "sc-range-label", k2 + " ");
+    ["low", "medium", "high", "smart"].forEach(function(k) {
+      var cell = el("span", "sc-range-label", k + " ");
       var inp = el("input");
       inp.type = "number";
       inp.className = "sc-input";
       inp.min = "0";
       inp.step = "1";
-      inp.value = String(caps[k2] !== void 0 && caps[k2] !== null ? caps[k2] : DEF[k2]);
+      inp.value = String(caps[k] !== void 0 && caps[k] !== null ? caps[k] : DEF[k]);
       inp.onchange = function() {
         var next = {};
         ["low", "medium", "high", "smart"].forEach(function(kk) {
           next[kk] = Math.max(0, parseInt(inputs[kk].value, 10) || 0);
         });
         appState.api("/set", { method: "POST", body: JSON.stringify({ key: "injectLevelCaps", value: JSON.stringify(next) }) }).then(function() {
-          appState.statusFn("\u2713 injectLevelCaps = " + JSON.stringify(next));
+          appState.statusFn("✓ injectLevelCaps = " + JSON.stringify(next));
         }).catch(appState.failFn);
       };
-      inputs[k2] = inp;
+      inputs[k] = inp;
       cell.appendChild(inp);
       wrap.appendChild(cell);
     });
     return UI.item(
-      tr("\u6863\u4F4D\u4E0A\u9650 injectLevelCaps"),
-      tr("\u56DB\u6863\uFF08low/medium/high/smart\uFF09\u5404\u81EA\u7684\u9009\u884C\u4E0A\u9650\uFF08**\u5BF9\u8C61\u952E**\uFF0C\u7F3A\u7701 2/4/8/14\uFF09\u3002\u6539\u540E\u6574\u5BF9\u8C61\u5199\u56DE\uFF1B\u5355\u6863\u8D8A\u754C\u7531\u670D\u52A1\u7AEF\u62D2\u5E76\u56DE\u62A5"),
+      tr("档位上限 injectLevelCaps"),
+      tr("四档（low/medium/high/smart）各自的选行上限（**对象键**，缺省 2/4/8/14）。改后整对象写回；单档越界由服务端拒并回报"),
       null,
       { children: [appState.metaBadges("injectLevelCaps"), wrap] }
     );
@@ -10917,59 +5815,59 @@
     renderEvalCard(host);
   }
   function renderTogglesModelVec(host) {
-    host.appendChild(el("div", "sc-desc", tr("\u94FE\u8DEF\u4E0E\u6A21\u578B\u9009\u62E9\uFF1B\u672C\u7EC4\u6539\u52A8\u5199\u5165\u81EA\u6301\u914D\u7F6E\uFF0C\u9700\u91CD\u8F7D\u63D2\u4EF6\u540E\u751F\u6548\u3002")));
-    host.appendChild(el("div", "sc-h3", tr("\u5411\u91CF\u4E0E\u6A21\u578B \xB7 \u5F53\u524D\u94FE\u8DEF")));
-    host.appendChild(el("div", "sc-desc", tr("\u8BED\u4E49\u53EC\u56DE\uFF08vec.ts + bge-m3\uFF09\u8FD0\u884C\u6001\u4E0E\u5F00\u5173\u3002\u6539\u52A8\u5199 ~/.dsh/suite/scheduler.json\uFF0C**\u9700\u91CD\u8F7D\u63D2\u4EF6\u540E\u751F\u6548**\u3002\u672C\u5730 GPU \u96F6 token\uFF1B\u6362\u4E91\u7AEF\u5728\u4E0B\u65B9\u586B baseUrl/model\u3002")));
+    host.appendChild(el("div", "sc-desc", tr("链路与模型选择；本组改动写入自持配置，需重载插件后生效。")));
+    host.appendChild(el("div", "sc-h3", tr("向量与模型 · 当前链路")));
+    host.appendChild(el("div", "sc-desc", tr("语义召回（vec.ts + bge-m3）运行态与开关。改动写 ~/.dsh/suite/scheduler.json，**需重载插件后生效**。本地 GPU 零 token；换云端在下方填 baseUrl/model。")));
     var vzone = el("div");
     function refreshVecZone() {
-      appState.api("/vector/status2").then(function(s22) {
+      appState.api("/vector/status2").then(function(s2) {
         vzone.textContent = "";
         var vb = el("div", "sc-ds-badges");
-        var st = s22.provider || "off";
+        var st = s2.provider || "off";
         vb.appendChild(UI.dsBadge("provider " + st, Derive.providerKind(st, ["DmlExecutionProvider"])).box);
-        vb.appendChild(UI.dsBadge(tr("\u53EC\u56DE\u6A21\u5F0F ") + Derive.vecLabel(st), "ended").setTitle(tr("provider \u2192 \u4E2D\u6587\u6A21\u5F0F\u540D\uFF1Afusion=\u878D\u5408 / lexical=\u8BCD\u6CD5 / gpu-ready=\u5C31\u7EEA / off=\u5173")).box);
-        vb.appendChild(UI.dsBadge(tr("\u7F13\u5B58 ") + String(s22.cache && s22.cache.lines || 0) + tr(" \u884C"), "ended").box);
-        if (s22.stats && s22.stats.queries) {
+        vb.appendChild(UI.dsBadge(tr("召回模式 ") + Derive.vecLabel(st), "ended").setTitle(tr("provider → 中文模式名：fusion=融合 / lexical=词法 / gpu-ready=就绪 / off=关")).box);
+        vb.appendChild(UI.dsBadge(tr("缓存 ") + String(s2.cache && s2.cache.lines || 0) + tr(" 行"), "ended").box);
+        if (s2.stats && s2.stats.queries) {
           vb.appendChild(UI.dsBadge(
-            tr("\u53EC\u56DE ") + String(s22.stats.queries) + tr(" \u6B21 \xB7 ") + String(s22.stats.lastMode || "") + " \xB7 " + String(s22.stats.lastMs || 0) + "ms",
+            tr("召回 ") + String(s2.stats.queries) + tr(" 次 · ") + String(s2.stats.lastMode || "") + " · " + String(s2.stats.lastMs || 0) + "ms",
             "ended"
-          ).setTitle(tr("\u6700\u8FD1\u67E5\u8BE2: ") + String(s22.stats.lastQuery || "")).box);
+          ).setTitle(tr("最近查询: ") + String(s2.stats.lastQuery || "")).box);
         }
         vzone.appendChild(vb);
         var sw = el("input");
         sw.type = "checkbox";
         sw.className = "checkbox-container";
-        sw.checked = !!(s22.running && s22.running.enabled);
+        sw.checked = !!(s2.running && s2.running.enabled);
         sw.addEventListener("change", function() {
           appState.api("/embed/config", { method: "POST", body: JSON.stringify({ embedEnabled: sw.checked }) }).then(function() {
-            appState.statusFn(tr("\u2713 \u5411\u91CF ") + (sw.checked ? tr("\u5F00") : tr("\u5173")) + tr("\uFF08\u91CD\u8F7D\u540E\u751F\u6548\uFF09"));
-          }).catch(function(e8) {
-            appState.failFn(e8);
+            appState.statusFn(tr("✓ 向量 ") + (sw.checked ? tr("开") : tr("关")) + tr("（重载后生效）"));
+          }).catch(function(e) {
+            appState.failFn(e);
             sw.checked = !sw.checked;
           });
         });
-        vzone.appendChild(UI.item(tr("\u8BED\u4E49\u53EC\u56DE\u5F00\u5173 embedEnabled"), tr("\u5F00=\u878D\u5408\u53EC\u56DE\uFF08dense0.7+lexical0.3\uFF09\uFF1B\u5173=\u7EAF\u8BCD\u6CD5\u3002\u5199 scheduler.json"), sw));
-        var curUrl = s22.running && s22.running.baseUrl || "http://127.0.0.1:11434/v1";
-        var curModel = s22.running && s22.running.model || "bge-m3";
-        var curKeyEnv = s22.running && s22.running.apiKeyEnv || "EMBED_API_KEY";
+        vzone.appendChild(UI.item(tr("语义召回开关 embedEnabled"), tr("开=融合召回（dense0.7+lexical0.3）；关=纯词法。写 scheduler.json"), sw));
+        var curUrl = s2.running && s2.running.baseUrl || "http://127.0.0.1:11434/v1";
+        var curModel = s2.running && s2.running.model || "bge-m3";
+        var curKeyEnv = s2.running && s2.running.apiKeyEnv || "EMBED_API_KEY";
         var EMBED_PROVIDERS = [
-          { id: "ollama", name: tr("Ollama\uFF08\u672C\u673A\u7F3A\u7701\uFF09"), base: "http://127.0.0.1:11434/v1" },
-          { id: "bge", name: tr("\u81EA\u5EFA bge-m3 \u6865\uFF08\u53EF\u9009\uFF09"), base: "http://127.0.0.1:9915/v1", noEnum: true },
+          { id: "ollama", name: tr("Ollama（本机缺省）"), base: "http://127.0.0.1:11434/v1" },
+          { id: "bge", name: tr("自建 bge-m3 桥（可选）"), base: "http://127.0.0.1:9915/v1", noEnum: true },
           { id: "lmstudio", name: "LM Studio", base: "http://127.0.0.1:1234/v1" },
-          { id: "custom", name: tr("\u81EA\u5B9A\u4E49 OpenAI \u517C\u5BB9\uFF08\u4E91\u7AEF\uFF09"), base: "" }
+          { id: "custom", name: tr("自定义 OpenAI 兼容（云端）"), base: "" }
         ];
         var provWrap = el("div", "sc-prov-btns");
-        EMBED_PROVIDERS.forEach(function(p4) {
-          var card = el("button", "sc-btn" + (curUrl.indexOf(p4.base) === 0 && p4.base ? " on" : ""), p4.name);
+        EMBED_PROVIDERS.forEach(function(p) {
+          var card = el("button", "sc-btn" + (curUrl.indexOf(p.base) === 0 && p.base ? " on" : ""), p.name);
           card.type = "button";
           card.addEventListener("click", function() {
-            uInp.value = p4.base;
+            uInp.value = p.base;
             var all = provWrap.querySelectorAll("button");
-            all.forEach(function(b3) {
-              b3.classList.remove("on");
+            all.forEach(function(b) {
+              b.classList.remove("on");
             });
             card.classList.add("on");
-            if (p4.id === "custom") {
+            if (p.id === "custom") {
               uInp.value = "";
               uInp.focus();
             }
@@ -10977,7 +5875,7 @@
           });
           provWrap.appendChild(card);
         });
-        vzone.appendChild(UI.item(tr("\u8BED\u4E49\u68C0\u7D22\u6765\u6E90"), tr("\u9009\u670D\u52A1 \u2192 \u81EA\u52A8\u586B\u5730\u5740 \u2192 \u4E0B\u65B9\u81EA\u52A8\u63A2\u6D4B\u5E76\u5217\u51FA\u53EF\u7528\u6A21\u578B\uFF08\u6D4F\u89C8\u5668\u76F4\u8FDE\uFF09\u3002\u6362\u670D\u52A1/\u6A21\u578B\u540E\u8BF7\u70B9\u300C\u6E05\u7F13\u5B58\u91CD\u5EFA\u300D\u3002"), null, { children: [provWrap] }));
+        vzone.appendChild(UI.item(tr("语义检索来源"), tr("选服务 → 自动填地址 → 下方自动探测并列出可用模型（浏览器直连）。换服务/模型后请点「清缓存重建」。"), null, { children: [provWrap] }));
         var urlWrap = el("div", "sc-col-end");
         var uInp = el("input", "sc-input sc-w-xl");
         uInp.value = curUrl;
@@ -10985,9 +5883,9 @@
         var dlist = el("datalist");
         dlist.id = "sc-embed-endpoints";
         ["http://127.0.0.1:11434/v1", "http://localhost:11434/v1", "http://127.0.0.1:9915/v1", "http://127.0.0.1:1234/v1", "https://api.openai.com/v1", "https://api.deepseek.com/v1"].forEach(function(ep) {
-          var o9 = el("option");
-          o9.value = ep;
-          dlist.appendChild(o9);
+          var o = el("option");
+          o.value = ep;
+          dlist.appendChild(o);
         });
         document.body.appendChild(dlist);
         uInp.setAttribute("list", "sc-embed-endpoints");
@@ -10996,33 +5894,33 @@
         var kInp = el("input", "sc-input sc-w-md");
         kInp.value = curKeyEnv;
         kInp.title = "embedApiKeyEnv";
-        kInp.placeholder = tr("key \u73AF\u5883\u53D8\u91CF\u540D\uFF08\u672C\u5730\u514D\u586B\uFF09");
+        kInp.placeholder = tr("key 环境变量名（本地免填）");
         var probeHint = el("div", "sc-mem-sub muted");
         probeHint.classList.add("sc-max-xl");
         urlWrap.appendChild(uInp);
         urlWrap.appendChild(mSel);
         urlWrap.appendChild(kInp);
         urlWrap.appendChild(probeHint);
-        vzone.appendChild(UI.item(tr("\u670D\u52A1\u5730\u5740\uFF08OpenAI \u517C\u5BB9 /v1 \u6839\uFF09"), tr("\u5982 http://127.0.0.1:11434/v1\uFF08Ollama\uFF09\u6216 http://127.0.0.1:9915/v1\uFF08\u81EA\u5EFA\u6865\uFF09\uFF1B\u6539\u5B8C\u56DE\u8F66\u81EA\u52A8\u63A2\u6D4B\u3002"), null, { children: [urlWrap] }));
+        vzone.appendChild(UI.item(tr("服务地址（OpenAI 兼容 /v1 根）"), tr("如 http://127.0.0.1:11434/v1（Ollama）或 http://127.0.0.1:9915/v1（自建桥）；改完回车自动探测。"), null, { children: [urlWrap] }));
         var saveWrap = el("div", "sc-vec-actions");
-        var probeBtn = el("button", "sc-btn subtle", tr("\u91CD\u65B0\u63A2\u6D4B"));
+        var probeBtn = el("button", "sc-btn subtle", tr("重新探测"));
         probeBtn.type = "button";
         probeBtn.classList.add("sc-btn-xs");
         probeBtn.addEventListener("click", enumModels);
-        var saveBtn = el("button", "sc-btn", tr("\u4FDD\u5B58\u914D\u7F6E"));
+        var saveBtn = el("button", "sc-btn", tr("保存配置"));
         saveBtn.type = "button";
         saveBtn.classList.add("sc-btn-xs");
         saveBtn.addEventListener("click", function() {
           saveBtn.disabled = true;
-          saveBtn.textContent = tr("\u4FDD\u5B58\u4E2D\u2026");
+          saveBtn.textContent = tr("保存中…");
           appState.api("/embed/config", { method: "POST", body: JSON.stringify({ embedBaseUrl: uInp.value.trim(), embedModel: mSel.value || curModel, embedApiKeyEnv: kInp.value.trim() || "EMBED_API_KEY" }) }).then(function() {
-            appState.statusFn(tr("\u2713 \u5DF2\u4FDD\u5B58\uFF08\u91CD\u8F7D\u540E\u751F\u6548\u2014\u2014\u82E5\u6362\u4E86\u670D\u52A1/\u6A21\u578B\u8BF7\u70B9\u300C\u6E05\u7F13\u5B58\u91CD\u5EFA\u300D\uFF09"));
+            appState.statusFn(tr("✓ 已保存（重载后生效——若换了服务/模型请点「清缓存重建」）"));
             saveBtn.disabled = false;
-            saveBtn.textContent = tr("\u4FDD\u5B58\u914D\u7F6E");
-          }).catch(function(e8) {
+            saveBtn.textContent = tr("保存配置");
+          }).catch(function(e) {
             saveBtn.disabled = false;
-            saveBtn.textContent = tr("\u4FDD\u5B58\u914D\u7F6E");
-            appState.failFn(e8);
+            saveBtn.textContent = tr("保存配置");
+            appState.failFn(e);
           });
         });
         saveWrap.appendChild(probeBtn);
@@ -11035,29 +5933,29 @@
           mSel.textContent = "";
           var opt = el("option");
           opt.value = "";
-          opt.textContent = placeholder || tr("\u9009\u62E9\u6A21\u578B\u2026");
+          opt.textContent = placeholder || tr("选择模型…");
           mSel.appendChild(opt);
         }
         function enumModels() {
-          var b3 = uInp.value.trim().replace(/\/+$/, "");
-          var root = b3.replace(/\/v1$/, "");
+          var b = uInp.value.trim().replace(/\/+$/, "");
+          var root = b.replace(/\/v1$/, "");
           probeDone = false;
           if (!root) {
-            setSelectState(true, tr("\u5148\u586B\u5199\u670D\u52A1\u5730\u5740"));
+            setSelectState(true, tr("先填写服务地址"));
             probeHint.textContent = "";
             return;
           }
           try {
-            var u4 = new URL(root);
-            if (u4.protocol !== "http:" && u4.protocol !== "https:") throw new Error("x");
-          } catch (e8) {
-            setSelectState(true, tr("URL \u65E0\u6548"));
-            probeHint.textContent = tr("\u9700 http(s):// \u5F00\u5934");
+            var u = new URL(root);
+            if (u.protocol !== "http:" && u.protocol !== "https:") throw new Error("x");
+          } catch (e) {
+            setSelectState(true, tr("URL 无效"));
+            probeHint.textContent = tr("需 http(s):// 开头");
             return;
           }
           if (probing) return;
           probing = true;
-          setSelectState(true, tr("\u52A0\u8F7D\u53EF\u7528\u6A21\u578B\u4E2D\u2026"));
+          setSelectState(true, tr("加载可用模型中…"));
           probeHint.textContent = "";
           var finish = function(models, mode, note) {
             if (probeDone) return;
@@ -11067,24 +5965,24 @@
               mSel.disabled = false;
               mSel.textContent = "";
               models.forEach(function(md) {
-                var o9 = el("option");
-                o9.value = md.id;
-                o9.textContent = md.id + (isEmbedLike(md.id) ? tr("\uFF08\u5D4C\u5165\uFF09") : "");
-                if (md.id === curModel) o9.selected = true;
-                mSel.appendChild(o9);
+                var o = el("option");
+                o.value = md.id;
+                o.textContent = md.id + (isEmbedLike(md.id) ? tr("（嵌入）") : "");
+                if (md.id === curModel) o.selected = true;
+                mSel.appendChild(o);
               });
-              probeHint.textContent = "\u2713 " + models.length + tr(" \u4E2A\u6A21\u578B \xB7 ") + (mode || "") + (note ? " \xB7 " + note : "");
+              probeHint.textContent = "✓ " + models.length + tr(" 个模型 · ") + (mode || "") + (note ? " · " + note : "");
             } else {
-              setSelectState(true, tr("\uFF08\u65E0\u53EF\u679A\u4E3E\u6A21\u578B\uFF09"));
-              probeHint.textContent = note || tr("\u672A\u63A2\u6D4B\u5230\u6A21\u578B");
+              setSelectState(true, tr("（无可枚举模型）"));
+              probeHint.textContent = note || tr("未探测到模型");
             }
           };
-          fetch(root + "/v1/models", { signal: AbortSignal.timeout(6e3) }).then(function(r7) {
-            if (!r7.ok) throw new Error("HTTP " + r7.status);
-            return r7.json();
-          }).then(function(j2) {
-            var models = (j2 && j2.data || []).map(function(m3) {
-              return { id: m3.id };
+          fetch(root + "/v1/models", { signal: AbortSignal.timeout(6e3) }).then(function(r) {
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            return r.json();
+          }).then(function(j) {
+            var models = (j && j.data || []).map(function(m) {
+              return { id: m.id };
             });
             if (Derive.has(models)) {
               finish(models, "openai-compatible");
@@ -11095,65 +5993,65 @@
             probeHealth(root, finish);
           });
         }
-        function isEmbedLike(id3) {
-          return /embed|bge|m3|nomic|e5|text-embed/i.test(String(id3));
+        function isEmbedLike(id) {
+          return /embed|bge|m3|nomic|e5|text-embed/i.test(String(id));
         }
         function probeHealth(root, finish) {
-          fetch(root + "/health", { signal: AbortSignal.timeout(5e3) }).then(function(r7) {
-            if (!r7.ok) throw new Error("x");
-            return r7.json();
-          }).then(function(j2) {
-            var fixed = j2 && j2.model || "bge-m3";
-            finish([{ id: fixed }], "health-fixed", tr("\u670D\u52A1\u5728\u4F46\u65E0 /models\u2014\u2014\u7528\u56FA\u5B9A ") + fixed + (j2 && j2.dims ? "\uFF08" + j2.dims + "d\uFF09" : ""));
+          fetch(root + "/health", { signal: AbortSignal.timeout(5e3) }).then(function(r) {
+            if (!r.ok) throw new Error("x");
+            return r.json();
+          }).then(function(j) {
+            var fixed = j && j.model || "bge-m3";
+            finish([{ id: fixed }], "health-fixed", tr("服务在但无 /models——用固定 ") + fixed + (j && j.dims ? "（" + j.dims + "d）" : ""));
           }).catch(function() {
             if (!probeDone) {
               probeDone = true;
               probing = false;
             }
-            setSelectState(true, tr("\uFF08\u8FDE\u63A5\u5931\u8D25\uFF09"));
-            probeHint.textContent = tr("\u65E0\u6CD5\u8FDE\u63A5\u8BE5\u670D\u52A1\uFF08/v1/models \u4E0E /health \u5747\u65E0\u54CD\u5E94\uFF09\u2014\u2014\u68C0\u67E5\u5730\u5740/\u670D\u52A1\u662F\u5426\u5728\u8DD1/CORS");
+            setSelectState(true, tr("（连接失败）"));
+            probeHint.textContent = tr("无法连接该服务（/v1/models 与 /health 均无响应）——检查地址/服务是否在跑/CORS");
           });
         }
         uInp.addEventListener("change", function() {
           enumModels();
         });
-        probeHint.textContent = curModel ? tr("\u5F53\u524D\uFF1A") + curModel + " @ " + curUrl : "";
+        probeHint.textContent = curModel ? tr("当前：") + curModel + " @ " + curUrl : "";
         enumModels();
         var clearRow = el("div", "setting-item");
         var clearInfo = el("div", "setting-item-info");
-        clearInfo.appendChild(el("div", "setting-item-name", tr("\u5411\u91CF\u7F13\u5B58")));
-        clearInfo.appendChild(el("div", "setting-item-desc", tr("\u7F13\u5B58\u6309 \u6A21\u578B+\u884C\u6587\u672C+\u5730\u5740 \u6307\u7EB9\u547D\u4E2D\uFF1B\u6362\u6A21\u578B/\u6539\u4E91\u7AEF\u540E\u70B9\u300C\u6E05\u7F13\u5B58\u91CD\u5EFA\u300D\uFF0C\u4E0B\u6B21\u53EC\u56DE\u6309\u65B0\u6A21\u578B\u81EA\u52A8\u91CD\u5D4C\uFF08\u5F53\u524D ") + String(s22.cache && s22.cache.lines || 0) + tr(" \u884C\u8584\u884C\uFF0C~\u79D2\u7EA7\uFF09")));
+        clearInfo.appendChild(el("div", "setting-item-name", tr("向量缓存")));
+        clearInfo.appendChild(el("div", "setting-item-desc", tr("缓存按 模型+行文本+地址 指纹命中；换模型/改云端后点「清缓存重建」，下次召回按新模型自动重嵌（当前 ") + String(s2.cache && s2.cache.lines || 0) + tr(" 行薄行，~秒级）")));
         clearRow.appendChild(clearInfo);
-        var clearBtn = UI.button(tr("\u6E05\u7F13\u5B58\u91CD\u5EFA"), function() {
-          return appState.api("/vector/cache/clear", { method: "POST", body: "{}" }).then(function(r7) {
-            appState.statusFn(tr("\u2713 \u5411\u91CF\u7F13\u5B58\u5DF2\u6E05") + (r7 && r7.removed ? tr("\uFF08\u5220\u9664 ") + r7.removed + "\uFF09" : "") + tr("\u2014\u2014\u4E0B\u6B21\u53EC\u56DE\u6309\u5F53\u524D\u6A21\u578B\u81EA\u52A8\u91CD\u5D4C"));
+        var clearBtn = UI.button(tr("清缓存重建"), function() {
+          return appState.api("/vector/cache/clear", { method: "POST", body: "{}" }).then(function(r) {
+            appState.statusFn(tr("✓ 向量缓存已清") + (r && r.removed ? tr("（删除 ") + r.removed + "）" : "") + tr("——下次召回按当前模型自动重嵌"));
           });
-        }, { danger: true, async: true, busyText: tr("\u6E05\u7406\u4E2D\u2026"), okText: tr("\u5411\u91CF\u7F13\u5B58\u5DF2\u6E05"), confirm: tr("\u6E05\u7A7A\u5411\u91CF\u7F13\u5B58\u5E76\u91CD\u5EFA\uFF1F\u6362\u6A21\u578B\u540E\u5FC5\u987B\u6267\u884C\uFF08\u5426\u5219\u65E7\u5411\u91CF\u6DF7\u7528\u5BFC\u81F4\u8BED\u4E49\u5931\u771F\uFF09\u3002") });
+        }, { danger: true, async: true, busyText: tr("清理中…"), okText: tr("向量缓存已清"), confirm: tr("清空向量缓存并重建？换模型后必须执行（否则旧向量混用导致语义失真）。") });
         var clearCtl = el("div", "setting-item-control");
         clearCtl.appendChild(clearBtn);
         clearRow.appendChild(clearCtl);
         vzone.appendChild(clearRow);
         if (Derive.providerDown(st)) {
           var guide = el("div");
-          guide.appendChild(el("div", "sc-mem-group-title", tr("\u5982\u4F55\u542F\u7528\u8BED\u4E49\u68C0\u7D22")));
+          guide.appendChild(el("div", "sc-mem-group-title", tr("如何启用语义检索")));
           var g1 = el("div", "setting-item");
           var g1i = el("div", "setting-item-info");
-          g1i.appendChild(el("div", "setting-item-name", tr("\u65B9\u6848 A \xB7 \u672C\u5730 GPU \u670D\u52A1\uFF08\u63A8\u8350\uFF0C\u96F6 token \u6210\u672C\uFF09")));
-          g1i.appendChild(el("div", "setting-item-desc", tr("\u9700\u81EA\u5907\u5D4C\u5165\u670D\u52A1\uFF08OpenAI \u517C\u5BB9 /v1/embeddings\uFF09\uFF1AOllama\uFF08ollama pull bge-m3\uFF0C:11434\uFF09\u6216\u81EA\u5EFA bge-m3 \u6865\uFF08:9915\uFF09\u3002\u5F53\u524D\u68C0\u6D4B\u4E0D\u53EF\u8FBE\u3002")));
+          g1i.appendChild(el("div", "setting-item-name", tr("方案 A · 本地 GPU 服务（推荐，零 token 成本）")));
+          g1i.appendChild(el("div", "setting-item-desc", tr("需自备嵌入服务（OpenAI 兼容 /v1/embeddings）：Ollama（ollama pull bge-m3，:11434）或自建 bge-m3 桥（:9915）。当前检测不可达。")));
           g1.appendChild(g1i);
           guide.appendChild(g1);
           var g2 = el("div", "setting-item");
           var g2i = el("div", "setting-item-info");
-          g2i.appendChild(el("div", "setting-item-name", tr("\u65B9\u6848 B \xB7 \u4E91\u7AEF API")));
-          g2i.appendChild(el("div", "setting-item-desc", tr("\u624B\u5199 ~/.dsh/suite/scheduler.json\uFF1AembedBaseUrl=\u4E91\u7AEF\u7AEF\u70B9 + embedModel=\u6A21\u578B\u540D + embedApiKeyEnv=key \u73AF\u5883\u53D8\u91CF\u540D\uFF1B\u6539\u540E\u91CD\u8F7D\u5E76\u300C\u6E05\u7F13\u5B58\u91CD\u5EFA\u300D\u3002")));
+          g2i.appendChild(el("div", "setting-item-name", tr("方案 B · 云端 API")));
+          g2i.appendChild(el("div", "setting-item-desc", tr("手写 ~/.dsh/suite/scheduler.json：embedBaseUrl=云端端点 + embedModel=模型名 + embedApiKeyEnv=key 环境变量名；改后重载并「清缓存重建」。")));
           g2.appendChild(g2i);
           guide.appendChild(g2);
-          guide.appendChild(el("div", "sc-desc", tr("\u672A\u914D\u7F6E\u65F6\u81EA\u52A8\u8BCD\u6CD5\u53EC\u56DE\uFF08\u53EF\u7528\u4F46\u65E0\u8BED\u4E49\uFF09\uFF1B\u914D\u7F6E\u540E\u672C\u9875 provider \u53D8\u5C31\u7EEA\u3002")));
+          guide.appendChild(el("div", "sc-desc", tr("未配置时自动词法召回（可用但无语义）；配置后本页 provider 变就绪。")));
           vzone.appendChild(guide);
         }
-      }).catch(function(e8) {
+      }).catch(function(e) {
         vzone.textContent = "";
-        vzone.appendChild(el("div", "sc-desc", tr("\u5411\u91CF\u72B6\u6001\u4E0D\u53EF\u7528: ") + e8.message));
+        vzone.appendChild(el("div", "sc-desc", tr("向量状态不可用: ") + e.message));
       });
     }
     host.appendChild(vzone);
@@ -11165,13 +6063,13 @@
     window._scVecTimer = setInterval(function() {
       try {
         refreshVecZone();
-      } catch (e8) {
+      } catch (e) {
       }
     }, 3e4);
   }
   function renderTogglesModelLlm(host) {
-    host.appendChild(el("div", "sc-h3", tr("\u84B8\u998F / \u6DF1\u7761\u6A21\u578B")));
-    host.appendChild(el("div", "sc-desc", tr("\u84B8\u998F\u4E0E\u6DF1\u5EA6\u7761\u7720\u5404\u81EA\u53EF\u9009\u5BBF\u4E3B\u6A21\u578B\uFF08\u76F4\u63A5\u7528 DeepSeek Harness \u6A21\u578B\u2014\u2014\u5148\u5728 Harness \u914D\u7F6E\u597D\u6A21\u578B\uFF0C\u8FD9\u91CC\u4E0B\u62C9\u9009\u5373\u53EF\uFF09\u3002\u300C\u7EE7\u627F\u4E3B\u4F1A\u8BDD\u300D= \u4E0D\u6307\u5B9A\uFF0C\u8DDF\u968F\u5F53\u524D\u4F1A\u8BDD\u6A21\u578B\u3002\u6863\u4F4D\uFF08reasoning effort\uFF09\u7531\u6A21\u578B\u9002\u914D\u5668\u58F0\u660E\uFF0C\u672A\u58F0\u660E\u5219\u6CBF\u7528\u6A21\u578B\u9ED8\u8BA4\u3002\u6539\u52A8\u5199 scheduler.json\uFF0C\u9700\u91CD\u8F7D\u751F\u6548\u3002")));
+    host.appendChild(el("div", "sc-h3", tr("蒸馏 / 深睡模型")));
+    host.appendChild(el("div", "sc-desc", tr("蒸馏与深度睡眠各自可选宿主模型（直接用 DeepSeek Harness 模型——先在 Harness 配置好模型，这里下拉选即可）。「继承主会话」= 不指定，跟随当前会话模型。档位（reasoning effort）由模型适配器声明，未声明则沿用模型默认。改动写 scheduler.json，需重载生效。")));
     var llmCard = el("div");
     host.appendChild(llmCard);
     function renderLlmSelect(container, keyP, keyM, keyE, label, desc) {
@@ -11180,11 +6078,11 @@
       info.appendChild(el("div", "setting-item-name", label));
       info.appendChild(el("div", "setting-item-desc", desc));
       item.appendChild(info);
-      var p4 = modelPicker({
+      var p = modelPicker({
         provider: llmVal[keyP] || "",
         model: llmVal[keyM] || "",
         effort: llmVal[keyE] || "",
-        labels: { inherit: tr("\u7EE7\u627F\u4E3B\u4F1A\u8BDD\uFF08\u9ED8\u8BA4\uFF09"), provider: tr("\u670D\u52A1"), model: tr("\u6A21\u578B"), effort: tr("\u6863\u4F4D") },
+        labels: { inherit: tr("继承主会话（默认）"), provider: tr("服务"), model: tr("模型"), effort: tr("档位") },
         onChange: function(patch) {
           var toPost = {};
           if (patch.provider !== void 0 || patch.model !== void 0) {
@@ -11199,52 +6097,52 @@
           }
           if (!Object.keys(toPost).length) return;
           appState.api("/distill/config", { method: "POST", body: JSON.stringify(toPost) }).then(function() {
-            var combo = llmVal[keyP] && llmVal[keyM] ? llmVal[keyP] + "/" + llmVal[keyM] : tr("\u7EE7\u627F\u4E3B\u4F1A\u8BDD");
-            appState.statusFn("\u2713 " + label + tr(" \u5DF2\u8BBE") + "\uFF1A" + combo + (llmVal[keyE] ? " @" + llmVal[keyE] : "") + tr("\u2014\u2014\u91CD\u8F7D\u540E\u751F\u6548"));
+            var combo = llmVal[keyP] && llmVal[keyM] ? llmVal[keyP] + "/" + llmVal[keyM] : tr("继承主会话");
+            appState.statusFn("✓ " + label + tr(" 已设") + "：" + combo + (llmVal[keyE] ? " @" + llmVal[keyE] : "") + tr("——重载后生效"));
           }).catch(appState.failFn);
         }
       });
-      item.appendChild(p4.box);
+      item.appendChild(p.box);
       container.appendChild(item);
-      return p4;
+      return p;
     }
     var llmVal = {};
     appState.api("/llm/models").then(function() {
-      return appState.api("/distill/config").then(function(d3) {
-        var run = d3 && d3.running || {}, p4 = d3 && d3.persisted || {};
-        ["distill", "sleep"].forEach(function(k2) {
-          var P2 = k2 + "Provider", M2 = k2 + "Model", E2 = k2 + "Effort";
-          llmVal[P2] = run[P2] != null ? run[P2] : p4[P2] || "";
-          llmVal[M2] = run[M2] != null ? run[M2] : p4[M2] || "";
-          llmVal[E2] = run[E2] != null ? run[E2] : p4[E2] || "";
+      return appState.api("/distill/config").then(function(d) {
+        var run = d && d.running || {}, p = d && d.persisted || {};
+        ["distill", "sleep"].forEach(function(k) {
+          var P = k + "Provider", M = k + "Model", E = k + "Effort";
+          llmVal[P] = run[P] != null ? run[P] : p[P] || "";
+          llmVal[M] = run[M] != null ? run[M] : p[M] || "";
+          llmVal[E] = run[E] != null ? run[E] : p[E] || "";
         });
         llmCard.textContent = "";
-        renderLlmSelect(llmCard, "distillProvider", "distillModel", "distillEffort", tr("\u84B8\u998F\u6A21\u578B"), tr("\u4E8B\u4EF6\u84B8\u998F\uFF08\u4F1A\u8BDD\u95F2\u7F6E\u63D0\u70BC\u53EF\u590D\u7528\u77E5\u8BC6\uFF09\u7528\u7684\u6A21\u578B\u3002\u7EE7\u627F=\u8DDF\u968F\u4E3B\u4F1A\u8BDD\u3002"));
-        renderLlmSelect(llmCard, "sleepProvider", "sleepModel", "sleepEffort", tr("\u6DF1\u7761\u5F52\u7EB3\u6A21\u578B"), tr("\u6DF1\u5EA6\u7761\u7720\uFF08\u79BB\u7EBF\u56DE\u60F3\u63D0\u70BC [\u539F\u5219]/[\u8DEF\u5F84] \u753B\u50CF\u6210\u957F\uFF09\u7528\u7684\u6A21\u578B\u3002\u7EE7\u627F=\u8DDF\u968F\u4E3B\u4F1A\u8BDD\u3002"));
+        renderLlmSelect(llmCard, "distillProvider", "distillModel", "distillEffort", tr("蒸馏模型"), tr("事件蒸馏（会话闲置提炼可复用知识）用的模型。继承=跟随主会话。"));
+        renderLlmSelect(llmCard, "sleepProvider", "sleepModel", "sleepEffort", tr("深睡归纳模型"), tr("深度睡眠（离线回想提炼 [原则]/[路径] 画像成长）用的模型。继承=跟随主会话。"));
       });
     }).catch(function() {
-      llmCard.appendChild(el("div", "sc-desc", tr("\u26A0 \u5BBF\u4E3B\u6A21\u578B\u4E0D\u53EF\u7528")));
+      llmCard.appendChild(el("div", "sc-desc", tr("⚠ 宿主模型不可用")));
     });
   }
-  function renderTogglesSched(host, g2) {
-    function gVal(key, fallback2) {
-      return g2[key] !== void 0 && g2[key] !== null ? g2[key] : fallback2;
+  function renderTogglesSched(host, g) {
+    function gVal(key, fallback) {
+      return g[key] !== void 0 && g[key] !== null ? g[key] : fallback;
     }
-    host.appendChild(el("div", "sc-desc", tr("\u9AD8\u7EA7\u9879\uFF1A\u84B8\u998F\u8282\u6D41 / \u53EC\u56DE\u4E0E\u5E93\u7248\u672C / \u8BA4\u77E5\u73AF\uFF1B\u6539\u540E\u9700\u91CD\u8F7D\u751F\u6548\u3002")));
-    host.appendChild(el("div", "sc-h3", tr("\u84B8\u998F\u8282\u6D41\uFF08\u8FD0\u884C\u65F6\u901A\u9053\uFF09")));
-    var dDesc = el("div", "sc-desc", tr("\u5199\u5165\u81EA\u6301\u914D\u7F6E ~/.dsh/suite/scheduler.json\uFF08\u6DF1\u5EA6\u7761\u7720\u540C\u901A\u9053\uFF09\u3002\u6539\u52A8\u4E0D\u4F1A\u7ACB\u523B\u4F5C\u7528\u5230\u5728\u8DD1\u7684\u4F1A\u8BDD\u2014\u2014**\u9700\u91CD\u8F7D\u63D2\u4EF6\u540E\u751F\u6548**\u3002\u5F53\u524D\u503C\u8BFB\u53D6\u4E2D\u2026"));
+    host.appendChild(el("div", "sc-desc", tr("高级项：蒸馏节流 / 召回与库版本 / 认知环；改后需重载生效。")));
+    host.appendChild(el("div", "sc-h3", tr("蒸馏节流（运行时通道）")));
+    var dDesc = el("div", "sc-desc", tr("写入自持配置 ~/.dsh/suite/scheduler.json（深度睡眠同通道）。改动不会立刻作用到在跑的会话——**需重载插件后生效**。当前值读取中…"));
     host.appendChild(dDesc);
     var dZone = el("div");
-    dZone.appendChild(el("div", "sc-desc", tr("\u8BFB\u53D6\u4E2D\u2026")));
+    dZone.appendChild(el("div", "sc-desc", tr("读取中…")));
     host.appendChild(dZone);
-    host.appendChild(el("div", "sc-h3", tr("\u53EC\u56DE\u4E0E\u5E93\u7248\u672C")));
+    host.appendChild(el("div", "sc-h3", tr("召回与库版本")));
     var fusRow = el("div", "setting-item");
     var fusInfo = el("div", "setting-item-info");
-    fusInfo.appendChild(el("div", "setting-item-name", tr("\u53EC\u56DE\u878D\u5408\u7B56\u7565 recallFusion")));
-    fusInfo.appendChild(el("div", "setting-item-desc", tr("rrf=\u6392\u540D\u878D\u5408\uFF08\u7F3A\u7701\uFF0C\u5BF9\u79BB\u7FA4\u5206\u7A33\u5065\uFF09\uFF1Bweighted=\u65E7 min-max \u52A0\u6743\uFF08\u56DE\u6EDA\u7528\uFF09\u3002\u9608\u503C\u53E3\u5F84\u4E0E\u878D\u5408\u89E3\u8026\u2014\u2014\u59CB\u7EC8\u7528\u7EDD\u5BF9\u4F59\u5F26\uFF08ACT-024\uFF09")));
+    fusInfo.appendChild(el("div", "setting-item-name", tr("召回融合策略 recallFusion")));
+    fusInfo.appendChild(el("div", "setting-item-desc", tr("rrf=排名融合（缺省，对离群分稳健）；weighted=旧 min-max 加权（回滚用）。阈值口径与融合解耦——始终用绝对余弦（ACT-024）")));
     fusInfo.appendChild(appState.metaBadges("recallFusion"));
     var fusRowCtrl = el("div", "sc-persona-slider");
-    var FUS_TIERS = [["rrf", "RRF"], ["weighted", tr("\u52A0\u6743")]];
+    var FUS_TIERS = [["rrf", "RRF"], ["weighted", tr("加权")]];
     var fusMode = String(gVal("recallFusion", "rrf"));
     FUS_TIERS.forEach(function(tier) {
       var cell = el("button", "sc-persona-cell" + (tier[0] === fusMode ? " active" : ""));
@@ -11252,13 +6150,13 @@
       cell.setAttribute("role", "radio");
       cell.setAttribute("aria-checked", tier[0] === fusMode ? "true" : "false");
       cell.textContent = tier[1];
-      cell.title = "recallFusion = " + tier[0] + tr("\uFF08\u9700\u91CD\u8F7D\u751F\u6548\uFF09");
+      cell.title = "recallFusion = " + tier[0] + tr("（需重载生效）");
       cell.onclick = function() {
         appState.api("/set", { method: "POST", body: JSON.stringify({ key: "recallFusion", value: tier[0] }) }).then(function() {
-          appState.statusFn("\u2713 recallFusion = " + tier[0] + tr("\uFF08\u9700\u91CD\u8F7D\u63D2\u4EF6\u751F\u6548\uFF09"));
-          fusRowCtrl.querySelectorAll(".sc-persona-cell").forEach(function(c5) {
-            c5.classList.remove("active");
-            c5.setAttribute("aria-checked", "false");
+          appState.statusFn("✓ recallFusion = " + tier[0] + tr("（需重载插件生效）"));
+          fusRowCtrl.querySelectorAll(".sc-persona-cell").forEach(function(c) {
+            c.classList.remove("active");
+            c.setAttribute("aria-checked", "false");
           });
           cell.classList.add("active");
           cell.setAttribute("aria-checked", "true");
@@ -11269,40 +6167,40 @@
     fusRow.appendChild(fusInfo);
     fusRow.appendChild(fusRowCtrl);
     host.appendChild(fusRow);
-    host.appendChild(appState.makeToggle("bankGit", tr("\u8BB0\u5FC6\u5E93 git \u7248\u672C\u5316 bankGit"), tr("\u6BCF\u6B21\u6210\u529F\u5199\u5165\u540E\u63D0\u4EA4\u5E93\u5FEB\u7167\uFF08\u53EF diff/revert\uFF1B\u5E93\u5728 ~/.dsh \u4E0B\uFF0C\u4E0D\u5165\u516C\u5F00\u6811\uFF09\u3002\u7F3A\u7701\u5F00"), gVal("bankGit", true) !== false, function(key, sw) {
+    host.appendChild(appState.makeToggle("bankGit", tr("记忆库 git 版本化 bankGit"), tr("每次成功写入后提交库快照（可 diff/revert；库在 ~/.dsh 下，不入公开树）。缺省开"), gVal("bankGit", true) !== false, function(key, sw) {
       appState.api("/toggle", { method: "POST", body: JSON.stringify({ key }) }).then(function() {
-        appState.statusFn(tr("\u2713 \u5DF2\u5207\u6362 ") + key + tr("\uFF08\u9700\u91CD\u8F7D\u751F\u6548\uFF09"));
-      }).catch(function(e8) {
-        appState.failFn(e8);
+        appState.statusFn(tr("✓ 已切换 ") + key + tr("（需重载生效）"));
+      }).catch(function(e) {
+        appState.failFn(e);
         sw.checked = !sw.checked;
       });
     }));
-    host.appendChild(el("div", "sc-h3", tr("\u8BA4\u77E5\u73AF\uFF08MCL \xB7 \u719F\u6089\u5EA6\u5206\u6D41 + \u6709\u754C\u518D\u5F15\u5BFC\uFF09")));
-    host.appendChild(appState.makeToggle("mclEnabled", tr("\u542F\u7528\u8BA4\u77E5\u73AF mclEnabled"), tr("\u6162\u901A\u9053\u9996\u6B65\u6CE8\u5165\u300C\u8584\u5951\u7EA6 + top-k \u6307\u9488\u300D\u5E76\u6309\u9700\u518D\u5F15\u5BFC\u4E00\u6B21\uFF1B\u5FEB\u901A\u9053\u96F6\u989D\u5916\u5F80\u8FD4\u3002\u7F3A\u7701\u5F00\uFF08false = \u4E00\u952E\u56DE\u6EDA\uFF09"), gVal("mclEnabled", true) !== false, function(key, sw) {
+    host.appendChild(el("div", "sc-h3", tr("认知环（MCL · 熟悉度分流 + 有界再引导）")));
+    host.appendChild(appState.makeToggle("mclEnabled", tr("启用认知环 mclEnabled"), tr("慢通道首步注入「薄契约 + top-k 指针」并按需再引导一次；快通道零额外往返。缺省开（false = 一键回滚）"), gVal("mclEnabled", true) !== false, function(key, sw) {
       appState.api("/toggle", { method: "POST", body: JSON.stringify({ key }) }).then(function() {
-        appState.statusFn(tr("\u2713 \u5DF2\u5207\u6362 ") + key + tr("\uFF08\u9700\u91CD\u8F7D\u751F\u6548\uFF09"));
-      }).catch(function(e8) {
-        appState.failFn(e8);
+        appState.statusFn(tr("✓ 已切换 ") + key + tr("（需重载生效）"));
+      }).catch(function(e) {
+        appState.failFn(e);
         sw.checked = !sw.checked;
       });
     }));
-    host.appendChild(numSetting2(tr("\u719F\u6089\u5EA6\u9608\u503C mclFamiliarThreshold"), tr("\u300C\u7528\u6237\u6587\u672C \u2194 \u547D\u4E2D\u7D22\u5F15\u884C\u300D\u7684\u7EDD\u5BF9\u4F59\u5F26\u9608\u503C\uFF080\u20131\uFF0C\u7F3A\u7701 0.65\uFF1BACT-024 \u6821\u51C6\uFF1A0.65 \u2192 \u89E6\u53D1\u7387 ~2% \u4E14\u9608\u4E0A\u5168\u4E3A\u771F\u547D\u4E2D\uFF09"), gVal("mclFamiliarThreshold", 0.65), "mclFamiliarThreshold", "", 0.01));
-    host.appendChild(numSetting2(tr("\u518D\u5F15\u5BFC\u4E0A\u9650 mclMaxNudges"), tr("\u6162\u901A\u9053\u6700\u591A\u518D\u5F15\u5BFC\u6B21\u6570\uFF080\u20133\uFF0C\u7F3A\u7701 1\uFF1B\u7EDD\u4E0D\u6B7B\u9501\uFF09"), gVal("mclMaxNudges", 1), "mclMaxNudges", tr("\u6B21"), 1));
-    host.appendChild(numSetting2(tr("\u6750\u6599\u9884\u7B97 mclBudgetChars"), tr("\u6162\u901A\u9053\u6750\u6599\u786C\u9884\u7B97\uFF08120\u20134000 \u5B57\u7B26\uFF0C\u7F3A\u7701 600\uFF1B\u53EA\u4F5C\u7528\u4E8E\u6162\u901A\u9053\u9996\u6B65\uFF09"), gVal("mclBudgetChars", 600), "mclBudgetChars", tr("\u5B57\u7B26"), 50));
-    host.appendChild(numSetting2(tr("\u6307\u9488\u6761\u6570 mclTopK"), tr("\u6162\u901A\u9053\u6CE8\u5165\u7684\u6307\u9488\u6761\u6570\uFF081\u20135\uFF0C\u7F3A\u7701 3\uFF09"), gVal("mclTopK", 3), "mclTopK", tr("\u6761"), 1));
-    host.appendChild(appState.makeToggle("mclAudit", tr("\u8BA4\u77E5\u73AF\u5BA1\u8BA1\u6D41 mclAudit"), tr("\u6BCF\u6B65\u4E00\u884C\u5199 suite/knowledge/audit/mcl-audit.jsonl\uFF08\u901A\u9053/\u719F\u6089\u5EA6/\u6CE8\u5165/\u518D\u5F15\u5BFC/\u5408\u89C4\uFF09"), gVal("mclAudit", true) !== false, function(key, sw) {
+    host.appendChild(numSetting2(tr("熟悉度阈值 mclFamiliarThreshold"), tr("「用户文本 ↔ 命中索引行」的绝对余弦阈值（0–1，缺省 0.65；ACT-024 校准：0.65 → 触发率 ~2% 且阈上全为真命中）"), gVal("mclFamiliarThreshold", 0.65), "mclFamiliarThreshold", "", 0.01));
+    host.appendChild(numSetting2(tr("再引导上限 mclMaxNudges"), tr("慢通道最多再引导次数（0–3，缺省 1；绝不死锁）"), gVal("mclMaxNudges", 1), "mclMaxNudges", tr("次"), 1));
+    host.appendChild(numSetting2(tr("材料预算 mclBudgetChars"), tr("慢通道材料硬预算（120–4000 字符，缺省 600；只作用于慢通道首步）"), gVal("mclBudgetChars", 600), "mclBudgetChars", tr("字符"), 50));
+    host.appendChild(numSetting2(tr("指针条数 mclTopK"), tr("慢通道注入的指针条数（1–5，缺省 3）"), gVal("mclTopK", 3), "mclTopK", tr("条"), 1));
+    host.appendChild(appState.makeToggle("mclAudit", tr("认知环审计流 mclAudit"), tr("每步一行写 suite/knowledge/audit/mcl-audit.jsonl（通道/熟悉度/注入/再引导/合规）"), gVal("mclAudit", true) !== false, function(key, sw) {
       appState.api("/toggle", { method: "POST", body: JSON.stringify({ key }) }).then(function() {
-        appState.statusFn(tr("\u2713 \u5DF2\u5207\u6362 ") + key + tr("\uFF08\u9700\u91CD\u8F7D\u751F\u6548\uFF09"));
-      }).catch(function(e8) {
-        appState.failFn(e8);
+        appState.statusFn(tr("✓ 已切换 ") + key + tr("（需重载生效）"));
+      }).catch(function(e) {
+        appState.failFn(e);
         sw.checked = !sw.checked;
       });
     }));
     function distillSave(patch, onFail) {
       return appState.api("/distill/config", { method: "POST", body: JSON.stringify(patch) }).then(function() {
-        appState.statusFn(tr("\u2713 \u5DF2\u5199\u5165 ") + Object.keys(patch).join(",") + tr("\uFF08\u91CD\u8F7D\u540E\u751F\u6548\uFF09"));
-      }).catch(function(e8) {
-        appState.failFn(e8);
+        appState.statusFn(tr("✓ 已写入 ") + Object.keys(patch).join(",") + tr("（重载后生效）"));
+      }).catch(function(e) {
+        appState.failFn(e);
         if (onFail) onFail();
       });
     }
@@ -11343,16 +6241,16 @@
         inp.step = "50";
       } else {
         inp.type = "text";
-        inp.placeholder = tr("\u7559\u7A7A=\u7EE7\u627F\u4E3B\u4F1A\u8BDD\u6A21\u578B");
+        inp.placeholder = tr("留空=继承主会话模型");
         inp.className = "sc-input sc-w-sm";
       }
-      var unitEl = el("span", "sc-range-label", kind === "minutes" ? tr("\u5206\u949F") : kind === "chars" ? tr("\u5B57\u7B26") : "");
+      var unitEl = el("span", "sc-range-label", kind === "minutes" ? tr("分钟") : kind === "chars" ? tr("字符") : "");
       inp.onchange = function() {
-        var v2;
-        if (kind === "text") v2 = inp.value.trim();
-        else v2 = Math.max(kind === "minutes" ? min || 1 : 0, parseInt(inp.value, 10) || 0);
+        var v;
+        if (kind === "text") v = inp.value.trim();
+        else v = Math.max(kind === "minutes" ? min || 1 : 0, parseInt(inp.value, 10) || 0);
         var patch = {};
-        patch[key] = kind === "minutes" ? v2 * 6e4 : v2;
+        patch[key] = kind === "minutes" ? v * 6e4 : v;
         distillSave(patch, function() {
           inp.value = String(initial);
         });
@@ -11363,54 +6261,54 @@
       item.appendChild(wrap);
       return item;
     }
-    appState.api("/distill/config").then(function(d3) {
-      var r7 = d3 && d3.running || {};
-      var p4 = d3 && d3.persisted || {};
-      function val(k2, dflt) {
-        return r7[k2] != null ? r7[k2] : p4[k2] != null ? p4[k2] : dflt;
+    appState.api("/distill/config").then(function(d) {
+      var r = d && d.running || {};
+      var p = d && d.persisted || {};
+      function val(k, dflt) {
+        return r[k] != null ? r[k] : p[k] != null ? p[k] : dflt;
       }
       var curModelTxt = (function() {
         var dp = val("distillProvider", ""), dm = val("distillModel", "");
-        return dp && dm ? dp + "/" + dm : "\u7EE7\u627F\u4E3B\u4F1A\u8BDD";
+        return dp && dm ? dp + "/" + dm : "继承主会话";
       })();
-      dDesc.textContent = tr("\u5199\u5165\u81EA\u6301\u914D\u7F6E ~/.dsh/suite/scheduler.json\uFF08\u6DF1\u5EA6\u7761\u7720\u540C\u901A\u9053\uFF09\u3002\u6539\u52A8\u4E0D\u4F1A\u7ACB\u523B\u4F5C\u7528\u5230\u5728\u8DD1\u7684\u4F1A\u8BDD\u2014\u2014**\u9700\u91CD\u8F7D\u63D2\u4EF6\u540E\u751F\u6548**\u3002\u5F53\u524D\uFF1A\u84B8\u998F ") + (val("enableDistill", true) ? tr("\u5F00") : tr("\u5173")) + tr(" / \u7A7A\u95F2 ") + Math.round(val("idleWakeMs", 6e5) / 6e4) + tr(" \u5206\u949F / \u672C\u8F6E\u6700\u5C11 ") + val("minTurnChars", 200) + tr(" \u5B57\u7B26 / \u9884\u7B5B ") + (val("distillPrescan", true) ? tr("\u5F00") : tr("\u5173")) + tr(" / \u84B8\u998F\u6A21\u578B ") + curModelTxt + "\u3002";
+      dDesc.textContent = tr("写入自持配置 ~/.dsh/suite/scheduler.json（深度睡眠同通道）。改动不会立刻作用到在跑的会话——**需重载插件后生效**。当前：蒸馏 ") + (val("enableDistill", true) ? tr("开") : tr("关")) + tr(" / 空闲 ") + Math.round(val("idleWakeMs", 6e5) / 6e4) + tr(" 分钟 / 本轮最少 ") + val("minTurnChars", 200) + tr(" 字符 / 预筛 ") + (val("distillPrescan", true) ? tr("开") : tr("关")) + tr(" / 蒸馏模型 ") + curModelTxt + "。";
       dZone.textContent = "";
-      dZone.appendChild(distillToggle("enableDistill", tr("\u5B88\u85CF\u84B8\u998F\u5668 enableDistill"), tr("\u5173=\u4E0D\u6CE8\u518C\u84B8\u998F\u5668\uFF08/suite \u7B49\u53EA\u8BFB\u89C6\u56FE\u4ECD\u53EF\u7528\uFF09\uFF1B\u6539\u52A8\u9700\u91CD\u8F7D\u751F\u6548"), val("enableDistill", true)));
-      dZone.appendChild(distillToggle("distillPrescan", tr("\u96F6\u6210\u672C\u9884\u7B5B distillPrescan"), tr("spawn \u524D\u5148\u626B\u589E\u91CF\u4FE1\u53F7\u8BCD + pending \u5019\u9009\uFF0C\u7686\u65E0\u5219\u8DF3\u8FC7\uFF08\u4E0D\u5524\u9192 LLM\uFF0C\u7701\u6210\u672C\uFF09"), val("distillPrescan", true)));
-      dZone.appendChild(distillInput("idleWakeMs", tr("\u7A7A\u95F2\u5524\u9192 idleWakeMs"), tr("turn \u7ED3\u675F\u540E\u7A7A\u95F2\u6EE1\u6B64\u65F6\u957F\u624D\u84B8\u998F\uFF08\u22651 \u5206\u949F\uFF0C\u9ED8\u8BA4 10 \u5206\u949F\uFF09"), Math.round(val("idleWakeMs", 6e5) / 6e4), "minutes", 1));
-      dZone.appendChild(distillInput("minTurnChars", tr("\u672C\u8F6E\u6700\u5C11\u5B57\u7B26 minTurnChars"), tr("\u672C\u8F6E\u65B0\u589E\u6B63\u6587\u5C11\u4E8E\u6B64\u503C\u8DF3\u8FC7\u84B8\u998F\uFF08\u6C34\u4F4D\u4ECD\u63A8\u8FDB\uFF1B0=\u4E0D\u8BBE\u9650\uFF0C\u9ED8\u8BA4 200\uFF09"), val("minTurnChars", 200), "chars"));
+      dZone.appendChild(distillToggle("enableDistill", tr("守藏蒸馏器 enableDistill"), tr("关=不注册蒸馏器（/suite 等只读视图仍可用）；改动需重载生效"), val("enableDistill", true)));
+      dZone.appendChild(distillToggle("distillPrescan", tr("零成本预筛 distillPrescan"), tr("spawn 前先扫增量信号词 + pending 候选，皆无则跳过（不唤醒 LLM，省成本）"), val("distillPrescan", true)));
+      dZone.appendChild(distillInput("idleWakeMs", tr("空闲唤醒 idleWakeMs"), tr("turn 结束后空闲满此时长才蒸馏（≥1 分钟，默认 10 分钟）"), Math.round(val("idleWakeMs", 6e5) / 6e4), "minutes", 1));
+      dZone.appendChild(distillInput("minTurnChars", tr("本轮最少字符 minTurnChars"), tr("本轮新增正文少于此值跳过蒸馏（水位仍推进；0=不设限，默认 200）"), val("minTurnChars", 200), "chars"));
       var pendRow = el("div", "setting-item");
       var pendInfo = el("div", "setting-item-info");
-      pendInfo.appendChild(el("div", "setting-item-name", tr("\u7ACB\u5373\u5904\u7406 pending \u5019\u9009")));
-      pendInfo.appendChild(el("div", "setting-item-desc", tr("\u624B\u52A8\u89E6\u53D1\u4E00\u8F6E\u84B8\u998F\u2014\u2014\u643A\u5E26 pending/ \u5019\u9009\uFF08\u5982 project-defer \u964D\u7EA7\u5361\uFF09\u91CD\u88C1\u51B3\u5165\u518C\u3002workspace \u53CD\u89E3\u4FEE\u590D\u540E project \u5361\u76F4\u5199\u5DE5\u4F5C\u533A devref\u3002")));
+      pendInfo.appendChild(el("div", "setting-item-name", tr("立即处理 pending 候选")));
+      pendInfo.appendChild(el("div", "setting-item-desc", tr("手动触发一轮蒸馏——携带 pending/ 候选（如 project-defer 降级卡）重裁决入册。workspace 反解修复后 project 卡直写工作区 devref。")));
       pendRow.appendChild(pendInfo);
-      var pendBtn = el("button", "sc-btn subtle", tr("\u7ACB\u5373\u84B8\u998F\u4E00\u6B21"));
+      var pendBtn = el("button", "sc-btn subtle", tr("立即蒸馏一次"));
       pendBtn.type = "button";
       pendBtn.classList.add("sc-btn-xs");
       pendBtn.addEventListener("click", function() {
         pendBtn.disabled = true;
-        pendBtn.textContent = tr("\u84B8\u998F\u4E2D\u2026\uFF08\u7EA6 1-2 \u5206\u949F\uFF09");
+        pendBtn.textContent = tr("蒸馏中…（约 1-2 分钟）");
         appState.api("/distill/run", { method: "POST", body: "{}" }).then(function(rr) {
           pendBtn.disabled = false;
-          pendBtn.textContent = tr("\u7ACB\u5373\u84B8\u998F\u4E00\u6B21");
-          if (rr && rr.ok) appState.statusFn("\u2713 " + (rr.note || tr("\u84B8\u998F\u5B8C\u6210")));
-          else appState.statusFn("\u26A0 " + (rr && rr.note || tr("\u84B8\u998F\u672A\u89E6\u53D1")) + tr("\u2014\u2014\u6839\u4F1A\u8BDD\u6D3B\u8DC3\u4E2D\u4F1A\u8DF3\u8FC7\uFF0C\u7B49\u95F2\u7F6E\u81EA\u52A8\u8DD1"));
-        }).catch(function(e8) {
+          pendBtn.textContent = tr("立即蒸馏一次");
+          if (rr && rr.ok) appState.statusFn("✓ " + (rr.note || tr("蒸馏完成")));
+          else appState.statusFn("⚠ " + (rr && rr.note || tr("蒸馏未触发")) + tr("——根会话活跃中会跳过，等闲置自动跑"));
+        }).catch(function(e) {
           pendBtn.disabled = false;
-          pendBtn.textContent = tr("\u7ACB\u5373\u84B8\u998F\u4E00\u6B21");
-          appState.failFn(e8);
+          pendBtn.textContent = tr("立即蒸馏一次");
+          appState.failFn(e);
         });
       });
       var pendCtl = el("div", "setting-item-control");
       pendCtl.appendChild(pendBtn);
       pendRow.appendChild(pendCtl);
       dZone.appendChild(pendRow);
-      if (d3 && d3.active === false) {
-        dZone.appendChild(el("div", "sc-desc", tr("\u26A0 \u8C03\u5EA6\u5668\u672A\u5C31\u7EEA\uFF1A\u663E\u793A\u503C\u4E3A\u6301\u4E45\u6587\u4EF6\u503C\uFF0C\u8FD0\u884C\u65F6\u503C\u9700\u63D2\u4EF6\u6FC0\u6D3B\u540E\u8BFB\u53D6")));
+      if (d && d.active === false) {
+        dZone.appendChild(el("div", "sc-desc", tr("⚠ 调度器未就绪：显示值为持久文件值，运行时值需插件激活后读取")));
       }
-    }).catch(function(e8) {
+    }).catch(function(e) {
       dZone.textContent = "";
-      dZone.appendChild(el("div", "sc-desc", tr("\u26A0 \u8BFB\u53D6\u5931\u8D25\uFF1A") + e8.message));
+      dZone.appendChild(el("div", "sc-desc", tr("⚠ 读取失败：") + e.message));
     });
   }
 
@@ -11420,7 +6318,7 @@
     "#scpanl-root,.sc-trigger,.sc-fab{",
     /* 语义色 */
     "--sc-bg1:var(--dsw-alias-bg-layer-1,#1e1e1e);",
-    "--sc-bg-card:#2a2a2f; /* v9 \u5BF9\u9F50\uFF1A\u5361\u9762\u6BD4\u9875\u9762\u4EAE\u4E00\u6863\uFF08\u51F8\u5361\u4F53\u7CFB\uFF09\uFF1Bsc-dark/sc-light \u4F1A\u8986\u76D6 */",
+    "--sc-bg-card:#2a2a2f; /* v9 对齐：卡面比页面亮一档（凸卡体系）；sc-dark/sc-light 会覆盖 */",
     "--sc-bg2:var(--dsw-alias-bg-layer-2,#191919);",
     "--sc-bg3:var(--dsw-alias-bg-layer-3,#262626);",
     "--sc-text:var(--dsw-alias-label-primary,#e6e6e6);",
@@ -11473,6 +6371,24 @@
     /* 根字号对齐 v9 的 body（13px/1.6）：面板此前继承宿主 16px ⇒ 未显式定字号的文本比方案大一档 */
     "font-size:13px;line-height:1.6;",
     "}",
+    /* ══════════ ①.5 组件适配层（U2/U4 · 2026-09-26）══════════
+     * **宿主组件包裹容器 + 降级自绘件**的样式。
+     * ⚠ 位置有语义：在**令牌层之后**（本层用 --sc-* 变量）、**组件规则之前**
+     *   —— 同层选择器由位置决胜负；改位置须复查 `audit-css-usage` 的「同层重复定义」判据。
+     * ⚠ 本层曾抽到 `styles-host-ui.js`，因 `__SC_CSS__` 锚点限制（见文件头）**回退内联**；
+     *   对应 `check-module-growth` 超基线走**出路② rebase**（理由：全是本轮功能必需的规则）。 */
+    /* U2：宿主组件（primitives 路径）的**包裹容器** + 自绘降级件（进度轨道 / 分段）。
+     *   `toggle`/`button` 走宿主 React 组件时用 `mountReact` 挂进一个 span —— 壳由本面板 CSS 定位，
+     *   外观由宿主组件自带样式管（只做布局贴合，不覆盖宿主观感）。
+     *   ⚠ 进度轨道/分段的尺寸与配色**逐值沿用**组件时代为对齐方案接管过的 WA 变量
+     *     （6px 轨道 / --sc-bg3 / --sc-accent / pill；28px 胶囊 / 内距 0·14 / 12.5px）
+     *     ⇒ 宿主路径与降级路径**观感一致**。
+     *   ⚠ 以下多条规则**合并进一行字符串**（纯格式，逐字符等价），以守 check-module-growth 行数棘轮。 */
+    "#scpanl-root .sc-host-switch,#scpanl-root .sc-host-btn{display:inline-flex;align-items:center;vertical-align:middle;}#scpanl-root .sc-host-btn{flex:none;}#scpanl-root .sc-prog-track{height:6px;border-radius:var(--sc-r-pill);background:var(--sc-bg3);overflow:hidden;}#scpanl-root .sc-prog-fill{height:100%;width:0;border-radius:var(--sc-r-pill);background:var(--sc-accent);transition:width var(--sc-t-base) var(--sc-ease);}",
+    /* ⚠ 分段（.sc-tabnav/.sc-tabbtn）的规则**不在此处** —— 第 500 行附近已有一份（本轮先加、
+     *   后与既有位置重合，被 audit-css-usage 判「同层重复定义 4 个」）。单一来源留在那一处。 */
+    /* U4 侧栏全局面板图标（sidebar.panellist）：尺寸由宿主 size prop 给定 ⇒ 此处不写死尺寸。 */
+    ".sc-panel-icon{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;border:0;border-radius:var(--sc-r-sm);background:transparent;padding:var(--sc-sp-1);color:var(--sc-text);transition:background var(--sc-t-base) var(--sc-ease);}.sc-panel-icon:hover{background:var(--sc-hover);}.sc-panel-icon.on{background:var(--sc-accent-soft);}",
     /* ══════════ ② 基础层 ══════════ */
     "#scpanl-root *{box-sizing:border-box;}",
     "#scpanl-root :focus{outline:none;}",
@@ -11517,7 +6433,20 @@
     "#scpanl-root .sc-facts-row{padding:var(--sc-sp-1) 0;border-bottom:1px dashed var(--sc-border2);}",
     "#scpanl-root .sc-code{margin:var(--sc-sp-1) 0 0;padding:var(--sc-sp-2);background:var(--sc-bg2);border:1px solid var(--sc-border2);border-radius:var(--sc-radius,8px);font-size:clamp(11px,.88vw,12px);line-height:1.5;color:var(--sc-fg2);overflow:auto;max-height:320px;}",
     /* ══════════ ③ 布局层 ══════════ */
-    "#scpanl-mask{position:fixed;inset:0;z-index:9900;background:rgba(0,0,0,.55);display:none;",
+    /* ── 层叠值对齐宿主体系（2026-09-26 U1 根因实修） ──
+     * **判因（真机实测，非推断）**：本面板原为 \`z-index:9900\`，而宿主自己的层叠体系是
+     *   引导 900 · 弹窗/拖放/灯箱 1000 · 菜单/Toast/Tooltip 1100（扫宿主 lib 实测）。
+     *   ⇒ 面板一打开就把**宿主审批/权限/提问弹窗压在下面**：实测命中测试
+     *   \`{ourZ:"9900", hostZ:"1000", topElAtHostModal:"sc-view", hostModalCovered:true}\`
+     *   —— 宿主弹窗中心点最顶层元素是我们的 \`.sc-view\`，用户**点不到审批按钮**。
+     *   这正是「会掩盖其他问题、让失败不可观测」类缺陷：面板看着正常，用户却卡在批不了。
+     * **修法**：面板落到宿主 Modal **之下** = \`950\`（宿主实测体系：主框架 ≤20 · 引导 900 ·
+     *   弹窗 1000 · 菜单/Toast/Tooltip 1100）⇒ 审批弹窗、结果通知、工具提示**全部浮在面板之上**。
+     *   ⚠ **为什么不取 1000（第一版修错了，已纠正）**：与宿主 Modal **同层时胜负由 DOM 顺序决定**，
+     *     而本面板是 \`document.body.appendChild\` 追加在 **body 末尾** ⇒ 同层必赢，遮挡照旧
+     *     （实测复核：改 1000 后 \`hostModalCovered\` 仍为 \`true\`）。要根治就得在**数值上**低于它，
+     *     不能指望顺序 —— 宿主随时可能把弹窗容器挪位置。 */
+    "#scpanl-mask{position:fixed;inset:0;z-index:950;background:rgba(0,0,0,.55);display:none;",
     "align-items:center;justify-content:center;color:var(--sc-text);padding:clamp(8px,2vw,24px);}",
     "#scpanl-mask.open{display:flex;}",
     "#scpanl-modal{width:min(1480px,96vw);height:min(900px,92vh);display:flex;overflow:hidden;",
@@ -11805,7 +6734,7 @@
     "background:linear-gradient(90deg,transparent,var(--sc-hover),transparent);background-size:200% 100%;",
     "animation:sc-shimmer 1.2s linear infinite;}",
     "@keyframes sc-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}",
-    "/* ---------- \u5206\u6BB5 Tab\uFF08P2\uFF09 ---------- */",
+    "/* ---------- 分段 Tab（P2） ---------- */",
     "#scpanl-root .sc-tabbox{display:flex;flex-direction:column;gap:var(--sc-gap-item);}",
     "#scpanl-root .sc-tabpane{margin-top:var(--sc-sp-1);min-height:0}",
     /* 组件库按钮（S3）：宿主元素不自带盒模型（尺寸/配交组件自身与 --wa-* 令牌），字号接方案标尺。
@@ -11847,6 +6776,20 @@
      * 每个 tab = 28px 胶囊（内距 0/14 · 12.5px · 圆角 6）；激活项 bg --sc-bg-card + shadow-1；
      * 组件自带的**下划线指示器关掉**（v9 无下划线）：--indicator-color:transparent。
      * 部件名来源：shadow DOM 实测 wa-tab-group::part(base/nav/tabs/body) · wa-tab::part(base)。 */
+    /* U2（2026-09-26）：**降级路径的自绘分段**（宿主 SegmentedTabs 拿不到时用）。
+     *   尺寸/配色**逐值对齐**上面那批 wa-tab 的接管值（28px 胶囊 · 内距 0/14 · 12.5px ·
+     *   外框 --sc-bg1 + 1px 边 + 8px 圆角 + 2px 内距；激活 bg --sc-bg-card + shadow-1），
+     *   故两条路径观感一致。 */
+    "#scpanl-root .sc-tabnav{background:var(--sc-bg1);border:1px solid var(--sc-border);",
+    "border-radius:var(--sc-r-md);padding:2px;display:inline-flex;gap:2px;align-self:flex-start;}",
+    "#scpanl-root .sc-tabbtn{height:28px;padding:0 14px;border-radius:var(--sc-r-sm);border:0;cursor:pointer;",
+    "font-size:12.5px;font-weight:400;font-family:inherit;color:var(--sc-muted);background:transparent;}",
+    "#scpanl-root .sc-tabbtn:hover{color:var(--sc-text);}",
+    "#scpanl-root .sc-tabbtn.sc-on{background:var(--sc-bg-card);color:var(--sc-text);font-weight:600;box-shadow:var(--sc-shadow-1);}",
+    /* 面板切换（U2）：宿主 SegmentedTabs 不带面板容器 ⇒ 由 .sc-hidden 控制显隐。
+     *   ⚠ 此处**不再声明** `.sc-tabpane` —— 第 428 行既有 `.sc-tabpane{margin-top…}`、
+     *     第 83 行 `.sc-hidden{display:none !important}` 已构成完整判据；
+     *     曾在此重复声明 display:block，被 audit-css-usage 判「同层重复定义」。 */
     "#scpanl-root wa-tab-group{--indicator-color:transparent;--track-color:transparent;}",
     "#scpanl-root wa-tab-group::part(nav){background:var(--sc-bg1);border:1px solid var(--sc-border);",
     "border-radius:var(--sc-r-md);padding:2px;display:inline-flex;width:auto;align-self:flex-start;height:auto;}",
@@ -12223,13 +7166,16 @@
     ".sc-trigger.sc-rail .sc-trigger-label{display:none;}",
     "#scpanl-root .sc-ic-lg{width:24px;height:24px;display:block;margin:var(--sc-gap-row) auto;pointer-events:none;}",
     "#scpanl-root .sc-ic-sm{width:var(--sc-sp-4);height:var(--sc-sp-4);display:block;pointer-events:none;}",
-    ".sc-fab{position:fixed;left:var(--sc-sp-4);bottom:var(--sc-sp-4);z-index:9800;width:40px;height:40px;",
+    /* 浮动入口同理（2026-09-26 U1）：原 \`9800\` 会浮在宿主弹窗/Toast 之上。
+     * 它是**常驻入口按钮**（非模态），取 900 —— 与宿主引导浮层同档，低于弹窗 1000
+     * ⇒ 宿主弹窗打开时它退到后面，不会挡住审批与提示。 */
+    ".sc-fab{position:fixed;left:var(--sc-sp-4);bottom:var(--sc-sp-4);z-index:900;width:40px;height:40px;",
     "border-radius:50%;border:none;cursor:pointer;font-size:var(--sc-fs-md);font-weight:var(--sc-fw-semibold);",
     "color:#fff;background:var(--sc-accent);box-shadow:var(--sc-shadow-2);}",
     /* 旧 footer 类名兼容（DSH 宿主演进后多为死代码，保留防回退） */
     ".hHd-Xa_footerActions{padding-left:var(--sc-sp-2);margin:0;}",
     ".hHd-Xa_settingsArea{margin:0;}",
-    "/* ---------- \u8FD0\u884C\u603B\u89C8\u7EC4\u4EF6\uFF08P1-1\uFF09 ---------- */",
+    "/* ---------- 运行总览组件（P1-1） ---------- */",
     "#scpanl-root .sc-opgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));gap:var(--sc-gap-item);margin-bottom:var(--sc-sp-4);}",
     /* v9 严格对齐：操作卡标题行 = 图标 + 标题（原型三张卡各带一个线框图标） */
     "#scpanl-root .sc-opcard-head{display:flex;align-items:center;gap:var(--sc-sp-2);}",
@@ -12340,1093 +7286,1095 @@
 
   // src-client/i18n-dict-cfg.js
   var EN = {
-    " / \u7A7A\u95F2 ": " / idle ",
-    " / \u84B8\u998F\u6A21\u578B ": " / distillation model ",
-    " \u5206\u949F / \u672C\u8F6E\u6700\u5C11 ": " min / this turn minimum ",
-    " \u5B57\u7B26 / \u9884\u7B5B ": " chars / prescan ",
-    " \u5B57\u7B26 \xB7 \u53CC\u753B\u50CF+\u8BB0\u5FC6\u6307\u9488 ": " chars \xB7 dual profile + memory pointers ",
-    " \u5B57\u7B26\uFF09\u3002\u4E0D\u5F71\u54CD\u4EFB\u52A1\u6267\u884C\u6CE8\u5165\u2014\u2014\u6CE8\u5165\u603B\u770B\u5B8C\u6574\u753B\u50CF": " chars). Does not affect task-execution injection \u2014 injection always sees the full profile",
-    " \u5B57\u7B26\uFF09\u3002\u4E0D\u5F71\u54CD\u4EFB\u52A1\u6267\u884C\u6CE8\u5165": " chars). Does not affect task-execution injection",
-    " \u5B57\u7B26\uFF09\u3002\u6CE8\u5165\u6309\u6863\u4F4D\u884C\u6570\u4E0D\u53D7\u6B64\u9650": " chars). Injection follows tier line counts and is not bound by this limit",
-    " \u5B8C\u6210": " done",
-    " \u5DF2\u8BBE": " set",
-    " \u6761\u5E26\u8017\u65F6\u8BB0\u5F55\u5747\u7B97": " timed records averaged",
-    " \u6761\uFF09\u2014\u2014\u6BCF\u8F6E\u968F\u63D0\u793A\u8BCD\u6CE8\u5165": " items) \u2014 injected with the prompt every round",
-    " \u6B21 \xB7 ": " times \xB7 ",
-    " \u884C\u8584\u884C\uFF0C~\u79D2\u7EA7\uFF09": " thin lines, ~seconds)",
-    " \u8F6E": " rounds",
-    " \u9879": " items",
-    "0 = \u5173\u95ED\u8F6E\u8BE2\u3002\u5F71\u54CD\u8FD0\u884C\u6001\u6570\u636E\u5237\u65B0\u9891\u7387\u3002": "0 = polling off. Affects how often runtime data is refreshed.",
-    "AGENT.md \u5BB9\u91CF\u95E8 cap_agent": "AGENT.md capacity gate cap_agent",
-    "MCL \u72B6\u6001": "MCL status",
-    "MEMORY.md \u5BB9\u91CF\u95E8 cap_memory": "MEMORY.md capacity gate cap_memory",
-    "Ollama\uFF08\u672C\u673A\u7F3A\u7701\uFF09": "Ollama (local default)",
-    "POST /eval/test \u2014\u2014 \u53D1\u4E00\u6B21\u6700\u5C0F\u5224\u5B9A\uFF0C\u8FD4\u56DE**\u5206\u6001**\u7ED3\u679C\uFF08ok / off / egress-denied / key-missing / unreachable / bad-body / type-violation\uFF09\uFF0C\u4E0D\u843D\u5E93\u3002": "POST /eval/test \u2014 sends one minimal judgment and returns a **state-classified** result (ok / off / egress-denied / key-missing / unreachable / bad-body / type-violation); nothing is persisted.",
-    "URL \u65E0\u6548": "Invalid URL",
-    "URL \u65E0\u6548\uFF08\u9700 http(s):// \u5F00\u5934\uFF09": "Invalid URL (must start with http(s)://)",
-    "USER.md \u5BB9\u91CF\u95E8 cap_user": "USER.md capacity gate cap_user",
-    "active\u2192warm \u65E0\u547D\u4E2D\u5929\u6570\uFF08\u7F3A\u7701 14\uFF09": "Days with no hit before active\u2192warm (default 14)",
+    " / 空闲 ": " / idle ",
+    " / 蒸馏模型 ": " / distillation model ",
+    " 分钟 / 本轮最少 ": " min / this turn minimum ",
+    " 字符 / 预筛 ": " chars / prescan ",
+    " 字符 · 双画像+记忆指针 ": " chars · dual profile + memory pointers ",
+    " 字符）。不影响任务执行注入——注入总看完整画像": " chars). Does not affect task-execution injection — injection always sees the full profile",
+    " 字符）。不影响任务执行注入": " chars). Does not affect task-execution injection",
+    " 字符）。注入按档位行数不受此限": " chars). Injection follows tier line counts and is not bound by this limit",
+    " 完成": " done",
+    " 已设": " set",
+    " 条带耗时记录均算": " timed records averaged",
+    " 条）——每轮随提示词注入": " items) — injected with the prompt every round",
+    " 次 · ": " times · ",
+    " 行薄行，~秒级）": " thin lines, ~seconds)",
+    " 轮": " rounds",
+    " 项": " items",
+    "0 = 关闭轮询。影响运行态数据刷新频率。": "0 = polling off. Affects how often runtime data is refreshed.",
+    "AGENT.md 容量门 cap_agent": "AGENT.md capacity gate cap_agent",
+    "MCL 状态": "MCL status",
+    "MEMORY.md 容量门 cap_memory": "MEMORY.md capacity gate cap_memory",
+    "Ollama（本机缺省）": "Ollama (local default)",
+    "POST /eval/test —— 发一次最小判定，返回**分态**结果（ok / off / egress-denied / key-missing / unreachable / bad-body / type-violation），不落库。": "POST /eval/test — sends one minimal judgment and returns a **state-classified** result (ok / off / egress-denied / key-missing / unreachable / bad-body / type-violation); nothing is persisted.",
+    "URL 无效": "Invalid URL",
+    "URL 无效（需 http(s):// 开头）": "Invalid URL (must start with http(s)://)",
+    "USER.md 容量门 cap_user": "USER.md capacity gate cap_user",
+    "active→warm 无命中天数（缺省 14）": "Days with no hit before active→warm (default 14)",
     // ADR-333（2026-09-22）：容量门文案改为**随开关态**如实描述（原文案无条件称"被拒"，
     //   而实测四条路径里三条本就不阻断 ⇒ 开关关闭后那三句全是假话）。
     //   ⚠ 键必须与 `panes-capacity.js` 的 tr() 串**逐字一致**（`check-i18n-keys` 守）。
-    "\u5199\u5165\u8D85\u9650\u4F1A\u88AB\u62D2\uFF08\u5F53\u524D\uFF1A\u963B\u65AD\u5DF2\u5F00\u542F\uFF09": "writes over the limit are rejected (currently: blocking is ON)",
-    "\u5199\u5165\u8D85\u9650\u4E0D\u518D\u963B\u65AD\uFF08\u5F53\u524D\uFF1A\u963B\u65AD\u5DF2\u5173\u95ED\uFF0C\u8D85\u9650\u7167\u5199\u5E76\u7559\u4E00\u6761 capacity-over \u5BA1\u8BA1\u75D5\uFF09": "writes over the limit are no longer blocked (currently: blocking is OFF \u2014 over-limit writes pass and leave a capacity-over audit trace)",
-    "\u5BB9\u91CF\u95E8 = \u8BB0\u5FC6\u5E93\u80FD\u957F\u591A\u5927\uFF08\u8D85\u9650\u662F\u5426\u963B\u65AD\u7531\u4E0B\u65B9\u5F00\u5173\u51B3\u5B9A\uFF09\uFF1B\u6D3B\u6027/\u9057\u5FD8\u4E3A\u5929\u7EA7\u9608\u503C\u3002": "Capacity gate = how large the memory bank may grow (whether over-limit blocks is decided by the switch below); activity/forgetting are day-level thresholds.",
-    "\u5BB9\u91CF\u95E8\u662F\u5426\u963B\u65AD\u5199\u5165 capacityEnforce": "Does the capacity gate block writes? (capacityEnforce)",
-    "\u7F3A\u7701\u300C\u5173\u95ED\u300D= \u8D85\u9650\u7167\u5199\uFF08\u5E76\u843D\u4E00\u6761 capacity-over \u7559\u75D5\uFF09\u3002\u5F00=\u8D85\u9650\u62D2\u5199\uFF08\u6539\u9020\u524D\u753B\u50CF\u884C\u4E3A\uFF09\u3002\u53EA\u5F71\u54CD\u5BB9\u91CF\u8FD9\u4E00\u652F\uFF1A\u6E90\u6307\u9488\u60AC\u7A7A / \u884C\u683C\u5F0F / \u7591\u4F3C\u51ED\u636E\u4E09\u9053\u95E8\u59CB\u7EC8\u786C\u62D2\uFF0C\u4E0D\u53D7\u6B64\u5F00\u5173\u5F71\u54CD\u3002\u6539\u540E\u5373\u65F6\u751F\u6548\uFF08\u5199\u95E8\u6BCF\u8F6E\u91CD\u8BFB\uFF09\u3002": 'Default "OFF" = over-limit writes pass (and leave a capacity-over trace). ON = reject over-limit writes (the pre-change profile behaviour). Affects only the capacity branch: dangling source pointers / line format / suspected credentials always stay hard-rejected regardless of this switch. Takes effect immediately (the write gate re-reads it every round).',
-    "\u5173\u95ED\uFF08\u7F3A\u7701\xB7\u8D85\u9650\u7167\u5199\u5E76\u7559\u75D5\uFF09": "OFF (default \xB7 pass over-limit and leave a trace)",
-    "\u5F00\u542F\uFF08\u8D85\u9650\u62D2\u5199\uFF09": "ON (reject over-limit writes)",
-    "agent \u753B\u50CF\u8BB0\u5FC6\u5E93\u5BB9\u91CF\uFF08\u5B57\u7B26\uFF09\uFF1A": "Agent profile memory bank capacity (chars): ",
-    "\uFF08AGENT.md \u5F53\u524D\u5B9E\u9645 ": "(AGENT.md currently ",
-    "\uFF08\u5F53\u524D\u5B9E\u9645 ": "(currently ",
-    " \u5B57\u7B26\uFF09\u3002\u4E0D\u5F71\u54CD\u4EFB\u52A1\u6267\u884C\u6CE8\u5165\u2014\u2014\u6CE8\u5165\u603B\u770B\u5B8C\u6574\u753B\u50CF": " chars). Does not affect task-execution injection \u2014 injection always sees the full profile",
-    " \u5B57\u7B26\uFF09\u3002\u4E0D\u5F71\u54CD\u4EFB\u52A1\u6267\u884C\u6CE8\u5165": " chars). Does not affect task-execution injection",
-    " \u5B57\u7B26\uFF09\u3002\u6CE8\u5165\u6309\u6863\u4F4D\u884C\u6570\u4E0D\u53D7\u6B64\u9650": " chars). Injection is limited by per-level row count, not by this",
-    "cold \u540E\u8D85\u6B64\u5929\u6570\u672A\u547D\u4E2D \u2192 \u9057\u5FD8\u5019\u9009\u6E05\u5355\uFF08\u7F3A\u7701 90\uFF0C\u53EA\u5EFA\u8BAE\u4E0D\u5220\u9664\uFF09": "No hit for more than this many days after cold \u2192 forgetting candidate list (default 90; suggestion only, never deletes)",
-    "cold/retired \u5C0F\u8282\u5728\u878D\u5408\u53EC\u56DE\u4E2D\u7684\u964D\u6743\u7CFB\u6570\uFF08\u767E\u5206\u6BD4 \u2192 /100\uFF1B\u7F3A\u7701 35%\uFF0C\u540E\u7AEF\u8303\u56F4\u6821\u9A8C [5,95] \u515C\u5E95\uFF09": "Downweight factor for cold/retired sections in fusion recall (percentage \u2192 /100; default 35%, backend range validation [5,95] as a fallback)",
-    "key \u73AF\u5883\u53D8\u91CF\u540D\uFF08\u672C\u5730\u514D\u586B\uFF09": "Key environment variable name (not needed locally)",
-    "key \u73AF\u5883\u53D8\u91CF\u540D\uFF08\u672C\u673A\u514D\u586B\uFF09": "API key environment variable name (not needed for local endpoints)",
-    "off=\u4E0D\u6CE8\u5165 / low(2 \u6761) / medium(4 \u6761) / high(8 \u6761) / smart=\u667A\u80FD\u4E0A\u9650(10 \u6761)\uFF1B\u5F53\u524D\uFF1A": "off = no injection / low(2 items) / medium(4 items) / high(8 items) / smart = smart cap (10 items); current: ",
-    "provider \u2192 \u4E2D\u6587\u6A21\u5F0F\u540D\uFF1Afusion=\u878D\u5408 / lexical=\u8BCD\u6CD5 / gpu-ready=\u5C31\u7EEA / off=\u5173": "provider \u2192 Chinese mode name: fusion=fusion / lexical=lexical / gpu-ready=ready / off=off",
-    "rrf=\u6392\u540D\u878D\u5408\uFF08\u7F3A\u7701\uFF0C\u5BF9\u79BB\u7FA4\u5206\u7A33\u5065\uFF09\uFF1Bweighted=\u65E7 min-max \u52A0\u6743\uFF08\u56DE\u6EDA\u7528\uFF09\u3002\u9608\u503C\u53E3\u5F84\u4E0E\u878D\u5408\u89E3\u8026\u2014\u2014\u59CB\u7EC8\u7528\u7EDD\u5BF9\u4F59\u5F26\uFF08ACT-024\uFF09": "rrf=rank fusion (default, robust to outlier scores); weighted=legacy min-max weighting (for rollback). The threshold measure is decoupled from fusion \u2014 always absolute cosine (ACT-024)",
-    "running \u65E0\u4E8B\u4EF6\u6301\u7EED\u6B64\u6BEB\u79D2\u540E\u53D1\u8D77\u8F93\u51FA\u589E\u957F\u63A2\u6D4B\uFF08\u9ED8\u8BA4 3 \u5C0F\u65F6\uFF09\u3002": "After running with no events for this many milliseconds, an output-growth probe is launched (default 3 hours).",
-    "spawn \u524D\u5148\u626B\u589E\u91CF\u4FE1\u53F7\u8BCD + pending \u5019\u9009\uFF0C\u7686\u65E0\u5219\u8DF3\u8FC7\uFF08\u4E0D\u5524\u9192 LLM\uFF0C\u7701\u6210\u672C\uFF09": "Before spawning, scan the delta for signal words + pending candidates; if neither is present, skip (no LLM wake-up, saving cost)",
-    "turn \u7ED3\u675F\u540E\u7A7A\u95F2\u6EE1\u6B64\u65F6\u957F\u624D\u84B8\u998F\uFF08\u22651 \u5206\u949F\uFF0C\u9ED8\u8BA4 10 \u5206\u949F\uFF09": "Distillation runs only after the turn ends and the session has been idle this long (\u22651 minute, default 10 minutes)",
-    "v17 \u5DF2\u751F\u6548\uFF1A\u5173\u95ED=\u4E0D\u6CE8\u5165\u753B\u50CF\uFF1B\u4EC5\u6CE8\u5165\u6211=\u53EA\u6CE8\u5165 agent \u753B\u50CF AGENT.md\uFF08\u542B [\u539F\u5219] \u4E60\u5F97\u539F\u5219\u4E0E [\u8DEF\u5F84] \u4EFB\u52A1\u8DEF\u5F84\uFF09\uFF1B\u4EC5\u6CE8\u5165\u4F60=\u53EA\u6CE8\u5165\u7528\u6237\u753B\u50CF USER.md\uFF1B\u5168\u6CE8\u5165=\u53CC\u753B\u50CF\uFF08\u9ED8\u8BA4\uFF09": "v17 in effect: off = no profile injection; inject me only = inject only the agent profile AGENT.md (including [\u539F\u5219] learned principles and [\u8DEF\u5F84] task paths); inject you only = inject only the user profile USER.md; inject both = both profiles (default)",
-    "v9 = \u65B9\u6848\u8C03\u8272\u677F\uFF08\u9ED8\u8BA4\uFF09\uFF1B\u5BBF\u4E3B = \u8DDF\u968F DSH \u4E3B\u9898\u4EE4\u724C\uFF08\u4E0E\u5BBF\u4E3B\u540C\u8272\uFF09\u3002": "v9 = scheme palette (default); host = follow DSH theme tokens (same colors as the host).",
-    "v9 \u65B9\u6848\u76AE\u80A4": "v9 scheme skin",
-    "warm\u2192cold \u65E0\u547D\u4E2D\u5929\u6570\uFF08\u7F3A\u7701 44 = warm+30\uFF09": "Days with no hit before warm\u2192cold (default 44 = warm+30)",
-    "\u2014\u2014\u4E0B\u6B21\u53EC\u56DE\u6309\u5F53\u524D\u6A21\u578B\u81EA\u52A8\u91CD\u5D4C": " \u2014 the next recall re-embeds automatically with the current model",
-    "\u2014\u2014\u6839\u4F1A\u8BDD\u6D3B\u8DC3\u4E2D\u4F1A\u8DF3\u8FC7\uFF0C\u7B49\u95F2\u7F6E\u81EA\u52A8\u8DD1": " \u2014 it is skipped while the root session is active; it runs automatically once idle",
-    "\u2014\u2014\u91CD\u8F7D\u540E\u751F\u6548": " \u2014 takes effect after reload",
-    "\u2460 \u6CE8\u5165\u4E0E\u753B\u50CF": "\u2460 Injection and profile",
-    "\u2461 \u8BB0\u5FC6\u4E0E\u5BB9\u91CF": "\u2461 Memory and capacity",
-    "\u2462 \u6A21\u578B\u4E0E\u5411\u91CF": "\u2462 Models and vectors",
-    "\u2463 \u540E\u53F0\u4E0E\u8C03\u5EA6": "\u2463 Background and scheduling",
-    "\u26A0 \u5BBF\u4E3B\u6A21\u578B\u4E0D\u53EF\u7528": "\u26A0 Host models unavailable",
-    "\u26A0 \u8BC4\u4F30\u901A\u9053\u914D\u7F6E\u8BFB\u53D6\u5931\u8D25\uFF1A": "\u26A0 Failed to read the evaluation channel configuration: ",
-    "\u26A0 \u8BFB\u53D6\u5931\u8D25\uFF1A": "\u26A0 Read failed: ",
-    "\u26A0 \u8C03\u5EA6\u5668\u672A\u5C31\u7EEA\uFF1A\u663E\u793A\u503C\u4E3A\u6301\u4E45\u6587\u4EF6\u503C\uFF0C\u8FD0\u884C\u65F6\u503C\u9700\u63D2\u4EF6\u6FC0\u6D3B\u540E\u8BFB\u53D6": "\u26A0 Scheduler not ready: the displayed values are from the persistent file; runtime values are read only after the plugin activates",
-    "\u2713 persona \u6863\u4F4D = ": "\u2713 persona level = ",
-    "\u2713 \u5206\u7EA7\u7B56\u7565\u8FDE\u8D25\u4E0A\u9650 = ": "\u2713 Graded policy consecutive-failure limit = ",
-    "\u2713 \u5411\u91CF ": "\u2713 Vector ",
-    "\u2713 \u5411\u91CF\u7F13\u5B58\u5DF2\u6E05": "\u2713 Vector cache cleared",
-    "\u2713 \u5DF2\u4FDD\u5B58\uFF08\u91CD\u8F7D\u540E\u751F\u6548\u2014\u2014\u82E5\u6362\u4E86\u670D\u52A1/\u6A21\u578B\u8BF7\u70B9\u300C\u6E05\u7F13\u5B58\u91CD\u5EFA\u300D\uFF09": '\u2713 Saved (takes effect after reload \u2014 if you switched service/model, click "Clear cache & rebuild")',
-    "\u2713 \u5DF2\u4FDD\u5B58\uFF08\u91CD\u8F7D\u751F\u6548\uFF09": "\u2713 Saved (takes effect on reload)",
-    "\u2713 \u5DF2\u4FDD\u5B58\uFF0C\u539F\u6587\u4EF6\u5DF2\u5907\u4EFD\u4E3A .bak-*": "\u2713 Saved; the original file was backed up as .bak-*",
-    "\u2713 \u5DF2\u5199\u5165 ": "\u2713 Written to ",
-    "\u2713 \u5DF2\u5207\u6362 ": "\u2713 Switched to ",
-    "\u2713 \u5DF2\u542F\u7528 ": "\u2713 Enabled ",
-    "\u2713 \u6839\u76EE\u5F55\u5DF2\u542F\u7528": "\u2713 Root directory enabled",
-    "\u2713 \u6DF1\u7761\u672A\u6D88\u5316\u7B56\u7565 = ": "\u2713 Deep sleep unprocessed policy = ",
-    "\u2713 \u914D\u7F6E\u5FEB\u7167\u5DF2\u5BFC\u51FA": "\u2713 Configuration snapshot exported",
-    "\u300C\u7528\u6237\u6587\u672C \u2194 \u547D\u4E2D\u7D22\u5F15\u884C\u300D\u7684\u7EDD\u5BF9\u4F59\u5F26\u9608\u503C\uFF080\u20131\uFF0C\u7F3A\u7701 0.65\uFF1BACT-024 \u6821\u51C6\uFF1A0.65 \u2192 \u89E6\u53D1\u7387 ~2% \u4E14\u9608\u4E0A\u5168\u4E3A\u771F\u547D\u4E2D\uFF09": 'Absolute cosine threshold for "user text \u2194 matched index line" (0\u20131, default 0.65; ACT-024 calibration: 0.65 \u2192 trigger rate ~2% and everything above the threshold is a true hit)',
-    "\u4E09\u7EA7\u9009\u62E9\uFF08\u670D\u52A1 \u2192 \u6A21\u578B \u2192 \u6863\u4F4D\uFF09\u3002\u670D\u52A1\u9009\u597D\u5148\u300C\u679A\u4E3E\u6A21\u578B\u300D\uFF08\u6D4F\u89C8\u5668\u76F4\u8FDE\u8BE5\u7AEF\u70B9\uFF09\uFF0C\u6216\u76F4\u63A5\u624B\u586B\u6A21\u578B\u540D\u2014\u2014\u672C\u673A Ollama \u7684\u6A21\u578B\u4E0D\u5728\u5BBF\u4E3B\u76EE\u5F55\u91CC\uFF0C\u624B\u586B\u662F\u5E38\u6001\u3002": 'Three-level selection (service \u2192 model \u2192 level). After choosing a service, click "List models" (the browser connects to that endpoint directly), or simply type the model id \u2014 local Ollama models are not in the host catalog, so typing them is the norm.',
-    "\u4E0E\u5F00\u5173**\u5206\u79BB**\u7684\u4E24\u9879\u6388\u6743\uFF1A\u300C\u5141\u8BB8\u88C5\u5916\u90E8\u670D\u52A1\u300D\u2260\u300C\u5141\u8BB8\u8BB0\u5FC6\u5185\u5BB9\u51FA\u673A\u300D\u3002\u7F3A\u7701 false\uFF1B\u586B\u4E86\u8FDC\u7AEF\u5730\u5740\u4F46\u672A\u52FE\u6B64\u9879 \u21D2 \u62D2\u53D1\u5E76\u5982\u5B9E\u8BB0 egress-denied\u3002": 'A **separate** authorization from the on/off switch: "allow installing an external service" \u2260 "allow memory content to leave the machine". Defaults to false; a remote URL without this checked \u21D2 the request is refused and honestly recorded as egress-denied.',
-    "\u4E24\u8F6E\u91C7\u6837\u4E4B\u95F4\u7684\u95F4\u9694\uFF08\u9ED8\u8BA4 60 \u79D2\uFF09\u3002": "Interval between two sampling rounds (default 60 seconds).",
-    "\u4E8B\u4EF6\u84B8\u998F\uFF08\u4F1A\u8BDD\u95F2\u7F6E\u63D0\u70BC\u53EF\u590D\u7528\u77E5\u8BC6\uFF09\u7528\u7684\u6A21\u578B\u3002\u7EE7\u627F=\u8DDF\u968F\u4E3B\u4F1A\u8BDD\u3002": "The model used for event distillation (extracting reusable knowledge while the session is idle). Inherit = follow the main session.",
-    "\u4EC5\u5728\u300C\u5206\u7EA7\u300D\u7B56\u7565\u4E0B\u751F\u6548\uFF081\u2013100\uFF0C\u7F3A\u7701 3\uFF09\uFF1A\u8FDE\u7EED\u5931\u8D25\u8FBE\u6B64\u8F6E\u6570\u540E\u653E\u884C\u6DF1\u7761\u6C34\u4F4D\u5E76\u8BB0\u4E00\u6761\u5BA1\u8BA1\u544A\u8B66\uFF1B\u5168\u91CD\u635E\u7B56\u7565\u4E0B\u6B64\u9879\u4E0D\u53C2\u4E0E\u5224\u5B9A\u3002": 'Only effective under the "graded" policy (1\u2013100, default 3): after this many consecutive failed rounds, the deep sleep watermark is released and one audit alert is logged; under the full re-fetch policy this setting does not take part in the decision.',
-    "\u4EC5\u6CE8\u5165\u4F60": "Inject you only",
-    "\u4EC5\u6CE8\u5165\u6211": "Inject me only",
-    "\u4FDD\u5B58": "Save",
-    "\u4FDD\u5B58\u7AEF\u70B9\u4E0E\u6863\u4F4D": "Save endpoint and level",
-    "\u4FDD\u5B58\u914D\u7F6E": "Save config",
-    "\u505C\u6EDE\u9608\u503C deepSleepIdleMs": "Stall threshold deepSleepIdleMs",
-    "\u5141\u8BB8\u51FA\u7F51 evalEgressAllow": "Allow egress (evalEgressAllow)",
-    "\u5148\u586B\u5199\u670D\u52A1\u5730\u5740": "Enter the service address first",
-    "\u5168\u5C40": "Global",
-    "\u5168\u6CE8\u5165": "Inject both",
-    "\u5168\u90E8\u4F1A\u8BDD\u505C\u6EDE \u2265 \u9608\u503C\u540E\u81EA\u52A8\u63D0\u70BC\u539F\u5219\u5C42\uFF08\u5173\u95ED = \u6682\u505C\uFF0C\u7B49\u4E8E\u539F\u300C\u6682\u505C\u5230\u660E\u5929\u300D\uFF09\u3002": 'Once all sessions have been stalled \u2265 the threshold, distill the principle layer automatically (off = paused, same as the former "pause until tomorrow").',
-    "\u5168\u90E8\u4F1A\u8BDD\u65E0\u6D3B\u52A8\u6301\u7EED\u6EE1\u6B64\u6BEB\u79D2\u6570\u624D\u89E6\u53D1\uFF08\u9ED8\u8BA4 3 \u5C0F\u65F6\uFF09\u3002": "Triggers only after all sessions have been inactive for this many milliseconds (default 3 hours).",
-    "\u5168\u91CD\u635E\uFF08retry\uFF09= \u6C38\u4E0D\u653E\u5F03\uFF0C\u672A\u6D88\u5316\u5C31\u4E00\u76F4\u91CD\u635E\u672C\u6279\uFF08\u4FDD\u8BC1\u4E0D\u4E22\u6599\uFF1B\u6750\u6599\u6C38\u4E45\u5931\u8D25\u65F6\u6BCF\u8F6E\u90FD\u4F1A\u91CD\u8BD5\uFF09\uFF1B\u5206\u7EA7\uFF08graded\uFF09= \u8FDE\u7EED\u5931\u8D25\u8FBE N \u8F6E\u540E\u653E\u884C\u6C34\u4F4D\u5E76\u8BB0\u5BA1\u8BA1\u544A\u8B66\uFF08\u907F\u514D\u65E0\u9650\u91CD\u8BD5\u70E7 LLM\uFF09\u3002\u7F3A\u7701 graded\u3002": "Full re-fetch (retry) = never give up; keeps re-fetching this batch while unprocessed (guarantees nothing is lost; retries every round when material fails permanently); graded = releases the watermark after N consecutive failed rounds and logs an audit alert (avoiding infinite retries burning LLM calls). Default graded.",
-    "\u5168\u91CD\u635E\uFF08\u4E0D\u4E22\u6599\uFF0C\u6C38\u4E0D\u653E\u5F03\uFF09": "Full re-fetch (lose nothing, never give up)",
-    "\u5173=\u4E0D\u6CE8\u518C\u84B8\u998F\u5668\uFF08/suite \u7B49\u53EA\u8BFB\u89C6\u56FE\u4ECD\u53EF\u7528\uFF09\uFF1B\u6539\u52A8\u9700\u91CD\u8F7D\u751F\u6548": "Off = the distiller is not registered (read-only views such as /suite remain available); changes take effect after reload",
-    "\u5173\u95ED": "Off",
-    "\u5173\u95ED\u9762\u677F": "Close panel",
-    "\u5199\u5165 ~/.dsh/suite/scheduler.json\uFF1B\u6539\u540E\u9700\u91CD\u8F7D\u63D2\u4EF6\u751F\u6548\u3002": "Written to ~/.dsh/suite/scheduler.json; reload the plugin for changes to take effect.",
-    "\u5199\u5165\u81EA\u6301\u914D\u7F6E ~/.dsh/suite/scheduler.json\uFF08\u6DF1\u5EA6\u7761\u7720\u540C\u901A\u9053\uFF09\u3002\u6539\u52A8\u4E0D\u4F1A\u7ACB\u523B\u4F5C\u7528\u5230\u5728\u8DD1\u7684\u4F1A\u8BDD\u2014\u2014**\u9700\u91CD\u8F7D\u63D2\u4EF6\u540E\u751F\u6548**\u3002\u5F53\u524D\u503C\u8BFB\u53D6\u4E2D\u2026": "Written to the self-held config ~/.dsh/suite/scheduler.json (same channel as deep sleep). Changes do not affect running sessions immediately \u2014 **they take effect after reloading the plugin**. Reading current values\u2026",
-    "\u5199\u5165\u81EA\u6301\u914D\u7F6E ~/.dsh/suite/scheduler.json\uFF08\u6DF1\u5EA6\u7761\u7720\u540C\u901A\u9053\uFF09\u3002\u6539\u52A8\u4E0D\u4F1A\u7ACB\u523B\u4F5C\u7528\u5230\u5728\u8DD1\u7684\u4F1A\u8BDD\u2014\u2014**\u9700\u91CD\u8F7D\u63D2\u4EF6\u540E\u751F\u6548**\u3002\u5F53\u524D\uFF1A\u84B8\u998F ": "Written to the self-held config ~/.dsh/suite/scheduler.json (same channel as deep sleep). Changes do not affect running sessions immediately \u2014 **they take effect after reloading the plugin**. Current: distillation ",
-    "\u5206\u7EA7\u7B56\u7565\u8FDE\u8D25\u4E0A\u9650 deepSleep.failPolicyMaxRounds": "Graded policy consecutive-failure limit deepSleep.failPolicyMaxRounds",
-    "\u5206\u7EA7\uFF08\u8FDE\u8D25 N \u8F6E\u540E\u653E\u884C\u5E76\u544A\u8B66\uFF09": "Graded (release and alert after N consecutive failures)",
-    "\u5206\u949F": "minutes",
-    "\u5207\u6362\u65E5\u5FD7\u9762\u677F": "Toggle log panel",
-    "\u5217\u8868\u9ED8\u8BA4\u6298\u53E0\u8BE6\u60C5\uFF0C\u5148\u7ED9\u6982\u89C8\u518D\u6309\u9700\u5C55\u5F00\u3002": "Details are collapsed by default: overview first, expand on demand.",
-    "\u52A0\u6743": "Weighted",
-    "\u52A0\u6DF1\u5019\u9009\u547D\u4E2D\u6570 activityHotHits": "Deepening candidate hit count activityHotHits",
-    "\u52A0\u8F7D\u53EF\u7528\u6A21\u578B\u4E2D\u2026": "Loading available models\u2026",
-    "\u5339\u914D ": "Matched ",
-    "\u5373\u65F6\u751F\u6548\uFF1A\u6539\u52A8\u76F4\u63A5\u5199 ~/.dsh/suite/scheduler.json\uFF08\u5199\u524D\u5907\u4EFD\uFF09\u3002": "Takes effect immediately: changes are written straight to ~/.dsh/suite/scheduler.json (backed up before writing).",
-    "\u539F\u751F\u6821\u51C6\u578B": "Natively calibrated",
-    "\u53C2\u6570\u8C03\u8282": "Parameter tuning",
-    "\u53EC\u56DE ": "Recall ",
-    "\u53EC\u56DE\u4E0E\u5E93\u7248\u672C": "Recall & bank version",
-    "\u53EC\u56DE\u51B7\u6761\u76EE\u964D\u6743 recallColdFactorPercent": "Recall downweight for cold entries recallColdFactorPercent",
-    "\u53EC\u56DE\u6A21\u5F0F ": "Recall mode ",
-    "\u53EC\u56DE\u878D\u5408\u7B56\u7565 recallFusion": "Recall fusion strategy recallFusion",
-    "\u53EF\u7528": "Available",
-    "\u5411\u91CF\u4E0E\u6A21\u578B \xB7 \u5F53\u524D\u94FE\u8DEF": "Vectors & models \xB7 current pipeline",
-    "\u5411\u91CF\u72B6\u6001\u4E0D\u53EF\u7528: ": "Vector status unavailable: ",
-    "\u5411\u91CF\u7F13\u5B58": "Vector cache",
-    "\u5411\u91CF\u7F13\u5B58\u5DF2\u6E05": "Vector cache cleared",
-    "\u542F\u52A8\u65F6\u89C6\u56FE": "Startup view",
-    "\u542F\u7528": "Enable",
-    "\u542F\u7528\u6DF1\u5EA6\u7761\u7720\u81EA\u52A8\u5F52\u7EB3 enableDeepSleep": "Enable deep sleep auto-induction enableDeepSleep",
-    "\u542F\u7528\u8BA4\u77E5\u73AF mclEnabled": "Enable cognition ring mclEnabled",
-    "\u542F\u7528\u8BC4\u4F30\u901A\u9053 evalEnabled": "Enable the evaluation channel (evalEnabled)",
-    "\u5728\u72B6\u6001\u680F\u4E0A\u65B9\u5E38\u9A7B\u663E\u793A\u8C03\u7528\u65E5\u5FD7\u3002": "Keep the call log visible above the status bar.",
-    "\u5929": "days",
-    "\u5982 http://127.0.0.1:11434/v1\uFF08Ollama\uFF09\u6216 http://127.0.0.1:9915/v1\uFF08\u81EA\u5EFA\u6865\uFF09\uFF1B\u6539\u5B8C\u56DE\u8F66\u81EA\u52A8\u63A2\u6D4B\u3002": "e.g. http://127.0.0.1:11434/v1 (Ollama) or http://127.0.0.1:9915/v1 (self-hosted bridge); press Enter after editing to probe automatically.",
-    "\u5982\u4F55\u542F\u7528\u8BED\u4E49\u68C0\u7D22": "How to enable semantic retrieval",
-    "\u5B57\u7B26": "chars",
-    "\u5B88\u85CF\u6839\u76EE\u5F55": "Shoucang root directories",
-    "\u5B88\u85CF\u84B8\u998F\u5668 enableDistill": "Shoucang distiller enableDistill",
-    "\u5BBF\u4E3B\u539F\u751F\u76AE\u80A4": "Host native skin",
-    "\u5BBF\u4E3B\u53EF\u7528 ": "Host available ",
-    "\u5BBF\u4E3B\u6A21\u578B\u76EE\u5F55\u4E3A\u7A7A \u2014\u2014 \u53EF\u5728\u300C\u81EA\u5B9A\u4E49\u300D\u91CC\u624B\u586B\u6A21\u578B\u540D\uFF0C\u6216\u5148\u5728 Harness \u91CC\u914D\u597D\u6A21\u578B": 'The host model catalog is empty \u2014 type a model id under "Custom", or configure a model in Harness first',
-    "\u5BFC\u51FA\u4E2D\u2026": "Exporting\u2026",
-    "\u5BFC\u51FA\u5FEB\u7167": "Export snapshot",
-    "\u5BFC\u51FA\u914D\u7F6E\u539F\u6587 + \u754C\u9762\u504F\u597D\uFF08JSON\uFF09": "Export the raw configuration + interface preferences (JSON)",
-    "\u5BFC\u822A\u5206\u7EC4\u663E\u793A": "Show navigation groups",
-    "\u5BFC\u822A\u5BBD\u5EA6": "Nav width",
-    "\u5C1A\u672A\u767B\u8BB0\u4EFB\u4F55\u6839\u76EE\u5F55\u2014\u2014\u5728\u4E0A\u65B9\u8F93\u5165\u8DEF\u5F84\u6DFB\u52A0\u3002": "No root directory registered yet \u2014 enter a path above to add one.",
-    "\u5D4C\u5165\u670D\u52A1\u8FDE\u901A\u6027\u6D4B\u8BD5": "Embedding service connectivity test",
-    "\u5DE6\u4FA7\u5BFC\u822A\u50CF\u7D20\u5BBD\u5EA6\uFF08140\u2013320\uFF09\uFF1B\u7A84\u5C4F\uFF08\u2264900px\uFF09\u7531\u54CD\u5E94\u5F0F\u65AD\u70B9\u63A5\u7BA1\u3002": "Left navigation width in pixels (140\u2013320); narrow screens (\u2264900px) are handled by the responsive breakpoint.",
-    "\u5DF2\u5141\u8BB8\u51FA\u7F51": "Egress allowed",
-    "\u5DF2\u5199\u5165": "Saved",
-    "\u5DF2\u7981\u6B62\u51FA\u7F51": "Egress disallowed",
-    "\u5E38\u9A7B\u663E\u793A\u8BB0\u5FC6\u5E93\u72B6\u6001\u4E0E\u5E93\u8DEF\u5F84\u3002": "Always show memory bank status and bank path.",
-    "\u5E73\u5747\u8017\u65F6": "Avg duration",
-    "\u5F00": "On",
-    "\u5F00=\u6309\u76F8\u5173\u6027\u9009\u884C\uFF08\u7F3A\u7701\uFF09\uFF1B\u5173=\u56DE\u843D\u300C\u57FA\u7EBF + \u65B0\u9C9C\u5EA6\u300D\u9009\u884C\u3002\u5373\u65F6\u751F\u6548\uFF08\u4E0B\u6B21\u6CE8\u5165\u5373\u7528\uFF09": 'on = select lines by relevance (default); off = fall back to "baseline + freshness" selection. Takes effect immediately (used on the next injection)',
-    "\u5F00=\u7C7B\u578B\u5316\u5224\u5B9A\u53EF\u7528\uFF08choice / boolean / score\uFF09\uFF1B\u5173=\u901A\u9053\u6574\u4F53\u505C\u7528\uFF08\u7F3A\u7701\u5173\uFF0Cfail-closed\uFF09\u3002\u5199\u5165 scheduler.json\u3002": "On = typed judgments available (choice / boolean / score); off = the whole channel is disabled (off by default, fail-closed). Written to scheduler.json.",
-    "\u5F00=\u878D\u5408\u53EC\u56DE\uFF08dense0.7+lexical0.3\uFF09\uFF1B\u5173=\u7EAF\u8BCD\u6CD5\u3002\u5199 scheduler.json": "On = fusion recall (dense 0.7 + lexical 0.3); off = pure lexical. Writes to scheduler.json",
-    "\u5F53\u524D": "Current",
-    "\u5F53\u524D\u4E3A\u663E\u5F0F\u5173\u95ED\u6001\uFF08scheduler.json \u91CC evalEnabled=false\uFF09\u3002": "Currently explicitly off (evalEnabled=false in scheduler.json).",
-    "\u5F53\u524D\u6839": "Current root",
-    "\u5F53\u524D\u6CE8\u5165\uFF1A\u7A7A\uFF08hot_memory \u5173\u6216\u753B\u50CF/\u8BB0\u5FC6\u4E3A\u7A7A\uFF09": "Current injection: empty (hot_memory off, or profile/memory is empty)",
-    "\u5F53\u524D\u76F4\u63A5\u6CE8\u5165 \u2248 ": "Current direct injection \u2248 ",
-    "\u5F53\u524D\uFF1A": "Current:",
-    "\u5FEB\u6377\u952E": "Shortcuts",
-    "\u6062\u590D\u9ED8\u8BA4\u8BBE\u7F6E": "Restore defaults",
-    "\u6162\u901A\u9053\u6700\u591A\u518D\u5F15\u5BFC\u6B21\u6570\uFF080\u20133\uFF0C\u7F3A\u7701 1\uFF1B\u7EDD\u4E0D\u6B7B\u9501\uFF09": "Maximum re-guidance count on the slow path (0\u20133, default 1; never deadlocks)",
-    "\u6162\u901A\u9053\u6750\u6599\u786C\u9884\u7B97\uFF08120\u20134000 \u5B57\u7B26\uFF0C\u7F3A\u7701 600\uFF1B\u53EA\u4F5C\u7528\u4E8E\u6162\u901A\u9053\u9996\u6B65\uFF09": "Hard budget for slow path material (120\u20134000 chars, default 600; applies only to the first slow path step)",
-    "\u6162\u901A\u9053\u6CE8\u5165\u7684\u6307\u9488\u6761\u6570\uFF081\u20135\uFF0C\u7F3A\u7701 3\uFF09": "Number of pointers injected on the slow path (1\u20135, default 3)",
-    "\u6162\u901A\u9053\u9996\u6B65\u6CE8\u5165\u300C\u8584\u5951\u7EA6 + top-k \u6307\u9488\u300D\u5E76\u6309\u9700\u518D\u5F15\u5BFC\u4E00\u6B21\uFF1B\u5FEB\u901A\u9053\u96F6\u989D\u5916\u5F80\u8FD4\u3002\u7F3A\u7701\u5F00\uFF08false = \u4E00\u952E\u56DE\u6EDA\uFF09": 'The slow path injects a "thin contract + top-k pointers" on its first step and re-guides once as needed; the fast path adds zero extra round trips. On by default (false = one-click rollback)',
-    "\u6210\u529F\u7387": "Success rate",
-    "\u624B\u5199 ~/.dsh/suite/scheduler.json\uFF1AembedBaseUrl=\u4E91\u7AEF\u7AEF\u70B9 + embedModel=\u6A21\u578B\u540D + embedApiKeyEnv=key \u73AF\u5883\u53D8\u91CF\u540D\uFF1B\u6539\u540E\u91CD\u8F7D\u5E76\u300C\u6E05\u7F13\u5B58\u91CD\u5EFA\u300D\u3002": 'Hand-edit ~/.dsh/suite/scheduler.json: embedBaseUrl=cloud endpoint + embedModel=model name + embedApiKeyEnv=key environment variable name; after editing, reload and "Clear cache & rebuild".',
-    "\u624B\u52A8\u89E6\u53D1\u4E00\u8F6E\u84B8\u998F\u2014\u2014\u643A\u5E26 pending/ \u5019\u9009\uFF08\u5982 project-defer \u964D\u7EA7\u5361\uFF09\u91CD\u88C1\u51B3\u5165\u518C\u3002workspace \u53CD\u89E3\u4FEE\u590D\u540E project \u5361\u76F4\u5199\u5DE5\u4F5C\u533A devref\u3002": "Manually trigger one distillation round \u2014 carrying pending/ candidates (such as project-defer downgrade cards) through re-adjudication and into the bank. After the workspace back-resolution fix, project cards are written directly to the workspace devref.",
-    "\u6253\u5F00 / \u5173\u95ED\u9762\u677F": "Open / close panel",
-    "\u6253\u5F00\u65F6\u81EA\u52A8\u5237\u65B0": "Auto-refresh on open",
-    "\u6253\u5F00\u9762\u677F\u5373\u91CD\u65B0\u62C9\u53D6\u5F53\u524D\u89C6\u56FE\u6570\u636E\u3002": "Re-fetch the current view\\'s data as soon as the panel opens.",
-    "\u6253\u5F00\u9762\u677F\u540E\u9ED8\u8BA4\u843D\u5730\u7684\u9875\u9762\u3002\u4F18\u5148\u7EA7\uFF1A#sc=<\u89C6\u56FE\u540D> \u6DF1\u94FE > \u4E0A\u6B21\u89C6\u56FE\u8BB0\u5FC6 > \u6B64\u9879\u3002": "The page the panel lands on by default when opened. Priority: #sc=<view name> deep link > last-view memory > this setting.",
-    "\u628A\u300C\u7B54\u6848\u53EF\u679A\u4E3E\u3001\u4F46\u5224\u636E\u5199\u4E0D\u6210\u4EE3\u7801\u300D\u7684\u5224\u5B9A\u4EA4\u7ED9\u4E00\u4E2A\u53EF\u914D\u7F6E\u6A21\u578B\u3002**\u9ED8\u8BA4\u5173\u95ED**\uFF1A\u5173\u95ED\u65F6\u884C\u4E3A\u4E0E\u672A\u88C5\u6B64\u80FD\u529B\u9010\u5B57\u8282\u4E00\u81F4\u3002\u6539\u52A8\u5199 ~/.dsh/suite/scheduler.json\uFF0C**\u91CD\u8F7D\u63D2\u4EF6\u540E\u751F\u6548**\u3002": "Delegate judgments whose answers are enumerable but whose criteria cannot be expressed as code to a configurable model. **Off by default**: while off, behavior is byte-identical to not having this capability at all. Changes are written to ~/.dsh/suite/scheduler.json and **take effect after reloading the plugin**.",
-    "\u6298\u53E0\u9608\u503C": "Fold threshold",
-    "\u6307\u5411\u542B shoucang.config.yaml \u7684\u5DE5\u4F5C\u533A\u76EE\u5F55\u3002\u8BE5\u76EE\u5F55\u672C\u8EAB\u5373\u4E3A Obsidian \u517C\u5BB9 vault\uFF08Markdown + frontmatter + [[\u53CC\u94FE]]\uFF09\uFF0C\u53EF\u7528 Obsidian \u76F4\u63A5\u6253\u5F00\u3002": "Points to a workspace directory containing shoucang.config.yaml. That directory is itself an Obsidian-compatible vault (Markdown + frontmatter + [[wikilinks]]) and can be opened directly in Obsidian.",
-    "\u6309 ": "By ",
-    "\u6309**\u6210\u672C\u7ED3\u6784**\u5206\u6863\uFF08\u4E0D\u662F\u6309\u5382\u5546\uFF09\uFF1A\u672C\u673A\u96F6\u6210\u672C / \u8FDC\u7A0B\u5C0F\u5FEB / \u539F\u751F\u6821\u51C6 / \u73B0\u6709\u5927\u6A21\u578B\u3002\u6863\u4F4D\u51B3\u5B9A**\u8D85\u65F6\u9884\u7B97**\uFF08\u672C\u673A\u63A8\u7406\u542B\u6A21\u578B\u52A0\u8F7D\u7ED9 60s\u3001\u8FDC\u7AEF\u5FEB\u6A21\u578B 15s\uFF09\u4E0E**\u7F6E\u4FE1\u9608\u503C\u53E3\u5F84**\uFF08\u539F\u751F\u6863\u7528\u6821\u51C6\u9608\u503C\uFF0C\u5176\u4F59\u7528\u4FDD\u5B88\u9608\u503C\uFF09\u3002": "Tiered by **cost structure**, not by vendor: local zero-cost / remote small-fast / natively calibrated / existing large model. The level determines the **timeout budget** (local inference includes model loading, so 60s; remote fast models 15s) and the **confidence-threshold regime** (the native tier uses calibrated thresholds, the rest use conservative ones).",
-    "\u6309\u8BED\u4E49\u663E\u793A\u5206\u7EC4\u6807\u9898\uFF08\u5B88\u85CF / \u603B\u89C8 / \u8BB0\u5FC6 / \u8FD0\u884C / \u914D\u7F6E\uFF09\u3002": "Show semantic group headings (Shoucang / Overview / Memory / Runtime / Config).",
-    "\u63A2\u6D4B\u53D1\u8D77\u5EF6\u8FDF deepSleepProbeAfterMs": "Probe launch delay deepSleepProbeAfterMs",
-    "\u63A2\u6D4B\u91C7\u6837\u95F4\u9694 deepSleepProbeWindowMs": "Probe sampling interval deepSleepProbeWindowMs",
-    "\u65B0\u9C9C\u5EA6\u4FDD\u5E95\u69FD injectFreshSlots": "Freshness reserved slots injectFreshSlots",
+    "写入超限会被拒（当前：阻断已开启）": "writes over the limit are rejected (currently: blocking is ON)",
+    "写入超限不再阻断（当前：阻断已关闭，超限照写并留一条 capacity-over 审计痕）": "writes over the limit are no longer blocked (currently: blocking is OFF — over-limit writes pass and leave a capacity-over audit trace)",
+    "容量门 = 记忆库能长多大（超限是否阻断由下方开关决定）；活性/遗忘为天级阈值。": "Capacity gate = how large the memory bank may grow (whether over-limit blocks is decided by the switch below); activity/forgetting are day-level thresholds.",
+    "容量门是否阻断写入 capacityEnforce": "Does the capacity gate block writes? (capacityEnforce)",
+    "缺省「关闭」= 超限照写（并落一条 capacity-over 留痕）。开=超限拒写（改造前画像行为）。只影响容量这一支：源指针悬空 / 行格式 / 疑似凭据三道门始终硬拒，不受此开关影响。改后即时生效（写门每轮重读）。": 'Default "OFF" = over-limit writes pass (and leave a capacity-over trace). ON = reject over-limit writes (the pre-change profile behaviour). Affects only the capacity branch: dangling source pointers / line format / suspected credentials always stay hard-rejected regardless of this switch. Takes effect immediately (the write gate re-reads it every round).',
+    "关闭（缺省·超限照写并留痕）": "OFF (default · pass over-limit and leave a trace)",
+    "开启（超限拒写）": "ON (reject over-limit writes)",
+    "agent 画像记忆库容量（字符）：": "Agent profile memory bank capacity (chars): ",
+    "（AGENT.md 当前实际 ": "(AGENT.md currently ",
+    "（当前实际 ": "(currently ",
+    " 字符）。不影响任务执行注入——注入总看完整画像": " chars). Does not affect task-execution injection — injection always sees the full profile",
+    " 字符）。不影响任务执行注入": " chars). Does not affect task-execution injection",
+    " 字符）。注入按档位行数不受此限": " chars). Injection is limited by per-level row count, not by this",
+    "cold 后超此天数未命中 → 遗忘候选清单（缺省 90，只建议不删除）": "No hit for more than this many days after cold → forgetting candidate list (default 90; suggestion only, never deletes)",
+    "cold/retired 小节在融合召回中的降权系数（百分比 → /100；缺省 35%，后端范围校验 [5,95] 兜底）": "Downweight factor for cold/retired sections in fusion recall (percentage → /100; default 35%, backend range validation [5,95] as a fallback)",
+    "key 环境变量名（本地免填）": "Key environment variable name (not needed locally)",
+    "key 环境变量名（本机免填）": "API key environment variable name (not needed for local endpoints)",
+    "off=不注入 / low(2 条) / medium(4 条) / high(8 条) / smart=智能上限(10 条)；当前：": "off = no injection / low(2 items) / medium(4 items) / high(8 items) / smart = smart cap (10 items); current: ",
+    "provider → 中文模式名：fusion=融合 / lexical=词法 / gpu-ready=就绪 / off=关": "provider → Chinese mode name: fusion=fusion / lexical=lexical / gpu-ready=ready / off=off",
+    "rrf=排名融合（缺省，对离群分稳健）；weighted=旧 min-max 加权（回滚用）。阈值口径与融合解耦——始终用绝对余弦（ACT-024）": "rrf=rank fusion (default, robust to outlier scores); weighted=legacy min-max weighting (for rollback). The threshold measure is decoupled from fusion — always absolute cosine (ACT-024)",
+    "running 无事件持续此毫秒后发起输出增长探测（默认 3 小时）。": "After running with no events for this many milliseconds, an output-growth probe is launched (default 3 hours).",
+    "spawn 前先扫增量信号词 + pending 候选，皆无则跳过（不唤醒 LLM，省成本）": "Before spawning, scan the delta for signal words + pending candidates; if neither is present, skip (no LLM wake-up, saving cost)",
+    "turn 结束后空闲满此时长才蒸馏（≥1 分钟，默认 10 分钟）": "Distillation runs only after the turn ends and the session has been idle this long (≥1 minute, default 10 minutes)",
+    "v17 已生效：关闭=不注入画像；仅注入我=只注入 agent 画像 AGENT.md（含 [原则] 习得原则与 [路径] 任务路径）；仅注入你=只注入用户画像 USER.md；全注入=双画像（默认）": "v17 in effect: off = no profile injection; inject me only = inject only the agent profile AGENT.md (including [原则] learned principles and [路径] task paths); inject you only = inject only the user profile USER.md; inject both = both profiles (default)",
+    "v9 = 方案调色板（默认）；宿主 = 跟随 DSH 主题令牌（与宿主同色）。": "v9 = scheme palette (default); host = follow DSH theme tokens (same colors as the host).",
+    "v9 方案皮肤": "v9 scheme skin",
+    "warm→cold 无命中天数（缺省 44 = warm+30）": "Days with no hit before warm→cold (default 44 = warm+30)",
+    "——下次召回按当前模型自动重嵌": " — the next recall re-embeds automatically with the current model",
+    "——根会话活跃中会跳过，等闲置自动跑": " — it is skipped while the root session is active; it runs automatically once idle",
+    "——重载后生效": " — takes effect after reload",
+    "① 注入与画像": "① Injection and profile",
+    "② 记忆与容量": "② Memory and capacity",
+    "③ 模型与向量": "③ Models and vectors",
+    "④ 后台与调度": "④ Background and scheduling",
+    "⚠ 宿主模型不可用": "⚠ Host models unavailable",
+    "⚠ 评估通道配置读取失败：": "⚠ Failed to read the evaluation channel configuration: ",
+    "⚠ 读取失败：": "⚠ Read failed: ",
+    "⚠ 调度器未就绪：显示值为持久文件值，运行时值需插件激活后读取": "⚠ Scheduler not ready: the displayed values are from the persistent file; runtime values are read only after the plugin activates",
+    "✓ persona 档位 = ": "✓ persona level = ",
+    "✓ 分级策略连败上限 = ": "✓ Graded policy consecutive-failure limit = ",
+    "✓ 向量 ": "✓ Vector ",
+    "✓ 向量缓存已清": "✓ Vector cache cleared",
+    "✓ 已保存（重载后生效——若换了服务/模型请点「清缓存重建」）": '✓ Saved (takes effect after reload — if you switched service/model, click "Clear cache & rebuild")',
+    "✓ 已保存（重载生效）": "✓ Saved (takes effect on reload)",
+    "✓ 已保存，原文件已备份为 .bak-*": "✓ Saved; the original file was backed up as .bak-*",
+    "✓ 已写入 ": "✓ Written to ",
+    "✓ 已切换 ": "✓ Switched to ",
+    "✓ 已启用 ": "✓ Enabled ",
+    "✓ 根目录已启用": "✓ Root directory enabled",
+    "✓ 深睡未消化策略 = ": "✓ Deep sleep unprocessed policy = ",
+    "✓ 配置快照已导出": "✓ Configuration snapshot exported",
+    "「用户文本 ↔ 命中索引行」的绝对余弦阈值（0–1，缺省 0.65；ACT-024 校准：0.65 → 触发率 ~2% 且阈上全为真命中）": 'Absolute cosine threshold for "user text ↔ matched index line" (0–1, default 0.65; ACT-024 calibration: 0.65 → trigger rate ~2% and everything above the threshold is a true hit)',
+    "三级选择（服务 → 模型 → 档位）。服务选好先「枚举模型」（浏览器直连该端点），或直接手填模型名——本机 Ollama 的模型不在宿主目录里，手填是常态。": 'Three-level selection (service → model → level). After choosing a service, click "List models" (the browser connects to that endpoint directly), or simply type the model id — local Ollama models are not in the host catalog, so typing them is the norm.',
+    "与开关**分离**的两项授权：「允许装外部服务」≠「允许记忆内容出机」。缺省 false；填了远端地址但未勾此项 ⇒ 拒发并如实记 egress-denied。": 'A **separate** authorization from the on/off switch: "allow installing an external service" ≠ "allow memory content to leave the machine". Defaults to false; a remote URL without this checked ⇒ the request is refused and honestly recorded as egress-denied.',
+    "两轮采样之间的间隔（默认 60 秒）。": "Interval between two sampling rounds (default 60 seconds).",
+    "事件蒸馏（会话闲置提炼可复用知识）用的模型。继承=跟随主会话。": "The model used for event distillation (extracting reusable knowledge while the session is idle). Inherit = follow the main session.",
+    "仅在「分级」策略下生效（1–100，缺省 3）：连续失败达此轮数后放行深睡水位并记一条审计告警；全重捞策略下此项不参与判定。": 'Only effective under the "graded" policy (1–100, default 3): after this many consecutive failed rounds, the deep sleep watermark is released and one audit alert is logged; under the full re-fetch policy this setting does not take part in the decision.',
+    "仅注入你": "Inject you only",
+    "仅注入我": "Inject me only",
+    "保存": "Save",
+    "保存端点与档位": "Save endpoint and level",
+    "保存配置": "Save config",
+    "停滞阈值 deepSleepIdleMs": "Stall threshold deepSleepIdleMs",
+    "允许出网 evalEgressAllow": "Allow egress (evalEgressAllow)",
+    "先填写服务地址": "Enter the service address first",
+    "全局": "Global",
+    "全注入": "Inject both",
+    "全部会话停滞 ≥ 阈值后自动提炼原则层（关闭 = 暂停，等于原「暂停到明天」）。": 'Once all sessions have been stalled ≥ the threshold, distill the principle layer automatically (off = paused, same as the former "pause until tomorrow").',
+    "全部会话无活动持续满此毫秒数才触发（默认 3 小时）。": "Triggers only after all sessions have been inactive for this many milliseconds (default 3 hours).",
+    "全重捞（retry）= 永不放弃，未消化就一直重捞本批（保证不丢料；材料永久失败时每轮都会重试）；分级（graded）= 连续失败达 N 轮后放行水位并记审计告警（避免无限重试烧 LLM）。缺省 graded。": "Full re-fetch (retry) = never give up; keeps re-fetching this batch while unprocessed (guarantees nothing is lost; retries every round when material fails permanently); graded = releases the watermark after N consecutive failed rounds and logs an audit alert (avoiding infinite retries burning LLM calls). Default graded.",
+    "全重捞（不丢料，永不放弃）": "Full re-fetch (lose nothing, never give up)",
+    "关=不注册蒸馏器（/suite 等只读视图仍可用）；改动需重载生效": "Off = the distiller is not registered (read-only views such as /suite remain available); changes take effect after reload",
+    "关闭": "Off",
+    "关闭面板": "Close panel",
+    "写入 ~/.dsh/suite/scheduler.json；改后需重载插件生效。": "Written to ~/.dsh/suite/scheduler.json; reload the plugin for changes to take effect.",
+    "写入自持配置 ~/.dsh/suite/scheduler.json（深度睡眠同通道）。改动不会立刻作用到在跑的会话——**需重载插件后生效**。当前值读取中…": "Written to the self-held config ~/.dsh/suite/scheduler.json (same channel as deep sleep). Changes do not affect running sessions immediately — **they take effect after reloading the plugin**. Reading current values…",
+    "写入自持配置 ~/.dsh/suite/scheduler.json（深度睡眠同通道）。改动不会立刻作用到在跑的会话——**需重载插件后生效**。当前：蒸馏 ": "Written to the self-held config ~/.dsh/suite/scheduler.json (same channel as deep sleep). Changes do not affect running sessions immediately — **they take effect after reloading the plugin**. Current: distillation ",
+    "分级策略连败上限 deepSleep.failPolicyMaxRounds": "Graded policy consecutive-failure limit deepSleep.failPolicyMaxRounds",
+    "分级（连败 N 轮后放行并告警）": "Graded (release and alert after N consecutive failures)",
+    "分钟": "minutes",
+    "切换日志面板": "Toggle log panel",
+    "列表默认折叠详情，先给概览再按需展开。": "Details are collapsed by default: overview first, expand on demand.",
+    "加权": "Weighted",
+    "加深候选命中数 activityHotHits": "Deepening candidate hit count activityHotHits",
+    "加载可用模型中…": "Loading available models…",
+    "匹配 ": "Matched ",
+    "即时生效：改动直接写 ~/.dsh/suite/scheduler.json（写前备份）。": "Takes effect immediately: changes are written straight to ~/.dsh/suite/scheduler.json (backed up before writing).",
+    "原生校准型": "Natively calibrated",
+    "参数调节": "Parameter tuning",
+    "召回 ": "Recall ",
+    "召回与库版本": "Recall & bank version",
+    "召回冷条目降权 recallColdFactorPercent": "Recall downweight for cold entries recallColdFactorPercent",
+    "召回模式 ": "Recall mode ",
+    "召回融合策略 recallFusion": "Recall fusion strategy recallFusion",
+    "可用": "Available",
+    "向量与模型 · 当前链路": "Vectors & models · current pipeline",
+    "向量状态不可用: ": "Vector status unavailable: ",
+    "向量缓存": "Vector cache",
+    "向量缓存已清": "Vector cache cleared",
+    "启动时视图": "Startup view",
+    "启用": "Enable",
+    "启用深度睡眠自动归纳 enableDeepSleep": "Enable deep sleep auto-induction enableDeepSleep",
+    "启用认知环 mclEnabled": "Enable cognition ring mclEnabled",
+    "启用评估通道 evalEnabled": "Enable the evaluation channel (evalEnabled)",
+    "在状态栏上方常驻显示调用日志。": "Keep the call log visible above the status bar.",
+    "天": "days",
+    "如 http://127.0.0.1:11434/v1（Ollama）或 http://127.0.0.1:9915/v1（自建桥）；改完回车自动探测。": "e.g. http://127.0.0.1:11434/v1 (Ollama) or http://127.0.0.1:9915/v1 (self-hosted bridge); press Enter after editing to probe automatically.",
+    "如何启用语义检索": "How to enable semantic retrieval",
+    "字符": "chars",
+    "守藏根目录": "Shoucang root directories",
+    "守藏蒸馏器 enableDistill": "Shoucang distiller enableDistill",
+    "宿主原生皮肤": "Host native skin",
+    "宿主可用 ": "Host available ",
+    "宿主模型目录为空 —— 可在「自定义」里手填模型名，或先在 Harness 里配好模型": 'The host model catalog is empty — type a model id under "Custom", or configure a model in Harness first',
+    "导出中…": "Exporting…",
+    "导出快照": "Export snapshot",
+    "导出配置原文 + 界面偏好（JSON）": "Export the raw configuration + interface preferences (JSON)",
+    "导航分组显示": "Show navigation groups",
+    "导航宽度": "Nav width",
+    "尚未登记任何根目录——在上方输入路径添加。": "No root directory registered yet — enter a path above to add one.",
+    "嵌入服务连通性测试": "Embedding service connectivity test",
+    "左侧导航像素宽度（140–320）；窄屏（≤900px）由响应式断点接管。": "Left navigation width in pixels (140–320); narrow screens (≤900px) are handled by the responsive breakpoint.",
+    "已允许出网": "Egress allowed",
+    "已写入": "Saved",
+    "已禁止出网": "Egress disallowed",
+    "常驻显示记忆库状态与库路径。": "Always show memory bank status and bank path.",
+    "平均耗时": "Avg duration",
+    "开": "On",
+    "开=按相关性选行（缺省）；关=回落「基线 + 新鲜度」选行。即时生效（下次注入即用）": 'on = select lines by relevance (default); off = fall back to "baseline + freshness" selection. Takes effect immediately (used on the next injection)',
+    "开=类型化判定可用（choice / boolean / score）；关=通道整体停用（缺省关，fail-closed）。写入 scheduler.json。": "On = typed judgments available (choice / boolean / score); off = the whole channel is disabled (off by default, fail-closed). Written to scheduler.json.",
+    "开=融合召回（dense0.7+lexical0.3）；关=纯词法。写 scheduler.json": "On = fusion recall (dense 0.7 + lexical 0.3); off = pure lexical. Writes to scheduler.json",
+    "当前": "Current",
+    "当前为显式关闭态（scheduler.json 里 evalEnabled=false）。": "Currently explicitly off (evalEnabled=false in scheduler.json).",
+    "当前根": "Current root",
+    "当前注入：空（hot_memory 关或画像/记忆为空）": "Current injection: empty (hot_memory off, or profile/memory is empty)",
+    "当前直接注入 ≈ ": "Current direct injection ≈ ",
+    "当前：": "Current:",
+    "快捷键": "Shortcuts",
+    "恢复默认设置": "Restore defaults",
+    "慢通道最多再引导次数（0–3，缺省 1；绝不死锁）": "Maximum re-guidance count on the slow path (0–3, default 1; never deadlocks)",
+    "慢通道材料硬预算（120–4000 字符，缺省 600；只作用于慢通道首步）": "Hard budget for slow path material (120–4000 chars, default 600; applies only to the first slow path step)",
+    "慢通道注入的指针条数（1–5，缺省 3）": "Number of pointers injected on the slow path (1–5, default 3)",
+    "慢通道首步注入「薄契约 + top-k 指针」并按需再引导一次；快通道零额外往返。缺省开（false = 一键回滚）": 'The slow path injects a "thin contract + top-k pointers" on its first step and re-guides once as needed; the fast path adds zero extra round trips. On by default (false = one-click rollback)',
+    "成功率": "Success rate",
+    "手写 ~/.dsh/suite/scheduler.json：embedBaseUrl=云端端点 + embedModel=模型名 + embedApiKeyEnv=key 环境变量名；改后重载并「清缓存重建」。": 'Hand-edit ~/.dsh/suite/scheduler.json: embedBaseUrl=cloud endpoint + embedModel=model name + embedApiKeyEnv=key environment variable name; after editing, reload and "Clear cache & rebuild".',
+    "手动触发一轮蒸馏——携带 pending/ 候选（如 project-defer 降级卡）重裁决入册。workspace 反解修复后 project 卡直写工作区 devref。": "Manually trigger one distillation round — carrying pending/ candidates (such as project-defer downgrade cards) through re-adjudication and into the bank. After the workspace back-resolution fix, project cards are written directly to the workspace devref.",
+    "打开 / 关闭面板": "Open / close panel",
+    "打开时自动刷新": "Auto-refresh on open",
+    "打开面板即重新拉取当前视图数据。": "Re-fetch the current view\\'s data as soon as the panel opens.",
+    "打开面板后默认落地的页面。优先级：#sc=<视图名> 深链 > 上次视图记忆 > 此项。": "The page the panel lands on by default when opened. Priority: #sc=<view name> deep link > last-view memory > this setting.",
+    "把「答案可枚举、但判据写不成代码」的判定交给一个可配置模型。**默认关闭**：关闭时行为与未装此能力逐字节一致。改动写 ~/.dsh/suite/scheduler.json，**重载插件后生效**。": "Delegate judgments whose answers are enumerable but whose criteria cannot be expressed as code to a configurable model. **Off by default**: while off, behavior is byte-identical to not having this capability at all. Changes are written to ~/.dsh/suite/scheduler.json and **take effect after reloading the plugin**.",
+    "折叠阈值": "Fold threshold",
+    "指向含 shoucang.config.yaml 的工作区目录。该目录本身即为 Obsidian 兼容 vault（Markdown + frontmatter + [[双链]]），可用 Obsidian 直接打开。": "Points to a workspace directory containing shoucang.config.yaml. That directory is itself an Obsidian-compatible vault (Markdown + frontmatter + [[wikilinks]]) and can be opened directly in Obsidian.",
+    "按 ": "By ",
+    "按**成本结构**分档（不是按厂商）：本机零成本 / 远程小快 / 原生校准 / 现有大模型。档位决定**超时预算**（本机推理含模型加载给 60s、远端快模型 15s）与**置信阈值口径**（原生档用校准阈值，其余用保守阈值）。": "Tiered by **cost structure**, not by vendor: local zero-cost / remote small-fast / natively calibrated / existing large model. The level determines the **timeout budget** (local inference includes model loading, so 60s; remote fast models 15s) and the **confidence-threshold regime** (the native tier uses calibrated thresholds, the rest use conservative ones).",
+    "按语义显示分组标题（守藏 / 总览 / 记忆 / 运行 / 配置）。": "Show semantic group headings (Shoucang / Overview / Memory / Runtime / Config).",
+    "探测发起延迟 deepSleepProbeAfterMs": "Probe launch delay deepSleepProbeAfterMs",
+    "探测采样间隔 deepSleepProbeWindowMs": "Probe sampling interval deepSleepProbeWindowMs",
+    "新鲜度保底槽 injectFreshSlots": "Freshness reserved slots injectFreshSlots",
     /* ── 槽位预算三键（2026-09-22 · ADR-328 ②）—— 控件新入面板，文案须双语齐备 ── */
-    "\u6CE8\u5165\u603B\u9884\u7B97 injectBudgetChars": "Injection total budget injectBudgetChars",
-    "\u6CE8\u5165\u6587\u672C\u7684\u5B57\u7B26\u603B\u9884\u7B97\uFF08**\u53C2\u4E0E\u9650\u989D\u7684\u4E09\u5C42\u4E4B\u548C**\uFF1A\u7A33\u5B9A\u9762 + \u52A8\u6001\u9762 + \u4E00\u6B21\u6027\uFF1B\u8303\u56F4 800\u201320000\uFF0C\u7F3A\u7701 4000\uFF09\u3002\u8D8A\u754C\u7531\u670D\u52A1\u7AEF\u5939\u56DE\u5E76\u5728\u9762\u677F\u6807\u300C\u5DF2\u5939\u53D6\u300D": 'Character budget for the injected text (**sum of the three limited layers**: stable + dynamic + one-shot; range 800\u201320000, default 4000). Out-of-range values are clamped server-side and flagged as "clamped" in the panel',
-    "\u60C5\u5883\u69FD\u9884\u7B97 injectSituationBudgetChars": "Situation slot budget injectSituationBudgetChars",
-    "\u60C5\u5883\u69FD\uFF08\u73AF\u8BB0\u5F55\u6309\u60C5\u5883\u952E\u5339\u914D\uFF09\u7684\u5B57\u7B26\u9884\u7B97\uFF08\u8303\u56F4 0\u20134000\uFF0C\u7F3A\u7701 1200\uFF09\u3002\u5B83**\u72EC\u7ACB\u4E8E**\u6CE8\u5165\u603B\u9884\u7B97\uFF0C\u4E0D\u5403\u4E09\u5C42\u989D\u5EA6": "Character budget for the situation slot (ring records matched by situation key; range 0\u20134000, default 1200). It is **independent of** the total injection budget and does not consume the three layers",
-    "\u6863\u4F4D\u4E0A\u9650 injectLevelCaps": "Level caps injectLevelCaps",
-    "\u56DB\u6863\uFF08low/medium/high/smart\uFF09\u5404\u81EA\u7684\u9009\u884C\u4E0A\u9650\uFF08**\u5BF9\u8C61\u952E**\uFF0C\u7F3A\u7701 2/4/8/14\uFF09\u3002\u6539\u540E\u6574\u5BF9\u8C61\u5199\u56DE\uFF1B\u5355\u6863\u8D8A\u754C\u7531\u670D\u52A1\u7AEF\u62D2\u5E76\u56DE\u62A5": "Per-level row caps for the four levels (low/medium/high/smart; an **object key**, default 2/4/8/14). The whole object is written back; an out-of-range level is rejected server-side and reported",
-    "\u65B9\u6848 A \xB7 \u672C\u5730 GPU \u670D\u52A1\uFF08\u63A8\u8350\uFF0C\u96F6 token \u6210\u672C\uFF09": "Option A \xB7 Local GPU service (recommended, zero token cost)",
-    "\u65B9\u6848 B \xB7 \u4E91\u7AEF API": "Option B \xB7 Cloud API",
-    "\u65E0\u54CD\u5E94": "No response",
-    "\u65E0\u6CD5\u8FDE\u63A5\u8BE5\u670D\u52A1\uFF08/v1/models \u4E0E /health \u5747\u65E0\u54CD\u5E94\uFF09": "Cannot reach the service (neither /v1/models nor /health responded)",
-    "\u65E0\u6CD5\u8FDE\u63A5\u8BE5\u670D\u52A1\uFF08/v1/models \u4E0E /health \u5747\u65E0\u54CD\u5E94\uFF09\u2014\u2014\u68C0\u67E5\u5730\u5740/\u670D\u52A1\u662F\u5426\u5728\u8DD1/CORS": "Cannot connect to this service (neither /v1/models nor /health responds) \u2014 check the address / whether the service is running / CORS",
-    "\u65E0\u8BB0\u5F55": "No records",
-    "\u663E\u793A\u5BC6\u5EA6": "Display density",
-    "\u663E\u793A\u65E5\u5FD7\u9762\u677F": "Show log panel",
-    "\u6682\u65E0\u5E26\u8017\u65F6\u7684\u8BB0\u5F55": "No timed records yet",
-    "\u6700\u8FD1\u6539\u52A8\uFF085 \u6761\uFF09": "Recent changes (last 5)",
-    "\u6700\u8FD1\u67E5\u8BE2: ": "Last query: ",
-    "\u670D\u52A1": "Service",
-    "\u670D\u52A1\u5728\u4F46\u65E0 /models \u679A\u4E3E\uFF08\u7528\u56FA\u5B9A\u6A21\u578B\uFF09": "Service is up but has no /models listing (using the fixed model)",
-    "\u670D\u52A1\u5728\u4F46\u65E0 /models\u2014\u2014\u7528\u56FA\u5B9A ": "Service is up but has no /models \u2014 using fixed ",
-    "\u670D\u52A1\u5730\u5740\uFF08OpenAI \u517C\u5BB9 /v1 \u6839\uFF09": "Service address (OpenAI-compatible /v1 root)",
-    "\u670D\u52A1\u5730\u5740\uFF08OpenAI \u517C\u5BB9 /v1 \u6839\uFF09\u4E0E key \u73AF\u5883\u53D8\u91CF": "Service URL (OpenAI-compatible /v1 root) and key environment variable",
-    "\u672A\u63A2\u6D4B\u5230\u6A21\u578B": "No models detected",
-    "\u672A\u6FC0\u6D3B\u6839\u76EE\u5F55\u2014\u2014\u8BF7\u5728\u300C\u9AD8\u7EA7 \xB7 \u6839\u76EE\u5F55\u300D\u533A\u6DFB\u52A0\u3002": "No active root directory \u2014 add one in the \u201CAdvanced \xB7 Root directories\u201D section.",
-    "\u672A\u914D\u7F6E\u65F6\u81EA\u52A8\u8BCD\u6CD5\u53EC\u56DE\uFF08\u53EF\u7528\u4F46\u65E0\u8BED\u4E49\uFF09\uFF1B\u914D\u7F6E\u540E\u672C\u9875 provider \u53D8\u5C31\u7EEA\u3002": "When unconfigured, recall falls back to lexical automatically (usable but without semantics); once configured, the provider on this page becomes ready.",
-    "\u672C\u5730\u4FDD\u7559\uFF08\u4E0A\u9650 500 \u6761\uFF09": "Kept locally (max 500)",
-    "\u672C\u673A Ollama\uFF08\u96F6\u6210\u672C \xB7 \u514D key\uFF09": "Local Ollama (zero cost \xB7 no key)",
-    "\u672C\u673A arbiter\uFF08Laya / Jev \u5FEB\u6A21\u578B\uFF09": "Local arbiter (Laya / Jev fast models)",
-    "\u672C\u673A\u7AEF\u70B9\u514D key\uFF1B\u8FDC\u7AEF\u7AEF\u70B9\u987B\u53E6\u5F00\u51FA\u7F51\u8BB8\u53EF\uFF08\u89C1\u4E0B\uFF09\u3002\u5730\u5740\u6309**\u89E3\u6790\u540E\u7684\u4E3B\u673A\u540D**\u5224\u662F\u5426\u672C\u673A\u2014\u2014127.0.0.1.evil.com \u8FD9\u7C7B\u4F2A\u9020\u4E0D\u4F1A\u88AB\u5F53\u6210\u672C\u673A\u3002": "Local endpoints need no key; remote endpoints additionally require egress permission (see below). Whether an address is local is decided by the **parsed hostname** \u2014 look-alikes such as 127.0.0.1.evil.com are not treated as local.",
-    "\u672C\u673A\u7AEF\u70B9\u6A21\u578B\u4E0D\u5728\u5BBF\u4E3B\u76EE\u5F55\u91CC \u2014\u2014 \u7528\u300C\u679A\u4E3E\u6A21\u578B\u300D\u5217\u51FA\u6765\uFF0C\u6216\u76F4\u63A5\u624B\u586B\u6A21\u578B\u540D": 'Local endpoint models are not in the host catalog \u2014 use "List models", or type the model id directly',
-    "\u672C\u673A\uFF08\u96F6\u6210\u672C \xB7 \u514D key\uFF09": "Local (zero cost \xB7 no key)",
-    "\u672C\u8F6E\u65B0\u589E\u6B63\u6587\u5C11\u4E8E\u6B64\u503C\u8DF3\u8FC7\u84B8\u998F\uFF08\u6C34\u4F4D\u4ECD\u63A8\u8FDB\uFF1B0=\u4E0D\u8BBE\u9650\uFF0C\u9ED8\u8BA4 200\uFF09": "Skip distillation when this turn\\'s new body text is below this value (the watermark still advances; 0 = no limit, default 200)",
-    "\u672C\u8F6E\u6700\u5C11\u5B57\u7B26 minTurnChars": "Minimum chars this turn minTurnChars",
-    "\u6761": "items",
-    "\u679A\u4E3E\u4E2D\u2026": "Listing\u2026",
-    "\u679A\u4E3E\u6A21\u578B": "List models",
-    "\u6863\u4F4D": "Level",
-    "\u6863\u4F4D evalTier": "Level (evalTier)",
-    "\u6863\u4F4D\uFF08reasoning effort / \u6210\u672C\u7ED3\u6784\u5206\u6863\uFF09": "Level (reasoning effort / cost tier)",
-    "\u68C0\u7D22\u53C2\u6570\uFF08\u540D\u79F0 / \u952E\u540D / \u8BF4\u660E\uFF09\u2026": "Search parameters (name / key / description)\u2026",
-    "\u6982\u89C8\u2014\u8BE6\u60C5\u5206\u5C42": "Overview\u2013detail layering",
-    "\u6A21\u578B": "Model",
-    "\u6A21\u578B\u540D\uFF08\u5982 qwen3.5:2b / jev-latest\uFF09": "Model id (e.g. qwen3.5:2b / jev-latest)",
-    "\u6A21\u578B\u540D\uFF08\u5982 qwen3.5:2b\uFF09": "Model id (e.g. qwen3.5:2b)",
-    "\u6B21": "times",
-    "\u6BCF\u6B21\u6210\u529F\u5199\u5165\u540E\u63D0\u4EA4\u5E93\u5FEB\u7167\uFF08\u53EF diff/revert\uFF1B\u5E93\u5728 ~/.dsh \u4E0B\uFF0C\u4E0D\u5165\u516C\u5F00\u6811\uFF09\u3002\u7F3A\u7701\u5F00": "Commit a bank snapshot after every successful write (diff/revert; the bank lives under ~/.dsh and never enters the public tree). On by default",
-    "\u6BCF\u6B65\u4E00\u884C\u5199 suite/knowledge/audit/mcl-audit.jsonl\uFF08\u901A\u9053/\u719F\u6089\u5EA6/\u6CE8\u5165/\u518D\u5F15\u5BFC/\u5408\u89C4\uFF09": "Writes one line per step to suite/knowledge/audit/mcl-audit.jsonl (path/familiarity/injection/re-guidance/compliance)",
-    "\u6CBF\u7528\u6A21\u578B\u9ED8\u8BA4": "Use the model's default",
-    "\u6CE8\u5165\u53C2\u6570\uFF08\u5168\u5C40\uFF0C\u5199 ~/.dsh/suite/scheduler.json\uFF09\u4E0E\u8FD0\u884C\u65F6\u901A\u9053\u3002\u6539\u52A8\u5373\u65F6\u5199\u56DE\uFF08scheduler.json \u5907\u4EFD\u5148\u884C\uFF09\u3002\u6CE8\u5165\u914D\u7F6E\u5DF2\u8FC1\u5168\u5C40\uFF0C\u4E0D\u518D\u968F root \u5207\u6362\u53D8\u5316\uFF08root YAML \u4EC5\u5269\u300C\u914D\u7F6E\u539F\u6587\u300D\u9875\u53EF\u76F4\u63A5\u7F16\u8F91\uFF09\u3002": 'Injection parameters (global, written to ~/.dsh/suite/scheduler.json) and runtime channels. Changes are written back immediately (scheduler.json is backed up first). Injection config has moved to global scope and no longer changes with root switching (the root YAML only keeps the "raw config" page, which is still directly editable).',
-    "\u6CE8\u5165\u65F6\u4F18\u5148\u4FDD\u7559\u300C\u6700\u8FD1\u65B0\u589E\u6761\u76EE\u300D\u7684\u69FD\u4F4D\u6570\uFF080\u20136\uFF0C\u7F3A\u7701 2\uFF09": 'Number of slots reserved at injection time for "most recently added items" (0\u20136, default 2)',
-    "\u6CE8\u5165\u76F8\u5173\u6027\u91CD\u6392 injectRelevance": "Injection relevance re-ranking injectRelevance",
-    "\u6D3B\u6027 / \u9057\u5FD8\u9608\u503C\uFF08v7\uFF09": "Activity / forgetting thresholds (v7)",
-    "\u6D3B\u6027\u964D\u7EA7 warm \u9608\u503C activityWarmDays": "Activity demotion warm threshold activityWarmDays",
-    "\u6D4B\u8BD5\u8FDE\u901A\u6027": "Test connectivity",
-    "\u6DF1\u5EA6\u7761\u7720\u9608\u503C": "Deep sleep thresholds",
-    "\u6DF1\u5EA6\u7761\u7720\uFF08\u79BB\u7EBF\u56DE\u60F3\u63D0\u70BC [\u539F\u5219]/[\u8DEF\u5F84] \u753B\u50CF\u6210\u957F\uFF09\u7528\u7684\u6A21\u578B\u3002\u7EE7\u627F=\u8DDF\u968F\u4E3B\u4F1A\u8BDD\u3002": "The model used for deep sleep (offline recall that extracts [principle]/[path] profile growth). Inherit = follow the main session.",
-    "\u6DF1\u7761\u5F52\u7EB3\u6A21\u578B": "Deep sleep summarization model",
-    "\u6DF1\u7761\u672A\u6D88\u5316\u7B56\u7565": "Deep sleep unprocessed policy",
-    "\u6DF1\u7761\u672A\u6D88\u5316\u7B56\u7565 deepSleep.failPolicy": "Deep sleep unprocessed policy deepSleep.failPolicy",
-    "\u6DF1\u7761\u6BCF\u8F6E\u7528 deepSleepLanded \u5224\u5B9A\u672C\u8F6E\u662F\u5426\u300C\u5DF2\u6D88\u5316\u300D\u3002\u672A\u6D88\u5316\u65F6\u7684\u4E24\u79CD\u53D6\u5411\u5728\u6B64\u5207\u6362\u2014\u2014\u5168\u91CD\u635E\u4FDD\u8BC1\u4E0D\u4E22\u6599\u4F46\u53EF\u80FD\u65E0\u9650\u91CD\u8BD5\uFF1B\u5206\u7EA7\u5728\u8FDE\u8D25\u8FBE\u4E0A\u9650\u540E\u653E\u884C\u5E76\u544A\u8B66\uFF0C\u907F\u514D\u65E0\u9650\u91CD\u8BD5\u70E7 LLM\u3002": 'Each deep sleep round uses deepSleepLanded to decide whether this round has been "processed". The two approaches for unprocessed rounds are switched here \u2014 full re-fetch guarantees nothing is lost but may retry forever; graded releases the watermark after the consecutive-failure limit and raises an alert, avoiding infinite retries burning LLM calls.',
-    "\u6DFB\u52A0\u5E76\u542F\u7528": "Add and enable",
-    "\u6DFB\u52A0\u6839\u76EE\u5F55": "Add root directory",
-    "\u6E05\u7406\u4E2D\u2026": "Clearing\u2026",
-    "\u6E05\u7A7A\u5411\u91CF\u7F13\u5B58\u5E76\u91CD\u5EFA\uFF1F\u6362\u6A21\u578B\u540E\u5FC5\u987B\u6267\u884C\uFF08\u5426\u5219\u65E7\u5411\u91CF\u6DF7\u7528\u5BFC\u81F4\u8BED\u4E49\u5931\u771F\uFF09\u3002": "Clear the vector cache and rebuild? This is required after switching models (otherwise old and new vectors mix and distort semantics).",
-    "\u6E05\u7F13\u5B58\u91CD\u5EFA": "Clear cache & rebuild",
-    "\u70B9\u51FB\u300C\u679A\u4E3E\u6A21\u578B\u300D\u52A0\u8F7D\u2026": 'Click "List models" to load\u2026',
-    "\u70ED\u8BB0\u5FC6\u6CE8\u5165\u5F3A\u5EA6 injection.level": "Hot-memory injection strength injection.level",
-    "\u719F\u6089\u5EA6": "Familiarity",
-    "\u73B0\u6709\u5927\u6A21\u578B": "Existing large model",
-    "\u7528\u6237\u753B\u50CF\u8BB0\u5FC6\u5E93\u5BB9\u91CF\uFF08\u5B57\u7B26\uFF09\uFF1A": "User profile memory bank capacity (chars): ",
-    "\u753B\u50CF persona \u6CE8\u5165\u6863\u4F4D injection.persona": "Profile persona injection level injection.persona",
-    "\u754C\u9762\u504F\u597D": "Interface preferences",
-    "\u754C\u9762\u504F\u597D\u4E0E\u9AD8\u7EA7\u64CD\u4F5C\u3002\u914D\u7F6E\u539F\u6587\uFF08YAML\uFF09\u4E0E\u884C\u7EA7\u7F16\u8F91\u6536\u5728\u6B64\u5904\uFF0C\u914D\u98CE\u9669\u63D0\u793A\u3002": "Interface preferences and advanced operations. The raw configuration (YAML) and line-level editing live here, with risk warnings.",
-    "\u754C\u9762\u76AE\u80A4": "UI skin",
-    "\u754C\u9762\u8BBE\u7F6E\u5DF2\u6062\u590D\u9ED8\u8BA4": "UI settings restored to defaults",
-    "\u7559\u7A7A=\u7EE7\u627F\u4E3B\u4F1A\u8BDD\u6A21\u578B": "Leave blank = inherit the main session model",
-    "\u76F4\u63A5\u7F16\u8F91 shoucang.config.yaml \u5168\u6587\u3002\u4FDD\u5B58\u65F6\u539F\u6587\u4EF6\u81EA\u52A8\u5907\u4EFD\u4E3A .bak-\u65F6\u95F4\u6233\u3002": "Edit shoucang.config.yaml in full directly. On save the original file is automatically backed up as .bak-timestamp.",
-    "\u77E5\u8BC6\u7D22\u5F15\u8BB0\u5FC6\u5E93\u5BB9\u91CF\uFF08\u5B57\u7B26\uFF09\uFF1A": "Knowledge index memory bank capacity (chars): ",
-    "\u786E\u8BA4\u6062\u590D\u5168\u90E8\u754C\u9762\u8BBE\u7F6E\u4E3A\u9ED8\u8BA4\u503C\uFF1F": "Restore all UI settings to their default values?",
-    "\u79D2": "sec",
-    "\u7A7A\u95F2\u5524\u9192 idleWakeMs": "Idle wake-up idleWakeMs",
-    "\u7ACB\u5373\u5904\u7406 pending \u5019\u9009": "Process pending candidates now",
-    "\u7ACB\u5373\u84B8\u998F\u4E00\u6B21": "Distill now",
-    "\u7AEF\u70B9\u4E0E\u6863\u4F4D\u5DF2\u8BBE": "Endpoint and level saved",
-    "\u7D27\u51D1": "Compact",
-    "\u7D27\u51D1\u6A21\u5F0F\u9690\u85CF\u63CF\u8FF0\u6587\u5B57\u3001\u538B\u7F29\u884C\u9AD8\uFF0C\u63D0\u5347\u4FE1\u606F\u5BC6\u5EA6\u3002": "Compact mode hides description text and compresses row height to increase information density.",
-    "\u7EDD\u5BF9\u8DEF\u5F84\uFF0C\u987B\u5305\u542B shoucang.config.yaml": "Absolute path; must contain shoucang.config.yaml",
-    "\u7EE7\u627F\u4E3B\u4F1A\u8BDD": "Inherit the main session",
-    "\u7EE7\u627F\u4E3B\u4F1A\u8BDD\uFF08\u9ED8\u8BA4\uFF09": "Inherit the main session (default)",
-    "\u7EE7\u627F\u4E3B\u6A21\u578B\uFF08\u9ED8\u8BA4\uFF09": "Inherit the main model (default)",
-    "\u7F13\u5B58 ": "Cache ",
-    "\u7F13\u5B58\u6309 \u6A21\u578B+\u884C\u6587\u672C+\u5730\u5740 \u6307\u7EB9\u547D\u4E2D\uFF1B\u6362\u6A21\u578B/\u6539\u4E91\u7AEF\u540E\u70B9\u300C\u6E05\u7F13\u5B58\u91CD\u5EFA\u300D\uFF0C\u4E0B\u6B21\u53EC\u56DE\u6309\u65B0\u6A21\u578B\u81EA\u52A8\u91CD\u5D4C\uFF08\u5F53\u524D ": 'The cache is keyed by the model + line text + address fingerprint; after switching models or changing the cloud config, click "Clear cache & rebuild" and the next recall re-embeds automatically with the new model (currently ',
-    "\u81EA\u5B9A\u4E49 OpenAI \u517C\u5BB9\uFF08\u4E91\u7AEF\uFF09": "Custom OpenAI-compatible (cloud)",
-    "\u81EA\u5B9A\u4E49\uFF08\u624B\u586B\u5730\u5740\u4E0E\u6A21\u578B\u540D\uFF09": "Custom (type the URL and model id)",
-    "\u81EA\u5B9A\u4E49\uFF08\u624B\u586B\u6A21\u578B\u540D\uFF09": "Custom (type the model id)",
-    "\u81EA\u5EFA bge-m3 \u6865\uFF08\u53EF\u9009\uFF09": "Self-hosted bge-m3 bridge (optional)",
-    "\u8212\u9002": "Comfortable",
-    "\u83B7\u53D6\u5931\u8D25": "Fetch failed",
-    "\u84B8\u998F / \u6DF1\u7761\u6A21\u578B": "Distillation / deep sleep models",
-    "\u84B8\u998F\u4E0E\u6DF1\u5EA6\u7761\u7720\u5404\u81EA\u53EF\u9009\u5BBF\u4E3B\u6A21\u578B\uFF08\u76F4\u63A5\u7528 DeepSeek Harness \u6A21\u578B\u2014\u2014\u5148\u5728 Harness \u914D\u7F6E\u597D\u6A21\u578B\uFF0C\u8FD9\u91CC\u4E0B\u62C9\u9009\u5373\u53EF\uFF09\u3002\u300C\u7EE7\u627F\u4E3B\u4F1A\u8BDD\u300D= \u4E0D\u6307\u5B9A\uFF0C\u8DDF\u968F\u5F53\u524D\u4F1A\u8BDD\u6A21\u578B\u3002\u6863\u4F4D\uFF08reasoning effort\uFF09\u7531\u6A21\u578B\u9002\u914D\u5668\u58F0\u660E\uFF0C\u672A\u58F0\u660E\u5219\u6CBF\u7528\u6A21\u578B\u9ED8\u8BA4\u3002\u6539\u52A8\u5199 scheduler.json\uFF0C\u9700\u91CD\u8F7D\u751F\u6548\u3002": 'Distillation and deep sleep can each pick a host model (straight from the DeepSeek Harness model system \u2014 configure the model in Harness first, then select it here). "Inherit the main session" = unspecified, follow the current session model. The level (reasoning effort) is declared by the model adapter; if it declares none, the model default applies. Changes are written to scheduler.json and take effect after reloading.',
-    "\u84B8\u998F\u4E2D\u2026\uFF08\u7EA6 1-2 \u5206\u949F\uFF09": "Distilling\u2026 (about 1-2 minutes)",
-    "\u84B8\u998F\u672A\u89E6\u53D1": "Distillation not triggered",
-    "\u84B8\u998F\u6A21\u578B": "Distillation model",
-    "\u84B8\u998F\u8282\u6D41\uFF08\u8FD0\u884C\u65F6\u901A\u9053\uFF09": "Distillation throttling (runtime channel)",
-    "\u884C\u7EA7\u5220\u9664\u5DF2\u6267\u884C\uFF08\u53EF\u80FD\u9700\u540C\u6B65\u7D22\u5F15\uFF09\uFF1A": "Line-level deletion applied (index may need re-sync): ",
-    "\u884C\u7EA7\u7F16\u8F91\u5DF2\u6267\u884C\uFF08\u53EF\u80FD\u9700\u540C\u6B65\u7D22\u5F15\uFF09\uFF1A": "Line-level edit applied (index may need re-sync): ",
-    "\u89C1\u4E0B\u65B9\u300C\u9519\u8BEF\u5B9A\u4F4D\u300D": "See Error location below",
-    "\u8BA4\u77E5\u73AF\u5BA1\u8BA1\u6D41 mclAudit": "Cognition ring audit stream mclAudit",
-    "\u8BA4\u77E5\u73AF\uFF08MCL \xB7 \u719F\u6089\u5EA6\u5206\u6D41 + \u6709\u754C\u518D\u5F15\u5BFC\uFF09": "Cognition ring (MCL \xB7 familiarity routing + bounded re-guidance)",
-    "\u8BB0\u5FC6\u5E93 git \u7248\u672C\u5316 bankGit": "Memory bank git versioning bankGit",
-    "\u8BB0\u5FC6\u5E93\u5C1A\u65E0 git \u5FEB\u7167\uFF08\u5199\u5165\u4E00\u6B21\u5373\u51FA\u73B0\uFF09": "No git snapshot for the memory bank yet (one write and it appears)",
-    "\u8BB0\u5FC6\u6761\u76EE\u6D3B\u6027\u72B6\u6001\u673A\uFF08active\u2192warm\u2192cold\uFF09\u4E0E\u9057\u5FD8/\u52A0\u6DF1\u5019\u9009\u7684\u5224\u5B9A\u9608\u503C\uFF0C\u4EE5\u53CA\u878D\u5408\u53EC\u56DE\u5BF9 cold/retired \u6761\u76EE\u7684\u964D\u6743\u7CFB\u6570\u3002\u6539\u52A8\u7ECF /set \u5373\u65F6\u5199\u56DE scheduler.json\uFF08\u4E0E\u6CE8\u5165/\u84B8\u998F\u914D\u7F6E\u540C\u901A\u9053\uFF0C\u91CD\u8F7D\u540E\u6309\u65B0\u9608\u503C\u8FD0\u884C\uFF09\u3002": "The memory entry activity state machine (active\u2192warm\u2192cold) and the thresholds for forgetting/deepening candidates, plus the downweight factor that fusion recall applies to cold/retired entries. Changes are written back immediately to scheduler.json via /set (same channel as injection/distillation config; the new thresholds take effect after reload).",
-    "\u8BC4\u4F30\u6A21\u578B": "Evaluation model",
-    "\u8BC4\u4F30\u901A\u9053 \u5173": "Evaluation channel off",
-    "\u8BC4\u4F30\u901A\u9053 \u5F00": "Evaluation channel on",
-    "\u8BC4\u4F30\u901A\u9053\u914D\u7F6E\u5DF2\u8BBE": "Evaluation channel configuration saved",
-    "\u8BC4\u4F30\u901A\u9053\uFF08\u53EF\u914D\u7F6E\u6A21\u578B \xB7 \u6309\u9700\u5F00\u542F\uFF09": "Evaluation channel (configurable model \xB7 opt-in)",
-    "\u8BE5\u6A21\u578B\u672A\u58F0\u660E\u53EF\u9009\u6863\u4F4D \u2014\u2014 \u6CBF\u7528\u6A21\u578B\u9ED8\u8BA4": "This model declares no selectable level \u2014 use the model's default",
-    "\u8BE5\u901A\u9053\u672A\u5B9A\u4E49\u6863\u4F4D \u2014\u2014 \u4FDD\u6301\u300C\u4E0D\u6307\u5B9A\u300D": "This channel defines no level \u2014 keep it unspecified",
-    "\u8BED\u4E49\u53EC\u56DE\u5F00\u5173 embedEnabled": "Semantic recall switch embedEnabled",
-    "\u8BED\u4E49\u53EC\u56DE\uFF08vec.ts + bge-m3\uFF09\u8FD0\u884C\u6001\u4E0E\u5F00\u5173\u3002\u6539\u52A8\u5199 ~/.dsh/suite/scheduler.json\uFF0C**\u9700\u91CD\u8F7D\u63D2\u4EF6\u540E\u751F\u6548**\u3002\u672C\u5730 GPU \u96F6 token\uFF1B\u6362\u4E91\u7AEF\u5728\u4E0B\u65B9\u586B baseUrl/model\u3002": "Runtime state and switch for semantic recall (vec.ts + bge-m3). Changes are written to ~/.dsh/suite/scheduler.json and **take effect after reloading the plugin**. Local GPU costs zero tokens; to switch to the cloud, fill in baseUrl/model below.",
-    "\u8BED\u4E49\u68C0\u7D22\u6765\u6E90": "Semantic retrieval source",
-    "\u8BF7\u6C42\u603B\u6570": "Total requests",
-    "\u8BF7\u8F93\u5165 vault \u7684\u7EDD\u5BF9\u8DEF\u5F84": "Enter the vault\\'s absolute path",
-    "\u8BFB\u53D6\u4E2D\u2026": "Loading\u2026",
-    "\u8BFB\u53D6\u5931\u8D25\uFF08/config/recent\uFF09": "Failed to load (/config/recent)",
-    "\u8D85\u8FC7\u8BE5\u884C\u6570\u7684\u5217\u8868\u9ED8\u8BA4\u6298\u53E0\u3002": "Lists longer than this row count are collapsed by default.",
-    "\u8F6E\u8BE2\u95F4\u9694": "Polling interval",
-    "\u8F6E\u8BE2\u95F4\u9694\uFF08\u6BEB\u79D2\uFF09": "Polling interval (ms)",
-    "\u8FC7\u6EE4\u65E5\u5FD7\u9762\u677F\u663E\u793A\u7684\u6700\u4F4E\u7EA7\u522B\uFF08\u5168\u90E8 / \u8B66\u544A+ / \u4EC5\u9519\u8BEF\uFF09\u3002": "Minimum level shown in the log panel (all / warning+ / errors only).",
-    "\u8FD1 30 \u5929\u547D\u4E2D \u2265 \u6B64\u503C \u2192 \u52A0\u6DF1\u5019\u9009 B\uFF08\u7F3A\u7701 5\uFF0C\u5582\u6DF1\u7761\u5F52\u7EB3\uFF09": "Hits in the last 30 days \u2265 this value \u2192 deepening candidate B (default 5; feeds deep sleep summarization)",
-    "\u8FDC\u7A0B\u5C0F\u5FEB\u6A21\u578B": "Remote small fast model",
-    "\u8FDE\u901A\u6027\u6D4B\u8BD5": "Connectivity test",
-    "\u9009\u62E9\u6A21\u578B\u2026": "Select a model\u2026",
-    "\u9009\u670D\u52A1 \u2192 \u81EA\u52A8\u586B\u5730\u5740 \u2192 \u4E0B\u65B9\u81EA\u52A8\u63A2\u6D4B\u5E76\u5217\u51FA\u53EF\u7528\u6A21\u578B\uFF08\u6D4F\u89C8\u5668\u76F4\u8FDE\uFF09\u3002\u6362\u670D\u52A1/\u6A21\u578B\u540E\u8BF7\u70B9\u300C\u6E05\u7F13\u5B58\u91CD\u5EFA\u300D\u3002": 'Pick a service \u2192 the address is filled in automatically \u2192 availability is probed below and available models are listed (direct browser connection). After switching service/model, click "Clear cache & rebuild".',
-    "\u901A\u8FC7": "passed",
-    "\u901A\u9053\u5DF2\u5173\u95ED\u2014\u2014\u5148\u6253\u5F00\u4E0A\u65B9\u5F00\u5173\u5E76\u91CD\u8F7D": "Channel is off \u2014 turn on the switch above and reload first",
-    "\u9057\u5FD8\u5019\u9009 archive \u9608\u503C activityArchiveDays": "Forgetting candidate archive threshold activityArchiveDays",
-    "\u9057\u5FD8\u51B7\u964D cold \u9608\u503C activityColdDays": "Forgetting cold demotion threshold activityColdDays",
-    "\u914D\u7F6E\u539F\u6587": "Raw config",
-    "\u914D\u7F6E\u539F\u6587\uFF08shoucang.config.yaml\uFF09\u4FDD\u5B58\u540E\u81EA\u52A8\u5907\u4EFD .bak-*\uFF1B\u6839\u76EE\u5F55\u5207\u6362\u4E0E\u65B0\u589E\u5728\u6B64\u3002": "The raw config (shoucang.config.yaml) is auto-backed up to .bak-* on save; switch or add root directories here.",
-    "\u914D\u7F6E\u5FEB\u7167\u5DF2\u5BFC\u51FA": "Configuration snapshot exported",
-    "\u914D\u7F6E\u6587\u4EF6\u5C1A\u65E0\u8BB0\u5F55": "No config file changes recorded yet",
-    "\u914D\u7F6E\u6587\u4EF6\u6539\u52A8\uFF1A": "Config file changes:",
-    "\u91CD\u65B0\u63A2\u6D4B": "Probe again",
-    "\u91CD\u7F6E 10 \u9879\u754C\u9762\u504F\u597D\u5E76\u7ACB\u5373\u91CD\u7ED8\uFF08\u5BC6\u5EA6 / \u5BFC\u822A\u5BBD\u5EA6 / \u65E5\u5FD7\u9762\u677F / \u8F6E\u8BE2\u5168\u90E8\u91CD\u65B0\u5E94\u7528\uFF09": "Reset 10 UI preferences and redraw immediately (density / nav width / log panel / polling are all reapplied)",
-    "\u94FE\u8DEF\u4E0E\u6A21\u578B\u9009\u62E9\uFF1B\u672C\u7EC4\u6539\u52A8\u5199\u5165\u81EA\u6301\u914D\u7F6E\uFF0C\u9700\u91CD\u8F7D\u63D2\u4EF6\u540E\u751F\u6548\u3002": "Pipeline and model selection; changes in this group are written to the self-held config and take effect after reloading the plugin.",
-    "\u9519\u8BEF": "Errors",
-    "\u957F\u5217\u8868\u6298\u53E0\u9608\u503C": "Long-list fold threshold",
-    "\u9608\u503C\u52A0\u8F7D\u5931\u8D25\uFF1A": "Failed to load thresholds:",
-    "\u96F6\u6210\u672C\u9884\u7B5B distillPrescan": "Zero-cost prescan distillPrescan",
-    "\u9700 http(s):// \u5F00\u5934": "Must start with http(s)://",
-    "\u9700\u81EA\u5907\u5D4C\u5165\u670D\u52A1\uFF08OpenAI \u517C\u5BB9 /v1/embeddings\uFF09\uFF1AOllama\uFF08ollama pull bge-m3\uFF0C:11434\uFF09\u6216\u81EA\u5EFA bge-m3 \u6865\uFF08:9915\uFF09\u3002\u5F53\u524D\u68C0\u6D4B\u4E0D\u53EF\u8FBE\u3002": "You need your own embedding service (OpenAI-compatible /v1/embeddings): Ollama (ollama pull bge-m3, :11434) or a self-hosted bge-m3 bridge (:9915). Currently detected as unreachable.",
-    "\u975E\u5931\u8D25\u8BF7\u6C42\u5360\u6BD4": "Share of non-failed requests",
-    "\u9762\u677F\u5185": "In panel",
-    "\u9762\u677F\u5185\u53EF\u7528": "Available in panel",
-    "\u9875\u811A\u5065\u5EB7\u6761": "Footer health bar",
-    "\u9AD8\u7EA7": "Advanced",
-    "\u9AD8\u7EA7 \xB7 \u914D\u7F6E\u539F\u6587\u4E0E\u6839\u76EE\u5F55": "Advanced \xB7 raw config and root directories",
-    "\u9AD8\u7EA7\u9879\uFF1A\u84B8\u998F\u8282\u6D41 / \u53EC\u56DE\u4E0E\u5E93\u7248\u672C / \u8BA4\u77E5\u73AF\uFF1B\u6539\u540E\u9700\u91CD\u8F7D\u751F\u6548\u3002": "Advanced: distillation throttling / recall & bank version / cognition ring; changes take effect after reload.",
-    "\uFF08\u4E0D\u6307\u5B9A\uFF09": "(unspecified)",
-    "\uFF08\u5148\u9009\u670D\u52A1\uFF09": "(choose a service first)",
-    "\uFF08\u5220\u9664 ": "(deleted ",
-    "\uFF08\u5373\u65F6\uFF09": "(immediate)",
-    "\uFF08\u5D4C\u5165\uFF09": "(embedding)",
-    "\uFF08\u65E0\u53EF\u679A\u4E3E\u6A21\u578B\uFF09": "(no enumerable models)",
-    "\uFF08\u8BE5 provider \u672A\u679A\u4E3E\u5230\u6A21\u578B\uFF09": "(this provider listed no models)",
-    "\uFF08\u8FDE\u63A5\u5931\u8D25\uFF09": "(connection failed)",
-    "\uFF08\u91CD\u8F7D\u540E\u751F\u6548\uFF09": " (takes effect after reload)",
-    "\uFF08\u91CD\u8F7D\u751F\u6548\uFF09": " (takes effect on reload)",
-    "\uFF08\u9700\u91CD\u8F7D\u63D2\u4EF6\u751F\u6548\uFF09": "(requires reloading the plugin to take effect)",
-    "\uFF08\u9700\u91CD\u8F7D\u751F\u6548\uFF09": "(takes effect on reload)",
-    "\uFF1B\u6539\u52A8\u5373\u65F6\u751F\u6548\uFF08\u7F13\u5B58\u4F5C\u5E9F\uFF09": "; changes take effect immediately (cache invalidated)"
+    "注入总预算 injectBudgetChars": "Injection total budget injectBudgetChars",
+    "注入文本的字符总预算（**参与限额的三层之和**：稳定面 + 动态面 + 一次性；范围 800–20000，缺省 4000）。越界由服务端夹回并在面板标「已夹取」": 'Character budget for the injected text (**sum of the three limited layers**: stable + dynamic + one-shot; range 800–20000, default 4000). Out-of-range values are clamped server-side and flagged as "clamped" in the panel',
+    "情境槽预算 injectSituationBudgetChars": "Situation slot budget injectSituationBudgetChars",
+    "情境槽（环记录按情境键匹配）的字符预算（范围 0–4000，缺省 1200）。它**独立于**注入总预算，不吃三层额度": "Character budget for the situation slot (ring records matched by situation key; range 0–4000, default 1200). It is **independent of** the total injection budget and does not consume the three layers",
+    "档位上限 injectLevelCaps": "Level caps injectLevelCaps",
+    "四档（low/medium/high/smart）各自的选行上限（**对象键**，缺省 2/4/8/14）。改后整对象写回；单档越界由服务端拒并回报": "Per-level row caps for the four levels (low/medium/high/smart; an **object key**, default 2/4/8/14). The whole object is written back; an out-of-range level is rejected server-side and reported",
+    "方案 A · 本地 GPU 服务（推荐，零 token 成本）": "Option A · Local GPU service (recommended, zero token cost)",
+    "方案 B · 云端 API": "Option B · Cloud API",
+    "无响应": "No response",
+    "无法连接该服务（/v1/models 与 /health 均无响应）": "Cannot reach the service (neither /v1/models nor /health responded)",
+    "无法连接该服务（/v1/models 与 /health 均无响应）——检查地址/服务是否在跑/CORS": "Cannot connect to this service (neither /v1/models nor /health responds) — check the address / whether the service is running / CORS",
+    "无记录": "No records",
+    "显示密度": "Display density",
+    "显示日志面板": "Show log panel",
+    "暂无带耗时的记录": "No timed records yet",
+    "最近改动（5 条）": "Recent changes (last 5)",
+    "最近查询: ": "Last query: ",
+    "服务": "Service",
+    "服务在但无 /models 枚举（用固定模型）": "Service is up but has no /models listing (using the fixed model)",
+    "服务在但无 /models——用固定 ": "Service is up but has no /models — using fixed ",
+    "服务地址（OpenAI 兼容 /v1 根）": "Service address (OpenAI-compatible /v1 root)",
+    "服务地址（OpenAI 兼容 /v1 根）与 key 环境变量": "Service URL (OpenAI-compatible /v1 root) and key environment variable",
+    "未探测到模型": "No models detected",
+    "未激活根目录——请在「高级 · 根目录」区添加。": "No active root directory — add one in the “Advanced · Root directories” section.",
+    "未配置时自动词法召回（可用但无语义）；配置后本页 provider 变就绪。": "When unconfigured, recall falls back to lexical automatically (usable but without semantics); once configured, the provider on this page becomes ready.",
+    "本地保留（上限 500 条）": "Kept locally (max 500)",
+    "本机 Ollama（零成本 · 免 key）": "Local Ollama (zero cost · no key)",
+    "本机 arbiter（Laya / Jev 快模型）": "Local arbiter (Laya / Jev fast models)",
+    "本机端点免 key；远端端点须另开出网许可（见下）。地址按**解析后的主机名**判是否本机——127.0.0.1.evil.com 这类伪造不会被当成本机。": "Local endpoints need no key; remote endpoints additionally require egress permission (see below). Whether an address is local is decided by the **parsed hostname** — look-alikes such as 127.0.0.1.evil.com are not treated as local.",
+    "本机端点模型不在宿主目录里 —— 用「枚举模型」列出来，或直接手填模型名": 'Local endpoint models are not in the host catalog — use "List models", or type the model id directly',
+    "本机（零成本 · 免 key）": "Local (zero cost · no key)",
+    "本轮新增正文少于此值跳过蒸馏（水位仍推进；0=不设限，默认 200）": "Skip distillation when this turn\\'s new body text is below this value (the watermark still advances; 0 = no limit, default 200)",
+    "本轮最少字符 minTurnChars": "Minimum chars this turn minTurnChars",
+    "条": "items",
+    "枚举中…": "Listing…",
+    "枚举模型": "List models",
+    "档位": "Level",
+    "档位 evalTier": "Level (evalTier)",
+    "档位（reasoning effort / 成本结构分档）": "Level (reasoning effort / cost tier)",
+    "检索参数（名称 / 键名 / 说明）…": "Search parameters (name / key / description)…",
+    "概览—详情分层": "Overview–detail layering",
+    "模型": "Model",
+    "模型名（如 qwen3.5:2b / jev-latest）": "Model id (e.g. qwen3.5:2b / jev-latest)",
+    "模型名（如 qwen3.5:2b）": "Model id (e.g. qwen3.5:2b)",
+    "次": "times",
+    "每次成功写入后提交库快照（可 diff/revert；库在 ~/.dsh 下，不入公开树）。缺省开": "Commit a bank snapshot after every successful write (diff/revert; the bank lives under ~/.dsh and never enters the public tree). On by default",
+    "每步一行写 suite/knowledge/audit/mcl-audit.jsonl（通道/熟悉度/注入/再引导/合规）": "Writes one line per step to suite/knowledge/audit/mcl-audit.jsonl (path/familiarity/injection/re-guidance/compliance)",
+    "沿用模型默认": "Use the model's default",
+    "注入参数（全局，写 ~/.dsh/suite/scheduler.json）与运行时通道。改动即时写回（scheduler.json 备份先行）。注入配置已迁全局，不再随 root 切换变化（root YAML 仅剩「配置原文」页可直接编辑）。": 'Injection parameters (global, written to ~/.dsh/suite/scheduler.json) and runtime channels. Changes are written back immediately (scheduler.json is backed up first). Injection config has moved to global scope and no longer changes with root switching (the root YAML only keeps the "raw config" page, which is still directly editable).',
+    "注入时优先保留「最近新增条目」的槽位数（0–6，缺省 2）": 'Number of slots reserved at injection time for "most recently added items" (0–6, default 2)',
+    "注入相关性重排 injectRelevance": "Injection relevance re-ranking injectRelevance",
+    "活性 / 遗忘阈值（v7）": "Activity / forgetting thresholds (v7)",
+    "活性降级 warm 阈值 activityWarmDays": "Activity demotion warm threshold activityWarmDays",
+    "测试连通性": "Test connectivity",
+    "深度睡眠阈值": "Deep sleep thresholds",
+    "深度睡眠（离线回想提炼 [原则]/[路径] 画像成长）用的模型。继承=跟随主会话。": "The model used for deep sleep (offline recall that extracts [principle]/[path] profile growth). Inherit = follow the main session.",
+    "深睡归纳模型": "Deep sleep summarization model",
+    "深睡未消化策略": "Deep sleep unprocessed policy",
+    "深睡未消化策略 deepSleep.failPolicy": "Deep sleep unprocessed policy deepSleep.failPolicy",
+    "深睡每轮用 deepSleepLanded 判定本轮是否「已消化」。未消化时的两种取向在此切换——全重捞保证不丢料但可能无限重试；分级在连败达上限后放行并告警，避免无限重试烧 LLM。": 'Each deep sleep round uses deepSleepLanded to decide whether this round has been "processed". The two approaches for unprocessed rounds are switched here — full re-fetch guarantees nothing is lost but may retry forever; graded releases the watermark after the consecutive-failure limit and raises an alert, avoiding infinite retries burning LLM calls.',
+    "添加并启用": "Add and enable",
+    "添加根目录": "Add root directory",
+    "清理中…": "Clearing…",
+    "清空向量缓存并重建？换模型后必须执行（否则旧向量混用导致语义失真）。": "Clear the vector cache and rebuild? This is required after switching models (otherwise old and new vectors mix and distort semantics).",
+    "清缓存重建": "Clear cache & rebuild",
+    "点击「枚举模型」加载…": 'Click "List models" to load…',
+    "热记忆注入强度 injection.level": "Hot-memory injection strength injection.level",
+    "熟悉度": "Familiarity",
+    "现有大模型": "Existing large model",
+    "用户画像记忆库容量（字符）：": "User profile memory bank capacity (chars): ",
+    "画像 persona 注入档位 injection.persona": "Profile persona injection level injection.persona",
+    "界面偏好": "Interface preferences",
+    "界面偏好与高级操作。配置原文（YAML）与行级编辑收在此处，配风险提示。": "Interface preferences and advanced operations. The raw configuration (YAML) and line-level editing live here, with risk warnings.",
+    "界面皮肤": "UI skin",
+    "界面设置已恢复默认": "UI settings restored to defaults",
+    "留空=继承主会话模型": "Leave blank = inherit the main session model",
+    "直接编辑 shoucang.config.yaml 全文。保存时原文件自动备份为 .bak-时间戳。": "Edit shoucang.config.yaml in full directly. On save the original file is automatically backed up as .bak-timestamp.",
+    "知识索引记忆库容量（字符）：": "Knowledge index memory bank capacity (chars): ",
+    "确认恢复全部界面设置为默认值？": "Restore all UI settings to their default values?",
+    "秒": "sec",
+    "空闲唤醒 idleWakeMs": "Idle wake-up idleWakeMs",
+    "立即处理 pending 候选": "Process pending candidates now",
+    "立即蒸馏一次": "Distill now",
+    "端点与档位已设": "Endpoint and level saved",
+    "紧凑": "Compact",
+    "紧凑模式隐藏描述文字、压缩行高，提升信息密度。": "Compact mode hides description text and compresses row height to increase information density.",
+    "绝对路径，须包含 shoucang.config.yaml": "Absolute path; must contain shoucang.config.yaml",
+    "继承主会话": "Inherit the main session",
+    "继承主会话（默认）": "Inherit the main session (default)",
+    "继承主模型（默认）": "Inherit the main model (default)",
+    "缓存 ": "Cache ",
+    "缓存按 模型+行文本+地址 指纹命中；换模型/改云端后点「清缓存重建」，下次召回按新模型自动重嵌（当前 ": 'The cache is keyed by the model + line text + address fingerprint; after switching models or changing the cloud config, click "Clear cache & rebuild" and the next recall re-embeds automatically with the new model (currently ',
+    "自定义 OpenAI 兼容（云端）": "Custom OpenAI-compatible (cloud)",
+    "自定义（手填地址与模型名）": "Custom (type the URL and model id)",
+    "自定义（手填模型名）": "Custom (type the model id)",
+    "自建 bge-m3 桥（可选）": "Self-hosted bge-m3 bridge (optional)",
+    "舒适": "Comfortable",
+    "获取失败": "Fetch failed",
+    "蒸馏 / 深睡模型": "Distillation / deep sleep models",
+    "蒸馏与深度睡眠各自可选宿主模型（直接用 DeepSeek Harness 模型——先在 Harness 配置好模型，这里下拉选即可）。「继承主会话」= 不指定，跟随当前会话模型。档位（reasoning effort）由模型适配器声明，未声明则沿用模型默认。改动写 scheduler.json，需重载生效。": 'Distillation and deep sleep can each pick a host model (straight from the DeepSeek Harness model system — configure the model in Harness first, then select it here). "Inherit the main session" = unspecified, follow the current session model. The level (reasoning effort) is declared by the model adapter; if it declares none, the model default applies. Changes are written to scheduler.json and take effect after reloading.',
+    "蒸馏中…（约 1-2 分钟）": "Distilling… (about 1-2 minutes)",
+    "蒸馏未触发": "Distillation not triggered",
+    "蒸馏模型": "Distillation model",
+    "蒸馏节流（运行时通道）": "Distillation throttling (runtime channel)",
+    "行级删除已执行（可能需同步索引）：": "Line-level deletion applied (index may need re-sync): ",
+    "行级编辑已执行（可能需同步索引）：": "Line-level edit applied (index may need re-sync): ",
+    "见下方「错误定位」": "See Error location below",
+    "认知环审计流 mclAudit": "Cognition ring audit stream mclAudit",
+    "认知环（MCL · 熟悉度分流 + 有界再引导）": "Cognition ring (MCL · familiarity routing + bounded re-guidance)",
+    "记忆库 git 版本化 bankGit": "Memory bank git versioning bankGit",
+    "记忆库尚无 git 快照（写入一次即出现）": "No git snapshot for the memory bank yet (one write and it appears)",
+    "记忆条目活性状态机（active→warm→cold）与遗忘/加深候选的判定阈值，以及融合召回对 cold/retired 条目的降权系数。改动经 /set 即时写回 scheduler.json（与注入/蒸馏配置同通道，重载后按新阈值运行）。": "The memory entry activity state machine (active→warm→cold) and the thresholds for forgetting/deepening candidates, plus the downweight factor that fusion recall applies to cold/retired entries. Changes are written back immediately to scheduler.json via /set (same channel as injection/distillation config; the new thresholds take effect after reload).",
+    "评估模型": "Evaluation model",
+    "评估通道 关": "Evaluation channel off",
+    "评估通道 开": "Evaluation channel on",
+    "评估通道配置已设": "Evaluation channel configuration saved",
+    "评估通道（可配置模型 · 按需开启）": "Evaluation channel (configurable model · opt-in)",
+    "该模型未声明可选档位 —— 沿用模型默认": "This model declares no selectable level — use the model's default",
+    "该通道未定义档位 —— 保持「不指定」": "This channel defines no level — keep it unspecified",
+    "语义召回开关 embedEnabled": "Semantic recall switch embedEnabled",
+    "语义召回（vec.ts + bge-m3）运行态与开关。改动写 ~/.dsh/suite/scheduler.json，**需重载插件后生效**。本地 GPU 零 token；换云端在下方填 baseUrl/model。": "Runtime state and switch for semantic recall (vec.ts + bge-m3). Changes are written to ~/.dsh/suite/scheduler.json and **take effect after reloading the plugin**. Local GPU costs zero tokens; to switch to the cloud, fill in baseUrl/model below.",
+    "语义检索来源": "Semantic retrieval source",
+    "请求总数": "Total requests",
+    "请输入 vault 的绝对路径": "Enter the vault\\'s absolute path",
+    "读取中…": "Loading…",
+    "读取失败（/config/recent）": "Failed to load (/config/recent)",
+    "超过该行数的列表默认折叠。": "Lists longer than this row count are collapsed by default.",
+    "轮询间隔": "Polling interval",
+    "轮询间隔（毫秒）": "Polling interval (ms)",
+    "过滤日志面板显示的最低级别（全部 / 警告+ / 仅错误）。": "Minimum level shown in the log panel (all / warning+ / errors only).",
+    "近 30 天命中 ≥ 此值 → 加深候选 B（缺省 5，喂深睡归纳）": "Hits in the last 30 days ≥ this value → deepening candidate B (default 5; feeds deep sleep summarization)",
+    "远程小快模型": "Remote small fast model",
+    "连通性测试": "Connectivity test",
+    "选择模型…": "Select a model…",
+    "选服务 → 自动填地址 → 下方自动探测并列出可用模型（浏览器直连）。换服务/模型后请点「清缓存重建」。": 'Pick a service → the address is filled in automatically → availability is probed below and available models are listed (direct browser connection). After switching service/model, click "Clear cache & rebuild".',
+    "通过": "passed",
+    "通道已关闭——先打开上方开关并重载": "Channel is off — turn on the switch above and reload first",
+    "遗忘候选 archive 阈值 activityArchiveDays": "Forgetting candidate archive threshold activityArchiveDays",
+    "遗忘冷降 cold 阈值 activityColdDays": "Forgetting cold demotion threshold activityColdDays",
+    "配置原文": "Raw config",
+    "配置原文（shoucang.config.yaml）保存后自动备份 .bak-*；根目录切换与新增在此。": "The raw config (shoucang.config.yaml) is auto-backed up to .bak-* on save; switch or add root directories here.",
+    "配置快照已导出": "Configuration snapshot exported",
+    "配置文件尚无记录": "No config file changes recorded yet",
+    "配置文件改动：": "Config file changes:",
+    "重新探测": "Probe again",
+    "重置 10 项界面偏好并立即重绘（密度 / 导航宽度 / 日志面板 / 轮询全部重新应用）": "Reset 10 UI preferences and redraw immediately (density / nav width / log panel / polling are all reapplied)",
+    "链路与模型选择；本组改动写入自持配置，需重载插件后生效。": "Pipeline and model selection; changes in this group are written to the self-held config and take effect after reloading the plugin.",
+    "错误": "Errors",
+    "长列表折叠阈值": "Long-list fold threshold",
+    "阈值加载失败：": "Failed to load thresholds:",
+    "零成本预筛 distillPrescan": "Zero-cost prescan distillPrescan",
+    "需 http(s):// 开头": "Must start with http(s)://",
+    "需自备嵌入服务（OpenAI 兼容 /v1/embeddings）：Ollama（ollama pull bge-m3，:11434）或自建 bge-m3 桥（:9915）。当前检测不可达。": "You need your own embedding service (OpenAI-compatible /v1/embeddings): Ollama (ollama pull bge-m3, :11434) or a self-hosted bge-m3 bridge (:9915). Currently detected as unreachable.",
+    "非失败请求占比": "Share of non-failed requests",
+    "面板内": "In panel",
+    "面板内可用": "Available in panel",
+    "页脚健康条": "Footer health bar",
+    "高级": "Advanced",
+    "高级 · 配置原文与根目录": "Advanced · raw config and root directories",
+    "高级项：蒸馏节流 / 召回与库版本 / 认知环；改后需重载生效。": "Advanced: distillation throttling / recall & bank version / cognition ring; changes take effect after reload.",
+    "（不指定）": "(unspecified)",
+    "（先选服务）": "(choose a service first)",
+    "（删除 ": "(deleted ",
+    "（即时）": "(immediate)",
+    "（嵌入）": "(embedding)",
+    "（无可枚举模型）": "(no enumerable models)",
+    "（该 provider 未枚举到模型）": "(this provider listed no models)",
+    "（连接失败）": "(connection failed)",
+    "（重载后生效）": " (takes effect after reload)",
+    "（重载生效）": " (takes effect on reload)",
+    "（需重载插件生效）": "(requires reloading the plugin to take effect)",
+    "（需重载生效）": "(takes effect on reload)",
+    "；改动即时生效（缓存作废）": "; changes take effect immediately (cache invalidated)"
   };
 
   // src-client/i18n-dict-memory.js
   var EN2 = {
-    "\u8BB0\u5FC6\u5E93\u753B\u50CF\u4E0D\u53EF\u7528": "Memory-bank profiles unavailable",
-    "\u753B\u50CF \xB7 ": "Profiles \xB7 ",
-    "\u5C0F\u8282\u4E0D\u53EF\u7528": "Section unavailable",
-    "\u538B\u7F29\u753B\u50CF": "Compact profiles",
-    "\u538B\u7F29\u4E2D\u2026": "Compacting\u2026",
-    "\u538B\u7F29\u6267\u884C\u4F4D\uFF1A\u4E0B\u65B9 USER.md \u5361": "Compaction entry: the USER.md card below",
-    "\u753B\u50CF\u538B\u7F29\uFF08\u6DF1\u5EA6\u7761\u7720\u5F52\u7EB3\uFF09\u89E6\u53D1\u4E2D\u2026": "Profile compaction (deep-sleep distillation) in progress\u2026",
-    "\u753B\u50CF\u538B\u7F29\uFF1A\u89E6\u53D1\u4E00\u6B21\u6DF1\u5EA6\u7761\u7720\u5F52\u7EB3\uFF0C\u7531\u6811\u6574\u7406\u628A\u9AD8\u5206\u91CD\u590D\u6761\u76EE\u6298\u53E0\u4E3A\u7D22\u5F15\u9879\uFF08\u65E0\u72EC\u7ACB\u7AEF\u70B9\uFF09": "Profile compaction: triggers one deep-sleep distillation that folds high-score duplicate entries into index items (no dedicated endpoint)",
-    "\u300C\u538B\u7F29\u753B\u50CF\u300D= \u89E6\u53D1\u4E00\u6B21\u6DF1\u5EA6\u7761\u7720\u5F52\u7EB3\uFF0C\u7531\u6DF1\u7761\u6811\u6574\u7406\u6298\u53E0\u9AD8\u5206\u91CD\u590D\u6761\u76EE\u3002\u7ACB\u5373\u6267\u884C\uFF1F": "Compact profiles = trigger one deep-sleep distillation that folds high-score duplicate entries into index items. Run now?",
-    "\u2713 \u5DF2\u89E6\u53D1\u6DF1\u7761\u5F52\u7EB3\uFF08\u9AD8\u5206\u91CD\u590D\u6761\u76EE\u5C06\u6298\u53E0\u4E3A\u7D22\u5F15\u9879\uFF09": "\u2713 Deep-sleep distillation triggered (high-score duplicate entries will be folded into index items)",
-    "\u5DF2\u89E6\u53D1\u5F52\u7EB3": "Distillation triggered",
-    "\u8FDB\u884C\u4E2D": "In progress",
-    "USER.md\uFF08\u7528\u6237\u753B\u50CF\uFF09\u4E0E AGENT.md\uFF08Agent \u753B\u50CF\uFF09\u7684\u552F\u4E00\u5C55\u793A\u4F4D\u3002": "The only place where USER.md (user profile) and AGENT.md (agent profile) are shown.",
-    "\u6210\u719F\u5EA6\u5206\u5E03": "Maturity distribution",
-    "\u6210\u719F\u5EA6\u53F0\u8D26\u4E3A\u7A7A\uFF1A\u5E93\u5185 audit/maturation.jsonl \u5C1A\u65E0\u8BB0\u5F55\uFF08\u8DD1\u4E00\u6B21\u6210\u719F\u5EA6\u626B\u63CF\u5373\u5199\u5165\uFF09\u3002": "Maturity ledger is empty: no records in audit/maturation.jsonl yet (run a maturity scan to populate it).",
-    "v4 \u65B0\u589E \xB7 \u6309 0.2 \u5206\u6863\u7EDF\u8BA1\u5E93\u5185\u5C0F\u8282\u6570": "New in v4 \xB7 counts library sections bucketed by 0.2",
-    "\u53E3\u5F84\uFF1A\u5E93\u5185 audit/maturation.jsonl \u6309 A \u503C 0.2 \u5206\u6863\u7684\u5C0F\u8282\u6570\u3002": "Definition: sections in the library bucketed by A value in 0.2 steps, from audit/maturation.jsonl.",
-    "\uFF08\u5347\u683C\u7EBF\uFF09\u624D\u5177\u5907\u5347\u683C\u4E3A [\u539F\u5219] / [\u8DEF\u5F84] \u7684\u7A33\u5B9A\u6761\u4EF6\u3002": " (the promotion line) does a section become eligible for promotion to [principles] / [paths].",
-    " \u2014\u2014 [\u539F\u5219] / [\u8DEF\u5F84] \u884C\u6570\u5728\u300C\u603B\u89C8 \xB7 \u672C\u6708\u6210\u957F\u300D\u6309\u6708\u8DDF\u8E2A\u3002": " \u2014 [principles] / [paths] line counts are tracked monthly in Overview \xB7 This month's growth.",
-    " \u2014\u2014 \u8D85\u8FC7 80% \u65F6\u5728\u6B64\u663E\u793A\u4E00\u884C\u63D0\u793A\uFF1B\u7EA2\u7EBF\u7531 write_gate \u5199\u5165\u65F6\u5F3A\u5236\u3002": " \u2014 a notice line appears here once usage exceeds 80%; the hard limit is enforced by write_gate on write.",
-    "\u6CE8\uFF1A\u5BB9\u91CF\u767E\u5206\u6BD4\u4E0E\u5BB9\u91CF\u6761\u6309 write_gate \u7684\u5B9E\u9645\u4E0A\u9650\u8BA1\u7B97\uFF1B\u6307\u9488\u884C\u70B9\u51FB\u53EF\u76F4\u8FBE notes/ \u5BF9\u5E94\u5C0F\u8282\u3002": "Note: capacity percentage and bar use write_gate's actual limit; clicking a pointer row jumps to the matching section under notes/.",
-    "\u6682\u65E0\u5BB9\u91CF\u95E8\u3002": "No capacity gate yet.",
-    "\u5BB9\u91CF ": "Capacity ",
-    " \u5BB9\u91CF": " capacity",
-    " \u5B57\u7B26 \xB7 ": " chars \xB7 ",
-    " \u8282": " section(s)",
-    " \u8282\uFF1AA \u2265 ": " section(s): A \u2265 ",
-    " \u6784\u6210": " composition",
-    " \u6761\u6307\u9488": " pointer(s)",
-    " \u6761\u753B\u50CF": " profile(s)",
-    " \xB7 \u70B9\u51FB\u8FDB\u8BE6\u60C5": " \xB7 click for details",
-    " \u6761\u7D22\u5F15\u884C\u6570\u636E\u683C\u5F0F\u5F02\u5E38\u5DF2\u8DF3\u8FC7\uFF08\u671F\u671B { tag, subject, pointer }\uFF09": " index row(s) skipped due to malformed data (expected { tag, subject, pointer })",
-    "\u6307\u9488\u76EE\u6807\u975E notes \u767D\u540D\u5355\uFF1A": "Pointer target not in the notes whitelist: ",
-    "\u8BE5\u6761\u76EE\u65E0 notes \u8DF3\u8F6C\u76EE\u6807": "This entry has no notes jump target",
-    "\u8BE5\u6307\u9488\u547D\u4E2D ": "This pointer matches ",
-    " \u4E2A\u540C\u540D/\u5305\u542B\u5C0F\u8282\uFF0C\u65E0\u6CD5\u552F\u4E00\u5B9A\u4F4D\uFF08\u672A\u5C55\u5F00\uFF09\uFF1A": " same-named/containing sections; cannot locate uniquely (not expanded): ",
-    "\u5C0F\u8282\u672A\u627E\u5230\uFF08\u6307\u9488\u951A\uFF1A": "Section not found (pointer anchor: ",
-    "\uFF09\u2014\u2014\u5DF2\u663E\u793A\u6574\u7BC7\uFF0C\u672A\u81EA\u52A8\u5C55\u5F00": ") \u2014 showing the full note without auto-expanding",
-    "\uFF08\u6682\u65E0\u6307\u9488\u884C\uFF09": "(no pointer rows yet)",
-    "\uFF08\u6682\u65E0\u6807\u7B7E\u884C\uFF09": "(no tag rows yet)",
-    "\u6807\u7B7E\u672A\u767B\u8BB0\u4E8E\u6620\u5C04\u8868\uFF1A": "Tag not in the label map: ",
-    "\uFF08\u5DF2\u6309\u539F\u6837\u663E\u793A\uFF1B\u8BF7\u540C\u6B65 tag-label.js\uFF09": " (shown verbatim; please sync tag-label.js)",
-    "renderIndexRows\uFF1A\u8DF3\u8FC7 ": "renderIndexRows: skipping ",
-    " \u6761\u683C\u5F0F\u5F02\u5E38\u7D22\u5F15\u884C\uFF08\u671F\u671B { tag, subject, pointer }\uFF09": " malformed index row(s) (expected { tag, subject, pointer })",
-    "  \u539F\u5219 +": "  principles +",
-    " \xB7 \u5269\u4F59 ": " \xB7 ",
-    " \xB7 \u5F02\u5E38 ": " \xB7 failed ",
-    " \xB7 \u66FF\u6362 ": " \xB7 replaced ",
-    " \xB7 \u753B\u50CF ": " \xB7 profile ",
-    " \xB7 \u753B\u50CF +": " \xB7 profiles +",
-    " \xB7 \u84B8\u998F ": " \xB7 distillation ",
-    " \xB7 \u8DEF\u5F84 ": " \xB7 paths ",
-    " \xB7 \u9884\u7B5B\u8DF3\u8FC7 ": " \xB7 prefiltered ",
-    " \u4E2A\u5C0F\u8282\uFF08\u767D\u540D\u5355\u53EA\u8BFB\uFF09": " sections (whitelist, read-only)",
-    " \u4E2A\u6587\u4EF6\uFF08forgetOps \u4EA7\u7269\uFF0C\u590D\u5236\u56DE notes/ \u5373\u6062\u590D\uFF09": " files (forgetOps output; copy back into notes/ to restore)",
-    " \u5904\u5F15\u7528": " references in total",
-    " \u5B57\uFF09": " chars)",
-    " \u6761\u3002": " items.",
-    " \u6B21": " times",
-    " \u6B63\u6587\u5DF2\u4FDD\u5B58\uFF08write_gate \u901A\u8FC7\uFF09": " body saved (write_gate passed)",
-    " \u6B63\u6587\uFF08": " body (",
-    " \u7C7B": " types",
-    " \u884C": " rows",
-    " \u9876\u5C42\u5C0F\u8282\uFF08\u6811\u72B6\uFF0C\u70B9\u51FB\u9010\u5C42\u5C55\u5F00\uFF1B\u7F16\u8F91\u5728\u8282\u70B9\u7EC6\u8282\uFF09": " top-level sections (tree view, click to expand level by level; edit in the node details)",
-    "/\u66FF\u6362 ": "/replaced ",
-    "AGENT \u753B\u50CF": "AGENT profile",
-    "MEMORY.md \u7D22\u5F15\u3001\u5019\u9009\u3001\u7B14\u8BB0\u4E0E\u5F52\u6863\u533A\uFF0C\u6309\u300C\u5E93 \u2192 \u5F85\u6D88\u5316 \u2192 \u8BE6\u60C5 \u2192 \u5DF2\u5F52\u6863\u300D\u7684\u751F\u547D\u5468\u671F\u6392\u5E8F\u3002": "MEMORY.md index, candidates, notes and archive, ordered by the life cycle \u201Cbank \u2192 pending digestion \u2192 details \u2192 archived\u201D.",
-    "cold \u4E14 \u226590 \u5929\u96F6\u547D\u4E2D": "cold and zero hits for \u226590 days",
-    "h \u6709\u6548": "h left",
-    "notes \u8BE6\u60C5\u5C0F\u8282": "notes detail section",
-    "notes/archive/ \xB7 \u4EC5\u5F52\u6863\u4E0D\u5220\u9664": "notes/archive/ \xB7 archive only, never delete",
-    "suite \xB7 flow-candidates": "suite \xB7 flow-candidates",
-    "suite \xB7 knowledge/pending": "suite \xB7 knowledge/pending",
-    "suite \u77E5\u8BC6\u533A \xB7 ": "suite knowledge area \xB7 ",
-    "\xA7 \u540D\u91CD\u53E0 0.5\u20130.66": "\xA7 name overlap 0.5\u20130.66",
-    "\u2026 \u5171 ": "\u2026 ",
-    "\u2190 \u8FD4\u56DE": "\u2190 Back",
-    "\u26A0 \u4E0A\u6B21\u672A\u5B8C\u6210\uFF08stop=": "\u26A0 Previous run incomplete (stop=",
-    "\u270E \u7F16\u8F91\u6B64\u5C0F\u8282": "\u270E Edit this section",
-    "\u2713 \u5DF2\u6279\u51C6 ": "\u2713 Approved ",
-    "\u4E0B\u8F6E\u6750\u6599\u9884\u4F30": "Next-round material estimate",
-    "\u4E0D\u53EF\u7528": "unavailable",
-    "\u4E3B\u52A8\u9057\u5FD8\u53EA\u5F52\u6863\u3001\u4E0D\u5220\u9664 \u2014\u2014 applyForgetOps \u7981\u76F4\u5220\uFF0C\u70ED\u8282\u4E0E\u753B\u50CF\u8282\u6709\u5B88\u536B\u3002": "Active forgetting only archives, never deletes \u2014 applyForgetOps forbids direct deletion, and hot sections and profile sections are guarded.",
-    "\u5019\u9009\u533A \xB7 ": "Candidates \xB7 ",
-    "\u8BB0\u5FC6\u5E93 \xB7 pending": "Memory bank \xB7 pending",
-    "\uFF08\u672C\u6839\u4EC5\u663E\u793A\u6700\u8FD1 ": " (this root shows only the latest ",
-    "\uFF0C\u4E0D\u5165\u518C\uFF09": ", not filed)",
-    "\uFF0C\u5185\u5BB9\u7531\u84B8\u998F\u6B63\u5E38\u5165\u518C\uFF09": ", content will be filed by distillation as usual)",
-    "\uFF08\u79FB ": " (moved to ",
-    "\u5171 ": "Total ",
-    " \u6761\uFF08\u53CC\u6839\u5408\u5E76\uFF09": " items (both roots merged)",
-    " \u6761\uFF0C\u5171 ": " items, ",
-    " \u6761 \xB7 \u6279\u51C6=\u786E\u8BA4\u6709\u4EF7\u503C\u5165\u518C\uFF08\u79FB .processed\uFF09\uFF0C\u5FFD\u7565=\u79FB\u51FA\u961F\u5217\uFF08\u79FB .ignored\uFF0C\u4E0D\u5165\u518C\uFF09": " items \xB7 Approve = confirm it is worth filing (moves to .processed), Ignore = remove from the queue (moves to .ignored, not filed)",
-    "\u5FFD\u7565\u5E76\u79FB\u51FA\u5019\u9009\u961F\u5217\uFF08\u79FB\u5165 .ignored\uFF0C\u4E0D\u5165\u518C\uFF09\uFF1A": "Ignore and remove from the candidate queue (moves to .ignored, not filed):",
-    "\u6682\u65E0\u5019\u9009\uFF08\u5DF2\u67E5 \u8BB0\u5FC6\u5E93 / suite / flow-candidates \u4E09\u5904\uFF09": "No candidates (checked all three: memory bank / suite / flow-candidates)",
-    "\u4E60\u5F97 ": "Acquired ",
-    "\u4E92\u6291\u5019\u9009": "Mutual-inhibition candidates",
-    "\u4FDD\u5B58\u4E2D\u2026": "Saving\u2026",
-    "\u4FDD\u5B58\u6B63\u6587": "Save body",
-    "\u4FDD\u7559": "Kept",
-    "\u5019\u9009\u533A ": "Candidates ",
-    "\u5199\u5165\u7531 write_gate \u5F3A\u5236\u7EA2\u7EBF": "Writes are enforced by the write_gate red line",
-    "\u52A0\u6DF1\u5019\u9009": "Deepen candidates",
-    "\u5347\u683C / \u964D\u683C\u8D70 /memory/approve\uFF0C\u7531 L0 \u5224\u636E\u88C1\u51B3\u3002\u7D22\u5F15\u884C\u53EA\u8BFB\uFF0C\u6B63\u6587\u7F16\u8F91\u8D70 /memory/section-edit\u3002": "Promotion / demotion goes through /memory/approve and is decided by the L0 criterion. Index rows are read-only; body edits go through /memory/section-edit.",
-    "\u539F\u5219 ": "Principles ",
-    "\u53D6\u6D88": "Cancel",
-    "\u53EA\u6709\u5B58\u5728\u771F\u5B9E\u5BB9\u91CF\u95E8\u7684\u8F7D\u4F53\u624D\u7ED9\u767E\u5206\u6BD4\u4E0E\u8FDB\u5EA6\u6761\uFF1AMEMORY.md\uFF08cap_memory\uFF09\u4E0E\u753B\u50CF\uFF08cap_user / cap_agent\uFF09\uFF1Bnotes / pending \u65E0\u5BB9\u91CF\u95E8 \u21D2 \u53EA\u62A5\u7EDD\u5BF9\u91CF\u3002\u662F\u5426\u56E0\u8D85\u9650**\u963B\u65AD**\u5199\u5165\u7531\u300C\u53C2\u6570\u8C03\u8282 \u2192 \u8BB0\u5FC6\u4E0E\u5BB9\u91CF\u300D\u7684\u5BB9\u91CF\u95E8\u5F00\u5173\u51B3\u5B9A\uFF08\u7F3A\u7701\u5173\u95ED = \u7167\u5199\u5E76\u7559\u4E00\u6761 capacity-over \u7559\u75D5\uFF09\u3002": "Only carriers with a real capacity gate get a percentage and progress bar: MEMORY.md (cap_memory) and profiles (cap_user / cap_agent); notes / pending have no capacity gate \u21D2 absolute counts only. Whether over-limit writes are blocked is decided by the capacity-gate switch under Settings \u2192 Memory & Capacity (default OFF = write through and leave a capacity-over trace).",
-    "\u5982\u9700\u6062\u590D\uFF0C\u628A notes/archive/ \u4E0B\u7684\u6587\u4EF6\u79FB\u56DE notes/ \u5373\u53EF\uFF08\u9762\u677F\u4E0D\u63D0\u4F9B\u5199\u5165\u53E3\uFF09\u3002": "To restore, simply move the files under notes/archive/ back into notes/ (the panel provides no write entry point).",
-    "\u5B88\u85CF\u672C\u5730\u77E5\u8BC6\u533A \xB7 suite/knowledge": "Shoucang local knowledge area \xB7 suite/knowledge",
-    "\u5B88\u85CF\u672C\u5730\u77E5\u8BC6\u533A\u672A\u542F\u7528\uFF08suite/knowledge \u4E0D\u5B58\u5728\uFF09": "Shoucang local knowledge area is not enabled (suite/knowledge does not exist)",
-    "\u5B88\u85CF\u77E5\u8BC6\u533A": "Shoucang knowledge area",
-    "\u5B88\u85CF\u84B8\u998F\u5668\u4E8B\u5B9E\u6E90\uFF08ADR-0002\uFF09\uFF1AMEMORY ": "Shoucang distiller source of truth (ADR-0002): MEMORY ",
-    "\u5BB9\u91CF\u5360\u7528": "Capacity usage",
-    "\u5C55\u5F00\u5168\u90E8 ": "Expand all ",
-    "\u5DF2\u5FFD\u7565": "Ignored",
-    "\u5DF2\u5FFD\u7565 ": "Ignored ",
-    "\u5F52\u6863": "Archived",
-    "\u5F52\u6863\u533A": "Archive",
-    "\u5F52\u6863\u533A ": "Archive area ",
-    "\u5F52\u6863\u533A notes/archive/": "Archive area notes/archive/",
-    "\u5F52\u6863\u533A notes/archive/ \xB7 ": "Archive notes/archive/ \xB7 ",
-    "\u5F52\u6863\u533A\u8BFB\u53D6\u5931\u8D25\uFF08/cognition/report\uFF09\u3002": "Failed to read the archive area (/cognition/report).",
-    "\u5FFD\u7565": "Ignore",
-    "\u5FFD\u7565\u4E2D\u2026": "Ignoring\u2026",
-    "\u6210\u529F ": "Succeeded ",
-    "\u6279\u51C6": "Approve",
-    "\u6307\u9488\u66F4\u65B0": "Pointer updates",
-    "\u65B0\u589E\u539F\u5219": "Principles added",
-    "\u65E0\u5C0F\u8282": "No sections",
-    "\u6682\u65E0\u5F52\u6863\u6761\u76EE\u3002": "No archived entries.",
-    "\u66FF\u6362\u539F\u5219": "Principles replaced",
-    "\u6700\u8FD1\u6210\u957F delta \xB7 \u6DF1\u7761\u4EA7\u51FA": "Recent growth delta \xB7 deep sleep output",
-    "\u672C\u5468\u6210\u957F \xB7 \u589E\u91CF": "This week's growth \xB7 delta",
-    "\u672C\u6708\u6210\u957F \xB7 ": "This month's growth \xB7 ",
-    "\u672C\u6708\u6709\u6548\u6DF1\u7761\u4EA7\u51FA": "Effective deep-sleep output this month",
-    "\u672C\u6708\u6DF1\u7761\u6709\u8FD0\u884C\u4F46\u65E0\u4EA7\u51FA\uFF08\u5185\u5BB9\u5224\u636E\u5408\u89C4\u4FDD\u5B88\uFF1A\u6750\u6599\u4E0D\u8DB3\u5B81\u7F3A\u6BCB\u6EE5\uFF09": "Deep sleep ran this month but produced nothing (the content criterion is conservatively compliant: with insufficient material, better nothing than noise)",
-    "\u672C\u6B21\u6DF1\u7761\u5F52\u7EB3\u4EA7\u51FA\uFF0848h \u6709\u6548": "Output of this deep sleep synthesis (valid for 48h",
-    "\u672C\u8F6E\u4EA7\u51FA\u56DE\u6267": "Output receipt for this run",
-    "\u6811\u64CD\u4F5C": "Tree operations",
-    "\u6B63\u5E38": "Normal",
-    "\u6B63\u6587\u4E0D\u80FD\u4E3A\u7A7A\u2014\u2014\u5982\u9700\u6E05\u7A7A\u8BF7\u7528\u5220\u9664": "The body cannot be empty \u2014 to clear it, use delete instead",
-    "\u6C34\u4F4D\u504F\u9AD8": "Watermark high",
-    "\u6DF1\u7761\u5F52\u7EB3": "Deep sleep distillation",
-    "\u6DF1\u7761\u65B0\u4E60\u5F97": "Newly acquired in deep sleep",
-    "\u70B9\u51FB\u5C55\u5F00/\u6536\u8D77": "Click to expand/collapse",
-    "\u70B9\u51FB\u884C\u76F4\u8FBE notes \u8BE6\u60C5\u5C0F\u8282\uFF08\u53EA\u8BFB\uFF09\u3002": "Click a row to jump straight to the notes detail section (read-only).",
-    "\u753B\u50CF\u66F4\u65B0": "Profile updates",
-    "\u753B\u50CF\u677F\u5757": "Profile board",
-    "\u77E5\u8BC6\u7D22\u5F15 ": "Knowledge index ",
-    "\u77E5\u8BC6\u7D22\u5F15 MEMORY.md \xB7 ": "Knowledge index MEMORY.md \xB7 ",
-    "\u7B14\u8BB0 ": "Notes ",
-    "\u5E93\u5185\u7ED3\u6784 \xB7 ": "Library structure \xB7 ",
-    " \u4E2A\u9876\u5C42\u6761\u76EE\uFF08\u5185\u5BB9 ": " top-level entries (content ",
-    " \xB7 \u5DE5\u5177\u6001 ": " \xB7 tooling ",
-    " \xB7 \u4EA7\u7269 ": " \xB7 artifacts ",
-    "\u5185\u5BB9": "Content",
-    "\u5DE5\u5177\u6001": "Tooling",
-    "\u4EA7\u7269": "Artifacts",
-    "\uFF08\u53EA\u62A5\u8BA1\u6570\uFF0C\u4E0D\u5C55\u5F00\uFF09\uFF1A": " (counts only, not expanded): ",
-    " \u4EF6": " files",
-    "\u5185\u5BB9\u6863\uFF08\u627F\u8F7D\u77E5\u8BC6\u7684\u677F\u5757\uFF09": "Content tier (boards that carry knowledge)",
-    " \u4EF6 \xB7 ": " files \xB7 ",
-    "\u6587\u6863": "Doc",
-    "\u677F\u5757": "Board",
-    "\u53E3\u5F84\uFF1A\u76EE\u5F55\u4E3A\u9012\u5F52\u6587\u4EF6\u6570\uFF1B\u5DE5\u5177\u6001\u6863\uFF08.git/.obsidian/scripts \u7B49\uFF09**\u53EA\u62A5\u6587\u4EF6\u6570\u4E0D\u62A5\u4F53\u91CF**\uFF08.git \u9012\u5F52\u53EF\u8FBE\u6570\u5341 MB\uFF0C\u4F1A\u628A\u300C\u5E93\u6709\u591A\u5927\u300D\u8FD9\u4E2A\u8BFB\u6570\u6C61\u67D3\uFF09\u3002\u679A\u4E3E\u7531\u540E\u7AEF readdirSync \u6D3E\u751F\uFF0C\u672A\u767B\u8BB0\u7684\u65B0\u6761\u76EE\u9ED8\u8BA4\u843D\u5185\u5BB9\u6863\uFF08\u5B81\u53EF\u591A\u62A5\u4E0D\u9759\u9ED8\u4E22\uFF09\u3002": 'Measure: directories report recursive file counts; the tooling tier (.git/.obsidian/scripts etc.) reports file counts only (a recursive .git can reach tens of MB and would distort any "how big is the library" reading). Enumeration is derived server-side via readdirSync; unregistered new entries default to the content tier (better to over-report than to silently drop).',
-    "\u7EDF\u8BA1": "Stats",
-    "\u7F16\u8F91 \xA7": "Edit \xA7",
-    "\u84B8\u998F": "Distillation",
-    "\u88AB\u5F15\u7528 \xB7 ": "Referenced \xB7 ",
-    "\u8BB0\u5FC6 \xB7 MEMORY ": "Memory \xB7 MEMORY ",
-    "\u8BB0\u5FC6\u5E93\u4E0D\u53EF\u7528": "Memory bank unavailable",
-    "\u8FC7\u6EE4\u7D22\u5F15 / \u5019\u9009 / \u7B14\u8BB0\u2026": "Filter index / candidates / notes\u2026",
-    "\u8FD1 7 \u5929 [\u539F\u5219]/[\u8DEF\u5F84] \u5F52\u7EB3": "[principle]/[path] synthesized in the last 7 days",
-    "\u9057\u5FD8\u5019\u9009": "Forget candidates",
-    "\uFF08\u5B50\u6811\uFF09": "(subtree)",
-    "\uFF08\u5C1A\u65E0\u6DF1\u7761\u8BB0\u5F55\uFF09": "(no deep-sleep records yet)",
-    "\uFF08\u7A7A\u5C0F\u8282\uFF09": "(empty section)",
-    "\uFF09\xB7 \u5DF2\u5728\u4F1A\u8BDD\u6CE8\u5165\u53EF\u89C1": ") \xB7 already visible in the session injection",
-    "\uFF09\u2014\u2014\u4FDD\u7559\u5F00\u5934\u6458\u8981\u884C\u6700\u4F73\uFF1B\u4FDD\u5B58\u8D70\u5199\u95E8\uFF08\u5907\u4EFD+\u5BB9\u91CF\u7EA2\u7EBF\uFF09\uFF0C\u7D22\u5F15\u6307\u9488\u4E0D\u53D8\u3002": ") \u2014 keeping the opening summary line is best; saving goes through the write gate (backup + capacity red line), and the index pointer stays unchanged.",
-    "\uFF09\u2014\u2014\u6309\u300C\u6DF1\u7761\u6C34\u4F4D\u62A4\u680F\u300D\u6C34\u4F4D\u5DF2\u56DE\u6EDA\uFF0C\u540C\u6279\u75D5\u8FF9\u4E0B\u8F6E\u91CD\u8BD5": ") \u2014 per the \u201Cdeep-sleep watermark guard\u201D the watermark was rolled back; this batch's traces will be retried next round"
+    "记忆库画像不可用": "Memory-bank profiles unavailable",
+    "画像 · ": "Profiles · ",
+    "小节不可用": "Section unavailable",
+    "压缩画像": "Compact profiles",
+    "压缩中…": "Compacting…",
+    "压缩执行位：下方 USER.md 卡": "Compaction entry: the USER.md card below",
+    "画像压缩（深度睡眠归纳）触发中…": "Profile compaction (deep-sleep distillation) in progress…",
+    "画像压缩：触发一次深度睡眠归纳，由树整理把高分重复条目折叠为索引项（无独立端点）": "Profile compaction: triggers one deep-sleep distillation that folds high-score duplicate entries into index items (no dedicated endpoint)",
+    "「压缩画像」= 触发一次深度睡眠归纳，由深睡树整理折叠高分重复条目。立即执行？": "Compact profiles = trigger one deep-sleep distillation that folds high-score duplicate entries into index items. Run now?",
+    "✓ 已触发深睡归纳（高分重复条目将折叠为索引项）": "✓ Deep-sleep distillation triggered (high-score duplicate entries will be folded into index items)",
+    "已触发归纳": "Distillation triggered",
+    "进行中": "In progress",
+    "USER.md（用户画像）与 AGENT.md（Agent 画像）的唯一展示位。": "The only place where USER.md (user profile) and AGENT.md (agent profile) are shown.",
+    "成熟度分布": "Maturity distribution",
+    "成熟度台账为空：库内 audit/maturation.jsonl 尚无记录（跑一次成熟度扫描即写入）。": "Maturity ledger is empty: no records in audit/maturation.jsonl yet (run a maturity scan to populate it).",
+    "v4 新增 · 按 0.2 分档统计库内小节数": "New in v4 · counts library sections bucketed by 0.2",
+    "口径：库内 audit/maturation.jsonl 按 A 值 0.2 分档的小节数。": "Definition: sections in the library bucketed by A value in 0.2 steps, from audit/maturation.jsonl.",
+    "（升格线）才具备升格为 [原则] / [路径] 的稳定条件。": " (the promotion line) does a section become eligible for promotion to [principles] / [paths].",
+    " —— [原则] / [路径] 行数在「总览 · 本月成长」按月跟踪。": " — [principles] / [paths] line counts are tracked monthly in Overview · This month's growth.",
+    " —— 超过 80% 时在此显示一行提示；红线由 write_gate 写入时强制。": " — a notice line appears here once usage exceeds 80%; the hard limit is enforced by write_gate on write.",
+    "注：容量百分比与容量条按 write_gate 的实际上限计算；指针行点击可直达 notes/ 对应小节。": "Note: capacity percentage and bar use write_gate's actual limit; clicking a pointer row jumps to the matching section under notes/.",
+    "暂无容量门。": "No capacity gate yet.",
+    "容量 ": "Capacity ",
+    " 容量": " capacity",
+    " 字符 · ": " chars · ",
+    " 节": " section(s)",
+    " 节：A ≥ ": " section(s): A ≥ ",
+    " 构成": " composition",
+    " 条指针": " pointer(s)",
+    " 条画像": " profile(s)",
+    " · 点击进详情": " · click for details",
+    " 条索引行数据格式异常已跳过（期望 { tag, subject, pointer }）": " index row(s) skipped due to malformed data (expected { tag, subject, pointer })",
+    "指针目标非 notes 白名单：": "Pointer target not in the notes whitelist: ",
+    "该条目无 notes 跳转目标": "This entry has no notes jump target",
+    "该指针命中 ": "This pointer matches ",
+    " 个同名/包含小节，无法唯一定位（未展开）：": " same-named/containing sections; cannot locate uniquely (not expanded): ",
+    "小节未找到（指针锚：": "Section not found (pointer anchor: ",
+    "）——已显示整篇，未自动展开": ") — showing the full note without auto-expanding",
+    "（暂无指针行）": "(no pointer rows yet)",
+    "（暂无标签行）": "(no tag rows yet)",
+    "标签未登记于映射表：": "Tag not in the label map: ",
+    "（已按原样显示；请同步 tag-label.js）": " (shown verbatim; please sync tag-label.js)",
+    "renderIndexRows：跳过 ": "renderIndexRows: skipping ",
+    " 条格式异常索引行（期望 { tag, subject, pointer }）": " malformed index row(s) (expected { tag, subject, pointer })",
+    "  原则 +": "  principles +",
+    " · 剩余 ": " · ",
+    " · 异常 ": " · failed ",
+    " · 替换 ": " · replaced ",
+    " · 画像 ": " · profile ",
+    " · 画像 +": " · profiles +",
+    " · 蒸馏 ": " · distillation ",
+    " · 路径 ": " · paths ",
+    " · 预筛跳过 ": " · prefiltered ",
+    " 个小节（白名单只读）": " sections (whitelist, read-only)",
+    " 个文件（forgetOps 产物，复制回 notes/ 即恢复）": " files (forgetOps output; copy back into notes/ to restore)",
+    " 处引用": " references in total",
+    " 字）": " chars)",
+    " 条。": " items.",
+    " 次": " times",
+    " 正文已保存（write_gate 通过）": " body saved (write_gate passed)",
+    " 正文（": " body (",
+    " 类": " types",
+    " 行": " rows",
+    " 顶层小节（树状，点击逐层展开；编辑在节点细节）": " top-level sections (tree view, click to expand level by level; edit in the node details)",
+    "/替换 ": "/replaced ",
+    "AGENT 画像": "AGENT profile",
+    "MEMORY.md 索引、候选、笔记与归档区，按「库 → 待消化 → 详情 → 已归档」的生命周期排序。": "MEMORY.md index, candidates, notes and archive, ordered by the life cycle “bank → pending digestion → details → archived”.",
+    "cold 且 ≥90 天零命中": "cold and zero hits for ≥90 days",
+    "h 有效": "h left",
+    "notes 详情小节": "notes detail section",
+    "notes/archive/ · 仅归档不删除": "notes/archive/ · archive only, never delete",
+    "suite · flow-candidates": "suite · flow-candidates",
+    "suite · knowledge/pending": "suite · knowledge/pending",
+    "suite 知识区 · ": "suite knowledge area · ",
+    "§ 名重叠 0.5–0.66": "§ name overlap 0.5–0.66",
+    "… 共 ": "… ",
+    "← 返回": "← Back",
+    "⚠ 上次未完成（stop=": "⚠ Previous run incomplete (stop=",
+    "✎ 编辑此小节": "✎ Edit this section",
+    "✓ 已批准 ": "✓ Approved ",
+    "下轮材料预估": "Next-round material estimate",
+    "不可用": "unavailable",
+    "主动遗忘只归档、不删除 —— applyForgetOps 禁直删，热节与画像节有守卫。": "Active forgetting only archives, never deletes — applyForgetOps forbids direct deletion, and hot sections and profile sections are guarded.",
+    "候选区 · ": "Candidates · ",
+    "记忆库 · pending": "Memory bank · pending",
+    "（本根仅显示最近 ": " (this root shows only the latest ",
+    "，不入册）": ", not filed)",
+    "，内容由蒸馏正常入册）": ", content will be filed by distillation as usual)",
+    "（移 ": " (moved to ",
+    "共 ": "Total ",
+    " 条（双根合并）": " items (both roots merged)",
+    " 条，共 ": " items, ",
+    " 条 · 批准=确认有价值入册（移 .processed），忽略=移出队列（移 .ignored，不入册）": " items · Approve = confirm it is worth filing (moves to .processed), Ignore = remove from the queue (moves to .ignored, not filed)",
+    "忽略并移出候选队列（移入 .ignored，不入册）：": "Ignore and remove from the candidate queue (moves to .ignored, not filed):",
+    "暂无候选（已查 记忆库 / suite / flow-candidates 三处）": "No candidates (checked all three: memory bank / suite / flow-candidates)",
+    "习得 ": "Acquired ",
+    "互抑候选": "Mutual-inhibition candidates",
+    "保存中…": "Saving…",
+    "保存正文": "Save body",
+    "保留": "Kept",
+    "候选区 ": "Candidates ",
+    "写入由 write_gate 强制红线": "Writes are enforced by the write_gate red line",
+    "加深候选": "Deepen candidates",
+    "升格 / 降格走 /memory/approve，由 L0 判据裁决。索引行只读，正文编辑走 /memory/section-edit。": "Promotion / demotion goes through /memory/approve and is decided by the L0 criterion. Index rows are read-only; body edits go through /memory/section-edit.",
+    "原则 ": "Principles ",
+    "取消": "Cancel",
+    "只有存在真实容量门的载体才给百分比与进度条：MEMORY.md（cap_memory）与画像（cap_user / cap_agent）；notes / pending 无容量门 ⇒ 只报绝对量。是否因超限**阻断**写入由「参数调节 → 记忆与容量」的容量门开关决定（缺省关闭 = 照写并留一条 capacity-over 留痕）。": "Only carriers with a real capacity gate get a percentage and progress bar: MEMORY.md (cap_memory) and profiles (cap_user / cap_agent); notes / pending have no capacity gate ⇒ absolute counts only. Whether over-limit writes are blocked is decided by the capacity-gate switch under Settings → Memory & Capacity (default OFF = write through and leave a capacity-over trace).",
+    "如需恢复，把 notes/archive/ 下的文件移回 notes/ 即可（面板不提供写入口）。": "To restore, simply move the files under notes/archive/ back into notes/ (the panel provides no write entry point).",
+    "守藏本地知识区 · suite/knowledge": "Shoucang local knowledge area · suite/knowledge",
+    "守藏本地知识区未启用（suite/knowledge 不存在）": "Shoucang local knowledge area is not enabled (suite/knowledge does not exist)",
+    "守藏知识区": "Shoucang knowledge area",
+    "守藏蒸馏器事实源（ADR-0002）：MEMORY ": "Shoucang distiller source of truth (ADR-0002): MEMORY ",
+    "容量占用": "Capacity usage",
+    "展开全部 ": "Expand all ",
+    "已忽略": "Ignored",
+    "已忽略 ": "Ignored ",
+    "归档": "Archived",
+    "归档区": "Archive",
+    "归档区 ": "Archive area ",
+    "归档区 notes/archive/": "Archive area notes/archive/",
+    "归档区 notes/archive/ · ": "Archive notes/archive/ · ",
+    "归档区读取失败（/cognition/report）。": "Failed to read the archive area (/cognition/report).",
+    "忽略": "Ignore",
+    "忽略中…": "Ignoring…",
+    "成功 ": "Succeeded ",
+    "批准": "Approve",
+    "指针更新": "Pointer updates",
+    "新增原则": "Principles added",
+    "无小节": "No sections",
+    "暂无归档条目。": "No archived entries.",
+    "替换原则": "Principles replaced",
+    "最近成长 delta · 深睡产出": "Recent growth delta · deep sleep output",
+    "本周成长 · 增量": "This week's growth · delta",
+    "本月成长 · ": "This month's growth · ",
+    "本月有效深睡产出": "Effective deep-sleep output this month",
+    "本月深睡有运行但无产出（内容判据合规保守：材料不足宁缺毋滥）": "Deep sleep ran this month but produced nothing (the content criterion is conservatively compliant: with insufficient material, better nothing than noise)",
+    "本次深睡归纳产出（48h 有效": "Output of this deep sleep synthesis (valid for 48h",
+    "本轮产出回执": "Output receipt for this run",
+    "树操作": "Tree operations",
+    "正常": "Normal",
+    "正文不能为空——如需清空请用删除": "The body cannot be empty — to clear it, use delete instead",
+    "水位偏高": "Watermark high",
+    "深睡归纳": "Deep sleep distillation",
+    "深睡新习得": "Newly acquired in deep sleep",
+    "点击展开/收起": "Click to expand/collapse",
+    "点击行直达 notes 详情小节（只读）。": "Click a row to jump straight to the notes detail section (read-only).",
+    "画像更新": "Profile updates",
+    "画像板块": "Profile board",
+    "知识索引 ": "Knowledge index ",
+    "知识索引 MEMORY.md · ": "Knowledge index MEMORY.md · ",
+    "笔记 ": "Notes ",
+    "库内结构 · ": "Library structure · ",
+    " 个顶层条目（内容 ": " top-level entries (content ",
+    " · 工具态 ": " · tooling ",
+    " · 产物 ": " · artifacts ",
+    "内容": "Content",
+    "工具态": "Tooling",
+    "产物": "Artifacts",
+    "（只报计数，不展开）：": " (counts only, not expanded): ",
+    " 件": " files",
+    "内容档（承载知识的板块）": "Content tier (boards that carry knowledge)",
+    " 件 · ": " files · ",
+    "文档": "Doc",
+    "板块": "Board",
+    "口径：目录为递归文件数；工具态档（.git/.obsidian/scripts 等）**只报文件数不报体量**（.git 递归可达数十 MB，会把「库有多大」这个读数污染）。枚举由后端 readdirSync 派生，未登记的新条目默认落内容档（宁可多报不静默丢）。": 'Measure: directories report recursive file counts; the tooling tier (.git/.obsidian/scripts etc.) reports file counts only (a recursive .git can reach tens of MB and would distort any "how big is the library" reading). Enumeration is derived server-side via readdirSync; unregistered new entries default to the content tier (better to over-report than to silently drop).',
+    "统计": "Stats",
+    "编辑 §": "Edit §",
+    "蒸馏": "Distillation",
+    "被引用 · ": "Referenced · ",
+    "记忆 · MEMORY ": "Memory · MEMORY ",
+    "记忆库不可用": "Memory bank unavailable",
+    "过滤索引 / 候选 / 笔记…": "Filter index / candidates / notes…",
+    "近 7 天 [原则]/[路径] 归纳": "[principle]/[path] synthesized in the last 7 days",
+    "遗忘候选": "Forget candidates",
+    "（子树）": "(subtree)",
+    "（尚无深睡记录）": "(no deep-sleep records yet)",
+    "（空小节）": "(empty section)",
+    "）· 已在会话注入可见": ") · already visible in the session injection",
+    "）——保留开头摘要行最佳；保存走写门（备份+容量红线），索引指针不变。": ") — keeping the opening summary line is best; saving goes through the write gate (backup + capacity red line), and the index pointer stays unchanged.",
+    "）——按「深睡水位护栏」水位已回滚，同批痕迹下轮重试": ") — per the “deep-sleep watermark guard” the watermark was rolled back; this batch's traces will be retried next round"
   };
 
   // src-client/i18n-dict-nav.js
   var EN3 = {
-    " \u9700\u8981\u8BF7\u6C42\u4F53\uFF08\u5FC5\u586B\uFF1A": " requires a request body (required: ",
-    "\u7F3A\u5C11\u5FC5\u586B\u5B57\u6BB5\uFF1A": "Missing required field(s): ",
-    "\u6267\u884C\u4E2D\u2026 ": "Running\u2026 ",
-    "\u5B8C\u6210 ": " completed ",
-    "\u5B8C\u6210": "Done",
-    "\u5DF2\u52A0\u8F7D ": "Loaded ",
-    " \u5DF2\u53D1\u8D77": " started",
-    "slots \u670D\u52A1\u7F3A\u5931": "slots service missing",
-    "\u5B88": "SC",
-    "\u663E\u793A": "Show",
-    "\u9690\u85CF": "Hide",
-    "\u65E5\u5FD7\u9762\u677F\u5DF2": "Log panel ",
-    "\u6253\u5F00\u9762\u677F": "Open panel",
-    "\u6253\u5F00\u5B88\u85CF\u9762\u677F": "Open the Shoucang panel",
-    "\u5BBF\u4E3B\u8BBE\u7F6E\u91CC\u4E5F\u80FD\u76F4\u63A5\u5524\u8D77\u5B88\u85CF\u9762\u677F": "You can also open the Shoucang panel directly from host settings",
-    "\u6253\u5F00\u9762\u677F\u9ED8\u8BA4\u843D\u5730\u9875\uFF08\u6DF1\u94FE > \u4E0A\u6B21\u89C6\u56FE > \u6B64\u9879\uFF09": "Default landing page when the panel opens (deep link > last view > this)",
-    "\u5B88\u85CF\u9762\u677F\u7684\u754C\u9762\u504F\u597D\uFF08\u4E0E\u9762\u677F\u5185\u300C\u8BBE\u7F6E\u300D\u9875\u540C\u6E90\uFF0C\u6539\u540E\u7ACB\u5373\u751F\u6548\uFF1B\u4FDD\u5B58\u5728\u6D4F\u89C8\u5668 localStorage\uFF09\u3002": "UI preferences for the Shoucang panel (same source as the in-panel Settings page; take effect immediately; stored in browser localStorage).",
-    "\u7D27\u51D1\u6A21\u5F0F\u9690\u85CF\u63CF\u8FF0\u3001\u538B\u7F29\u884C\u9AD8": "Compact mode hides descriptions and reduces row height",
-    "\u9762\u677F\u5DE6\u5BFC\u822A\u50CF\u7D20\u5BBD\u5EA6\uFF08140\u2013320\uFF09": "Panel left-nav width in pixels (140-320)",
-    "\u6BEB\u79D2\uFF1B0 = \u5173\u95ED\u8F6E\u8BE2": "milliseconds; 0 = disable polling",
-    "\u72B6\u6001\u680F\u4E0A\u65B9\u5E38\u9A7B\u65E5\u5FD7\uFF08\u5173\u95ED\u5373\u6298\u53E0\u6210\u4E00\u884C\uFF09": "Persistent log above the status bar (turning it off collapses it to one line)",
-    "v9 = \u65B9\u6848\u8C03\u8272\u677F\uFF08\u9ED8\u8BA4\uFF09\uFF1B\u5BBF\u751F = \u8DDF\u968F DSH \u4E3B\u9898\u4EE4\u724C": "v9 = scheme palette (default); host = follow DSH theme tokens",
-    "\u672A\u6FC0\u6D3B\u6839\u76EE\u5F55\u2014\u2014\u8BF7\u5230\u300C\u914D\u7F6E\u539F\u6587\u300D\u9875\u6839\u76EE\u5F55\u533A\u6DFB\u52A0\u3002": "No active root \u2014 add one in the Roots section of the Raw config page.",
-    "\u6CE8\u5165\u53C2\u6570\u5DF2\u5168\u5C40\u53EF\u7528\uFF08scheduler.json\uFF09\uFF1Broot \u672A\u767B\u8BB0\u2014\u2014\u300C\u8BB0\u5FC6\u677F\u5757\u663E\u793A\u300D\u5F00\u5173\u5F85\u767B\u8BB0\u540E\u53EF\u7528\u3002": "Injection parameters are globally available (scheduler.json); no root registered \u2014 the memory-section switch becomes available after registration.",
-    "\u6CE8\u5165\u70ED\u8BB0\u5FC6\u603B\u95F8 hot_memory": "Hot-memory injection master switch hot_memory",
-    "\u5173=\u4E0D\u6CE8\u5165 agent/\u7528\u6237\u753B\u50CF\u4E0E\u77E5\u8BC6\u7D22\u5F15\u4EFB\u4F55\u6307\u9488\u884C": "off = inject no pointer lines from agent/user profiles or the knowledge index",
-    "\u5168\u5C40\u6CE8\u5165": "Global injection",
-    "\u5199\u95E8\u5BB9\u91CF": "Write-gate capacity",
-    "\u53EC\u56DE\u878D\u5408": "Recall fusion",
-    "\u8C03\u5EA6": "Scheduling",
-    "\u6CE8\u5165\u9009\u884C": "Injection row selection",
-    "\u5E93\u7248\u672C\u5316": "Library versioning",
-    "\u8BA4\u77E5\u73AF": "Cognition loop",
-    "\u5951\u7EA6\u9884\u68C0\u672A\u901A\u8FC7\uFF1A": "Contract precheck failed: ",
-    "\uFF08\u672C\u5730\u62E6\u622A\uFF0C\u672A\u53D1\u51FA\u8BF7\u6C42\uFF09": " (blocked locally; request not sent)",
-    "\u9700\u91CD\u8F7D": "Reload required",
-    "\u5373\u65F6": "Instant",
-    "\u6298\u53E0\u6536\u53E3\u5931\u8D25\uFF1A": "Collapse failed: ",
-    "\u7EC4\u4EF6\u5E93\u4E3B\u9898\u6CE8\u5165\u5931\u8D25\uFF1A": "Component-library theme injection failed: ",
-    "\u8BBE\u7F6E\u751F\u6548\u5931\u8D25\uFF08": "Failed to apply setting (",
-    "\u4FA7\u680F\u5165\u53E3\uFF1A\u5DF2\u6CE8\u518C\u5BBF\u4E3B\u63D2\u69FD sidebar.footer.action\uFF08\u4E0D\u6302 DOM \u76F4\u63D2\u5165\u53E3\uFF09": "Sidebar entry: registered host slot sidebar.footer.action (no direct DOM entry)",
-    "\u4FA7\u680F\u5165\u53E3\uFF1A\u5BBF\u4E3B\u63D2\u69FD\u4E0D\u53EF\u7528\uFF08": "Sidebar entry: host slot unavailable (",
-    "require('react') \u4E0D\u53EF\u7528": "require('react') unavailable",
-    "\uFF09\uFF0C\u56DE\u9000 DOM \u76F4\u63D2": "); falling back to direct DOM insertion",
-    "\u5173": "Off",
-    "\u53C2\u6570": "Parameters",
-    "\u5B88\u85CF": "Shoucang",
-    "\u5B88\u85CF SHOUCANG": "Shoucang",
-    "\u5B88\u85CF\u8BB0\u5FC6\u9762\u677F": "Shoucang memory panel",
-    "\u5B88\u85CF\u9762\u677F": "Shoucang panel",
-    "\u5C55\u5F00": "Expand",
-    "\u5DF2\u91CD\u65B0\u53D6\u6570": "Data reloaded",
-    "\u603B\u89C8": "Overview",
-    "\u63D2\u4EF6\u96C6\u5408": "Plugins",
-    "\u6536\u8D77 \u25B4": "Collapse \u25B4",
-    "\u67B6\u6784": "Architecture",
-    "\u6DF1\u5EA6\u7761\u7720": "Deep sleep",
-    "\u753B\u50CF": "Profiles",
-    "\u8BB0\u5FC6": "Memory",
-    "\u8BB0\u5FC6\u5E93": "Memory bank",
-    "\u8BBE\u7F6E": "Settings",
-    "\u8FC7\u6EE4": "Filter",
-    "\u8FC7\u6EE4\u2026": "Filtering\u2026",
-    "\u8FD0\u884C": "Runtime",
-    "\u8FD0\u884C\u603B\u89C8": "Overview",
-    "\u8FD0\u884C\u89C2\u6D4B": "Observability",
-    "\u914D\u7F6E": "Configuration",
-    "\u91CD\u65B0\u53D6\u6570\u5E76\u91CD\u7ED8\u672C\u9875": "Reload data and redraw this page",
-    "\uFF08\u65E0\u5185\u5BB9\uFF09": "(no content)"
+    " 需要请求体（必填：": " requires a request body (required: ",
+    "缺少必填字段：": "Missing required field(s): ",
+    "执行中… ": "Running… ",
+    "完成 ": " completed ",
+    "完成": "Done",
+    "已加载 ": "Loaded ",
+    " 已发起": " started",
+    "slots 服务缺失": "slots service missing",
+    "守": "SC",
+    "显示": "Show",
+    "隐藏": "Hide",
+    "日志面板已": "Log panel ",
+    "打开面板": "Open panel",
+    "打开守藏面板": "Open the Shoucang panel",
+    "宿主设置里也能直接唤起守藏面板": "You can also open the Shoucang panel directly from host settings",
+    "打开面板默认落地页（深链 > 上次视图 > 此项）": "Default landing page when the panel opens (deep link > last view > this)",
+    "守藏面板的界面偏好（与面板内「设置」页同源，改后立即生效；保存在浏览器 localStorage）。": "UI preferences for the Shoucang panel (same source as the in-panel Settings page; take effect immediately; stored in browser localStorage).",
+    "紧凑模式隐藏描述、压缩行高": "Compact mode hides descriptions and reduces row height",
+    "面板左导航像素宽度（140–320）": "Panel left-nav width in pixels (140-320)",
+    "毫秒；0 = 关闭轮询": "milliseconds; 0 = disable polling",
+    "状态栏上方常驻日志（关闭即折叠成一行）": "Persistent log above the status bar (turning it off collapses it to one line)",
+    "v9 = 方案调色板（默认）；宿生 = 跟随 DSH 主题令牌": "v9 = scheme palette (default); host = follow DSH theme tokens",
+    "未激活根目录——请到「配置原文」页根目录区添加。": "No active root — add one in the Roots section of the Raw config page.",
+    "注入参数已全局可用（scheduler.json）；root 未登记——「记忆板块显示」开关待登记后可用。": "Injection parameters are globally available (scheduler.json); no root registered — the memory-section switch becomes available after registration.",
+    "注入热记忆总闸 hot_memory": "Hot-memory injection master switch hot_memory",
+    "关=不注入 agent/用户画像与知识索引任何指针行": "off = inject no pointer lines from agent/user profiles or the knowledge index",
+    "全局注入": "Global injection",
+    "写门容量": "Write-gate capacity",
+    "召回融合": "Recall fusion",
+    "调度": "Scheduling",
+    "注入选行": "Injection row selection",
+    "库版本化": "Library versioning",
+    "认知环": "Cognition loop",
+    "契约预检未通过：": "Contract precheck failed: ",
+    "（本地拦截，未发出请求）": " (blocked locally; request not sent)",
+    "需重载": "Reload required",
+    "即时": "Instant",
+    "折叠收口失败：": "Collapse failed: ",
+    /* U2（2026-09-26）删除：`组件库主题注入失败：` —— 该词条的**唯一调用点**是 body.js 中
+     *   注入 Web Awesome 主题令牌层的 try/catch，而 U2 已删掉那整段（产物不再带组件库，省 574KB）
+     *   ⇒ 词条成孤儿，由 `check-i18n-keys` 断言 A「死键」抓到。删除以恢复双向键集一致。 */
+    "设置生效失败（": "Failed to apply setting (",
+    "侧栏入口：已注册宿主插槽 sidebar.footer.action（不挂 DOM 直插入口）": "Sidebar entry: registered host slot sidebar.footer.action (no direct DOM entry)",
+    "侧栏入口：宿主插槽不可用（": "Sidebar entry: host slot unavailable (",
+    "require('react') 不可用": "require('react') unavailable",
+    "），回退 DOM 直插": "); falling back to direct DOM insertion",
+    "关": "Off",
+    "参数": "Parameters",
+    "守藏": "Shoucang",
+    "守藏 SHOUCANG": "Shoucang",
+    "守藏记忆面板": "Shoucang memory panel",
+    "守藏面板": "Shoucang panel",
+    "展开": "Expand",
+    "已重新取数": "Data reloaded",
+    "总览": "Overview",
+    "插件集合": "Plugins",
+    "收起 ▴": "Collapse ▴",
+    "架构": "Architecture",
+    "深度睡眠": "Deep sleep",
+    "画像": "Profiles",
+    "记忆": "Memory",
+    "记忆库": "Memory bank",
+    "设置": "Settings",
+    "过滤": "Filter",
+    "过滤…": "Filtering…",
+    "运行": "Runtime",
+    "运行总览": "Overview",
+    "运行观测": "Observability",
+    "配置": "Configuration",
+    "重新取数并重绘本页": "Reload data and redraw this page",
+    "（无内容）": "(no content)"
   };
 
   // src-client/i18n-dict-pane-arch.js
   var EN4 = {
-    " + \u951A ": " + anchors ",
-    " \xB7 **\u5206\u6B67 ": " \xB7 **divergent ",
-    " \xB7 \u53EF\u8FD8\u539F ": " \xB7 recoverable ",
-    " \xB7 \u5F53\u524D": " \xB7 current",
-    " \xB7 \u6210\u719F\u5EA6\u5C31\u7EEA=": " \xB7 maturity ready=",
-    " \xB7 \u672B\u6B21 ": " \xB7 last ",
-    " \xB7 \u89E3\u6790\u51FA\u7684\u4F1A\u8BDD = ": " \xB7 resolved session = ",
-    " \xB7 \u95ED\u5408=": " \xB7 closed=",
-    " \u2713\uFF08\u4E09\u6761\u6865\u5DF2\u9000\u5F79\uFF09": " \u2713 (all three bridges retired)",
-    " \u5206": " min",
-    " \u5206\u949F": " min",
-    " \u53D6\u6570\u5931\u8D25\uFF08\u7AEF\u70B9\u4E0D\u53EF\u8FBE\uFF09": " fetch failed (endpoint unreachable)",
-    " \u5929 ": " d ",
-    " \u5B57\u7B26": " chars",
-    " \u5C0F\u65F6": " h",
-    " \u5C0F\u65F6 ": " h ",
-    " \u65B0\u67B6\u6784\u6A21\u5757\u5728": " new-architecture modules present in",
-    " \u6761": " items",
-    " \u6761]": " items]",
-    " \u6761\u5728\u518C": " items registered",
-    " \u6761\uFF09": " items)",
-    " \u6865": " bridges",
-    " \u6B21 \xB7 \u53EF\u8FD8\u539F / \u5206\u6B67": " runs \xB7 recoverable / divergent",
-    " \u79D2": " sec",
-    " \u8F7D\u4F53\u4E00\u81F4": " carriers consistent",
-    " \u952E}": " keys}",
-    "REM \u76F8 enableRemPass": "REM phase enableRemPass",
-    "audit \u76EE\u5F55\u5B9E\u51B5": "audit directory actuals",
-    "dual\uFF08md \u2194 Record \u53CC\u5199\uFF09": "dual (md \u2194 Record dual-write)",
-    "legacy \u6D41\uFF08\u5DF2\u5E76\u5165\u53F0\u8D26\uFF0C\u4EC5\u5B58\u5386\u53F2\uFF09": "legacy stream (merged into the ledger, history only)",
-    "lib \u6587\u4EF6\u6570": "lib file count",
-    "md = \u53EA\u5199 md \u6295\u5F71\uFF1Bdual = md \u2194 Record \u53CC\u5199\uFF08\u5199\u65F6\u81EA\u8BC1\uFF1A\u53EF\u8FD8\u539F / \u5206\u6B67\uFF09\u3002": "md = write the md projection only; dual = md \u2194 Record dual-write (self-attested on write: recoverable / divergent).",
-    "md \u2194 store \u9010\u4EF6": "md \u2194 store, item by item",
-    "md \u2194 store \u9010\u4EF6\u4E00\u81F4": "md \u2194 store item-by-item consistent",
-    "md\u2194store \u5BF9\u8D26": "md\u2194store reconciliation",
-    "md\uFF08\u53EA\u7528 md \u6295\u5F71\uFF09": "md (md projection only)",
-    "suite \u88C5\u914D\u77E9\u9635": "suite assembly matrix",
-    "suite \u88C5\u914D\u77E9\u9635\u7531 targets.ts \u7684 suiteAssemblyMatrix() \u5355\u4E00\u5B9E\u73B0\uFF1B\u9762\u677F\u4E0E scheduler \u5171\u7528\u3002": "The suite assembly matrix has a single implementation, suiteAssemblyMatrix() in targets.ts; the panel and scheduler share it.",
-    "systemPrompt \u6BB5\uFF08P2b \u5F00\uFF09": "systemPrompt segment (P2b on)",
-    "\u2026 \u53E6\u6709 ": "\u2026 and ",
-    "\u26A0 storeMode \u5199\u5165\u5931\u8D25\uFF08\u679A\u4E3E\u6216\u767D\u540D\u5355\u62D2\u7EDD\uFF09": "\u26A0 storeMode write failed (rejected by enum or whitelist)",
-    "\u26A0 \u672A\u751F\u6548": "\u26A0 Not in effect",
-    "\u26A0 \u67B6\u6784\u89C6\u56FE\u6E32\u67D3\u5931\u8D25\uFF1A": "\u26A0 Architecture view failed to render: ",
-    "\u26A0 \u68C0\u6D4B\u5230\u7591\u4F3C\u5361\u4F4F\u7684\u4F1A\u8BDD\uFF08\u65E0\u8F93\u51FA\u589E\u957F\u4F46\u4F1A\u8BDD\u4ECD\u5728\uFF09\uFF1A\u5DF2\u6B63\u5E38\u8BA1\u5165\u505C\u6EDE\u5E76\u5B89\u6392\u7761\u7720\uFF0C\u4F46\u5EFA\u8BAE\u4F60\u786E\u8BA4\u8BE5\u4EFB\u52A1\u662F\u5426\u771F\u7684\u5361\u4F4F\u2014\u2014\u5FC5\u8981\u65F6\u624B\u52A8\u91CD\u542F\u8BE5\u4F1A\u8BDD\u3002": "\u26A0 Possible stuck session detected (no output growth but the session is still alive): it has been counted as stalled as usual and sleep has been scheduled, but you should confirm whether the task is really stuck \u2014 restart that session manually if needed.",
-    "\u26A0 \u89E6\u53D1\u5931\u8D25\uFF1A": "\u26A0 Trigger failed: ",
-    "\u2713 \u5DF2\u89E6\u53D1\u5F52\u7EB3\uFF08\u89C1\u65E5\u5FD7\uFF09": "\u2713 Induction triggered (see log)",
-    "\u2713 \u81EA\u68C0\u5B8C\u6210\uFF1A": "\u2713 Self-check complete: ",
-    "\u4E00\u952E\u56DE\u6EDA\u5F00\u5173": "One-click rollback switch",
-    "\u4E0A\u6B21\u7ED3\u679C\u8BFB selfcheck-latest.json\uFF08GET\uFF09\uFF1B\u6267\u884C\u8D70 POST": "Read the last result from selfcheck-latest.json (GET); run it via POST",
-    "\u4E0D\u9650": "Unlimited",
-    "\u4E8E ": "at ",
-    "\u4E94\u73AF KPI \u4E0E\u73AF\u4E8B\u4EF6\u5BF9\u8D26": "Five-ring KPI and ring-event reconciliation",
-    "\u4E94\u73AF KPI \u4E0E\u73AF\u4E8B\u4EF6\u5BF9\u8D26 + \u7EDF\u4E00\u53F0\u8D26\u6309 type \u5206\u5E03\uFF08\u7F3A `at` \u884C\u6570 = \u4FE1\u5C01\u5B8C\u6574\u6027\uFF09\u3002": "Five-ring KPIs reconciled against ring events + unified ledger distribution by type (rows missing `at` = envelope completeness).",
-    "\u4EC5\u7A84\u52A8\u4F5C\u4E14\u53EF\u56DE\u6EDA\uFF1B\u6539 \u03B1/gate/\u5224\u636E \u4E00\u5F8B\u53EA\u5EFA\u8BAE": "Narrow, rollback-safe actions only; changes to \u03B1/gate/criterion are suggestions only",
-    "\u4ECE\u672A": "Never",
-    "\u4FBF\u7B7E": "Notes",
-    "\u505C\u6EDE": "Stalled",
-    "\u5F85\u84B8\u998F": "Pending distill",
-    "\u5168\u90E8\u6839\u4F1A\u8BDD\u505C\u6EDE \u2265 \u9608\u503C\u540E\u81EA\u52A8\u56DE\u60F3\u5F53\u5929\u8BB0\u5FC6\u3001\u63D0\u70BC\u539F\u5219\u5C42 PRINCIPLES.md\u3002\u72B6\u6001\u673A\u533A\u5206\u300C\u6B63\u5E38\u957F\u4EFB\u52A1 / \u5361\u4F4F / \u5F02\u5E38\u9000\u51FA\u300D\uFF1A\u4EC5\u957F\u4EFB\u52A1\u6B63\u5728\u63A8\u8FDB\u624D\u62E6\u7761\uFF0C\u5176\u4F59\u6B63\u5E38\u7761\u3002": `Once all root sessions have been stalled \u2265 the threshold, recall the day's memories and distill the principle layer PRINCIPLES.md. The state machine distinguishes "healthy long task / stuck / abnormal exit": sleep is blocked only while a long task is actually progressing; otherwise it sleeps normally.`,
-    "\u516D\u9879\u68C0\u6D4B": "Six checks",
-    "\u5185\u5BB9\u73AF": "Content rings",
-    "\u5185\u5BB9\u73AF\u4E0E\u53F0\u8D26": "Content rings and ledger",
-    "\u518D\u5F15\u5BFC\u4E0A\u9650": "Re-guidance limit",
-    "\u518D\u5F15\u5BFC\u4E0A\u9650 mclMaxNudges": "Re-nudge cap mclMaxNudges",
-    "\u5199 ": "Written ",
-    "\u5199\u65F6\u81EA\u8BC1": "Write-time self-verification",
-    "\u5199\u7EDF\u4E00\u53F0\u8D26\uFF08type=mcl*\uFF09": "Write to the unified ledger (type=mcl*)",
-    "\u5237\u65B0": "Refresh",
-    "\u52A0\u8F7D\u5931\u8D25\uFF1A": "Load failed:",
-    "\u5355\u4E00\u5B9E\u73B0\uFF1Atargets.ts \xB7 suiteAssemblyMatrix()": "Single implementation: targets.ts \xB7 suiteAssemblyMatrix()",
-    "\u539F\u5219 + \u8DEF\u5F84": "Principles + paths",
-    "\u539F\u59CB JSON": "Raw JSON",
-    "\u53BB\u8C03\u53C2": "Go to parameter tuning",
-    "\u53D6\u6570\u4E2D\u2026": "Fetching\u2026",
-    "\u53D6\u6570\u5931\u8D25\uFF08\u7AEF\u70B9\u4E0D\u53EF\u8FBE\u6216\u8FD4\u56DE\u975E JSON\uFF09": "Fetch failed (endpoint unreachable or returned non-JSON)",
-    "\u53E3\u5F84\uFF08\u65CF \xD7 \u57DF\uFF09": "Breakdown (family \xD7 domain)",
-    "\u53EF\u8FD8\u539F / \u5206\u6B67": "Verifiable / diverged",
-    "\u53F0\u8D26\u884C\u6570": "Ledger rows",
-    "\u53F0\u8D26\u8DEF\u5F84": "Ledger path",
-    "\u5426": "No",
-    "\u57DF\uFF1A": "Domain:",
-    "\u5951\u7EA6\u8DEF\u7531\u6570": "Contract route count",
-    "\u5B58\u50A8\u6A21\u5F0F": "Storage mode",
-    "\u5B58\u50A8\u6A21\u5F0F storeMode": "Storage mode storeMode",
-    "\u5B9A\u65F6\u5668/\u6DF1\u7761\u540E\u4F1A\u81EA\u52A8\u6267\u884C": "Runs automatically on the timer / after deep sleep",
-    "\u5BA1\u8BA1\u6D41 mclAudit": "Audit stream mclAudit",
-    "\u5BB9\u91CF": "Capacity",
-    "\u5C1A\u672A\u8DD1\u8FC7": "Not run yet",
-    "\u5DF2\u5207\u5230\u300C\u89C2\u6D4B\u300D": 'Switched to "Observability"',
-    "\u5DF2\u5207\u5230\u300C\u8BA4\u77E5\u73AF\u65CB\u94AE\u300D": 'Switched to "Cognition ring knobs"',
-    "\u5DF2\u5237\u65B0": "Refreshed",
-    "\u5DF2\u6309\u6CE8\u5165\u5668 registry + profiles \u91CD\u65B0\u6838\u88C5\u914D": "Assembly re-checked against the injector registry + profiles",
-    "\u5DF2\u7528": "Used",
-    "\u5DF2\u88C5\u914D": "Assembled",
-    "\u5F00 = \u6750\u6599\u6302\u6CE8\u5165\u9762\u3001\u4E0D\u8FDB\u8F6C\u5F55\uFF08\u5B9E\u6D4B `sysBlockNonEmpty` \u4F1A\u6DA8\uFF09\uFF1B\u5173 = \u8D70\u6D88\u606F\u9762\uFF08\u9001\u8FBE\u6709\u636E\uFF09": "On = material attached to the injection surface, not in the transcript (measured: `sysBlockNonEmpty` rises); off = goes through the message surface (delivery is evidenced)",
-    "\u5F71\u5B50 flipReady=": "Shadow flipReady=",
-    "\u60AC\u7A7A\u8BC1\u636E": "Dangling evidence",
-    "\u60F0\u6027\u6865 / \u65B0\u67B6\u6784\u6A21\u5757": "Lazy bridges / new architecture modules",
-    "\u60F0\u6027\u6865\u8FB9\u6570": "Lazy bridge edge count",
-    "\u6162\u901A\u9053\u672A\u5F15\u7528\u6750\u6599\u65F6\u7684\u518D\u5F15\u5BFC\u6B21\u6570\uFF080 = \u53EA\u6CE8\u5165\u4E0D\u5F15\u5BFC\uFF1B\u7F3A\u7701 ": "Re-guidance attempts when the slow path does not cite the material (0 = inject without guidance; default ",
-    "\u6162\u901A\u9053\u6750\u6599\u786C\u9884\u7B97\uFF08\u5B57\u7B26\uFF1B\u7F3A\u7701 ": "Slow-path material hard budget (characters; default ",
-    "\u6162\u901A\u9053\u6CE8\u5165\u7684\u6307\u9488\u6761\u6570\uFF08\u7F3A\u7701 ": "Number of pointers injected by the slow path (default ",
-    "\u6307\u9488\u6761\u6570": "Pointer count",
-    "\u6307\u9488\u6761\u6570 mclTopK": "Pointer count mclTopK",
-    "\u6309 type \u5206\u5E03": "Distribution by type",
-    "\u63A2\u9488\uFF08\u5B9A\u4F4D P2b \u7528\uFF09\uFF1A\u5BBF\u4E3B\u4F20\u5165 context \u952E = ": "Probe (for locating P2b): context key passed in by the host = ",
-    "\u63D2\u4EF6\u7248\u672C": "Plugin version",
-    "\u65AD\u8A00\u56FE\uFF08\u5173\u7CFB\u5373\u4E8B\u5B9E\uFF09": "Assertion graph (relations are facts)",
-    "\u65CF\uFF1A": "Family:",
-    "\u65E0": "None",
-    "\u65E0\u6807\u7B7E ": "Untagged ",
-    "\u65E0\u6807\u7B7E\u5F85\u5F52\u7C7B": "Untagged, awaiting classification",
-    "\u65E0\uFF08\u9664\u7D22\u5F15/\u8BE6\u60C5\u540C\u540D\u6807\u9898\u8FD9\u7C7B\u7ED3\u6784\u6027\u91CD\u540D\uFF09": "None (apart from structural duplicates such as index/detail titles sharing a name)",
-    "\u65F6\u5E8F\u8F68\u8FF9\uFF08cap \u6355\u83B7 \xB7 set \u5199\u6750\u6599 \xB7 ren \u6E32\u67D3\uFF09": "Timeline (cap capture \xB7 set writes material \xB7 ren render)",
-    "\u662F": "Yes",
-    "\u6700\u8FD1\u4F1A\u8BDD": "Recent sessions",
-    "\u672A\u88C5\u914D": "Not assembled",
-    "\u672B\u6B21": "Last",
-    "\u6743\u5A01\uFF1A": "Authority:",
-    "\u6750\u6599\u5165 systemPrompt \u6BB5\uFF08P2b\uFF09": "Material into the systemPrompt segment (P2b)",
-    "\u6750\u6599\u53BB\u5411": "Material destination",
-    "\u6750\u6599\u9001\u8FBE\u8BA1\u6570": "Material delivery counts",
-    "\u6750\u6599\u9884\u7B97": "Material budget",
-    "\u6750\u6599\u9884\u7B97 mclBudgetChars": "Material budget mclBudgetChars",
-    "\u6D3B\u8DC3 / \u5931\u6548": "Active / stale",
-    "\u6D88\u606F\u9762": "message surface",
-    "\u6DF1\u5EA6\u7761\u7720 \xB7 \u4F1A\u8BDD\u72B6\u6001\u673A": "Deep sleep \xB7 session state machine",
-    "\u6DF1\u5EA6\u7761\u7720\u5F52\u7EB3\u4E2D\u2026": "Deep sleep induction in progress\u2026",
-    "\u6DF1\u5EA6\u7761\u7720\u5F52\u7EB3\u5668\u5F53\u524D\u672A\u6FC0\u6D3B\uFF08\u84B8\u998F\u5668 enableDistill \u672A\u542F\u7528\u6216\u5C1A\u672A\u5C31\u7EEA\uFF09\u3002": "The deep sleep inductor is currently inactive (the distiller's enableDistill is off or not yet ready).",
-    "\u6DF1\u7761\u540C pass \u5185\u505A\u8DE8\u4E3B\u9898\u8054\u60F3\uFF08\u7F3A\u7701\u5173\uFF1B\u4EA7\u7269\u4F1A\u5E76\u5165\u753B\u50CF\uFF0C\u566A\u58F0\u4EE3\u4EF7\u9AD8\uFF09": "Cross-topic association within the same deep-sleep pass (off by default; output merges into profiles, and the noise cost is high)",
-    "\u6DFB\u52A0\u76EE\u6807\u5E93": "Add target bank",
-    "\u719F\u6089\u5EA6\u9608\u503C": "Familiarity threshold",
-    "\u719F\u6089\u5EA6\u9608\u503C / \u518D\u5F15\u5BFC\u4E0A\u9650 / \u6750\u6599\u9884\u7B97 / topK / \u6750\u6599\u53BB\u5411\uFF08P2b\uFF09/ REM \u2014\u2014 \u767D\u540D\u5355\u8865\u4E01\u5199 scheduler.json\u3002": "Familiarity threshold / re-nudge cap / material budget / topK / material destination (P2b) / REM \u2014 whitelist patches are written to scheduler.json.",
-    "\u719F\u6089\u5EA6\u9608\u503C mclFamiliarThreshold": "Familiarity threshold mclFamiliarThreshold",
-    "\u72B6\u6001": "Status",
-    "\u753B\u50CF + \u504F\u597D": "Profile + preferences",
-    "\u767D\u540D\u5355\u8865\u4E01\u5199 `scheduler.json`\uFF1B**\u91CD\u8F7D\u540E\u751F\u6548**\u3002\u5F53\u524D\u8FD0\u884C\u6001\uFF1A": "Whitelist patches are written to `scheduler.json`; **effective after reload**. Current runtime:",
-    "\u767D\u540D\u5355\u8C03\u6574": "Whitelist adjustments",
-    "\u76EE\u6807\u5E93": "Target bank",
-    "\u770B\u89C2\u6D4B": "View observability",
-    "\u7761\u7720\u671F\u81EA\u68C0\uFF08\u5224\u636E\u95E8 / \u8F7D\u4F53\u95E8 / \u5206\u5C42 / \u6210\u719F\u5EA6 / \u5F71\u5B50 / \u5BF9\u8D26\uFF09": "Sleep self-check (criterion gate / carrier gate / layering / maturity / shadow / reconciliation)",
-    "\u7ECF\u9A8C + \u53CD\u4F8B": "Lessons + counterexamples",
-    "\u7EDD\u5BF9\u4F59\u5F26\u53E3\u5F84\uFF1B\u2265 \u9608\u503C\u4E14\u547D\u4E2D\u9AD8\u7F6E\u4FE1\u6807\u7B7E\u624D\u8D70\u5FEB\u901A\u9053\uFF08\u7F3A\u7701 ": "Absolute cosine basis; the fast path is taken only when \u2265 threshold and a high-confidence tag hits (default ",
-    "\u7EDF\u4E00\u53F0\u8D26\u4E0E\u89C2\u6D4B\u9762": "Unified ledger and observability surface",
-    "\u7F3A at \u884C\uFF08\u4FE1\u5C01\u5B8C\u6574\u6027\uFF09": "Missing at field (envelope integrity)",
-    "\u81EA\u68C0\u5B8C\u6210": "Self-check complete",
-    "\u8282\u70B9": "Nodes",
-    "\u88C1\u51B3": "Verdict",
-    "\u88C5\u914D": "Assembly",
-    "\u88C5\u914D\u5185\u5BB9": "Assembled content",
-    "\u88C5\u914D\u6839\uFF08composition root\uFF09\u4E0E\u5DF2\u88C5\u80FD\u529B": "Composition root and installed capabilities",
-    "\u88C5\u914D\u9762": "Assembly surface",
-    "\u89C2\u6D4B": "Observability",
-    "\u8BA4\u77E5\u73AF\u5F00\u5173 mclEnabled": "Cognition ring switch mclEnabled",
-    "\u8BA4\u77E5\u73AF\u65CB\u94AE": "Cognition ring knobs",
-    "\u8BA4\u77E5\u73AF\uFF08MCL\uFF09\u65CB\u94AE": "Cognition ring (MCL) knobs",
-    "\u8BB0\u5F55\u4E0E\u56FE": "Records & graph",
-    "\u8BB0\u5F55\u5C42\uFF08Record \u4E8B\u5B9E\u6E90\uFF09": "Record layer (Record source of truth)",
-    "\u8BB0\u5F55\u6570": "Records",
-    "\u8BB0\u5FC6\u8BB0\u5F55": "Memory records",
-    "\u8BFB\u53D6\u4E2D\u2026\u82E5\u957F\u671F\u5982\u6B64\u8BF4\u660E /arch/assembly \u7AEF\u70B9\u4E0D\u53EF\u8FBE": "Loading\u2026 if this persists, the /arch/assembly endpoint is unreachable",
-    "\u8BFB\u53D6\u4E2D\u2026\u82E5\u957F\u671F\u5982\u6B64\u8BF4\u660E /arch/observability \u7AEF\u70B9\u4E0D\u53EF\u8FBE": "Loading\u2026 if this persists, the /arch/observability endpoint is unreachable",
-    "\u8BFB\u53D6\u4E2D\u2026\u82E5\u957F\u671F\u5982\u6B64\u8BF4\u660E /arch/records \xB7 /arch/graph \u7AEF\u70B9\u4E0D\u53EF\u8FBE": "Loading\u2026 if this persists, the /arch/records \xB7 /arch/graph endpoints are unreachable",
-    "\u8BFB\u53D6\u4E2D\u2026\u82E5\u957F\u671F\u5982\u6B64\u8BF4\u660E /mcl/config \u7AEF\u70B9\u4E0D\u53EF\u8FBE": "Loading\u2026 if this persists, the /mcl/config endpoint is unreachable",
-    "\u8BFB\u53D6\u4E2D\u2026\u82E5\u957F\u671F\u5982\u6B64\u8BF4\u660E /rings \u7AEF\u70B9\u4E0D\u53EF\u8FBE": "Loading\u2026 if this persists, the /rings endpoint is unreachable",
-    "\u8D85\u9608": "Over threshold",
-    "\u8DE8\u6587\u4EF6\u9010\u5B57\u8282\u540C\u6587\uFF08\u53EA\u62A5\u544A\u4E0D\u5220\u2014\u2014\u5185\u5BB9\u5C5E\u7528\u6237\uFF09": "Byte-identical text across files (report only, never delete \u2014 the content belongs to the user)",
-    "\u8F7D\u4F53\u5BF9\u8D26": "Carrier reconciliation",
-    "\u8F7D\u4F53\u9010\u4EF6\u5BF9\u8D26": "Carrier item-by-item reconciliation",
-    "\u8FB9": "Edges",
-    "\u8FD0\u884C\u6001\u901A\u9053\u8BA1\u6570": "Runtime channel counts",
-    "\u91CD\u53D6\u67B6\u6784\u5FEB\u7167": "Reload architecture snapshot",
-    "\u91CD\u53D6\u88C5\u914D\u77E9\u9635\uFF08/suite\uFF09": "Re-fetch assembly matrix (/suite)",
-    "\u91CD\u65B0\u62C9\u53D6\u8BB0\u5F55\u5C42 / \u65AD\u8A00\u56FE / \u89C2\u6D4B / \u88C5\u914D\u56DB\u4E2A\u53EA\u8BFB\u7AEF\u70B9\uFF08\u5404\u9875\u7B7E\u540C\u65F6\u5237\u65B0\uFF09\u3002": "Re-fetch the four read-only endpoints \u2014 record layer / assertion graph / observability / assembly (all tabs refresh together).",
-    "\u91CD\u65B0\u88C5\u914D": "Re-assemble",
-    "\u91CD\u6784\u540E\u65B0\u589E\u6A21\u5757\uFF08\u88C5\u4E0A\u53BB\u7684\u90A3\u4EFD\u662F\u5426\u5E26\u7740\uFF09": "Modules added by the refactor (does the installed copy carry them?)",
-    "\u91CD\u6784\u540E\u7684\u4E8B\u5B9E\u9762\u4E0E\u65CB\u94AE\uFF1A\u5185\u5BB9\u73AF KPI \xB7 \u8BB0\u5F55\u5C42\u5BF9\u8D26\u4E0E\u81EA\u8BC1 \xB7 \u7EDF\u4E00\u53F0\u8D26\u4E0E legacy \u6D41 \xB7 \u88C5\u914D\u6839\u5C31\u7EEA\u5EA6 \xB7 \u65AD\u8A00\u56FE \xB7 \u8BA4\u77E5\u73AF\u53C2\u6570\u3002\u6570\u636E\u5168\u90E8\u6765\u81EA\u53EA\u8BFB\u7AEF\u70B9\uFF0C\u552F\u4E00\u5199\u5165\u53E3\u662F\u8BA4\u77E5\u73AF\u65CB\u94AE\uFF08\u767D\u540D\u5355\u8865\u4E01\uFF09\u3002": "The post-refactor fact surface and knobs: content-ring KPIs \xB7 record-layer reconciliation and self-verification \xB7 unified ledger and legacy stream \xB7 assembly-root readiness \xB7 assertion graph \xB7 cognition-ring parameters. All data comes from read-only endpoints; the only write entry point is the cognition ring knobs (whitelist patches).",
-    "\u9700\u5728\u767D\u540D\u5355\u5185\u767B\u8BB0\uFF08target-registry / members \u914D\u7F6E\uFF09": "Must be registered in the whitelist (target-registry / members config)",
-    "\uFF08suite \u57DF\u4E8B\u4EF6\u6D41\u76EE\u6807 = ": "(suite domain event-stream target = ",
-    "\uFF08\u5DF2\u5199 scheduler.json\uFF09": "(written to scheduler.json)",
-    "\uFF08\u5DF2\u5199\u5165 scheduler.json\uFF0C\u91CD\u8F7D\u540E\u751F\u6548\uFF09": "(written to scheduler.json, effective after reload)",
-    "\uFF08\u6309\u6301\u4E45\u914D\u7F6E\uFF09": "(per persisted config)",
-    "\uFF08\u65E0\u5BB9\u91CF\u6CE8\u518C\u8868\u6570\u636E\uFF09": "(no capacity registry data)",
-    "\uFF08\u7A7A\uFF09": "(empty)",
-    "\uFF08\u8BB0\u5F55 ": "(records ",
-    "\uFF09\u3002\u6570\u636E\u63D0\u793A\uFF1A\u672C\u5E93 936 \u6B65\u5B9E\u6D4B 86% \u7684\u6B65**\u65E0\u53EC\u56DE\u547D\u4E2D**\u2014\u2014\u5148\u67E5\u53EC\u56DE\uFF0C\u518D\u8C03\u6B64\u503C\u3002": "). Data note: in this bank, across 936 measured steps 86% had **no recall hit** \u2014 check recall before tuning this value."
+    " + 锚 ": " + anchors ",
+    " · **分歧 ": " · **divergent ",
+    " · 可还原 ": " · recoverable ",
+    " · 当前": " · current",
+    " · 成熟度就绪=": " · maturity ready=",
+    " · 末次 ": " · last ",
+    " · 解析出的会话 = ": " · resolved session = ",
+    " · 闭合=": " · closed=",
+    " ✓（三条桥已退役）": " ✓ (all three bridges retired)",
+    " 分": " min",
+    " 分钟": " min",
+    " 取数失败（端点不可达）": " fetch failed (endpoint unreachable)",
+    " 天 ": " d ",
+    " 字符": " chars",
+    " 小时": " h",
+    " 小时 ": " h ",
+    " 新架构模块在": " new-architecture modules present in",
+    " 条": " items",
+    " 条]": " items]",
+    " 条在册": " items registered",
+    " 条）": " items)",
+    " 桥": " bridges",
+    " 次 · 可还原 / 分歧": " runs · recoverable / divergent",
+    " 秒": " sec",
+    " 载体一致": " carriers consistent",
+    " 键}": " keys}",
+    "REM 相 enableRemPass": "REM phase enableRemPass",
+    "audit 目录实况": "audit directory actuals",
+    "dual（md ↔ Record 双写）": "dual (md ↔ Record dual-write)",
+    "legacy 流（已并入台账，仅存历史）": "legacy stream (merged into the ledger, history only)",
+    "lib 文件数": "lib file count",
+    "md = 只写 md 投影；dual = md ↔ Record 双写（写时自证：可还原 / 分歧）。": "md = write the md projection only; dual = md ↔ Record dual-write (self-attested on write: recoverable / divergent).",
+    "md ↔ store 逐件": "md ↔ store, item by item",
+    "md ↔ store 逐件一致": "md ↔ store item-by-item consistent",
+    "md↔store 对账": "md↔store reconciliation",
+    "md（只用 md 投影）": "md (md projection only)",
+    "suite 装配矩阵": "suite assembly matrix",
+    "suite 装配矩阵由 targets.ts 的 suiteAssemblyMatrix() 单一实现；面板与 scheduler 共用。": "The suite assembly matrix has a single implementation, suiteAssemblyMatrix() in targets.ts; the panel and scheduler share it.",
+    "systemPrompt 段（P2b 开）": "systemPrompt segment (P2b on)",
+    "… 另有 ": "… and ",
+    "⚠ storeMode 写入失败（枚举或白名单拒绝）": "⚠ storeMode write failed (rejected by enum or whitelist)",
+    "⚠ 未生效": "⚠ Not in effect",
+    "⚠ 架构视图渲染失败：": "⚠ Architecture view failed to render: ",
+    "⚠ 检测到疑似卡住的会话（无输出增长但会话仍在）：已正常计入停滞并安排睡眠，但建议你确认该任务是否真的卡住——必要时手动重启该会话。": "⚠ Possible stuck session detected (no output growth but the session is still alive): it has been counted as stalled as usual and sleep has been scheduled, but you should confirm whether the task is really stuck — restart that session manually if needed.",
+    "⚠ 触发失败：": "⚠ Trigger failed: ",
+    "✓ 已触发归纳（见日志）": "✓ Induction triggered (see log)",
+    "✓ 自检完成：": "✓ Self-check complete: ",
+    "一键回滚开关": "One-click rollback switch",
+    "上次结果读 selfcheck-latest.json（GET）；执行走 POST": "Read the last result from selfcheck-latest.json (GET); run it via POST",
+    "不限": "Unlimited",
+    "于 ": "at ",
+    "五环 KPI 与环事件对账": "Five-ring KPI and ring-event reconciliation",
+    "五环 KPI 与环事件对账 + 统一台账按 type 分布（缺 `at` 行数 = 信封完整性）。": "Five-ring KPIs reconciled against ring events + unified ledger distribution by type (rows missing `at` = envelope completeness).",
+    "仅窄动作且可回滚；改 α/gate/判据 一律只建议": "Narrow, rollback-safe actions only; changes to α/gate/criterion are suggestions only",
+    "从未": "Never",
+    "便签": "Notes",
+    "停滞": "Stalled",
+    "待蒸馏": "Pending distill",
+    "全部根会话停滞 ≥ 阈值后自动回想当天记忆、提炼原则层 PRINCIPLES.md。状态机区分「正常长任务 / 卡住 / 异常退出」：仅长任务正在推进才拦睡，其余正常睡。": `Once all root sessions have been stalled ≥ the threshold, recall the day's memories and distill the principle layer PRINCIPLES.md. The state machine distinguishes "healthy long task / stuck / abnormal exit": sleep is blocked only while a long task is actually progressing; otherwise it sleeps normally.`,
+    "六项检测": "Six checks",
+    "内容环": "Content rings",
+    "内容环与台账": "Content rings and ledger",
+    "再引导上限": "Re-guidance limit",
+    "再引导上限 mclMaxNudges": "Re-nudge cap mclMaxNudges",
+    "写 ": "Written ",
+    "写时自证": "Write-time self-verification",
+    "写统一台账（type=mcl*）": "Write to the unified ledger (type=mcl*)",
+    "刷新": "Refresh",
+    "加载失败：": "Load failed:",
+    "单一实现：targets.ts · suiteAssemblyMatrix()": "Single implementation: targets.ts · suiteAssemblyMatrix()",
+    "原则 + 路径": "Principles + paths",
+    "原始 JSON": "Raw JSON",
+    "去调参": "Go to parameter tuning",
+    "取数中…": "Fetching…",
+    "取数失败（端点不可达或返回非 JSON）": "Fetch failed (endpoint unreachable or returned non-JSON)",
+    "口径（族 × 域）": "Breakdown (family × domain)",
+    "可还原 / 分歧": "Verifiable / diverged",
+    "台账行数": "Ledger rows",
+    "台账路径": "Ledger path",
+    "否": "No",
+    "域：": "Domain:",
+    "契约路由数": "Contract route count",
+    "存储模式": "Storage mode",
+    "存储模式 storeMode": "Storage mode storeMode",
+    "定时器/深睡后会自动执行": "Runs automatically on the timer / after deep sleep",
+    "审计流 mclAudit": "Audit stream mclAudit",
+    "容量": "Capacity",
+    "尚未跑过": "Not run yet",
+    "已切到「观测」": 'Switched to "Observability"',
+    "已切到「认知环旋钮」": 'Switched to "Cognition ring knobs"',
+    "已刷新": "Refreshed",
+    "已按注入器 registry + profiles 重新核装配": "Assembly re-checked against the injector registry + profiles",
+    "已用": "Used",
+    "已装配": "Assembled",
+    "开 = 材料挂注入面、不进转录（实测 `sysBlockNonEmpty` 会涨）；关 = 走消息面（送达有据）": "On = material attached to the injection surface, not in the transcript (measured: `sysBlockNonEmpty` rises); off = goes through the message surface (delivery is evidenced)",
+    "影子 flipReady=": "Shadow flipReady=",
+    "悬空证据": "Dangling evidence",
+    "惰性桥 / 新架构模块": "Lazy bridges / new architecture modules",
+    "惰性桥边数": "Lazy bridge edge count",
+    "慢通道未引用材料时的再引导次数（0 = 只注入不引导；缺省 ": "Re-guidance attempts when the slow path does not cite the material (0 = inject without guidance; default ",
+    "慢通道材料硬预算（字符；缺省 ": "Slow-path material hard budget (characters; default ",
+    "慢通道注入的指针条数（缺省 ": "Number of pointers injected by the slow path (default ",
+    "指针条数": "Pointer count",
+    "指针条数 mclTopK": "Pointer count mclTopK",
+    "按 type 分布": "Distribution by type",
+    "探针（定位 P2b 用）：宿主传入 context 键 = ": "Probe (for locating P2b): context key passed in by the host = ",
+    "插件版本": "Plugin version",
+    "断言图（关系即事实）": "Assertion graph (relations are facts)",
+    "族：": "Family:",
+    "无": "None",
+    "无标签 ": "Untagged ",
+    "无标签待归类": "Untagged, awaiting classification",
+    "无（除索引/详情同名标题这类结构性重名）": "None (apart from structural duplicates such as index/detail titles sharing a name)",
+    "时序轨迹（cap 捕获 · set 写材料 · ren 渲染）": "Timeline (cap capture · set writes material · ren render)",
+    "是": "Yes",
+    "最近会话": "Recent sessions",
+    "未装配": "Not assembled",
+    "末次": "Last",
+    "权威：": "Authority:",
+    "材料入 systemPrompt 段（P2b）": "Material into the systemPrompt segment (P2b)",
+    "材料去向": "Material destination",
+    "材料送达计数": "Material delivery counts",
+    "材料预算": "Material budget",
+    "材料预算 mclBudgetChars": "Material budget mclBudgetChars",
+    "活跃 / 失效": "Active / stale",
+    "消息面": "message surface",
+    "深度睡眠 · 会话状态机": "Deep sleep · session state machine",
+    "深度睡眠归纳中…": "Deep sleep induction in progress…",
+    "深度睡眠归纳器当前未激活（蒸馏器 enableDistill 未启用或尚未就绪）。": "The deep sleep inductor is currently inactive (the distiller's enableDistill is off or not yet ready).",
+    "深睡同 pass 内做跨主题联想（缺省关；产物会并入画像，噪声代价高）": "Cross-topic association within the same deep-sleep pass (off by default; output merges into profiles, and the noise cost is high)",
+    "添加目标库": "Add target bank",
+    "熟悉度阈值": "Familiarity threshold",
+    "熟悉度阈值 / 再引导上限 / 材料预算 / topK / 材料去向（P2b）/ REM —— 白名单补丁写 scheduler.json。": "Familiarity threshold / re-nudge cap / material budget / topK / material destination (P2b) / REM — whitelist patches are written to scheduler.json.",
+    "熟悉度阈值 mclFamiliarThreshold": "Familiarity threshold mclFamiliarThreshold",
+    "状态": "Status",
+    "画像 + 偏好": "Profile + preferences",
+    "白名单补丁写 `scheduler.json`；**重载后生效**。当前运行态：": "Whitelist patches are written to `scheduler.json`; **effective after reload**. Current runtime:",
+    "白名单调整": "Whitelist adjustments",
+    "目标库": "Target bank",
+    "看观测": "View observability",
+    "睡眠期自检（判据门 / 载体门 / 分层 / 成熟度 / 影子 / 对账）": "Sleep self-check (criterion gate / carrier gate / layering / maturity / shadow / reconciliation)",
+    "经验 + 反例": "Lessons + counterexamples",
+    "绝对余弦口径；≥ 阈值且命中高置信标签才走快通道（缺省 ": "Absolute cosine basis; the fast path is taken only when ≥ threshold and a high-confidence tag hits (default ",
+    "统一台账与观测面": "Unified ledger and observability surface",
+    "缺 at 行（信封完整性）": "Missing at field (envelope integrity)",
+    "自检完成": "Self-check complete",
+    "节点": "Nodes",
+    "裁决": "Verdict",
+    "装配": "Assembly",
+    "装配内容": "Assembled content",
+    "装配根（composition root）与已装能力": "Composition root and installed capabilities",
+    "装配面": "Assembly surface",
+    "观测": "Observability",
+    "认知环开关 mclEnabled": "Cognition ring switch mclEnabled",
+    "认知环旋钮": "Cognition ring knobs",
+    "认知环（MCL）旋钮": "Cognition ring (MCL) knobs",
+    "记录与图": "Records & graph",
+    "记录层（Record 事实源）": "Record layer (Record source of truth)",
+    "记录数": "Records",
+    "记忆记录": "Memory records",
+    "读取中…若长期如此说明 /arch/assembly 端点不可达": "Loading… if this persists, the /arch/assembly endpoint is unreachable",
+    "读取中…若长期如此说明 /arch/observability 端点不可达": "Loading… if this persists, the /arch/observability endpoint is unreachable",
+    "读取中…若长期如此说明 /arch/records · /arch/graph 端点不可达": "Loading… if this persists, the /arch/records · /arch/graph endpoints are unreachable",
+    "读取中…若长期如此说明 /mcl/config 端点不可达": "Loading… if this persists, the /mcl/config endpoint is unreachable",
+    "读取中…若长期如此说明 /rings 端点不可达": "Loading… if this persists, the /rings endpoint is unreachable",
+    "超阈": "Over threshold",
+    "跨文件逐字节同文（只报告不删——内容属用户）": "Byte-identical text across files (report only, never delete — the content belongs to the user)",
+    "载体对账": "Carrier reconciliation",
+    "载体逐件对账": "Carrier item-by-item reconciliation",
+    "边": "Edges",
+    "运行态通道计数": "Runtime channel counts",
+    "重取架构快照": "Reload architecture snapshot",
+    "重取装配矩阵（/suite）": "Re-fetch assembly matrix (/suite)",
+    "重新拉取记录层 / 断言图 / 观测 / 装配四个只读端点（各页签同时刷新）。": "Re-fetch the four read-only endpoints — record layer / assertion graph / observability / assembly (all tabs refresh together).",
+    "重新装配": "Re-assemble",
+    "重构后新增模块（装上去的那份是否带着）": "Modules added by the refactor (does the installed copy carry them?)",
+    "重构后的事实面与旋钮：内容环 KPI · 记录层对账与自证 · 统一台账与 legacy 流 · 装配根就绪度 · 断言图 · 认知环参数。数据全部来自只读端点，唯一写入口是认知环旋钮（白名单补丁）。": "The post-refactor fact surface and knobs: content-ring KPIs · record-layer reconciliation and self-verification · unified ledger and legacy stream · assembly-root readiness · assertion graph · cognition-ring parameters. All data comes from read-only endpoints; the only write entry point is the cognition ring knobs (whitelist patches).",
+    "需在白名单内登记（target-registry / members 配置）": "Must be registered in the whitelist (target-registry / members config)",
+    "（suite 域事件流目标 = ": "(suite domain event-stream target = ",
+    "（已写 scheduler.json）": "(written to scheduler.json)",
+    "（已写入 scheduler.json，重载后生效）": "(written to scheduler.json, effective after reload)",
+    "（按持久配置）": "(per persisted config)",
+    "（无容量注册表数据）": "(no capacity registry data)",
+    "（空）": "(empty)",
+    "（记录 ": "(records ",
+    "）。数据提示：本库 936 步实测 86% 的步**无召回命中**——先查召回，再调此值。": "). Data note: in this bank, across 936 measured steps 86% had **no recall hit** — check recall before tuning this value."
   };
 
   // src-client/i18n-dict-pane-run.js
   var EN5 = {
-    " / \u5199\u4E8B\u4EF6 ": " / write events ",
-    " / \u8BB0\u5FC6\u9762 ": " / memory-side ",
-    " \xB7 \u5C1D\u8BD5 ": " \xB7 attempts ",
-    " \xB7 \u5DF2\u5173\u95ED": " \xB7 disabled",
-    " \xB7 \u5DF2\u542F\u7528": " \xB7 enabled",
-    " \xB7 \u5F52\u6863 ": " \xB7 archived ",
-    " \xB7 \u6307\u9488 ": " \xB7 pointers ",
-    " \xB7 \u6700\u8FD1 ": " \xB7 latest ",
-    " \xB7 \u672C\u6708\u505C\u4EA7\uFF08\u53E3\u5F84\uFF09": " \xB7 halted this month (per policy)",
-    " \xB7 \u884C\u6570\u95E8": " \xB7 row-count gate",
-    " \u4E2A": " sessions",
-    " \u4E2A\u6A21\u578B": " models",
-    " \u4E2A\u6A21\u578B \xB7 ": " models \xB7 ",
-    " \u5206\u949F \xB7 ": " minutes \xB7 ",
-    " \u5206\u949F\u524D": " minutes ago",
-    " \u5929\u524D": " days ago",
-    " \u5C0F\u65F6\u524D": " hours ago",
-    " \u63D0\u4EA4": " commits",
-    " \u671F \xB7 \u6700\u8FD1 ": " reports \xB7 latest ",
-    " \u6761 \xB7 \u53EC\u56DE\u9762 ": " \xB7 recall-side ",
-    " \u6761 \xB7 \u5F02\u5E38 ": " items \xB7 anomalies ",
-    " \u6761\u5F85\u88C1\u51B3": " items pending verdict",
-    " \u6761\u65E5\u5FD7\uFF09": " log entries)",
-    " \u6BB5": " sections",
-    " \u884C \xB7 \u5199\u4E8B\u4EF6 ": " rows \xB7 write events ",
-    " \u8F6E \xB7 \u6DF1\u7761\u8F6E\u6B21 ": " rounds \xB7 deep sleep rounds ",
-    " \u8FBE ": " reached ",
-    " \u9879\u5F85\u5904\u7406": " items pending",
-    "/\u6162": "/slow",
-    "/\u6863\uFF09\xB7 R=\u4EFB\u52A1\u95E8\u63A7 \xB7 E=\u76F8\u5173\u6027\u95E8\u63A7": "/tier) \xB7 R=task-gated \xB7 E=relevance-gated",
-    "24h \u5185\u65B0\u589E ": "Added in 24h ",
-    "MCL \u8BA4\u77E5\u73AF": "MCL cognition ring",
-    "P=\u6052\u5E38\uFF08\u7D22\u5F15+P \u5C42\u753B\u50CF\u884C \u2264": "P=constant (index + P-tier profile rows \u2264",
-    "POST /embed/test \u2014\u2014 \u9A8C\u8BC1\u5F53\u524D embedding \u914D\u7F6E\u662F\u5426\u53EF\u7528": "POST /embed/test \u2014 verify whether the current embedding configuration works",
-    "POST /embed/test \u2014\u2014 \u9A8C\u8BC1\u5F53\u524D embedding \u914D\u7F6E\u662F\u5426\u53EF\u7528\uFF08\u914D\u5B8C\u5373\u53EF\u9A8C\u8BC1\uFF0C\u4E0D\u5FC5\u7B49\u5B9E\u9645\u8C03\u7528\u5931\u8D25\uFF09\u3002": "POST /embed/test \u2014 verifies whether the current embedding configuration works (verify right after configuring; you need not wait for a real call to fail).",
-    "POST /eval/test \u2014\u2014 \u9A8C\u8BC1\u8BC4\u4F30\u901A\u9053\u662F\u5426\u53EF\u7528\uFF08\u9ED8\u8BA4\u5173\u95ED\uFF1B\u672C\u673A\u7AEF\u70B9\u514D key\uFF0C\u8FDC\u7AEF\u7AEF\u70B9\u987B\u53E6\u5F00\u51FA\u7F51\u8BB8\u53EF\uFF09\u3002": "POST /eval/test \u2014 verifies whether the evaluation channel works (off by default; local endpoints need no key, remote endpoints require a separate egress permission).",
-    "GET /eval/stats \u2014\u2014 \u6298\u7EDF\u4E00\u53F0\u8D26 type=eval.decision\uFF1A\u5206\u6001\u5206\u5E03 / \u6765\u6E90 / \u771F\u51FA\u673A\u6B21\u6570 / \u56DE\u843D\u6B21\u6570\u3002": "GET /eval/stats \u2014 aggregates ledger rows of type=eval.decision: outcome distribution, sources, real egress count, fallback count.",
-    "POST /maturation/scan \u2014\u2014 \u91CD\u7B97\u5E93\u5185\u5C0F\u8282\u6210\u719F\u5EA6\u5E76\u8986\u76D6\u53F0\u8D26\uFF08\u53EA\u5199\u53F0\u8D26\uFF0C\u4E0D\u6539\u8BB0\u5FC6\u5185\u5BB9\uFF09": "POST /maturation/scan \u2014 recompute section maturity in the memory bank and overwrite the ledger (writes the ledger only, does not change memory content)",
-    "POST /reconcile \u2014\u2014 \u8BB0\u5FC6\u5E93\u5BF9\u8D26\uFF08\u53EA\u8BFB\u6C47\u603B\uFF09": "POST /reconcile \u2014 memory bank reconciliation (read-only summary)",
-    "POST /root/bootstrap \u2014\u2014 \u521D\u59CB\u5316/\u4FEE\u590D\u8BB0\u5FC6\u6839\u76EE\u5F55\u7ED3\u6784\u3002": "POST /root/bootstrap \u2014 initializes/repairs the memory root directory structure.",
-    "isWritable \u767D\u540D\u5355\u5185\u7684\u8BB0\u5FC6\u6587\u4EF6\u3002": "A memory file on the isWritable whitelist.",
-    "memory-reconcile.mjs \u672A\u90E8\u7F72": "memory-reconcile.mjs is not deployed",
-    "notes \u544A\u8B66\u9608\u503C": "notes alert threshold",
-    "\u26A0 \u6709\u5DEE\u5F02": "\u26A0 Differences found",
-    "\u26A0 \u884C\u7EA7\u76F4\u63A5\u6539\u5199\u8BB0\u5FC6\u6587\u4EF6\u3002\u6539\u7D22\u5F15\u884C\u53EF\u80FD\u5BFC\u81F4\u6307\u9488\u4E0E notes \u6B63\u6587\u4E0D\u4E00\u81F4\uFF08\u8BE6\u89C1 R3\uFF09\uFF0C\u5E38\u89C4\u7F16\u8F91\u8BF7\u7528\u300C\u8BB0\u5FC6\u677F\u5757 \u2192 \u5C0F\u8282\u7F16\u8F91\u300D\u3002": '\u26A0 Directly rewrites memory files at the line level. Changing index rows can make pointers inconsistent with the notes body (see R3 for details); for routine edits use "Memory board \u2192 Section edit".',
-    "\u2705 \u5DEE\u5F02 0": "\u2705 0 differences",
-    "\u2713 \u53EF\u8FBE \xB7 ": "\u2713 Reachable \xB7 ",
-    "\u2713 \u5BF9\u8D26\u5B8C\u6210": "\u2713 Reconciliation complete",
-    "\u2713 \u5DF2\u5220\u9664\u8BE5\u884C": "\u2713 Line deleted",
-    "\u2713 \u5DF2\u6539\u5199\u8BE5\u884C": "\u2713 Line rewritten",
-    "\u2713 \u5DF2\u89E6\u53D1\u6DF1\u7761\u5F52\u7EB3\uFF08\u540E\u53F0\u6267\u884C\uFF0C\u56DE\u6267\u89C1\u300C\u6DF1\u5EA6\u7761\u7720\u300D\uFF09": "\u2713 Deep sleep induction triggered (runs in the background; see \u300CDeep sleep\u300D for the receipt)",
-    "\u2713 \u626B\u63CF\u5B8C\u6210\uFF08\u5206\u6863\u5DF2\u5199\u5165 audit/maturation.jsonl\uFF09": "\u2713 Scan complete (tiers written to audit/maturation.jsonl)",
-    "\u2713 \u81EA\u68C0\u5DF2\u6267\u884C\uFF0C\u7ED3\u679C\u89C1\u300C\u8FD0\u884C\u89C2\u6D4B\u300D": "\u2713 Self-check executed; see \u300CRun observation\u300D for the results",
-    "\u2713 \u89C2\u6D4B\u6570\u636E\u5DF2\u5BFC\u51FA\uFF08": "\u2713 Observation data exported (",
-    "\u2717 \u6587\u4EF6 / \u539F\u59CB\u884C / \u65B0\u884C \u4E09\u9879\u5747\u5FC5\u586B": "\u2717 File / original line / new line are all required",
-    "\u2717 \u6587\u4EF6\u4E0E\u539F\u59CB\u884C\u5FC5\u586B": "\u2717 File and original line are required",
-    "\u2717 \u672A\u914D\u7F6E embedBaseUrl\uFF08\u4E14\u7F3A\u7701\u4E0D\u53EF\u7528\uFF09": "\u2717 embedBaseUrl not configured (and the default is unavailable)",
-    "\u2717 \u672A\u914D\u7F6E embedBaseUrl\uFF0C\u8BF7\u5148\u5230\u300C\u53C2\u6570\u8C03\u8282\u300D\u586B\u5199\u3002": '\u2717 embedBaseUrl is not configured; fill it in under "Parameters" first.',
-    "\u4E00\u5C4F\u56DE\u7B54\u300C\u73B0\u5728\u600E\u4E48\u6837\u300D\u3002\u5FBD\u7AE0\u884C = \u539F\u8BB0\u5FC6\u677F\u5757 \xA70 \u7684 7 \u679A\u72B6\u6001\u5FBD\u7AE0\uFF0C\u6574\u4F53\u63D0\u5347\u4E3A\u72EC\u7ACB\u9996\u5C4F\u3002": 'Answers "how are things now" on one screen. The badge row = the 7 status badges from \xA70 of the original memory section, promoted in full to a standalone first screen.',
-    "\u4E09\u5C42\u5360\u6BD4": "Three-tier share",
-    "\u4E0A\u6B21\u6709\u6548\u6DF1\u7761": "Last effective deep sleep",
-    "\u4E0B\u6B21\u53EF\u7761 ": "Next sleep in ",
-    "\u4E0B\u8F7D\u5F53\u524D\u65E5\u5FD7/\u9519\u8BEF/\u6307\u6807\uFF08JSON\uFF09": "Download the current logs/errors/metrics (JSON)",
-    "\u4E0D\u53EF\u8BFB": "Unreadable",
-    "\u4E60\u5F97\u539F\u5219 ": "Principles acquired ",
-    "\u4EC5\u9519\u8BEF": "Errors only",
-    "\u4FDD\u7559 ": "kept ",
-    "\u5019\u9009 ": "Candidates ",
-    "\u5019\u9009 \u2026": "Candidates \u2026",
-    "\u5019\u9009\u5F85\u88C1\u51B3 \xB7 ": "Candidates pending verdict \xB7 ",
-    "\u5065\u5EB7\u5EA6 health.R / K \u4E0E caps \u7531 criteria-gate.json \u63D0\u4F9B\uFF1B\u672C\u5361\u53EA\u8BFB\u3002": "Health health.R / K and caps come from criteria-gate.json; this card is read-only.",
-    "\u5168\u90E8": "All",
-    "\u5173\u952E\u6307\u6807": "Key metrics",
-    "\u5199\u5165\u88AB\u62D2\u7387": "Write rejection rate",
-    "\u5206\u6BCD \u5F71\u54CD\u8D26 ": "denominator: impact ledger ",
-    "\u521A\u521A": "Just now",
-    "\u5224\u636E\u4E0E\u91CD\u6392\u95E8": "Criteria & reorder gate",
-    "\u5224\u636E\u53F0\u8D26 \xB7 ": "Criteria ledger \xB7 ",
-    "\u5224\u636E\u53F0\u8D26 \u2026": "Criteria ledger \u2026",
-    "\u5224\u636E\u53F0\u8D26\u8BFB\u53D6\u5931\u8D25\uFF08GET /criteria\uFF09\u3002": "Failed to read the criteria ledger (GET /criteria).",
-    "\u5224\u636E\u7248\u672C": "Criteria version",
-    "\u524D\u5F80\u5904\u7406": "Go to handle",
-    "\u538B\u7F29": "Compaction",
-    "\u539F\u59CB\u884C": "Original line",
-    "\u53EF\u56DE\u770B": "viewable",
-    "\u53EF\u8FBE": "Reachable",
-    "\u53F0\u8D26 ": "Ledger ",
-    "\u5411\u91CF ": "Vector ",
-    "\u5411\u91CF \u2026": "Vector \u2026",
-    "\u5411\u91CF \u672A\u542F\u7528": "Vector not enabled",
-    "\u5411\u91CF\u6863": "Vector store",
-    "\u5806\u6808": "Stack",
-    "\u5931\u8D25": "Failed",
-    "\u5931\u8D25\uFF1A": "Failed: ",
-    "\u5BB9\u91CF\u9884\u8B66 \xB7 ": "Capacity warning \xB7 ",
-    "\u5BF9\u8D26": "Reconciliation",
-    "\u5BF9\u8D26\u4E2D\u2026": "Reconciling\u2026",
-    "\u5BFC\u51FA": "Export",
-    "\u5C1A\u65E0\u6C47\u62A5": "no report yet",
-    "\u5C1A\u65E0\u84B8\u998F\u4E8B\u4EF6": "No distillation events yet",
-    "\u5C1A\u672A\u4EA7\u51FA\u7761\u7720\u6C47\u62A5\uFF08\u6DF1\u7761\u8F6E\u8DD1\u5B8C\u624D\u6709\uFF09\u3002": "No sleep report yet (produced after a deep-sleep round).",
-    "\u5D4C\u5165\u670D\u52A1": "Embedding service",
-    "\u5D4C\u5165\u670D\u52A1\u4E0D\u53EF\u8FBE\uFF0C\u5411\u91CF\u53EC\u56DE\u5DF2\u964D\u7EA7\u4E3A\u8BCD\u6CD5": "Embedding service unreachable; vector recall has degraded to lexical",
-    "\u5D4C\u5165\u670D\u52A1\u8FDE\u901A\u6027": "Embedding service connectivity",
-    "\u8BC4\u4F30\u901A\u9053\u8FDE\u901A\u6027": "Evaluation channel connectivity",
-    "\u5C1A\u65E0\u5224\u5B9A\u8BB0\u5F55\uFF08\u901A\u9053\u672A\u5F00\u542F\u6216\u672A\u8DD1\u8FC7\uFF09": "No decisions recorded yet (channel is off or has never run)",
-    "\u7EDF\u8BA1\u4E2D\u2026": "Collecting\u2026",
-    "\u7EDF\u8BA1\u5B8C\u6210": "Stats collected",
-    "\u672A\u7EDF\u8BA1": "Not collected",
-    "\u5237\u65B0\u7EDF\u8BA1": "Refresh stats",
-    "\u8BC4\u4F30\u901A\u9053\u7EDF\u8BA1": "Evaluation channel stats",
-    "\u8BC4\u4F30\u901A\u9053": "Evaluation channel",
-    "\u8BC4\u4F30\u901A\u9053\u8FDE\u901A\u6027\u6D4B\u8BD5\u5B8C\u6210": "Evaluation channel connectivity test complete",
-    "\u8BC4\u4F30\u901A\u9053\u8FDE\u901A\u6027\u6D4B\u8BD5": "Evaluation channel connectivity test",
-    "\u901A\u9053\u5DF2\u5173\u95ED\uFF08\u7F3A\u7701\uFF09\u3002\u5230\u300C\u53C2\u6570\u8C03\u8282\u300D\u5F00\u542F evalEnabled \u540E\u518D\u6D4B\u3002": "Channel is off (default). Enable evalEnabled in Parameters before testing.",
-    "\uFF08\u5DF2\u5141\u8BB8\u51FA\u7F51\uFF09": " (egress allowed)",
-    "\u5D4C\u5165\u8FDE\u901A\u6027": "Embedding connectivity",
-    "\u5D4C\u5165\u8FDE\u901A\u6027\u6D4B\u8BD5\u5B8C\u6210": "Embedding connectivity test complete",
-    "\u5DF2\u542F\u7528": "Enabled",
-    "\u5DF2\u5C31\u7EEA": "Ready",
-    "\u5DF2\u6E05\u7A7A\u65E5\u5FD7\u4E0E\u9519\u8BEF\u8BB0\u5F55": "Logs and error records cleared",
-    "\u5DF2\u6FC0\u6D3B": "Active",
-    "\u5DF2\u8FBE": "Reached",
-    "\u5E93\u7248\u672C": "Bank version",
-    "\u5E93\u7248\u672C \xB7 ": "Bank version \xB7 ",
-    "\u5E93\u7248\u672C \u2026": "Bank version \u2026",
-    "\u5E93\u7248\u672C \u8BFB\u53D6\u5931\u8D25": "Failed to read the bank version",
-    "\u5F53\u524D\u65E0\u8FDB\u884C\u4E2D\u7684\u4EFB\u52A1\u3002": "No task in progress.",
-    "\u5F53\u524D\u6839\u76EE\u5F55": "Current root",
-    "\u5F85\u5339\u914D\u7684\u539F\u59CB\u884C\u6587\u672C": "Original line text to match",
-    "\u5F85\u547D\u4E2D": "Standing by",
-    "\u5F85\u5904\u7406": "Pending",
-    "\u5F85\u5F52\u6863\u4F1A\u8BDD ": "Pending archive: ",
-    "\u5FC5\u987B\u4E0E\u539F\u6587\u4EF6\u4E2D\u7684\u4E00\u884C\u5B8C\u5168\u4E00\u81F4\uFF08\u540E\u7AEF\u6309\u884C\u5339\u914D\uFF09\u3002": "Must match one line in the original file exactly (the backend matches by line).",
-    "\u5FEB": "Fast",
-    "\u5FEB\u6377\u64CD\u4F5C": "Quick actions",
-    "\u5FEB\u901A\u9053": "Fast path",
-    "\u6162\u901A\u9053": "Slow path",
-    "\u6210\u719F\u5EA6\u626B\u63CF": "Maturity scan",
-    "\u6210\u719F\u5EA6\u626B\u63CF\u5B8C\u6210": "Maturity scan complete",
-    "\u6267\u884C\u4E2D\u2026": "Running\u2026",
-    "\u6267\u884C\u5F15\u5BFC": "Run bootstrap",
-    "\u6267\u884C\u6839\u76EE\u5F55\u5F15\u5BFC\u4F1A\u5C1D\u8BD5\u521B\u5EFA\u7F3A\u5931\u7684\u76EE\u5F55\u7ED3\u6784\uFF0C\u786E\u8BA4\u7EE7\u7EED\uFF1F": "Root bootstrap will try to create any missing directory structure. Continue?",
-    "\u6267\u884C\u8FDB\u5EA6": "Execution progress",
-    "\u6267\u884C\u8FDB\u5EA6\u3001\u8C03\u7528\u65E5\u5FD7\u3001\u9519\u8BEF\u5B9A\u4F4D\u4E0E\u5173\u952E\u6307\u6807\u3002\u65E5\u5FD7\u4FDD\u7559\u6700\u8FD1 500 \u6761\uFF0C\u9519\u8BEF\u5E26\u7AEF\u70B9/\u53C2\u6570/\u5806\u6808\uFF0C\u4FBF\u4E8E\u5B9A\u4F4D\u800C\u975E\u53EA\u5269\u4E00\u884C\u63D0\u793A\u3002": "Execution progress, call log, error triage and key metrics. The log keeps the latest 500 entries, and errors carry endpoint/parameters/stack so you can locate them instead of being left with a single-line notice.",
-    "\u626B\u63CF\u4E2D\u2026": "Scanning\u2026",
-    "\u62D2 ": "Rejected ",
-    "\u6309\u6C34\u4F4D\u89E6\u53D1": "Triggered by watermark",
-    "\u6309\u884C\u5220\u9664": "Delete by line",
-    "\u6309\u884C\u7F16\u8F91": "Edit by line",
-    "\u63D0\u4EA4\u4E2D\u2026": "Submitting\u2026",
-    "\u63D0\u5B58": "Admitted",
-    "\u6587\u4EF6\uFF0C\u5982 MEMORY.md / notes/lessons.md": "file, e.g. MEMORY.md / notes/lessons.md",
-    "\u65B0\u589E ": "added ",
-    "\u65B0\u884C": "New line",
-    "\u65B0\u884C\u6587\u672C": "New line text",
-    "\u65B0\u884C\u6587\u672C\uFF08\u4EC5\u7F16\u8F91\u9700\u8981\uFF09": "New line text (needed for edit only)",
-    "\u65E5\u5FD7": "Logs",
-    "\u65E5\u5FD7\u7EA7\u522B": "Log level",
-    "\u6682\u65E0\u52A8\u6001\u3002": "No activity yet.",
-    "\u6682\u65E0\u6307\u6807\uFF08\u5207\u6362\u5404\u89C6\u56FE\u4F1A\u81EA\u52A8\u91C7\u96C6\uFF09\u3002": "No metrics yet (switching views collects them automatically).",
-    "\u6682\u65E0\u9519\u8BEF\u3002": "No errors.",
-    "\u6700\u8FD1 24 \u5C0F\u65F6": "Last 24 hours",
-    "\u6700\u8FD1\u51E0\u671F": "Recent reports",
-    "\u6700\u8FD1\u52A8\u6001": "Recent activity",
-    "\u672A\u521D\u59CB\u5316": "Not initialized",
-    "\u672A\u542F\u7528": "Disabled",
-    "\u672A\u5904\u7406 ": "open ",
-    "\u672A\u5C31\u7EEA": "Not ready",
-    "\u672A\u6267\u884C": "Not run",
-    "\u672A\u6D4B\u8BD5": "Untested",
-    "\u672A\u6FC0\u6D3B": "Inactive",
-    "\u672A\u751F\u6210": "Not generated",
-    "\u672A\u89E6\u53D1\uFF1A\u6839\u4F1A\u8BDD\u6D3B\u8DC3\u4E2D\u4F1A\u8DF3\u8FC7\uFF0C\u7B49\u95F2\u7F6E\u81EA\u52A8\u8DD1": "Not triggered: active root sessions are skipped; it runs automatically once idle",
-    "\u672A\u8FBE": "Not reached",
-    "\u672C\u6708": "This month",
-    "\u672C\u6708\u6210\u957F": "Growth this month",
-    "\u672C\u6B21\u4F1A\u8BDD ": "This session ",
-    "\u672C\u6B21\u4F1A\u8BDD\u7684\u6DF1\u7761 / \u84B8\u998F\u8FDB\u5EA6": "Deep sleep / distillation progress for this session",
-    "\u672C\u8F6E\u84B8\u998F\u4E8B\u4EF6": "Distillation events this round",
-    "\u672C\u8F6E\u84B8\u998F\u4E8B\u4EF6 \xB7 ": "Distillation events this round \xB7 ",
-    "\u6811 ": "tree ",
-    "\u6821\u9A8C\u5224\u636E\u95E8 / \u8F7D\u4F53\u95E8 / \u5206\u5C42 / \u6210\u719F\u5EA6 / \u5F71\u5B50 / \u5BF9\u8D26\u516D\u9879\uFF1B\u8D85\u65F6\u4E0A\u9650 180s\u3002": "Checks six items: criteria gate / carrier gate / layering / maturity / shadow / reconciliation; timeout cap 180s.",
-    "\u6837\u672C\u4E0D\u8DB3": "Insufficient samples",
-    "\u6839\u76EE\u5F55\u5F15\u5BFC": "Root bootstrap",
-    "\u6839\u76EE\u5F55\u5F15\u5BFC\u5B8C\u6210": "Root bootstrap complete",
-    "\u6CE8\u5165\u7EDF\u8BA1": "Injection stats",
-    "\u6052\u5B9A\u9762\u901A\u9053": "Stable-face channel",
+    " / 写事件 ": " / write events ",
+    " / 记忆面 ": " / memory-side ",
+    " · 尝试 ": " · attempts ",
+    " · 已关闭": " · disabled",
+    " · 已启用": " · enabled",
+    " · 归档 ": " · archived ",
+    " · 指针 ": " · pointers ",
+    " · 最近 ": " · latest ",
+    " · 本月停产（口径）": " · halted this month (per policy)",
+    " · 行数门": " · row-count gate",
+    " 个": " sessions",
+    " 个模型": " models",
+    " 个模型 · ": " models · ",
+    " 分钟 · ": " minutes · ",
+    " 分钟前": " minutes ago",
+    " 天前": " days ago",
+    " 小时前": " hours ago",
+    " 提交": " commits",
+    " 期 · 最近 ": " reports · latest ",
+    " 条 · 召回面 ": " · recall-side ",
+    " 条 · 异常 ": " items · anomalies ",
+    " 条待裁决": " items pending verdict",
+    " 条日志）": " log entries)",
+    " 段": " sections",
+    " 行 · 写事件 ": " rows · write events ",
+    " 轮 · 深睡轮次 ": " rounds · deep sleep rounds ",
+    " 达 ": " reached ",
+    " 项待处理": " items pending",
+    "/慢": "/slow",
+    "/档）· R=任务门控 · E=相关性门控": "/tier) · R=task-gated · E=relevance-gated",
+    "24h 内新增 ": "Added in 24h ",
+    "MCL 认知环": "MCL cognition ring",
+    "P=恒常（索引+P 层画像行 ≤": "P=constant (index + P-tier profile rows ≤",
+    "POST /embed/test —— 验证当前 embedding 配置是否可用": "POST /embed/test — verify whether the current embedding configuration works",
+    "POST /embed/test —— 验证当前 embedding 配置是否可用（配完即可验证，不必等实际调用失败）。": "POST /embed/test — verifies whether the current embedding configuration works (verify right after configuring; you need not wait for a real call to fail).",
+    "POST /eval/test —— 验证评估通道是否可用（默认关闭；本机端点免 key，远端端点须另开出网许可）。": "POST /eval/test — verifies whether the evaluation channel works (off by default; local endpoints need no key, remote endpoints require a separate egress permission).",
+    "GET /eval/stats —— 折统一台账 type=eval.decision：分态分布 / 来源 / 真出机次数 / 回落次数。": "GET /eval/stats — aggregates ledger rows of type=eval.decision: outcome distribution, sources, real egress count, fallback count.",
+    "POST /maturation/scan —— 重算库内小节成熟度并覆盖台账（只写台账，不改记忆内容）": "POST /maturation/scan — recompute section maturity in the memory bank and overwrite the ledger (writes the ledger only, does not change memory content)",
+    "POST /reconcile —— 记忆库对账（只读汇总）": "POST /reconcile — memory bank reconciliation (read-only summary)",
+    "POST /root/bootstrap —— 初始化/修复记忆根目录结构。": "POST /root/bootstrap — initializes/repairs the memory root directory structure.",
+    "isWritable 白名单内的记忆文件。": "A memory file on the isWritable whitelist.",
+    "memory-reconcile.mjs 未部署": "memory-reconcile.mjs is not deployed",
+    "notes 告警阈值": "notes alert threshold",
+    "⚠ 有差异": "⚠ Differences found",
+    "⚠ 行级直接改写记忆文件。改索引行可能导致指针与 notes 正文不一致（详见 R3），常规编辑请用「记忆板块 → 小节编辑」。": '⚠ Directly rewrites memory files at the line level. Changing index rows can make pointers inconsistent with the notes body (see R3 for details); for routine edits use "Memory board → Section edit".',
+    "✅ 差异 0": "✅ 0 differences",
+    "✓ 可达 · ": "✓ Reachable · ",
+    "✓ 对账完成": "✓ Reconciliation complete",
+    "✓ 已删除该行": "✓ Line deleted",
+    "✓ 已改写该行": "✓ Line rewritten",
+    "✓ 已触发深睡归纳（后台执行，回执见「深度睡眠」）": "✓ Deep sleep induction triggered (runs in the background; see 「Deep sleep」 for the receipt)",
+    "✓ 扫描完成（分档已写入 audit/maturation.jsonl）": "✓ Scan complete (tiers written to audit/maturation.jsonl)",
+    "✓ 自检已执行，结果见「运行观测」": "✓ Self-check executed; see 「Run observation」 for the results",
+    "✓ 观测数据已导出（": "✓ Observation data exported (",
+    "✗ 文件 / 原始行 / 新行 三项均必填": "✗ File / original line / new line are all required",
+    "✗ 文件与原始行必填": "✗ File and original line are required",
+    "✗ 未配置 embedBaseUrl（且缺省不可用）": "✗ embedBaseUrl not configured (and the default is unavailable)",
+    "✗ 未配置 embedBaseUrl，请先到「参数调节」填写。": '✗ embedBaseUrl is not configured; fill it in under "Parameters" first.',
+    "一屏回答「现在怎么样」。徽章行 = 原记忆板块 §0 的 7 枚状态徽章，整体提升为独立首屏。": 'Answers "how are things now" on one screen. The badge row = the 7 status badges from §0 of the original memory section, promoted in full to a standalone first screen.',
+    "三层占比": "Three-tier share",
+    "上次有效深睡": "Last effective deep sleep",
+    "下次可睡 ": "Next sleep in ",
+    "下载当前日志/错误/指标（JSON）": "Download the current logs/errors/metrics (JSON)",
+    "不可读": "Unreadable",
+    "习得原则 ": "Principles acquired ",
+    "仅错误": "Errors only",
+    "保留 ": "kept ",
+    "候选 ": "Candidates ",
+    "候选 …": "Candidates …",
+    "候选待裁决 · ": "Candidates pending verdict · ",
+    "健康度 health.R / K 与 caps 由 criteria-gate.json 提供；本卡只读。": "Health health.R / K and caps come from criteria-gate.json; this card is read-only.",
+    "全部": "All",
+    "关键指标": "Key metrics",
+    "写入被拒率": "Write rejection rate",
+    "分母 影响账 ": "denominator: impact ledger ",
+    "刚刚": "Just now",
+    "判据与重排门": "Criteria & reorder gate",
+    "判据台账 · ": "Criteria ledger · ",
+    "判据台账 …": "Criteria ledger …",
+    "判据台账读取失败（GET /criteria）。": "Failed to read the criteria ledger (GET /criteria).",
+    "判据版本": "Criteria version",
+    "前往处理": "Go to handle",
+    "压缩": "Compaction",
+    "原始行": "Original line",
+    "可回看": "viewable",
+    "可达": "Reachable",
+    "台账 ": "Ledger ",
+    "向量 ": "Vector ",
+    "向量 …": "Vector …",
+    "向量 未启用": "Vector not enabled",
+    "向量档": "Vector store",
+    "堆栈": "Stack",
+    "失败": "Failed",
+    "失败：": "Failed: ",
+    "容量预警 · ": "Capacity warning · ",
+    "对账": "Reconciliation",
+    "对账中…": "Reconciling…",
+    "导出": "Export",
+    "尚无汇报": "no report yet",
+    "尚无蒸馏事件": "No distillation events yet",
+    "尚未产出睡眠汇报（深睡轮跑完才有）。": "No sleep report yet (produced after a deep-sleep round).",
+    "嵌入服务": "Embedding service",
+    "嵌入服务不可达，向量召回已降级为词法": "Embedding service unreachable; vector recall has degraded to lexical",
+    "嵌入服务连通性": "Embedding service connectivity",
+    "评估通道连通性": "Evaluation channel connectivity",
+    "尚无判定记录（通道未开启或未跑过）": "No decisions recorded yet (channel is off or has never run)",
+    "统计中…": "Collecting…",
+    "统计完成": "Stats collected",
+    "未统计": "Not collected",
+    "刷新统计": "Refresh stats",
+    "评估通道统计": "Evaluation channel stats",
+    "评估通道": "Evaluation channel",
+    "评估通道连通性测试完成": "Evaluation channel connectivity test complete",
+    "评估通道连通性测试": "Evaluation channel connectivity test",
+    "通道已关闭（缺省）。到「参数调节」开启 evalEnabled 后再测。": "Channel is off (default). Enable evalEnabled in Parameters before testing.",
+    "（已允许出网）": " (egress allowed)",
+    "嵌入连通性": "Embedding connectivity",
+    "嵌入连通性测试完成": "Embedding connectivity test complete",
+    "已启用": "Enabled",
+    "已就绪": "Ready",
+    "已清空日志与错误记录": "Logs and error records cleared",
+    "已激活": "Active",
+    "已达": "Reached",
+    "库版本": "Bank version",
+    "库版本 · ": "Bank version · ",
+    "库版本 …": "Bank version …",
+    "库版本 读取失败": "Failed to read the bank version",
+    "当前无进行中的任务。": "No task in progress.",
+    "当前根目录": "Current root",
+    "待匹配的原始行文本": "Original line text to match",
+    "待命中": "Standing by",
+    "待处理": "Pending",
+    "待归档会话 ": "Pending archive: ",
+    "必须与原文件中的一行完全一致（后端按行匹配）。": "Must match one line in the original file exactly (the backend matches by line).",
+    "快": "Fast",
+    "快捷操作": "Quick actions",
+    "快通道": "Fast path",
+    "慢通道": "Slow path",
+    "成熟度扫描": "Maturity scan",
+    "成熟度扫描完成": "Maturity scan complete",
+    "执行中…": "Running…",
+    "执行引导": "Run bootstrap",
+    "执行根目录引导会尝试创建缺失的目录结构，确认继续？": "Root bootstrap will try to create any missing directory structure. Continue?",
+    "执行进度": "Execution progress",
+    "执行进度、调用日志、错误定位与关键指标。日志保留最近 500 条，错误带端点/参数/堆栈，便于定位而非只剩一行提示。": "Execution progress, call log, error triage and key metrics. The log keeps the latest 500 entries, and errors carry endpoint/parameters/stack so you can locate them instead of being left with a single-line notice.",
+    "扫描中…": "Scanning…",
+    "拒 ": "Rejected ",
+    "按水位触发": "Triggered by watermark",
+    "按行删除": "Delete by line",
+    "按行编辑": "Edit by line",
+    "提交中…": "Submitting…",
+    "提存": "Admitted",
+    "文件，如 MEMORY.md / notes/lessons.md": "file, e.g. MEMORY.md / notes/lessons.md",
+    "新增 ": "added ",
+    "新行": "New line",
+    "新行文本": "New line text",
+    "新行文本（仅编辑需要）": "New line text (needed for edit only)",
+    "日志": "Logs",
+    "日志级别": "Log level",
+    "暂无动态。": "No activity yet.",
+    "暂无指标（切换各视图会自动采集）。": "No metrics yet (switching views collects them automatically).",
+    "暂无错误。": "No errors.",
+    "最近 24 小时": "Last 24 hours",
+    "最近几期": "Recent reports",
+    "最近动态": "Recent activity",
+    "未初始化": "Not initialized",
+    "未启用": "Disabled",
+    "未处理 ": "open ",
+    "未就绪": "Not ready",
+    "未执行": "Not run",
+    "未测试": "Untested",
+    "未激活": "Inactive",
+    "未生成": "Not generated",
+    "未触发：根会话活跃中会跳过，等闲置自动跑": "Not triggered: active root sessions are skipped; it runs automatically once idle",
+    "未达": "Not reached",
+    "本月": "This month",
+    "本月成长": "Growth this month",
+    "本次会话 ": "This session ",
+    "本次会话的深睡 / 蒸馏进度": "Deep sleep / distillation progress for this session",
+    "本轮蒸馏事件": "Distillation events this round",
+    "本轮蒸馏事件 · ": "Distillation events this round · ",
+    "树 ": "tree ",
+    "校验判据门 / 载体门 / 分层 / 成熟度 / 影子 / 对账六项；超时上限 180s。": "Checks six items: criteria gate / carrier gate / layering / maturity / shadow / reconciliation; timeout cap 180s.",
+    "样本不足": "Insufficient samples",
+    "根目录引导": "Root bootstrap",
+    "根目录引导完成": "Root bootstrap complete",
+    "注入统计": "Injection stats",
+    "恒定面通道": "Stable-face channel",
     /* S3 额度夹取可见化（2026-09-22）：`supplyUsage.budgetClamped` 的面板面。
      * 判因：夹取此前只写进账、**无渲染** ⇒ 用户设了越界值仍以为生效（"不静默"只做了一半）。 */
-    "\u989D\u5EA6\u5939\u53D6": "Budget clamped",
-    "\uFF08\u4F60\u8BBE\u7684\u503C\u8D8A\u754C \u21D2 \u5DF2\u6309\u8303\u56F4\u5939\u56DE\uFF0C\u672A\u91C7\u539F\u503C\uFF09": "(your value was out of range \u21D2 clamped back, the original was not used)",
-    "\u5DF2\u5939\u53D6": "Clamped",
-    "\u5DF2\u6302 section \xB7 \u8282\u70B90\u8C41\u514D": "section mounted \xB7 node 0 exempt",
-    "\u672A\u6302\u8F7D \u21D2 \u968F context \u6CE8\u5165\uFF08\u53EF\u538B\u533A\uFF09": "not mounted \u21D2 injects via context (compressible)",
-    " \xB7 \u539F\u56E0\uFF1A": " \xB7 reason: ",
-    "\u7761\u7720\u6C47\u62A5": "Sleep report",
-    "\u7761\u7720\u6C47\u62A5\u8BFB\u53D6\u5931\u8D25\uFF08/sleep/reports\uFF09\u3002": "Failed to read the sleep report (/sleep/reports).",
-    "\u8C41\u514D": "Exempt",
-    "\u53EF\u538B": "Compressible",
-    "\u6D45\u7761": "Light sleep",
-    "\u6D4B\u8BD5\u4E2D\u2026": "Testing\u2026",
-    "\u6D4B\u8BD5\u4E2D\u2026 ": "Testing\u2026 ",
-    "\u6D4B\u8BD5\u5D4C\u5165\u8FDE\u901A": "Test embedding connectivity",
-    "\u6D4B\u8BD5\u8FDE\u63A5": "Test connection",
-    "\u6DF1\u5EA6\u7761\u7720\u6574\u7406 \xB7 \u672C\u6708 ": "Deep sleep consolidation \xB7 This month ",
-    "\u6DF1\u7761": "Deep sleep",
-    "\u6DF1\u7761\u6574\u7406\u4E2D": "Deep sleep consolidation in progress",
-    "\u6E05\u7A7A": "Clear",
-    "\u6E05\u7A7A\u65E5\u5FD7": "Clear logs",
-    "\u6E05\u7A7A\u9519\u8BEF": "Clear errors",
-    "\u719F\u6089\u5EA6 ": "Familiarity ",
-    "\u73B0\u72B6\u5DF2\u6709 \xB7 \u4EC5\u6539\u5F52\u5C5E": "Already present \xB7 ownership change only",
-    "\u76EE\u6807\u6587\u4EF6": "Target file",
-    "\u786E\u8BA4\u6267\u884C\u884C\u7EA7\u5220\u9664\uFF1F": "Run the line-level delete?",
-    "\u786E\u8BA4\u6E05\u7A7A\u5168\u90E8\u65E5\u5FD7\u4E0E\u9519\u8BEF\u8BB0\u5F55\uFF1F": "Clear all logs and error records?",
-    "\u786E\u8BA4\u6E05\u7A7A\u9519\u8BEF\u8BB0\u5F55\uFF1F": "Clear error records?",
-    "\u79BB\u7EBF\u56DE\u60F3\uFF0C\u63D0\u70BC\u300C[\u539F\u5219]/[\u8DEF\u5F84]\u300D\u5E76\u505A\u7ED3\u6784\u6574\u7406\u4E0E\u5F52\u6863\uFF08\u7981\u76F4\u5220\uFF09\u3002\u9884\u8BA1 1\u20133 \u5206\u949F\u3002": "Offline recall: extract \u300C[principle]/[path]\u300D, then restructure and archive (direct deletion prohibited). Estimated 1\u20133 minutes.",
-    "\u7A7A\u95F2 ": "Idle ",
-    "\u7ACB\u5373\u84B8\u998F": "Distill now",
-    "\u7ACB\u5373\u89E6\u53D1\u4E00\u6B21\u6DF1\u5EA6\u7761\u7720\u5F52\u7EB3\uFF1F\u5C06\u8C03\u7528\u5F52\u7EB3\u5B50\u4EE3\u7406\u56DE\u987E\u5F53\u5929\u8BB0\u5FC6\u75D5\u8FF9\u3002": "Trigger one deep sleep distillation now? It will invoke the distillation subagent to review the day's memory traces.",
-    "\u7ACB\u5373\u8DD1\u4E00\u6B21\u8FD0\u884C\u81EA\u68C0\uFF1F\u6267\u884C\u671F\u95F4\u8BF7\u52FF\u5173\u95ED\u9762\u677F\u3002": "Run a self-check now? Do not close the panel while it runs.",
-    "\u7ACB\u5373\u8FDB\u5165\u6DF1\u7761": "Enter deep sleep now",
-    "\u7AEF\u70B9": "Endpoint",
-    "\u7CFB\u7EDF\u72B6\u6001": "System status",
-    "\u7D2F\u8BA1\u5165\u5E93 ": "Total stored ",
-    "\u7EA2\u7EBF\u7531 write_gate \u5199\u5165\u65F6\u5F3A\u5236\uFF1B\u5EFA\u8BAE\u5728\u4E0B\u4E00\u6B21\u6DF1\u7761\u4E2D\u6267\u884C\u753B\u50CF\u538B\u7F29": "The red line is enforced by write_gate at write time; consider running profile compression in the next deep sleep",
-    "\u7F16\u8F91\u65F6\u5FC5\u586B\uFF1B\u5220\u9664\u65F6\u5FFD\u7565\u3002": "Required when editing; ignored when deleting.",
-    "\u81EA\u68C0": "Self-check",
-    "\u81EA\u68C0\u4E2D\u2026": "Self-checking\u2026",
-    "\u84B8\u998F \xB7 ": "Distillation \xB7 ",
-    "\u84B8\u998F \u2026": "Distillation \u2026",
-    "\u84B8\u998F\u4E2D\u2026": "Distilling\u2026",
-    "\u84B8\u998F\u5B8C\u6210": "Distillation complete",
-    "\u84B8\u998F\u5B8C\u6210 \xB7 \u672C\u6708 ": "Distillation complete \xB7 This month ",
-    "\u84B8\u998F\u6267\u884C\u4F4D\uFF1A\u4E0B\u65B9\u64CD\u4F5C\u5361\uFF08\u672C\u9875\u4EC5\u4E00\u5904\uFF09": "Distillation control: the action card below (the only one on this page)",
-    "\u84B8\u998F\u6C34\u4F4D": "Distillation watermark",
-    "\u884C \xB7 ": " rows \xB7 ",
-    "\u884C\u7EA7\u5220\u9664": "Line-level delete",
-    "\u884C\u7EA7\u7F16\u8F91": "Line-level edit",
-    "\u8B66\u544A+": "Warning+",
-    "\u8BA4\u77E5\u73AF ": "Cognition ring ",
-    "\u8BA4\u77E5\u73AF \u2026": "Cognition ring \u2026",
-    "\u8BA4\u77E5\u73AF \u8BFB\u53D6\u5931\u8D25": "Failed to read the cognition ring",
-    "\u8BB0\u5FC6\u5E93 \xB7 ": "Memory bank \xB7 ",
-    "\u8BB0\u5FC6\u5E93 \u2026": "Memory bank \u2026",
-    "\u8BB0\u5FC6\u5E93\u5BB9\u91CF": "Memory bank capacity",
-    "\u8BB0\u5FC6\u6587\u4EF6": "Memory file",
-    "\u8BCD\u6CD5\u53EC\u56DE\u515C\u5E95": "Lexical recall fallback",
-    "\u8BFB\u53D6\u4E2D": "Loading",
-    "\u8BFB\u53D6\u5931\u8D25": "Read failed",
-    "\u8BFB\u53D6\u914D\u7F6E\u2026": "Loading config\u2026",
-    "\u8C03\u7528\u65E5\u5FD7 ": "Call log ",
-    "\u8D26\u672C\u5BF9\u8D26": "Ledger reconciliation",
-    "\u8D26\u672C\u5BF9\u8D26\u4E0E\u4EA7\u51FA\u5065\u5EB7\uFF08v2.1 M3\uFF09": "Ledger reconciliation and output health (v2.1 M3)",
-    "\u8D26\u672C\u5BF9\u8D26\u5B8C\u6210": "Ledger reconciliation complete",
-    "\u8D26\u672C\u95ED\u5408": "Ledger closed",
-    "\u8FD0\u7EF4\u64CD\u4F5C": "Maintenance operations",
-    "\u8FD0\u884C\u81EA\u68C0": "Run self-check",
-    "\u8FDE\u7EED\u7A7A\u8F6C ": "Consecutive idle rounds ",
-    "\u904D\u5386\u6839\u4F1A\u8BDD\u84B8\u998F\uFF0C\u643A\u5E26 pending \u5019\u9009\u56DE\u6D41\uFF1B\u7B49\u4EF7\u4E8E\u7B49\u4F1A\u8BDD\u7A7A\u95F2\u81EA\u52A8\u89E6\u53D1\u3002": "Distill by traversing root sessions, carrying pending candidates back into the flow; equivalent to waiting for sessions to go idle and triggering automatically.",
-    "\u91CD\u6392\u95E8": "Reorder gate",
-    "\u9519\u8BEF\u5B9A\u4F4D ": "Error triage ",
-    "\u95EE\u9898": "Issues",
-    "\u9608\u503C 80%": "Threshold 80%",
-    "\u9AD8\u7EA7\uFF1A\u884C\u7EA7\u7F16\u8F91 / \u5220\u9664\uFF08\u8C28\u614E\uFF09": "Advanced: line-level edit / delete (use with care)",
-    "\uFF08\u5DF2\u843D\u76D8\uFF09": " (saved to disk)",
-    "\uFF08\u65E0\uFF09": "(none)",
-    "\uFF08\u7F3A\u7701\u5728\u7528\uFF09": " (default in use)",
+    "额度夹取": "Budget clamped",
+    "（你设的值越界 ⇒ 已按范围夹回，未采原值）": "(your value was out of range ⇒ clamped back, the original was not used)",
+    "已夹取": "Clamped",
+    "已挂 section · 节点0豁免": "section mounted · node 0 exempt",
+    "未挂载 ⇒ 随 context 注入（可压区）": "not mounted ⇒ injects via context (compressible)",
+    " · 原因：": " · reason: ",
+    "睡眠汇报": "Sleep report",
+    "睡眠汇报读取失败（/sleep/reports）。": "Failed to read the sleep report (/sleep/reports).",
+    "豁免": "Exempt",
+    "可压": "Compressible",
+    "浅睡": "Light sleep",
+    "测试中…": "Testing…",
+    "测试中… ": "Testing… ",
+    "测试嵌入连通": "Test embedding connectivity",
+    "测试连接": "Test connection",
+    "深度睡眠整理 · 本月 ": "Deep sleep consolidation · This month ",
+    "深睡": "Deep sleep",
+    "深睡整理中": "Deep sleep consolidation in progress",
+    "清空": "Clear",
+    "清空日志": "Clear logs",
+    "清空错误": "Clear errors",
+    "熟悉度 ": "Familiarity ",
+    "现状已有 · 仅改归属": "Already present · ownership change only",
+    "目标文件": "Target file",
+    "确认执行行级删除？": "Run the line-level delete?",
+    "确认清空全部日志与错误记录？": "Clear all logs and error records?",
+    "确认清空错误记录？": "Clear error records?",
+    "离线回想，提炼「[原则]/[路径]」并做结构整理与归档（禁直删）。预计 1–3 分钟。": "Offline recall: extract 「[principle]/[path]」, then restructure and archive (direct deletion prohibited). Estimated 1–3 minutes.",
+    "空闲 ": "Idle ",
+    "立即蒸馏": "Distill now",
+    "立即触发一次深度睡眠归纳？将调用归纳子代理回顾当天记忆痕迹。": "Trigger one deep sleep distillation now? It will invoke the distillation subagent to review the day's memory traces.",
+    "立即跑一次运行自检？执行期间请勿关闭面板。": "Run a self-check now? Do not close the panel while it runs.",
+    "立即进入深睡": "Enter deep sleep now",
+    "端点": "Endpoint",
+    "系统状态": "System status",
+    "累计入库 ": "Total stored ",
+    "红线由 write_gate 写入时强制；建议在下一次深睡中执行画像压缩": "The red line is enforced by write_gate at write time; consider running profile compression in the next deep sleep",
+    "编辑时必填；删除时忽略。": "Required when editing; ignored when deleting.",
+    "自检": "Self-check",
+    "自检中…": "Self-checking…",
+    "蒸馏 · ": "Distillation · ",
+    "蒸馏 …": "Distillation …",
+    "蒸馏中…": "Distilling…",
+    "蒸馏完成": "Distillation complete",
+    "蒸馏完成 · 本月 ": "Distillation complete · This month ",
+    "蒸馏执行位：下方操作卡（本页仅一处）": "Distillation control: the action card below (the only one on this page)",
+    "蒸馏水位": "Distillation watermark",
+    "行 · ": " rows · ",
+    "行级删除": "Line-level delete",
+    "行级编辑": "Line-level edit",
+    "警告+": "Warning+",
+    "认知环 ": "Cognition ring ",
+    "认知环 …": "Cognition ring …",
+    "认知环 读取失败": "Failed to read the cognition ring",
+    "记忆库 · ": "Memory bank · ",
+    "记忆库 …": "Memory bank …",
+    "记忆库容量": "Memory bank capacity",
+    "记忆文件": "Memory file",
+    "词法召回兜底": "Lexical recall fallback",
+    "读取中": "Loading",
+    "读取失败": "Read failed",
+    "读取配置…": "Loading config…",
+    "调用日志 ": "Call log ",
+    "账本对账": "Ledger reconciliation",
+    "账本对账与产出健康（v2.1 M3）": "Ledger reconciliation and output health (v2.1 M3)",
+    "账本对账完成": "Ledger reconciliation complete",
+    "账本闭合": "Ledger closed",
+    "运维操作": "Maintenance operations",
+    "运行自检": "Run self-check",
+    "连续空转 ": "Consecutive idle rounds ",
+    "遍历根会话蒸馏，携带 pending 候选回流；等价于等会话空闲自动触发。": "Distill by traversing root sessions, carrying pending candidates back into the flow; equivalent to waiting for sessions to go idle and triggering automatically.",
+    "重排门": "Reorder gate",
+    "错误定位 ": "Error triage ",
+    "问题": "Issues",
+    "阈值 80%": "Threshold 80%",
+    "高级：行级编辑 / 删除（谨慎）": "Advanced: line-level edit / delete (use with care)",
+    "（已落盘）": " (saved to disk)",
+    "（无）": "(none)",
+    "（缺省在用）": " (default in use)",
     // ADR-333 册三（2026-09-22）：写入被拒率**按通道**明细 + 门禁拒收**按目标**明细。
     //   判因：原面板只有总量 ⇒ 画像通道 167 次真拒被摊薄成 7.4%，**通道级冻死在 UI 上不可见**。
-    " \xB7 \u6309\u901A\u9053\uFF1A": " \xB7 by channel: ",
-    "\u95E8\u7981\u62D2\u6536\uFF08\u6309\u76EE\u6807\uFF09": "Gate rejections (by target)",
-    " \xB7 \u6700\u8FD1 ": " \xB7 latest "
+    " · 按通道：": " · by channel: ",
+    "门禁拒收（按目标）": "Gate rejections (by target)",
+    " · 最近 ": " · latest "
   };
 
   // src-client/i18n-dict-index.generated.js
@@ -13435,7 +8383,7 @@
   // src-client/i18n-ctrl.js
   function switchKeys() {
     return [
-      ["injection.hot_memory", tr("\u6CE8\u5165\u70ED\u8BB0\u5FC6\u603B\u95F8 hot_memory"), tr("\u5173=\u4E0D\u6CE8\u5165 agent/\u7528\u6237\u753B\u50CF\u4E0E\u77E5\u8BC6\u7D22\u5F15\u4EFB\u4F55\u6307\u9488\u884C")]
+      ["injection.hot_memory", tr("注入热记忆总闸 hot_memory"), tr("关=不注入 agent/用户画像与知识索引任何指针行")]
       // 2026-09-10 审查收敛：archive/lifecycle/merge/scheduler 组开关是 v15 单库化前旧 Python 链路的
       // 遗留控件，其消费端（_meta/*.py）已不随包分发——保留只会误导用户"改了有效"。已移除。
       // 2026-09-11 同类遗漏：boards.memory 是「只写不读」死开关（parseView 解析进 out.boards 后全仓零读取点，
@@ -13464,17 +8412,17 @@
     mclAudit: { scope: "cognitionLoop", effect: "reload" }
   };
   function ctrlEffectText(effect) {
-    if (effect === "reload") return tr("\u9700\u91CD\u8F7D");
-    return tr("\u5373\u65F6");
+    if (effect === "reload") return tr("需重载");
+    return tr("即时");
   }
   function ctrlScopeText(scope) {
-    if (scope === "global") return tr("\u5168\u5C40\u6CE8\u5165");
-    if (scope === "writeGate") return tr("\u5199\u95E8\u5BB9\u91CF");
-    if (scope === "recallFusion") return tr("\u53EC\u56DE\u878D\u5408");
-    if (scope === "scheduling") return tr("\u8C03\u5EA6");
-    if (scope === "injectionRows") return tr("\u6CE8\u5165\u9009\u884C");
-    if (scope === "bankGit") return tr("\u5E93\u7248\u672C\u5316");
-    if (scope === "cognitionLoop") return tr("\u8BA4\u77E5\u73AF");
+    if (scope === "global") return tr("全局注入");
+    if (scope === "writeGate") return tr("写门容量");
+    if (scope === "recallFusion") return tr("召回融合");
+    if (scope === "scheduling") return tr("调度");
+    if (scope === "injectionRows") return tr("注入选行");
+    if (scope === "bankGit") return tr("库版本化");
+    if (scope === "cognitionLoop") return tr("认知环");
     return scope;
   }
 
@@ -13486,48 +8434,49 @@
       factory: function(require2) {
         var module = { exports: {} };
         var exports = module.exports;
+        setRequire(require2);
         var BASE = "/api/shoucang-panel";
         var inject = ["slots"];
         function contract() {
           return typeof window !== "undefined" && window.__SC_CONTRACT__ || null;
         }
         function contractOf(path) {
-          var _a8;
+          var _a;
           if (!contract()) return null;
           if (!appState.contractByPath) {
             appState.contractByPath = {};
-            (((_a8 = contract()) == null ? void 0 : _a8.routes) || []).forEach(function(r7) {
-              appState.contractByPath[r7.path] = r7;
+            (((_a = contract()) == null ? void 0 : _a.routes) || []).forEach(function(r) {
+              appState.contractByPath[r.path] = r;
             });
           }
           return appState.contractByPath[path] || null;
         }
         function preflight(path, body) {
-          var c5 = contractOf(path);
-          if (!c5 || !Derive.has(c5.required)) return null;
-          if (!body || typeof body !== "object") return { error: "preflight_missing_body", detail: path + tr(" \u9700\u8981\u8BF7\u6C42\u4F53\uFF08\u5FC5\u586B\uFF1A") + c5.required.join(", ") + "\uFF09" };
-          var miss = c5.required.filter(function(k2) {
-            var v2 = body[k2];
-            return v2 === void 0 || v2 === null || v2 === "";
+          var c = contractOf(path);
+          if (!c || !Derive.has(c.required)) return null;
+          if (!body || typeof body !== "object") return { error: "preflight_missing_body", detail: path + tr(" 需要请求体（必填：") + c.required.join(", ") + "）" };
+          var miss = c.required.filter(function(k) {
+            var v = body[k];
+            return v === void 0 || v === null || v === "";
           });
-          return miss.length ? { error: "preflight_missing_field", detail: tr("\u7F3A\u5C11\u5FC5\u586B\u5B57\u6BB5\uFF1A") + miss.join(", ") } : null;
+          return miss.length ? { error: "preflight_missing_field", detail: tr("缺少必填字段：") + miss.join(", ") } : null;
         }
         function api(path, opts) {
-          var o9 = opts || {};
+          var o = opts || {};
           var t0 = Date.now();
-          var ctx = { method: o9.method || "GET", path, params: o9.body || null };
-          var pre = preflight(path, o9.body);
+          var ctx = { method: o.method || "GET", path, params: o.body || null };
+          var pre = preflight(path, o.body);
           if (pre) {
             var pe = new Error(pre.detail);
             pe.__ctx = ctx;
             pe.preflight = pre.error;
-            Log.warn(tr("\u5951\u7EA6\u9884\u68C0\u672A\u901A\u8FC7\uFF1A") + pre.detail + tr("\uFF08\u672C\u5730\u62E6\u622A\uFF0C\u672A\u53D1\u51FA\u8BF7\u6C42\uFF09"), ctx);
+            Log.warn(tr("契约预检未通过：") + pre.detail + tr("（本地拦截，未发出请求）"), ctx);
             return Promise.reject(pe);
           }
           var busyShown = false;
           var busyTimer = setTimeout(function() {
             busyShown = true;
-            setStatusText(tr("\u6267\u884C\u4E2D\u2026 ") + path, "info");
+            setStatusText(tr("执行中… ") + path, "info");
           }, 1500);
           function endBusy() {
             clearTimeout(busyTimer);
@@ -13536,39 +8485,39 @@
               setStatusText("", "info");
             }
           }
-          return fetch(BASE + path, Object.assign({ headers: { "content-type": "application/json" } }, o9)).then(function(r7) {
-            return r7.json().then(function(j2) {
-              if (!r7.ok) {
-                var err = new Error(j2 && (j2.detail || j2.error) || "HTTP " + r7.status);
+          return fetch(BASE + path, Object.assign({ headers: { "content-type": "application/json" } }, o)).then(function(r) {
+            return r.json().then(function(j) {
+              if (!r.ok) {
+                var err = new Error(j && (j.detail || j.error) || "HTTP " + r.status);
                 err.__ctx = ctx;
-                err.httpStatus = r7.status;
-                if (j2 && j2.detail) err.detail = j2.detail;
+                err.httpStatus = r.status;
+                if (j && j.detail) err.detail = j.detail;
                 throw err;
               }
               endBusy();
               ctx.ms = Date.now() - t0;
-              ctx.status = r7.status;
-              Log.info(ctx.method + " " + path + " \u2713 " + ctx.ms + "ms", ctx);
-              return j2;
+              ctx.status = r.status;
+              Log.info(ctx.method + " " + path + " ✓ " + ctx.ms + "ms", ctx);
+              return j;
             });
-          }).catch(function(e8) {
-            if (!e8.__ctx) e8.__ctx = ctx;
+          }).catch(function(e) {
+            if (!e.__ctx) e.__ctx = ctx;
             endBusy();
-            Log.error(ctx.method + " " + path + " \u2717 " + (e8 && e8.message ? e8.message : String(e8)), ctx);
-            throw e8;
+            Log.error(ctx.method + " " + path + " ✗ " + (e && e.message ? e.message : String(e)), ctx);
+            throw e;
           });
         }
         var SC_ICON = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAD90lEQVR4Aeybv65NQRTGL52CB6CRkNAIlUKpoPEIGkoFL6D1ACRaCs+gIFErFBQSJBQKHoBE666v2Mnsndmz98yeNd+cc76bWXfP/7XW9ztz/mafPNIfVQEBoMp/dCQAAkBWgOxeJ0AAyAqQ3esECABZAbJ7nQABICtAdn+YJ4AseuheAEI1CHUBIIgeuhSAUA1CXQAIoocuBSBUg1DvEcB/0yE0a2aVcC3qWYtbT+4RQGsNqP4EgCq/fpAhyy8AhwSAnmuXAeg1gIxFAA4QwDvLGe/P58yGR2Vu3lz/aLE15uah/6uNU0urE3DWskTCsJtW76VcskAQE+ya1ZuXFgBeWVa/zHovHy3A5ifCGwAeWXctsV0pOBHfWwbrCWDp0XTHEj1BMvg219FywXr/mTUpngDwaJom8c06BtFfW51V4HuI43ckiFPWh9ctu/gWLwB46plGft86Lpv1Vs5ZQI/NpqXJ65YXgGkyaL/Ev07ticWFU2GXumVpNw8AsUc/jvtSLOzx2OvCH++gPAB4x9xy/9PezloA2IVH/6DzjaHS6toCQKtcavh5X2OTnD0EIEcth7kC4CBqzpYCkKOWw9zaAPAx3iHM/d2yBADe589ZjS+y5vYu7d9Kb8nvpv1LAGxyqMVjBfYTwDjHrlsCQMZTAgCfbOfstkM+2HPOX6y/dggxH2HfJn8lAFIO36YGC8c89iwMpf6y2gDqR7jnOwoAGbAACABZAbJ7nQABICtAdq8TsD8AyJnsqHudADK42gAeOOTzMGPPnfs9ogRA6vvx5xlirZ361CamfIZjNX6PMHejEu4fq48m5zZKAOT60PyEAgKQEKfFkAC0UDnhowRA+F14rJ5wt2ootueWvlVOE5OWfCeWLg+VAFjeVTNWKyAAq6XymSgAG3XdulwAtiq4cb0AjAW8NW76t1oAwKdH/0zqeHhTZ5v1u7QAsD6a/mb+9Q7JAwDeN0/jdr/XauqwoP0isuZMpK9qlweAWIC41+pqbKCTPtw+e48RixeA2Cn4ZAn2+HqAmL5YbNNyftrh0fYCgFhjd6CjHwnDUGcaYoDFYkDsP2MDtfs8AeAO9FS8SJ5pqdiWYk+tzRrzBIBA8FT0AZUdsc8WJ2K2S5viDQBZXLd/dZOyDR0KYrzisG9yyxYAhgCQIGxo93JFTDBKPC0BDAki2ZQN84brI6uk5odjF23utCzdXzCd37TNAJCb4LOMBT8ic7u+v2AXAEQ03Z8uASCzFAABICtAdq8TIABkBcjuezwB4ft61HMlwprQctc3nZ8BoGlcB+NMAMioBUAAyAqQ3esECABZAbJ7nQABICtAdq8TIABkBcjudQIWAHgPHwMAAP//8UoJFgAAAAZJREFUAwBhOrPBP4+UEwAAAABJRU5ErkJggg==";
-        function make2(k2, v2) {
-          var o9 = {};
-          o9[k2] = v2;
-          return o9;
+        function make2(k, v) {
+          var o = {};
+          o[k] = v;
+          return o;
         }
         function setStatusText(msg, level) {
-          var n6 = document.getElementById("sc-statusbar");
-          if (!n6) return;
-          n6.textContent = (msg || "") + "";
-          n6.className = "sc-statusbar sc-status-" + (level || "info");
+          var n = document.getElementById("sc-statusbar");
+          if (!n) return;
+          n.textContent = (msg || "") + "";
+          n.className = "sc-statusbar sc-status-" + (level || "info");
         }
         setLogStatusSink(setStatusText);
         function status(msg, level) {
@@ -13576,59 +8525,59 @@
           setStatusText(msg, lv);
           if (msg) Log.add(lv, msg);
         }
-        function fail(e8, ctx) {
-          var err = e8 instanceof Error ? e8 : new Error(String(e8 && e8.message ? e8.message : e8));
-          var c5 = ctx || e8 && e8.__ctx || null;
-          var where = c5 ? " [" + (c5.method || "") + " " + (c5.path || "") + (c5.params ? " " + JSON.stringify(c5.params) : "") + "]" : "";
-          var msg = "\u26A0 " + err.message + where;
+        function fail(e, ctx) {
+          var err = e instanceof Error ? e : new Error(String(e && e.message ? e.message : e));
+          var c = ctx || e && e.__ctx || null;
+          var where = c ? " [" + (c.method || "") + " " + (c.path || "") + (c.params ? " " + JSON.stringify(c.params) : "") + "]" : "";
+          var msg = "⚠ " + err.message + where;
           status(msg, "error");
-          var rec = { t: Date.now(), message: err.message, ctx: c5, stack: (err.stack || "").split("\n").slice(0, 4).join(" | ") };
-          var a4 = (Store.get("errors") || []).concat([rec]);
-          Store.set("errors", a4.slice(-100));
-          if (!c5) Log.error(err.message, { where: null, stack: rec.stack });
+          var rec = { t: Date.now(), message: err.message, ctx: c, stack: (err.stack || "").split("\n").slice(0, 4).join(" | ") };
+          var a = (Store.get("errors") || []).concat([rec]);
+          Store.set("errors", a.slice(-100));
+          if (!c) Log.error(err.message, { where: null, stack: rec.stack });
           return rec;
         }
         function apiCtx(path, opts, label) {
-          var o9 = opts || {};
+          var o = opts || {};
           var t0 = Date.now();
-          var ctx = { method: o9.method || "GET", path, params: o9.body || null };
+          var ctx = { method: o.method || "GET", path, params: o.body || null };
           if (label) Prog.start(path, label);
-          return api(path, o9).then(function(r7) {
-            if (label) Prog.done(path, true, tr("\u5B8C\u6210 ") + Math.round((Date.now() - t0) / 100) / 10 + "s");
-            Log.info((o9.method || "GET") + " " + path + " \u2713 " + (Date.now() - t0) + "ms", ctx);
-            return r7;
-          }).catch(function(e8) {
-            if (label) Prog.done(path, false, tr("\u5931\u8D25"));
-            throw Object.assign(new Error(e8 && e8.message ? e8.message : String(e8)), { __ctx: ctx });
+          return api(path, o).then(function(r) {
+            if (label) Prog.done(path, true, tr("完成 ") + Math.round((Date.now() - t0) / 100) / 10 + "s");
+            Log.info((o.method || "GET") + " " + path + " ✓ " + (Date.now() - t0) + "ms", ctx);
+            return r;
+          }).catch(function(e) {
+            if (label) Prog.done(path, false, tr("失败"));
+            throw Object.assign(new Error(e && e.message ? e.message : String(e)), { __ctx: ctx });
           });
         }
         function metaBadges(key) {
-          var m3 = CTRL_META[key] || { scope: "global", effect: "live" };
+          var m = CTRL_META[key] || { scope: "global", effect: "live" };
           var box = el("div", "sc-ctrl-meta");
-          var sc = ctrlScopeText(m3.scope);
-          var eff = ctrlEffectText(m3.effect) || String(m3.effect || "");
-          box.title = sc && eff ? sc + " \xB7 " + eff : sc || eff;
-          if (eff) box.appendChild(el("span", "sc-chip" + (m3.effect === "reload" ? " warn" : ""), eff));
+          var sc = ctrlScopeText(m.scope);
+          var eff = ctrlEffectText(m.effect) || String(m.effect || "");
+          box.title = sc && eff ? sc + " · " + eff : sc || eff;
+          if (eff) box.appendChild(el("span", "sc-chip" + (m.effect === "reload" ? " warn" : ""), eff));
           return box;
         }
         function scheduleFold(host, mark, label, openDefault, key) {
           var nodes = [];
-          var n6 = mark.nextSibling;
-          while (n6) {
-            nodes.push(n6);
-            n6 = n6.nextSibling;
+          var n = mark.nextSibling;
+          while (n) {
+            nodes.push(n);
+            n = n.nextSibling;
           }
           if (!Derive.has(nodes)) {
             if (mark.parentNode) mark.parentNode.removeChild(mark);
             return null;
           }
-          var f3 = UI.fold({ key: key || "more:" + label, variant: "more", label, open: !!openDefault });
-          nodes.forEach(function(x2) {
-            f3.body.appendChild(x2);
+          var f = UI.fold({ key: key || "more:" + label, variant: "more", label, open: !!openDefault });
+          nodes.forEach(function(x) {
+            f.body.appendChild(x);
           });
-          f3.appendTo(host);
+          f.appendTo(host);
           if (mark.parentNode) mark.parentNode.removeChild(mark);
-          return f3;
+          return f;
         }
         function deferFold(host, mark, label, openDefault, key) {
           appState.foldQueue.push({ host, mark, label, open: !!openDefault, key });
@@ -13636,40 +8585,40 @@
         function flushFolds() {
           var q = appState.foldQueue;
           appState.foldQueue = [];
-          q.forEach(function(t6) {
+          q.forEach(function(t) {
             try {
-              scheduleFold(t6.host, t6.mark, t6.label, t6.open, t6.key);
-            } catch (e8) {
-              if (t6.mark && t6.mark.parentNode) t6.mark.parentNode.removeChild(t6.mark);
-              Log.warn(tr("\u6298\u53E0\u6536\u53E3\u5931\u8D25\uFF1A") + (e8 && e8.message ? e8.message : e8));
+              scheduleFold(t.host, t.mark, t.label, t.open, t.key);
+            } catch (e) {
+              if (t.mark && t.mark.parentNode) t.mark.parentNode.removeChild(t.mark);
+              Log.warn(tr("折叠收口失败：") + (e && e.message ? e.message : e));
             }
           });
           return q.length;
         }
         function opCard(title, desc, ep, btn, run, opts) {
-          var o9 = opts || {};
-          var c5 = el("div", "sc-opcard");
+          var o = opts || {};
+          var c = el("div", "sc-opcard");
           var head = el("div", "sc-opcard-head");
-          if (o9.icon) {
+          if (o.icon) {
             var ic = el("span", "sc-opcard-ic");
-            ic.appendChild(svg(o9.icon));
+            ic.appendChild(svg(o.icon));
             head.appendChild(ic);
           }
           head.appendChild(el("span", "sc-opcard-t", title));
-          c5.appendChild(head);
-          c5.appendChild(el("div", "sc-opcard-d", desc));
-          var f3 = el("div", "sc-opcard-f");
-          f3.appendChild(el("span", "sc-src", ep));
-          f3.appendChild(el("span", "sc-spacer"));
-          f3.appendChild(UI.button(btn, run, {
+          c.appendChild(head);
+          c.appendChild(el("div", "sc-opcard-d", desc));
+          var f = el("div", "sc-opcard-f");
+          f.appendChild(el("span", "sc-src", ep));
+          f.appendChild(el("span", "sc-spacer"));
+          f.appendChild(UI.button(btn, run, {
             primary: true,
             async: true,
-            busyText: o9.busyText || tr("\u6267\u884C\u4E2D\u2026"),
-            confirm: o9.confirm,
-            okText: o9.okText || title + tr(" \u5DF2\u53D1\u8D77")
+            busyText: o.busyText || tr("执行中…"),
+            confirm: o.confirm,
+            okText: o.okText || title + tr(" 已发起")
           }));
-          c5.appendChild(f3);
-          return c5;
+          c.appendChild(f);
+          return c;
         }
         var refs = {};
         var state = { parsed: null };
@@ -13677,13 +8626,13 @@
           var host = refs.view;
           if (!host) return 0;
           var rows = host.querySelectorAll(".sc-idx-row,.sc-row,.sc-recent-row");
-          var n6 = 0;
-          for (var i7 = 0; i7 < rows.length; i7++) {
-            var hit = !q || String(rows[i7].textContent || "").toLowerCase().indexOf(q.toLowerCase()) >= 0;
-            rows[i7].classList.toggle("sc-filtered", !hit);
-            if (hit) n6++;
+          var n = 0;
+          for (var i = 0; i < rows.length; i++) {
+            var hit = !q || String(rows[i].textContent || "").toLowerCase().indexOf(q.toLowerCase()) >= 0;
+            rows[i].classList.toggle("sc-filtered", !hit);
+            if (hit) n++;
           }
-          return q ? n6 : rows.length;
+          return q ? n : rows.length;
         }
         appState.currentView = Cfg.get("startView", "overview");
         function refreshCurrentView() {
@@ -13694,18 +8643,18 @@
           appState.currentView = name;
           try {
             Cfg.set("lastView", name);
-          } catch (e8) {
+          } catch (e) {
           }
           if (refs.view) {
             var vv = null;
-            for (var i7 = 0; i7 < VIEWS.length; i7++) {
-              if (VIEWS[i7][0] === name) {
-                vv = VIEWS[i7];
+            for (var i = 0; i < VIEWS.length; i++) {
+              if (VIEWS[i][0] === name) {
+                vv = VIEWS[i];
                 break;
               }
             }
             refs.view.setAttribute("role", "region");
-            if (vv) refs.view.setAttribute("aria-label", navLabelById(vv[0]) + "\uFF08" + navGroupByKey(vv[3]) + "\uFF09");
+            if (vv) refs.view.setAttribute("aria-label", navLabelById(vv[0]) + "（" + navGroupByKey(vv[3]) + "）");
           }
           refs.navItems.forEach(function(it) {
             it.el.classList.toggle("active", it.name === name);
@@ -13719,26 +8668,26 @@
           if (name === "overview") {
             renderViewOverview(refs.view);
           } else if (name === "persona") {
-            api("/memory/overview").then(function(r7) {
-              renderPersona(refs.view, r7);
+            api("/memory/overview").then(function(r) {
+              renderPersona(refs.view, r);
             }).catch(fail);
           } else if (name === "memory") {
-            api("/memory/overview").then(function(r7) {
-              renderMemoryExpanded(refs.view, r7);
+            api("/memory/overview").then(function(r) {
+              renderMemoryExpanded(refs.view, r);
             }).catch(fail);
           } else if (name === "suite") {
-            api("/suite").then(function(r7) {
-              renderSuite(refs.view, r7);
+            api("/suite").then(function(r) {
+              renderSuite(refs.view, r);
             }).catch(fail);
           } else if (name === "toggles") {
-            api("/config").then(function(r7) {
-              if (!r7.global) {
-                status(r7.error === "no-active-root" ? tr("\u672A\u6FC0\u6D3B\u6839\u76EE\u5F55\u2014\u2014\u8BF7\u5230\u300C\u914D\u7F6E\u539F\u6587\u300D\u9875\u6839\u76EE\u5F55\u533A\u6DFB\u52A0\u3002") : r7.error || "");
+            api("/config").then(function(r) {
+              if (!r.global) {
+                status(r.error === "no-active-root" ? tr("未激活根目录——请到「配置原文」页根目录区添加。") : r.error || "");
                 return;
               }
-              if (!r7.parsed) status(tr("\u6CE8\u5165\u53C2\u6570\u5DF2\u5168\u5C40\u53EF\u7528\uFF08scheduler.json\uFF09\uFF1Broot \u672A\u767B\u8BB0\u2014\u2014\u300C\u8BB0\u5FC6\u677F\u5757\u663E\u793A\u300D\u5F00\u5173\u5F85\u767B\u8BB0\u540E\u53EF\u7528\u3002"));
-              else status(tr("\u5DF2\u52A0\u8F7D ") + (r7.file || ""));
-              renderViewToggles(refs.view, r7.parsed || {}, r7.global);
+              if (!r.parsed) status(tr("注入参数已全局可用（scheduler.json）；root 未登记——「记忆板块显示」开关待登记后可用。"));
+              else status(tr("已加载 ") + (r.file || ""));
+              renderViewToggles(refs.view, r.parsed || {}, r.global);
             }).catch(fail);
           } else if (name === "deepsleep") {
             renderDeepSleep(refs.view);
@@ -13754,24 +8703,24 @@
         function installShortcuts() {
           if (installShortcuts._done) return;
           installShortcuts._done = true;
-          document.addEventListener("keydown", function(e8) {
-            var mod = e8.ctrlKey || e8.metaKey;
-            if (mod && e8.shiftKey && (e8.key === "S" || e8.key === "s")) {
-              e8.preventDefault();
+          document.addEventListener("keydown", function(e) {
+            var mod = e.ctrlKey || e.metaKey;
+            if (mod && e.shiftKey && (e.key === "S" || e.key === "s")) {
+              e.preventDefault();
               togglePanel();
               return;
             }
-            if (mod && e8.shiftKey && (e8.key === "L" || e8.key === "l")) {
-              e8.preventDefault();
+            if (mod && e.shiftKey && (e.key === "L" || e.key === "l")) {
+              e.preventDefault();
               Cfg.set("showLogs", !Cfg.get("showLogs", true));
               applyLogPanel();
-              status(tr("\u65E5\u5FD7\u9762\u677F\u5DF2") + (Cfg.get("showLogs") ? tr("\u663E\u793A") : tr("\u9690\u85CF")), "info");
+              status(tr("日志面板已") + (Cfg.get("showLogs") ? tr("显示") : tr("隐藏")), "info");
               return;
             }
-            if (e8.key === "Escape") {
+            if (e.key === "Escape") {
               var mask = document.getElementById("scpanl-mask");
               if (mask && mask.classList.contains("open")) {
-                e8.preventDefault();
+                e.preventDefault();
                 closePanel();
               }
             }
@@ -13792,34 +8741,34 @@
           modal.id = "scpanl-modal";
           modal.setAttribute("role", "dialog");
           modal.setAttribute("aria-modal", "true");
-          modal.setAttribute("aria-label", tr("\u5B88\u85CF\u8BB0\u5FC6\u9762\u677F"));
+          modal.setAttribute("aria-label", tr("守藏记忆面板"));
           var nav = el("div", "sc-nav");
-          nav.appendChild(el("div", "sc-nav-title", tr("\u5B88\u85CF SHOUCANG")));
+          nav.appendChild(el("div", "sc-nav-title", tr("守藏 SHOUCANG")));
           refs.navItems = [];
           var lastGroup = null;
-          VIEWS.forEach(function(v2) {
-            if (v2[3] && v2[3] !== lastGroup) {
-              nav.appendChild(el("div", "sc-nav-group", navGroupByKey(v2[3])));
-              lastGroup = v2[3];
+          VIEWS.forEach(function(v) {
+            if (v[3] && v[3] !== lastGroup) {
+              nav.appendChild(el("div", "sc-nav-group", navGroupByKey(v[3])));
+              lastGroup = v[3];
             }
             var item = el("div", "sc-nav-item");
-            item.setAttribute("data-view", v2[0]);
-            item.appendChild(svg(ICONS2[v2[2]]));
-            var label = navLabelById(v2[0]);
+            item.setAttribute("data-view", v[0]);
+            item.appendChild(svg(ICONS[v[2]]));
+            var label = navLabelById(v[0]);
             item.appendChild(el("span", null, label));
             item.setAttribute("role", "button");
             item.setAttribute("tabindex", "0");
             item.setAttribute("aria-label", label);
             item.onclick = function() {
-              show(v2[0]);
+              show(v[0]);
             };
-            item.onkeydown = function(e8) {
-              if (e8.key === "Enter" || e8.key === " ") {
-                e8.preventDefault();
-                show(v2[0]);
+            item.onkeydown = function(e) {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                show(v[0]);
               }
             };
-            refs.navItems.push({ name: v2[0], el: item });
+            refs.navItems.push({ name: v[0], el: item });
             nav.appendChild(item);
           });
           nav.appendChild(el("div", "sc-nav-spacer"));
@@ -13827,8 +8776,8 @@
           var health = el("div", "sc-nav-health");
           var fdot = el("span", "sc-dot ok");
           health.appendChild(fdot);
-          health.appendChild(el("b", null, tr("\u8BB0\u5FC6\u5E93")));
-          var fstate = el("span", null, "\u2014");
+          health.appendChild(el("b", null, tr("记忆库")));
+          var fstate = el("span", null, "—");
           health.appendChild(fstate);
           foot.appendChild(health);
           var fsub = el("div", "sc-nav-foot-sub", "storage = obsidian vault");
@@ -13839,10 +8788,10 @@
             if (kind) fdot.className = "sc-dot " + (kind === "ended" ? "ok" : kind === "stalled" ? "err" : kind === "suspect" ? "warn" : kind);
             if (subText) fsub.textContent = subText;
           };
-          var navClose = el("button", "sc-nav-close", "\u2715");
+          var navClose = el("button", "sc-nav-close", "✕");
           navClose.type = "button";
-          navClose.title = tr("\u5173\u95ED\u9762\u677F");
-          navClose.setAttribute("aria-label", tr("\u5173\u95ED\u9762\u677F"));
+          navClose.title = tr("关闭面板");
+          navClose.setAttribute("aria-label", tr("关闭面板"));
           navClose.onclick = function() {
             closePanel();
           };
@@ -13871,16 +8820,16 @@
           var startView = "file";
           try {
             var hm = String(location.hash || "").match(/[#&]sc=([a-z0-9_-]+)/i);
-            if (hm && VIEWS.some(function(v2) {
-              return v2[0] === hm[1];
+            if (hm && VIEWS.some(function(v) {
+              return v[0] === hm[1];
             })) startView = hm[1];
             else if (Cfg.get("lastView")) {
               var lv = String(Cfg.get("lastView"));
-              if (VIEWS.some(function(v2) {
-                return v2[0] === lv;
+              if (VIEWS.some(function(v) {
+                return v[0] === lv;
               })) startView = lv;
             }
-          } catch (e8) {
+          } catch (e) {
           }
           show(startView);
         }
@@ -13901,16 +8850,6 @@
           rootEl.id = "scpanl-root";
           document.body.appendChild(rootEl);
           syncTheme();
-          try {
-            if (window.__SC_VENDOR_CSS__ && !document.getElementById("scpanl-vendor-css")) {
-              var vstyle = el("style");
-              vstyle.id = "scpanl-vendor-css";
-              vstyle.textContent = window.__SC_VENDOR_CSS__;
-              rootEl.appendChild(vstyle);
-            }
-          } catch (e8) {
-            Log.warn(tr("\u7EC4\u4EF6\u5E93\u4E3B\u9898\u6CE8\u5165\u5931\u8D25\uFF1A") + (e8 && e8.message));
-          }
           var styleHost = el("style");
           styleHost.textContent = CSS;
           rootEl.appendChild(styleHost);
@@ -13926,10 +8865,10 @@
           if (document.getElementById("scpanl-btn")) return;
           var btn = el("button");
           btn.id = "scpanl-btn";
-          btn.title = tr("\u5B88\u85CF\u9762\u677F");
+          btn.title = tr("守藏面板");
           var ic = el("img", "sc-ic-lg");
           ic.src = SC_ICON;
-          ic.alt = tr("\u5B88");
+          ic.alt = tr("守");
           btn.appendChild(ic);
           btn.dataset.fallback = "1";
           btn.classList.add("sc-fab");
@@ -13954,7 +8893,7 @@
           var settingsBtn = null;
           try {
             settingsBtn = document.querySelector('[class*="triggerRow"] button');
-          } catch (e8) {
+          } catch (e) {
             settingsBtn = null;
           }
           if (settingsBtn && settingsBtn.cloneNode) {
@@ -13963,11 +8902,11 @@
               btn.id = "scpanl-btn";
               btn.removeAttribute("aria-haspopup");
               btn.removeAttribute("aria-expanded");
-              btn.title = tr("\u5B88\u85CF\u9762\u677F");
+              btn.title = tr("守藏面板");
               var lab = btn.querySelector("span, [data-slot] span");
-              if (lab) lab.textContent = tr("\u5B88\u85CF");
+              if (lab) lab.textContent = tr("守藏");
               btn.onclick = openPanel;
-            } catch (e8) {
+            } catch (e) {
               btn = null;
             }
           }
@@ -13975,13 +8914,13 @@
             btn = el("button");
             btn.id = "scpanl-btn";
             btn.type = "button";
-            btn.title = tr("\u5B88\u85CF\u9762\u677F");
+            btn.title = tr("守藏面板");
             btn.className = "sc-trigger";
             var icF = el("img", "sc-ic-sm");
             icF.src = SC_ICON;
-            icF.alt = tr("\u5B88");
+            icF.alt = tr("守");
             btn.appendChild(icF);
-            btn.appendChild(el("span", "sc-trigger-label", tr("\u5B88\u85CF")));
+            btn.appendChild(el("span", "sc-trigger-label", tr("守藏")));
             btn.onclick = openPanel;
           }
           var settingsRow = settingsBtn ? settingsBtn.closest('[class*="triggerRow"]') : null;
@@ -14031,93 +8970,93 @@
               refreshCurrentView();
             } else if (key === "startView" || key === "logLevel" || key === "overviewMode" || key === "maxRows") {
             }
-          } catch (e8) {
-            Log.warn(tr("\u8BBE\u7F6E\u751F\u6548\u5931\u8D25\uFF08") + key + "\uFF09\uFF1A" + (e8 && e8.message));
+          } catch (e) {
+            Log.warn(tr("设置生效失败（") + key + "）：" + (e && e.message));
           }
         }
         function ShoucangSettingsSection() {
-          var h3 = appState.slotReact.createElement;
+          var h = appState.slotReact.createElement;
           function row(key, title, desc, control) {
-            return h3(
+            return h(
               "div",
               { className: "setting-item", key },
-              h3(
+              h(
                 "div",
                 { className: "setting-item-info" },
-                h3("div", { className: "setting-item-name" }, title),
-                h3("div", { className: "setting-item-desc" }, desc)
+                h("div", { className: "setting-item-name" }, title),
+                h("div", { className: "setting-item-desc" }, desc)
               ),
-              h3("div", { className: "setting-item-control" }, control)
+              h("div", { className: "setting-item-control" }, control)
             );
           }
-          function sel(key, opts, fallback2) {
-            return h3("select", {
-              value: String(Cfg.get(key, fallback2)),
+          function sel(key, opts, fallback) {
+            return h("select", {
+              value: String(Cfg.get(key, fallback)),
               onChange: function(ev) {
                 Cfg.set(key, ev.target.value);
                 applyCfgSideEffect(key);
               }
-            }, (opts || []).map(function(o9) {
-              return h3("option", { value: String(o9.value), key: String(o9.value) }, o9.label);
+            }, (opts || []).map(function(o) {
+              return h("option", { value: String(o.value), key: String(o.value) }, o.label);
             }));
           }
-          function num(key, fallback2, min, max, step) {
-            return h3("input", {
+          function num(key, fallback, min, max, step) {
+            return h("input", {
               type: "number",
-              value: String(Cfg.get(key, fallback2)),
+              value: String(Cfg.get(key, fallback)),
               step: step || 1,
               onChange: function(ev) {
-                var n6 = parseInt(ev.target.value, 10);
-                if (isNaN(n6)) return;
-                Cfg.set(key, Math.max(min, Math.min(max, n6)));
+                var n = parseInt(ev.target.value, 10);
+                if (isNaN(n)) return;
+                Cfg.set(key, Math.max(min, Math.min(max, n)));
                 applyCfgSideEffect(key);
               }
             });
           }
-          function tgl(key, fallback2) {
-            return h3("input", {
+          function tgl(key, fallback) {
+            return h("input", {
               type: "checkbox",
-              checked: !!Cfg.get(key, fallback2),
+              checked: !!Cfg.get(key, fallback),
               onChange: function(ev) {
                 Cfg.set(key, ev.target.checked);
                 applyCfgSideEffect(key);
               }
             });
           }
-          return h3(
+          return h(
             "div",
             { className: "sc-host-settings" },
-            h3("div", { className: "setting-item-desc" }, tr("\u5B88\u85CF\u9762\u677F\u7684\u754C\u9762\u504F\u597D\uFF08\u4E0E\u9762\u677F\u5185\u300C\u8BBE\u7F6E\u300D\u9875\u540C\u6E90\uFF0C\u6539\u540E\u7ACB\u5373\u751F\u6548\uFF1B\u4FDD\u5B58\u5728\u6D4F\u89C8\u5668 localStorage\uFF09\u3002")),
+            h("div", { className: "setting-item-desc" }, tr("守藏面板的界面偏好（与面板内「设置」页同源，改后立即生效；保存在浏览器 localStorage）。")),
             row(
               "density",
-              tr("\u663E\u793A\u5BC6\u5EA6"),
-              tr("\u7D27\u51D1\u6A21\u5F0F\u9690\u85CF\u63CF\u8FF0\u3001\u538B\u7F29\u884C\u9AD8"),
-              sel("density", [{ value: "comfortable", label: tr("\u8212\u9002") }, { value: "compact", label: tr("\u7D27\u51D1") }], "comfortable")
+              tr("显示密度"),
+              tr("紧凑模式隐藏描述、压缩行高"),
+              sel("density", [{ value: "comfortable", label: tr("舒适") }, { value: "compact", label: tr("紧凑") }], "comfortable")
             ),
-            row("navWidth", tr("\u5BFC\u822A\u5BBD\u5EA6"), tr("\u9762\u677F\u5DE6\u5BFC\u822A\u50CF\u7D20\u5BBD\u5EA6\uFF08140\u2013320\uFF09"), num("navWidth", 216, 140, 320)),
-            row("refreshMs", tr("\u8F6E\u8BE2\u95F4\u9694"), tr("\u6BEB\u79D2\uFF1B0 = \u5173\u95ED\u8F6E\u8BE2"), num("refreshMs", 6e4, 0, 36e5, 1e3)),
-            row("showLogs", tr("\u663E\u793A\u65E5\u5FD7\u9762\u677F"), tr("\u72B6\u6001\u680F\u4E0A\u65B9\u5E38\u9A7B\u65E5\u5FD7\uFF08\u5173\u95ED\u5373\u6298\u53E0\u6210\u4E00\u884C\uFF09"), tgl("showLogs", false)),
+            row("navWidth", tr("导航宽度"), tr("面板左导航像素宽度（140–320）"), num("navWidth", 216, 140, 320)),
+            row("refreshMs", tr("轮询间隔"), tr("毫秒；0 = 关闭轮询"), num("refreshMs", 6e4, 0, 36e5, 1e3)),
+            row("showLogs", tr("显示日志面板"), tr("状态栏上方常驻日志（关闭即折叠成一行）"), tgl("showLogs", false)),
             row(
               "skin",
-              tr("\u754C\u9762\u76AE\u80A4"),
-              tr("v9 = \u65B9\u6848\u8C03\u8272\u677F\uFF08\u9ED8\u8BA4\uFF09\uFF1B\u5BBF\u751F = \u8DDF\u968F DSH \u4E3B\u9898\u4EE4\u724C"),
-              sel("skin", [{ value: "v9", label: tr("v9 \u65B9\u6848\u76AE\u80A4") }, { value: "host", label: tr("\u5BBF\u4E3B\u539F\u751F\u76AE\u80A4") }], "v9")
+              tr("界面皮肤"),
+              tr("v9 = 方案调色板（默认）；宿生 = 跟随 DSH 主题令牌"),
+              sel("skin", [{ value: "v9", label: tr("v9 方案皮肤") }, { value: "host", label: tr("宿主原生皮肤") }], "v9")
             ),
             row(
               "startView",
-              tr("\u542F\u52A8\u65F6\u89C6\u56FE"),
-              tr("\u6253\u5F00\u9762\u677F\u9ED8\u8BA4\u843D\u5730\u9875\uFF08\u6DF1\u94FE > \u4E0A\u6B21\u89C6\u56FE > \u6B64\u9879\uFF09"),
-              sel("startView", VIEWS.map(function(v2) {
-                return { value: v2[0], label: navLabelById(v2[0]) };
+              tr("启动时视图"),
+              tr("打开面板默认落地页（深链 > 上次视图 > 此项）"),
+              sel("startView", VIEWS.map(function(v) {
+                return { value: v[0], label: navLabelById(v[0]) };
               }), "overview")
             ),
             row(
               "openPanel",
-              tr("\u6253\u5F00\u9762\u677F"),
-              tr("\u5BBF\u4E3B\u8BBE\u7F6E\u91CC\u4E5F\u80FD\u76F4\u63A5\u5524\u8D77\u5B88\u85CF\u9762\u677F"),
-              h3("button", { type: "button", className: "sc-btn sc-btn-primary", onClick: function() {
+              tr("打开面板"),
+              tr("宿主设置里也能直接唤起守藏面板"),
+              h("button", { type: "button", className: "sc-btn sc-btn-primary", onClick: function() {
                 openPanel();
-              } }, tr("\u6253\u5F00\u5B88\u85CF\u9762\u677F"))
+              } }, tr("打开守藏面板"))
             )
           );
         }
@@ -14136,7 +9075,7 @@
               try {
                 relabelChrome();
                 appState.refreshView();
-              } catch (e8) {
+              } catch (e) {
               }
             }
           });
@@ -14152,7 +9091,7 @@
                 if (now - lastFocusRefresh < 1500) return;
                 lastFocusRefresh = now;
                 refreshCurrentView();
-              } catch (e8) {
+              } catch (e) {
               }
             };
             window.addEventListener("focus", focusRefresh);
@@ -14160,68 +9099,39 @@
               if (!document.hidden) focusRefresh();
             });
           }
-          var reactEl = null;
+          var reactEl2 = null;
           try {
-            reactEl = require2("react");
-          } catch (e8) {
-            reactEl = null;
+            reactEl2 = require2("react");
+          } catch (e) {
+            reactEl2 = null;
           }
-          appState.slotReact = reactEl;
-          var SLOT_OK = !!(reactEl && typeof reactEl.createElement === "function" && ctx && typeof ctx.effect === "function" && ctx.slots && typeof ctx.slots.inject === "function" && typeof ctx.slots.register === "function");
+          appState.slotReact = reactEl2;
+          var SLOT_OK = !!(reactEl2 && typeof reactEl2.createElement === "function" && ctx && typeof ctx.effect === "function" && ctx.slots && typeof ctx.slots.inject === "function" && typeof ctx.slots.register === "function");
+          var SLOT_OK = registerHostSlots({
+            ctx,
+            reactEl: reactEl2,
+            openPanel,
+            iconSrc: SC_ICON,
+            Tr: tr,
+            SettingsSection: ShoucangSettingsSection
+          });
           if (SLOT_OK) {
-            ctx.effect(function() {
-              return ctx.slots.inject("sidebar.footer.action", function() {
-                var open = openPanel;
-                var ShoucangToggle = function() {
-                  if (!reactEl || typeof reactEl.createElement !== "function") return null;
-                  return reactEl.createElement(
-                    "button",
-                    { type: "button", title: tr("\u5B88\u85CF\u9762\u677F"), className: "sc-trigger", onClick: function() {
-                      open();
-                    } },
-                    reactEl.createElement("img", { src: SC_ICON, alt: tr("\u5B88"), style: { width: 22, height: 22, display: "block", pointerEvents: "none" } }),
-                    reactEl.createElement("span", { className: "sc-trigger-label" }, tr("\u5B88\u85CF"))
-                  );
-                };
-                return ctx.slots.register({
-                  name: "sidebar.footer.action",
-                  id: "shoucang-panel-toggle",
-                  label: function() {
-                    return tr("\u5B88\u85CF\u9762\u677F");
-                  }
-                }, ShoucangToggle);
-              });
-            }, "shoucang-panel: footer action");
-            ctx.effect(function() {
-              return ctx.slots.inject("settings.section", function() {
-                return ctx.slots.register({
-                  name: "settings.section",
-                  id: "shoucang",
-                  order: 60,
-                  label: function() {
-                    return tr("\u5B88\u85CF");
-                  }
-                }, ShoucangSettingsSection);
-              });
-            }, "shoucang-panel: settings section");
-          }
-          if (SLOT_OK) {
-            Log.info(tr("\u4FA7\u680F\u5165\u53E3\uFF1A\u5DF2\u6CE8\u518C\u5BBF\u4E3B\u63D2\u69FD sidebar.footer.action\uFF08\u4E0D\u6302 DOM \u76F4\u63D2\u5165\u53E3\uFF09"));
+            Log.info(tr("侧栏入口：已注册宿主插槽 sidebar.footer.action（不挂 DOM 直插入口）"));
           } else {
-            Log.info(tr("\u4FA7\u680F\u5165\u53E3\uFF1A\u5BBF\u4E3B\u63D2\u69FD\u4E0D\u53EF\u7528\uFF08") + (reactEl ? tr("slots \u670D\u52A1\u7F3A\u5931") : tr("require('react') \u4E0D\u53EF\u7528")) + tr("\uFF09\uFF0C\u56DE\u9000 DOM \u76F4\u63D2"));
+            Log.info(tr("侧栏入口：宿主插槽不可用（") + (reactEl2 ? tr("slots 服务缺失") : tr("require('react') 不可用")) + tr("），回退 DOM 直插"));
             if (!document.getElementById("scpanl-btn")) mountSidebarEntry();
           }
           return function() {
             if (appState.sidebarObserver) {
               try {
                 appState.sidebarObserver.disconnect();
-              } catch (e8) {
+              } catch (e) {
               }
             }
-            var n6 = document.getElementById("scpanl-root");
-            if (n6) n6.remove();
-            var b3 = document.getElementById("scpanl-btn");
-            if (b3) b3.remove();
+            var n = document.getElementById("scpanl-root");
+            if (n) n.remove();
+            var b = document.getElementById("scpanl-btn");
+            if (b) b.remove();
           };
         }
         exports.inject = inject;

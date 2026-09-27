@@ -238,10 +238,12 @@ function syncTheme() {
   var skin = String(Cfg.get('skin', 'v9')) === 'host' ? 'host' : 'v9';
   root.classList.toggle('sc-dark', dark);
   root.classList.toggle('sc-light', !dark);
-  /* 组件库暗色（S3）：WA 默认主题是**浅色**，与深色面板冲突；其 .wa-dark 提供暗色调色板，
-   *   已由构建期限定在 #scpanl-root 作用域内 ⇒ 只影响面板，不动宿主页。 */
-  root.classList.toggle('wa-dark', dark);
-  root.classList.toggle('wa-light', !dark);
+  /* U2（2026-09-26）：**移除 wa-dark / wa-light 切换** —— 产物已不带 Web Awesome
+   *   （7 个组件改为「宿主 primitives 优先 + 自绘降级」，省 574KB）。
+   *   那两个类是 WA 主题的暗/亮调色板入口，现无消费者：
+   *     · 宿主路径 —— primitives 自带样式，跟随宿主主题，不需要我们标类；
+   *     · 自绘路径 —— 由本面板的 --sc-* 令牌 + .sc-dark/.sc-light（上一行）承担。
+   *   ⚠ 面板自身的深浅色**未受影响**（sc-dark/sc-light 仍在）。 */
   root.classList.toggle('sc-skin-v9', skin === 'v9');
   root.classList.toggle('sc-skin-host', skin === 'host');
   try { Cfg.set('theme', dark ? 'dark' : 'light'); } catch (e) { }

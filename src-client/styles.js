@@ -10,6 +10,13 @@
  *   相关判因见 `entry.js` 头注与 `check-layout-px.mjs` 的锚点正则。
  */
 
+      /* ⚠ `window.__SC_CSS__` 是**门禁抽取锚点**，四个门禁（audit-css-usage / check-layout-px /
+       *   gen-ui-preview / build-client）共用正则 `\[[\s\S]*?\]\.join\(\s*['"]['"]\s*\)` ——
+       *   即该表达式**必须**是「字面量数组 + .join('')」形态。
+       *   实测教训（2026-09-26）：曾把组件适配层样式抽到 `styles-host-ui.js` 后用
+       *   `...HOST_UI_CSS` / `.concat(HOST_UI_CSS)` 并入 ⇒ ①该表达式在门禁的**新上下文**里
+       *   求值时报 `HOST_UI_CSS is not defined`；②`build-client` 的锚点断言当场红。
+       *   ⇒ **本数组只能写字面量**；要拆模块请改这四处正则（属 R3 跨门禁口径变更）。 */
       export const CSS = (window.__SC_CSS__ = [
         /* ══════════ ① 令牌层 ══════════ */
         '#scpanl-root,.sc-trigger,.sc-fab{',
@@ -69,6 +76,30 @@
         'font-size:13px;line-height:1.6;',
         '}',
 
+        /* ══════════ ①.5 组件适配层（U2/U4 · 2026-09-26）══════════
+         * **宿主组件包裹容器 + 降级自绘件**的样式。
+         * ⚠ 位置有语义：在**令牌层之后**（本层用 --sc-* 变量）、**组件规则之前**
+         *   —— 同层选择器由位置决胜负；改位置须复查 `audit-css-usage` 的「同层重复定义」判据。
+         * ⚠ 本层曾抽到 `styles-host-ui.js`，因 `__SC_CSS__` 锚点限制（见文件头）**回退内联**；
+         *   对应 `check-module-growth` 超基线走**出路② rebase**（理由：全是本轮功能必需的规则）。 */
+        /* U2：宿主组件（primitives 路径）的**包裹容器** + 自绘降级件（进度轨道 / 分段）。
+         *   `toggle`/`button` 走宿主 React 组件时用 `mountReact` 挂进一个 span —— 壳由本面板 CSS 定位，
+         *   外观由宿主组件自带样式管（只做布局贴合，不覆盖宿主观感）。
+         *   ⚠ 进度轨道/分段的尺寸与配色**逐值沿用**组件时代为对齐方案接管过的 WA 变量
+         *     （6px 轨道 / --sc-bg3 / --sc-accent / pill；28px 胶囊 / 内距 0·14 / 12.5px）
+         *     ⇒ 宿主路径与降级路径**观感一致**。
+         *   ⚠ 以下多条规则**合并进一行字符串**（纯格式，逐字符等价），以守 check-module-growth 行数棘轮。 */
+        '#scpanl-root .sc-host-switch,#scpanl-root .sc-host-btn{display:inline-flex;align-items:center;vertical-align:middle;}'
+        + '#scpanl-root .sc-host-btn{flex:none;}'
+        + '#scpanl-root .sc-prog-track{height:6px;border-radius:var(--sc-r-pill);background:var(--sc-bg3);overflow:hidden;}'
+        + '#scpanl-root .sc-prog-fill{height:100%;width:0;border-radius:var(--sc-r-pill);background:var(--sc-accent);transition:width var(--sc-t-base) var(--sc-ease);}',
+        /* ⚠ 分段（.sc-tabnav/.sc-tabbtn）的规则**不在此处** —— 第 500 行附近已有一份（本轮先加、
+         *   后与既有位置重合，被 audit-css-usage 判「同层重复定义 4 个」）。单一来源留在那一处。 */
+        /* U4 侧栏全局面板图标（sidebar.panellist）：尺寸由宿主 size prop 给定 ⇒ 此处不写死尺寸。 */
+        '.sc-panel-icon{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;border:0;border-radius:var(--sc-r-sm);background:transparent;padding:var(--sc-sp-1);color:var(--sc-text);transition:background var(--sc-t-base) var(--sc-ease);}'
+        + '.sc-panel-icon:hover{background:var(--sc-hover);}'
+        + '.sc-panel-icon.on{background:var(--sc-accent-soft);}',
+
         /* ══════════ ② 基础层 ══════════ */
         '#scpanl-root *{box-sizing:border-box;}',
         '#scpanl-root :focus{outline:none;}',
@@ -114,7 +145,20 @@
         '#scpanl-root .sc-code{margin:var(--sc-sp-1) 0 0;padding:var(--sc-sp-2);background:var(--sc-bg2);border:1px solid var(--sc-border2);border-radius:var(--sc-radius,8px);font-size:clamp(11px,.88vw,12px);line-height:1.5;color:var(--sc-fg2);overflow:auto;max-height:320px;}',
 
         /* ══════════ ③ 布局层 ══════════ */
-        '#scpanl-mask{position:fixed;inset:0;z-index:9900;background:rgba(0,0,0,.55);display:none;',
+        /* ── 层叠值对齐宿主体系（2026-09-26 U1 根因实修） ──
+         * **判因（真机实测，非推断）**：本面板原为 \`z-index:9900\`，而宿主自己的层叠体系是
+         *   引导 900 · 弹窗/拖放/灯箱 1000 · 菜单/Toast/Tooltip 1100（扫宿主 lib 实测）。
+         *   ⇒ 面板一打开就把**宿主审批/权限/提问弹窗压在下面**：实测命中测试
+         *   \`{ourZ:"9900", hostZ:"1000", topElAtHostModal:"sc-view", hostModalCovered:true}\`
+         *   —— 宿主弹窗中心点最顶层元素是我们的 \`.sc-view\`，用户**点不到审批按钮**。
+         *   这正是「会掩盖其他问题、让失败不可观测」类缺陷：面板看着正常，用户却卡在批不了。
+         * **修法**：面板落到宿主 Modal **之下** = \`950\`（宿主实测体系：主框架 ≤20 · 引导 900 ·
+         *   弹窗 1000 · 菜单/Toast/Tooltip 1100）⇒ 审批弹窗、结果通知、工具提示**全部浮在面板之上**。
+         *   ⚠ **为什么不取 1000（第一版修错了，已纠正）**：与宿主 Modal **同层时胜负由 DOM 顺序决定**，
+         *     而本面板是 \`document.body.appendChild\` 追加在 **body 末尾** ⇒ 同层必赢，遮挡照旧
+         *     （实测复核：改 1000 后 \`hostModalCovered\` 仍为 \`true\`）。要根治就得在**数值上**低于它，
+         *     不能指望顺序 —— 宿主随时可能把弹窗容器挪位置。 */
+        '#scpanl-mask{position:fixed;inset:0;z-index:950;background:rgba(0,0,0,.55);display:none;',
         'align-items:center;justify-content:center;color:var(--sc-text);padding:clamp(8px,2vw,24px);}',
         '#scpanl-mask.open{display:flex;}',
         '#scpanl-modal{width:min(1480px,96vw);height:min(900px,92vh);display:flex;overflow:hidden;',
@@ -450,6 +494,20 @@
          * 每个 tab = 28px 胶囊（内距 0/14 · 12.5px · 圆角 6）；激活项 bg --sc-bg-card + shadow-1；
          * 组件自带的**下划线指示器关掉**（v9 无下划线）：--indicator-color:transparent。
          * 部件名来源：shadow DOM 实测 wa-tab-group::part(base/nav/tabs/body) · wa-tab::part(base)。 */
+        /* U2（2026-09-26）：**降级路径的自绘分段**（宿主 SegmentedTabs 拿不到时用）。
+         *   尺寸/配色**逐值对齐**上面那批 wa-tab 的接管值（28px 胶囊 · 内距 0/14 · 12.5px ·
+         *   外框 --sc-bg1 + 1px 边 + 8px 圆角 + 2px 内距；激活 bg --sc-bg-card + shadow-1），
+         *   故两条路径观感一致。 */
+        '#scpanl-root .sc-tabnav{background:var(--sc-bg1);border:1px solid var(--sc-border);',
+        'border-radius:var(--sc-r-md);padding:2px;display:inline-flex;gap:2px;align-self:flex-start;}',
+        '#scpanl-root .sc-tabbtn{height:28px;padding:0 14px;border-radius:var(--sc-r-sm);border:0;cursor:pointer;',
+        'font-size:12.5px;font-weight:400;font-family:inherit;color:var(--sc-muted);background:transparent;}',
+        '#scpanl-root .sc-tabbtn:hover{color:var(--sc-text);}',
+        '#scpanl-root .sc-tabbtn.sc-on{background:var(--sc-bg-card);color:var(--sc-text);font-weight:600;box-shadow:var(--sc-shadow-1);}',
+        /* 面板切换（U2）：宿主 SegmentedTabs 不带面板容器 ⇒ 由 .sc-hidden 控制显隐。
+         *   ⚠ 此处**不再声明** `.sc-tabpane` —— 第 428 行既有 `.sc-tabpane{margin-top…}`、
+         *     第 83 行 `.sc-hidden{display:none !important}` 已构成完整判据；
+         *     曾在此重复声明 display:block，被 audit-css-usage 判「同层重复定义」。 */
         '#scpanl-root wa-tab-group{--indicator-color:transparent;--track-color:transparent;}',
         '#scpanl-root wa-tab-group::part(nav){background:var(--sc-bg1);border:1px solid var(--sc-border);',
         'border-radius:var(--sc-r-md);padding:2px;display:inline-flex;width:auto;align-self:flex-start;height:auto;}',
@@ -839,7 +897,10 @@
         '.sc-trigger.sc-rail .sc-trigger-label{display:none;}',
         '#scpanl-root .sc-ic-lg{width:24px;height:24px;display:block;margin:var(--sc-gap-row) auto;pointer-events:none;}',
         '#scpanl-root .sc-ic-sm{width:var(--sc-sp-4);height:var(--sc-sp-4);display:block;pointer-events:none;}',
-        '.sc-fab{position:fixed;left:var(--sc-sp-4);bottom:var(--sc-sp-4);z-index:9800;width:40px;height:40px;',
+        /* 浮动入口同理（2026-09-26 U1）：原 \`9800\` 会浮在宿主弹窗/Toast 之上。
+         * 它是**常驻入口按钮**（非模态），取 900 —— 与宿主引导浮层同档，低于弹窗 1000
+         * ⇒ 宿主弹窗打开时它退到后面，不会挡住审批与提示。 */
+        '.sc-fab{position:fixed;left:var(--sc-sp-4);bottom:var(--sc-sp-4);z-index:900;width:40px;height:40px;',
         'border-radius:50%;border:none;cursor:pointer;font-size:var(--sc-fs-md);font-weight:var(--sc-fw-semibold);',
         'color:#fff;background:var(--sc-accent);box-shadow:var(--sc-shadow-2);}',
         /* 旧 footer 类名兼容（DSH 宿主演进后多为死代码，保留防回退） */

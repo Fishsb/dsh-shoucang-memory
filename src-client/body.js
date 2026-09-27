@@ -1,4 +1,9 @@
 import { UI } from './ui-kit.js'
+import { setRequire } from './host-ui.js'
+/* U2/U4（2026-09-26）：**宿主插槽注册按领域接缝抽出**（原内联于本文件，使其越 check-module-growth
+ *   冻结棘轮）。三个席位（footer.action / settings.section / panellist）属「宿主装配面」，
+ *   与面板本体（视图 / 端点 / DOM 壳）领域不同，变更节奏亦不同（随宿主契约 vs 随业务）——真接缝。 */
+import { registerHostSlots } from './host-slots.js'
 import { appState } from './app-state.js'
 import { Derive, fmtTime } from './derive.js'
 import { renderPersona, renderIndexRows, openMemoryNote, makeMemoryPointerRow } from './panes-memory.js'
@@ -45,6 +50,15 @@ import { CTRL_META, ctrlScopeText, ctrlEffectText, switchKeys } from './i18n-ctr
     factory: function (require) {
       var module = { exports: {} };
       var exports = module.exports;
+
+      /* ---- 宿主 UI 接入（U2 · 2026-09-26）----
+       * 把宿主的 require 交给「宿主 UI 接入层」——**单一接缝**。
+       *   判因：宿主 primitives（Button/Switch/Pill/StateDot…）在 seed 表白名单里可直接 require，
+       *   而本插件自带整套 Web Awesome（574KB）只为 7 个组件。接线后各处即可"优先宿主、失败降级"。
+       *   ⚠ 只传句柄、不做探测：探测与降级判定全在 host-ui.js 内（单一实现）。
+       *   ⚠ 本条必须在**节标记内** —— check-pane-sections 要求 factory 体开头到首个标记之间
+       *     只有前置声明（var/function）；裸调用会被判「无主区域」。 */
+      setRequire(require);
 
       var BASE = '/api/shoucang-panel';
       // 入口位：注册进侧栏 footer.action 插槽（现行 cordis client slot 契约）；
@@ -720,13 +734,10 @@ function metaBadges(key) {
         var rootEl = el('div'); rootEl.id = 'scpanl-root';
         document.body.appendChild(rootEl);
         syncTheme(); // 挂载即探测一次（此后每次 mount/打开都会刷新）
-        /* S3：组件库主题令牌层单独一个 <style>（缺它组件就"没有盒子"，见 CHANGELOG 判因） */
-        try {
-          if (window.__SC_VENDOR_CSS__ && !document.getElementById('scpanl-vendor-css')) {
-            var vstyle = el('style'); vstyle.id = 'scpanl-vendor-css'; vstyle.textContent = window.__SC_VENDOR_CSS__;
-            rootEl.appendChild(vstyle);
-          }
-        } catch (e) { Log.warn(tr('组件库主题注入失败：') + (e && e.message)); }
+        /* U2（2026-09-26）：**不再注入第三方组件库主题层** —— 产物已不带 Web Awesome
+         *   （7 个组件改为「宿主 primitives 优先 + 自绘降级」，省 574KB）。
+         *   宿主 primitives 自带样式（各组件有独立 *.module.css），不需我们注入令牌层；
+         *   面板自身的样式仍由下方 styleHost（window.__SC_CSS__）承担 —— 单一来源，未变。 */
         var styleHost = el('style'); styleHost.textContent = CSS; rootEl.appendChild(styleHost);
         var mask = el('div'); mask.id = 'scpanl-mask';
         mask.onclick = function (ev) { if (ev.target === mask) mask.classList.remove('open'); };
@@ -956,40 +967,13 @@ function metaBadges(key) {
         var SLOT_OK = !!(reactEl && typeof reactEl.createElement === 'function' &&
           ctx && typeof ctx.effect === 'function' && ctx.slots && typeof ctx.slots.inject === 'function' &&
           typeof ctx.slots.register === 'function');
-        if (SLOT_OK) {
-          ctx.effect(function () {
-            return ctx.slots.inject('sidebar.footer.action', function () {
-              // 0.1.2 契约：组件作为 register 的第二个参数（options.component 已不再被读取）
-              var open = openPanel;
-              var ShoucangToggle = function () {
-                // 纯 DOM 插件无 react 运行时 → 渲染 null（React 组件返回 null 合法，空槽不崩）；DOM 入口由 mountSidebarEntry 提供
-                if (!reactEl || typeof reactEl.createElement !== 'function') return null;
-                return reactEl.createElement(
-                  'button',
-                  { type: 'button', title: tr('守藏面板'), className: 'sc-trigger', onClick: function () { open(); } },
-                  reactEl.createElement('img', { src: SC_ICON, alt: tr("守"), style: { width: 22, height: 22, display: 'block', pointerEvents: 'none' } }),
-                  reactEl.createElement('span', { className: 'sc-trigger-label' }, tr('守藏'))
-                );
-              };
-              return ctx.slots.register({
-                name: 'sidebar.footer.action',
-                id: 'shoucang-panel-toggle',
-                label: function () { return tr('守藏面板'); }
-              }, ShoucangToggle);
-            });
-          }, 'shoucang-panel: footer action');
-          /* S2：界面偏好进宿主设置中心（settings.section）；面板内「设置」视图保留作兜底与高级项 */
-          ctx.effect(function () {
-            return ctx.slots.inject('settings.section', function () {
-              return ctx.slots.register({
-                name: 'settings.section',
-                id: 'shoucang',
-                order: 60,
-                label: function () { return tr('守藏'); }
-              }, ShoucangSettingsSection);
-            });
-          }, 'shoucang-panel: settings section');
-        }
+        /* U2/U4（2026-09-26）：三个宿主插槽的注册**按领域接缝抽到 host-slots.js**
+         *   （原在此处内联，使 body.js 越过 check-module-growth 冻结棘轮）。
+         *   本处只保留**互斥判定** —— 插槽可用则不再挂 DOM 直插入口（S2 纪律，行为不变）。 */
+        var SLOT_OK = registerHostSlots({
+          ctx: ctx, reactEl: reactEl, openPanel: openPanel,
+          iconSrc: SC_ICON, Tr: tr, SettingsSection: ShoucangSettingsSection
+        })
         // S2：互斥——插槽可用时**不再**挂 DOM 直插入口（否则侧栏出现两个入口，0.1.2 的老问题）
         if (SLOT_OK) {
           Log.info(tr('侧栏入口：已注册宿主插槽 sidebar.footer.action（不挂 DOM 直插入口）'));
